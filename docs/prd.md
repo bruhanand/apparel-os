@@ -1,5 +1,7 @@
 # Apparel OS — Product Requirements Document
 
+> **Rank 1 of 4.** This document wins over the KDPS policies, the design and the code. See [README.md](README.md).
+
 ## Product
 
 Apparel OS runs purchasing, receiving, stock, selling, finance, workforce management and planning for retail businesses selling clothing, footwear and packaged goods. It connects offices, warehouses, multi-brand outlets (MBO), exclusive-brand outlets (EBO) and franchise operations in one system.

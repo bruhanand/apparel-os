@@ -1,5 +1,7 @@
 # RetailsOps design language
 
+> **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
+
 Status: **Approved for build: Step 2, revision 2, 24 Sep 2026.** Replaces the previous `docs/product/design-language.md` (G-01).
 Source of truth: `Step 2 - Design System v2.dc.html`. If this document and the design file disagree, raise it; do not guess.
 

@@ -1,5 +1,7 @@
 # Apparel OS — Delivery stages
 
+> **Delivery plan.** Sets the order of work only. If this document disagrees with the PRD or the KDPS policies, they win. See [README.md](README.md).
+
 This document divides the product in [prd.md](prd.md) into six delivery stages and describes how each is tested beside the current system at KDPS. The PRD holds the rules; this document holds only the order of delivery.
 
 ## How the stages are cut

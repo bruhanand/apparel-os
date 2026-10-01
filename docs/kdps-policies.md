@@ -1,5 +1,7 @@
 # KDPS — Policy answers
 
+> **Rank 2 of 4.** Answers must stay within the options the PRD allows. If this document and the PRD disagree, the PRD wins. See [README.md](README.md).
+
 Apparel OS switches on nothing by default. Each policy below must be answered and signed by KDPS before the stage that needs it can start. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
 | # | Policy | Decided by | Needed by stage | Status |
