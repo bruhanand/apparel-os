@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f6f6f4;color:#1c1d1f;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</helmet>
+<div style="max-width:1280px;margin:0 auto;padding:40px 32px 96px;display:flex;flex-direction:column;gap:56px">
+
+<header style="display:flex;flex-direction:column;gap:14px;border-bottom:1px solid #d9d9d4;padding-bottom:28px">
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b6c70">RetailsOps · Step 1 · Revision 4 · 23 Sep 2026</div>
+  <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-.01em">Information architecture blueprint</h1>
+  <p style="margin:0;max-width:800px;font-size:15px;line-height:1.55;color:#45464b;text-wrap:pretty">Revised after your review. Receive Goods is now one section. The sitemap lists only real pages (lists, records and workspaces); actions are buttons on those records. The sidebar follows the 12 sections in RBAC v1, and each role gets its own short menu. Amber tags such as <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:#fbeed6;color:#7a4a00;padding:1px 6px;border-radius:3px">OQ-30</span> mark pages that wait on an open decision; green tags carry a rule Anand has decided.</p>
+  <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+    <strong style="font-size:13px">What changed in Revision 4</strong>
+    <sc-for list="{{ changes }}" as="c" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;font-size:13px;line-height:1.45;color:#45464b"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#2f55c4">{{ c.id }}</span><span>{{ c.t }}</span></div>
+    </sc-for>
+  </div>
+  <nav style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px">
+    <a href="#decisions" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">0 · Decisions</a>
+    <a href="#sitemap" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">1 · Map of everything</a>
+    <a href="#menus" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">2 · Menus by role</a>
+    <a href="#roles" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">3 · Roles &amp; access</a>
+    <a href="#nav" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">4 · Shells</a>
+    <a href="#gaps" style="border:1px solid #d9d9d4;background:#fff;padding:6px 12px;border-radius:4px;color:#1c1d1f">5 · Open items</a>
+  </nav>
+</header>
+
+<section id="decisions" style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-size:22px;font-weight:600">0 · Decisions recorded for design</h2>
+  <p style="margin:-8px 0 0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">Only points the product owner (Anand) has decided. Anything still open in the PRDs is listed under <a href="#gaps">5 · Open items</a>. The design supports both options there and says which rule is on today only where a document already states it.</p>
+  <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;overflow:hidden">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="10">
+      <div style="display:grid;grid-template-columns:180px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:12px 16px;border-top:1px solid #f0f0ec;font-size:13px;line-height:1.5">
+        <strong>{{ d.topic }}</strong>
+        <span style="color:#45464b">{{ d.design }}</span>
+        <span style="display:flex;flex-direction:column;gap:4px;align-items:flex-start"><span style="color:#1d5e36">{{ d.now }}</span><sc-if value="{{ d.flag }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#fbeed6;color:#7a4a00;padding:1px 6px;border-radius:3px">{{ d.flag }}</span></sc-if></span>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section id="sitemap" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h2 style="margin:0;font-size:22px;font-weight:600">1 · Map of everything</h2>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:840px;line-height:1.5">{{ pageCount }} pages across 15 sections. Page types: <strong>List</strong> (find and filter), <strong>Record</strong> (one document and its actions), <strong>Work</strong> (task workspace such as the till or matching), <strong>Settings</strong>. Tabs are shown after “·”. No role sees all of this; see section 2.</p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #c9d6f5;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><strong style="font-size:15px">Delivery record: one screen, eight steps</strong><span style="font-size:12px;color:#6b6c70">Receive Goods · store-warehouse PRD §5.1, §12 · same record for vendor deliveries and incoming transfers. For a transfer, the PT is made automatically from the source stock, and the step shows it read-only; there is no preparation (transfers PRD §2). A quarantine transfer arrives straight into quarantine; no PT step (G-36).</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="8">
+        <div style="border:1px solid #e1e1dc;border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:4px;background:#fafaf8">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#2f55c4">{{ s.no }}</span>
+          <span style="font-size:13px;font-weight:600">{{ s.n }}</span>
+          <span style="font-size:12px;color:#6b6c70;line-height:1.4">{{ s.d }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">
+    <sc-for list="{{ modules }}" as="m" hint-placeholder-count="15">
+      <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8a8b90">{{ m.num }}</span>
+            <span style="font-size:15px;font-weight:600">{{ m.name }}</span>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6c70;border:1px solid #e1e1dc;padding:1px 6px;border-radius:3px;white-space:nowrap">{{ m.shell }}</span>
+        </div>
+        <div style="font-size:12px;color:#6b6c70;line-height:1.4">{{ m.refs }}</div>
+        <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px">
+          <sc-for list="{{ m.pages }}" as="p" hint-placeholder-count="5">
+            <li style="display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:baseline;font-size:13px;line-height:1.4;border-top:1px solid #f0f0ec;padding-top:5px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b6c70;text-transform:uppercase">{{ p.k }}</span>
+              <span>{{ p.n }}<sc-if value="{{ p.tabs }}" hint-placeholder-val="{{ false }}"><span style="color:#8a8b90"> · {{ p.tabs }}</span></sc-if></span>
+              <sc-if value="{{ p.g }}" hint-placeholder-val="{{ false }}">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#fbeed6;color:#7a4a00;padding:1px 6px;border-radius:3px;white-space:nowrap">{{ p.g }}</span>
+              </sc-if>
+              <sc-if value="{{ p.gd }}" hint-placeholder-val="{{ false }}">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#d7ecdf;color:#1d5e36;padding:1px 6px;border-radius:3px;max-width:170px;line-height:1.35">{{ p.gd }}</span>
+              </sc-if>
+            </li>
+          </sc-for>
+        </ul>
+        <sc-if value="{{ m.actions }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px;line-height:1.5;color:#45464b;background:#f6f6f4;border-radius:4px;padding:8px 10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;color:#8a8b90">Actions on records · </span>{{ m.actions }}</div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section id="menus" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h2 style="margin:0;font-size:22px;font-weight:600">2 · Menus by role</h2>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:840px;line-height:1.5">What each role's sidebar actually shows (PRD §12): a few sections with tabs inside. A person with several roles sees the combined menu, and maker/checker still applies on each record.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+    <sc-for list="{{ menus }}" as="mn" hint-placeholder-count="4">
+      <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:15px;font-weight:600">{{ mn.title }}</span>
+          <span style="font-size:12px;color:#6b6c70">{{ mn.who }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{ mn.items }}" as="i" hint-placeholder-count="7">
+            <div style="display:flex;flex-direction:column;gap:1px;border-top:1px solid #f0f0ec;padding-top:6px">
+              <span style="font-size:13px;font-weight:500">{{ i.s }}</span>
+              <span style="font-size:12px;color:#6b6c70;line-height:1.4">{{ i.t }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12px;color:#45464b;background:#f6f6f4;border-radius:4px;padding:8px 10px;line-height:1.45">Lands on: {{ mn.land }}</div>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section id="roles" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h2 style="margin:0;font-size:22px;font-weight:600">3 · Roles &amp; access</h2>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:840px;line-height:1.5"><strong>3a</strong>: the six approved roles (RBAC v1) plus proposed later roles, on the ladder none &lt; view &lt; operate &lt; approve &lt; manage. <strong>3b</strong>: where each PRD §4.2 responsibility lands. <strong>3c</strong>: the Step 1 responsibility matrix, kept unchanged for reference.</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#45464b">
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#1f3f8f"></span>manage</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#5b7fd6"></span>approve</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#c9d6f5"></span>operate</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#ececE8"></span>view</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;border:1px dashed #d0d0cb"></span>none</span>
+    <span style="display:flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;background:#fbeed6;color:#7a4a00;padding:1px 5px;border-radius:3px">proposed</span>not yet approved</span>
+  </div>
+  <h3 style="margin:0;font-size:15px;font-weight:600">3a · Section grid</h3>
+  <div style="overflow-x:auto;background:#fff;border:1px solid #e1e1dc;border-radius:6px">
+    <table style="border-collapse:collapse;width:100%;min-width:1180px;font-size:11px">
+      <thead>
+        <tr style="background:#fafaf8">
+          <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e1e1dc;font-weight:600;position:sticky;left:0;background:#fafaf8;min-width:170px;font-size:12px">Role</th>
+          <sc-for list="{{ secCols }}" as="c" hint-placeholder-count="14">
+            <th style="padding:8px 4px;border-bottom:1px solid #e1e1dc;font-weight:500;color:#45464b;vertical-align:bottom;min-width:74px;text-align:left;font-size:11px;line-height:1.2">{{ c }}</th>
+          </sc-for>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{ rbac }}" as="r" hint-placeholder-count="15">
+          <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #f0f0ec;position:sticky;left:0;background:#fff;vertical-align:top">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <span style="font-weight:600;font-size:12px">{{ r.name }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6b6c70">{{ r.code }}</span>
+                <sc-if value="{{ r.proposed }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;background:#fbeed6;color:#7a4a00;padding:1px 5px;border-radius:3px;align-self:flex-start">{{ r.proposed }}</span></sc-if>
+              </div>
+            </td>
+            <sc-for list="{{ r.cells }}" as="x" hint-placeholder-count="14">
+              <td style="padding:4px;border-bottom:1px solid #f0f0ec;vertical-align:top">
+                <sc-if value="{{ x.m }}"><div style="background:#1f3f8f;color:#fff;border-radius:3px;padding:4px 5px;line-height:1.25">{{ x.l }}</div></sc-if>
+                <sc-if value="{{ x.a }}"><div style="background:#5b7fd6;color:#fff;border-radius:3px;padding:4px 5px;line-height:1.25">{{ x.l }}</div></sc-if>
+                <sc-if value="{{ x.o }}"><div style="background:#c9d6f5;color:#1f3f8f;border-radius:3px;padding:4px 5px;line-height:1.25">{{ x.l }}</div></sc-if>
+                <sc-if value="{{ x.v }}"><div style="background:#ececE8;color:#45464b;border-radius:3px;padding:4px 5px;line-height:1.25">{{ x.l }}</div></sc-if>
+                <sc-if value="{{ x.n }}"><div style="border:1px dashed #d8d8d3;color:#b5b6ba;border-radius:3px;padding:3px 5px;text-align:center">·</div></sc-if>
+              </td>
+            </sc-for>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;font-size:13px;line-height:1.5;color:#45464b">
+    <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:14px 16px"><strong style="color:#1c1d1f">Grid columns 13–14 are new.</strong> People (the <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">hrms</span> section already in the app) and Partners. Every staff member also gets Self-service for their own attendance, targets and payslips. Nobody needs a role for that.</div>
+    <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:14px 16px"><strong style="color:#1c1d1f">Approvals are permissions.</strong> “Approve PT”, “approve variance” and “approve transfer” are checked against the approve rung plus the policy's value band, not against a role name. Maker ≠ checker is enforced on every record.</div>
+    <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:14px 16px"><strong style="color:#1c1d1f">Existing app roles are untouched.</strong> <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">ho_ops</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">promo</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">data_steward</span> keep their seats; they are shown for completeness and are outside v1.</div>
+  </div>
+
+  <h3 style="margin:8px 0 0;font-size:15px;font-weight:600">3b · Where PRD §4.2 responsibilities land</h3>
+  <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;overflow:hidden">
+    <sc-for list="{{ mapping }}" as="mp" hint-placeholder-count="18">
+      <div style="display:grid;grid-template-columns:56px 220px 180px minmax(0,1fr);gap:12px;padding:8px 14px;border-top:1px solid #f0f0ec;font-size:13px;line-height:1.45;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6c70">{{ mp.code }}</span>
+        <span>{{ mp.prd }}</span>
+        <strong style="font-weight:600">{{ mp.to }}</strong>
+        <span style="color:#45464b">{{ mp.how }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <h3 style="margin:8px 0 0;font-size:15px;font-weight:600">3c · Step 1 responsibility matrix <span style="font-weight:400;color:#6b6c70;font-size:13px">(retained · columns are the Step 1 module list)</span></h3>
+  <div style="overflow-x:auto;background:#fff;border:1px solid #e1e1dc;border-radius:6px">
+    <table style="border-collapse:collapse;width:100%;min-width:1080px;font-size:12px">
+      <thead>
+        <tr style="background:#fafaf8">
+          <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e1e1dc;font-weight:600;position:sticky;left:0;background:#fafaf8;min-width:220px">Role</th>
+          <sc-for list="{{ oldCols }}" as="c" hint-placeholder-count="15">
+            <th style="padding:8px 4px;border-bottom:1px solid #e1e1dc;font-weight:500;color:#45464b;vertical-align:bottom;width:56px;font-size:11px;line-height:1.2">{{ c }}</th>
+          </sc-for>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{ oldRoles }}" as="r" hint-placeholder-count="18">
+          <tr>
+            <td style="padding:7px 12px;border-bottom:1px solid #f0f0ec;position:sticky;left:0;background:#fff">
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6c70;width:44px;flex-shrink:0">{{ r.code }}</span><span style="font-weight:500">{{ r.name }}</span></div>
+            </td>
+            <sc-for list="{{ r.cells }}" as="x" hint-placeholder-count="15">
+              <td style="padding:4px;border-bottom:1px solid #f0f0ec;text-align:center">
+                <sc-if value="{{ x.A }}"><span style="display:inline-flex;width:24px;height:18px;border-radius:3px;background:#1f3f8f;color:#fff;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center;justify-content:center">A</span></sc-if>
+                <sc-if value="{{ x.E }}"><span style="display:inline-flex;width:24px;height:18px;border-radius:3px;background:#c9d6f5;color:#1f3f8f;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center;justify-content:center">E</span></sc-if>
+                <sc-if value="{{ x.S }}"><span style="display:inline-flex;width:24px;height:18px;border-radius:3px;background:#d7ecdf;color:#1d5e36;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center;justify-content:center">S</span></sc-if>
+                <sc-if value="{{ x.V }}"><span style="display:inline-flex;width:24px;height:18px;border-radius:3px;background:#ececE8;color:#45464b;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center;justify-content:center">V</span></sc-if>
+                <sc-if value="{{ x.O }}"><span style="display:inline-flex;width:24px;height:18px;border-radius:3px;background:#fbeed6;color:#7a4a00;font-family:'IBM Plex Mono',monospace;font-size:11px;align-items:center;justify-content:center">O</span></sc-if>
+                <sc-if value="{{ x.N }}"><span style="color:#c4c5c8">·</span></sc-if>
+              </td>
+            </sc-for>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+  <div style="font-size:12px;color:#6b6c70">A approve/manage · E create/prepare · S site/partner-scoped · V view · O own records · · none</div>
+</section>
+
+<section id="nav" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h2 style="margin:0;font-size:22px;font-weight:600">4 · Shells</h2>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">Three shells, one account. The example below is a Store Person's back-office sidebar.</p>
+  </div>
+  <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px">
+    <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:14px;font-weight:600">A · Back office <span style="font-weight:400;color:#6b6c70">(desktop-first, responsive)</span></div>
+      <div style="border:1px solid #cfcfca;border-radius:4px;overflow:hidden;font-size:11px;font-family:'IBM Plex Mono',monospace;color:#45464b">
+        <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:#1c1d1f;color:#e9e9e6;flex-wrap:wrap">
+          <span style="border:1px dashed #6b6c70;padding:2px 8px;border-radius:3px;color:#9a9ba0">logo</span>
+          <span style="border:1px solid #4a4b50;padding:2px 8px;border-radius:3px">Sites ▾ · Brands ▾</span>
+          <span style="flex:1;min-width:120px;border:1px solid #4a4b50;padding:2px 8px;border-radius:3px;color:#9a9ba0">Search or scan: SKU · barcode · doc no. · bill  ⌘K</span>
+          <span>My work 12</span><span>Alerts</span><span>☾</span><span>AK ▾</span>
+        </div>
+        <div style="display:grid;grid-template-columns:170px 1fr;min-height:260px">
+          <div style="background:#f3f3f0;border-right:1px solid #e1e1dc;padding:10px;display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ storeSide }}" as="g" hint-placeholder-count="8">
+              <span style="color:#1c1d1f;line-height:1.4">{{ g }}</span>
+            </sc-for>
+          </div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+            <div>Receive Goods › Delivery DLV-0412</div>
+            <div style="border:1px dashed #cfcfca;padding:8px;border-radius:3px">Header: title · status · scope chip · primary action · as-of</div>
+            <div style="border:1px dashed #cfcfca;padding:8px;border-radius:3px">Stepper / tabs</div>
+            <div style="border:1px dashed #cfcfca;padding:8px;border-radius:3px;flex:1">Dense table / form workspace</div>
+            <div style="border:1px dashed #cfcfca;padding:8px;border-radius:3px">Right drawer: preview · exception · approval panel · history</div>
+          </div>
+        </div>
+      </div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#45464b">
+        <li><strong>Scope picker</strong> allows several sites and brands at once (G-07). Every page shows its active scope as a chip.</li>
+        <li><strong>Restricted fields</strong> show a lock and the word “Restricted”; the value itself never reaches the browser (G-08).</li>
+        <li><strong>Notifications</strong> are in-app only for now. <strong>My work</strong> collects approvals and owned exceptions, with separate Seen, Acknowledged and Resolved states.</li>
+        <li><strong>Mobile</strong> uses the same routes with the sidebar as a drawer. Baseline priorities: My work, approvals, stock lookup, scan receive/count, self-service check-in.</li>
+      </ul>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:14px;font-weight:600">B · Till</div>
+        <div style="border:1px solid #cfcfca;border-radius:4px;overflow:hidden;font-size:11px;font-family:'IBM Plex Mono',monospace;color:#45464b">
+          <div style="display:flex;gap:8px;padding:6px 10px;background:#1c1d1f;color:#e9e9e6;flex-wrap:wrap"><span>BLR01-C1</span><span>● Offline · 14 queued</span><span>Lease 19h</span><span style="flex:1"></span><span>PIN: Ravi</span></div>
+          <div style="display:grid;grid-template-columns:1fr 110px;min-height:120px">
+            <div style="padding:8px;border-right:1px solid #e1e1dc">Scan field (always focused)<br>Lines · salesperson per line · offers</div>
+            <div style="padding:8px">Totals<br>Tenders<br>[F12 Pay]</div>
+          </div>
+          <div style="padding:6px 10px;background:#f3f3f0;border-top:1px solid #e1e1dc">F2 Customer · F3 Salesperson · F4 Park · F6 Return · F7 Manager PIN · F9 X-report</div>
+        </div>
+        <p style="margin:0;font-size:13px;line-height:1.5;color:#45464b">No sidebar. Keyboard and scanner only. Cashiers sign in with a PIN, and a manager PIN approves discounts. Built for several tills per store; one is enabled now.</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:14px;font-weight:600">C · Portal</div>
+        <p style="margin:0;font-size:13px;line-height:1.5;color:#45464b">Top tabs, no sidebar. <strong>Self-service</strong>: Check-in · My attendance · My targets · My payslips · Profile. <strong>Partner / EBO</strong>: Dashboard · Uploads · Statements · Ledger. A shared store tablet runs Self-service check-in under each employee's own sign-in.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="gaps" style="display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h2 style="margin:0;font-size:22px;font-weight:600">5 · Open items: status after your review</h2>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">{{ gapCount }} items · {{ openCount }} still open. <span style="color:#1d5e36;font-weight:600">Resolved</span> = answered (who decided is shown on the item). <span style="color:#7a4a00;font-weight:600">Need from you</span> = still blocking or deferred.</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;overflow:hidden">
+    <sc-for list="{{ gaps }}" as="it" hint-placeholder-count="26">
+      <div style="display:grid;grid-template-columns:48px 120px minmax(0,1fr) 150px;gap:12px;padding:10px 14px;border-top:1px solid #f0f0ec;font-size:13px;line-height:1.5;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8b90">{{ it.id }}</span>
+        <span>
+          <sc-if value="{{ it.r }}"><span style="font-size:11px;font-weight:600;color:#1d5e36;background:#d7ecdf;padding:2px 7px;border-radius:3px">Resolved</span></sc-if>
+          <sc-if value="{{ it.p }}"><span style="font-size:11px;font-weight:600;color:#1f3f8f;background:#dfe7fa;padding:2px 7px;border-radius:3px">Recommended</span></sc-if>
+          <sc-if value="{{ it.o }}"><span style="font-size:11px;font-weight:600;color:#7a4a00;background:#fbeed6;padding:2px 7px;border-radius:3px">Need from you</span></sc-if>
+        </span>
+        <span style="text-wrap:pretty;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><span><strong>{{ it.t }}</strong> {{ it.d }}</span><sc-if value="{{ it.by }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#1d5e36;font-weight:500">{{ it.by }}</span></sc-if><sc-if value="{{ it.flag }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;background:#fbeed6;color:#7a4a00;padding:1px 6px;border-radius:3px">{{ it.flag }}</span></sc-if></span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6c70;text-align:right">{{ it.ref }}</span>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const P = (k, n, tabs, g) => ({ k, n, tabs: tabs || null, g: typeof g === 'string' ? g : null, gd: g && g.dec ? g.dec : null });
+    const D = dec => ({ dec });
+    const L = (n, t, g) => P('List', n, t, g), R = (n, t, g) => P('Record', n, t, g), W = (n, t, g) => P('Work', n, t, g), S = (n, t, g) => P('Settings', n, t, g);
+
+    const decisions = [
+      { topic: 'Receive Goods', design: 'One section: an inbox for vendor deliveries and incoming transfers, and one delivery record with 8 steps.', now: 'As ruled 23 Sep (store-warehouse PRD §5.1, §12).' },
+      { topic: 'Customer returns', design: 'Configurable policy: refund, exchange or credit; company default with store overrides; separate rules for normal and damaged items.', now: 'Only exchange is switched on.' },
+      { topic: 'Tills per store', design: 'Several tills per store, each with its own bill series and lease.', now: 'One registered till per store is enabled.' },
+      { topic: 'PT approval', design: 'Checked by permission (approve rung on Receive Goods + policy band), never by role name, so the approver can change later without a redesign.', now: 'Only the Owner approves a PT, and must be a different person from the preparer. Warehouse prepares and submits. Warehouse’s approve rung on Receive Goods means prepare-and-submit only (store-warehouse PRD §3.2).' },
+      { topic: 'Manual discount', design: 'Manager PIN on the till within the configured limit.', now: 'Store Person (manager) supervises; baseline.' },
+      { topic: 'Salesperson', design: 'Set on each sale line; a bill-level pick fills all lines.', now: 'Staff list feeds the till roster.' },
+      { topic: 'Notifications', design: 'Channel model kept open.', now: 'In-app only.' },
+      { topic: 'Locale', design: 'Externalised strings.', now: 'English (India), ₹, Indian digit grouping 1,23,456, DD MMM YYYY.' },
+      { topic: 'Visual direction', design: 'New design language: minimal, subtle glassmorphism, comfortable density, light and dark.', now: 'For Step 2. The logo slot is left empty for you to fill.' },
+      { topic: 'G-27 · Transfer receipt', design: 'Each dispatch is received in one go. Anything missing is recorded as short against that dispatch. A transfer can still be fulfilled bit by bit through several dispatches; that is how partial receipt is met.', now: 'Resolved — decided by Anand.', flag: 'Decided by Anand · overall PRD update pending' },
+      { topic: 'G-28 · Offline lease', design: 'Till authority lasts 24 hours after the last online renewal; expiry blocks new bills; viewing and uploading still work.', now: 'Resolved (correction) · change-prd-store-warehouse-operations §10.1.' },
+      { topic: 'G-29 · Mistaken damage report', design: 'A different person may reject a damage report and must give a reason. Rejection removes only the damage hold. Goods return to sellable stock only if their identity is resolved and no other hold applies. Full history is kept.', now: 'Resolved — decided by Anand.', flag: 'Decided by Anand · overall PRD update pending' },
+      { topic: 'G-30 · Product-master confirmation in v1', design: 'The Brand Manager confirms new items and mapping rules for their own brands. The Owner is the backup for any brand without a Brand Manager. The proposer can never confirm their own item or rule.', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-31 · RTV closing gap', design: 'The Owner closes a gap between shipped and vendor-acknowledged quantity, with a reason and evidence. Closing is a record only: no stock is added back and no money entry is created. Vendor claims and credit notes come later with finance.', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-32 · Adjustments', design: 'Staff raise an adjustment with a reason. A different person approves it within the value band on the approval policy; the Owner approves anything above the band. Quantity and memo value only; no money entries until finance.', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-33 · Write-off', design: 'The Owner approves every write-off, with a reason and evidence. Goods stay in quarantine until a separate disposal. One action, “Write off and dispose”, creates two linked records (write-off + disposal). The same loss can never be written off twice.', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-34 · RTV eligibility', design: 'Any quarantined, wrong or excess goods may be put on an RTV. The Brand Manager (own brands) or the Owner approves. The vendor’s return terms are attached as a note or evidence; the system does not check them yet (automatic checking later with OQ-26).', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-35 · Damage during a count', design: 'A damage report is allowed while a count is running and places the damage hold at once. The count still counts those pieces where they are (counts are of physical pieces, not condition), and the count record shows the report. Counts at a trading site stay gated.', now: 'Resolved — decided by Anand.' },
+      { topic: 'G-36 · Pre-PT damaged goods, store → warehouse', design: 'Allowed as a “quarantine transfer”: goods stay quarantined, have no value and no PT, and carry their GRN custody references. The Owner approves it. It never makes goods sellable.', now: 'Resolved — decided by Anand.', flag: 'Decided by Anand · overall PRD update pending' },
+      { topic: 'G-37 · Keeping wrong or unidentified goods', design: 'Allowed once a person explicitly approves keeping them (different from the proposer) and their identity is resolved. They then go on a supplemental PT, like accepted excess. The original discrepancy stays on record. If also damaged, they keep the damage hold.', now: 'Resolved — decided by Anand.', flag: 'Decided by Anand · overall PRD update pending' }
+    ];
+
+    const steps = [
+      { no: '01', n: 'Arrival', d: 'Actual site, time, people, invoice/booking link' },
+      { no: '02', n: 'Count', d: 'Scan by style + size; good · damaged · wrong' },
+      { no: '03', n: 'GRN', d: 'Quantity-only note; goods into receiving hold' },
+      { no: '04', n: 'Problems', d: 'Shortage, excess, damage, unknown items; owner and SLA' },
+      { no: '05', n: 'PT', d: 'Three ways to fill the grid: from the GRN count, from a canonical KDPS file, or from the brand’s own file (.xlsx .xls .xlsb .csv). No AI enrichment. Mapping suggestions need a person to accept them.' },
+      { no: '06', n: 'Approval', d: 'Owner approves (never the preparer): 4-way reconciliation with dispositions and policy limits' },
+      { no: '07', n: 'Labels', d: 'Print job from the official PT; reprints tracked' },
+      { no: '08', n: 'Accept', d: 'Scan-accept and put away; ATS released' }
+    ];
+
+    const modules = [
+      { num: '01', name: 'Home', shell: 'Back office', refs: 'Home · S-1, S-2 · R-CTL-005/006', pages: [W('Home dashboard (role-scoped)'), R('Daily digest', null, 'OQ-43'), W('My work', 'Approvals · Exceptions · Notifications', 'OQ-18'), R('Exception record'), L('Search results')], actions: 'Acknowledge · assign · resolve with evidence · open source record.' },
+      { num: '02', name: 'Sell', shell: 'Till + Back office', refs: 'Sell · R-POS · BP-07, 08', pages: [W('Till sign-in (cashier PIN)', null, 'OQ-35'), W('Billing', null, 'OQ-31'), W('Return & exchange', null, 'OQ-44 · OQ-45'), W('Shift', 'Float · X-report · Z-report · Close'), W('Sync queue', 'Pending · Conflicts · Failed', 'OQ-30 · OQ-32'), L('Bills', 'Today · All'), R('Bill'), L('Customers'), R('Customer'), L('Billed-retained handovers', null, 'OQ-49'), W('Footfall entry', null, 'OQ-15'), L('Store services', 'Loyalty · Vouchers · Credit · Dues · Alterations · Deliveries', 'R-POS-014')], actions: 'Park / recall cart · manager PIN approval · capture customer · split tender · reprint (marked) · email receipt · hand over / cancel custody.' },
+      { num: '03', name: 'Booking', shell: 'Back office', refs: 'Booking · R-BUY · BP-02', pages: [L('Bookings', 'Open · Partly received · Closed'), R('Booking', 'Lines · Deliveries · Outstanding · History'), W('Booking intake review', null, 'OQ-21'), L('Purchase orders', null, 'OQ-26'), R('Purchase order', null, 'OQ-26'), L('Vendors & agreements', null, 'OQ-23'), R('Vendor', 'Brands · Terms · Evidence', 'OQ-26')], actions: 'New booking · confirm draft · link receipt · short-close (reason) · approve.' },
+      { num: '04', name: 'Receive Goods', shell: 'Back office', refs: 'Receive Goods · R-REC · R-PT · R-INV-012', pages: [L('Inbox', 'Pending · History (vendor delivery / incoming transfer)'), R('Delivery', 'Arrival → Count → GRN → Problems → PT → Approval → Labels → Accept'), L('PT work', 'To prepare · To approve · Mapping rules'), R('PT', 'Lines · Reconciliation · Versions · Evidence', D('G-37 · supplemental PT for accepted wrong goods')), L('Intake queue', 'Uploads · Mailbox'), L('New items to confirm'), L('Labels & print jobs'), R('Print job'), L('Opening stock', null, 'OQ-29'), R('Opening manifest', 'Rows · Verification · Opening PT', 'OQ-54')], actions: 'Counter-GRN · add disposition · submit / withdraw PT (Warehouse) · approve / reject PT (Owner, not the preparer) · confirm new item / mapping rule (Brand Manager for own brands, Owner backup; never the proposer) · supplemental PT (accepted excess · accepted wrong goods, G-37) · reverse / reissue · export XLSX · reprint labels · scan-accept.' },
+      { num: '05', name: 'Transfer', shell: 'Back office', refs: 'Transfer · R-INV-004…007 · BP-06', pages: [L('Transfers', 'Requests · Open · History (filter: in transit)'), R('Transfer', 'Type (incl. Quarantine transfer) · Lines · Dispatches · Receipts · E-way · History', D('G-36 · Quarantine transfer: Owner approves; stays quarantined, no PT'))], actions: 'New request · new quarantine transfer (Owner approves) · approve (sets stock aside) · add dispatch · receive dispatch (in one go; missing → short) · mark failed delivery → back to source · attach e-way evidence · cancel before dispatch.' },
+      { num: '06', name: 'Stock Count', shell: 'Back office', refs: 'Stock Count · R-INV-009', pages: [L('Counts', 'Planned · In progress · Awaiting approval · Closed', D('G-35 · damage report allowed during a count; hold at once')), R('Count session', 'Blind entry · Variance · Adjustment · Damage reports', 'Gated: counts at a trading site')], actions: 'Start count · submit · approve variance (by band) · recount.' },
+      { num: '07', name: 'Damage & returns', shell: 'Back office', refs: 'Damage & returns · BP-15 · damaged-goods PRD §4–5 · quarantine-outcomes §7', pages: [L('Damage reports', 'Awaiting confirm · Confirmed · Rejected'), R('Damage report', null, D('G-29 · reject by a different person; reason required')), L('Return notices', null, 'OQ-48'), R('Return notice', 'Versions · Eligible stock · Alerts', 'OQ-48'), L('Returns to vendor (RTV)', 'Approval & pickup · Shipped · Closing gap · Closed', D('G-34 · quarantined, wrong or excess; BM (own brands) or Owner approves')), R('RTV', 'Lines · Pickup · Vendor receipt · Credit note · Closing gap', D('G-31 · Owner closes gap; record only')), L('Disposals'), R('Disposal (numbered)'), L('Write-offs', 'linked to Stock › Adjustments', D('G-33 · Owner approves every write-off')), R('Write-off')], actions: 'Report damage · confirm / reject (not your own; reason required) · build return list from notice · approve RTV (Brand Manager own brands / Owner; vendor terms attached as note or evidence) · record pickup · record vendor receipt · close gap (Owner, reason + evidence) · approve disposal · Write off and dispose (Owner, reason + evidence; creates linked write-off + disposal; never twice for the same loss).' },
+      { num: '08', name: 'Stock', shell: 'Back office', refs: 'Stock · R-INV · R-ORG-003', pages: [L('Stock explorer', 'Available · Holds · Quarantine · Transit · Billed-retained'), R('SKU stock', 'By site · Layers & lineage · Movements'), L('Movements ledger'), L('Adjustments', 'linked to Damage & returns › Write-offs', D('G-32 · approve within band; Owner above band')), R('Adjustment'), W('Planning proposals', 'Replenish · Rebalance · New site', 'OQ-43')], actions: 'Bin move · raise adjustment (reason) · approve within band (different person) · Owner above band (quantity and memo value only) · approve proposal → opens normal transfer.' },
+      { num: '09', name: 'Money', shell: 'Back office', refs: 'Money · R-FIN · design deferred by you', pages: [W('Morning page'), L('Bank accounts & books', null, 'OQ-07'), W('Bank lines', 'Uncoded · Unmatched · Matched', 'OQ-24'), L('Expenses', null, 'OQ-03'), R('Expense'), L('Cash closures', null, 'OQ-08'), R('Store day', 'Sales · Tenders · Cash closure', 'OQ-08'), L('Petty cash, deposits & HO transfers', null, 'OQ-08'), L('Payables', null, 'OQ-12'), L('Payment runs', null, 'OQ-39'), R('Payment run'), L('Receivables & brand claims', null, 'OQ-09'), W('GST & TDS', '2B match · GSTR extracts · TDS', 'OQ-10 · OQ-11'), L('Accounting exports', 'Batches · Tally XML', 'OQ-04 · OQ-25 · OQ-47'), S('Period close'), L('CapEx & NAV', null, 'OQ-06')], actions: 'Import statement · code · match / unmatch (reason) · propose / approve / release run · confirm outcome · export batch · lock period.' },
+      { num: '10', name: 'Offers & Price', shell: 'Back office', refs: 'Offers & Price · R-PRC · BP-09', pages: [L('Offers', 'Draft · Approved · Live · Ended'), R('Offer', 'Rule · Scope · Funding · Simulation · Stores', 'OQ-55'), W('Circular intake review', null, 'OQ-20'), L('EOSS periods', null, 'OQ-43'), R('EOSS period', null, 'OQ-43'), W('Markdown & dead stock', null, 'OQ-43')], actions: 'New offer · simulate · submit · approve (within band) · distribute to stores · end.' },
+      { num: '11', name: 'Reports', shell: 'Back office', refs: 'Reports · S-2…S-8 · §11.2', pages: [W('Site business view'), W('Brand scorecard'), W('Profitability', 'Store · Brand · Brand × store', 'OQ-50'), W('Leakage & anomaly watch'), W('Ask (natural-language analyst)', null, 'OQ-17'), L('Metric catalogue'), L('Exports', 'Queued · Ready · Failed')], actions: 'Export XLSX / CSV / PDF · schedule · open source records.' },
+      { num: '12', name: 'People', shell: 'Back office', refs: 'hrms · R-HR · BP-12', pages: [L('Employees'), R('Employee', 'Profile · Assignments · Bank · Documents'), L('Salespeople (till roster)'), W('Attendance', 'Today · Corrections', 'OQ-53'), S('Rosters, shifts & leave'), L('Targets & achievement'), L('Incentives', null, 'OQ-02 · OQ-19'), L('Payroll runs', null, 'OQ-46'), R('Payroll run', 'Calculate · Review · Approve · Payslips', 'OQ-46')], actions: 'Transfer employee · approve correction · issue payslips · revise (linked).' },
+      { num: '13', name: 'Self-service', shell: 'Portal', refs: 'C-EMP · R-HR-004/005/008', pages: [W('Check-in / check-out'), L('My attendance'), L('My targets & incentives'), L('My payslips'), R('Payslip')], actions: 'Request correction · download payslip.' },
+      { num: '14', name: 'Partners', shell: 'Back office + Portal', refs: 'R-PAR · BP-17', pages: [L('Partners', 'Lead · Active · Exit'), R('Partner', 'Sites · Terms · Deposits · Ledger', 'OQ-52'), L('EBO uploads', 'Due · Received · Missing'), R('Upload', 'Invoice · DSR · SOH · Payment advice'), L('Settlement statements', null, 'OQ-52'), W('Partner portal', 'Dashboard · Uploads · Statements · Ledger')], actions: 'Upload · validate · send reminder · issue statement.' },
+      { num: '15', name: 'Setup', shell: 'Back office', refs: 'Setup · R-ORG · R-MDM · R-CTL · §12–14', pages: [
+        L('Products', 'Styles · SKUs · Aliases & barcodes'), R('SKU'), L('Ambiguity queue'), S('Vocabularies', 'Season · Brand · Colour · Gender · Sub-cat · Type · Item · Fit · Size · Tax slab'), S('PT profiles & versions', null, 'OQ-27'), S('Vendor · brand · sub-brand crosswalk'), W('Data-quality workbench'),
+        S('Tenant profile'), L('Legal entities & registrations', null, 'OQ-05'), L('Sites & SBUs', null, 'OQ-14'), R('Site', 'Locations & bins · Tills · Opening checklist · Closure checklist', 'OQ-51'), S('Business calendar'),
+        L('Users'), S('Roles & grid', null, 'OQ-28 (beyond v1)'), S('Approval policies & bands'), L('Devices, tills & number series', null, 'OQ-35 · OQ-40'),
+        S('Tax configuration'), S('Customer return policy', 'Company default · Store overrides · Normal · Damaged', 'OQ-44'), S('Reason codes'), S('Exception policies (one row per kind)', null, 'OQ-18'), S('Label templates'),
+        L('Golden pricing cases'), L('AI edge register', null, 'OQ-16'), L('Audit log'), L('Privileged actions'), W('Evidence health & restore drills', null, 'OQ-33 · OQ-37'), L('Configuration history'),
+        W('Legacy cutover', 'Sources · Mapping · Reconcile', 'OQ-29 · OQ-41'), W('Data export & exit', null, 'OQ-38'),
+        W('Sign in · password reset'), R('My profile', 'Details · PIN · Sessions · Theme')], actions: 'Approve config revision · schedule effective date · enrol / retire device · sign checklist snapshot · run restore drill.' }
+    ];
+    const pageCount = modules.reduce((a, m) => a + m.pages.length, 0);
+
+    const menus = [
+      { title: 'Store', who: 'Store Person: one store, several people', land: 'Home (own store) with today’s pending deliveries, handovers and My work', items: [
+        { s: 'Home', t: 'Today · My work' }, { s: 'Sell', t: 'Till · Bills · Customers · Handovers · Footfall' }, { s: 'Booking', t: 'Relevant bookings (read-only)' }, { s: 'Receive Goods', t: 'Inbox: Pending · History (own store)' }, { s: 'Transfer', t: 'Requests · Open · History' }, { s: 'Stock Count', t: 'Own store counts (gated: trading-site counts)' }, { s: 'Damage & returns', t: 'Report · Awaiting confirm' }, { s: 'Stock', t: 'Own store' }, { s: 'Money', t: 'Expenses (create own) · Store day & cash closure (own store)' }, { s: 'Offers & Price', t: 'Running offers first, then permitted read views' }, { s: 'Reports', t: 'Own store' } ] },
+      { title: 'Warehouse', who: 'Warehouse', land: 'Receive Goods › Inbox (Pending)', items: [
+        { s: 'Home', t: 'Queues · My work' }, { s: 'Booking', t: 'Booking workspace (permitted actions)' }, { s: 'Receive Goods', t: 'Inbox · PT work (prepare & submit) · Labels · Opening stock · Intake' }, { s: 'Transfer', t: 'Requests · Dispatch · History' }, { s: 'Stock Count', t: 'Warehouse' }, { s: 'Damage & returns', t: 'Damage · RTV · Disposals · Write-offs' }, { s: 'Offers & Price', t: 'Running offers (read)' }, { s: 'Stock', t: 'Full' }, { s: 'Products', t: 'Setup › Products only' }, { s: 'Expenses', t: 'Create own' } ] },
+      { title: 'Head office', who: 'Brand Manager · Accounts · Admin (menus differ by role)', land: 'Brand Manager: Bookings · Accounts: Morning page · Admin: Setup', items: [
+        { s: 'Home', t: 'Assigned brands / finance view · My work' }, { s: 'Booking', t: 'Open · Intake review · Vendors (BM)' }, { s: 'Receive Goods', t: 'New items to confirm · Mapping rules (BM, own brands)' }, { s: 'Transfer', t: 'Approve requests (BM)' }, { s: 'Offers & Price', t: 'Draft · Approve within band (BM)' }, { s: 'Money', t: 'Full (Accounts only)' }, { s: 'Stock & Reports', t: 'Assigned brands / all' }, { s: 'Setup', t: 'Assigned products (BM) · Everything incl. Users & Roles (Admin)' } ] },
+      { title: 'Owner', who: 'Owner', land: 'Daily digest, then My work › Approvals', items: [
+        { s: 'Home', t: 'Digest · Approvals · Exceptions' }, { s: 'Booking', t: 'Approve' }, { s: 'Stock', t: 'All locations · Planning' }, { s: 'Money', t: 'Full' }, { s: 'Offers & Price', t: 'Approve / override' }, { s: 'Reports', t: 'All · Profitability' }, { s: 'Setup', t: 'Full' }, { s: 'More', t: 'Receive Goods (approve PT · New items to confirm · Mapping rules) · Transfer · Count · Damage & returns (approve/override)' } ] }
+    ];
+
+    const secCols = ['Home', 'Sell', 'Booking', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & returns', 'Stock', 'Money', 'Offers & Price', 'Reports', 'Setup', 'People', 'Partners'];
+    const rung = s => { const [r, l] = s.split('|'); return { m: r === 'M', a: r === 'A', o: r === 'O', v: r === 'V', n: r === '-', l: l || '' }; };
+    const RB = (name, code, proposed, cells) => ({ name, code, proposed, cells: cells.map(rung) });
+    const rbac = [
+      RB('Owner', 'owner', null, ['V|All (network)', 'V|View', 'A|Approve', 'V|View all', 'A|Override', 'A|Approve big variances', 'A|Approve', 'M|Full', 'M|Full', 'A|Approve / override', 'V|All', 'M|Full', 'V|View', 'V|View']),
+      RB('Store Person', 'store_person', null, ['V|Own store', 'O|Bill, return, customer', 'V|Headed to store', 'O|Receive + bill upload (own)', 'O|Request / send / receive', 'O|Count own · small variances', 'O|Mark damage only', 'V|Own store', 'O|Expenses only', 'V|View', 'V|Own store', '-', 'V|Team attendance', '-']),
+      RB('Warehouse', 'warehouse', null, ['V|Warehouse', '-', 'O|Draft', 'A|Draft GRN, PT; prepare and submit', 'O|Distribute, dispatch', 'O|Count warehouse', 'O|Create & execute', 'M|Full', 'O|Expenses only', 'V|View', 'V|All', 'O|Products only', '-', '-']),
+      RB('Brand Manager', 'brand_manager', null, ['V|Assigned brands', 'V|View', 'O|Create', 'V|View', 'A|Approve', 'V|Assigned brands', 'V|Own brands', 'V|Assigned brands', '-', 'A|Approve within band', 'V|Own brands', 'O|Assigned products', '-', 'V|Terms (own brands)']),
+      RB('Accounts', 'accounts', null, ['V|Finance view', 'V|View', 'V|View', 'V|View', 'V|View', 'V|View', 'V|Credit notes', 'V|View', 'M|Full', 'V|View', 'V|All', 'V|View', 'V|Payroll export', 'O|Settlement']),
+      RB('Admin', 'it_admin', null, ['V|All', 'M|All', 'M|Configure', 'M|All', 'V|Monitor', 'M|All', 'M|All', 'M|Full', '-', 'M|Configure', 'V|All', 'M|Full incl. Users & Roles', 'M|Configure', 'M|Configure']),
+      RB('HR admin', 'hr_admin', 'proposed', ['V|People view', '-', '-', '-', '-', '-', '-', '-', '-', '-', 'V|Attendance, staff', '-', 'M|Full (no payroll approve)', '-']),
+      RB('Payroll reviewer', 'payroll_reviewer', 'proposed', ['V|People view', '-', '-', '-', '-', '-', '-', '-', 'V|Payroll postings', '-', '-', '-', 'A|Approve payroll', '-']),
+      RB('Franchise partner', 'franchise_partner', 'proposed · portal', ['V|Own sites', 'O|Own sites', '-', 'O|Own sites', 'O|Own sites', 'O|Own sites', 'O|Mark damage', 'V|Own sites', 'V|Own ledger', 'V|Own sites', 'V|Own sites', '-', 'O|Own staff', 'O|Own partner']),
+      RB('EBO reporter', 'ebo_reporter', 'proposed · portal', ['-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', 'O|Uploads (own site)']),
+      RB('Analyst', 'analyst', 'proposed', ['V|All', '-', '-', '-', '-', '-', '-', 'V|View', '-', 'V|View', 'V|All + Ask', '-', '-', '-']),
+      RB('HO ops', 'ho_ops', 'existing · outside v1', ['V|All', '-', 'V|View', 'V|View', 'A|Approve', 'A|Approve variances', 'V|View', 'V|View', '-', 'V|View', 'V|All', '-', '-', '-']),
+      RB('Promo', 'promo', 'existing · outside v1', ['V|Brands', '-', '-', '-', '-', '-', '-', 'V|View', '-', 'O|Draft offers', 'V|Offers', '-', '-', '-']),
+      RB('Data steward', 'data_steward', 'existing · outside v1', ['V|MDM', '-', '-', 'V|Mapping', '-', '-', '-', 'V|View', '-', '-', 'V|Data quality', 'M|Products & vocabularies', '-', '-'])
+    ];
+
+    const mapping = [
+      { code: 'X-PLT', prd: 'Platform administrator', to: 'Admin', how: 'Setup › Full. No Money. Business data only in scope.' },
+      { code: 'C-OWN', prd: 'Company owner', to: 'Owner', how: 'Direct.' },
+      { code: 'C-FIN', prd: 'Finance', to: 'Accounts', how: 'Merged. Maker/checker needs two Accounts users or Accounts + Owner.' },
+      { code: 'M-STR', prd: 'Store manager', to: 'Store Person', how: 'Merged (22 Sep). Holds the small-variance band and the manager PIN for discounts.' },
+      { code: 'M-CSH', prd: 'Cashier / counter staff', to: 'Store Person', how: 'Merged. Each person signs in to the till with their own PIN, so every bill has one identity.' },
+      { code: 'C-WHO', prd: 'Warehouse operator', to: 'Warehouse', how: 'Direct.' },
+      { code: 'C-PMO', prd: 'Product master owner', to: 'Brand Manager + Owner', how: 'Brand Manager (own brands) + Owner backup in v1; Data steward later.' },
+      { code: 'C-INV', prd: 'Inventory controller / PT approver', to: 'Permission', how: 'The approve rung on Receive Goods plus a policy band. Held today by the Owner only; maker ≠ checker.' },
+      { code: 'C-BUY', prd: 'Buyer / merchandiser', to: 'Brand Manager', how: 'Direct. Allocation = transfer approval.' },
+      { code: 'C-CAO', prd: 'Commercial agreement owner', to: 'Brand Manager + Owner', how: 'Merged. Return notices and terms: BM prepares, Owner approves.' },
+      { code: 'C-STO', prd: 'Site transition owner', to: 'Owner + Admin', how: 'Merged. Admin prepares the site checklist; named reviewers sign the same snapshot.' },
+      { code: 'X-FRN', prd: 'Franchise partner', to: 'Franchise partner', how: 'Proposed later role. Own sites only; portal + scoped back office.' },
+      { code: 'E-RPT', prd: 'EBO reporter', to: 'EBO reporter', how: 'Proposed later role. Portal uploads only.' },
+      { code: 'C-HRA', prd: 'HR administrator', to: 'HR admin', how: 'Proposed later role on the existing hrms section.' },
+      { code: 'C-PAY', prd: 'Payroll reviewer', to: 'Payroll reviewer', how: 'Proposed later role; approves what HR admin prepares.' },
+      { code: 'C-EMP', prd: 'Employee', to: 'Self-service', how: 'Not a role: every staff member gets it.' },
+      { code: 'C-ANL', prd: 'Analytics user', to: 'Reports view / Analyst', how: 'Reports view covers most; Analyst (proposed) adds Ask and cross-network view.' },
+      { code: 'X-SVC', prd: 'Support / service identity', to: 'No UI', how: 'Audited in Setup › Privileged actions.' }
+    ];
+
+    const oldCols = ['Home', 'My work', 'Buying', 'Pricing', 'GRN', 'PT', 'Inventory', 'POS', 'Store BO', 'Finance', 'HR', 'Partners', 'Insights', 'MDM', 'Admin'];
+    const cell = c => ({ A: c === 'A', E: c === 'E', S: c === 'S', V: c === 'V', O: c === 'O', N: c === '.' });
+    const OR = (code, name, m) => ({ code, name, cells: m.split(' ').map(cell) });
+    const oldRoles = [
+      OR('X-PLT', 'Platform administrator', '. S . . . . . . . . . . . V A'), OR('C-OWN', 'Company owner', 'V A V A V V V . V A V V V V V'), OR('C-FIN', 'Finance', 'V A V V V V V . V A E A V V V'), OR('M-STR', 'Store manager', 'S S . S S V S S A S S . S . .'), OR('M-CSH', 'Cashier / counter staff', 'O O . . . . V E S . O . . . .'), OR('C-WHO', 'Warehouse operator', 'S S . . E E E . . . O . . . .'), OR('C-PMO', 'Product master owner', 'V S . . . V V . . . O . V A .'), OR('C-INV', 'Inventory controller / PT approver', 'V A V . A A A . V V O . V V .'), OR('C-BUY', 'Buyer / merchandiser', 'V S A E V V E . . V O . V V .'), OR('X-FRN', 'Franchise partner', 'S S . V S V S S S S S S S . .'), OR('E-RPT', 'EBO reporter', '. O . . . . . . . . . E . . .'), OR('C-HRA', 'HR administrator', 'V S . . . . . . . . A . . . S'), OR('C-EMP', 'Employee', 'O O . . . . . . . . O . . . .'), OR('C-PAY', 'Payroll reviewer', '. S . . . . . . . V A . . . .'), OR('C-CAO', 'Commercial agreement owner', 'V S A A . V V . . V O V V . .'), OR('C-STO', 'Site transition owner', 'V S V . V V E . V V V . V . E'), OR('C-ANL', 'Analytics / intelligence user', 'V O . V . . V . . V O . A V .'), OR('X-SVC', 'Support / service identity', '. . . . . . . . . . . . . . .')
+    ];
+
+    const storeSide = ['Home', 'Sell', 'Booking', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & returns', 'Stock', 'Money', 'Offers & Price', 'Reports'];
+
+    const G = (id, s, t, d, ref, by, flag) => ({ id, r: s === 'r', p: s === 'p', o: s === 'o', t, d, ref, by: by || null, flag: flag || null });
+    const AP = 'Resolved — approved by Anand', AN = 'Resolved — decided by Anand', FL = 'Decided by Anand · overall PRD update pending';
+    const gaps = [
+      G('G-01', 'r', 'Design language.', 'New language: minimal, subtle glassmorphism. Palette to be chosen later. Replaces docs/product/design-language.md once approved. Glass effects only on chrome (top bar, drawers, overlays). Tables, forms, the PT grid and the till stay solid, for readability.', 'Step 2'),
+      G('G-02', 'r', 'Branding.', 'You supply the logo; an empty logo slot is reserved.', '—'),
+      G('G-03', 'r', 'Locale.', 'India, English only; ₹ with Indian grouping.', 'Q-12'),
+      G('G-04', 'r', 'State vocabulary & colours.', 'Labels accepted; I define the colour mapping in Step 2.', 'R-ORG-003'),
+      G('G-05', 'r', 'Density & theme.', 'Comfortable density; light and dark.', '—'),
+      G('G-06', 'r', 'Roles.', 'RBAC v1 six roles plus proposed later roles (3a/3b). Step 1 matrix retained.', 'RBAC v1'),
+      G('G-07', 'r', 'Multi-scope.', 'Several sites/brands at once.', 'R-CTL-003'),
+      G('G-08', 'r', 'Restricted fields.', 'Shown as a lock with the word “Restricted”.', 'AC-33'),
+      G('G-09', 'r', 'Discount override.', 'Store manager supervises with a manager PIN.', 'R-PRC-003'),
+      G('G-10', 'r', 'Mobile.', 'Baseline priorities listed in section 4.', '§12.1'),
+      G('G-11', 'r', 'PT.', 'Keep “PT”; the canonical file says Price Ticket / article master.', 'canonical-pt-file'),
+      G('G-12', 'r', 'PT grid.', '22 columns: 15 typed (Season … Basic) and 7 derived (P RATE, INPUT TAX, OUTPUT TAX, NAG, MARGIN, SUGGESTED SUB CATEGORY, SUGGESTED TYPE). The 7 derived columns are read-only with no override (store-warehouse PRD §5.4).', 'canonical-pt-file'),
+      G('G-13', 'o', 'Reconciliation layout.', 'Structure adopted (invoice · GRN · existing · proposed · held · returned/disposed; dispositions beside quantities; limits beside the approve button). Disposition list adopted: Short: record shortage, or counter-GRN if the count was wrong. Excess: accept excess (→ supplemental PT) · return to vendor · keep on hold. Damaged: keep in quarantine · value damage (value at MRP, still unsellable) · return to vendor · dispose. Wrong: return to vendor · accept (G-37 → supplemental PT) · keep on hold. Unidentified: resolve identity · return to vendor · keep on hold. Still needed from Anand: reason codes, and one real messy delivery to design against.', 'R-REC-005'),
+      G('G-14', 'r', 'PT size.', 'Design target: 50,000 lines, 20 MB intake, from the non-authoritative carried-forward decision log; still open. Whole-column fill; row review per page selection; paged loading.', 'OQ-34', AP),
+      G('G-15', 'r', 'Offline states.', 'Not finalised / cart recoverable; conflict kept for review; uncertain lease blocks finalisation; old-client bill retained.', 'OQ-32', AP),
+      G('G-16', 'r', 'Receipts & labels.', 'Salesperson per line; label printing is part of the PT label journey; itemised receipt with a marked reprint. Printer models TBD.', 'OQ-01', AP),
+      G('G-17', 'r', 'Customer capture.', 'Name, mobile, tax registration no.; email only with the unchecked choice “Email me this receipt at [address]”.', 'C-06', AP),
+      G('G-18', 'r', 'Exception SLA.', 'One policy row per kind: owner, ack deadline, resolve deadline, calendar, escalation recipient, channel.', 'OQ-18', AP),
+      G('G-19', 'r', 'Attendance.', 'Shared store tablet or portal under each employee’s own identity; manager reviews corrections; GPS/biometric optional.', 'OQ-53', AP),
+      G('G-20', 'r', 'Site checklists.', 'Opening and closure checklists; named reviewers sign one snapshot; every residual has an owner.', 'OQ-51', AP),
+      G('G-21', 'r', 'Store services.', 'Staged: exchange now; loyalty/vouchers/credit/dues, alterations and delivery each approved before activation.', 'R-POS-014', AP),
+      G('G-22', 'r', 'Dashboards.', 'Built from this app’s own data per the PRD metric groups; definitions still follow OQ-43.', 'OQ-43'),
+      G('G-23', 'r', 'Trust label.', 'A compact “as of · complete %” chip on every metric (Step 2 component).', 'R-AN-003'),
+      G('G-24', 'r', 'Exports.', 'XLSX, CSV and PDF; durable progress for large exports.', 'Q-03'),
+      G('G-25', 'r', 'Notifications.', 'In-app only.', 'R-CTL-006'),
+      G('G-26', 'o', 'Finance & accounting.', 'Pages listed as placeholders; design deferred until you brief it.', 'OQ-47'),
+      G('G-27', 'r', 'Transfer receipt.', 'Each dispatch is received in one go; anything missing is recorded as short against that dispatch. A transfer can still be fulfilled bit by bit through several dispatches, and that is how partial receipt is met. Transfer record: “receive dispatch” stays; missing → short.', 'transfers §5 · R-INV-006', AN, FL),
+      G('G-28', 'r', 'Offline lease.', 'Till authority lasts 24 hours after the last online renewal; expiry blocks new bills; viewing and uploading still work. Till mock keeps “Lease 19h”.', 'store-warehouse §10.1', 'Resolved (correction)'),
+      G('G-29', 'r', 'Mistaken damage report.', 'A different person may reject a damage report, and must give a reason. Rejection removes only the damage hold. Goods return to sellable stock only if their identity is resolved and no other hold applies. Full history is kept.', '§15.2.1 rule 3', AN, FL),
+      G('G-30', 'r', 'Product-master confirmation in v1.', 'The Brand Manager confirms new items and mapping rules for their own brands. The Owner is the backup for any brand without a Brand Manager. The proposer can never confirm their own item or rule.', 'RBAC v1', AN),
+      G('G-31', 'r', 'RTV closing gap.', 'The Owner closes a gap between the shipped and vendor-acknowledged quantity, with a reason and evidence. Record only: no stock added back, no money entry. Vendor claims and credit notes come later with finance.', 'GSA-O01', AN),
+      G('G-32', 'r', 'Adjustments.', 'Staff raise an adjustment with a reason. A different person approves within the value band on the approval policy; the Owner approves anything above the band. Quantity and memo value only; no money entries until finance.', 'quarantine-outcomes', AN),
+      G('G-33', 'r', 'Write-off.', 'The Owner approves every write-off, with a reason and evidence. Goods stay in quarantine until a separate disposal. One action, “Write off and dispose”, creates two linked records (write-off + disposal). The same loss can never be written off twice.', 'quarantine-outcomes §7', AN),
+      G('G-34', 'r', 'RTV eligibility.', 'Any quarantined, wrong or excess goods may be put on an RTV. The Brand Manager (own brands) or the Owner approves. Vendor return terms attached as a note or evidence; not checked by the system yet (later with OQ-26).', 'OQ-26', AN),
+      G('G-35', 'r', 'Damage during a count.', 'A damage report is allowed while a count is running and places the damage hold at once. The count still counts those pieces where they are; the count record shows the report. Counts at a trading site stay gated.', 'goods-to-store', AN),
+      G('G-36', 'r', 'Pre-PT damaged goods, store → warehouse.', 'Allowed as a “quarantine transfer”: goods stay quarantined, have no value and no PT, and carry their GRN custody references. The Owner approves it. It never makes goods sellable.', 'R-INV-004', AN, FL),
+      G('G-37', 'r', 'Keeping wrong or unidentified goods.', 'Allowed once a person explicitly approves keeping them (different from the proposer) and their identity is resolved; they then go on a supplemental PT, like accepted excess. The original discrepancy stays on record. If also damaged, they keep the damage hold.', '§15.2.1 rule 2', AN, FL),
+      G('G-38', 'o', 'Store Person Money grant.', 'RBAC v1 gives Store Person “Expenses only” in Money; the store day and cash closure page added to the Store menu needs a grant decision.', 'RBAC v1 · R-FIN-015')
+    ];
+    const changes = [
+      { id: 'G-28', t: 'Correction: offline lease resolved: 24 hours after the last online renewal; expiry blocks new bills; viewing and uploading still work (store-warehouse §10.1). Back in 0 · Decisions.' },
+      { id: 'G-27', t: 'Transfer receipt decided: each dispatch received in one go; missing → short. Overall PRD update pending.' },
+      { id: 'G-29', t: 'Damage report reject decided: different person, reason required; removes only the damage hold. Overall PRD update pending.' },
+      { id: 'G-30', t: 'Product-master confirmation: Brand Manager (own brands), Owner backup. Added to BM and Owner menus; 3b C-PMO updated.' },
+      { id: 'G-31', t: 'RTV closing gap: Owner closes with reason + evidence; record only.' },
+      { id: 'G-32', t: 'Adjustments: raise with reason; approve within band; Owner above band.' },
+      { id: 'G-33', t: 'Write-off: Owner approves every one; new “Write off and dispose” action (two linked records).' },
+      { id: 'G-34', t: 'RTV eligibility: quarantined, wrong or excess goods; BM (own brands) or Owner approves.' },
+      { id: 'G-35', t: 'Damage during a count: allowed; hold at once; count record shows the report.' },
+      { id: 'G-36', t: 'Quarantine transfer added (Owner approves; no PT). Overall PRD update pending.' },
+      { id: 'G-37', t: 'Accepted wrong goods go on a supplemental PT. Overall PRD update pending.' },
+      { id: 'G-14–21', t: 'Changed from Recommended to Resolved — approved by Anand. Text unchanged; G-14 keeps OQ-34.' },
+      { id: 'G-13', t: 'Still Need from you; disposition list adopted. Reason codes and one real messy delivery still needed.' },
+      { id: 'G-26 · 38', t: 'No change: stay open, deferred with finance.' }
+    ];
+    const gapCount = gaps.length, openCount = gaps.filter(g => g.o).length;
+    return { changes, decisions, steps, modules, pageCount, menus, secCols, rbac, mapping, oldCols, oldRoles, storeSide, gaps, gapCount, openCount };
+  }
+}
+</script>
+</body>
+</html>

@@ -15,15 +15,146 @@ Apparel OS runs purchasing, receiving, stock, selling, finance, workforce manage
 - Support English and Hindi interfaces, counter and office PCs, and a phone client.
 - Online storefronts, marketplace order management, automatic government-return filing and facial recognition are outside the product scope. EBO brand billing software remains an external system whose reports are imported.
 
+### Why this exists
+
+**Who.** The first customer is KDPS Lifestyle Pvt. Ltd. (KDPS). Its work today is spread across four tools that are not connected:
+
+- The POS only sells goods.
+- Excel holds every document and report.
+- Tally holds the books.
+- Phone calls, WhatsApp and email carry the work between people.
+
+There is no single system. Data is scattered, documents are converted by hand and there are no analytics.
+
+**Why.** Organise the business in one place and let software do the manual, repetitive work. People decide; the software records, checks and reminds.
+
+| Today at KDPS | What it costs | What Apparel OS does |
+| --- | --- | --- |
+| Supplier files are retyped into Excel price tickets | Hours of manual work; wrong prices and labels | Converts the file into a reviewed PT; a person approves it |
+| Stock is known through the POS and separate sheets | Nobody has one picture of what is where | Shows stock by product, size, location, condition and owner |
+| Transfers and approvals run on WhatsApp and phone calls | No trail; gaps with no owner | Tracked movements, one inbox and recorded approvals |
+| Supplier return deadlines are remembered by people | Missed returns; money stuck in unsold stock | Tracks return rights and deadlines; sends reminders |
+| Cash, card, UPI and bank entries are matched by hand | Gaps are found late | Matches daily; every gap gets an owner |
+| Sales and purchases are typed again into Tally | Double entry and errors | Generates Tally vouchers from approved records |
+| Incentives are worked out in sheets | Delay and disputes | Calculates from approved sales and attendance |
+| Reports are built by hand from Excel exports | Late numbers; no analytics | One definition per number; reports from live records |
+
+### Words used
+
+Business words:
+
+| Word | Meaning |
+| --- | --- |
+| Ageing | How long stock has been held, or how long a due has been unpaid |
+| BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
+| Booking | A buying order placed with a brand or supplier for a season |
+| CA | Chartered Accountant |
+| COGS | Cost of goods sold: the cost of the pieces sold in a period |
+| Custody | Who physically holds the goods and where, separate from who owns them |
+| Cycle count | A count of part of the stock, such as one rack or brand, without a full store count |
+| Dead stock | Good unsold stock that is no longer selling |
+| EBO | Exclusive-brand outlet: a store selling one brand, billed on the brand's own software |
+| ESI | Employees' State Insurance: a statutory health-insurance contribution for staff |
+| E-way bill | The electronic government document required to move goods above a set value |
+| Fill rate | The share of the ordered quantity that the supplier delivered |
+| GRN | Goods receipt note: the record of goods physically counted at the receiving Site |
+| GSP | GST Suvidha Provider: an approved service connecting software to the government GST system |
+| GST | Goods and Services Tax |
+| GSTR-2B | The government statement of available input tax credit, built from what suppliers filed |
+| Hold | A block that keeps stock from being sold or moved until a question is settled |
+| HR, HRMS | Human resources; human resource management system |
+| HSN | Harmonised System of Nomenclature: the goods classification code used for GST |
+| INR | Indian rupee. One rupee is 100 paise |
+| IRN | Invoice Reference Number: the unique number the government e-invoice system gives a tax invoice |
+| KDPS | KDPS Lifestyle Pvt. Ltd., the first customer; also the name of its PT column layout |
+| Lakh | 100,000 |
+| Markdown | A planned price reduction |
+| MBO | Multi-brand outlet: a store selling several brands |
+| MRP | Maximum retail price: the price printed on the ticket |
+| MSME | Micro, Small and Medium Enterprise. Registered MSME suppliers must be paid within legal time limits |
+| NAG | Piece count in the KDPS PT layout; always equal to QTY |
+| NAV | Net asset value: what a store or business owns minus what it owes on a date |
+| Open-to-buy | The budget still free to commit to new bookings, by brand and season |
+| Outright | Commercial terms where goods are bought with no agreed right to return unsold pieces |
+| P RATE | Purchase rate: in the KDPS PT layout, the approved cost of a piece at receipt |
+| P&L | Profit and loss statement |
+| PAN | Permanent Account Number: the income-tax identity number |
+| PF | Provident Fund: a statutory retirement-savings contribution for staff |
+| POS | Point of sale: the billing counter and its software |
+| PT | Price ticket: a reviewed table of merchandise identity, counted coverage, approved cost, MRP and tax information |
+| Putaway | Placing received goods in their storage location |
+| QTY | Quantity |
+| Quarantine | A hold that keeps damaged, wrong or unidentified goods apart from sellable stock |
+| RTV | Return to vendor: goods sent back to the supplier |
+| Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
+| SBU | Business unit: the whole Store or one of several units within it |
+| Sell-through | The share of received pieces sold in a period |
+| Shop-in-shop | A brand counter operating inside a larger store |
+| Site | A physical place with a permanent identity |
+| SKU | Stock keeping unit: one merchandise variant, such as one style, colour and size |
+| SOH | Stock on hand: the quantity a system says is in stock |
+| Store | A trading business at a Site |
+| Tally | TallyPrime, the accounting software that holds the official books |
+| TDS | Tax deducted at source |
+| Tender | The way a customer pays: cash, card, UPI, store credit or gift voucher |
+| Till | The cash counter and its drawer for one billing session |
+| UPI | Unified Payments Interface: instant bank-to-bank payment by phone |
+| Voucher | An accounting entry in Tally, such as a sale, purchase, payment or journal |
+| Weeks of cover | How many weeks the current stock lasts at the current rate of sale |
+
+Technical words:
+
+| Word | Meaning |
+| --- | --- |
+| AI | Artificial intelligence: software that reads documents and drafts suggestions for a person to review |
+| API | Application programming interface: how one program talks to another |
+| CSV, XLSX, XLS, XLSB | Spreadsheet file formats |
+| ESC/POS | The command language used by receipt printers |
+| Idempotency | Sending the same request twice has the effect of sending it once |
+| LTS | Long-term support: a software version maintained for a long period |
+| ORM | Object-relational mapper: a library that reads and writes database rows from code |
+| OTP | One-time password sent to the user |
+| Outbox | A database table of follow-up work, saved in the same transaction as the business record |
+| PWA | Progressive web app: a web page that installs and works like an app, including offline |
+| REST/JSON | The common style and data format for web APIs |
+| S3 | A widely used interface for storing files |
+| SMS | Text message to a phone |
+| SQL | The language used to query the database |
+| TOTP | Time-based one-time password from an authenticator app |
+| UUIDv7 | A unique identifier that sorts by creation time |
+| XML | A text data format; Tally imports vouchers in it |
+
 ### Business measures
 
-- Measure stock-count accuracy against the configured tolerance for each operating unit.
-- Measure imported price-ticket lines approved without re-entry or correction.
-- Track eligible supplier returns so missed deadlines remain visible.
-- Explain each store-day and bank line by the next working day through a match or an assigned exception.
-- Generate Tally vouchers without duplicate manual entry; track import rejection against the target of less than 2%.
-- Make monthly brand-by-store profit available by the fifth working day, identifying incomplete inputs.
-- Calculate incentives from approved sales and attendance records without a separate calculation sheet.
+Targets marked proposed are starting goals awaiting KDPS agreement. They are goals, not system settings, and never act as policy defaults. The present value of each measure is recorded during the first month of the test run.
+
+| Measure | How it is counted | Target | Checked | Owner |
+| --- | --- | --- | --- | --- |
+| Stock-count accuracy | Pieces matching the system at a count ÷ pieces counted, within the configured tolerance for each operating unit | 98% (proposed) | Every count | Operations |
+| PT lines right first time | Imported PT lines approved without re-entry or correction ÷ lines imported, once the brand's layout is saved | 90% (proposed) | Monthly | Booking |
+| Supplier returns in time | Eligible return value dispatched before its deadline ÷ eligible return value; every missed deadline stays visible | 95% (proposed) | Monthly | Operations |
+| Store-days and bank lines explained | Store-days and bank lines with a match or an assigned exception by the next working day ÷ all store-days and bank lines | 100% (proposed) | Daily | Accounts |
+| Tally import rejection | Vouchers rejected by Tally ÷ vouchers sent | Less than 2% | Monthly | Accounts |
+| Tally manual entry | Vouchers typed by hand for records the system holds | Zero (proposed) | Monthly | Accounts |
+| Monthly brand-by-store profit | Working day on which it is available, with incomplete inputs identified | Fifth working day | Monthly | Accounts |
+| Incentives without a side sheet | Incentive amounts calculated from approved sales and attendance records ÷ all incentive amounts paid | 100% (proposed) | Each payroll period | HR |
+| Backup and restore | Most data that can be lost; time to restore service | 15 minutes; 4 hours (proposed) | Each restore test | Admin |
+
+### Delivery stages
+
+The product is delivered in six stages. Each stage completes one workflow end to end. The full plan, the test run and the switch from the current system are in [phases.md](phases.md).
+
+| Stage | Delivers |
+| --- | --- |
+| 1. Shared foundation | Business structure, users, permissions, products, parties, document numbering, audit history, and stock/money recording rules |
+| 2. Goods-in | Booking/order → physical receipt → discrepancies → PT approval → labels → accepted stock |
+| 3. Stock movement | Allocation → transfer → dispatch → store receipt, plus counts, supplier returns and claims |
+| 4. Store day | Opening till → sale → payment → return/exchange → day close → reconciliation |
+| 5. Financial control | Full accounting, Tally integration, bank matching, tax and franchise settlement |
+| 6. People and planning | HRMS alongside the core; forecasting once dependable history exists |
+
+- Basic operational reports belong in every stage.
+- Each stage records its stock and money effects from the start; stage 5 extends those records into full accounting.
 
 ## Organisation, sites and ownership
 
@@ -367,6 +498,42 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Prepare statutory data for authorised filing; do not claim submission merely because an export exists.
 - Maintain fixed assets, fit-out capitalisation, depreciation, transfers, disposal and monthly Store net-asset-value snapshots.
 
+### Net asset value and profitability
+
+**Net asset value (NAV)** is what the store or business owns minus what it owes, on a particular date.
+
+Assets:
+
+- Stock/inventory value
+- Refundable security deposits paid
+- Fixtures and other fixed assets, after accumulated depreciation
+- Debtors: money customers or others owe you
+- Cash and bank balances
+
+Minus liabilities:
+
+- Creditors: money owed to suppliers
+- Outstanding loans
+- Unpaid expenses, interest and taxes
+- Security deposits received that must be returned
+
+NAV = Total assets − Total liabilities
+
+Example: ₹20 lakh assets − ₹8 lakh liabilities = ₹12 lakh NAV
+
+**Profitability** is how much the store or business earned or lost over a period.
+
+- Sales after returns and discounts, excluding GST
+- Minus cost of the goods sold = Gross profit
+- Minus operating expenses such as rent, salaries, electricity and allocated head-office expenses
+- Minus depreciation and interest, plus other income = Profit before tax
+- Minus applicable income-tax expense = Net profit
+
+Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, depreciation, interest and tax = ₹1 lakh net profit
+
+- Stock/inventory value counts owned goods only; third-party-owned goods are excluded under the ownership rules.
+- These definitions govern the monthly Store net-asset-value snapshots and the Store P&L.
+
 ## Franchise and partner accounts
 
 - Maintain partner leads, active agreements and exit, with access limited to their authorised Stores and records.
@@ -435,6 +602,11 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Import opening supplier/customer dues, advances, deposits and outstanding commercial stock separately; reconcile with the last closed books without double counting.
 - Import historical sales for reports only, preserving source identities.
 - Keep opening balances, historical reference and live corrections distinct, with defined cutover and reconciliation.
+- Support a parallel run in which the existing external POS remains the selling system for a Store.
+- During a parallel run, import that POS's daily sales report and stock-on-hand (SOH) report through saved approved layouts, with the same validation and duplicate controls as EBO imports. Apply each sale and return to stock once.
+- Compare the reported SOH with system stock each day; each difference becomes an owned exception.
+- Switch each Store over at a day close, with verified balances and a fresh bill series. After the switch, the earlier POS is kept for reference only.
+- A parallel-run import never creates a tax invoice or a second sale for an externally issued bill.
 - During closure, stop new operations and settle stock, transit, reservations, custody, staff, cash, dues, books and exceptions.
 - Show remaining closure quantities and values by brand and owner.
 - Final retirement requires all outstanding items resolved; unresolved items cannot be waived solely to retire a unit.
@@ -584,26 +756,28 @@ Reference workload: 60 Stores, 500 users, 100 concurrent counters, 200,000 SKUs 
 
 A policy-dependent operation remains unavailable until its required configuration, authority and evidence are valid. Suggested commercial, financial or permission values are never active defaults.
 
-| Policy | Required definition |
-| --- | --- |
-| Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement |
-| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits; independent checks; material-change reapproval |
-| Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment |
-| Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility |
-| Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules |
-| Customer returns | Ordinary/defective windows, qualifying date, Store overrides and permitted remedies |
-| Refunds and no-bill returns | Tender routing, cash substitution, original-payment restoration, valuation and privileged evidence |
-| Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition |
-| Financial posting | Recognition, cost formula/adjustment, accounts, book mappings, tolerances, vouchers and acknowledgments |
-| Statutory applicability | Registration, goods/rate classification, sale-or-return tax, e-invoice/e-way, TDS and payroll rules |
-| Official book | Authority and reconciliation evidence for moving the official book from Tally |
-| Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement |
-| Workforce | Employer/state/staff-group pay, leave, overtime, incentives and final-settlement policies |
-| Opening and cutover | Verified manifest, financial opening balances, cutoff, outstanding work and sign-off authority |
-| Planning | Purpose, horizon, history quality, forecast measures and permitted approval/automation boundaries |
-| Offline operation | Permitted tender/return modes, stock and return allocations, device authority and conflict resolution |
-| Held-goods outcomes | Pre-PT custody-movement rules, wrong/unidentified acceptance, write-off/disposal authority and value treatment |
-| Recovery and retention | Recovery objectives, backup/export verification, retention schedules and legal holds |
+Decided by names the responsibilities that set and approve the policy. Needed by stage is the delivery stage that cannot start without it; see [phases.md](phases.md). KDPS's answers are kept in [kdps-policies.md](kdps-policies.md).
+
+| Policy | Required definition | Decided by | Needed by stage |
+| --- | --- | --- | --- |
+| Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement | Owner, Accounts | 2 |
+| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits; independent checks; material-change reapproval | Owner, Admin | 1 |
+| Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
+| Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
+| Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
+| Customer returns | Ordinary/defective windows, qualifying date, Store overrides and permitted remedies | Owner, Operations | 4 |
+| Refunds and no-bill returns | Tender routing, cash substitution, original-payment restoration, valuation and privileged evidence | Owner, Accounts | 4 |
+| Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
+| Financial posting | Recognition, cost formula/adjustment, accounts, book mappings, tolerances, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
+| Statutory applicability | Registration, goods/rate classification, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
+| Official book | Authority and reconciliation evidence for moving the official book from Tally | Owner, CA | 5 |
+| Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement | Owner, Accounts | 5 |
+| Workforce | Employer/state/staff-group pay, leave, overtime, incentives and final-settlement policies | Owner, HR | 6 |
+| Opening and cutover | Verified manifest, financial opening balances, cutoff, outstanding work and sign-off authority | Owner, Accounts, Operations | 1; signed before the pilot switch |
+| Planning | Purpose, horizon, history quality, forecast measures and permitted approval/automation boundaries | Owner, Booking | 6 |
+| Offline operation | Permitted tender/return modes, stock and return allocations, device authority and conflict resolution | Owner, Operations | 4 |
+| Held-goods outcomes | Pre-PT custody-movement rules, wrong/unidentified acceptance, write-off/disposal authority and value treatment | Owner, Operations, Accounts | 2; write-off and disposal by 3 |
+| Recovery and retention | Recovery objectives, backup/export verification, retention schedules and legal holds | Owner, Admin | 1 |
 
 ## Acceptance conditions
 
