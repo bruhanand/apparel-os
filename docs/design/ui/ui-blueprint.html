@@ -357,7 +357,7 @@ class Component extends DCLogic {
       { num: '14', name: 'Self-service', shell: 'Portal', stage: 'Stage 6', refs: 'PRD: HRMS and payroll', pages: [W('Check-in and check-out', null, D('Photo, location, time; no face matching')), L('My attendance'), L('My targets and incentives'), L('My payslips')], actions: 'Request a correction · download a payslip.' },
       { num: '15', name: 'Partners', shell: 'Back office + Portal', stage: 'Stage 5', refs: 'PRD: Franchise and partner accounts', pages: [L('Partners', 'Lead · Active · Exit'), R('Partner', 'Agreements · Stores · Deposits · Credit · Ledger', 'Policy 12'), L('Monthly statements', 'Minimum guarantee · Entitlement · Differences', 'Policy 12'), W('Partner portal', 'Dashboard · Statements · Ledger')], actions: 'Record an agreement version · issue a statement · assign differences.' },
       { num: '16', name: 'Setup', shell: 'Back office', stage: 'Stage 1', refs: 'PRD: Organisation, sites and ownership · People, access and approvals · Required policy configuration · Technical platform', pages: [
-        W('Policy readiness', '18 policies · Signed · Configured · What is blocked'), S('Organisation structure', 'Legal entities · Registrations · Books · Sites · Stores · Business units · Locations'), S('Geography and groupings', 'Country · State · City · Area · Regions · Clusters'),
+        W('Policy readiness', '19 policies · Signed · Configured · What is blocked'), S('Organisation structure', 'Legal entities · Registrations · Books · Sites · Stores · Business units · Locations'), S('Geography and groupings', 'Country · State · City · Area · Regions · Clusters'),
         L('Products', 'Styles · SKUs · Barcodes and aliases'), S('Merchandise tracking profiles', 'Units · Packs · Batch and expiry · Piece IDs', 'Policy 4'), S('Vocabularies', 'Season · Brand · Colour · Gender · Sub category · Type · Item · Fit · Size'), S('PT profiles', 'KDPS export profile · Costing profiles', 'Policy 3'),
         L('Users'), S('Personas and roles', 'PRD personas · KDPS templates · Role assignments', 'Policy 2'), S('Approval limits', null, 'Policy 2'), S('Exception rules', 'Owner · Due time · Escalation · Alerts', 'Policy 2'),
         S('Customer return policy', 'Organisation · Authorised Store overrides', 'Policy 6'), S('Tax configuration', null, 'Policy 10'), S('Posting maps', null, 'Policy 9'), L('Devices, tills and bill series', null, 'Policy 16'), S('Reason codes'), S('Label templates'),
@@ -389,7 +389,7 @@ class Component extends DCLogic {
     const rung = s => { const [r, l] = s.split('|'); return { m: r === 'M', a: r === 'A', o: r === 'O', v: r === 'V', n: r === '-', l: l || '' }; };
     const RB = (name, tpl, cells) => ({ name, id: PID[name], code: tpl ? 'Template: ' + tpl : null, proposed: tpl ? null : 'No template yet', cells: cells.map(rung) });
     const rbac = [
-      RB('Owner', 'Owner', ['V|All', 'V|View', 'A|Approve', 'V|View', 'V|View', 'V|View', 'A|Approve losses', 'V|All', 'V|View', 'A|Approve', 'A|Approve payments', 'V|All', 'V|View', 'A|Approve', 'A|Approve changes']),
+      RB('Owner', 'Owner', ['V|All', 'V|View', 'A|Approve', 'V|View', 'V|View', 'V|View', 'V|View', 'V|All', 'V|View', 'A|Approve', 'A|Approve payments', 'V|All', 'V|View', 'A|Approve', 'A|Approve changes']),
       RB('Admin', 'Admin', ['V|Own', '-', '-', '-', '-', '-', '-', '-', 'O|Layouts', '-', 'O|Integrations', 'V|Exports', '-', '-', 'M|Full']),
       RB('Accounts', 'Accounts', ['V|Finance', 'V|Bills', 'V|View', 'O|Invoice matching', 'V|View', 'V|View', 'O|Claims', 'V|Value', 'O|Settlement', 'V|View', 'M|Full', 'V|All', 'V|Payroll', 'O|Ledgers', 'O|Posting maps']),
       RB('Chartered Accountant (CA)', null, ['V|Own', '-', '-', '-', '-', '-', '-', '-', '-', '-', 'V|Books in scope', 'V|In scope', '-', '-', '-']),
@@ -441,7 +441,7 @@ class Component extends DCLogic {
     const G = (id, k, t, d, by, ref) => ({ id, r: k === 'kdps', p: k === 'design', o: k === 'prd', t, d, by, ref });
     const gaps = [
       G('1', 'kdps', 'Who holds which persona and role.', 'The person-to-persona, role and scope map, and who holds Operations, HR, EBO staff, CA and Auditor.', 'KDPS · policy 2', 'Blocks: stage 1 live use'),
-      G('2', 'kdps', 'Approval limits.', 'Limit values, approvers, the next approver above each limit, and the value basis (MRP or cost).', 'KDPS · policy 2', 'Blocks: live approvals'),
+      G('2', 'kdps', 'Approval limits.', 'Limit values, assigned approvers and the next approver above each limit. Value bases follow PRD-ACS-015.', 'KDPS · policy 2', 'Blocks: live approvals'),
       G('3', 'kdps', 'Exception rules and alerts.', 'Owner, due time and escalation for each kind of exception; recipients of alerts and the 9 PM summary.', 'KDPS · policy 2', 'Blocks: stage 1 live use'),
       G('4', 'kdps', 'Count controls.', 'Count tolerance, who approves differences, and the rule for movements during a count.', 'KDPS · policy 2', 'Blocks: stage 3'),
       G('5', 'kdps', 'Tracking profiles.', 'Which categories need batch or expiry, shelf-life limits, and which products get piece IDs.', 'KDPS · policy 4', 'Blocks: stage 1 live use'),
@@ -462,7 +462,8 @@ class Component extends DCLogic {
       G('20', 'design', 'Bill number.', 'A format within 16 characters that includes the counter series.', 'KDPS and CA', 'Needed by: stage 4'),
       G('21', 'design', 'Finance screens.', 'Detailed layouts for the Money pages.', 'Design', 'Needed by: stage 5'),
       G('22', 'design', 'Hindi.', 'Hindi text and a Devanagari font check on every screen.', 'Design and KDPS', 'Needed by: stage 5'),
-      G('23', 'design', 'Logo.', 'Artwork for the empty logo slot.', 'KDPS', 'Needed by: pilot switch')
+      G('23', 'design', 'Logo.', 'Artwork for the empty logo slot.', 'KDPS', 'Needed by: pilot switch'),
+      G('24', 'kdps', 'Offers and promotions.', 'Offer-combination rules, brand and Organisation cost shares, and markdown approval rules.', 'Owner and Brand manager · policy 19', 'Blocks: stage 4')
     ];
     const gapCount = gaps.length;
     return { changes, rules, steps, modules, pageCount, moduleCount, menus, secCols, rbac, mapping, oldCodes, storeSide, gaps, gapCount };

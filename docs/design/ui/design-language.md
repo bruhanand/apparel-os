@@ -4,7 +4,7 @@
 
 Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 2 Oct 2026. If this document disagrees with them, they win; raise the clash, do not guess.
 
-Implements these PRD sections: Operator experience; People, access and approvals; Receiving and price tickets (delivery record, PT workbench); Counter sales and payments; Offline counter; Exceptions, reports and planning; AI, security and operational reliability; Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 6 and 7 (returns, refunds, tenders), 16 (offline), 17 (held goods).
+Implements these PRD sections: Operator experience; People, access and approvals; Receiving and price tickets (delivery record, PT workbench); Counter sales and payments; Offline counter; Exceptions, reports and planning; AI, security and operational reliability; Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 6 and 7 (returns, refunds, tenders), 16 (offline), 17 (held goods), 19 (offers and promotions).
 
 People are described by the 14 PRD personas in [personas.md](../access/personas.md). Live visual version: [design-system.html](design-system.html).
 
@@ -599,7 +599,7 @@ Each entry covers anatomy, states and usage rules.
 - **Anatomy (e1 card):**
   - Header: record title + “Awaiting approval” badge; prepared by, with date, time and record version.
   - Body:
-    - Value label + value (kpi). The label names the value basis set in policy 2, such as “Value at cost”.
+    - Value label + value (kpi). The label names the value basis required by `PRD-ACS-015` for that action.
     - **Limit bar:** 10 px track in `--sunken`, the approver’s limit in `--tint` ending in a 2 px `--accent` edge, and a value marker (4 × 18 px): `--accent` inside the limit, `--w-fg` outside.
     - Scale: “₹0 · Your limit up to ₹X · Next: <next approver>”.
     - A message block in the family tint.
@@ -673,7 +673,7 @@ Each entry covers anatomy, states and usage rules.
 
 | Item | Who decides | Needed by |
 |---|---|---|
-| Approval limit values, approvers and the value basis (MRP or cost) | KDPS, policy 2 | Live approvals |
+| Approval limit values and approvers | KDPS, policy 2 | Live approvals |
 | Reason list (Setup › Reason codes) | KDPS | Stage 2 |
 | One real messy delivery to test the reconciliation layout | KDPS | Stage 2 |
 | Piece-label layout; label and receipt printer models | KDPS | Stage 2 |
