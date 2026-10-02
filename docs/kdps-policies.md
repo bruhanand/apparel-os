@@ -78,7 +78,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 **Answer:**
 
 - `POL-02.01` Start with editable KDPS role templates for Owner, Store POS, Warehouse, Brand Manager, Accounts and Admin. Businesses can configure their own roles; a template label alone grants no permission and does not replace the PRD personas.
-- `POL-02.02` Assign each user a role with explicit business, Site and brand scope.
+- `POL-02.02` Assign each user one or more roles, each with explicit business, Site and brand scope.
 - `POL-02.03` Expand broad labels such as All, Full and Manage into explicit view, create, edit, approve, cancel, export and override permissions.
 - `POL-02.04` Control sensitive fields separately from module access.
 - `POL-02.05` Keep approval authority separate from ordinary access, with configurable limits and independence requirements.
@@ -87,8 +87,10 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-02.08` A person cannot self-approve through another role. Routine billing and receiving within approved rules can proceed without additional approval.
 - `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant. Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
 - `POL-02.10` Set numeric limit values when KDPS assigns approvers; the values remain undecided.
-- `POL-02.11` The actual person-to-persona, role and scope map, exception owners/timings/recipients, count controls, session durations, and 9 PM summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
+- `POL-02.11` The actual person-to-persona, role and scope map, exception owners/timings/recipients, count controls, session durations, and daily summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
 - `POL-02.12` Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action.
+- `POL-02.13` The day-close cash-variance tolerance and its approvers remain unconfigured.
+- `POL-02.14` Send KDPS's daily summary at 9 PM.
 
 **Template map (proposed, Open).** Which PRD personas each KDPS template serves. A person gets only the parts their role assignment grants.
 
@@ -137,9 +139,10 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-04.03` Set a stock unit per product (piece, pair or pack) and explicit conversions for each purchasing and selling pack. Itemise mixed size/colour packs by their contents.
 - `POL-04.04` Retain unit and pack-conversion history so later changes do not rewrite past quantities.
 - `POL-04.05` Require batch/expiry identity throughout movements only for profiles that require it. Configure minimum remaining shelf life separately for receiving and selling; hold goods that fail the applicable eligibility rule.
-- `POL-04.06` Give each KDPS-tracked physical piece a unique internal ID with a printable barcode, and retain supplier product barcodes for lookup.
+- `POL-04.06` Give each physical piece of a piece-tracked profile a unique internal ID with a printable barcode, and retain supplier product barcodes for lookup.
 - `POL-04.07` Support quantity-based tracking for broader products where appropriate.
 - `POL-04.08` Specific batch/expiry categories and minimum remaining shelf-life day limits remain to be confirmed.
+- `POL-04.09` Which categories are piece-tracked remains to be confirmed.
 
 **Signed by, date:**
 
@@ -192,7 +195,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 
 **Answer:**
 
-- `POL-07.01` Route each refund only to its original tender(s), capped at each tender’s remaining refundable amount; a cash purchase may be refunded in cash. For split payments, retain the original tender allocations; no new tender priority is assumed. A card/UPI refund cannot be substituted with cash.
+- `POL-07.01` Route each refund only to its original tender(s), capped at each tender’s remaining refundable amount; a cash purchase may be refunded in cash. For split payments, retain the original tender allocations and split each refund across them in proportion, as the PRD requires. A card/UPI refund cannot be substituted with cash.
 - `POL-07.02` Keep refund entitlement separate from permitted tender routing. Prevent duplicate refunds; while the original refund outcome is unknown, do not issue a second refund. Keep approved, pending, failed and confirmed outcomes distinct; a failed payment remains an outstanding customer obligation.
 - `POL-07.03` Issue store credit only with the customer’s agreement.
 - `POL-07.04` For a no-bill request, first search the original sale using receipt details, customer details or payment reference. If found, handle it as an ordinary bill-backed return.
@@ -201,6 +204,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-07.07` Assess defective-goods claims separately under applicable rights and warranties.
 - `POL-07.08` Each Organisation may enable or disable ordinary no-bill exceptions. Keep them unavailable until eligibility, valuation and approval limits are configured.
 - `POL-07.09` The online tender set, store-credit/voucher/loyalty values, customer notice/consent rules and which refund cases require independent approval remain to be confirmed. These features remain unavailable until configured.
+- `POL-07.10` Gift-voucher validity, partial redemption, refund of an unused balance and treatment of a lost voucher remain to be confirmed.
 
 **Signed by, date:**
 
@@ -251,6 +255,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-09.16` Validate inventory vouchers and combined cash-sale mapping against KDPS’s actual Tally configuration to avoid duplicate stock or money effects.
 - `POL-09.17` Exporting or sending a voucher is not success. Parse Tally’s response and associate each accepted voucher with its ERP transaction. Support partial batch success; rejected or uncertain vouchers remain pending and can be safely retried without duplicates.
 - `POL-09.18` Reconcile voucher values, tax and totals before marking a batch reconciled.
+- `POL-09.19` The cost pool (each SKU across the accounting book, or each SKU at each Site) remains to be confirmed by the CA.
 
 **Signed by, date:**
 
@@ -271,6 +276,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-10.04` Configure TDS rules for applicable payment types and payroll rules by employer and state.
 - `POL-10.05` Accounts and the CA approve statutory settings. Missing required configuration blocks the affected statutory action and raises an exception; configuration cannot bypass applicable law.
 - `POL-10.06` KDPS registrations, merchandise classifications, rates and applicability still require verification; no thresholds or framework applicability are assumed.
+- `POL-10.07` The bill-number format for each tax registration, within the statutory limit, remains to be confirmed by the CA.
 
 **Signed by, date:**
 
