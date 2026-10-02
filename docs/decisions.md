@@ -126,3 +126,35 @@
 - **Options.** Stop the Store P&L at profit before tax · Allocate the entity's tax to Stores by a configured rule.
 - **Choice.** Stop at profit before tax. A tax split across Stores would be an allocation, not a real amount, and would need its own policy.
 - **Changed.** New `PRD-NAV-017` (Store P&L and brand-by-store profit end at profit before tax; income tax and net profit only for a legal entity).
+
+## DEC-012 — Refund approval cases belong to policy 7
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** A-6, D-05
+- **Question.** Policy 7 asks which refund cases need independent approval, while policy 2 and the PRD also appear to decide those cases. Policy 2 must still define who may approve, their authority and limits, and prevent self-approval.
+- **Options.** Put refund-case triggers in policy 7 and approver identity/authority in policy 2 · Keep refund triggers in both policies.
+- **Choice.** Policy 7 owns which refund cases require independent approval. Policy 2 owns assigned approvers, authority, limits and no-self-approval, and cross-references policy 7. Do not duplicate refund triggers.
+- **Changed.** `POL-02.05`, `POL-02.07`, `POL-02.08`, `POL-02.09`, `POL-07.09`; the PRD Required policy configuration rows for policies 2 and 7.
+
+## DEC-013 — Real opening data is loaded at the stage 4 switch
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** A-7, D-03
+- **Question.** Opening and cutover policy 14 is needed in stage 1 to design import layouts, while verified opening stock, balances and sign-off are needed for the stage 4 pilot switch.
+- **Options.** Require the verified opening data in stage 1 · Build and test layouts with sample data in stage 1, then load verified real data at the approved stage 4 switch.
+- **Choice.** Build and test import layouts with sample data in stage 1. Load real opening stock and balances, and record verification and sign-off, at each approved day-close switch in stage 4.
+- **Changed.** `POL-14.07`; the PRD Required policy configuration row for policy 14.
+
+## DEC-014 — Give offers, EBO settlements and Store P&L allocation explicit policy homes
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report items:** B-2, B-4, B-5
+- **Question.** Offer combination, funding and markdown approvals; missing EBO report timing and EBO brand commission/settlement; and Store P&L allocation had no complete policy homes.
+- **Options.** Add a separate offers policy and extend the existing permission, partner and financial-posting policies · Leave the details in design or in unrelated policies.
+- **Choice.** Add policy 19, Offers and promotions, decided by Owner and Brand manager for stage 4. Policy 2 owns missing EBO report due/exception timing; policy 12 also covers EBO brand commission and settlement; policy 9 owns Store P&L and brand-by-Store allocation with Accounts and CA for stage 5. This approves policy homes only; actual rates, terms, bases and formulas remain OPEN.
+- **Changed.** Updated PRD Required policy configuration rows 2, 9 and 12; new row for policy 19; `POL-02.11`, new `POL-12.06`, new `POL-09.20`, and new `POL-19.01`–`POL-19.03`.
+
+## DEC-015 — PT approval limits use proposed acquisition cost
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** 4.11, V-55
+- **Question.** A PT approval monetary limit could be compared with MRP or with the acquisition cost of the proposed covered quantities. A missing or disputed cost must not be treated as zero.
+- **Options.** Use the total proposed acquisition cost for the covered PT quantities · Use their MRP total.
+- **Choice.** Use total proposed acquisition cost, calculated from the approved receipt-layer cost of each covered quantity; do not use MRP. A missing or disputed cost blocks value-based approval until resolved, never as zero. This is an approval valuation and does not determine supplier-liability recognition.
+- **Changed.** `PRD-ACS-015`, `PRD-ACS-016`; cross-references in `POL-02.09` and `POL-03.07`; design-language and design-system approval guidance; V-55 is settled.
