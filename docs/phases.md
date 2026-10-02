@@ -48,7 +48,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** None are live. The rules that every later stage posts under are fixed and tested here.
 
-**Policies needed first.** Permissions and approvals; Merchandise tracking; Financial posting; Opening and cutover; Recovery and retention.
+**Policies needed before live use.** Permissions and approvals; Merchandise tracking; Financial posting; Opening and cutover; Recovery and retention.
 
 **Reports.** Master lists, access and audit history, import outcomes.
 
@@ -78,7 +78,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** Physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement; the supplier obligation under the approved recognition rule.
 
-**Policies needed first.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (goods classification and rates); Held-goods outcomes.
+**Policies needed before live use.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (goods classification and rates); Held-goods outcomes.
 
 **Reports.** Ordered, delivered, outstanding and cancelled by booking; receipt discrepancies; PT lines right first time; supplier fill rate and timeliness; stock by product, size, location, condition and owner.
 
@@ -107,7 +107,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** Every movement keeps receipt origin, PT revision, quantity, ownership and cost; write-off records loss of established value; claims record amounts due from suppliers.
 
-**Policies needed first.** Held-goods outcomes (write-off and disposal); Commercial ownership (return rights); Statutory applicability (movement documents).
+**Policies needed before live use.** Held-goods outcomes (write-off and disposal); Commercial ownership (return rights); Statutory applicability (movement documents).
 
 **Reports.** Goods in transit and overdue transit; count differences; return deadlines; claims register; dead stock and damaged stock.
 
@@ -139,7 +139,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** Immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit and loyalty liabilities.
 
-**Policies needed first.** Customer returns; Refunds and no-bill returns; Billed-retained; Offline operation; Statutory applicability (e-invoice).
+**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Statutory applicability (e-invoice).
 
 **Reports.** Sales by Store, brand, category, size, salesperson and hour; day-close variance; offer sales and who funded the discount.
 
@@ -173,7 +173,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** No new kinds. The records written since stage 2 are reconciled, closed by period and exchanged with Tally.
 
-**Policies needed first.** Official book; Franchise/partner; Financial posting (vouchers and acknowledgments); Statutory applicability (TDS).
+**Policies needed before live use.** Official book; Franchise/partner; Financial posting (vouchers and acknowledgments); Statutory applicability (TDS).
 
 **Reports.** Trial balance and ledgers; payables and receivables ageing; bank reconciliation; GST registers; Store NAV; brand-by-store profit; Store P&L.
 
@@ -203,7 +203,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** Raw attendance events; incentive calculations with their policy versions; payroll inputs, liabilities and payments kept distinct.
 
-**Policies needed first.** Workforce; Planning; Statutory applicability (payroll).
+**Policies needed before live use.** Workforce; Planning; Statutory applicability (payroll).
 
 **Reports.** Attendance; target against achievement; incentive statements; forecast accuracy against the baseline.
 
