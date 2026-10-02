@@ -58,6 +58,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 - `ui-blueprint.html` renders only with `support.js` beside it and an internet connection (it loads React from unpkg). Its content lives in the `<script data-dc-script>` block at the end of the file.
 - `design-system.html` is a self-contained bundle that opens offline. Its page is one JSON string in `<script type="__bundler/template">`: unpack it with `json.loads`, edit, and repack with `json.dumps(page, ensure_ascii=False).replace('</', '<\\u002F')`. Leave the manifest (fonts, React, runtime) alone.
 - Test hosting (Railway environments, services, one origin, what the test setup never does) is in `docs/design/platform/deployment.md`. Production hosting is not designed yet.
+- The stock ledger (movements, the five separate stock facts, holds and reservations, cost pools and layers, counts, locking, golden scenarios) is in `docs/design/stock/stock-ledger.md`. Every stage posts stock through it.
 - The UI was first drawn for RetailsOps, an earlier version of this product in another repo. Its codes (G-, OQ-, R-, BP-) and decisions are not requirements; anything still wanted belongs in the PRD or the policies.
 
 
@@ -66,7 +67,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 
 Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Each live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; the Hindi interface and WhatsApp and SMS messaging arrive in stage 5.
 
-During the test run, the existing POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup. Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
+During the test run, the existing POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
 
 ## Stack
 
