@@ -325,7 +325,7 @@ class Component extends DCLogic {
       { topic: 'Restricted fields', design: 'Cost, margin, salary, bank, identity and customer contact details show a lock; the value never reaches the browser.', src: 'PRD: People, access and approvals' },
       { topic: 'Returns and refunds', design: 'Returns and exchanges need a connection. Refunds go back to the original tenders; a card or UPI refund is never paid in cash. Remedies follow policy 6.', src: 'PRD: Customer returns, exchanges and credit · policies 6, 7' },
       { topic: 'Offline billing', design: 'Only one registered counter per Store bills offline, with offline authority renewed online every 24 hours. Offline it takes cash, and card or UPI only with an approved evidence procedure.', src: 'PRD: Offline counter · policy 16' },
-      { topic: 'Old POS during the test', design: 'The old POS keeps selling. Its SOH is loaded as shadow stock at the start; its daily sales report and SOH are imported and compared with official plus shadow stock every day; each difference becomes an exception (PRD-LIF-024).', src: 'PRD: Opening, closure, migration and export' },
+      { topic: 'Old POS during the test', design: 'The old POS does all real billing while it is active; bills in the app during the test only test the app. Its end-of-day sales report and SOH are imported for checking and reports only and never move stock (PRD-LIF-014). At the switch, the verified count becomes opening stock and is reconciled with the last SOH (PRD-LIF-027).', src: 'PRD: Opening, closure, migration and export' },
       { topic: 'Language and messages', design: 'English first, ready for Hindi. Notifications are in-app; the Hindi interface and WhatsApp and SMS arrive in stage 5.', src: 'PRD: Product · phases.md' }
     ];
 
