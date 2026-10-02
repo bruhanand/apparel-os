@@ -381,7 +381,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 
 **Answer:**
 
-- `POL-14.01` Switch one Store at a time at a recorded day close, after the parallel run's stock and sales reconcile.
+- `POL-14.01` Switch one Store at a time at a recorded day close, after the side-by-side test's go/no-go checks pass.
 - `POL-14.02` Operations verifies the opening manifest by item, quantity, location, condition and ownership.
 - `POL-14.03` Accounts verifies opening values, supplier and customer dues, advances and deposits against the last closed books. Complete a through-cutoff reconciliation that prevents omissions and double counting.
 - `POL-14.04` Carry unfinished transfers, bookings, supplier/customer returns and refunds, claims and billed-retained items with their original references.
