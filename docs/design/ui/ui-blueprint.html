@@ -255,11 +255,11 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
           <div style="display:flex;gap:8px;padding:6px 10px;background:#1c1d1f;color:#e9e9e6;flex-wrap:wrap"><span>B01-C1 · offline counter</span><span>! Offline · 14 queued</span><span>Offline authority 19 h left</span><span style="flex:1"></span><span>Priya S.</span></div>
           <div style="display:grid;grid-template-columns:1fr 110px;min-height:120px">
             <div style="padding:8px;border-right:1px solid #e1e1dc">Scan field (always focused): piece ID or barcode<br>Lines · salesperson per line · offers</div>
-            <div style="padding:8px">Totals<br>Cash · Card · UPI · Store credit · Gift voucher<br>[F12 Pay]</div>
+            <div style="padding:8px">Totals<br>Cash<br>[F12 Pay]</div>
           </div>
           <div style="padding:6px 10px;background:#f3f3f0;border-top:1px solid #e1e1dc">F2 Customer · F3 Salesperson · F4 Hold cart · F5 Recall · F6 Return (online) · F7 Manager approval · F9 Till summary</div>
         </div>
-        <p style="margin:0;font-size:13px;line-height:1.5;color:#45464b">No sidebar. Keyboard and scanner first. Everyone signs in with their own login; a manager approves a discount above the cashier’s limit by signing in on the till. A Store can run several online tills; only its one registered counter bills offline, taking cash, and card or UPI only with policy 16’s evidence procedure. Tenders shown are those enabled under policy 7.</p>
+        <p style="margin:0;font-size:13px;line-height:1.5;color:#45464b">No sidebar. Keyboard and scanner first. Everyone signs in with their own login; a manager approves a discount above the cashier’s limit by signing in on the till. A Store can run several online tills; the offline pilot is cash-first on one registered counter. Later card or UPI use requires policy 16’s evidence procedure. Tenders shown are those enabled under policy 7.</p>
       </div>
       <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px">
         <div style="font-size:14px;font-weight:600">C · Portal</div>
@@ -303,7 +303,7 @@ class Component extends DCLogic {
       { id: 'Name', t: 'The product is Apparel OS throughout.' },
       { id: 'Sources', t: 'Every rule cites a PRD section or a KDPS policy. Decision and question codes from the earlier repo are gone.' },
       { id: 'Rules', t: 'Section 0 lists the rules the screens follow. Earlier decisions that are in neither the PRD nor the policies were dropped; add them to the policies to bring them back.' },
-      { id: 'Personas', t: 'Menus and the access grid use the PRD’s 14 personas, each with an ID (P-OWN … P-AUD). A person can hold several. KDPS’s six templates map onto them (policy 2), and 3c shows where the earlier codes land.' },
+      { id: 'Personas', t: 'Menus and the access grid use the PRD’s 14 personas, each with an ID (P-OWN … P-AUD). A person can hold several. KDPS’s eleven editable templates map onto them (policy 2), and 3c shows where the earlier codes land.' },
       { id: 'Stages', t: 'Each section shows its delivery stage. Amber tags name the policy needed before live use.' },
       { id: 'New', t: 'External sales section for the old POS import during the test run and for EBO uploads. Policy readiness page in Setup. Piece pages and piece labels.' },
       { id: 'Till', t: 'No PINs. Offline authority only on the one offline counter. All PRD tenders. Returns online only.' },
@@ -444,17 +444,17 @@ class Component extends DCLogic {
       G('2', 'kdps', 'Approval limits.', 'Limit values, assigned approvers and the next approver above each limit. Value bases follow PRD-ACS-015.', 'KDPS · policy 2', 'Blocks: live approvals'),
       G('3', 'kdps', 'Exception rules and alerts.', 'Owner, due time and escalation for each kind of exception; recipients of alerts and the 9 PM summary.', 'KDPS · policy 2', 'Blocks: stage 1 live use'),
       G('4', 'kdps', 'Count controls.', 'Count tolerance, who approves differences, and the rule for movements during a count.', 'KDPS · policy 2', 'Blocks: stage 3'),
-      G('5', 'kdps', 'Tracking profiles.', 'Which categories need batch or expiry, shelf-life limits, and which products get piece IDs.', 'KDPS · policy 4', 'Blocks: stage 1 live use'),
+      G('5', 'kdps', 'Tracking profiles.', 'Which categories need batch/expiry and shelf-life limits; apparel and footwear use piece IDs by default, with any additional categories selected explicitly.', 'KDPS · policy 4', 'Blocks: stage 1 and 2 live use'),
       G('6', 'kdps', 'Costing formulas.', 'The P RATE formula for each brand, backed by its agreement or a worked example.', 'KDPS · policy 3', 'Blocks: stage 2'),
       G('7', 'kdps', 'Tax settings.', 'Registrations, HSN rates and slabs, e-invoice and e-way rules.', 'Accounts and CA · policy 10', 'Blocks: stage 2'),
-      G('8', 'kdps', 'Tenders and customer credit.', 'Which tenders are enabled; store credit, gift voucher and loyalty rules; customer notice and consent.', 'KDPS · policy 7', 'Blocks: stage 4'),
-      G('9', 'kdps', 'Returns.', 'The defective-item cutoff, and which refund cases need a second person.', 'KDPS · policies 6, 7', 'Blocks: stage 4'),
+      G('8', 'kdps', 'Tenders and customer credit.', 'The chosen tender set is in scope. Confirm provider evidence, customer-credit limits and due dates; store-credit/voucher terms; loyalty; and customer notice/consent.', 'KDPS · policy 7', 'Blocks: stage 4'),
+      G('9', 'kdps', 'Returns.', 'Assess defective goods under applicable rights and warranties without an invented hard cutoff; name approvers and limits for the selected refund exceptions.', 'KDPS · policies 6, 7', 'Blocks: stage 4'),
       G('10', 'kdps', 'Billed-retained.', 'The collection period, and what happens to goods never collected.', 'KDPS · policy 8', 'Blocks: stage 4'),
-      G('11', 'kdps', 'Offline counter.', 'Which Stores bill offline, the stock set aside, and the card or UPI evidence procedure.', 'KDPS · policy 16', 'Blocks: offline billing'),
+      G('11', 'kdps', 'Offline counter.', 'Name the cash-first pilot Store/counter and reserved stock; define evidence before any later external-terminal tender is used.', 'KDPS · policy 16', 'Blocks: offline billing'),
       G('12', 'kdps', 'Held goods.', 'Write-off and disposal approvers and limits; whether damaged goods may be donated or sold.', 'KDPS · policy 17', 'Blocks: stage 3'),
-      G('13', 'kdps', 'Go or no-go pass marks.', 'Days of agreement, the allowed stock difference, open exceptions and staff trained.', 'KDPS · phases.md', 'Blocks: pilot switch'),
+      G('13', 'kdps', 'Go or no-go pass marks.', 'Set the run length and material-difference threshold. Require no unexplained material difference and training for every participating staff member.', 'KDPS · phases.md', 'Blocks: pilot switch'),
       G('14', 'kdps', 'Partner statements.', 'What partner users may see in their statements and ledger.', 'KDPS · policies 2, 12', 'Blocks: stage 5'),
-      G('15', 'prd', 'Quick re-check at the till.', 'The PRD requires password plus OTP or TOTP. Should a short PIN re-check a signed-in person on a registered till? Until decided, there is no PIN.', 'You · PRD', 'Affects: stage 4'),
+      G('15', 'prd', 'Quick re-check at the till.', 'Production requires password plus authenticator-app TOTP. A short PIN does not replace production MFA; any easier development test path is separate.', 'You · PRD / Policy 2', 'Affects: stage 1 and stage 4'),
       G('16', 'prd', 'Store P&L.', 'Should Store reports stop at profit before tax? Income tax is paid by the company, not a Store.', 'You · PRD', 'Affects: stage 5'),
       G('17', 'prd', 'Pages dropped.', 'Footfall, purchase orders apart from bookings, leakage watch, the AI request register, mailbox and circular intake, customer deliveries and the sub-brand crosswalk had no PRD rule. Add any to the PRD to bring it back.', 'You · PRD', 'Affects: none yet'),
       G('18', 'design', 'Reconciliation sample.', 'One real messy delivery to test the reconciliation layout, and the reason list.', 'KDPS and design', 'Needed by: stage 2'),

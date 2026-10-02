@@ -175,9 +175,9 @@ Rules:
 - **Device trouble:** a full storage, a wrong clock, a second open tab or an app update stops new bills on that device with a banner that says why. A finished bill is never lost or deleted (PRD: Offline counter).
 - **Left:** the scan field (56 px), which always has focus and takes a piece ID or a supplier barcode, a bill-level salesperson picker, and the lines table (60 px rows; salesperson per line).
 - **Right (420 px):** Add customer (F2) · subtotal, offers, GST included · To pay (till-total) · tenders (52 px tiles) · Pay (64 px, F12).
-  - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Store credit · Gift voucher. Split divides To pay across tenders; it starts unallocated and must add up exactly.
+  - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Bank transfer · Store credit · Gift voucher · Customer credit. Bank transfer is confirmed by bank/provider evidence; Customer credit shows its approved limit and due date. Split divides To pay across tenders; it starts unallocated and must add up exactly.
   - Cash shows Cash received and Change. Left empty, Cash received means exact cash; 0 means zero.
-  - On the offline counter only Cash shows, plus Card or UPI where policy 16's evidence procedure is configured.
+  - Start the offline pilot with Cash. Card or UPI may appear later only where policy 16's evidence procedure is explicitly configured.
 - **Function bar:** 52 px. F2 Customer · F3 Salesperson · F4 Hold cart · F5 Recall · F6 Return (online only) · F7 Manager approval · F9 Till summary · Esc Remove line.
 - **Manager approval (F7):** for a discount or price change above the cashier's limit. The manager signs in with their own login and reauthenticates as the PRD requires; the approval records that manager and the exact bill version.
 - After any action, focus returns to the scan field.
