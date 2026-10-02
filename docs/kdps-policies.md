@@ -2,7 +2,7 @@
 
 > **Rank 2 of 4.** Answers must stay within the options the PRD allows. If this document and the PRD disagree, the PRD wins. See [README.md](README.md).
 
-Apparel OS switches on nothing by default. Each policy below must be answered and signed by KDPS before the stage that needs it can start. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
+Apparel OS switches on no policy-dependent live operation by default. All 18 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
 | # | Policy | Decided by | Needed by stage | Status |
 | --- | --- | --- | --- | --- |
@@ -59,39 +59,55 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Which actions need a second person to approve?
 - What are the amount and quantity limits for each approver?
 - Which changes after approval need a fresh approval?
+- Who owns each kind of exception, what are its due and escalation rules, and who receives the required alerts?
+- What stock-count tolerance, variance approver, and movement rule apply while a count is open?
+- Which session-expiry, notice-recipient and operational-alert settings apply?
 
 **Answer:**
 
-- Start with editable KDPS role templates for Owner, Store POS, Warehouse, Brand Manager, Accounts and Admin, based on the user survey. Businesses can configure their own roles.
+- Start with editable KDPS role templates for Owner, Store POS, Warehouse, Brand Manager, Accounts and Admin. Businesses can configure their own roles; a template label alone grants no permission and does not replace the PRD personas.
 - Assign each user a role with explicit business, Site and brand scope.
 - Expand broad labels such as All, Full and Manage into explicit view, create, edit, approve, cancel, export and override permissions.
 - Control sensitive fields separately from module access.
 - Keep approval authority separate from ordinary access, with configurable limits and independence requirements.
 - Preserve who changed permissions and when.
-- Require approval by an authorised person other than the preparer for PT approval and changes to approved cost/pricing; stock adjustments, write-offs and discrepancy settlements; exceptional discounts, refunds and no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
+- Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers; damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts and refunds; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
 - A person cannot self-approve through another role. Routine billing and receiving within approved rules can proceed without additional approval.
 - Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant. Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
 - Set numeric limit values when KDPS assigns approvers; the values remain undecided.
+- The actual person-to-persona, role and scope map, exception owners/timings/recipients, count controls, session durations, and 9 PM summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
 - Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action.
+
+**Template map (proposed, Open).** Which PRD personas each KDPS template serves. A person gets only the parts their role assignment grants.
+
+| KDPS template | PRD personas |
+| --- | --- |
+| Owner | P-OWN Owner |
+| Store POS | P-STM Store manager, P-CSH Cashier, P-SLS Salesperson |
+| Warehouse | P-WHS Warehouse |
+| Brand Manager | P-BRM Brand manager, P-BKG Booking |
+| Accounts | P-ACC Accounts |
+| Admin | P-ADM Admin |
+| No template yet | P-OPS Operations, P-HRS HR, P-EBO EBO staff, P-CHA Chartered Accountant (CA), P-AUD Auditor. KDPS to decide who holds these |
 
 **Signed by, date:**
 
 ## 3. Source conflicts and pricing
 
-- When the invoice, the supplier file and the physical ticket disagree on cost, MRP, attributes or tax, which one is trusted?
+- When the invoice, the supplier file and the paper price tag disagree on cost, MRP, attributes or tax, which one is trusted?
 - How is P RATE worked out from BASIC for each brand: which additions, which tax base, which rounding?
 - What happens to a line while a conflict is open?
 
 **Answer:**
 
-- Resolve conflicts by field; there is no universal rule that the invoice or supplier file wins every conflict. Record physically counted quantity separately from invoiced and booked quantity. Compare invoice cost with agreed booking terms and the approved costing profile; compare MRP and attributes on the physical ticket/item with supplier data and flag inconsistencies. Accounts validates tax against applicable rules.
+- Resolve conflicts by field; there is no universal rule that the invoice or supplier file wins every conflict. Record physically counted quantity separately from invoiced and booked quantity. Compare invoice cost with agreed booking terms and the approved costing profile; compare MRP and attributes on the price tag/item with supplier data and flag inconsistencies. Accounts validates tax against applicable rules.
 - Preserve original values and record the approved resolution, evidence and approver. Imports must not silently overwrite approved data.
 - A conflict does not prevent recording physical custody, but it holds the affected line from final PT approval and saleability. Clean, independently resolved lines may proceed.
-- Automatically create discrepancy tickets for detected conflicts; users may also raise them manually. Link each ticket to the affected document/item and retain conflicting values, evidence and resolution history.
-- Assign tickets to the responsible user or team in Booking, Accounts or Receiving based on the issue. Support comments, attachments, reassignment and escalation; resolve through the required approval. Closing a ticket alone does not change saleability or accounting.
+- Automatically create an exception for detected conflicts; users may also raise one manually. Link it to the affected document/item and retain conflicting values, evidence and resolution history.
+- Assign each exception to the responsible user or team in Booking, Accounts or Warehouse based on the issue. Support comments, attachments, reassignment and escalation; resolve through the required approval. Closing an exception alone does not change saleability or accounting.
 - Maintain an approved costing profile per brand. A booking-level override requires approval. The profile defines discounts and additions and their calculation order, allocation of freight and other charges, tax treatment (keeping recoverable tax separate from inventory cost), rounding, and permitted matching tolerances.
 - Keep BASIC, calculated P RATE and supplier-provided cost separately visible. Each brand formula must be supported by its agreement or a verified worked example; no formula or rate is assumed.
-- Missing inputs or an unexplained mismatch raise a discrepancy ticket and block final costing approval.
+- Missing inputs or an unexplained mismatch raise an exception and block final costing approval.
 
 **Signed by, date:**
 
@@ -128,7 +144,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Material changes after approval require renewed approval.
 - After issue, amendments and cancellation follow the supplier agreement; record the communication with the supplier and its response. Cancellation cannot erase quantities already received.
 - Set a delivery window per booking and line-level delivery dates for staggered deliveries. Partial receipts reduce outstanding quantity; shortages remain visible.
-- When the delivery window expires, mark the remaining balance overdue and raise a follow-up ticket. Expiry alone does not cancel the balance.
+- When the delivery window expires, mark the remaining balance overdue and raise a follow-up exception. Expiry alone does not cancel the balance.
 - An authorised user may extend the window or cancel undelivered balance under the supplier terms and required approval.
 - Late or excess goods may be recorded into physical custody, but require approval before acceptance into the booking.
 
@@ -144,8 +160,8 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 **Answer:**
 
 - Each Store inherits its Organisation’s customer-return policy, including return windows, eligibility and permitted remedies. A Store-specific override is permitted only when explicitly authorised by the Organisation.
-- For ordinary apparel and footwear returns, use 15 days as a configurable Organisation-level starting default. Eligibility requires the item to be unused, with its original tags and a sale that can be traced.
-- Count the ordinary return window from customer handover or delivery. For billed-retained goods, start it on collection.
+- KDPS’s ordinary apparel and footwear return window is 15 days from customer handover. The Organisation may edit its policy. A Store-specific override is permitted only when explicitly authorised by the Organisation and must be effective-dated. Eligibility requires the item to be unused, with its original tags and a sale that can be traced.
+- Count the ordinary return window from customer handover. For billed-retained goods, start it on collection.
 - Preserve the policy that applied at the time of sale; a later policy change cannot retrospectively reduce that sale’s return eligibility.
 - Handle defective items through a separate assessment and remedy process. Do not reject one solely because the ordinary return window has elapsed; applicable consumer rights and warranties still apply. The defective-item cutoff remains to be decided.
 - For eligible ordinary returns, offer refund, exchange or store credit, with the customer choosing among remedies permitted by policy. Record an exchange's return and replacement separately and collect or refund any price difference; refund routing is governed by the Refunds and no-bill returns policy.
@@ -158,11 +174,13 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Does a refund go back to the original payment method?
 - When may cash be given in place of the original method?
 - Are returns without a bill allowed? If so, who may approve one, at what value, and with what evidence?
+- Which tenders may be enabled online, and how are store credit, gift vouchers and loyalty issued, valued, expired and redeemed?
+- Which refund cases require independent approval, and what policy-defined exception or value basis applies?
+- What customer notice, consent and permitted contact use apply when contact details are collected?
 
 **Answer:**
 
-- Route refunds to the original payment method by default. For split payments, allocate the refund among original tenders, capped at each tender’s remaining refundable amount; no priority among tenders is specified. A cash purchase may be refunded in cash as the original tender.
-- Permit substitution of a card/UPI refund with cash only if the provider permits it, an independent authorised approver approves it, and the reason is recorded.
+- Route each refund only to its original tender(s), capped at each tender’s remaining refundable amount; a cash purchase may be refunded in cash. For split payments, retain the original tender allocations; no new tender priority is assumed. A card/UPI refund cannot be substituted with cash.
 - Keep refund entitlement separate from permitted tender routing. Prevent duplicate refunds; while the original refund outcome is unknown, do not issue a second refund. Keep approved, pending, failed and confirmed outcomes distinct; a failed payment remains an outstanding customer obligation.
 - Issue store credit only with the customer’s agreement.
 - For a no-bill request, first search the original sale using receipt details, customer details or payment reference. If found, handle it as an ordinary bill-backed return.
@@ -170,6 +188,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - An approved ordinary no-bill exception may be handled by exchange or store credit; it does not receive an automatic cash refund. Use documented, evidenced valuation rather than assuming MRP.
 - Assess defective-goods claims separately under applicable rights and warranties.
 - Each Organisation may enable or disable ordinary no-bill exceptions. Keep them unavailable until eligibility, valuation and approval limits are configured.
+- The online tender set, store-credit/voucher/loyalty values, customer notice/consent rules and which refund cases require independent approval remain to be confirmed. These features remain unavailable until configured.
 
 **Signed by, date:**
 
@@ -182,10 +201,10 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 
 **Answer:**
 
-- The Store is responsible for safekeeping until a handover to assigned staff is recorded.
+- The Store is responsible for safekeeping until handover to the customer is recorded.
 - Link each retained piece to its bill, customer, storage location, reason for retention and promised collection date. Keep retained pieces unavailable for sale or allocation.
 - Track alteration separately from ready-for-collection status. Record collection and partial pickups piece by piece.
-- Configure collection periods and reminders per Organisation. An overdue item raises a follow-up ticket; it is not automatically resold, written off or forfeited.
+- Configure collection periods and reminders per Organisation. An overdue item raises a follow-up exception; it is not automatically resold, written off or forfeited. An abandonment outcome remains unconfigured and must be decided under applicable law before any such disposition is enabled.
 - Handle cancellation under the agreed return or alteration terms and required approvals. Inspect goods before releasing them to sellable stock.
 - Keep payment, physical handover and revenue recognition distinct. Revenue-recognition timing remains unresolved here and belongs to Financial posting.
 
@@ -197,12 +216,13 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Which cost formula is used for stock, and how are later cost adjustments treated?
 - Which accounts does each kind of transaction post to, in which book?
 - What difference is tolerated before a reconciliation is raised as an exception?
+- What petty-cash float and transaction limits apply to each Store or business unit?
 - Which Tally voucher type does each transaction become, and what counts as a successful acknowledgment?
 
 **Answer:**
 
 - Use accrual-based recognition and posting rules configured per Organisation and accounting book. Accounts and the CA must approve the applicable framework and rules before activation.
-- Recognise purchase inventory and the supplier obligation when required by the contract and applicable accounting framework. Receipt/acceptance is a common recognition event, but not a universal rule. Physical custody is recorded from the actual count regardless of invoice or PT status. If an obligation exists while the invoice is missing or PT is pending, record it using an approved, supported provisional valuation and reconcile it when evidence arrives; do not conceal the liability while awaiting paperwork.
+- Recognise purchase inventory and the supplier obligation when required by the contract and applicable accounting framework. Receipt/acceptance is a common recognition event, but not a universal rule. Physical custody is recorded from the actual count regardless of invoice or PT status. If an obligation exists while the invoice is missing or PT is pending, a provisional valuation requires traceable source evidence, the governing agreement and approved costing inputs under CA-approved posting rules. Reconcile it when final evidence arrives. If the inputs do not support a value, preserve the obligation as an exception and keep its amount unknown; do not fabricate a payable, inventory value or journal.
 - Genuine supplier-owned consignment remains outside owned inventory until its relevant recognition event. Sale-or-return ownership follows the agreement; the label alone does not determine it.
 - Recognise ordinary-sale revenue and COGS at the applicable transfer event, normally customer handover. Payment or invoicing alone does not determine recognition. Billed-retained goods require a separate assessment of readiness and remaining obligations, including alteration.
 - Keep physical receipt of returned goods, credit/refund entitlement and repayment as distinct events. PT approval is a valuation control, not a universal accounting-recognition trigger.
@@ -212,9 +232,9 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - KDPS’s existing cost method is unknown. If it changes, reconcile the transition and opening stock; no operational method change or validation is claimed here.
 - The applicable framework (AS or Ind AS), exact event mappings and billed-retained recognition rules still require CA approval; no framework is assumed.
 - Define posting maps per Organisation and accounting book for purchases, sales, returns, payments, stock adjustments and other events. Use Store and brand dimensions rather than a separate ledger per Store. Accounts and the CA must supply the actual ledger accounts.
-- A missing or invalid map blocks the affected financial posting and raises a ticket while preserving the underlying operational event. Version maps and retain the applied rule with each transaction. Posted entries are immutable; corrections use linked reversals or adjustments subject to financial-period locks.
-- Apply zero tolerance to unbalanced journals, duplicate postings and unexplained missing transactions. Permit configurable, Accounts-approved tolerances only for genuine rounding and invoice matching; show differences even within tolerance. Above tolerance, raise a ticket and hold the affected financial action. A tolerance never authorises a write-off; that requires a separate approved rule.
-- Actual rupee or percentage tolerance values remain unset until representative transactions have been checked.
+- A missing or invalid map blocks the affected financial posting and raises an exception while preserving the underlying operational event. Version maps and retain the applied rule with each transaction. Posted entries are immutable; corrections use linked reversals or adjustments subject to financial-period locks.
+- Apply zero tolerance to unbalanced journals, duplicate postings and unexplained missing transactions. Permit configurable, Accounts-approved tolerances only for genuine rounding and invoice matching; show differences even within tolerance. Above tolerance, raise an exception and hold the affected financial action. A tolerance never authorises a write-off; that requires a separate approved rule.
+- Actual rupee or percentage tolerance values and petty-cash floats/limits remain unset until checked and approved.
 - Use configurable, Accounts-approved starting Tally mappings: sales to Sales; purchases to Purchase; sales returns to Credit Note; purchase returns to Debit Note; receipts and payments to Receipt and Payment; own-entity cash/bank transfers to Contra; and appropriate accrual, depreciation and adjustment events to Journal.
 - Validate inventory vouchers and combined cash-sale mapping against KDPS’s actual Tally configuration to avoid duplicate stock or money effects.
 - Exporting or sending a voucher is not success. Parse Tally’s response and associate each accepted voucher with its ERP transaction. Support partial batch success; rejected or uncertain vouchers remain pending and can be safely retried without duplicates.
@@ -237,7 +257,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Maintain effective-dated HSN and merchandise classifications, rates and applicable value slabs. Determine sale-or-return tax from the actual agreement and transaction.
 - Configure e-invoice and e-way bill requirements by applicable entity and transaction, preserving official acknowledgments.
 - Configure TDS rules for applicable payment types and payroll rules by employer and state.
-- Accounts and the CA approve statutory settings. Missing required configuration blocks the affected statutory action and raises a ticket; configuration cannot bypass applicable law.
+- Accounts and the CA approve statutory settings. Missing required configuration blocks the affected statutory action and raises an exception; configuration cannot bypass applicable law.
 - KDPS registrations, merchandise classifications, rates and applicability still require verification; no thresholds or framework applicability are assumed.
 
 **Signed by, date:**
@@ -291,7 +311,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Prepare approved payroll inputs and a calculation breakdown; approval is required before creating payment instructions.
 - HR and Accounts validate actual entitlements, rates and statutory deductions against applicable law. Do not assume universal state rules; specific values remain to be confirmed.
 - Use versioned, effective-dated incentive schemes for percentage, per-piece, target-slab, brand-funded and team-pool incentives. Each scheme specifies eligible staff, Sites, brands and dates, with a calculation basis of net sales, units or margin.
-- Define attendance eligibility and treatment of approved leave, salesperson attribution and shared-sale splits. Apply returns, cancellations and corrections to the incentive calculation.
+- Define attendance eligibility and treatment of approved leave, salesperson attribution per the PRD’s sale-line rule, and incentive adjustment handling. Apply returns, cancellations and corrections to the incentive calculation.
 - Define approval and payout timing for each scheme. Show employees an explanation of their calculation.
 - After payment, corrections remain visible as reviewed adjustments; do not silently rewrite earnings or deduct them from salary.
 - Configure actual targets, rates and eligibility thresholds; none are assumed here.
@@ -316,7 +336,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Accounts verifies opening values, supplier and customer dues, advances and deposits against the last closed books. Complete a through-cutoff reconciliation that prevents omissions and double counting.
 - Carry unfinished transfers, bookings, supplier/customer returns and refunds, claims and billed-retained items with their original references.
 - Owner, Accounts and Operations approve the switch and its fallback.
-- Opening stock records verified physical stock without creating a fabricated purchase or vendor liability. Historical sales are reporting-only. After a Store switches, the old POS is reference-only; Tally remains the official book.
+- Opening stock records physically counted and verified stock without creating a fabricated purchase or supplier liability. Historical sales are reporting-only. After a Store switches, the old POS is reference-only; Tally remains the official book.
 - Import and reconciliation tools may be prepared before cutover evidence is complete. Before the pilot switch, record the verified manifest and balances, day-close date, carried work, approvals and fallback.
 
 **Signed by, date:**
@@ -353,9 +373,9 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 
 - Enable offline billing only for approved Stores, through one registered counter per Store, with authority renewed online every 24 hours.
 - Cash may be recorded offline. External-terminal tenders require an approved evidence procedure; a screenshot alone is not provider confirmation.
-- Refunds, store-credit redemption, returns/exchanges and actions requiring fresh approval require online authority.
+- Refunds and returns/exchanges require online authority; store-credit redemption and actions requiring fresh approval also require online authority.
 - Permit only reserved eligible counter stock and valid cached prices, offers and tax versions. Configure allocation limits per Store; actual limits remain unset.
-- Expired authority, required data or statutory documents block finalisation while preserving work. Uploads must be duplicate-free; refused or conflicting bills create tickets for the Store Manager, with Accounts handling monetary differences.
+- Expired authority, required data or statutory documents block finalisation while preserving work. Uploads must be duplicate-free; refused or conflicting bills create exceptions for the Store Manager, with Accounts handling monetary differences.
 - Obtain required statutory documents before the applicable invoice is issued or goods are released.
 
 **Signed by, date:**
@@ -366,6 +386,7 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - Who may accept wrong or unidentified goods, and through which PT route?
 - Who may approve a write-off or a disposal, and up to what value?
 - How is the lost value treated in the books?
+- May damaged merchandise be sold or donated, and under which separately approved disposition rule?
 
 **Answer:**
 
@@ -376,7 +397,8 @@ Apparel OS switches on nothing by default. Each policy below must be answered an
 - A write-off of established value is distinct from physical presence: goods still present remain in custody and unavailable.
 - Record disposal quantity, reason, actual destruction or scrap handover, custody/source references and evidence; any remaining quantity stays quarantined.
 - Accounts treats loss only against established values. Unknown pre-PT cost remains unknown and creates no fictitious cost, liability or journal.
-- Link the case/ticket to affected stock and claims, preserving the actual approver, limits, evidence and history; approvers/limits remain pending configuration.
+- Link the case/exception to affected stock and claims, preserving the actual approver, limits, evidence and history; approvers/limits remain pending configuration.
+- Donation or sale of damaged merchandise is not enabled by destruction/scrap authority and stays unavailable until an explicit disposition rule is approved.
 
 **Signed by, date:**
 
