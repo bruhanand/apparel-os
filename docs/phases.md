@@ -67,7 +67,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
-- Labels, including piece IDs for KDPS-tracked pieces, barcode verification, acceptance and putaway at the selling Site.
+- Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site.
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.
 - PT corrections and reversals through linked records.
 - Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
@@ -167,7 +167,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Franchise and partner accounts.
 - Site closure, relocation and complete export.
 - Hindi interface for the screens already built.
-- WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the 9 PM summary and alerts.
+- WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the daily summary and alerts.
 
 **Out of scope.** Payroll posting (stage 6).
 
