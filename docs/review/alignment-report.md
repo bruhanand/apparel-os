@@ -12,10 +12,10 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-029 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-035 in [decisions.md](../decisions.md). DEC-030 to DEC-035 came from the stock-ledger design ([design/stock/stock-ledger.md](../design/stock/stock-ledger.md)): the old POS stays outside app stock, moving average and cost rules, receipt-origin rules, and four new words. DEC-034 and DEC-035 settled its review questions: undoing a mistaken inflow, late-cost excess, and a counted piece the ledger shows as gone. Product-owner items left: SL-10 (returns with no sale in the app) waits for the later plan to bring the earlier POS's data into the app, which needs a decision record because `PRD-LIF-010` imports old sales for reports only; SL-11 only if a performance test fails. Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
-2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
+2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024, since replaced by DEC-030), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
 3. **Remaining structural questions** are listed in section 4. Their product rules and policy homes are identified; KDPS/CA values remain OPEN where applicable.
 4. **Policy homes are now recorded for offers and promotions, EBO report timing and settlement, and Store P&L allocation** (DEC-014). Their real terms, rates, bases and formulas remain OPEN.
 5. **The open values** are listed in section 5 with their owners and delivery stages.
@@ -90,7 +90,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.2 Cost formula and averaging scope
 
-**Product side settled: DEC-004 and DEC-018.** The system supports the configured pool choices, but KDPS initially retains its current CA-approved method and pool. Actual method and pool must be verified; any future change is separate and validated (V-08, V-09).
+**Product side settled: DEC-004, DEC-018 and DEC-031.** The system supports FIFO and moving weighted average (periodic average is out until a PRD change) and the configured pool choices, but KDPS initially retains its current CA-approved method and pool. Actual method and pool must be verified; any future change is separate and validated (V-08, V-09).
 
 - **Where:** `POL-09.06`, `POL-09.07`, `POL-09.09`, `PRD-LED-006`.
 - **The point.** KDPS will initially retain its current CA-approved method and pool. Accounts and the CA must verify actual method, pool and supporting valuation; a future change requires separate approval and validation.
@@ -193,7 +193,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.13 Imported sales of piece-tracked goods
 
-**Settled: DEC-023.** Piece rules at a Store start at its switch count, where every unlabelled piece is labelled. Before then, imported sales and returns change SKU quantity only. EBO Stores reporting through brand software hold piece-tracked goods as SKU quantity.
+**Settled: DEC-023, DEC-030.** Piece rules at a Store start at its switch count, where every unlabelled piece is labelled. Old-POS imports change no stock at all (DEC-030). EBO Stores reporting through brand software hold piece-tracked goods as SKU quantity.
 
 - **Where:** `PRD-MER-016`, `PRD-MER-017`, `PRD-LIF-013`, `PRD-LIF-025`, `PRD-EBO-005`, `PRD-EBO-011`.
 - **The point.** Neither the earlier POS nor brand software can say which piece was sold. The open part is the size of each Store's labelling job (V-57).
@@ -202,9 +202,9 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.14 Parallel-run stock comparison
 
-**Settled: DEC-024.** The earlier POS's SOH is loaded as shadow stock at the start of the run. Imported sales reduce official stock first, then shadow stock. Shadow stock is never official, and the verified switch count replaces it.
+**Replaced: DEC-030** (DEC-024 is superseded). The old POS does all real billing while active. Its end-of-day sales report and SOH are evidence for checking and reports only and never move app stock. At each Store's switch, the verified count becomes opening stock and is reconciled with the last SOH.
 
-- **Where:** `PRD-LIF-014`, `PRD-LIF-024`; `phases.md` stage 2 and switch-over.
+- **Where:** `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-027` (`PRD-LIF-024` retired); `phases.md` stage 2 and switch-over.
 - **Who decides:** Me.
 - **Blocks:** 2, the parallel-run comparison.
 
@@ -212,7 +212,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 **Testing settled: DEC-027, DEC-028.** Everything runs on Railway for testing, including KDPS's side-by-side test with real KDPS data. The current POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
 
-- **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37).
+- **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37); the rollout order on production: when a warehouse goes live with its opening stock, and how goods move to a Store not yet switched ([stock-ledger](../design/stock/stock-ledger.md) SL-9; not a build blocker).
 - **The point.** The test setup is designed in [design/platform/deployment.md](../design/platform/deployment.md); its open questions D-1 to D-5 are listed there.
 - **Who decides:** Me; KDPS Owner for the data agreement.
 - **Blocks:** 2 (side-by-side test with real data); 4 (first Store switch).
@@ -267,7 +267,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-42 | Expected/overdue time and escalation for a missing EBO daily report | `POL-02.11` | KDPS Owner, Operations | 4 |
 | V-43 | Explicitly permitted offer combinations, agreement-based cost shares, named proposer and approver | `POL-19.01`–`POL-19.05` | KDPS Owner, Brand manager | 4 |
 | V-44 | Opening manifest, balances, cutoff and switch date for the pilot Store | `POL-14.07` | KDPS Owner, Accounts, Operations | before the pilot switch (4) |
-| V-45 | Run length and material-difference threshold; qualitative no-unexplained-difference and all-staff-trained checks are set | [phases.md](../phases.md) | KDPS Owner, Accounts | before the test run |
+| V-45 | Run length of the side-by-side test; material-difference threshold for the switch count against the old POS's last SOH. The no-unexplained-difference and all-staff-trained checks are set | [phases.md](../phases.md) | KDPS Owner, Accounts | Run length before the test run; threshold before the first switch |
 | V-46 | Tally voucher types checked against KDPS's real Tally | `POL-09.15`, `POL-09.16` | Accounts | 5 |
 | V-47 | Franchise rates and terms per agreement | `POL-12.05` | KDPS Owner, Accounts | 5 |
 | V-48 | TDS rules | `POL-10.04` | CA | 5 |
@@ -281,7 +281,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-56 | EBO brand commission and settlement basis, rates and terms | `POL-12.06` | Owner, Accounts | 5 |
 | V-57 | Pieces in each Store today, who labels them and when, before its switch | `PRD-LIF-025` | KDPS Owner, Operations | 4 (before each switch) |
 
-**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-029 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
+**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-035 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
 
 ## 6. Design files that show open values as decided
 

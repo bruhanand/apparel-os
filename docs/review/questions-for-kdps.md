@@ -50,7 +50,7 @@
 26. **EBO reports.** By what time must each EBO's daily report arrive before it counts as missing, and who owns a late-report exception? (With Operations.) · `POL-02.11` · V-42
 27. **Offers and promotions.** Offers do not stack unless a rule explicitly allows it. Provide each brand agreement's cost shares and name the Brand manager who proposes and authorised approver who approves those shares and markdowns. · `POL-19.01`–`POL-19.05` · V-43
 28. **The pilot switch.** Which Store goes first, on which date? Who verifies and signs its opening stock, balances and carried work at the day-close switch? (With Accounts and Operations.) · `POL-14.02`–`POL-14.07` · V-44
-29. **Test-run pass marks.** Set the run length and material-difference threshold per Store. Pass requires no unexplained material difference and training for all participating staff. · `phases.md` · V-45
+29. **Test-run pass marks.** Set how long the side-by-side test runs. Set the material-difference threshold per Store for the switch count against the old POS's last SOH. Pass requires training for all participating staff and, at each switch, no unexplained material difference. · `phases.md`, `PRD-LIF-027` · V-45
 
 ### Needed for stage 5 (money)
 
@@ -71,29 +71,33 @@
 
 ## Accounts
 
-1. **How is stock valued today?** Confirm the current method and pool from KDPS's CA-approved practice. Send a real stock-valuation sample from Tally or Excel. Retain it initially; any future change is separately approved. · `POL-09.09`, `POL-09.21` · V-08 · stage 1
+1. **How is stock valued today?** Confirm the current method and pool from KDPS's CA-approved practice. Send a real stock-valuation sample from Tally or Excel. Retain it initially; any future change is separately approved. Apparel OS supports FIFO and moving weighted average (DEC-031). If KDPS uses a periodic average today (one average for a month or year), please say so. · `POL-09.09`, `POL-09.21` · V-08 · stage 1
 2. **Does Tally track stock?** Do sales and purchase entries carry item quantities or only amounts? Send real sample vouchers of each kind. · `POL-09.16` · V-46 · shapes stage 1 design; needed by stage 5
-3. **Ledger accounts.** Provide KDPS's current CA-approved chart of accounts and identify the ledger each transaction should post to. (With the CA.) · `POL-09.11`, `POL-09.23` · V-10 · stage 2
+3. **Ledger accounts.** Provide KDPS's current CA-approved chart of accounts and identify the ledger each transaction should post to, including the difference between a supplier's credit and the stock value a supplier return removes, late cost changes for goods already sold (and any excess shown on its own line in cost of goods sold), and the variance left when a mistaken receipt is undone. (With the CA.) · `POL-09.11`, `POL-09.23` · V-10 · stage 2
 4. **Small differences.** How much rounding or invoice-matching difference is acceptable before it becomes a problem to chase? · `POL-09.14` · V-11 · stage 2
 5. **GST numbers.** Which GST registration covers each Store, warehouse and office unit? (With the CA.) · `POL-10.06` · V-18 · stage 2
 6. **Each brand's cost formula.** For each brand: how do you get from BASIC to P RATE? Which discounts, freight and other charges, in what order, with what rounding? One real worked example per brand. (With Booking.) · `POL-03.06`, `POL-03.07` · V-15 · stage 2
 7. **Petty cash.** Float and spending limit for each Store. · `POL-09.14` · V-39 · stage 4
 8. **E-invoices.** Which of your legal entities must issue e-invoices? (With the CA.) · `POL-10.03` · V-41 · stage 4
 9. **Tally voucher types.** Validate the starting map against real Tally samples. Contra covers only cash/bank transfers within one legal entity, never stock transfers. · `POL-09.15`, `POL-09.16`, `POL-09.25` · V-46 · stage 5
+10. **Rounding stock cost.** When an average cost does not divide into whole paise, how should each sale's cost be rounded? (With the CA.) · `PRD-MOD-014` · stock-ledger SL-2 · stage 2
 
 ## CA
 
 1. **AS or Ind AS?** Which accounting standards apply to KDPS Lifestyle Pvt. Ltd.? · `POL-09.10` · V-07 · stage 2
-2. **Cost formula and pool.** Confirm the existing applicable method and pool with Accounts. KDPS retains these initially; provide a future change proposal only if needed, with representative validation. · `POL-09.06`, `POL-09.19`, `POL-09.21` · V-09 · stage 2
+2. **Cost formula and pool.** Confirm the existing applicable method and pool with Accounts. KDPS retains these initially; provide a future change proposal only if needed, with representative validation. Please also check the stock-ledger cost rules with real cases. First: a supplier return leaves stock at the formula cost, not its own purchase cost, so a gap to the supplier's credit can show even at the purchase price. Then: a late cost change follows its goods, and any excess it cannot put on stock goes to cost of goods sold; customer returns come back at their sale's cost; a mistaken receipt is undone at its own value; costs are worked out in posting order. · `POL-09.06`, `POL-09.19`, `POL-09.21`, `PRD-LED-016`–`PRD-LED-018` · V-09, stock-ledger SL-4 · stage 2
 3. **Goods owned before they arrive.** When a deal makes KDPS the owner at supplier dispatch, how should those goods and the supplier liability be recorded before they are counted? The system will show an amount only when backed by an invoice or the deal's price. · `POL-09.02` · stage 2
 4. **Bill number format.** Each till will have its own number series per GST registration per financial year. Please confirm the length limit and allowed characters, and approve a format. · `POL-10.07` · V-40 · stage 4
-5. **Altered or held goods.** When a customer has paid but the goods stay in the Store (for alteration or pickup), when is the sale recognised? · `POL-08.06`, `POL-09.10` · V-35 · stage 4
+5. **Altered or held goods.** When a customer has paid but the goods stay in the Store (for alteration or pickup), when is the sale recognised? Does the goods' cost leave stock at the bill or at handover? · `POL-08.06`, `POL-09.10` · V-35, stock-ledger SL-17 · stage 4
 6. **Gift vouchers and tax.** How is GST handled when a voucher is sold and when it is used? · `POL-07.10` · V-30 · stage 4
 7. **TDS.** Which payments (rent, contractors, professionals, commission) need TDS, and at which rates? · `POL-10.04` · V-48 · stage 5
 8. **MSME suppliers.** Provide evidence of each supplier's MSME classification and confirm its applicable payment deadline. · `POL-10.09` · stage 5
 9. **Fixed assets.** Category-specific capitalisation thresholds, depreciation methods and actual rates. · `POL-09.26` · V-50 · stage 5
 10. **Payroll law.** Which PF, ESI and other payroll rules apply to each employer and state? (With Accounts and HR.) · `POL-10.04` · V-53 · stage 6
 11. **Record keeping.** Validate the legal retention period for each record class and identify records under a legal hold. · `POL-18.05` · V-13 · stage 1
+12. **Writing stock down to what it can sell for.** How should a net realisable value write-down be worked out and spread, under FIFO and under moving average, and how is it reversed? · `PRD-LED-007`, `POL-09.08` · stock-ledger SL-5 · stage 5
+13. **Store value when cost is pooled for the whole book.** If stock cost is pooled across the whole book, how should each Store's stock value be shown for its monthly net asset value and at closure? (With Accounts.) · `PRD-NAV-016`, `PRD-LIF-018` · stock-ledger SL-14 · stage 5
+14. **Late entries for a closed month.** When a stock entry arrives late and its business date falls in a closed month, which accounting date should it take? (With Accounts.) · `PRD-LED-009`, `POL-09.12` · stock-ledger SL-15 · stage 5
 
 ## Operations
 
