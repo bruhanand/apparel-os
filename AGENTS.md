@@ -31,11 +31,15 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 - The PRD and policy text belong to the user. Propose edits and wait for approval unless the user asks for the change directly.
 - Do not delete or reword existing PRD rules as a side effect of another edit.
 - PRD style: short imperative bullets, British spelling (Organisation, colour), capitalised defined nouns (Site, Store, Organisation).
-- `docs/design/ui/design-language.md` is the approved UI design language. It refers to decision codes (G-01 and so on) and a source file that are not in the repository.
+- People are described by the PRD's 14 personas, each with an ID (P-OWN … P-AUD). A person can hold several; a persona grants no access, only role assignments do. Details and the earlier-code crosswalk: `docs/design/access/personas.md`.
+- UI design lives in `docs/design/ui/`: `design-language.md` (tokens, states, components), `ui-blueprint.html` (screens, menus by persona), `design-system.html` (the live visual version of the design language) and `design-system-preview.html` (visual examples only). Each names the PRD sections and KDPS policies it implements.
+- `ui-blueprint.html` renders only with `support.js` beside it and an internet connection (it loads React from unpkg). Its content lives in the `<script data-dc-script>` block at the end of the file.
+- `design-system.html` is a self-contained bundle that opens offline. Its page is one JSON string in `<script type="__bundler/template">`: unpack it with `json.loads`, edit, and repack with `json.dumps(page, ensure_ascii=False).replace('</', '<\\u002F')`. Leave the manifest (fonts, React, runtime) alone.
+- The UI was first drawn for RetailsOps, an earlier version of this product in another repo. Its codes (G-, OQ-, R-, BP-) and decisions are not requirements; anything still wanted belongs in the PRD or the policies.
 
 ## Delivery
 
-Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Each stage records its stock and money effects from the start. Offline billing is designed in stage 1 and enabled later.
+Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Each live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; the Hindi interface and WhatsApp and SMS messaging arrive in stage 5.
 
 During the test run, the existing POS keeps selling. Its daily sales report and stock-on-hand (SOH) are imported, and Stores switch over one at a time at a day close.
 
