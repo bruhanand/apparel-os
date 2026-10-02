@@ -271,3 +271,15 @@
 - **Choice.** For testing: Railway runs the NestJS server, its pg-boss jobs and PostgreSQL; Vercel serves the web app and the counter PWA. Testing here means synthetic data. Still OPEN for the product owner: hosting for the KDPS parallel run and production; file storage provider; how the in-store local helper and the Tally local gateway reach the server.
 - **Why.** Quick to set up for building and testing; the stack itself does not change.
 - **Changed.** PRD "Technical platform › Stack": new Hosting row; `AGENTS.md` stack table; alignment report 4.15.
+
+## DEC-028 — Run the KDPS side-by-side test on Railway; switch Stores only on production hosting
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** 4.15 Deployment topology
+- **Question.** DEC-027 put the front ends on Vercel and limited test hosting to synthetic data. KDPS will now run the test build beside its current POS. The test plan also had a pilot Store switching mid-test and billing real customers in Apparel OS, which is production use.
+- **Options.** Everything on Railway · Keep Vercel for the front ends. And: side by side only, with the switch waiting for production hosting · Switch the pilot Store on the Railway test setup.
+- **Choice.**
+  - Everything on Railway for testing: server, jobs, PostgreSQL, web app and counter PWA. This replaces the Vercel part of DEC-027.
+  - KDPS's side-by-side test runs on this test setup with real KDPS data. The current POS stays the system of record throughout; Apparel OS issues no tax invoice and bills no real customer there.
+  - No Store switches on test hosting. The product owner chooses production hosting before the first switch.
+- **Why.** Testing stays testing. Real billing, tax invoices and backups that must meet policy 18 belong on hosting chosen for production.
+- **Changed.** New `PRD-LIF-026`; PRD and `AGENTS.md` stack Hosting rows; `AGENTS.md` delivery note; `phases.md` stage 4 and "Testing and switch-over"; alignment report 4.15; a KDPS Owner question on test-data hosting.
