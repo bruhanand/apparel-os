@@ -29,9 +29,9 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 | 9 | Financial posting | Accounts, CA | 1; Store P&L allocation, vouchers and acknowledgments by 5 | Open |
 | 10 | Statutory applicability | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 | Open |
 | 11 | Official book | Owner, CA | 5 | Open |
-| 12 | Franchise/partner and EBO brands | Owner, Accounts | 5; EBO reporting by 4 | Open |
+| 12 | Franchise/partner | Owner, Accounts | 5 | Open |
 | 13 | Workforce | Owner, HR | 6 | Open |
-| 14 | Opening and cutover | Owner, Accounts, Operations | 1 for layouts and sample-data tests; verified real data and sign-off before the stage 4 pilot switch | Open |
+| 14 | Opening and cutover | Owner, Accounts, Operations | 4; before the pilot switch | Open |
 | 15 | Planning | Owner, Booking | 6 | Open |
 | 16 | Offline operation | Owner, Operations | 4 | Open |
 | 17 | Held-goods outcomes | Owner, Operations, Accounts | 2; write-off and disposal by 3 | Open |
@@ -86,7 +86,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-02.06` Preserve who changed permissions and when.
 - `POL-02.07` Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers; damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts; refund cases identified under policy 7; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
 - `POL-02.08` A person cannot self-approve through another role, including for a refund case identified under policy 7. Routine billing and receiving within approved rules can proceed without additional approval.
-- `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant, including for refund cases identified under policy 7. For PT approvals, compare the limit with total proposed acquisition cost for the covered quantities using approved receipt-layer costs, not MRP (`PRD-ACS-015`). A missing or disputed cost blocks value-based approval until resolved (`PRD-ACS-016`). Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
+- `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant, including for refund cases identified under policy 7. For PT approvals, compare the limit with total proposed acquisition cost: the proposed P RATE times the covered quantity on the PT revision under approval, not MRP (`PRD-ACS-015`). A missing or disputed cost blocks value-based approval until resolved (`PRD-ACS-016`). Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
 - `POL-02.10` Set numeric limit values when KDPS assigns approvers; the values remain undecided.
 - `POL-02.11` The actual person-to-persona, role and scope map, exception owners/timings/recipients (including the expected/overdue timing and escalation for missing EBO daily reports), count controls, session durations, and daily summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
 - `POL-02.12` Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action.
