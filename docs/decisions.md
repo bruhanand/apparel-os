@@ -262,3 +262,12 @@
   - For the record, DEC-017 to DEC-022 also changed `POL-02.10`, the PRD Tender word, and the policy table rows 2 and 9.
 - **Why.** Every change stays traceable to an entry.
 - **Changed.** `PRD-EXC-022` retired; PRD and policies IDs notes; `POL-13.16` placeholder removed.
+
+## DEC-027 — Host test environments on Railway and Vercel
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** 4.15 Deployment topology
+- **Question.** Where do the server, database and front ends run? No document said.
+- **Options.** Railway for the backend and database, Vercel for the front ends · One host for everything · Servers in KDPS's office.
+- **Choice.** For testing: Railway runs the NestJS server, its pg-boss jobs and PostgreSQL; Vercel serves the web app and the counter PWA. Testing here means synthetic data. Still OPEN for the product owner: hosting for the KDPS parallel run and production; file storage provider; how the in-store local helper and the Tally local gateway reach the server.
+- **Why.** Quick to set up for building and testing; the stack itself does not change.
+- **Changed.** PRD "Technical platform › Stack": new Hosting row; `AGENTS.md` stack table; alignment report 4.15.
