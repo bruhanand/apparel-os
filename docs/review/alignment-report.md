@@ -2,7 +2,7 @@
 
 > **Not ranked.** This report decides nothing and changes nothing. Any further PRD or policy change needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
-**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-028 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
+**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-029 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
 
 **How to read it.**
 
@@ -12,7 +12,7 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-028 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-029 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
 2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
@@ -281,7 +281,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-56 | EBO brand commission and settlement basis, rates and terms | `POL-12.06` | Owner, Accounts | 5 |
 | V-57 | Pieces in each Store today, who labels them and when, before its switch | `PRD-LIF-025` | KDPS Owner, Operations | 4 (before each switch) |
 
-**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-026, including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
+**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-029 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
 
 ## 6. Design files that show open values as decided
 
