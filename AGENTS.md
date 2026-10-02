@@ -65,7 +65,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 
 Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Each live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; the Hindi interface and WhatsApp and SMS messaging arrive in stage 5.
 
-During the test run, the existing POS keeps selling. Its daily sales report and stock-on-hand (SOH) are imported, and Stores switch over one at a time at a day close.
+During the test run, the existing POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup. Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
 
 ## Stack
 
@@ -95,7 +95,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Messaging       | Email, WhatsApp Business Platform and SMS adapters                                                                      |
 | Diagnostics     | pino structured JSON logs; OpenTelemetry-ready traces                                                                   |
 | Verification    | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier                                            |
-| Hosting         | Test: Railway for the server, jobs and PostgreSQL; Vercel for the web app and counter PWA. Production not yet chosen    |
+| Hosting         | Test, including KDPS's side-by-side test: Railway for everything. Production chosen before the first Store switch      |
 
 
 
