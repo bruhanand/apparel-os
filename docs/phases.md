@@ -134,7 +134,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - IRN evidence through a GSP where a tax invoice requires it.
 - Store operator experience: Billing, Bills, Till & Sync, opening and closing checklists.
 - Offline counter, enabled after online billing is proven.
-- The pilot Store switch from the current POS. See "Testing and switch-over".
+- The pilot Store switch from the current POS, on production hosting only (`PRD-LIF-026`). See "Testing and switch-over".
 
 **Out of scope.** Bank matching, provider settlement matching and Tally vouchers (stage 5). Hindi screens and WhatsApp or SMS bills (stage 5).
 
@@ -216,19 +216,20 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Testing and switch-over
 
-The built system is tested beside the current system before it replaces it. The current POS keeps selling during the first half of the test. The switch happens mid-way, one Store at a time, and only after the checks pass. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set.
+The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
 | Before the test | Load product masters and approved mappings; load each Store's SOH as shadow stock, a comparison source only, not proof of physical stock or value | Current |
-| First half | Exercise goods-in and transfer workflows in shadow mode. Import the daily sales report and SOH from the current POS as comparison evidence; do not make unverified opening quantities official. Compare stock every day | Current |
+| Side-by-side test (Railway test setup) | Exercise goods-in and transfer workflows in shadow mode. Import the daily sales report and SOH from the current POS as comparison evidence; do not make unverified opening quantities official. Compare stock every day | Current |
 | Go or no-go check | No unexplained material stock or sales difference remains, each difference is an owned exception, no serious exception is open, and all participating staff are trained | Current |
-| Switch day | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, replace shadow stock with the verified count, then start billing in Apparel OS | Apparel OS for that Store |
-| Second half | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
+| Switch day (production hosting) | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, replace shadow stock with the verified count, then start billing in Apparel OS | Apparel OS for that Store |
+| After the switch | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
 
 - Switch one pilot Store first, never every Store on one day.
+- Never switch a Store on the test setup. It issues no tax invoice and bills no real customer.
 - Plan each Store's labelling before its switch day: how many pieces, who labels them, and the label stock needed (`PRD-LIF-025`).
 - Write the way back before the switch: the checks that would send the pilot Store back to the current POS, who decides, and how bills made in Apparel OS are carried back.
 - Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the current POS can load it. This depends on the current POS accepting that file and must be confirmed.
