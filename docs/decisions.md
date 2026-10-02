@@ -169,3 +169,57 @@
   - Policy 14 is needed by stage 4, before the pilot switch. Its import layouts are built and tested in stage 1 with sample data, which needs no policy.
   - A PT approval limit compares with the proposed P RATE times the covered quantity on the PT revision under approval. This replaces the DEC-015 wording "approved receipt-layer cost".
 - **Changed.** PRD "Required policy configuration" rows for policies 12 and 14; `PRD-ACS-015`; policy table rows 12 and 14; `POL-02.09`; `phases.md` stages 1 and 4; the alignment report's A-2 status and PT wording.
+
+## DEC-017 — Set the stage 1 access baseline
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** Which role templates, login controls, approval defaults and exception routing should shape the shared foundation?
+- **Options.** Keep the six original templates and leave these flows wholly unspecified · Add the five named templates and record the selected access-control behaviours while leaving actual users, Sites, brands, amounts and owners open.
+- **Choice.** Use eleven editable templates; require production TOTP; set initial 5-minute shared-POS and 15-minute office idle locks plus a 12-hour absolute limit; preserve unfinished work; define default role/action limits with explicitly authorised individual limits; require item-level bulk checks and named, scoped, expiring stand-ins; route exceptions by type and Site. Missing values confer no authority.
+- **Why.** The product needs reviewable access and workflow defaults without inventing KDPS's roster, limits or actual assignments.
+- **Changed.** `PRD-ACS-017`–`PRD-ACS-019`; `POL-02.01`, `POL-02.11`, `POL-02.15`–`POL-02.20`; policy 2 template map; stage 1 questions.
+
+## DEC-018 — Keep stage 2 authority and accounting grounded in real evidence
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** Which goods-in, booking and costing approaches can be fixed before the real agreements, chart and CA values are supplied?
+- **Options.** Infer terms, accounts or costing from examples · Set workflow ownership and evidence rules while retaining verified current policy and keeping actual terms open.
+- **Choice.** Use signed brand agreements for commercial terms; Booking proposes material booking changes and cancellations for authorised approval; Booking prepares buying budgets, Accounts checks, and the Owner approves. Operations proposes write-offs/disposals for independent cost-limit approval with Accounts reviewing value. Name Booking approvers by Site and brand for resolved wrong/unknown goods. Start from the current CA-approved chart, mappings, cost method and pool; verify them and do not switch methods. CA and Accounts validate real examples, framework, goods-in-transit postings, tax mappings and tolerances. Apparel and footwear use piece IDs; other categories require explicit selection.
+- **Why.** Product-owner choices establish safe process without fabricating contracts, accounts, legal facts, rates or thresholds.
+- **Changed.** `POL-04.09`, `POL-05.09`–`POL-05.10`, `POL-09.21`–`POL-09.25`, `POL-10.08`, `POL-17.10`–`POL-17.11`; stage 2 questions.
+
+## DEC-019 — Freeze counted stock and require approved variance
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** What stock controls apply while a full or cycle count is in progress?
+- **Options.** Permit normal selling/movement or automatic adjustments · Freeze counted scope and require approval, with full selling stopped for a full Store count.
+- **Choice.** Freeze counted items and locations during counts; stop selling during full Store counts; a Store Manager may approve count differences only within configured cost limits, and larger differences escalate. Never adjust automatically.
+- **Why.** This protects counted stock and retains independent control without inventing limits or people.
+- **Changed.** `PRD-STK-008`–`PRD-STK-009`; new `POL-02.21`; stage 3 count questions; `phases.md` pass criteria.
+
+## DEC-020 — Include the selected store-day instruments and controls
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** Which store-day features belong in product scope, and which controls apply before live activation?
+- **Options.** Defer some requested payment instruments and customer credit outside the product · Include them, gated by signed policy and verified terms/evidence.
+- **Choice.** Include cash, UPI, card, verified Bank transfer, Store credit, own Gift vouchers and approved Customer credit/pay-later. Store credit is redeemable only at authorised Stores in the same legal entity. Keep customer phone optional and marketing consent separate. Require independent approval for no-bill, cash-substitution, tender/return override and above-limit refund exceptions. Assess defects under applicable rights/warranties without inventing a hard cutoff. Keep loyalty off until approved. Offline pilot is one approved counter with reserved stock and cash-first; external-terminal evidence remains a later explicitly approved procedure. Offers do not stack unless allowed, and Brand managers propose agreement-based shares for authorised approval.
+- **Why.** The requested instruments and workflows are in scope; their real limits, validity, provider, agreement, tax and approver facts remain gated.
+- **Changed.** PRD "Words used" (Bank transfer, Customer credit), `PRD-POS-005`, `PRD-POS-012`, `PRD-POS-021`–`PRD-POS-022`, `PRD-RET-010`, `PRD-RET-023`; `POL-02.13`, `POL-06.05`, `POL-07.01`, `POL-07.09`–`POL-07.13`, `POL-16.02`, `POL-19.04`–`POL-19.05`; store-day questions and tender UI references.
+
+## DEC-021 — Send the selected financial-control evidence to named approvers
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** Which notifications and review evidence should stage 5 support?
+- **Options.** Leave summary channel and store-profit allocation presentation open · Set the requested channel and require approved causal allocation with a visible comparison.
+- **Choice.** Send the 9 PM daily summary by WhatsApp to selected recipients. Phone approval notifications use authenticated links bound to the exact record version; a plain “yes” does not approve. Show Store P&L before and after shared-cost allocation using approved causal drivers. Keep franchise and EBO formulas tied to signed contracts; verify Tally mappings and supplier MSME classification/deadlines with real evidence; have the CA approve category-specific asset capitalisation/depreciation policy. Use Contra only for cash/bank transfers inside one legal entity, never stock transfers.
+- **Why.** The chosen product behaviours are clear while actual recipient names, agreements, mapping and allocation drivers remain evidence-based and open.
+- **Changed.** `PRD-ACS-012`; `POL-02.14`, `POL-09.20`, `POL-09.25`–`POL-09.26`, `POL-10.09`, `POL-12.07`; `POL-13.16` retired and moved to policy 9; stage 5 questions and phase pass references.
+
+## DEC-022 — Validate stage 6 plans against current rules and held-out evidence
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** six-stage chat choices
+- **Question.** What planning and workforce approach should stage 6 use?
+- **Options.** Invent default pay/incentive and forecast values · Start from validated current rules and evaluate forecasts against a baseline and operational outcomes.
+- **Choice.** Use existing validated pay, leave and overtime rules by employer/state/group and verify current incentive schemes against examples. Set replenishment horizon from lead time plus review cycle and buying horizon from the seasonal plan. Evaluate on held-out data against a simple baseline and stockout/excess outcomes. Configure payroll only where applicable. CA approves category-specific asset policy; actual rates, rules, data and thresholds remain open.
+- **Why.** Stage 6 can be designed around real validated inputs without turning synthetic examples into defaults.
+- **Changed.** `POL-13.15`, `POL-15.08`; stage 6 questions.
