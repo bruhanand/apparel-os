@@ -173,7 +173,7 @@ Rules:
 - **Authority expired:** a red banner under the status bar says new bills are blocked and that viewing and upload still work. Pay is replaced by a disabled “Pay blocked · offline authority expired” button.
 - **Paused:** billing stays paused until the counter is online and the release is confirmed. Pay is disabled and says why.
 - **Device trouble:** a full storage, a wrong clock, a second open tab or an app update stops new bills on that device with a banner that says why. A finished bill is never lost or deleted (PRD: Offline counter).
-- **Left:** the scan field (56 px), which always has focus and takes a piece ID or a supplier barcode, a bill-level salesperson picker, and the lines table (60 px rows; salesperson per line).
+- **Left:** the scan field (56 px), which always has focus and takes a piece ID or a supplier barcode, a bill-level salesperson picker, and the lines table (60 px rows; salesperson per line). A piece-tracked line lists each scanned piece ID under its SKU, so returns and counts stay at piece level (PRD-MER-016).
 - **Right (420 px):** Add customer (F2) · subtotal, offers, GST included · To pay (till-total) · tenders (52 px tiles) · Pay (64 px, F12).
   - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Bank transfer · Store credit · Gift voucher · Customer credit. Bank transfer is confirmed by bank/provider evidence; Customer credit shows its approved limit and due date. Split divides To pay across tenders; it starts unallocated and must add up exactly.
   - Cash shows Cash received and Change. Left empty, Cash received means exact cash; 0 means zero.
