@@ -48,7 +48,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** None are live. The rules that every later stage posts under are fixed and tested here.
 
-**Policies needed before live use.** Permissions and approvals; Merchandise tracking; Financial posting; Opening and cutover; Recovery and retention.
+**Policies needed before live use.** Permissions and approvals; Merchandise tracking; Financial posting; Recovery and retention. Opening and cutover is needed before the stage 4 pilot switch; its import layouts are built and tested here with sample data.
 
 **Reports.** Master lists, access and audit history, import outcomes.
 
@@ -139,7 +139,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** Immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit and loyalty liabilities.
 
-**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Statutory applicability (e-invoice).
+**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (e-invoice).
 
 **Reports.** Sales by Store, brand, category, size, salesperson and hour; day-close variance; offer sales and who funded the discount.
 
