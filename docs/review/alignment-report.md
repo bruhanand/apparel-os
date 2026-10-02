@@ -2,7 +2,7 @@
 
 > **Not ranked.** This report decides nothing and changes nothing. Any further PRD or policy change needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
-**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-027 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
+**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-028 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
 
 **How to read it.**
 
@@ -12,7 +12,7 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-027 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-028 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
 2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
@@ -210,12 +210,12 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.15 Deployment topology
 
-**Test environments settled: DEC-027.** Railway runs the server, jobs and PostgreSQL; Vercel serves the web app and counter PWA. Synthetic data only.
+**Testing settled: DEC-027, DEC-028.** Everything runs on Railway for testing, including KDPS's side-by-side test with real KDPS data. The current POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
 
-- **Still OPEN:** hosting for the KDPS parallel run and production; the file storage provider; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server.
-- **The point.** These shape networking, backup, offline behaviour and the Tally link. Settle them before the parallel run; write `docs/design/deployment.md` before stage 1 build.
-- **Who decides:** Me.
-- **Blocks:** 1 (design document); 2 (parallel-run hosting).
+- **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37).
+- **The point.** The test setup needs a short design document (`docs/design/deployment.md`) before stage 1 build.
+- **Who decides:** Me; KDPS Owner for the data agreement.
+- **Blocks:** 1 (design document); 2 (side-by-side test with real data); 4 (first Store switch).
 
 ## 5. Open values
 

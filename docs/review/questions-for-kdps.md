@@ -65,6 +65,10 @@
 35. **Pay and incentives.** Salary make-up, leave, overtime, incentive schemes and targets, by employer, state and staff group. (With HR.) · `POL-13.06`, `POL-13.11` · V-52
 36. **Forecasts.** Set replenishment horizon from actual lead time plus review cycle and the buying horizon from the seasonal plan. Provide held-out data and define evaluation against a simple baseline, including stockout/excess outcomes and pass thresholds. (With Booking.) · `POL-15.08` · V-54
 
+### Needed before the side-by-side test
+
+37. **Your data on the test setup.** The side-by-side test holds your real product, stock and sales data with Railway, a hosting company whose servers are outside India. It is a test, not your official system. Do you agree? Should customer names and phone numbers from the old POS reports be left out of the import? · `PRD-LIF-026` · alignment report 4.15 · before the side-by-side test
+
 ## Accounts
 
 1. **How is stock valued today?** Confirm the current method and pool from KDPS's CA-approved practice. Send a real stock-valuation sample from Tally or Excel. Retain it initially; any future change is separately approved. · `POL-09.09`, `POL-09.21` · V-08 · stage 1
