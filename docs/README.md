@@ -31,6 +31,6 @@ All project documents live in this folder. When two of them disagree, the one hi
 
 ## Design documents
 
-- Design documents live in [design/](design/), one folder per area. The user interface design is in [design/ui/](design/ui/). Personas, roles and access are in [design/access/](design/access/).
+- Design documents live in [design/](design/), one folder per area. The user interface design is in [design/ui/](design/ui/). Personas, roles and access are in [design/access/](design/access/). Hosting and environments are in [design/platform/](design/platform/).
 - Each design document starts by naming the PRD sections and KDPS policies it implements.
 - A design document lists its open questions. A question that needs a business decision is raised against the PRD or the KDPS policies.
