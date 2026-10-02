@@ -723,6 +723,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-023` Retain customer history and in-progress work through migration. Demo-data retirement cannot authorise deletion of real business records.
 - `PRD-LIF-024` At the start of a parallel run, load the earlier POS's SOH as each Store's shadow stock. Imported sales reduce that Store's official stock of the SKU first, then its shadow stock; imported returns add to shadow stock. Shadow stock never becomes official stock, value, PT coverage or sellable stock. At the switch, the verified count replaces it and every difference is reported.
 - `PRD-LIF-025` At a Store's switch count, label every piece of a piece-tracked profile that has no piece ID, and verify every piece ID counted. Plan each Store's labelling before its switch day.
+- `PRD-LIF-026` Switch a Store only on production hosting. A side-by-side test on test hosting keeps the earlier POS as the system of record; it issues no tax invoice and bills no real customer.
 
 ## Operator experience
 
@@ -764,7 +765,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 | Messaging | Email, WhatsApp Business Platform and SMS adapters |
 | Diagnostics | pino structured JSON logs and OpenTelemetry-ready traces |
 | Verification | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier |
-| Hosting | Test environments: Railway for the server, jobs and PostgreSQL; Vercel for the web app and counter PWA. Parallel-run and production hosting not yet chosen |
+| Hosting | Test environments, including a customer's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. Production hosting is chosen before the first Store switch |
 
 ### Module and data boundaries
 
