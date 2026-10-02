@@ -12,7 +12,8 @@
 >
 > - `POL-09` alone means the whole policy.
 > - Question bullets have no ID.
-> - An ID never changes and is never reused.
+> - An ID never changes and is never reused. A removed bullet's ID is retired.
+> - Retired IDs: `POL-13.16` (DEC-021, DEC-026).
 
 Apparel OS switches on no policy-dependent live operation by default. All 19 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
@@ -24,7 +25,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 | 4 | Merchandise tracking | Booking, Operations | 1 | Open |
 | 5 | Booking | Owner, Booking | 2 | Open |
 | 6 | Customer returns | Owner, Operations | 4 | Open |
-| 7 | Refunds and no-bill returns | Owner, Accounts | 4 | Open |
+| 7 | Refunds and no-bill returns | Owner, Accounts | 4; Customer credit by 5 | Open |
 | 8 | Billed-retained | Operations, Accounts | 4 | Open |
 | 9 | Financial posting | Accounts, CA | 1; Store P&L allocation, asset policy, vouchers and acknowledgments by 5 | Open |
 | 10 | Statutory applicability | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 | Open |
@@ -367,7 +368,6 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-13.13` HR verifies the leaving date and entitlements; Accounts verifies amounts and approves payment. Track asset return and disputed recoveries separately; do not automatically withhold all earned pay.
 - `POL-13.14` Track applicable deadlines and retain the final statement and payment evidence. Validate formulas and deadlines by employer and applicable law; no universal rules are assumed.
 - `POL-13.15` Use the existing validated salary, leave and overtime rules for each employer, state and staff group, and verify current incentive schemes against real examples before activation. HR, Accounts and the CA validate applicability; actual rates, rules and examples remain required.
-- `POL-13.16` Retired by DEC-021; fixed-asset policy belongs to Financial posting (`POL-09.26`).
 
 **Signed by, date:**
 
