@@ -292,3 +292,81 @@
 - **Choice.** Record it. DEC-017 to DEC-022 were finalised by the product owner together with a KDPS representative. Those entries stay as written; this entry corrects their "Decided by". The representative's name is OPEN until the product owner adds it. Each policy stays Open until it is signed in its "Signed by, date" line.
 - **Why.** The log must show who agreed each KDPS choice.
 - **Changed.** Decision log only; the alignment report's summary line.
+
+## DEC-030 — The old POS stays outside the app's stock
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger design interview
+- **Question.** DEC-024 made old-POS sales move app stock: official stock first, then shadow stock loaded from the old POS's SOH. While the old POS is active it does all real billing, and the app runs beside it only to test the app. Should the old POS's files move app stock at all?
+- **Options.** Keep shadow stock and apply old-POS sales and returns to app stock · Leave the old POS outside the app's stock and reconcile at the switch.
+- **Choice.** Leave it outside.
+  - While the old POS is active, it does all real billing. Nobody scans goods twice. Bills made in the app during the test only test the app.
+  - The old POS's end-of-day files (daily sales report and SOH) are loaded for checking and reports only. They never create, reduce or move app stock.
+  - At each Store's switch, its verified count is its opening stock. The count is reconciled with the old POS's last SOH, and every difference is reported.
+  - This replaces the shadow-stock rule of DEC-024 and the part of DEC-023 about imported sales changing SKU quantity. Piece rules still start at each Store's switch count (DEC-023).
+- **Why.** The test checks the app, not a second stock record. The stock ledger needs no state for goods the app never handled.
+- **Changed.**
+  - PRD "Words used": Shadow stock removed.
+  - `PRD-LIF-024` retired. New `PRD-LIF-027` (the switch count is the opening stock, reconciled with the last SOH).
+  - `PRD-LIF-013`, `PRD-LIF-014` and `PRD-MER-017` reworded. The PRD IDs note lists the retired ID.
+  - `POL-14.01`: "after the parallel run's stock and sales reconcile" → "after the side-by-side test's go/no-go checks pass".
+  - `phases.md`: stage 2, "Testing and switch-over" and the go/no-go pass marks.
+
+## DEC-031 — Cost rules: moving average, late cost changes, outflows
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger design interview
+- **Question.** The PRD supports FIFO and weighted average (`PRD-LED-014`) and asks for the effect of late cost adjustments on goods already sold (`PRD-LED-006`). It did not say which weighted average, how a late cost change splits between stock still held and goods gone, or at what cost a supplier return leaves stock.
+- **Options.**
+  - Weighted average: moving only · moving and periodic.
+  - Late cost change under weighted average: follow the receipt's own units · split by the pool's stock on hand now.
+  - Supplier return: the pool's formula cost · that receipt's own cost.
+- **Choice.**
+  - Moving weighted average only: the average is recalculated each time goods enter the cost pool. Periodic average stays out until a PRD change. If Accounts finds that KDPS uses one today (`POL-09.21`), raise it then.
+  - A late cost change follows its goods. Under FIFO it follows the receipt's cost layer; under weighted average, the receipt's own units, which the receipt origin tracks. Units still held change the pool's value; units gone carry their share to cost of goods sold or to the movement that took them. A pool's value never falls below zero; any excess goes with the share for units gone.
+  - Every outflow from a cost pool, including a supplier return, leaves at the formula cost. The difference from the supplier's credit is a separate variance. An inflow that undoes an earlier outflow, such as a customer return or found goods matched to a recorded loss, comes back at the cost it left with. This last rule was proposed in the design outline and approved with it.
+- **Why.** Moving average gives every sale its cost at once and is KDPS's stated preference (`POL-09.06`). Following the receipt's own units uses tracking the product already keeps (`PRD-STK-004`). One outflow rule is simple to explain and cannot push a pool below zero. The CA still validates these rules with real cases before activation (`POL-09.06`).
+- **Changed.** PRD "Words used": Weighted average. `PRD-LED-014` reworded. New `PRD-LED-016` and `PRD-LED-017`.
+
+## DEC-032 — Which receipt origin moves, and count surplus with no origin
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger design interview
+- **Question.** Quantity-tracked goods keep their receipt origin through every move (`PRD-STK-004`), but a sale or a count shortage often does not say which origin. A count can also find extra goods whose origin, owner, PT and cost nobody knows.
+- **Options.**
+  - Which origin: the oldest first · the person picks each time.
+  - Count surplus: hold it until explained · give it the latest origin at that place.
+- **Choice.**
+  - Take the oldest receipt origin at that place first. Where batch or expiry is tracked, take the soonest expiry first.
+  - A count surplus with no known origin is custody held as excess, with owner, PT coverage and cost unknown. It becomes available only when an approver links it to a recorded loss, which is then reversed with that loss's origin, owner, coverage and cost; or when its owner is established and a PT for the counted quantity is approved, as for opening stock.
+- **Why.** Automatic and quick at the till, and nothing is guessed. Piece-tracked goods need neither rule: the piece ID names the origin.
+- **Changed.** New `PRD-STK-013` and `PRD-STK-014`.
+
+## DEC-033 — Stock-ledger words
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger design interview
+- **Question.** The stock-ledger design needs words the PRD uses but never defines (movement, receipt origin, cost pool) and one it does not use yet (cost layer). A new word goes into "Words used" before any other document uses it.
+- **Options.** Add them to "Words used" · Define them only in the design.
+- **Choice.** Add them, as the documents index requires.
+- **Changed.** PRD "Words used": new Cost layer, Cost pool, Movement and Receipt origin.
+
+## DEC-034 — Undoing a mistaken inflow, and late-cost excess
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger review, open questions SL-12 and SL-13
+- **Question.** Two value cases had no rule.
+  - A mistaken inflow (a wrong receipt count, opening row, cost established or cost adjustment) is found after the pool has moved on. What value comes off when it is reversed?
+  - A late cost cut can be larger than the pool can absorb while all the receipt's units are still held. `PRD-LED-016` sent any excess "with the share for units gone", but none are gone.
+- **Options.**
+  - Reversal: the mistake's own value · today's formula cost, like any outflow.
+  - Excess with nothing gone: to cost of goods sold as its own line · held as an exception for Accounts to decide each time.
+- **Choice.**
+  - A reversal of an inflow made in error takes off the value that inflow added. Any part that would take a cost pool below zero is shown as a separate variance. Example: 10 pieces at ₹100.00 counted, only 8 arrived; the reversal takes off ₹200.00. If nothing was sold since, stock value comes out exactly right; the formula cost would not.
+  - When none of the receipt's units are gone, the excess goes to cost of goods sold as its own line, because earlier outflows were costed too high.
+- **Why.** Undoing a mistake should remove what the mistake added. The excess belongs to goods already costed out, and an automatic rule avoids a manual case for a rare event. Accounts and the CA map both accounts and validate the rules (`POL-09.06`).
+- **Changed.** `PRD-LED-016` and `PRD-LED-017` reworded. New `PRD-LED-018`.
+
+## DEC-035 — A counted piece the ledger shows as gone
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** stock-ledger review, open question SL-16
+- **Question.** A count finds piece A, but the ledger shows A as sold, returned to its supplier or disposed of. Usually the cashier scanned A while the customer took piece B of the same SKU, so B is the one missing.
+- **Options.** Swap the two pieces under approval · treat A as found stock with no known origin and B as a count loss.
+- **Choice.** Swap with approval. An approver links A to the movement that wrongly named it. A correction record swaps A with the piece of the same SKU that actually left. A comes back with its own history, PT coverage and cost; the bill or other document never changes. With no matching missing piece, or a different SKU, A is held and an exception is raised.
+- **Why.** A keeps the history and PT it already has, so it needs no new PT before it can be sold, and the record shows what really left.
+- **Changed.** New `PRD-STK-015`.
