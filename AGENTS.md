@@ -95,6 +95,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Messaging       | Email, WhatsApp Business Platform and SMS adapters                                                                      |
 | Diagnostics     | pino structured JSON logs; OpenTelemetry-ready traces                                                                   |
 | Verification    | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier                                            |
+| Hosting         | Test: Railway for the server, jobs and PostgreSQL; Vercel for the web app and counter PWA. Production not yet chosen    |
 
 
 
