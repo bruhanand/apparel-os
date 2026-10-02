@@ -7,14 +7,14 @@
 > | Part | Meaning |
 > | --- | --- |
 > | `POL` | This document |
-> | `09` | Policy number (1 to 18) |
+> | `09` | Policy number (1 to 19) |
 > | `.04` | Bullet number inside that policy's answer |
 >
 > - `POL-09` alone means the whole policy.
 > - Question bullets have no ID.
 > - An ID never changes and is never reused.
 
-Apparel OS switches on no policy-dependent live operation by default. All 18 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
+Apparel OS switches on no policy-dependent live operation by default. All 19 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
 | # | Policy | Decided by | Needed by stage | Status |
 | --- | --- | --- | --- | --- |
@@ -26,16 +26,17 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 | 6 | Customer returns | Owner, Operations | 4 | Open |
 | 7 | Refunds and no-bill returns | Owner, Accounts | 4 | Open |
 | 8 | Billed-retained | Operations, Accounts | 4 | Open |
-| 9 | Financial posting | Accounts, CA | 1; vouchers and acknowledgments by 5 | Open |
+| 9 | Financial posting | Accounts, CA | 1; Store P&L allocation, vouchers and acknowledgments by 5 | Open |
 | 10 | Statutory applicability | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 | Open |
 | 11 | Official book | Owner, CA | 5 | Open |
-| 12 | Franchise/partner | Owner, Accounts | 5 | Open |
+| 12 | Franchise/partner and EBO brands | Owner, Accounts | 5; EBO reporting by 4 | Open |
 | 13 | Workforce | Owner, HR | 6 | Open |
-| 14 | Opening and cutover | Owner, Accounts, Operations | 1; signed before the pilot switch | Open |
+| 14 | Opening and cutover | Owner, Accounts, Operations | 1 for layouts and sample-data tests; verified real data and sign-off before the stage 4 pilot switch | Open |
 | 15 | Planning | Owner, Booking | 6 | Open |
 | 16 | Offline operation | Owner, Operations | 4 | Open |
 | 17 | Held-goods outcomes | Owner, Operations, Accounts | 2; write-off and disposal by 3 | Open |
 | 18 | Recovery and retention | Owner, Admin | 1 | Open |
+| 19 | Offers and promotions | Owner, Brand manager | 4 | Open |
 
 ## 1. Commercial ownership
 
@@ -71,7 +72,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - Which actions need a second person to approve?
 - What are the amount and quantity limits for each approver?
 - Which changes after approval need a fresh approval?
-- Who owns each kind of exception, what are its due and escalation rules, and who receives the required alerts?
+- Who owns each kind of exception, what are its due and escalation rules, and who receives the required alerts, including when an EBO daily report is overdue?
 - What stock-count tolerance, variance approver, and movement rule apply while a count is open?
 - Which session-expiry, notice-recipient and operational-alert settings apply?
 
@@ -81,13 +82,13 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-02.02` Assign each user one or more roles, each with explicit business, Site and brand scope.
 - `POL-02.03` Expand broad labels such as All, Full and Manage into explicit view, create, edit, approve, cancel, export and override permissions.
 - `POL-02.04` Control sensitive fields separately from module access.
-- `POL-02.05` Keep approval authority separate from ordinary access, with configurable limits and independence requirements.
+- `POL-02.05` Keep approval authority separate from ordinary access, with configurable limits and independence requirements. For refunds, use the cases identified in policy 7.
 - `POL-02.06` Preserve who changed permissions and when.
-- `POL-02.07` Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers; damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts and refunds; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
-- `POL-02.08` A person cannot self-approve through another role. Routine billing and receiving within approved rules can proceed without additional approval.
-- `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant. Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
+- `POL-02.07` Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers; damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts; refund cases identified under policy 7; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
+- `POL-02.08` A person cannot self-approve through another role, including for a refund case identified under policy 7. Routine billing and receiving within approved rules can proceed without additional approval.
+- `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant, including for refund cases identified under policy 7. For PT approvals, compare the limit with total proposed acquisition cost for the covered quantities using approved receipt-layer costs, not MRP (`PRD-ACS-015`). A missing or disputed cost blocks value-based approval until resolved (`PRD-ACS-016`). Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
 - `POL-02.10` Set numeric limit values when KDPS assigns approvers; the values remain undecided.
-- `POL-02.11` The actual person-to-persona, role and scope map, exception owners/timings/recipients, count controls, session durations, and daily summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
+- `POL-02.11` The actual person-to-persona, role and scope map, exception owners/timings/recipients (including the expected/overdue timing and escalation for missing EBO daily reports), count controls, session durations, and daily summary audiences/channels remain unconfigured. Do not enable the affected live actions until these values are approved.
 - `POL-02.12` Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action.
 - `POL-02.13` The day-close cash-variance tolerance and its approvers remain unconfigured.
 - `POL-02.14` Send KDPS's daily summary at 9 PM.
@@ -120,7 +121,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-03.04` Automatically create an exception for detected conflicts; users may also raise one manually. Link it to the affected document/item and retain conflicting values, evidence and resolution history.
 - `POL-03.05` Assign each exception to the responsible user or team in Booking, Accounts or Warehouse based on the issue. Support comments, attachments, reassignment and escalation; resolve through the required approval. Closing an exception alone does not change saleability or accounting.
 - `POL-03.06` Maintain an approved costing profile per brand. A booking-level override requires approval. The profile defines discounts and additions and their calculation order, allocation of freight and other charges, tax treatment (keeping recoverable tax separate from inventory cost), rounding, and permitted matching tolerances.
-- `POL-03.07` Keep BASIC, calculated P RATE and supplier-provided cost separately visible. Each brand formula must be supported by its agreement or a verified worked example; no formula or rate is assumed.
+- `POL-03.07` Keep BASIC, calculated P RATE and supplier-provided cost separately visible. Each brand formula must be supported by its agreement or a verified worked example; no formula or rate is assumed. Use total proposed acquisition cost for PT approval limits under `PRD-ACS-015`, not MRP; a missing or disputed cost blocks value-based approval under `PRD-ACS-016`.
 - `POL-03.08` Missing inputs or an unexplained mismatch raise an exception and block final costing approval.
 
 **Signed by, date:**
@@ -203,7 +204,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-07.06` An approved ordinary no-bill exception may be handled by exchange or store credit; it does not receive an automatic cash refund. Use documented, evidenced valuation rather than assuming MRP.
 - `POL-07.07` Assess defective-goods claims separately under applicable rights and warranties.
 - `POL-07.08` Each Organisation may enable or disable ordinary no-bill exceptions. Keep them unavailable until eligibility, valuation and approval limits are configured.
-- `POL-07.09` The online tender set, store-credit/voucher/loyalty values, customer notice/consent rules and which refund cases require independent approval remain to be confirmed. These features remain unavailable until configured.
+- `POL-07.09` The online tender set, store-credit/voucher/loyalty values, customer notice/consent rules and which refund cases require independent approval remain to be confirmed here. Policy 2 defines the authorised approvers, their limits and independence for those cases. These features remain unavailable until configured.
 - `POL-07.10` Gift-voucher validity, partial redemption, refund of an unused balance and treatment of a lost voucher remain to be confirmed.
 
 **Signed by, date:**
@@ -233,6 +234,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - Which accounts does each kind of transaction post to, in which book?
 - What difference is tolerated before a reconciliation is raised as an exception?
 - What petty-cash float and transaction limits apply to each Store or business unit?
+- Which bases allocate merchandise cost, commissions, brand support and shared expenses to Store P&L and brand-by-Store profit?
 - Which Tally voucher type does each transaction become, and what counts as a successful acknowledgment?
 
 **Answer:**
@@ -256,6 +258,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-09.17` Exporting or sending a voucher is not success. Parse Tally’s response and associate each accepted voucher with its ERP transaction. Support partial batch success; rejected or uncertain vouchers remain pending and can be safely retried without duplicates.
 - `POL-09.18` Reconcile voucher values, tax and totals before marking a batch reconciled.
 - `POL-09.19` The cost pool (each SKU across the accounting book, or each SKU at each Site) remains to be confirmed by the CA.
+- `POL-09.20` The allocation bases for merchandise cost, commissions, brand support and shared expenses in Store P&L and brand-by-Store profit require approval by Accounts and the CA. The bases and formulas remain unset; do not allocate until configured for stage 5.
 
 **Signed by, date:**
 
@@ -301,6 +304,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - What are the commission, royalty and minimum guarantee?
 - What are the deposit, credit limit and payment terms?
 - How and when is the partner settled?
+- For EBO brands, what commission basis and settlement terms apply, including returns and adjustments?
 
 **Answer:**
 
@@ -309,6 +313,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-12.03` Record deposits, credit limits, payment terms, settlement cycle, deductions, dispute handling and required approval under the agreement.
 - `POL-12.04` Version agreements and preserve the version applicable to each transaction. Provide source-detail statements for sales, returns, charges and payments so settlements can be reconciled.
 - `POL-12.05` Obtain actual rates and terms from each signed agreement; they remain to be supplied.
+- `POL-12.06` Apply the configured EBO brand commission and settlement basis to imported sales, returns and adjustments. Actual basis, rates and terms remain to be supplied from each applicable agreement.
 
 **Signed by, date:**
 
@@ -355,7 +360,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-14.04` Carry unfinished transfers, bookings, supplier/customer returns and refunds, claims and billed-retained items with their original references.
 - `POL-14.05` Owner, Accounts and Operations approve the switch and its fallback.
 - `POL-14.06` Opening stock records physically counted and verified stock without creating a fabricated purchase or supplier liability. Historical sales are reporting-only. After a Store switches, the old POS is reference-only; Tally remains the official book.
-- `POL-14.07` Import and reconciliation tools may be prepared before cutover evidence is complete. Before the pilot switch, record the verified manifest and balances, day-close date, carried work, approvals and fallback.
+- `POL-14.07` Build and test opening import layouts and reconciliation tools with labelled sample data in stage 1. Load real opening stock and balances only at each Store's approved day-close switch in stage 4. Before the pilot switch, record the verified manifest and balances, cutoff and day-close date, carried work, approvals and fallback.
 
 **Signed by, date:**
 
@@ -435,5 +440,19 @@ Apparel OS switches on no policy-dependent live operation by default. All 18 ans
 - `POL-18.03` Admin conducts a restore drill before go-live, quarterly thereafter, and after major recovery changes. Operations and Accounts validate stock, bills and financial totals before reopening.
 - `POL-18.04` Reconcile any recovery gap against counter, provider and Tally records. Do not silently lose or duplicate transactions.
 - `POL-18.05` Set retention by record class, including financial, stock, employee, customer and audit records. Validate actual durations against applicable legal retention requirements; legal holds override routine deletion.
+
+**Signed by, date:**
+
+## 19. Offers and promotions
+
+- Which offers may be combined, and what combination rules apply?
+- How are offer costs shared between the Organisation and each brand?
+- Who approves markdowns, and what approval rules apply before publication?
+
+**Answer:**
+
+- `POL-19.01` Configure the permitted offer-combination rules before an offer is activated. No combination rule is assumed.
+- `POL-19.02` Record the Organisation and brand cost shares for each applicable offer from the governing agreement or approved terms. No share or calculation is assumed.
+- `POL-19.03` Configure markdown approval authority and workflow before a markdown is published. Offer activation and markdown publication remain unavailable until the applicable rules and approvers are configured under policies 19 and 2.
 
 **Signed by, date:**
