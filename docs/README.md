@@ -11,7 +11,7 @@ All project documents live in this folder. When two of them disagree, the one hi
 
 [phases.md](phases.md) is the delivery plan. It sets the order of the work only. If it disagrees with the PRD or the KDPS policies, they win.
 
-[decisions/](decisions/) holds one record per change to the PRD or the KDPS policies: context, options, decision and the IDs it affects. The record comes first; the edit follows it. [review/](review/) holds reports and open questions. Neither is ranked; they decide nothing on their own.
+[decisions.md](decisions.md) logs each change to the PRD or the KDPS policies: the question, the options, the choice and why, and the IDs it changed. The entry comes first; the edit follows it. [review/](review/) holds reports and open questions. Neither is ranked; they decide nothing on their own.
 
 ## When two documents disagree
 

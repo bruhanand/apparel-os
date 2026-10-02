@@ -1,6 +1,6 @@
 # Alignment report — 2 Oct 2026
 
-> **Not ranked.** This report decides nothing and changes nothing. Each fix still needs a decision record (`docs/decisions/`) before the PRD or the policies change. See [README.md](../README.md).
+> **Not ranked.** This report decides nothing and changes nothing. Each fix still needs an entry in [decisions.md](../decisions.md) before the PRD or the policies change. See [README.md](../README.md).
 
 **What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Checked after the IDs were added. It re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
 
@@ -11,6 +11,8 @@
 - **Blocks** = the delivery stage whose live operation waits for it. Design and synthetic-data tests never wait.
 
 ## 1. Short version
+
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-011 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
 1. **Two real clashes between the PRD and the policies.** One role per user (POL-02.02) against several roles (PRD-ACS-001). A provisional supplier liability (POL-09.02) with no PRD rule saying when an amount may be recorded.
 2. **KDPS values sit inside the PRD.** The 15-day return window, "KDPS-tracked" pieces and "Tally is KDPS's sole book" belong in the policies.
@@ -25,11 +27,11 @@
 
 | # | Kind | Where | Finding | Who decides | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| A-1 | Conflict | `POL-02.02` vs `PRD-ACS-001`, `PRD-ACS-004` | Policy: "Assign each user **a** role with explicit … scope." PRD: a person may hold **several** roles, each scope applied inside its own assignment. Read literally, the policy forbids what the PRD allows, and the persona design (several personas per person) needs several roles. | Me | 1 |
-| A-2 | Unclear | `POL-09.02` vs `PRD-LED-005`, `PRD-DMG-016`, `PRD-ACP-004`, `PRD-LIF-008` | Policy 9 lets a supplier obligation carry a **provisional valuation** while the invoice is missing or the PT is pending, "under CA-approved posting rules". The PRD keeps "provisional commercial amounts" distinct (`PRD-LED-005`) and forbids a fictitious payable for unknown pre-PT value (`PRD-ACP-004`). No PRD rule says what evidence makes a provisional amount allowed rather than fictitious. Audit B-08, still open. | Me (the rule); CA (the posting treatment) | 2 |
-| A-3 | Layering | `PRD-RET-002` = `POL-06.02` | The PRD states KDPS's own value: "KDPS's ordinary apparel and footwear return window is 15 days from customer handover … The defective-item cutoff remains to be decided." The same sentence is in the policy. A product rule should not carry one customer's value or open item. | Me | 4 |
-| A-4 | Layering | PRD "Words used": Tally, Piece ID; `PRD-MER-003` | "Tally: TallyPrime, **KDPS's** sole official accounting book …" and "Piece ID: … one **KDPS-tracked** physical piece" put a customer fact inside product words. "KDPS-tracked" is not defined anywhere (see 4.1). BASIC, NAG, P RATE and the KDPS export profile (`PRD-PTW-008`) are fine: they name a layout the product supports. | Me | 1 |
-| A-5 | Layering | `PRD-EXC-012` | "The configured **9 PM** WhatsApp summary." The time is fixed in the PRD while the recipients and channel are policy 2 values. | Me | 5 |
+| A-1 | **Settled: DEC-001** · Conflict | `POL-02.02` vs `PRD-ACS-001`, `PRD-ACS-004` | Policy: "Assign each user **a** role with explicit … scope." PRD: a person may hold **several** roles, each scope applied inside its own assignment. Read literally, the policy forbids what the PRD allows, and the persona design (several personas per person) needs several roles. | Me | 1 |
+| A-2 | **Settled: DEC-003** · Unclear | `POL-09.02` vs `PRD-LED-005`, `PRD-DMG-016`, `PRD-ACP-004`, `PRD-LIF-008` | Policy 9 lets a supplier obligation carry a **provisional valuation** while the invoice is missing or the PT is pending, "under CA-approved posting rules". The PRD keeps "provisional commercial amounts" distinct (`PRD-LED-005`) and forbids a fictitious payable for unknown pre-PT value (`PRD-ACP-004`). No PRD rule says what evidence makes a provisional amount allowed rather than fictitious. Audit B-08, still open. | Me (the rule); CA (the posting treatment) | 2 |
+| A-3 | **Settled: DEC-010** · Layering | `PRD-RET-002` = `POL-06.02` | The PRD states KDPS's own value: "KDPS's ordinary apparel and footwear return window is 15 days from customer handover … The defective-item cutoff remains to be decided." The same sentence is in the policy. A product rule should not carry one customer's value or open item. | Me | 4 |
+| A-4 | **Settled: DEC-002 (piece), DEC-010 (Tally)** · Layering | PRD "Words used": Tally, Piece ID; `PRD-MER-003` | "Tally: TallyPrime, **KDPS's** sole official accounting book …" and "Piece ID: … one **KDPS-tracked** physical piece" put a customer fact inside product words. "KDPS-tracked" is not defined anywhere (see 4.1). BASIC, NAG, P RATE and the KDPS export profile (`PRD-PTW-008`) are fine: they name a layout the product supports. | Me | 1 |
+| A-5 | **Settled: DEC-010** · Layering | `PRD-EXC-012` | "The configured **9 PM** WhatsApp summary." The time is fixed in the PRD while the recipients and channel are policy 2 values. | Me | 5 |
 | A-6 | Misfiled | `POL-07.09`; PRD policy table, rows 2 and 7 | "Which refund cases require independent approval" is asked in policy 7, but the PRD lists "refund-approval cases" under policy 2 (Permissions). One question, two homes. Audit D-05. | Me | 4 |
 | A-7 | Unclear | PRD policy table, row 14: "1; signed before the pilot switch" | Two times for one policy. Stage 1 needs the opening layouts; the pilot switch is in stage 4. Audit D-03, still open. | Me | 1 |
 | A-8 | Gap | `POL-08.04`; PRD policy table, row 8 | The abandonment outcome for goods never collected is still unconfigured. The PRD row requires it. Audit B-13 (second half), still open. | KDPS Owner, Operations, Accounts | 4 |
@@ -59,9 +61,9 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 | # | Rule | PRD IDs | Nearest policy | What is missing | Who decides | Blocks |
 | --- | --- | --- | --- | --- | --- | --- |
-| B-1 | Cash variance at day close: tolerance, who approves, what happens above it | `PRD-CSH-001`, `PRD-CSH-002`, `PRD-EXC-001` | 9 covers "rounding/invoice tolerances" only | A cash-variance line in policy 9 or 2 | Me (where it lives); Accounts (values) | 4 |
+| B-1 | **Settled: DEC-008** (policy 2) · Cash variance at day close: tolerance, who approves, what happens above it | `PRD-CSH-001`, `PRD-CSH-002`, `PRD-EXC-001` | 9 covers "rounding/invoice tolerances" only | A cash-variance line in policy 9 or 2 | Me (where it lives); Accounts (values) | 4 |
 | B-2 | Offer combination (stacking) rules, brand and company cost shares, markdown approval | `PRD-OFR-002`, `PRD-OFR-007`, `PRD-POS-003` | 2 covers who approves only | An offers and pricing policy, or a widened row | Me; KDPS Owner, Brand manager | 4 |
-| B-3 | Bill and document number formats, including the GST limit | `PRD-MOD-004`, `PRD-OFF-002`, `PRD-LIF-015` | None | A numbering line (format per registration and year) | Me (shape); CA (compliance) | 4 |
+| B-3 | **Settled: DEC-005** · Bill and document number formats, including the GST limit | `PRD-MOD-004`, `PRD-OFF-002`, `PRD-LIF-015` | None | A numbering line (format per registration and year) | Me (shape); CA (compliance) | 4 |
 | B-4 | Store P&L and brand-by-store profit allocation bases | `PRD-EXC-008` | None | Merchandise cost, commission, support and expense allocation bases | Me; KDPS Owner, Accounts | 5 |
 | B-5 | EBO: when a daily report counts as missing; brand commission and settlement basis | `PRD-EBO-007`, `PRD-EBO-009` | 12 covers franchise partners, not EBO brands | An EBO line in policy 1 or 12 | Me; KDPS Owner, Operations | 4 |
 | B-6 | Loyalty earning, redemption and expiry | `PRD-RET-019` | Rows 6 and 7 name loyalty; `POL-06` says nothing; `POL-07.09` says unconfirmed | The answer itself | KDPS Owner, Accounts | 4 |
@@ -78,6 +80,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.1 Piece IDs
 
+**Settled: DEC-002** ([decisions.md](../decisions.md)). Piece tracking is set per tracking profile; tracked goods scan the piece ID. Which categories: still open (V-06).
+
 - **Where:** `PRD-MER-003`, `PRD-MER-006`, `PRD-STK-003`, `POL-04.06`, `POL-04.07`, `POL-09.07`.
 - **The point.** Every "KDPS-tracked" piece gets its own ID, while identical pieces share a supplier barcode. Nothing says which pieces are tracked.
 - **Why it matters.** It decides whether stock is stored per piece or as quantity per SKU, how labels print at receipt, and what the till must scan. If the till scans only a supplier barcode, the system cannot know which piece was sold, and `PRD-MER-003` (piece identity through sale) fails.
@@ -85,6 +89,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Blocks:** 2 (labels at receipt).
 
 ### 4.2 Cost formula and averaging scope
+
+**Product side settled: DEC-004.** The pool is configurable per book (whole book or each Site). KDPS's formula and pool: still open with the CA (V-09).
 
 - **Where:** `POL-09.06`, `POL-09.07`, `POL-09.09`, `PRD-LED-006`.
 - **The point.** Moving weighted average is "preferred", subject to the CA. The scope of the average is not stated: per SKU across the whole accounting book? Per SKU per Site? Per business unit? KDPS's current method is unknown.
@@ -101,6 +107,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Blocks:** 5 (vouchers); the posting model is designed in 1.
 
 ### 4.4 Ownership before custody
+
+**Settled: DEC-003.** An inbound ownership record that is not stock; an amount only from invoice or agreement-price evidence. Accounting still with the CA (V-07).
 
 - **Where:** `POL-01.05`, `POL-09.02`, `PRD-ORG-014`, `PRD-REC-008`, `PRD-STK-004`.
 - **The point.** An agreement can move ownership at supplier dispatch, before anything is counted. Stock comes only from a count. So KDPS can own goods it does not hold.
@@ -126,6 +134,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.7 Split-tender refund order
 
+**Settled: DEC-007.** Proportional to the original split. No KDPS value needed.
+
 - **Where:** `POL-07.01`, `PRD-RET-010`, `PRD-POS-005`.
 - **The point.** Refunds go to the original tenders, capped per tender, and "no new tender priority is assumed". For a partial return of a bill paid in two or more tenders, nothing says which tender is refunded first.
 - **Why it matters.** It decides how much refundable value each tender line keeps.
@@ -133,6 +143,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Blocks:** 4.
 
 ### 4.8 Count and cash tolerances
+
+**Product side settled: DEC-008.** A tolerance only selects the approver; nothing is adjusted automatically. Values: still open (V-21, V-38).
 
 - **Where:** `PRD-STK-008`, `PRD-CSH-001`, `POL-02.11`, `POL-09.13`, `POL-09.14`.
 - **The point.** It is not said what a tolerance does. Does a difference inside it post automatically, or is it still approved, only by a lower authority? `POL-09.13` says differences show even within tolerance and never authorise a write-off; the PRD says nothing for counts or cash.
@@ -142,6 +154,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.9 Bill numbering per device
 
+**Product side settled: DEC-005.** Every billing device has its own series per registration and year. Format: still open with the CA (V-40).
+
 - **Where:** `PRD-OFF-002`, `PRD-LIF-015`, `PRD-ORG-005`.
 - **The point.** The offline counter has its own series per financial year. Nothing says whether online tills also have one each, or share a Store series. A GST invoice number is limited in length and must be unique per registration and year (CA to confirm the exact rule). One Site can hold units with different registrations.
 - **Why it matters.** It decides who owns a number series: device, Store or business unit and registration.
@@ -150,6 +164,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.10 Store credit and gift vouchers
 
+**Product side settled: DEC-006.** Own bearer vouchers only, held as a liability. KDPS's terms: still open (V-29, V-30).
+
 - **Where:** `PRD-RET-016`, `PRD-POS-005`, `POL-07.03`, `POL-07.09`.
 - **The point.** Store credit is customer-linked (PRD). Gift vouchers are named as a tender only. Does the product sell its own vouchers (a liability), only accept outside ones, or both? Are they bearer or named? Can a voucher be refunded?
 - **Why it matters.** It decides a voucher ledger and whether a voucher sale is a sale of goods.
@@ -157,6 +173,8 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Blocks:** 4.
 
 ### 4.11 Value basis of approval limits
+
+**Settled: DEC-009.** Each limit names its basis; unknown value needs explicit authority. Amounts: still open (V-02).
 
 - **Where:** `POL-02.09`, `PRD-ACS-011`.
 - **The point.** Limits use "amount, quantity or discount percentage". For stock it is not said whether the amount is at MRP or at cost. Unknown pre-PT cost (`PRD-DMG-005`) has no amount at all. Audit D-06, still open.
@@ -195,7 +213,7 @@ Every value below is unset. None may be invented; each stays OPEN until its owne
 | V-23 | Defective-item return cutoff | `POL-06.05` | KDPS Owner, Operations | 4 |
 | V-24 | Stores with an authorised return override | `POL-06.01` | KDPS Owner | 4 |
 | V-25 | Tenders enabled online | `POL-07.09` | KDPS Owner, Accounts | 4 |
-| V-26 | Refund order for split-tender bills | `POL-07.01` | KDPS Owner, Accounts | 4 |
+| V-26 | ~~Refund order for split-tender bills~~ Settled: DEC-007 | `PRD-RET-022` | — | — |
 | V-27 | Which refunds need a second person | `POL-07.09` | KDPS Owner, Accounts | 4 |
 | V-28 | No-bill returns on or off; value limit; valuation method | `POL-07.08` | KDPS Owner, Accounts | 4 |
 | V-29 | Store-credit validity and cross-Store scope | `POL-07.09`, `PRD-RET-016` | KDPS Owner, Accounts | 4 |
