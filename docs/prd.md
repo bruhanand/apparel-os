@@ -47,17 +47,29 @@ Business words:
 
 | Word | Meaning |
 | --- | --- |
+| Acceptance | Confirmation that goods meet the applicable identity, count, condition, policy and destination checks |
+| Accrual | Recording income, expense, assets or obligations when their applicable recognition event occurs, rather than only when cash moves |
 | Ageing | How long stock has been held, or how long a due has been unpaid |
+| AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
 | Booking | A buying order placed with a brand or supplier for a season |
+| Business unit | The whole Store or one of several operating units at a Site, mapped to its legal entity, tax registration and accounting book |
 | CA | Chartered Accountant |
 | COGS | Cost of goods sold: the cost of the pieces sold in a period |
+| Consignment | An agreement under which goods are held for sale; ownership and settlement follow the agreement, not the label alone |
+| Contra | A Tally voucher for a transfer between accounts within the same legal entity |
+| Coverage | Quantity covered by an approved price ticket at a merchandise identity and location |
 | Custody | Who physically holds the goods and where, separate from who owns them |
 | Cycle count | A count of part of the stock, such as one rack or brand, without a full store count |
+| Day close | The end of a Store's business day: counted cash, tender reconciliation and the closing checklist |
 | Dead stock | Good unsold stock that is no longer selling |
+| Disposal | A record of actual destruction or scrap/recycling handover of goods |
+| E-invoice | An electronic tax invoice whose applicable government registration/acknowledgment evidence is linked to the issued invoice |
+| E-way bill | The electronic government document required to move goods above a set value |
 | EBO | Exclusive-brand outlet: a store selling one brand, billed on the brand's own software |
 | ESI | Employees' State Insurance: a statutory health-insurance contribution for staff |
-| E-way bill | The electronic government document required to move goods above a set value |
+| Exception | A tracked unresolved condition or difference with an owner, due date, status, evidence and exposure |
+| FIFO | First-in, first-out inventory cost formula |
 | Fill rate | The share of the ordered quantity that the supplier delivered |
 | GRN | Goods receipt note: the record of goods physically counted at the receiving Site |
 | GSP | GST Suvidha Provider: an approved service connecting software to the government GST system |
@@ -70,39 +82,54 @@ Business words:
 | IRN | Invoice Reference Number: the unique number the government e-invoice system gives a tax invoice |
 | KDPS | KDPS Lifestyle Pvt. Ltd., the first customer; also the name of its PT column layout |
 | Lakh | 100,000 |
+| Legal entity | A registered company or other legal person with its own statutory and accounting identity |
 | Markdown | A planned price reduction |
 | MBO | Multi-brand outlet: a store selling several brands |
-| MRP | Maximum retail price: the price printed on the ticket |
+| MRP | Maximum retail price: the price printed on the price tag |
 | MSME | Micro, Small and Medium Enterprise. Registered MSME suppliers must be paid within legal time limits |
+| My work | The user's assigned tasks, approvals and exceptions |
 | NAG | Piece count in the KDPS PT layout; always equal to QTY |
 | NAV | Net asset value: what a store or business owns minus what it owes on a date |
+| Net realisable value | Estimated selling price less the costs required to complete and sell the goods, under the applicable accounting framework |
+| Official | Approved to serve as the operational record for the stated fact; official PT coverage does not determine ownership or accounting recognition |
+| Offline authority | The time-limited right of a Store's one registered offline counter to finalise bills without a connection; renewed online every 24 hours |
 | Open-to-buy | The budget still free to commit to new bookings, by brand and season |
+| Organisation | An independent retail business group containing its legal entities and operating network, with data isolated from other Organisations |
 | Outright | Commercial terms where goods are bought with no agreed right to return unsold pieces |
 | P RATE | Purchase rate: in the KDPS PT layout, the approved cost of a piece at receipt |
 | P&L | Profit and loss statement |
 | PAN | Permanent Account Number: the income-tax identity number |
+| Persona | One of the 14 kinds of work listed in People, access and approvals, each with a short ID. A person can hold several; a persona grants no access |
 | PF | Provident Fund: a statutory retirement-savings contribution for staff |
+| Piece ID | The unique internal ID of one KDPS-tracked physical piece, printed as a barcode label |
 | POS | Point of sale: the billing counter and its software |
+| Price tag | The paper tag showing merchandise identity and ticket price; it is not the same as an exception or a PT record |
 | PT | Price ticket: a reviewed table of merchandise identity, counted coverage, approved cost, MRP and tax information |
 | Putaway | Placing received goods in their storage location |
 | QTY | Quantity |
 | Quarantine | A hold that keeps damaged, wrong or unidentified goods apart from sellable stock |
-| RTV | Return to vendor: goods sent back to the supplier |
+| Reservation | Stock set aside for an approved purpose and unavailable for another allocation |
+| Role | A named set of permissions, granted to a person through scoped role assignments |
+| RTV | Supplier return: goods sent back to a supplier under an agreement or approved claim |
 | Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
-| SBU | Business unit: the whole Store or one of several units within it |
+| SBU | Short for business unit |
 | Sell-through | The share of received pieces sold in a period |
 | Shop-in-shop | A brand counter operating inside a larger store |
 | Site | A physical place with a permanent identity |
 | SKU | Stock keeping unit: one merchandise variant, such as one style, colour and size |
-| SOH | Stock on hand: the quantity a system says is in stock |
+| SOH, stock on hand | A quantity reported by a system as in stock; it is a comparison source, not physical verification |
 | Store | A trading business at a Site |
-| Tally | TallyPrime, the accounting software that holds the official books |
+| Store credit | A customer-linked balance issued under policy and redeemable within its configured scope and validity |
+| Supplier return | A return of goods to a supplier under an agreement or an approved claim |
+| Tally | TallyPrime, KDPS’s sole official accounting book unless a separately approved future change occurs |
 | TDS | Tax deducted at source |
 | Tender | The way a customer pays: cash, card, UPI, store credit or gift voucher |
 | Till | The cash counter and its drawer for one billing session |
 | UPI | Unified Payments Interface: instant bank-to-bank payment by phone |
 | Voucher | An accounting entry in Tally, such as a sale, purchase, payment or journal |
 | Weeks of cover | How many weeks the current stock lasts at the current rate of sale |
+| Weighted average | Inventory cost formula using the average cost of similar inventory |
+| Write-off | An approved record that removes the established accounting value of stock; it does not itself destroy or move the goods |
 
 Technical words:
 
@@ -118,6 +145,7 @@ Technical words:
 | OTP | One-time password sent to the user |
 | Outbox | A database table of follow-up work, saved in the same transaction as the business record |
 | PWA | Progressive web app: a web page that installs and works like an app, including offline |
+| RBAC | Role-based access control: permissions assigned through scoped role assignments |
 | REST/JSON | The common style and data format for web APIs |
 | S3 | A widely used interface for storing files |
 | SMS | Text message to a phone |
@@ -179,25 +207,26 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 ## People, access and approvals
 
-| Responsibility | Work supported |
-| --- | --- |
-| Owner | Business results, significant approvals, payments, offers and losses |
-| Admin | Users, permissions, masters, configuration and integration administration |
-| Accounts | Cash, bank, payables, receivables, claims, tax, journals, Tally and period close |
-| Chartered Accountant (CA) | Authorised book/report access, comments and document requests |
-| Booking | Buying plans, bookings, deliveries, merchandise and price-ticket preparation |
-| Operations | Distribution, transfers, counts, exceptions and Site lifecycle |
-| Warehouse | Receiving, labels, putaway, picking, dispatch and supplier returns |
-| Brand manager | Brand performance, assortment, pricing, offers and brand reporting |
-| Store manager | Store operation, authorised discounts/returns and day close |
-| Cashier | Billing, tender recording and authorised customer returns |
-| Salesperson | Sale attribution, targets and own incentive information |
-| EBO staff | Brand-report uploads, stock handling and petty cash |
-| HR | Employee records, attendance, rosters, leave, incentives and payroll |
-| Auditor | Scoped read-only records and audit evidence |
+| ID | Persona | Work supported |
+| --- | --- | --- |
+| P-OWN | Owner | Business results, significant approvals, payments, offers and losses |
+| P-ADM | Admin | Users, permissions, masters, configuration and integration administration |
+| P-ACC | Accounts | Cash, bank, payables, receivables, claims, tax, journals, Tally and period close |
+| P-CHA | Chartered Accountant (CA) | Authorised book/report access, comments and document requests |
+| P-BKG | Booking | Buying plans, bookings, deliveries, merchandise and price-ticket preparation |
+| P-OPS | Operations | Distribution, transfers, counts, exceptions and Site lifecycle |
+| P-WHS | Warehouse | Receiving, labels, putaway, picking, dispatch and supplier returns |
+| P-BRM | Brand manager | Brand performance, assortment, pricing, offers and brand reporting |
+| P-STM | Store manager | Store operation, authorised discounts/returns and day close |
+| P-CSH | Cashier | Billing, tender recording and authorised customer returns |
+| P-SLS | Salesperson | Sale attribution, targets and own incentive information |
+| P-EBO | EBO staff | Brand-report uploads, stock handling and petty cash |
+| P-HRS | HR | Employee records, attendance, rosters, leave, incentives and payroll |
+| P-AUD | Auditor | Scoped read-only records and audit evidence |
 
 - Allow a person to hold several roles, with explicit action, entity, Site, brand and field permissions.
-- Keep work placement separate from access. A responsibility label does not itself grant a transaction or approval.
+- Allow a person to hold several personas. Personas set home screens, menus and summaries; only role assignments grant access.
+- Keep work placement separate from access. A persona does not itself grant a transaction or approval.
 - Apply scope within each role assignment; do not combine an action from one assignment with another assignment's fields or locations.
 - Effective-date assignments and policy changes; preserve their history. All-members scope includes future members; selected-member scope remains fixed; empty scope grants none.
 - Require a different authorised person from the preparer wherever independent approval applies, including PT approval and transfer approval.
@@ -214,9 +243,10 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 - Maintain brands, suppliers, agents, ordering parties, invoicing parties and goods movers independently.
 - Maintain stable internal SKU identities for merchandise variants. Apparel and footwear use style/article, colour and size, with category-specific size sets and size-colour grids.
+- Assign a unique internal ID to each KDPS-tracked physical piece, even when identical pieces share a supplier barcode. Preserve that piece identity through custody, PT coverage, sale, return and count.
 - Maintain season, collection, launch date, gender, fabric, fit, category, HSN and applicable merchandise attributes.
 - Preserve unknown values. Missing size is distinct from an explicitly supplied Free Size.
-- Map external barcodes and supplier codes to the correct SKU and unit, with scope and validity dates. Identical pieces can share a barcode.
+- Map external barcodes and supplier codes to the correct SKU and unit, with scope and validity dates. Identical pieces may share an external barcode; their internal piece IDs remain distinct.
 - Reject ambiguous active mappings; preserve leading zeros and historical aliases.
 - Print internal barcode labels when appropriate identifiers are absent.
 - Keep purchase cost, price-ticket maximum retail price (MRP), selling price, tax and discount separate; retain transaction-time snapshots.
@@ -261,8 +291,8 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 A goods receipt note (GRN) records the goods physically counted at the receiving Site. A price ticket (PT) is a reviewed table of merchandise identity, counted coverage, approved cost, maximum retail price (MRP) and tax information. It may come from a supplier or be assembled from an invoice and merchandise evidence.
 
-- Provide one Receive Goods inbox per Site, combining vendor deliveries and incoming transfer dispatches, with Pending and History views.
-- Start vendor receiving through Goods arrived or Receive against booking; both open the same guided workflow.
+- Provide one Receive Goods inbox per Site, combining supplier deliveries and incoming transfer dispatches, with Pending and History views.
+- Start supplier receiving through Goods arrived or Receive against booking; both open the same guided workflow.
 - Keep arrival, count, GRN, discrepancy, PT revision, approval, label job and acceptance records distinct within the workflow.
 - Receive directly at a Store or warehouse, by barcode scan or controlled count; record the actual Site even when another Site prepares the PT.
 - Count goods despite missing booking, invoice or PT. Capture actual quantity, identity evidence and condition.
@@ -282,7 +312,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Correct or reverse through linked records; validate dependencies on accepted, reserved, transferred, returned and sold quantities before changing coverage.
 - Print merchandise/MRP labels from official frozen PT values and retain print/reprint jobs. A pre-approval custody label cannot assert an approved price or sale eligibility.
 - Verify the barcode/tag and physically accept goods at the selling Site. PT approval alone cannot make goods sellable.
-- Record acceptance and putaway by the people authorised at the actual destination; vendor-supplied tags still require verification.
+- Record acceptance and putaway by the people authorised at the actual destination; supplier-supplied tags still require verification.
 
 ### PT workbench
 
@@ -318,7 +348,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 
 - Support warehouse-to-store, store-to-warehouse, store-to-store and warehouse-to-warehouse movements.
 - An internal transfer has one source and destination; different destinations require separate documents.
-- Keep internal transfers, returns to vendor (RTV) and commercial sales to partners distinct.
+- Keep internal transfers, returns to supplier (RTV) and commercial sales to partners distinct.
 - Present allowed destinations by name/code without granting access to their operational data. Ordinary internal movement remains within its authorised legal-entity boundary.
 - Use request/draft → independent higher-authority approval and reservation → dispatch → destination count → acceptance.
 - At approval, ordinary transfers require official PT coverage, source acceptance and available unreserved quantity. Bind reservations to the reviewed source/custody references and condition.
@@ -327,7 +357,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - An undispatched reservation has no automatic expiry. Release it only by actual dispatch or explicit cancellation.
 - Changing items, increasing quantity or changing destination requires renewed approval. A smaller dispatch leaves the remainder reserved.
 - Support several dispatches against one approved movement. Each records actual quantities, source references, departure time, recording time, actor and transport evidence.
-- Derive transfer documentation for registered stock from its source origins; do not create a new vendor purchase or apply markup again.
+- Derive transfer documentation for registered stock from its source origins; do not create a new supplier purchase or apply markup again.
 - Record actual dispatch and arrival separately and safely once. Pending destination visibility is not physical receipt.
 - Receive each dispatch as one whole shipment. Separate dispatches can arrive separately; staged partial receipt within one dispatch is outside this movement contract.
 - An unfinished scan session stays unfinished; it cannot silently short-close the shipment.
@@ -335,7 +365,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Release eligible good quantities independently of disputed portions.
 - Preserve explicit discrepancy resolution before missing or disputed quantities count as accounted for.
 - If delivery fails and goods return, record actual receipt at the source linked to the dispatch, with condition and evidence; preserve the failed destination outcome.
-- For internal dispatch, completion requires destination accounting for its quantities. For direct vendor pickup, it requires confirmed handover. For delivery to a vendor, it requires confirmed vendor receipt.
+- For internal dispatch, completion requires destination accounting for its quantities. For direct supplier pickup, it requires confirmed handover. For delivery to a supplier, it requires confirmed supplier receipt.
 - Complete the overall movement only when every dispatched quantity is accounted for and no undispatched reservation remains. Returned or cancelled quantity is not labelled successfully delivered.
 - Cancellation clears only the relevant undispatched reservation, never quarantine or another hold.
 - Determine statutory movement documents from configured ownership, entity, registration and movement rules. Keep transfer PTs and statutory documents separately linked.
@@ -351,7 +381,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Record damage at arrival, after GRN and before PT, or after official PT, using the available custody/origin evidence.
 - Preserve unknown pre-PT identity, cost and tax instead of inventing stock layers or zero values.
 - Allow confirmed damaged goods to remain quarantined without a forced movement or time-based release.
-- Support controlled store-to-warehouse quarantine movement and store/warehouse-to-vendor returns, retaining condition at every hop.
+- Support controlled store-to-warehouse quarantine movement and store/warehouse-to-supplier returns, retaining condition at every hop.
 - Pre-PT custody movement requires its approved quantity/document/authority contract; ordinary good-stock transfer permission cannot bypass a hold.
 - Wrong or excess goods returned to the supplier can use GRN custody without forced PT completion.
 - Acceptance of wrong/unidentified goods requires resolved identity, explicit permission and the applicable PT route. Acceptance of damaged goods never makes them good stock.
@@ -387,8 +417,10 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 
 ## Customer returns, exchanges and credit
 
-- Maintain an entity-default return policy with explicit Store overrides.
-- Configure ordinary and defective-item cases independently, including time limits and permitted refund, exchange, store-credit or refusal outcomes.
+- Maintain an Organisation return policy with Store-specific overrides only when explicitly authorised by the Organisation. Snapshot the policy that applied to each sale.
+- KDPS’s ordinary apparel and footwear return window is 15 days from customer handover. The Organisation may edit its policy. A Store-specific override must be explicitly authorised by the Organisation and effective-dated. The defective-item cutoff remains to be decided.
+- Configure ordinary and defective-item cases independently, including permitted refund, exchange, store-credit or refusal outcomes.
+- For defective goods, assess separately and support replacement, repair where appropriate, or refund under applicable consumer rights and warranties; do not force store credit where a refund is owed.
 - Determine bill-backed entitlement from original paid quantity/value less prior completed or pending returns, not current MRP.
 - Prevent concurrent requests from returning the same sold quantity or exceeding its remaining paid-value entitlement.
 - Use current prices and offers for replacement goods. Equal value has no difference; higher value collects the difference.
@@ -430,10 +462,10 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Track supplier return eligibility and deadlines by receipt lot and contractual qualifying event.
 - Support return reminders, including 30-, 15- and 7-day reminders where the configured schedule applies.
 - Build proposed unsold-return lists for approval and picking; preserve exclusions and edited selections.
-- Support direct vendor pickup or consolidation through a warehouse, with independently approved legs.
-- Keep RTV preparation, reservation, physical departure, vendor handover/receipt and financial follow-up separate.
+- Support direct supplier pickup or consolidation through a warehouse, with independently approved legs.
+- Keep RTV preparation, reservation, physical departure, supplier handover/receipt and financial follow-up separate.
 - Track Initiated, Completed, Cancelled before departure and Closed—partially returned outcomes.
-- Record partial-pickup reasons against remaining quantities: vendor rejection, later pickup, goods not ready, withdrawal or another stated reason.
+- Record partial-pickup reasons against remaining quantities: supplier rejection, later pickup, goods not ready, withdrawal or another stated reason.
 - Record whether another pickup is expected for each remaining portion; Other requires a remark. Keep the RTV Initiated while any quantity awaits departure or any dispatched shipment remains unresolved.
 - Explicitly withdraw rejected/abandoned undispatched quantities; closing that balance cannot close a shipment still awaiting confirmation.
 - Link replacement goods to a new inbound receipt.
@@ -451,6 +483,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - Require balanced journals, source-document links and immutable posted entries; use linked reversals/corrections.
 - Keep operational quantities, provisional commercial amounts and accounting recognition distinct.
 - Preserve receipt-cost evidence and record later approved cost adjustments separately, including their inventory/COGS effects for goods already sold.
+- Support lower-of-cost-and-net-realisable-value write-downs under applicable rules.
 - Reconcile inventory value, receivables, payables, cash, bank and controlling ledger balances.
 - Lock financial periods; require authorised reopening for affected posting.
 - Provide month-close checklists, owners, due dates, reconciliations and unresolved amounts.
@@ -580,7 +613,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - Give every metric one definition covering eligible states, units, dates, returns, discounts, tax, cost basis and aggregation.
 - Separate sales, collections, settlements and profit; show as-of time, estimates and missing data.
 - Drill from totals to source evidence; restrict every report and export to permitted data.
-- Produce brand sell-through reports and role-specific daily summaries, including the configured 9 PM WhatsApp summary.
+- Produce brand sell-through reports and persona-specific daily summaries, including the configured 9 PM WhatsApp summary.
 - Notify responsible users of cash gaps, large discounts, missing reports, overdue transit and return deadlines.
 - Send customer bills and credit information through permitted channels; marketing requires its applicable consent.
 - Answer plain-language questions only from the asker's authorised data, with inspectable supporting records.
@@ -600,7 +633,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - Require identity, quantity, location and valuation evidence for opening rows.
 - Permit explicitly selected and audited unknown historical season. It matches no season-specific offer and loosens no other opening requirement.
 - Preserve original opening evidence and past transaction snapshots when season is later established.
-- Opening stock creates no vendor delivery, booking, invoice, purchase liability or automatic accounting entry.
+- Opening stock creates no supplier delivery, booking, invoice, purchase liability or automatic accounting entry.
 - Import opening supplier/customer dues, advances, deposits and outstanding commercial stock separately; reconcile with the last closed books without double counting.
 - Import historical sales for reports only, preserving source identities.
 - Keep opening balances, historical reference and live corrections distinct, with defined cutover and reconciliation.
@@ -619,7 +652,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 
 ## Operator experience
 
-- Provide role-specific home screens with relevant numbers, tasks and approvals; daily actions are reachable within three navigation actions.
+- Provide persona-specific home screens with relevant numbers, tasks and approvals; daily actions are reachable within three navigation actions.
 - Provide scan/search, keyboard shortcuts, saved filters, bulk actions, comments, attachments and drill-through.
 - Show state, blocking reason and next action; preserve unfinished work.
 - Give Store users Billing, Bills, Till & Sync, Receive Goods, Transfers, Stock, Offers, Money, Reports and staff self-service.
@@ -709,8 +742,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - Use financial year plus next sequence for pause/release checks, including pauses crossing a year boundary. A missing reply leaves the counter paused.
 - Preserve pause through restart; resume only after online confirmation and a full fresh protected stock snapshot.
 - Flag and retain a bill received inside a paused interval; never discard it to clear a conflict.
-- Restrict returns/exchanges to online authority unless an explicit offline-return policy authorises cached original bills and protected return entitlements.
-- Any authorised offline return remains unavailable until synchronised and accepted; never permit duplicate use of the original entitlement.
+- Require returns and exchanges to use online authority. Do not enable an offline return or refund flow.
 - Refunds, store-credit redemption, transfers, supplier/bank payment execution and actions needing fresh approval require online authority.
 - Enable offline cash/manual-tender recording only under its approved tender policy. It cannot assert online provider confirmation or settle a bank payment.
 - Block unknown items, ineligible quantity, expired authority and tax-document-dependent finalisation without the required evidence.
@@ -733,7 +765,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - Expose failed jobs, stale data, integration failures, missing uploads, stuck sync and recovery status to authorised operators.
 - Maintain correlated logs/traces and incident evidence without leaking secrets or unnecessary personal data.
 - Pin compatible dependencies and preserve reproducible lockfiles; validate schema changes and module boundaries.
-- Type checks, lint, calculation tests, database/concurrency tests and role-specific browser journeys must pass for affected changes.
+- Type checks, lint, calculation tests, database/concurrency tests and persona-specific browser journeys must pass for affected changes.
 - Use per-Organisation capability controls; switching on a feature cannot bypass missing policy or stock/accounting invariants.
 
 ### Performance
@@ -758,39 +790,39 @@ Reference workload: 60 Stores, 500 users, 100 concurrent counters, 200,000 SKUs 
 
 A policy-dependent operation remains unavailable until its required configuration, authority and evidence are valid. Suggested commercial, financial or permission values are never active defaults.
 
-Decided by names the responsibilities that set and approve the policy. Needed by stage is the delivery stage that cannot start without it; see [phases.md](phases.md). KDPS's answers are kept in [kdps-policies.md](kdps-policies.md).
+Decided by names the personas that set and approve the policy. Needed by stage marks when its policy-dependent live operations may be enabled, not when design, development or synthetic-data tests may begin. Live activation requires a signed policy and validated real configuration; see [phases.md](phases.md). KDPS's answers are kept in [kdps-policies.md](kdps-policies.md).
 
 | Policy | Required definition | Decided by | Needed by stage |
 | --- | --- | --- | --- |
 | Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement | Owner, Accounts | 2 |
-| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits; independent checks; material-change reapproval | Owner, Admin | 1 |
+| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and refund-approval cases; independent checks; count variance tolerance/approval and movement during counts; exception owner/due/escalation and alert recipients; 9 PM summary recipients/channels; session settings; material-change reapproval | Owner, Admin | 1 |
 | Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
 | Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
 | Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
-| Customer returns | Ordinary/defective windows, qualifying date, Store overrides and permitted remedies | Owner, Operations | 4 |
-| Refunds and no-bill returns | Tender routing, cash substitution, original-payment restoration, valuation and privileged evidence | Owner, Accounts | 4 |
+| Customer returns | Ordinary/defective windows, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
+| Refunds and no-bill returns | Enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
 | Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
-| Financial posting | Recognition, cost formula/adjustment, accounts, book mappings, tolerances, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
+| Financial posting | Recognition, cost formula/adjustment, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
 | Statutory applicability | Registration, goods/rate classification, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
 | Official book | Authority and reconciliation evidence for moving the official book from Tally | Owner, CA | 5 |
 | Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement | Owner, Accounts | 5 |
 | Workforce | Employer/state/staff-group pay, leave, overtime, incentives and final-settlement policies | Owner, HR | 6 |
 | Opening and cutover | Verified manifest, financial opening balances, cutoff, outstanding work and sign-off authority | Owner, Accounts, Operations | 1; signed before the pilot switch |
 | Planning | Purpose, horizon, history quality, forecast measures and permitted approval/automation boundaries | Owner, Booking | 6 |
-| Offline operation | Permitted tender/return modes, stock and return allocations, device authority and conflict resolution | Owner, Operations | 4 |
-| Held-goods outcomes | Pre-PT custody-movement rules, wrong/unidentified acceptance, write-off/disposal authority and value treatment | Owner, Operations, Accounts | 2; write-off and disposal by 3 |
+| Offline operation | Permitted offline tenders and their evidence, stock allocations, device authority and conflict resolution | Owner, Operations | 4 |
+| Held-goods outcomes | Pre-PT custody movement, wrong/unidentified acceptance, write-off/disposal authority/value, and any separate authorised donation/sale route for damaged goods | Owner, Operations, Accounts | 2; write-off and disposal by 3 |
 | Recovery and retention | Recovery objectives, backup/export verification, retention schedules and legal holds | Owner, Admin | 1 |
 
 ## Acceptance conditions
 
 - Invoice/booking quantities never create uncounted physical stock; clean accepted quantity can proceed while damage, excess or identity discrepancies remain held.
 - Primary/supplemental PT coverage cannot overlap, and a correction after sale/transfer preserves origins and respects dependent quantities.
-- Vendor/direct-store/opening/transfer goods all meet the same selling-Site acceptance and hold checks.
+- Supplier, direct-store, opening and transfer goods all meet the same selling-Site acceptance and hold checks.
 - Missing pre-PT identity/value remains unknown during return, custody movement or disposal; no fictitious layer, zero value or payable is created.
 - Damage immediately blocks stock; independent rejection clears only the mistaken damage hold.
 - Transfer approval, multiple dispatches, whole-shipment counts, cancellation, shortage/damage and failed-delivery return reconcile every quantity without fake destination receipt.
-- Vendor departure alone does not complete an RTV; partial-pickup closure leaves no pending shipment or undispatched reservation.
-- Entity return policy and Store override apply correctly; original paid caps, current replacement price, refund state and physical disposition remain separate.
+- Supplier departure alone does not complete an RTV; partial-pickup closure leaves no pending shipment or undispatched reservation.
+- Organisation return policy and authorised Store override apply correctly; original paid caps, current replacement price, refund state and physical disposition remain separate.
 - Concurrent returns and credit redemption cannot spend the same entitlement twice.
 - Changed offer totals, cash splits, explicit zero, invalid entry and repeated checkout produce one correctly paid immutable bill; printer failure produces no new sale.
 - Offline power loss, restart, expiry, full storage, duplicate tabs, wrong clock, device replacement, repeated upload and year-spanning pause preserve bills, quantities and numbering.
