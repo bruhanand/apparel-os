@@ -56,6 +56,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - One physical Site with different business-unit books and registrations keeps correct mappings.
 - Shared golden cases for prices, discounts, tax and rounding pass on server and counter code.
+- Golden stock-and-posting scenarios on synthetic data pass: receipt, transfer, sale, return and late cost adjustment, under both cost formulas and both cost-pool modes (`PRD-LED-014`, `PRD-LED-015`).
 - A backup restores with linked records and attachments.
 - An operation whose policy is not configured stays unavailable.
 
@@ -72,7 +73,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - PT corrections and reversals through linked records.
 - Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
 - Stock search by product, brand, size, barcode, location and condition.
-- The parallel-run import of the current POS's daily sales report and SOH, so system stock stays true while the current POS sells.
+- The parallel-run import of the current POS's daily sales report and SOH, with each Store's shadow stock loaded from that SOH at the start of the run (`PRD-LIF-024`), so system stock stays comparable while the current POS sells. Piece rules at that Store start at its switch (`PRD-MER-017`).
 
 **Out of scope.** Inter-Site transfers, supplier returns, disposal, payment runs.
 
@@ -88,7 +89,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Primary and supplemental PT coverage cannot overlap.
 - Supplier, direct-store and opening goods meet the same selling-Site acceptance and hold checks.
 - Damage immediately blocks stock; independent rejection clears only the mistaken damage hold.
-- System stock after the daily sales load agrees with the current POS's SOH, or each difference is an owned exception.
+- Official stock plus shadow stock after the daily sales load agrees with the current POS's SOH, or each difference is an owned exception.
 
 ## Stage 3 — Complete stock-movement workflow
 
@@ -125,7 +126,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **In scope (PRD sections)**
 
-- Counter sales and payments.
+- Counter sales and payments. Customer credit waits for receivables in stage 5.
 - Customer returns, exchanges and credit, including store credit and loyalty.
 - Offers and price lists, with one evaluation shared by Running Offers and checkout.
 - Store day close: denomination count, variance, petty expenses, cash pickup and deposit.
@@ -161,7 +162,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - Ledger and official books: reconciliations, period locks, month close, Tally XML exchange.
 - Cash, collections and bank: provider settlement matching, bank statement import and matching.
-- Payables, receivables and payments: payment plans and runs, bank files, supplier-credit application, receivables, commission.
+- Payables, receivables and payments: payment plans and runs, bank files, supplier-credit application, receivables, commission, and Customer credit at the till.
 - Tax and assets: GST registers, GSTR-2B matching, e-way bills through a GSP, TDS, statutory calendar, fixed assets.
 - Net asset value and profitability; brand-by-store profit and Store P&L.
 - Franchise and partner accounts.
@@ -219,26 +220,28 @@ The built system is tested beside the current system before it replaces it. The 
 
 | Step | What happens | System of record |
 | --- | --- | --- |
-| Before the test | Load product masters and approved mappings; treat the current POS SOH only as a comparison source, not as proof of physical stock or value | Current |
+| Before the test | Load product masters and approved mappings; load each Store's SOH as shadow stock, a comparison source only, not proof of physical stock or value | Current |
 | First half | Exercise goods-in and transfer workflows in shadow mode. Import the daily sales report and SOH from the current POS as comparison evidence; do not make unverified opening quantities official. Compare stock every day | Current |
-| Go or no-go check | No unexplained material stock or sales difference remains, each difference is an owned exception, and all participating staff are trained | Current |
-| Switch day | One pilot Store. At day close: physically count stock, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, then start billing in Apparel OS | Apparel OS for that Store |
+| Go or no-go check | No unexplained material stock or sales difference remains, each difference is an owned exception, no serious exception is open, and all participating staff are trained | Current |
+| Switch day | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, replace shadow stock with the verified count, then start billing in Apparel OS | Apparel OS for that Store |
 | Second half | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
 
 - Switch one pilot Store first, never every Store on one day.
+- Plan each Store's labelling before its switch day: how many pieces, who labels them, and the label stock needed (`PRD-LIF-025`).
 - Write the way back before the switch: the checks that would send the pilot Store back to the current POS, who decides, and how bills made in Apparel OS are carried back.
 - Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the current POS can load it. This depends on the current POS accepting that file and must be confirmed.
 - A parallel-run import creates no tax invoice and no second sale.
 - Every difference between the two systems becomes an exception with an owner; none is closed by editing a number to match.
 
-**Go or no-go pass marks.** KDPS sets the run length and material-difference threshold before the test starts. All participating staff must be trained; no unexplained material difference may remain.
+**Go or no-go pass marks.** KDPS sets the run length and material-difference threshold before the test starts. All participating staff must be trained; no unexplained material difference and no serious exception may remain open.
 
 | Check | Pass mark |
 | --- | --- |
 | Days in a row for stock and sales reconciliation | OPEN — KDPS Owner, before test run |
 | Material-difference threshold per Store | OPEN — KDPS Owner and Accounts, before test run |
 | Unexplained material differences | None |
+| Open serious exceptions | None |
 | Participating staff trained | All |
 | Who signs the switch | Owner, Accounts and Operations |
