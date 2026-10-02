@@ -15,7 +15,7 @@
 
 1. **Who does what?** For each person: their job, which Stores or warehouses, which brands. We will turn this into role assignments. One person may hold several. · `POL-02.11` · V-01
 2. **Who fills the five jobs with no template yet?** Operations (transfers, counts, problems), HR, EBO staff, your CA's login, and any auditor. · `POL-02.01` · V-01
-3. **Approval limits.** For each kind of approval (discount, refund, stock adjustment, write-off, transfer, supplier payment …), who may approve and up to how much? Stock limits are measured at cost; customer money at bill value. Is anyone allowed "no upper limit"? · `POL-02.10` · V-02
+3. **Approval limits.** For each kind of approval (PT approval by proposed acquisition cost, discount, refund, stock adjustment, write-off, transfer, supplier payment …), who may approve and up to how much? Stock limits are measured at cost; customer money at bill value. Is anyone allowed "no upper limit"? · `POL-02.10`, `PRD-ACS-015` · V-02
 4. **Problems ("exceptions").** For each kind (short delivery, damage, cash gap, missing report …), who owns it, how many days to fix it, and who hears if it is late? · `POL-02.11` · V-03
 5. **Logins.** How long may someone stay logged in while idle, and in total? One-time code by SMS, or an authenticator app? (Ask Admin too.) · `POL-02.11` · V-04
 6. **Bulk approval and stand-ins.** Which approvals may be done many at once? Who covers for an approver on leave? (Ask Admin too.) · alignment report B-9
@@ -39,7 +39,7 @@
 15. **Defective items.** Up to how many days after purchase may a customer bring back a faulty item? (With Operations.) · `POL-06.05` · V-23
 16. **Store exceptions.** Does any Store get a different return rule? Which, and what rule? · `POL-06.01` · V-24
 17. **How customers may pay.** Which of cash, card, UPI, store credit and gift voucher are switched on? (With Accounts.) · `POL-07.09` · V-25
-18. **Refunds needing a second person.** Which refunds need someone other than the cashier to approve? (With Accounts.) · `POL-07.09` · V-27
+18. **Refund approval cases.** Which refund cases require approval by an independent authorised person? (With Accounts.) · `POL-07.09` · V-27
 19. **Returns without a bill.** Allowed or not? If yes: up to what value, who approves, and how is the item valued? (With Accounts.) · `POL-07.08` · V-28
 20. **Store credit.** How long is it valid? Usable at every Store? (With Accounts.) · `POL-07.09` · V-29
 21. **Gift vouchers.** KDPS sells its own vouchers. How long valid? Can a customer use part and keep the rest? Can an unused balance be refunded? What if one is lost? (With Accounts; the CA for tax.) · `POL-07.10` · V-30
@@ -48,9 +48,9 @@
 24. **Goods never collected.** If a paid item kept for alteration or pickup is never collected, what happens to it, and after how long? (With Operations and Accounts; take legal advice.) · `POL-08.04` · V-34
 25. **Offline billing.** Which Stores may bill when the internet is down, on which counter? How much stock is set aside for it? How do you prove a card or UPI payment taken offline? (With Operations and Accounts.) · `POL-16.01`, `POL-16.02`, `POL-16.04` · V-36, V-37
 26. **Day-close cash.** How big a cash shortage or excess may a Store manager approve, and who approves above that? (With Accounts.) · `POL-02.13` · V-38
-27. **EBO reports.** By what time must an EBO's daily report arrive before it counts as missing? How is the brand's commission worked out? (With Operations.) · alignment report B-5 · V-42
-28. **Offers.** May two offers apply to the same item? How is the cost of an offer split between KDPS and the brand? (With the Brand manager.) · alignment report B-2 · V-43
-29. **The pilot switch.** Which Store goes first, on which date? Who counts and signs its opening stock? (With Accounts and Operations.) · `POL-14.07` · V-44
+27. **EBO reports.** By what time must each EBO's daily report arrive before it counts as missing, and who owns a late-report exception? (With Operations.) · `POL-02.11` · V-42
+28. **Offers and promotions.** Which offers may combine, how are their costs split between the Organisation and each brand, and who approves markdowns? (With the Brand manager.) · `POL-19.01`–`POL-19.03` · V-43
+29. **The pilot switch.** Which Store goes first, on which date? Who verifies and signs its opening stock, balances and carried work at the day-close switch? (With Accounts and Operations.) · `POL-14.02`–`POL-14.07` · V-44
 30. **Test-run pass marks.** How many days in a row must stock and sales agree with the old POS? How big a stock difference is acceptable per Store? How many staff must be trained? · `phases.md` · V-45
 
 ### Needed for stage 5 (money)
@@ -58,12 +58,13 @@
 31. **Daily summary.** Who receives the 9 PM summary, and by WhatsApp, SMS or both? · `POL-02.14`, `POL-02.11` · V-51
 32. **Phone approvals.** Which approvals may be given from a phone or WhatsApp? · alignment report B-8
 33. **Franchise deals.** For each franchise partner: commission, royalty, minimum guarantee, deposit, credit limit and payment terms. (With Accounts.) · `POL-12.05` · V-47
-34. **Store profit.** How should head-office costs, brand support and commissions be shared across Stores for the Store P&L? (With Accounts.) · alignment report B-4 · V-49
+34. **EBO commission and settlement.** How is each brand's commission calculated and settled, including returns and adjustments? (With Accounts.) · `POL-12.06` · V-56
+35. **Store profit.** What bases allocate merchandise cost, commissions, brand support and shared expenses to Store P&L and brand-by-Store profit? (With Accounts and the CA.) · `POL-09.20` · V-49
 
 ### Needed for stage 6 (people and planning)
 
-35. **Pay and incentives.** Salary make-up, leave, overtime, incentive schemes and targets, by employer, state and staff group. (With HR.) · `POL-13.06`, `POL-13.11` · V-52
-36. **Forecasts.** How far ahead should forecasts look, for buying and for replenishment? How will you judge them? (With Booking.) · `POL-15.07` · V-54
+36. **Pay and incentives.** Salary make-up, leave, overtime, incentive schemes and targets, by employer, state and staff group. (With HR.) · `POL-13.06`, `POL-13.11` · V-52
+37. **Forecasts.** How far ahead should forecasts look, for buying and for replenishment? How will you judge them? (With Booking.) · `POL-15.07` · V-54
 
 ## Accounts
 
