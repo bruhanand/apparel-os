@@ -4,7 +4,7 @@
 
 **PRD sections implemented:** Product; Organisation, sites and ownership; People, access and approvals; Merchandise and identifiers; Source conversion and imports; Booking and buying; Receiving and price tickets; Stock and warehouse control; Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; Customer returns, exchanges and credit; EBO sales and external billing; Offers, prices and supplier returns; Finance and accounting; Franchise and partner accounts; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Operator experience; Offline counter; AI, security and operational reliability.
 
-**Policies represented:** 1–18. Answers remain Open/unsigned. Missing production values and authority do not block design, development or synthetic-data tests; they do gate the affected live operation.
+**Policies represented:** 1–19. Answers remain Open/unsigned. Missing production values and authority do not block design, development or synthetic-data tests; they do gate the affected live operation.
 
 - [Design language](design-language.md): visual tokens, accessibility and data/state presentation.
 - [UI blueprint](ui-blueprint.html): current navigation, screen contracts and user workflows. It needs [support.js](support.js) in the same folder and an internet connection, because it loads React from unpkg.
