@@ -102,11 +102,11 @@
 
 ## Booking
 
-- See KDPS Owner 10, 11 and 36, Accounts 6 and Operations 1 and 2. These are shared with Booking.
+- See KDPS Owner 10, 11 and 37, Accounts 6 and Operations 1 and 2. These are shared with Booking.
 
 ## HR
 
-- See KDPS Owner 35 and CA 10.
+- See KDPS Owner 36 and CA 10.
 
 ## Admin
 

@@ -14,7 +14,7 @@
 
 **Since this report:** the product-owner decisions are logged as DEC-001 to DEC-015 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
-1. **One PRD/policy clash remains open:** policy 9's provisional supplier obligation valuation still needs its CA-approved evidence rule to match the PRD (`DEC-003`; A-2).
+1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
 2. **Settled product-owner findings are logged through DEC-015.** This includes role assignment (DEC-001), policy homes for refund approvals (DEC-012), opening-data timing (DEC-013), PT approval valuation (DEC-015), and Store P&L ending at profit before tax (DEC-011 / D-02).
 3. **Remaining structural questions** are listed in section 4. Their product rules and policy homes are identified; KDPS/CA values remain OPEN where applicable.
 4. **Policy homes are now recorded for offers and promotions, EBO report timing and settlement, and Store P&L allocation** (DEC-014). Their real terms, rates, bases and formulas remain OPEN.
@@ -48,7 +48,7 @@
 | B-05 repair as a remedy | Fixed. `PRD-RET-004` allows repair. |
 | B-06 15 days as a "default" | Fixed by DEC-010. `PRD-RET-001` keeps the product rule; KDPS's 15-day value is in `POL-06.02` (A-3). |
 | B-07 unique piece ID vs shared barcode | Text now agrees (`PRD-MER-003`, `PRD-MER-006`, `POL-04.06`). What "KDPS-tracked" covers is open (4.1). |
-| B-08 provisional valuation | Open (A-2). |
+| B-08 provisional valuation | Settled on the product side (A-2, DEC-003); accounting with the CA (V-07). |
 | B-09 shared-sale splits | Fixed. No longer in policy 13. |
 | B-10 net realisable value | Fixed. In "Words used" and `PRD-LED-007`. |
 | B-11 "delivery" to customers | Fixed. Gone from policy 6. |
@@ -177,7 +177,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 **Settled: DEC-009 and DEC-015.** Each limit names its basis; PT approval limits use total proposed acquisition cost for covered quantities, never MRP. Unknown values stay distinct from zero. Actual KDPS limit amounts and approvers remain OPEN (V-02).
 
 - **Where:** `POL-02.09`, `POL-03.07`, `PRD-ACS-015`, `PRD-ACS-016`.
-- **The rule.** PT approval cost is calculated from approved receipt-layer costs for the covered quantities. Missing or disputed cost blocks value-based approval until resolved; this approval valuation does not determine supplier-liability recognition.
+- **The rule.** PT approval cost is the proposed P RATE times the covered quantity on the PT revision under approval (DEC-016). Missing or disputed cost blocks value-based approval until resolved; this approval valuation does not determine supplier-liability recognition.
 - **Why it matters.** Each limit needs a stored basis, and missing cost must not be mistaken for zero.
 - **Who decides:** The PRD sets the basis and unknown-value rule; KDPS Owner sets live approval values and approvers.
 - **Blocks:** 1 for approval configuration; 2 for PT approval.
@@ -263,7 +263,7 @@ Report only. Design is fixed after the PRD and policies settle.
 | # | File | Finding | Rule it breaks |
 | --- | --- | --- | --- |
 | E-1 | `design/ui/design-system.html`, `design/ui/design-language.md` §8 | Bill no. `B01C1/2627/04381` shown as the format. `ui-blueprint.html` G20 says the format is open. | 4.9, V-40 |
-| E-2 | `design/ui/design-system.html` | **Fixed by DEC-015:** the PT approval card uses total proposed acquisition cost from the covered quantities' approved receipt-layer costs. Its synthetic example shows 1,096 pieces and ₹14,27,500, calculated from its displayed quantities and unit costs; the total follows quantity changes. | `PRD-ACS-015`, V-55 |
+| E-2 | `design/ui/design-system.html` | **Fixed by DEC-015:** the PT approval card uses total proposed acquisition cost: proposed P RATE times covered quantity (DEC-016). Its synthetic example shows 1,096 pieces and ₹14,27,500, calculated from its displayed quantities and unit costs; the total follows quantity changes. | `PRD-ACS-015`, V-55 |
 | E-3 | `design/ui/design-system.html` | Sample values with no "example" label: limits ₹50,000 and ₹50,00,000; day close "due 21:30"; shift 10:00–19:00 with no grace; P RATE = MRP × 0.5 (this one is labelled). | AGENTS.md "Never invent a value" |
 | E-4 | `design/ui/ui-blueprint.html` | **Fixed:** the Owner now has View in the access grid. G12 still correctly leaves write-off and disposal approvers and limits OPEN. | `POL-17.04`, V-19 |
 | E-5 | `design/ui/design-system.html`, `design/ui/ui-blueprint.html` | Offline tenders differ: design system shows Cash and UPI; the blueprint till mock in Offline state shows all five tenders. | `POL-16.02`, `PRD-OFF-017` |
