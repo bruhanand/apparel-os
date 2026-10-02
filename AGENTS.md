@@ -19,7 +19,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 3. `docs/design/`: how the system implements both. Never contradicts the two above.
 4. Code: implements the design.
 
-`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/review/` holds reports and open questions; it decides nothing.
+`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/reports/` holds one-time reports and `docs/questions-for-kdps.md` holds open questions; neither decides anything.
 
 - Fix the lower document to match the higher one. Never edit a higher document just to fit a lower one.
 - A business decision is never settled in design or code. Raise it against the PRD or the policies.
@@ -45,7 +45,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 - Design documents cite the requirement and policy IDs they implement: in their header and next to each rule they apply. Code and tests cite the ID where a rule is enforced.
 - Any change to `prd.md` or `kdps-policies.md` is logged first in `docs/decisions.md`: one short entry (`DEC-001` …) with date, who decided, question, options, choice and why, and the IDs changed. Then edit the document to match the entry.
 - The PRD and policy text belong to the user. Propose a decision entry and wait for approval unless the user decides the change directly.
-- Questions only KDPS or the CA can answer go in `docs/review/questions-for-kdps.md`, grouped by person, in plain language.
+- Questions only KDPS or the CA can answer go in `docs/questions-for-kdps.md`, grouped by person, in plain language.
 
 
 

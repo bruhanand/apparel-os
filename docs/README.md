@@ -11,7 +11,18 @@ All project documents live in this folder. When two of them disagree, the one hi
 
 [phases.md](phases.md) is the delivery plan. It sets the order of the work only. If it disagrees with the PRD or the KDPS policies, they win.
 
-[decisions.md](decisions.md) logs each change to the PRD or the KDPS policies: the question, the options, the choice and why, and the IDs it changed. The entry comes first; the edit follows it. [review/](review/) holds reports and open questions. Neither is ranked; they decide nothing on their own.
+[decisions.md](decisions.md) logs each change to the PRD or the KDPS policies: the question, the options, the choice and why, and the IDs it changed. The entry comes first; the edit follows it. [questions-for-kdps.md](questions-for-kdps.md) lists what only KDPS or the CA can answer. [reports/](reports/) holds one-time reports. Neither is ranked; they decide nothing on their own.
+
+## Folder map
+
+| Path | What it is |
+| --- | --- |
+| [prd.md](prd.md), [kdps-policies.md](kdps-policies.md) | Ranks 1 and 2. |
+| [design/](design/) | Rank 3. One folder per area: `access/`, `platform/`, `stock/`, `ui/`. |
+| [phases.md](phases.md) | Delivery order. |
+| [decisions.md](decisions.md) | Log of changes to the PRD and policies. |
+| [questions-for-kdps.md](questions-for-kdps.md) | Open questions for KDPS and the CA, by person. |
+| [reports/](reports/) | One-time reports. |
 
 ## When two documents disagree
 

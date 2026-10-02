@@ -1,12 +1,12 @@
 # Questions for KDPS and the CA
 
-> **Not ranked.** These are questions, not answers. Each answer goes into [kdps-policies.md](../kdps-policies.md) (logged in [decisions.md](../decisions.md) first if it changes a rule). See [README.md](../README.md).
+> **Not ranked.** These are questions, not answers. Each answer goes into [kdps-policies.md](kdps-policies.md) (logged in [decisions.md](decisions.md) first if it changes a rule). See [README.md](README.md).
 
 **How to use this list.**
 
 - Questions are grouped by the person who should answer. Some need two people; they appear under the first and say who else.
 - Each question names the policy bullet it fills (`POL-…`) and the stage that waits for it. Building and testing with sample data never waits; only real, live use does.
-- `V-` numbers point to section 5 of the [alignment report](alignment-report.md).
+- `V-` numbers point to section 5 of the [alignment report](reports/alignment-report.md).
 - Please give real numbers, names and dates. "Same as now" is fine if you also tell us what "now" is.
 
 ## KDPS Owner

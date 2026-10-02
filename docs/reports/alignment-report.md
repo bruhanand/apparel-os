@@ -2,7 +2,7 @@
 
 > **Not ranked.** This report decides nothing and changes nothing. Any further PRD or policy change needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
-**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-029 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
+**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-029 and re-checks the findings of the earlier audit (in git history); audit codes (B-04, D-06 …) are given where they match.
 
 **How to read it.**
 
@@ -12,7 +12,7 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-035 in [decisions.md](../decisions.md). DEC-030 to DEC-035 came from the stock-ledger design ([design/stock/stock-ledger.md](../design/stock/stock-ledger.md)): the old POS stays outside app stock, moving average and cost rules, receipt-origin rules, and four new words. DEC-034 and DEC-035 settled its review questions: undoing a mistaken inflow, late-cost excess, and a counted piece the ledger shows as gone. Product-owner items left: SL-10 (returns with no sale in the app) waits for the later plan to bring the earlier POS's data into the app, which needs a decision record because `PRD-LIF-010` imports old sales for reports only; SL-11 only if a performance test fails. Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-035 in [decisions.md](../decisions.md). DEC-030 to DEC-035 came from the stock-ledger design ([design/stock/stock-ledger.md](../design/stock/stock-ledger.md)): the old POS stays outside app stock, moving average and cost rules, receipt-origin rules, and four new words. DEC-034 and DEC-035 settled its review questions: undoing a mistaken inflow, late-cost excess, and a counted piece the ledger shows as gone. Product-owner items left: SL-10 (returns with no sale in the app) waits for the later plan to bring the earlier POS's data into the app, which needs a decision record because `PRD-LIF-010` imports old sales for reports only; SL-11 only if a performance test fails. Questions only KDPS or the CA can answer are in [questions-for-kdps.md](../questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
 2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024, since replaced by DEC-030), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
