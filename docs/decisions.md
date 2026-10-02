@@ -158,3 +158,14 @@
 - **Options.** Use the total proposed acquisition cost for the covered PT quantities · Use their MRP total.
 - **Choice.** Use total proposed acquisition cost, calculated from the approved receipt-layer cost of each covered quantity; do not use MRP. A missing or disputed cost blocks value-based approval until resolved, never as zero. This is an approval valuation and does not determine supplier-liability recognition.
 - **Changed.** `PRD-ACS-015`, `PRD-ACS-016`; cross-references in `POL-02.09` and `POL-03.07`; design-language and design-system approval guidance; V-55 is settled.
+
+## DEC-016 — Corrections to DEC-013 to DEC-015
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-012 to DEC-015
+- **Question.** A check of DEC-012 to DEC-015 found four slips: policy 12 had two names; policy 12 said "EBO reporting by 4" although DEC-014 put EBO report timing in policy 2; policy 14's stage said "1 for layouts and sample-data tests", but the "Needed by stage" column marks live use only; and the PT approval cost used "approved receipt-layer costs", which are not approved until the PT itself is.
+- **Options.** Correct each slip · Leave them.
+- **Choice.** Correct them.
+  - Policy 12 keeps the single name "Franchise/partner" in both documents; it still covers EBO brand settlement. Needed by stage 5.
+  - Policy 14 is needed by stage 4, before the pilot switch. Its import layouts are built and tested in stage 1 with sample data, which needs no policy.
+  - A PT approval limit compares with the proposed P RATE times the covered quantity on the PT revision under approval. This replaces the DEC-015 wording "approved receipt-layer cost".
+- **Changed.** PRD "Required policy configuration" rows for policies 12 and 14; `PRD-ACS-015`; policy table rows 12 and 14; `POL-02.09`; `phases.md` stages 1 and 4; the alignment report's A-2 status and PT wording.
