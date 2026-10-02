@@ -73,7 +73,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - PT corrections and reversals through linked records.
 - Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
 - Stock search by product, brand, size, barcode, location and condition.
-- The parallel-run import of the current POS's daily sales report and SOH, with each Store's shadow stock loaded from that SOH at the start of the run (`PRD-LIF-024`), so system stock stays comparable while the current POS sells. Piece rules at that Store start at its switch (`PRD-MER-017`).
+- The parallel-run import of the current POS's daily sales report and SOH, for checking and reports only; it never moves stock (`PRD-LIF-013`, `PRD-LIF-014`). Piece rules at that Store start at its switch (`PRD-MER-017`).
 
 **Out of scope.** Inter-Site transfers, supplier returns, disposal, payment runs.
 
@@ -89,7 +89,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Primary and supplemental PT coverage cannot overlap.
 - Supplier, direct-store and opening goods meet the same selling-Site acceptance and hold checks.
 - Damage immediately blocks stock; independent rejection clears only the mistaken damage hold.
-- Official stock plus shadow stock after the daily sales load agrees with the current POS's SOH, or each difference is an owned exception.
+- A parallel-run import changes no stock: after a daily load, every stock quantity and value in Apparel OS is unchanged (`PRD-LIF-014`).
 
 ## Stage 3 — Complete stock-movement workflow
 
@@ -216,14 +216,14 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Testing and switch-over
 
-The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set.
+The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set. While the current POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
-| Before the test | Load product masters and approved mappings; load each Store's SOH as shadow stock, a comparison source only, not proof of physical stock or value | Current |
-| Side-by-side test (Railway test setup) | Exercise goods-in and transfer workflows in shadow mode. Import the daily sales report and SOH from the current POS as comparison evidence; do not make unverified opening quantities official. Compare stock every day | Current |
-| Go or no-go check | No unexplained material stock or sales difference remains, each difference is an owned exception, no serious exception is open, and all participating staff are trained | Current |
-| Switch day (production hosting) | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, replace shadow stock with the verified count, then start billing in Apparel OS | Apparel OS for that Store |
+| Before the test | Load product masters and approved mappings | Current |
+| Side-by-side test (Railway test setup) | Test the app: goods-in, transfers and test bills. Load the current POS's end-of-day sales report and SOH for checking and reports only; they never move stock in Apparel OS (`PRD-LIF-014`) | Current |
+| Go or no-go check | No serious exception is open, and all participating staff are trained | Current |
+| Switch day (production hosting) | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count with the current POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, then start billing in Apparel OS | Apparel OS for that Store |
 | After the switch | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
@@ -234,15 +234,15 @@ The built system is tested beside the current system before it replaces it. KDPS
 - Write the way back before the switch: the checks that would send the pilot Store back to the current POS, who decides, and how bills made in Apparel OS are carried back.
 - Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the current POS can load it. This depends on the current POS accepting that file and must be confirmed.
 - A parallel-run import creates no tax invoice and no second sale.
-- Every difference between the two systems becomes an exception with an owner; none is closed by editing a number to match.
+- Every difference found at the switch count is reported and explained; none is closed by editing a number to match.
 
-**Go or no-go pass marks.** KDPS sets the run length and material-difference threshold before the test starts. All participating staff must be trained; no unexplained material difference and no serious exception may remain open.
+**Go or no-go pass marks.** KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained and no serious exception may remain open. At each switch, no unexplained material difference may remain between the count and the current POS's last SOH.
 
 | Check | Pass mark |
 | --- | --- |
-| Days in a row for stock and sales reconciliation | OPEN — KDPS Owner, before test run |
-| Material-difference threshold per Store | OPEN — KDPS Owner and Accounts, before test run |
-| Unexplained material differences | None |
+| Run length of the side-by-side test | OPEN — KDPS Owner, before test run |
+| Material-difference threshold per Store, at the switch count | OPEN — KDPS Owner and Accounts, before the first switch |
+| Unexplained material differences at the switch count | None |
 | Open serious exceptions | None |
 | Participating staff trained | All |
 | Who signs the switch | Owner, Accounts and Operations |
