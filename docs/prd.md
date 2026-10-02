@@ -7,6 +7,7 @@
 > - `PRD` means this document. The three letters name the section. The number counts bullets in that section, in order.
 > - An ID never changes and is never reused. A removed bullet's ID is retired.
 > - The bullets under "Why this exists" describe KDPS today and have no ID.
+> - Retired IDs: `PRD-RET-002` (DEC-010).
 
 | Prefix | Section |
 | --- | --- |
@@ -112,6 +113,7 @@ Business words:
 | Exception | A tracked unresolved condition or difference with an owner, due date, status, evidence and exposure |
 | FIFO | First-in, first-out inventory cost formula |
 | Fill rate | The share of the ordered quantity that the supplier delivered |
+| Gift voucher | A bearer voucher issued by the Organisation, identified by a unique code and redeemable as a tender within its configured validity |
 | GRN | Goods receipt note: the record of goods physically counted at the receiving Site |
 | GSP | GST Suvidha Provider: an approved service connecting software to the government GST system |
 | GST | Goods and Services Tax |
@@ -119,6 +121,7 @@ Business words:
 | Hold | A block that keeps stock from being sold or moved until a question is settled |
 | HR, HRMS | Human resources; human resource management system |
 | HSN | Harmonised System of Nomenclature: the goods classification code used for GST |
+| Inbound ownership | Ownership of goods acquired under an agreement before they are counted at the receiving Site; it is not stock |
 | INR | Indian rupee. One rupee is 100 paise |
 | IRN | Invoice Reference Number: the unique number the government e-invoice system gives a tax invoice |
 | KDPS | KDPS Lifestyle Pvt. Ltd., the first customer; also the name of its PT column layout |
@@ -142,7 +145,8 @@ Business words:
 | PAN | Permanent Account Number: the income-tax identity number |
 | Persona | One of the 14 kinds of work listed in People, access and approvals, each with a short ID. A person can hold several; a persona grants no access |
 | PF | Provident Fund: a statutory retirement-savings contribution for staff |
-| Piece ID | The unique internal ID of one KDPS-tracked physical piece, printed as a barcode label |
+| Piece ID | The unique internal ID of one piece-tracked physical piece, printed as a barcode label |
+| Piece-tracked | Merchandise whose tracking profile requires a piece ID for every physical piece |
 | POS | Point of sale: the billing counter and its software |
 | Price tag | The paper tag showing merchandise identity and ticket price; it is not the same as an exception or a PT record |
 | PT | Price ticket: a reviewed table of merchandise identity, counted coverage, approved cost, MRP and tax information |
@@ -162,7 +166,7 @@ Business words:
 | Store | A trading business at a Site |
 | Store credit | A customer-linked balance issued under policy and redeemable within its configured scope and validity |
 | Supplier return | A return of goods to a supplier under an agreement or an approved claim |
-| Tally | TallyPrime, KDPS’s sole official accounting book unless a separately approved future change occurs |
+| Tally | TallyPrime, an external accounting book. Whether it is the official book is set by the Official book policy |
 | TDS | Tax deducted at source |
 | Tender | The way a customer pays: cash, card, UPI, store credit or gift voucher |
 | Till | The cash counter and its drawer for one billing session |
@@ -245,6 +249,9 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ORG-014` Record stock ownership from the applicable agreement. Outright and sale-or-return terms do not by themselves determine legal title, valuation or accounting recognition.
 - `PRD-ORG-015` Track company, supplier/brand and partner-owned goods separately where the approved commercial model requires it. Exclude third-party-owned goods from owned-inventory value under the applicable accounting policy.
 - `PRD-ORG-016` Maintain effective-dated margins, commissions, payment terms, return windows, return processes, credit-note terms and brand-funded promotion terms.
+- `PRD-ORG-017` When an agreement transfers ownership before receipt, record inbound ownership by agreement, booking, supplier document and quantity. Inbound ownership is not stock: it cannot be sold, reserved, transferred or counted as custody.
+- `PRD-ORG-018` Give inbound ownership a provisional amount only from a supplier invoice or the agreement's price for the same goods and quantity. Without that evidence, keep the amount unknown and raise an exception; never create a fictitious payable, inventory value or journal. Accounting recognition follows the Financial posting policy.
+- `PRD-ORG-019` Close inbound ownership against the receipt count. Settle quantity and amount differences through the receiving discrepancy and invoice-matching records.
 
 ## People, access and approvals
 
@@ -276,6 +283,8 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ACS-009` Give each person one inbox containing tasks, exceptions and approvals, ordered by due time and exposure.
 - `PRD-ACS-010` Support approve/reject with reasons, evidence, comments, delegation during absence and escalation of overdue work.
 - `PRD-ACS-011` Permit bulk approval only within the configured authority and risk policy.
+- `PRD-ACS-015` Give each approval limit an explicit value basis: cost for stock adjustments, write-offs, disposals and transfers; bill value for discounts, refunds and no-bill returns; the amount paid for payments; quantity or discount percentage where configured. Show the basis beside the limit.
+- `PRD-ACS-016` When a request's value on its basis is unknown, only a person whose authority explicitly covers unknown value may approve it; otherwise it stays pending. Unknown value never counts as zero.
 - `PRD-ACS-012` Support phone and WhatsApp approval through authenticated actions tied to the exact record version.
 - `PRD-ACS-013` Record actor, event time, recording time, scope, before/after values, version, reason, source and approval evidence for important changes.
 - `PRD-ACS-014` Preserve approved content and completed business events. Corrections, reversals and lifecycle changes are separately attributable records.
@@ -284,7 +293,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 - `PRD-MER-001` Maintain brands, suppliers, agents, ordering parties, invoicing parties and goods movers independently.
 - `PRD-MER-002` Maintain stable internal SKU identities for merchandise variants. Apparel and footwear use style/article, colour and size, with category-specific size sets and size-colour grids.
-- `PRD-MER-003` Assign a unique internal ID to each KDPS-tracked physical piece, even when identical pieces share a supplier barcode. Preserve that piece identity through custody, PT coverage, sale, return and count.
+- `PRD-MER-003` Assign a unique internal ID to each piece-tracked physical piece, even when identical pieces share a supplier barcode. Preserve that piece identity through custody, PT coverage, sale, return and count.
 - `PRD-MER-004` Maintain season, collection, launch date, gender, fabric, fit, category, HSN and applicable merchandise attributes.
 - `PRD-MER-005` Preserve unknown values. Missing size is distinct from an explicitly supplied Free Size.
 - `PRD-MER-006` Map external barcodes and supplier codes to the correct SKU and unit, with scope and validity dates. Identical pieces may share an external barcode; their internal piece IDs remain distinct.
@@ -295,6 +304,9 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-011` Carry configured unit, batch and expiry identity through receiving, movement, sale, return and count. Missing required tracking information blocks the affected operation.
 - `PRD-MER-012` Apply configured expiry eligibility and hold rules; quantities in different units are not silently combined.
 - `PRD-MER-013` Maintain product and vocabulary proposals separately from approved masters. Unconfirmed identity cannot enter an official PT.
+- `PRD-MER-014` Set piece tracking per merchandise tracking profile. Goods outside a piece-tracked profile are held as quantity per SKU and unit.
+- `PRD-MER-015` Print piece-ID labels from the receipt count. A piece-ID label printed before PT approval asserts no price or sale eligibility.
+- `PRD-MER-016` Bill, count, transfer and return piece-tracked goods by scanning the piece ID. A supplier barcode identifies the SKU, not the piece, and cannot complete these actions alone.
 
 ## Source conversion and imports
 
@@ -383,6 +395,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-STK-008` For a full store count, reconcile tills, stop finalisation, establish the count scope, count/scan, review differences and authorise adjustments before resuming selling.
 - `PRD-STK-009` Support cycle counts by location, rack, brand or selected items, with an explicit rule for movements occurring during the count.
 - `PRD-STK-010` Preserve initial counts, recounts, differences, reasons and approved corrections.
+- `PRD-STK-012` Record, explain and approve every count difference. The configured count tolerance only selects the approver: within it, the approver set for that tolerance; above it, a higher approver and an owned exception. No difference is adjusted automatically.
 - `PRD-STK-011` Identify broken size runs and opportunities to obtain missing sizes from other locations.
 
 ## Transfers and physical movement
@@ -455,11 +468,11 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-POS-017` Send permitted digital bills through WhatsApp or SMS.
 - `PRD-POS-018` Support billed-retained goods paid for but still in store custody, with linked collection/alteration status and protected quantity. Its fulfilment and accounting policy governs issue, pickup, cancellation and release.
 - `PRD-POS-019` Obtain the required Invoice Reference Number (IRN) evidence before issuing an applicable tax invoice or authorising goods release.
+- `PRD-POS-020` Give each billing device its own bill series per tax registration and financial year, online or offline. Devices never share a live series. Set the number format per Organisation within the statutory limits for invoice numbers.
 
 ## Customer returns, exchanges and credit
 
-- `PRD-RET-001` Maintain an Organisation return policy with Store-specific overrides only when explicitly authorised by the Organisation. Snapshot the policy that applied to each sale.
-- `PRD-RET-002` KDPS’s ordinary apparel and footwear return window is 15 days from customer handover. The Organisation may edit its policy. A Store-specific override must be explicitly authorised by the Organisation and effective-dated. The defective-item cutoff remains to be decided.
+- `PRD-RET-001` Maintain an Organisation return policy with Store-specific overrides only when explicitly authorised by the Organisation. Effective-date each override. Snapshot the policy that applied to each sale.
 - `PRD-RET-003` Configure ordinary and defective-item cases independently, including permitted refund, exchange, store-credit or refusal outcomes.
 - `PRD-RET-004` For defective goods, assess separately and support replacement, repair where appropriate, or refund under applicable consumer rights and warranties; do not force store credit where a refund is owed.
 - `PRD-RET-005` Determine bill-backed entitlement from original paid quantity/value less prior completed or pending returns, not current MRP.
@@ -469,6 +482,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-RET-009` Allow replacement SKUs other than the original unless the configured policy restricts them.
 - `PRD-RET-010` Determine refund entitlement separately from permitted tender routing; do not infer cash substitution from an exchange.
 - `PRD-RET-011` Keep approved, pending, failed and confirmed refunds distinct; failed payment remains an outstanding customer obligation.
+- `PRD-RET-022` For a bill paid with several tenders, split each refund across the original tenders in proportion to their original allocation, capped at each tender's remaining refundable amount. Give any amount above a tender's cap to the other original tenders in the same proportion, and any paise left by rounding to the largest tender.
 - `PRD-RET-012` Record customer remedy and physical returned condition separately.
 - `PRD-RET-013` Accept good returned pieces through the site's acceptance rules; quarantine damaged/defective pieces immediately.
 - `PRD-RET-014` A refused request does not create returned stock through this flow.
@@ -477,6 +491,8 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-RET-017` Keep no-bill returns unavailable without their explicit eligibility, valuation, permission and tender policy.
 - `PRD-RET-018` Maintain customer purchase history, sizes and preferred brands, with appropriate access.
 - `PRD-RET-019` Support loyalty earning/redemption and return reversals under configured rules, retaining liability and balance history.
+- `PRD-RET-020` Issue the Organisation's own gift vouchers as bearer vouchers with a unique code and configured validity. Record each unredeemed balance as a liability, and check and consume the authoritative balance online at redemption. Tax on issue and redemption follows the Statutory applicability policy.
+- `PRD-RET-021` Accept only the Organisation's own gift vouchers as the gift-voucher tender. Vouchers issued by brands or other parties are outside the product until the PRD adds them.
 
 ## EBO sales and external billing
 
@@ -525,6 +541,8 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-LED-005` Keep operational quantities, provisional commercial amounts and accounting recognition distinct.
 - `PRD-LED-006` Preserve receipt-cost evidence and record later approved cost adjustments separately, including their inventory/COGS effects for goods already sold.
 - `PRD-LED-007` Support lower-of-cost-and-net-realisable-value write-downs under applicable rules.
+- `PRD-LED-014` Support FIFO and weighted-average cost formulas. The Financial posting policy selects the formula for each accounting book and applies it consistently to inventories of similar nature and use.
+- `PRD-LED-015` Configure the cost pool for each accounting book: each SKU across the whole book, or each SKU at each Site. Under a Site pool, a transfer carries its source cost into the destination pool without markup. Changing the formula or pool is effective-dated and reconciles the transition.
 - `PRD-LED-008` Reconcile inventory value, receivables, payables, cash, bank and controlling ledger balances.
 - `PRD-LED-009` Lock financial periods; require authorised reopening for affected posting.
 - `PRD-LED-010` Provide month-close checklists, owners, due dates, reconciliations and unresolved amounts.
@@ -536,6 +554,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 
 - `PRD-CSH-001` Close each Store day using opening cash plus inflows minus outflows, compared with a denomination-based physical count.
 - `PRD-CSH-002` Preserve original count, recount, variance, explanation and supporting evidence.
+- `PRD-CSH-011` Record, explain and approve every day-close cash variance. The configured cash-variance tolerance only selects the approver: within it, the approver set for that tolerance; above it, a higher approver and an owned exception. No variance is written off automatically.
 - `PRD-CSH-003` Separate sales collections, old-dues recovery, cash transfers and non-cash collections.
 - `PRD-CSH-004` Maintain petty expenses with bill photos, limits, top-up requests and float accountability.
 - `PRD-CSH-005` Track pickup, safe handover and bank deposit; cash remains in transit until the relevant receipt is confirmed.
@@ -609,6 +628,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 
 - `PRD-NAV-015` Stock/inventory value counts owned goods only; third-party-owned goods are excluded under the ownership rules.
 - `PRD-NAV-016` These definitions govern the monthly Store net-asset-value snapshots and the Store P&L.
+- `PRD-NAV-017` End the Store P&L and brand-by-store profit at profit before tax. Show income-tax expense and net profit only for a legal entity.
 
 ## Franchise and partner accounts
 
@@ -654,7 +674,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-EXC-009` Give every metric one definition covering eligible states, units, dates, returns, discounts, tax, cost basis and aggregation.
 - `PRD-EXC-010` Separate sales, collections, settlements and profit; show as-of time, estimates and missing data.
 - `PRD-EXC-011` Drill from totals to source evidence; restrict every report and export to permitted data.
-- `PRD-EXC-012` Produce brand sell-through reports and persona-specific daily summaries, including the configured 9 PM WhatsApp summary.
+- `PRD-EXC-012` Produce brand sell-through reports and persona-specific daily summaries, including the configured daily WhatsApp summary.
 - `PRD-EXC-013` Notify responsible users of cash gaps, large discounts, missing reports, overdue transit and return deadlines.
 - `PRD-EXC-014` Send customer bills and credit information through permitted channels; marketing requires its applicable consent.
 - `PRD-EXC-015` Answer plain-language questions only from the asker's authorised data, with inspectable supporting records.
@@ -836,15 +856,15 @@ Decided by names the personas that set and approve the policy. Needed by stage m
 | Policy | Required definition | Decided by | Needed by stage |
 | --- | --- | --- | --- |
 | Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement | Owner, Accounts | 2 |
-| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and refund-approval cases; independent checks; count variance tolerance/approval and movement during counts; exception owner/due/escalation and alert recipients; 9 PM summary recipients/channels; session settings; material-change reapproval | Owner, Admin | 1 |
+| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and refund-approval cases; independent checks; count variance tolerance/approval and movement during counts; day-close cash-variance tolerance/approval; exception owner/due/escalation and alert recipients; daily summary time, recipients and channels; session settings; material-change reapproval | Owner, Admin | 1 |
 | Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
 | Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
 | Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
 | Customer returns | Ordinary/defective windows, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
 | Refunds and no-bill returns | Enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
 | Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
-| Financial posting | Recognition, cost formula/adjustment, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
-| Statutory applicability | Registration, goods/rate classification, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
+| Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
+| Statutory applicability | Registration, goods/rate classification, invoice-number format, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
 | Official book | Authority and reconciliation evidence for moving the official book from Tally | Owner, CA | 5 |
 | Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement | Owner, Accounts | 5 |
 | Workforce | Employer/state/staff-group pay, leave, overtime, incentives and final-settlement policies | Owner, HR | 6 |
@@ -875,3 +895,4 @@ Decided by names the personas that set and approve the policy. Needed by stage m
 - `PRD-ACP-017` Attendance correction, returned-sale incentives and payroll replay preserve raw evidence and one approved period outcome.
 - `PRD-ACP-018` Shared golden cases validate prices, discounts, tax, rounding, incentives and posting; real PostgreSQL concurrency and scoped browser journeys enforce the same rules.
 - `PRD-ACP-019` Backup restoration and complete export reproduce linked records, attachments and control totals without reusing business identities.
+- `PRD-ACP-020` Goods owned before receipt appear as inbound ownership, never as stock; they carry an amount only with invoice or agreement-price evidence, and close against the receipt count.
