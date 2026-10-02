@@ -94,6 +94,7 @@ Business words:
 | Ageing | How long stock has been held, or how long a due has been unpaid |
 | AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
+| Bank transfer | A customer payment sent directly between bank accounts, confirmed by bank/provider evidence |
 | Booking | A buying order placed with a brand or supplier for a season |
 | Business unit | The whole Store or one of several operating units at a Site, mapped to its legal entity, tax registration and accounting book |
 | CA | Chartered Accountant |
@@ -101,6 +102,7 @@ Business words:
 | Consignment | An agreement under which goods are held for sale; ownership and settlement follow the agreement, not the label alone |
 | Contra | A Tally voucher for a transfer between accounts within the same legal entity |
 | Coverage | Quantity covered by an approved price ticket at a merchandise identity and location |
+| Customer credit | An approved amount the customer may pay later under a configured limit and due date; distinct from Store credit |
 | Custody | Who physically holds the goods and where, separate from who owns them |
 | Cycle count | A count of part of the stock, such as one rack or brand, without a full store count |
 | Day close | The end of a Store's business day: counted cash, tender reconciliation and the closing checklist |
@@ -168,7 +170,7 @@ Business words:
 | Supplier return | A return of goods to a supplier under an agreement or an approved claim |
 | Tally | TallyPrime, an external accounting book. Whether it is the official book is set by the Official book policy |
 | TDS | Tax deducted at source |
-| Tender | The way a customer pays: cash, card, UPI, store credit or gift voucher |
+| Tender | The way a customer pays: cash, card, UPI, Bank transfer, Store credit, Gift voucher or approved Customer credit |
 | Till | The cash counter and its drawer for one billing session |
 | UPI | Unified Payments Interface: instant bank-to-bank payment by phone |
 | Voucher | An accounting entry in Tally, such as a sale, purchase, payment or journal |
@@ -285,9 +287,12 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ACS-011` Permit bulk approval only within the configured authority and risk policy.
 - `PRD-ACS-015` Give each approval limit an explicit value basis: cost for stock adjustments, write-offs, disposals and transfers; bill value for discounts, refunds and no-bill returns; the amount paid for payments; quantity or discount percentage where configured. For PT approval limits, use the total proposed acquisition cost of the covered PT quantities: the proposed P RATE times the covered quantity on the PT revision under approval, not MRP. Show the basis beside the limit.
 - `PRD-ACS-016` When a request's value on its basis is unknown, only a person whose authority explicitly covers unknown value may approve it; otherwise it stays pending. Unknown value never counts as zero. For PT approval, missing or disputed proposed acquisition cost blocks value-based approval until resolved; do not treat it as zero.
-- `PRD-ACS-012` Support phone and WhatsApp approval through authenticated actions tied to the exact record version.
+- `PRD-ACS-012` Send phone approval notifications as links to authenticated actions bound to the exact record version. A plain text or WhatsApp “yes” is not approval.
 - `PRD-ACS-013` Record actor, event time, recording time, scope, before/after values, version, reason, source and approval evidence for important changes.
 - `PRD-ACS-014` Preserve approved content and completed business events. Corrections, reversals and lifecycle changes are separately attributable records.
+- `PRD-ACS-017` Apply the configured idle-lock and absolute session limits; preserve unfinished work when a session locks or expires. Keep development test access separate from production authentication.
+- `PRD-ACS-018` Grant a stand-in only named, scoped, time-limited authority with automatic expiry. A stand-in cannot approve their own preparation.
+- `PRD-ACS-019` For bulk approval, show the selected items and total, recheck each item's scope, limit, state and independent-approval requirement, and route exceptions individually. Enable only explicitly allowed action types.
 
 ## Merchandise and identifiers
 
@@ -392,8 +397,8 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-STK-005` Within-Site floor, backstore, rack and bin moves are exact-quantity movements preserving condition and acceptance; they are not inter-Site transfers.
 - `PRD-STK-006` Provide stock search by product, brand, size, barcode, location and condition, including availability at authorised alternative stores.
 - `PRD-STK-007` Distinguish good unsold dead stock from damaged/non-returnable stock.
-- `PRD-STK-008` For a full store count, reconcile tills, stop finalisation, establish the count scope, count/scan, review differences and authorise adjustments before resuming selling.
-- `PRD-STK-009` Support cycle counts by location, rack, brand or selected items, with an explicit rule for movements occurring during the count.
+- `PRD-STK-008` For a full Store count, stop selling, reconcile tills, establish and freeze the count scope, count/scan, review differences and authorise adjustments before resuming selling.
+- `PRD-STK-009` Support cycle counts by location, rack, brand or selected items. Freeze counted items and locations from sale and movement while the count is open.
 - `PRD-STK-010` Preserve initial counts, recounts, differences, reasons and approved corrections.
 - `PRD-STK-012` Record, explain and approve every count difference. The configured count tolerance only selects the approver: within it, the approver set for that tolerance; above it, a higher approver and an owned exception. No difference is adjusted automatically.
 - `PRD-STK-011` Identify broken size runs and opportunities to obtain missing sizes from other locations.
@@ -453,14 +458,14 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-POS-002` Attribute each line to a salesperson separately from the cashier.
 - `PRD-POS-003` Apply approved offers; require the configured authority and reason for manual discounts or price changes.
 - `PRD-POS-004` Allocate basket discounts across lines before applying the relevant effective tax and rounding rules.
-- `PRD-POS-005` Support enabled cash, card, UPI, store-credit and gift-voucher tenders and exact split allocation.
+- `PRD-POS-005` Support enabled cash, card, UPI, verified Bank transfer, Store credit, Gift voucher and approved Customer credit tenders with exact split allocation. Keep each actual instrument and its confirmation state distinct.
 - `PRD-POS-006` Start payment allocation as unallocated; total allocated tenders must equal the amount due.
 - `PRD-POS-007` Record cash received separately from cash tender. An omitted cash-received entry explicitly means exact cash; entered zero means zero.
 - `PRD-POS-008` Reject insufficient cash, cash-received input without a cash portion, and invalid amounts. Calculate change only on cash.
 - `PRD-POS-009` Revalidate tender allocation after any item, quantity, offer or price change; stale amounts cannot finalise the revised bill.
 - `PRD-POS-010` Distinguish manually recorded card/UPI collections from provider-confirmed attempts and from final bank settlement.
 - `PRD-POS-011` Retain provider references and pending/failed/confirmed outcomes; an uncertain response requires lookup/reconciliation before another charge.
-- `PRD-POS-012` Make customer phone optional; record consent and permitted use separately.
+- `PRD-POS-012` Make customer phone optional; explain its purpose when collected and keep marketing consent separate.
 - `PRD-POS-013` Save held carts and support recall with current eligibility/price validation.
 - `PRD-POS-014` Preserve completed bill items, prices, discounts, taxes, tender allocation, business date, operator and calculation-policy snapshots.
 - `PRD-POS-015` Search bills by customer, number and date range; include unsynced local bills without duplicating them after sync.
@@ -469,6 +474,8 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-POS-018` Support billed-retained goods paid for but still in store custody, with linked collection/alteration status and protected quantity. Its fulfilment and accounting policy governs issue, pickup, cancellation and release.
 - `PRD-POS-019` Obtain the required Invoice Reference Number (IRN) evidence before issuing an applicable tax invoice or authorising goods release.
 - `PRD-POS-020` Give each billing device its own bill series per tax registration and financial year, online or offline. Devices never share a live series. Set the number format per Organisation within the statutory limits for invoice numbers.
+- `PRD-POS-021` Require provider or bank evidence to confirm a Bank transfer tender; a customer screenshot alone is not confirmation.
+- `PRD-POS-022` Allow Customer credit sales only under an approved customer limit and due date; record the receivable and its settlement separately from Store credit.
 
 ## Customer returns, exchanges and credit
 
@@ -480,7 +487,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-RET-007` Use current prices and offers for replacement goods. Equal value has no difference; higher value collects the difference.
 - `PRD-RET-008` For a cheaper replacement, apply the configured refund-difference, credit-difference or refusal rule.
 - `PRD-RET-009` Allow replacement SKUs other than the original unless the configured policy restricts them.
-- `PRD-RET-010` Determine refund entitlement separately from permitted tender routing; do not infer cash substitution from an exchange.
+- `PRD-RET-010` Determine refund entitlement separately from permitted tender routing; require independent authorised approval for cash substitution or another tender override.
 - `PRD-RET-011` Keep approved, pending, failed and confirmed refunds distinct; failed payment remains an outstanding customer obligation.
 - `PRD-RET-022` For a bill paid with several tenders, split each refund across the original tenders in proportion to their original allocation, capped at each tender's remaining refundable amount. Give any amount above a tender's cap to the other original tenders in the same proportion, and any paise left by rounding to the largest tender.
 - `PRD-RET-012` Record customer remedy and physical returned condition separately.
@@ -493,6 +500,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-RET-019` Support loyalty earning/redemption and return reversals under configured rules, retaining liability and balance history.
 - `PRD-RET-020` Issue the Organisation's own gift vouchers as bearer vouchers with a unique code and configured validity. Record each unredeemed balance as a liability, and check and consume the authoritative balance online at redemption. Tax on issue and redemption follows the Statutory applicability policy.
 - `PRD-RET-021` Accept only the Organisation's own gift vouchers as the gift-voucher tender. Vouchers issued by brands or other parties are outside the product until the PRD adds them.
+- `PRD-RET-023` Restrict store-credit redemption to authorised Stores within the same legal entity; configure validity and redemption scope before activation.
 
 ## EBO sales and external billing
 
@@ -684,6 +692,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-EXC-019` Preserve baseline, edited proposal, reason, author, approval and accepted/rejected outcome.
 - `PRD-EXC-020` Planning proposals cannot purchase, transfer or change prices without the relevant approval.
 - `PRD-EXC-021` Evaluate forecasting and planning against the configured horizon, baseline, quality measures and operational results.
+- `PRD-EXC-022` Record every cash-count difference. A Store Manager may approve only within configured limits; route larger differences to Accounts. Never write off a difference automatically.
 
 ## Opening, closure, migration and export
 
@@ -856,14 +865,14 @@ Decided by names the personas that set and approve the policy. Needed by stage m
 | Policy | Required definition | Decided by | Needed by stage |
 | --- | --- | --- | --- |
 | Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement | Owner, Accounts | 2 |
-| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and authorities for actions including refund cases selected under policy 7; independent checks; count variance tolerance/approval and movement during counts; day-close cash-variance tolerance/approval; exception owner/due/escalation and alert recipients, including missing EBO daily reports; daily summary time, recipients and channels; session settings; material-change reapproval | Owner, Admin | 1 |
+| Permissions and approvals | Role/action/field/scope assignments; production TOTP and session locks; amount/quantity limits and authorities for actions including refund cases selected under policy 7; independent checks; bulk-approval allowlist and stand-ins; count variance tolerance/approval and movement during counts; day-close cash-variance tolerance/approval; exception owner/due/escalation and alert recipients, including missing EBO daily reports; daily summary time and recipients; material-change reapproval | Owner, Admin | 1 |
 | Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
 | Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
 | Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
 | Customer returns | Ordinary/defective windows, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
 | Refunds and no-bill returns | Refund cases requiring independent approval; enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
 | Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
-| Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, Store P&L and brand-by-Store allocation bases, vouchers and acknowledgments | Accounts, CA | 1; Store P&L allocation, vouchers and acknowledgments by 5 |
+| Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, Store P&L and brand-by-Store allocation bases, asset capitalisation/depreciation policy, vouchers and acknowledgments | Accounts, CA | 1; Store P&L allocation, asset policy, vouchers and acknowledgments by 5 |
 | Statutory applicability | Registration, goods/rate classification, invoice-number format, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
 | Official book | Authority and reconciliation evidence for moving the official book from Tally | Owner, CA | 5 |
 | Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement, including EBO brand commission and settlement basis | Owner, Accounts | 5 |
