@@ -213,9 +213,9 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 **Testing settled: DEC-027, DEC-028.** Everything runs on Railway for testing, including KDPS's side-by-side test with real KDPS data. The current POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
 
 - **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37).
-- **The point.** The test setup needs a short design document (`docs/design/deployment.md`) before stage 1 build.
+- **The point.** The test setup is designed in [design/platform/deployment.md](../design/platform/deployment.md); its open questions D-1 to D-5 are listed there.
 - **Who decides:** Me; KDPS Owner for the data agreement.
-- **Blocks:** 1 (design document); 2 (side-by-side test with real data); 4 (first Store switch).
+- **Blocks:** 2 (side-by-side test with real data); 4 (first Store switch).
 
 ## 5. Open values
 
