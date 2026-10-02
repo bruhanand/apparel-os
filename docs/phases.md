@@ -215,13 +215,13 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Testing and switch-over
 
-The built system is tested beside the current system before it replaces it. The current POS keeps selling during the first half of the test. The switch happens mid-way, one Store at a time, and only after the checks pass. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances and quantitative go/no-go pass marks remain to be set.
+The built system is tested beside the current system before it replaces it. The current POS keeps selling during the first half of the test. The switch happens mid-way, one Store at a time, and only after the checks pass. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
 | Before the test | Load product masters and approved mappings; treat the current POS SOH only as a comparison source, not as proof of physical stock or value | Current |
 | First half | Exercise goods-in and transfer workflows in shadow mode. Import the daily sales report and SOH from the current POS as comparison evidence; do not make unverified opening quantities official. Compare stock every day | Current |
-| Go or no-go check | Stock and sales agree for the agreed run of days; no serious exception is open; staff are trained | Current |
+| Go or no-go check | No unexplained material stock or sales difference remains, each difference is an owned exception, and all participating staff are trained | Current |
 | Switch day | One pilot Store. At day close: physically count stock, stop billing on the current POS, reconcile the count against the reviewed opening PT and verified balances, approve the cutover, then start billing in Apparel OS | Apparel OS for that Store |
 | Second half | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
@@ -233,13 +233,12 @@ The built system is tested beside the current system before it replaces it. The 
 - A parallel-run import creates no tax invoice and no second sale.
 - Every difference between the two systems becomes an exception with an owner; none is closed by editing a number to match.
 
-**Go or no-go pass marks.** To be set by KDPS before the test starts.
+**Go or no-go pass marks.** KDPS sets the run length and material-difference threshold before the test starts. All participating staff must be trained; no unexplained material difference may remain.
 
 | Check | Pass mark |
 | --- | --- |
-| Days in a row that system stock agrees with the current POS's SOH | To be set |
-| Allowed stock difference per Store | To be set |
-| Days in a row that daily sales totals agree | To be set |
-| Open serious exceptions | To be set |
-| Staff trained at the pilot Store | To be set |
+| Days in a row for stock and sales reconciliation | OPEN — KDPS Owner, before test run |
+| Material-difference threshold per Store | OPEN — KDPS Owner and Accounts, before test run |
+| Unexplained material differences | None |
+| Participating staff trained | All |
 | Who signs the switch | Owner, Accounts and Operations |
