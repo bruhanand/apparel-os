@@ -283,8 +283,8 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ACS-009` Give each person one inbox containing tasks, exceptions and approvals, ordered by due time and exposure.
 - `PRD-ACS-010` Support approve/reject with reasons, evidence, comments, delegation during absence and escalation of overdue work.
 - `PRD-ACS-011` Permit bulk approval only within the configured authority and risk policy.
-- `PRD-ACS-015` Give each approval limit an explicit value basis: cost for stock adjustments, write-offs, disposals and transfers; bill value for discounts, refunds and no-bill returns; the amount paid for payments; quantity or discount percentage where configured. Show the basis beside the limit.
-- `PRD-ACS-016` When a request's value on its basis is unknown, only a person whose authority explicitly covers unknown value may approve it; otherwise it stays pending. Unknown value never counts as zero.
+- `PRD-ACS-015` Give each approval limit an explicit value basis: cost for stock adjustments, write-offs, disposals and transfers; bill value for discounts, refunds and no-bill returns; the amount paid for payments; quantity or discount percentage where configured. For PT approval limits, use the total proposed acquisition cost of the covered PT quantities, calculated from their approved receipt-layer costs, not MRP. Show the basis beside the limit.
+- `PRD-ACS-016` When a request's value on its basis is unknown, only a person whose authority explicitly covers unknown value may approve it; otherwise it stays pending. Unknown value never counts as zero. For PT approval, missing or disputed proposed acquisition cost blocks value-based approval until resolved; do not treat it as zero.
 - `PRD-ACS-012` Support phone and WhatsApp approval through authenticated actions tied to the exact record version.
 - `PRD-ACS-013` Record actor, event time, recording time, scope, before/after values, version, reason, source and approval evidence for important changes.
 - `PRD-ACS-014` Preserve approved content and completed business events. Corrections, reversals and lifecycle changes are separately attributable records.
@@ -856,23 +856,24 @@ Decided by names the personas that set and approve the policy. Needed by stage m
 | Policy | Required definition | Decided by | Needed by stage |
 | --- | --- | --- | --- |
 | Commercial ownership | Active stock models, legal owner, return rights, recognition and settlement rules by agreement | Owner, Accounts | 2 |
-| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and refund-approval cases; independent checks; count variance tolerance/approval and movement during counts; day-close cash-variance tolerance/approval; exception owner/due/escalation and alert recipients; daily summary time, recipients and channels; session settings; material-change reapproval | Owner, Admin | 1 |
+| Permissions and approvals | Role/action/field/scope assignments; amount/quantity limits and authorities for actions including refund cases selected under policy 7; independent checks; count variance tolerance/approval and movement during counts; day-close cash-variance tolerance/approval; exception owner/due/escalation and alert recipients, including missing EBO daily reports; daily summary time, recipients and channels; session settings; material-change reapproval | Owner, Admin | 1 |
 | Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
 | Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
 | Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
 | Customer returns | Ordinary/defective windows, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
-| Refunds and no-bill returns | Enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
+| Refunds and no-bill returns | Refund cases requiring independent approval; enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
 | Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
-| Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, vouchers and acknowledgments | Accounts, CA | 1; vouchers and acknowledgments by 5 |
+| Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, Store P&L and brand-by-Store allocation bases, vouchers and acknowledgments | Accounts, CA | 1; Store P&L allocation, vouchers and acknowledgments by 5 |
 | Statutory applicability | Registration, goods/rate classification, invoice-number format, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
 | Official book | Authority and reconciliation evidence for moving the official book from Tally | Owner, CA | 5 |
-| Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement | Owner, Accounts | 5 |
+| Franchise/partner | Ownership, dispatch classification/price, commission, royalty, guarantees, credit and settlement, including EBO brand commission and settlement basis | Owner, Accounts | 5; EBO reporting by 4 |
 | Workforce | Employer/state/staff-group pay, leave, overtime, incentives and final-settlement policies | Owner, HR | 6 |
-| Opening and cutover | Verified manifest, financial opening balances, cutoff, outstanding work and sign-off authority | Owner, Accounts, Operations | 1; signed before the pilot switch |
+| Opening and cutover | Import layouts and sample-data tests; verified manifest, financial opening balances, cutoff, outstanding work and sign-off authority | Owner, Accounts, Operations | 1 for layouts and sample-data tests; verified real data and sign-off before the stage 4 pilot switch |
 | Planning | Purpose, horizon, history quality, forecast measures and permitted approval/automation boundaries | Owner, Booking | 6 |
 | Offline operation | Permitted offline tenders and their evidence, stock allocations, device authority and conflict resolution | Owner, Operations | 4 |
 | Held-goods outcomes | Pre-PT custody movement, wrong/unidentified acceptance, write-off/disposal authority/value, and any separate authorised donation/sale route for damaged goods | Owner, Operations, Accounts | 2; write-off and disposal by 3 |
 | Recovery and retention | Recovery objectives, backup/export verification, retention schedules and legal holds | Owner, Admin | 1 |
+| Offers and promotions | Offer stacking/combination rules, brand and Organisation cost shares, and markdown approval authority and workflow | Owner, Brand manager | 4 |
 
 ## Acceptance conditions
 
