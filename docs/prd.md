@@ -7,7 +7,7 @@
 > - `PRD` means this document. The three letters name the section. The number counts bullets in that section, in order.
 > - An ID never changes and is never reused. A removed bullet's ID is retired.
 > - The bullets under "Why this exists" describe KDPS today and have no ID.
-> - Retired IDs: `PRD-RET-002` (DEC-010).
+> - Retired IDs: `PRD-RET-002` (DEC-010), `PRD-EXC-022` (DEC-026).
 
 | Prefix | Section |
 | --- | --- |
@@ -161,6 +161,7 @@ Business words:
 | Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
 | SBU | Short for business unit |
 | Sell-through | The share of received pieces sold in a period |
+| Shadow stock | During a parallel run, a Store's comparison quantity loaded from the earlier POS's SOH. It is never official stock, value, PT coverage or sellable stock |
 | Shop-in-shop | A brand counter operating inside a larger store |
 | Site | A physical place with a permanent identity |
 | SKU | Stock keeping unit: one merchandise variant, such as one style, colour and size |
@@ -312,6 +313,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-014` Set piece tracking per merchandise tracking profile. Goods outside a piece-tracked profile are held as quantity per SKU and unit.
 - `PRD-MER-015` Print piece-ID labels from the receipt count. A piece-ID label printed before PT approval asserts no price or sale eligibility.
 - `PRD-MER-016` Bill, count, transfer and return piece-tracked goods by scanning the piece ID. A supplier barcode identifies the SKU, not the piece, and cannot complete these actions alone.
+- `PRD-MER-017` At a Store still selling through an earlier POS, piece rules start at its switch count. Before then, imported sales and returns change SKU quantity only and name no piece.
 
 ## Source conversion and imports
 
@@ -514,6 +516,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-EBO-008` Reconcile brand stock with system stock monthly; assign differences for resolution.
 - `PRD-EBO-009` Produce EBO brand-settlement statements and the configured commission/partner basis.
 - `PRD-EBO-010` Support authorised API ingestion where the brand permits access, using the same validation and duplicate controls as file imports.
+- `PRD-EBO-011` An EBO Store that reports through brand software holds piece-tracked goods as SKU quantity until it bills in Apparel OS; its imports name no piece.
 
 ## Offers, prices and supplier returns
 
@@ -692,7 +695,6 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-EXC-019` Preserve baseline, edited proposal, reason, author, approval and accepted/rejected outcome.
 - `PRD-EXC-020` Planning proposals cannot purchase, transfer or change prices without the relevant approval.
 - `PRD-EXC-021` Evaluate forecasting and planning against the configured horizon, baseline, quality measures and operational results.
-- `PRD-EXC-022` Record every cash-count difference. A Store Manager may approve only within configured limits; route larger differences to Accounts. Never write off a difference automatically.
 
 ## Opening, closure, migration and export
 
@@ -709,7 +711,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-011` Keep opening balances, historical reference and live corrections distinct, with defined cutover and reconciliation.
 - `PRD-LIF-012` Support a parallel run in which the existing external POS remains the selling system for a Store.
 - `PRD-LIF-013` During a parallel run, import that POS's daily sales report and stock-on-hand (SOH) report through saved approved layouts, with the same validation and duplicate controls as EBO imports. Apply each sale and return to stock once.
-- `PRD-LIF-014` Compare the reported SOH with system stock each day; each difference becomes an owned exception.
+- `PRD-LIF-014` Compare the reported SOH with the Store's shadow stock plus its official stock each day; each difference becomes an owned exception.
 - `PRD-LIF-015` Switch each Store over at a day close, with verified balances and a fresh bill series. After the switch, the earlier POS is kept for reference only.
 - `PRD-LIF-016` A parallel-run import never creates a tax invoice or a second sale for an externally issued bill.
 - `PRD-LIF-017` During closure, stop new operations and settle stock, transit, reservations, custody, staff, cash, dues, books and exceptions.
@@ -719,6 +721,8 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-021` Relocation creates a new linked Site. Renaming does not replace the physical identity.
 - `PRD-LIF-022` Export masters, documents, lines, stock/accounting movements, attachments, mappings and audit history with reconstructible relationships and reconciled totals.
 - `PRD-LIF-023` Retain customer history and in-progress work through migration. Demo-data retirement cannot authorise deletion of real business records.
+- `PRD-LIF-024` At the start of a parallel run, load the earlier POS's SOH as each Store's shadow stock. Imported sales reduce that Store's official stock of the SKU first, then its shadow stock; imported returns add to shadow stock. Shadow stock never becomes official stock, value, PT coverage or sellable stock. At the switch, the verified count replaces it and every difference is reported.
+- `PRD-LIF-025` At a Store's switch count, label every piece of a piece-tracked profile that has no piece ID, and verify every piece ID counted. Plan each Store's labelling before its switch day.
 
 ## Operator experience
 
@@ -869,8 +873,8 @@ Decided by names the personas that set and approve the policy. Needed by stage m
 | Source conflicts and pricing | Authoritative cost, MRP, attribute and tax evidence; calculation profiles; unresolved-conflict treatment | Booking, Accounts | 2 |
 | Merchandise tracking | Product profiles requiring batch/expiry or other tracking; units, pack conversions, required identifiers and expiry eligibility | Booking, Operations | 1 |
 | Booking | Commitment, revision, cancellation, delivery-window and outstanding-balance rules | Owner, Booking | 2 |
-| Customer returns | Ordinary/defective windows, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
-| Refunds and no-bill returns | Refund cases requiring independent approval; enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; required customer notice/consent | Owner, Accounts | 4 |
+| Customer returns | Ordinary return window and defective-item assessment, qualifying date, authorised Store overrides, permitted remedies, Store-credit and loyalty settings | Owner, Operations | 4 |
+| Refunds and no-bill returns | Refund cases requiring independent approval; enabled online tenders, original-tender routing, no-bill eligibility/valuation and privileged evidence; Store credit and gift-voucher issuance/redemption rules; Customer credit limits and due dates; Bank transfer evidence; required customer notice/consent | Owner, Accounts | 4; Customer credit by 5 |
 | Billed-retained | Custody, collection, alteration, cancellation, abandonment and financial recognition | Operations, Accounts | 4 |
 | Financial posting | Recognition, cost formula/adjustment, cost pool, accounts, book mappings, rounding/invoice tolerances, petty-cash float/limits, Store P&L and brand-by-Store allocation bases, asset capitalisation/depreciation policy, vouchers and acknowledgments | Accounts, CA | 1; Store P&L allocation, asset policy, vouchers and acknowledgments by 5 |
 | Statutory applicability | Registration, goods/rate classification, invoice-number format, sale-or-return tax, e-invoice/e-way, TDS and payroll rules | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 |
