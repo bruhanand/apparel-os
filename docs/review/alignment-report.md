@@ -2,7 +2,7 @@
 
 > **Not ranked.** This report decides nothing and changes nothing. Any further PRD or policy change needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
-**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-022 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
+**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed after DEC-017 to DEC-026 and re-checks the findings of [audit-2026-10-02.md](../audit-2026-10-02.md); audit codes (B-04, D-06 …) are given where they match.
 
 **How to read it.**
 
@@ -12,10 +12,10 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-022 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-026 in [decisions.md](../decisions.md). Questions only KDPS or the CA can answer are in [questions-for-kdps.md](questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment is an open value (V-07).
-2. **Settled product-owner findings are logged through DEC-022.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022).
+2. **Settled product-owner findings are logged through DEC-026.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026).
 3. **Remaining structural questions** are listed in section 4. Their product rules and policy homes are identified; KDPS/CA values remain OPEN where applicable.
 4. **Policy homes are now recorded for offers and promotions, EBO report timing and settlement, and Store P&L allocation** (DEC-014). Their real terms, rates, bases and formulas remain OPEN.
 5. **The open values** are listed in section 5 with their owners and delivery stages.
@@ -191,6 +191,31 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Who decides:** Me (the product rule); Accounts and the CA (KDPS allocation bases).
 - **Blocks:** 5 for configured Store P&L reporting.
 
+### 4.13 Imported sales of piece-tracked goods
+
+**Settled: DEC-023.** Piece rules at a Store start at its switch count, where every unlabelled piece is labelled. Before then, imported sales and returns change SKU quantity only. EBO Stores reporting through brand software hold piece-tracked goods as SKU quantity.
+
+- **Where:** `PRD-MER-016`, `PRD-MER-017`, `PRD-LIF-013`, `PRD-LIF-025`, `PRD-EBO-005`, `PRD-EBO-011`.
+- **The point.** Neither the earlier POS nor brand software can say which piece was sold. The open part is the size of each Store's labelling job (V-57).
+- **Who decides:** Me (the product rule); KDPS Owner and Operations (the labelling plan).
+- **Blocks:** 4, before each Store's switch.
+
+### 4.14 Parallel-run stock comparison
+
+**Settled: DEC-024.** The earlier POS's SOH is loaded as shadow stock at the start of the run. Imported sales reduce official stock first, then shadow stock. Shadow stock is never official, and the verified switch count replaces it.
+
+- **Where:** `PRD-LIF-014`, `PRD-LIF-024`; `phases.md` stage 2 and switch-over.
+- **Who decides:** Me.
+- **Blocks:** 2, the parallel-run comparison.
+
+### 4.15 Deployment topology
+
+**OPEN.** No document says where the server runs (hosted or in KDPS's office) or how it reaches the in-store local helper for printers and cash drawers (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`).
+
+- **The point.** This shapes networking, backup, offline behaviour and the Tally link. It needs a PRD rule first, then a design document.
+- **Who decides:** Me.
+- **Blocks:** 1, before build starts.
+
 ## 5. Open values
 
 Every active value below is unset. None may be invented; each stays OPEN until its owner gives it. Struck-through entries record settled questions and are not open values.
@@ -253,8 +278,9 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-54 | Actual lead times, review/seasonal horizons, held-out evidence and stockout/excess pass thresholds | `POL-15.08` | KDPS Owner, Booking | 6 |
 | V-55 | ~~PT approval threshold value basis (cost or MRP)~~ Settled: DEC-015; actual limits remain V-02 | `PRD-ACS-015`, `POL-02.09` | — | — |
 | V-56 | EBO brand commission and settlement basis, rates and terms | `POL-12.06` | Owner, Accounts | 5 |
+| V-57 | Pieces in each Store today, who labels them and when, before its switch | `PRD-LIF-025` | KDPS Owner, Operations | 4 (before each switch) |
 
-**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-022, including A-1 to A-8, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
+**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-026, including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
 
 ## 6. Design files that show open values as decided
 
@@ -266,7 +292,7 @@ Report only. Design is fixed after the PRD and policies settle.
 | E-2 | `design/ui/design-system.html` | **Fixed by DEC-015:** the PT approval card uses total proposed acquisition cost: proposed P RATE times covered quantity (DEC-016). Its synthetic example shows 1,096 pieces and ₹14,27,500, calculated from its displayed quantities and unit costs; the total follows quantity changes. | `PRD-ACS-015`, V-55 |
 | E-3 | `design/ui/design-system.html` | Sample values with no "example" label: limits ₹50,000 and ₹50,00,000; day close "due 21:30"; shift 10:00–19:00 with no grace; P RATE = MRP × 0.5 (this one is labelled). | AGENTS.md "Never invent a value" |
 | E-4 | `design/ui/ui-blueprint.html` | **Fixed:** the Owner now has View in the access grid. G12 still correctly leaves write-off and disposal approvers and limits OPEN. | `POL-17.04`, V-19 |
-| E-5 | `design/ui/design-system.html`, `design/ui/ui-blueprint.html` | Fixed by DEC-020: the offline pilot is cash-first; later card/UPI requires an explicit evidence procedure. | `POL-16.02` |
+| E-5 | `design/ui/design-system.html`, `design/ui/ui-blueprint.html` | Fixed: both files now show Cash only on the offline counter (DEC-020); later card/UPI requires an explicit evidence procedure. The design-system till also lists each piece ID under a piece-tracked line. | `POL-16.02` |
 | E-6 | `design/ui/ui-blueprint.html` | Piece-level actions apply to configured piece-tracked profiles; DEC-018 sets apparel/footwear by default and leaves additional categories explicit. No open clash. | `POL-04.09` |
 | E-7 | `design/ui/ui-blueprint.html` | Ledger, trial balance and period close sit beside "Tally is the sole official book". Fine only if marked as the internal ledger. | `PRD-LED-011`, `POL-11.01` |
 | E-8 | `design/ui/ui-blueprint.html` | Transfer approval needs "a higher authority". `PRD-TRF-005` says "independent higher-authority approval", so this agrees; but `POL-02.07` only says "other than the preparer". Who counts as higher is not set. | V-02 |

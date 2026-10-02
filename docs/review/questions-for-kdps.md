@@ -98,6 +98,7 @@
 3. **Supplier-return reminders.** Set the actual reminder schedule from each supplier agreement and its return deadline; the example intervals are not defaults. · `PRD-OFR-009` · V-22 · stage 3
 4. **Transfer routes.** Provide the actual Store/warehouse route matrix, including each Store's default warehouse and any allowed alternatives. · `PRD-ORG-013` · stage 3
 5. **Altered or held goods.** How long may a Store keep paid goods waiting for collection, and when are reminders sent? · `POL-08.04` · V-33 · stage 4
+6. **Piece labels at the switch.** How many pieces are in each Store today? Who labels them, and on which days before that Store's switch? Every apparel and footwear piece needs its own label by the switch count. · `PRD-LIF-025` · V-57 · stage 4, before each switch
 
 ## Booking
 
