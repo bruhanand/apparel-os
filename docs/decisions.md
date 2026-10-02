@@ -223,3 +223,42 @@
 - **Choice.** Use existing validated pay, leave and overtime rules by employer/state/group and verify current incentive schemes against examples. Set replenishment horizon from lead time plus review cycle and buying horizon from the seasonal plan. Evaluate on held-out data against a simple baseline and stockout/excess outcomes. Configure payroll only where applicable. CA approves category-specific asset policy; actual rates, rules, data and thresholds remain open.
 - **Why.** Stage 6 can be designed around real validated inputs without turning synthetic examples into defaults.
 - **Changed.** `POL-13.15`, `POL-15.08`; stage 6 questions.
+
+## DEC-023 — Piece tracking becomes binding at each Store's switch
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-017 to DEC-022, finding 1
+- **Question.** Piece-tracked goods must be sold by piece ID (`PRD-MER-016`), but the parallel-run import (`PRD-LIF-013`) and EBO brand-software imports (`PRD-EBO-005`) report sales by barcode or SKU. Which piece was sold is unknown.
+- **Options.** Piece tracking binds at each Store's switch; before it, imports change SKU quantity only · Imports change SKU quantity and leave an unresolved piece until the next count.
+- **Choice.** Binding at the switch. Before a Store's switch, imported sales and returns change SKU quantity and name no piece. At the switch count, every piece of a piece-tracked profile is labelled and verified; piece rules apply from then on. An EBO Store reporting through brand software holds piece-tracked goods as SKU quantity until it bills in Apparel OS.
+- **Why.** The stock ledger needs no "unresolved piece" state, and the switch count already touches every piece.
+- **Changed.** New `PRD-MER-017`, `PRD-LIF-025`, `PRD-EBO-011`; `phases.md` switch-over.
+
+## DEC-024 — Shadow stock for the parallel run
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-017 to DEC-022, finding 2
+- **Question.** The daily comparison with the earlier POS's SOH (`PRD-LIF-014`) has nothing to compare against: opening stock becomes official only at the switch (DEC-013), so imported sales of older stock would drive quantities negative.
+- **Options.** Load the earlier POS's SOH as unofficial shadow stock per Store · Compare daily movements only and drop the balance check.
+- **Choice.** Shadow stock. At the start of the run, load the earlier POS's SOH as each Store's shadow stock. Imported sales reduce that Store's official stock of the SKU first, then its shadow stock, so goods received during the run and sold by the earlier POS do not show as a loss at the switch. Imported returns add to shadow stock. Shadow stock is never official stock, value, PT coverage or sellable stock. The verified switch count replaces it, and every difference is reported.
+- **Why.** Drift is caught every day, not on switch day, without making unverified quantities official.
+- **Changed.** PRD "Words used": new Shadow stock; new `PRD-LIF-024`; `PRD-LIF-014`; `phases.md` stage 2 and switch-over.
+
+## DEC-025 — Customer credit goes live in stage 5
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-017 to DEC-022
+- **Question.** Customer credit is a stage 4 Tender (DEC-020), but receivables arrive in stage 5. A stage 4 credit sale would have no receivable to post to.
+- **Options.** Enable Customer credit in stage 5 with receivables · Build a small receivable in stage 4.
+- **Choice.** Stage 5. Also bring the policy table rows for policies 6 and 7 up to date with DEC-020: defective items are assessed, not given a window; policy 7 also sets Customer credit limits and due dates and Bank transfer evidence.
+- **Why.** No half-built receivable.
+- **Changed.** PRD and policies "Required policy configuration" rows 6 and 7; `phases.md` stages 4 and 5.
+
+## DEC-026 — Clean-ups after DEC-017 to DEC-022
+
+- **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-017 to DEC-022
+- **Question.** The review found a duplicate rule, a placeholder ID and changes the entries did not list.
+- **Options.** Leave them · Fix them, leaving DEC-017 to DEC-022 as written.
+- **Choice.**
+  - Retire `PRD-EXC-022`. `PRD-CSH-011` already states the cash-variance rule, and the Accounts approver is a KDPS value already in `POL-02.13`. No DEC added it.
+  - List `POL-13.16` as retired in the policies IDs note and remove its placeholder bullet.
+  - For the record, DEC-017 to DEC-022 also changed `POL-02.10`, the PRD Tender word, and the policy table rows 2 and 9.
+- **Why.** Every change stays traceable to an entry.
+- **Changed.** `PRD-EXC-022` retired; PRD and policies IDs notes; `POL-13.16` placeholder removed.
