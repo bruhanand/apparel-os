@@ -283,3 +283,12 @@
   - No Store switches on test hosting. The product owner chooses production hosting before the first switch.
 - **Why.** Testing stays testing. Real billing, tax invoices and backups that must meet policy 18 belong on hosting chosen for production.
 - **Changed.** New `PRD-LIF-026`; PRD and `AGENTS.md` stack Hosting rows; `AGENTS.md` delivery note; `phases.md` stage 4 and "Testing and switch-over"; alignment report 4.15; a KDPS Owner question on test-data hosting.
+
+## DEC-029 — DEC-017 to DEC-022 were agreed with KDPS
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** check of the 37 KDPS Owner questions
+- **Question.** DEC-017 to DEC-022 say "Decided by: product owner", but they set KDPS choices in the policies (templates, login controls, WhatsApp summary, cash-first offline pilot, approval workflows and others). Did KDPS agree them?
+- **Options.** Ask KDPS to confirm each choice · Record that they were already agreed.
+- **Choice.** Record it. DEC-017 to DEC-022 were finalised by the product owner together with a KDPS representative. Those entries stay as written; this entry corrects their "Decided by". The representative's name is OPEN until the product owner adds it. Each policy stays Open until it is signed in its "Signed by, date" line.
+- **Why.** The log must show who agreed each KDPS choice.
+- **Changed.** Decision log only; the alignment report's summary line.
