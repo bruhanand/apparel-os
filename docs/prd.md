@@ -7,7 +7,7 @@
 > - `PRD` means this document. The three letters name the section. The number counts bullets in that section, in order.
 > - An ID never changes and is never reused. A removed bullet's ID is retired.
 > - The bullets under "Why this exists" describe KDPS today and have no ID.
-> - Retired IDs: `PRD-RET-002` (DEC-010), `PRD-EXC-022` (DEC-026).
+> - Retired IDs: `PRD-RET-002` (DEC-010), `PRD-EXC-022` (DEC-026), `PRD-LIF-024` (DEC-030).
 
 | Prefix | Section |
 | --- | --- |
@@ -101,6 +101,8 @@ Business words:
 | COGS | Cost of goods sold: the cost of the pieces sold in a period |
 | Consignment | An agreement under which goods are held for sale; ownership and settlement follow the agreement, not the label alone |
 | Contra | A Tally voucher for a transfer between accounts within the same legal entity |
+| Cost layer | Under FIFO, a quantity that entered a cost pool together at one cost; the oldest layer is issued first |
+| Cost pool | The stock over which a cost formula runs: each SKU across an accounting book, or each SKU at each Site, as configured per book |
 | Coverage | Quantity covered by an approved price ticket at a merchandise identity and location |
 | Customer credit | An approved amount the customer may pay later under a configured limit and due date; distinct from Store credit |
 | Custody | Who physically holds the goods and where, separate from who owns them |
@@ -131,6 +133,7 @@ Business words:
 | Legal entity | A registered company or other legal person with its own statutory and accounting identity |
 | Markdown | A planned price reduction |
 | MBO | Multi-brand outlet: a store selling several brands |
+| Movement | An append-only record of a change in stock quantity, place, condition, custody, ownership or value. Stock balances are derived from movements |
 | MRP | Maximum retail price: the price printed on the price tag |
 | MSME | Micro, Small and Medium Enterprise. Registered MSME suppliers must be paid within legal time limits |
 | My work | The user's assigned tasks, approvals and exceptions |
@@ -155,13 +158,13 @@ Business words:
 | Putaway | Placing received goods in their storage location |
 | QTY | Quantity |
 | Quarantine | A hold that keeps damaged, wrong or unidentified goods apart from sellable stock |
+| Receipt origin | The counted receipt, opening stock or other counted source a quantity of stock came from. It carries its PT revision, ownership and cost through every move |
 | Reservation | Stock set aside for an approved purpose and unavailable for another allocation |
 | Role | A named set of permissions, granted to a person through scoped role assignments |
 | RTV | Supplier return: goods sent back to a supplier under an agreement or approved claim |
 | Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
 | SBU | Short for business unit |
 | Sell-through | The share of received pieces sold in a period |
-| Shadow stock | During a parallel run, a Store's comparison quantity loaded from the earlier POS's SOH. It is never official stock, value, PT coverage or sellable stock |
 | Shop-in-shop | A brand counter operating inside a larger store |
 | Site | A physical place with a permanent identity |
 | SKU | Stock keeping unit: one merchandise variant, such as one style, colour and size |
@@ -176,7 +179,7 @@ Business words:
 | UPI | Unified Payments Interface: instant bank-to-bank payment by phone |
 | Voucher | An accounting entry in Tally, such as a sale, purchase, payment or journal |
 | Weeks of cover | How many weeks the current stock lasts at the current rate of sale |
-| Weighted average | Inventory cost formula using the average cost of similar inventory |
+| Weighted average | Inventory cost formula using the average cost of similar inventory, recalculated each time goods enter the cost pool (moving weighted average) |
 | Write-off | An approved record that removes the established accounting value of stock; it does not itself destroy or move the goods |
 
 Technical words:
@@ -313,7 +316,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-014` Set piece tracking per merchandise tracking profile. Goods outside a piece-tracked profile are held as quantity per SKU and unit.
 - `PRD-MER-015` Print piece-ID labels from the receipt count. A piece-ID label printed before PT approval asserts no price or sale eligibility.
 - `PRD-MER-016` Bill, count, transfer and return piece-tracked goods by scanning the piece ID. A supplier barcode identifies the SKU, not the piece, and cannot complete these actions alone.
-- `PRD-MER-017` At a Store still selling through an earlier POS, piece rules start at its switch count. Before then, imported sales and returns change SKU quantity only and name no piece.
+- `PRD-MER-017` At a Store still selling through an earlier POS, piece rules start at its switch count.
 
 ## Source conversion and imports
 
@@ -404,6 +407,9 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-STK-010` Preserve initial counts, recounts, differences, reasons and approved corrections.
 - `PRD-STK-012` Record, explain and approve every count difference. The configured count tolerance only selects the approver: within it, the approver set for that tolerance; above it, a higher approver and an owned exception. No difference is adjusted automatically.
 - `PRD-STK-011` Identify broken size runs and opportunities to obtain missing sizes from other locations.
+- `PRD-STK-013` When an operation on quantity-tracked goods does not name the receipt origin, take the oldest receipt origin at that place first. Where batch or expiry is tracked, take the soonest expiry first.
+- `PRD-STK-014` A count surplus with no known receipt origin creates custody held as excess, with owner, PT coverage and cost unknown. It becomes available only when an approver links it to a recorded loss, which is reversed with that loss's origin, owner, coverage and cost; or when its owner is established and a PT for the counted quantity is approved, as for opening stock.
+- `PRD-STK-015` When a count finds a piece the ledger shows as sold, returned to its supplier or disposed of, an approver may link it to the movement that wrongly named it. A correction record then swaps it with the piece of the same SKU that actually left; the bill or other document never changes. Without such a match, the found piece is held and an exception is raised.
 
 ## Transfers and physical movement
 
@@ -552,8 +558,11 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-LED-005` Keep operational quantities, provisional commercial amounts and accounting recognition distinct.
 - `PRD-LED-006` Preserve receipt-cost evidence and record later approved cost adjustments separately, including their inventory/COGS effects for goods already sold.
 - `PRD-LED-007` Support lower-of-cost-and-net-realisable-value write-downs under applicable rules.
-- `PRD-LED-014` Support FIFO and weighted-average cost formulas. The Financial posting policy selects the formula for each accounting book and applies it consistently to inventories of similar nature and use.
+- `PRD-LED-014` Support FIFO and moving weighted-average cost formulas. The Financial posting policy selects the formula for each accounting book and applies it consistently to inventories of similar nature and use.
 - `PRD-LED-015` Configure the cost pool for each accounting book: each SKU across the whole book, or each SKU at each Site. Under a Site pool, a transfer carries its source cost into the destination pool without markup. Changing the formula or pool is effective-dated and reconciles the transition.
+- `PRD-LED-016` A later cost adjustment follows its goods: under FIFO, through the receipt's cost layer; under weighted average, through the receipt's own units by receipt origin. Units still held change the cost pool's value; units gone carry their share to cost of goods sold or to the movement that took them. A pool's value never falls below zero; any excess goes with the share for units gone or, when none are gone, to cost of goods sold as its own line.
+- `PRD-LED-017` Every outflow from a cost pool, including a supplier return, leaves at the pool's formula cost, except a reversal of an inflow made in error (`PRD-LED-018`). Show the difference from the supplier's credit as a separate variance. An inflow that undoes an earlier outflow, such as a customer return or found goods matched to a recorded loss, comes back at the cost it left with.
+- `PRD-LED-018` A reversal of an inflow made in error takes off the value that inflow added. Any part that would take a cost pool below zero is shown as a separate variance.
 - `PRD-LED-008` Reconcile inventory value, receivables, payables, cash, bank and controlling ledger balances.
 - `PRD-LED-009` Lock financial periods; require authorised reopening for affected posting.
 - `PRD-LED-010` Provide month-close checklists, owners, due dates, reconciliations and unresolved amounts.
@@ -710,8 +719,8 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-010` Import historical sales for reports only, preserving source identities.
 - `PRD-LIF-011` Keep opening balances, historical reference and live corrections distinct, with defined cutover and reconciliation.
 - `PRD-LIF-012` Support a parallel run in which the existing external POS remains the selling system for a Store.
-- `PRD-LIF-013` During a parallel run, import that POS's daily sales report and stock-on-hand (SOH) report through saved approved layouts, with the same validation and duplicate controls as EBO imports. Apply each sale and return to stock once.
-- `PRD-LIF-014` Compare the reported SOH with the Store's shadow stock plus its official stock each day; each difference becomes an owned exception.
+- `PRD-LIF-013` During a parallel run, import that POS's daily sales report and stock-on-hand (SOH) report through saved approved layouts, with the same validation and duplicate controls as EBO imports.
+- `PRD-LIF-014` Parallel-run imports are evidence for checking and reports only. They never create, reduce or move stock.
 - `PRD-LIF-015` Switch each Store over at a day close, with verified balances and a fresh bill series. After the switch, the earlier POS is kept for reference only.
 - `PRD-LIF-016` A parallel-run import never creates a tax invoice or a second sale for an externally issued bill.
 - `PRD-LIF-017` During closure, stop new operations and settle stock, transit, reservations, custody, staff, cash, dues, books and exceptions.
@@ -721,9 +730,9 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-021` Relocation creates a new linked Site. Renaming does not replace the physical identity.
 - `PRD-LIF-022` Export masters, documents, lines, stock/accounting movements, attachments, mappings and audit history with reconstructible relationships and reconciled totals.
 - `PRD-LIF-023` Retain customer history and in-progress work through migration. Demo-data retirement cannot authorise deletion of real business records.
-- `PRD-LIF-024` At the start of a parallel run, load the earlier POS's SOH as each Store's shadow stock. Imported sales reduce that Store's official stock of the SKU first, then its shadow stock; imported returns add to shadow stock. Shadow stock never becomes official stock, value, PT coverage or sellable stock. At the switch, the verified count replaces it and every difference is reported.
 - `PRD-LIF-025` At a Store's switch count, label every piece of a piece-tracked profile that has no piece ID, and verify every piece ID counted. Plan each Store's labelling before its switch day.
 - `PRD-LIF-026` Switch a Store only on production hosting. A side-by-side test on test hosting keeps the earlier POS as the system of record; it issues no tax invoice and bills no real customer.
+- `PRD-LIF-027` At a Store's switch, its verified count becomes its opening stock under the opening rules. Reconcile the count with the earlier POS's last SOH and report every difference.
 
 ## Operator experience
 
