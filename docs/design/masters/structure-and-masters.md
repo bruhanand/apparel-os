@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; Merchandise and identifiers; and, from People, access and approvals, the place scope of a role assignment, restricted fields, audit and the approvals these masters need. It is GC-2 in [gaps-before-code.md](../../reports/gaps-before-code.md).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-008`, `PRD-ACS-020`, `PRD-ACS-021`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-008`, `PRD-ACS-020`–`PRD-ACS-022`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.02`, `POL-02.07`), 4 (`POL-04.01`–`POL-04.09`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.08`, `POL-10.09`).
-- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096.
+- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096, DEC-098, DEC-100.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners, interfaces and events of `organisation` and `merchandise`), [domain-model.md](../architecture/domain-model.md) (the records and invariants this document makes concrete), [stock-ledger.md](../stock/stock-ledger.md) (the place facts a movement carries).
 
-Used by: the access design (GC-3), which uses the place tree of section 3.9; the stage 1 code of `organisation` and `merchandise`; every later design that reads the structure, a SKU, a party or an agreement.
+Used by: the access design, [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), which uses the place tree of section 3.9; the stage 1 code of `organisation` and `merchandise`; every later design that reads the structure, a SKU, a party or an agreement.
 
 ---
 
@@ -157,10 +157,10 @@ Events: `organisation.structure-changed`, `organisation.mapping-changed` (module
 
 - A role assignment's places form one tree: a Site, the Stores linked to it on a date, and the business units of each Store; warehouse and office units hang directly under their Site (`PRD-ACS-021`, DEC-094).
 - Its place scope is all members, selected members or empty (`PRD-ACS-005`). All members covers every Site, now and later. A selected member may be a Site, a Store or a business unit. Empty grants nothing.
-- A selected Site covers every Store and business unit at it, including ones added later (`PRD-ACS-021`). Whether a selected Store likewise covers business units added to it later is OPEN (GC2-8). **Proposed:** yes, the same as a Site.
+- A selected Site covers every Store and business unit at it, including ones added later. A selected Store covers every business unit of it, including ones added later (`PRD-ACS-021`, DEC-098). A selected business unit covers only itself.
 - From stage 5, when a Store can relocate: a Store-scoped assignment follows the Store, and a Site-scoped assignment covers the Stores linked to the Site on the record's business date. **Design choice.** Where the relocated Store's business units sit waits for GC2-4.
-- Legal entity and brand stay separate scope dimensions (`PRD-ACS-001`, `POL-02.02`). Self-service uses a scope of the person's own records (`PRD-ACS-021`, DEC-041); it is not a place.
-- `organisation` builds and expands the tree; `access` decides. How a record without a Store, a brand or a business unit is matched, and how the tree reaches PostgreSQL scope controls, is GC-3.
+- Legal entity and brand stay separate scope dimensions (`PRD-ACS-001`, `POL-02.02`). Self-service uses a scope of the person's own records, through its own role (`PRD-ACS-021`, `PRD-ACS-022`, DEC-041, DEC-100); it is not a place.
+- `organisation` builds and expands the tree; `access` decides. How a record without a Store, a brand or a business unit is matched, and how the tree reaches PostgreSQL scope controls, is in [access-and-approvals.md](../access/access-and-approvals.md) 5.3 and 7.2.
 
 ## 4. Merchandise catalogue
 
@@ -389,7 +389,7 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC2-5 | May a SKU's stock unit change once stock of it exists, and how is that stock restated? `POL-04.04` keeps unit history but says no more | Business | Booking, Operations (policy 4) | 1 live use | Whether a unit change is refused or needs a conversion of stock |
 | GC2-6 | Must a bank-detail change for an agent, goods mover or other non-supplier party also be approved by a different person? `POL-02.07` names suppliers only | Business | KDPS Owner, Admin (policy 2) | 5 (payments) | One row of the approval rules |
 | GC2-7 | Does any master ever need a version that starts on a past date (2.2)? | Business | Product owner | 1 | Whether the no-back-dating rule needs an exception and its controls |
-| GC2-8 | Does a selected Store cover business units added to it later, as a selected Site does (`PRD-ACS-021`)? `PRD-ACS-005` keeps selected-member scope fixed; a selected Site is the exception `PRD-ACS-021` makes. **Proposed:** yes | Business (access) | Product owner | 1 (GC-3) | Whether a new brand counter is visible to Store-scoped users without a new assignment |
+| GC2-8 | Settled: a selected Store covers every business unit of it, including ones added later (`PRD-ACS-021`, DEC-098) | — | — | — | — |
 | GC2-9 | Which merchandise attributes carry an approved vocabulary? The blueprint's Setup list (Type, Item) and the style fields of `PRD-MER-004` (collection, fabric) differ (4.2) | Business | Product owner; Booking | 1 | The vocabulary records and the catalogue screens |
 
-**Settled here:** DM-9 (section 3.5).
+**Settled here:** DM-9 (section 3.5). **Settled since:** GC2-8 (DEC-098).

@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Module and data boundaries; Transaction and integration integrity; Delivery stages. For ownership only, it places every other PRD section in a module (section 11).
 
-- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-021`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
+- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-022`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
 - Policies: 1 (`POL-01.02`–`POL-01.04`, `POL-01.06`, `POL-01.07`), 2 (`POL-02.06`–`POL-02.09`, `POL-02.12`, `POL-02.14`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.05`), 4 (`POL-04.03`, `POL-04.04`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.01`), 9 (`POL-09.01`, `POL-09.02`, `POL-09.04`, `POL-09.11`–`POL-09.13`, `POL-09.24`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.07`), 11 (`POL-11.01`), 14 (`POL-14.07`), 18 (`POL-18.05`). Section 11.2 places all 19 policies.
-- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093.
+- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100.
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), and the future stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-3 to GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-4 and GC-6 to GC-9. This document is GC-1.
 
 ---
 
@@ -65,13 +65,13 @@ flowchart TB
 | --- | --- | --- | --- | --- |
 | 0 | `kernel` | Not named. **Design choice** (MM-1) | No business records. Technical records only: outbox rows, job rows | 1 |
 | 0 | `calculations` | money/tax calculations | Nothing. Shared logic for pricing, tax, discount allocation, rounding and incentives (`PRD-MOD-007`) | 1; incentive golden cases in 6 |
-| 1 | `access` | identity/access | Users, credentials, sessions, device identities, service identities, personas held, roles, permissions, role assignments, approval rules and limits, stand-ins, approval requests and decisions | 1 |
+| 1 | `access` | identity/access | Users, credentials, sessions, device identities, service identities, personas held, roles, permissions, role assignments, approval rules and limits, stand-ins, approval requests, decisions and their uses | 1 |
 | 1 | `configuration` | configuration | Organisation settings, policy status, capability controls, activity grants | 1 |
 | 1 | `audit` | audit | Audit records; sign-in, permission-change and sensitive-access records | 1 |
 | 1 | `numbering` | numbering | Number series and their allocations | 1 |
 | 1 | `files-imports` | files/imports | Stored files, attachments, saved layouts and mappings, mapping rules and their proposals, import batches, staged rows, import outcomes | 1 |
 | 1 | `inbox` | inbox | Work items shown in My work. No business record of its own | 1 |
-| 1 | `notifications` | notifications | Message requests, templates, delivery outcomes | WhatsApp and SMS in 5 ([phases.md](../../phases.md)); earlier need is OPEN (MM-9) |
+| 1 | `notifications` | notifications | Message requests, templates, delivery outcomes | Email, WhatsApp and SMS in 5; no channel before ([phases.md](../../phases.md), DEC-099) |
 | 1 | `ai-gateway` | AI gateway | AI request records (`PRD-SEC-002`) | phases.md names no stage. OPEN (MM-14) |
 | 2 | `organisation` | Not named. **Design choice** (MM-1) | Organisation, legal entities, tax registrations, accounting-book identities, Sites, Stores, business units and their mappings, internal stock locations, geography and groupings | 1 |
 | 2 | `merchandise` · catalogue | merchandise/PT | Brands, categories, styles, SKUs, size sets, attributes and their approved vocabulary, external barcode and supplier-code mappings, units and pack conversions, tracking profiles, product and vocabulary proposals | 1 |
@@ -206,13 +206,14 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
-| Authenticate | `kernel`, on every request | Checks the session, the password and the configured second factor; returns the actor (`PRD-SEC-001`, `PRD-INT-001`, `POL-02.17`) | The session is past its idle or absolute limit (`PRD-ACS-017`, `POL-02.18`); the device or session is Revoked (`PRD-SEC-008`) |
+| Authenticate | `kernel`, on every request | Checks the session on every request, and the password and the authenticator code at sign-in; returns the actor (`PRD-SEC-001`, `PRD-INT-001`, `POL-02.17`, DEC-099) | The session is past its idle or absolute limit (`PRD-ACS-017`, `POL-02.18`); the device or session is Revoked (`PRD-SEC-008`) |
 | Authorise | Every module, before a command and again under the locks | Finds one role assignment that covers the action, the record type, the record's scope and the fields (`PRD-ACS-001`, `PRD-ACS-004`, `PRD-INT-001`, `PRD-INT-003`) | No single assignment covers it; the scope is empty (`PRD-ACS-005`); the assignment is not in force on that date |
 | Restrict fields | Every interface and read model | Masks or leaves out restricted fields: salary, identity documents, bank details, customer contact, cost and margin (`PRD-ACS-008`, `PRD-SEC-006`) | — |
 | Scope for the database | `kernel` | Gives PostgreSQL the actor's effective scopes for its scope controls (`PRD-SEC-005`) | — |
 | Request approval | A module with an independently approved action | Opens an approval request bound to the document, its exact version, the value on its basis and the preparer (`PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-015`) | The action has no approval rule in force (policy gate) |
 | Decide | The approver | Records approve or reject with reason, evidence and comment (`PRD-ACS-010`, `POL-02.23`). Checks that the approver is a different person from the preparer through any role (`POL-02.08`), and that the approver's limit covers the value on its basis (`POL-02.09`) | Self-approval; no limit configured, since a missing limit grants nothing (`POL-02.09`, `POL-02.15`); the value is Unknown and the approver's authority does not explicitly cover unknown value (`PRD-ACS-016`) |
-| Verify under lock | The posting module | Rechecks version, state, independence and value on its basis (stock-ledger 10.4) | The document changed materially after approval (`PRD-ACS-007`, `POL-02.12`); the value now exceeds the limit or the approved amount (DEC-066) |
+| Verify under lock | The posting module | Rechecks that the decision is Approved and not yet used, and version, state, independence and value on its basis (stock-ledger 10.4) | The document changed materially after approval (`PRD-ACS-007`, `POL-02.12`); the value now exceeds the limit or the approved amount (DEC-066); the decision is already used (DEC-097) |
+| Record use | The posting module, inside the posting transaction | Records that this decision authorised this posting. It commits with the stock and money records and is the approval evidence of `PRD-INT-004` (DEC-097) | The decision is already used, is not Approved, or the version is not the one decided |
 | Decide in bulk | The approver | Only for allowlisted action types. Shows the items and total; rechecks each item's scope, limit, state and independence; routes the rest one by one (`PRD-ACS-011`, `PRD-ACS-019`, `POL-02.19`) | The action type is not on the allowlist |
 | Grant a stand-in | An authorised person | Named, scoped, time-limited authority that expires by itself (`PRD-ACS-018`, `POL-02.20`) | The stand-in would approve their own preparation |
 | Register or revoke a device | `pos`, `hr`, Admin | Keeps the device's identity and its Revoked state (`PRD-SEC-008`). A cloned or restored device cannot continue an identity (`PRD-OFF-010`) | — |
@@ -223,8 +224,9 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - **Events:** `access.assignment-changed`, `access.approval-requested`, `access.approval-decided`, `access.stand-in-changed`, `access.session-revoked`, `access.device-revoked`.
 - **Read models:** users and their assignments as of a date; approval history. Stage 1 report: access history ([phases.md](../../phases.md)).
 - **Never:** a persona grants nothing (`PRD-ACS-002`, `PRD-ACS-003`); one assignment's action is never combined with another's scope or fields (`PRD-ACS-004`).
-- **OPEN:** who holds which role, scope and limit (V-01, V-02; KDPS Owner, Admin; stage 1 live use). Which role assignment carries own-record self-service (product owner; DEC-041). SL-22 (section 6.3).
-- Sign-in, sessions, encryption of restricted data and row-level security are detailed in GC-3.
+- **Self-service** is granted only by an assignment of its own role, scoped to the person's own records (`PRD-ACS-022`, DEC-100).
+- **OPEN:** who holds which role, scope and limit (V-01, V-02; KDPS Owner, Admin; stage 1 live use). SL-22 is settled (DEC-097, section 6.3).
+- Sign-in, sessions, encryption of restricted data, row-level security and approvals are detailed in [access-and-approvals.md](../access/access-and-approvals.md) (GC-3).
 
 ### 4.4 `configuration`
 
@@ -262,7 +264,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - Append-only. Audit evidence is protected from unauthorised alteration (`PRD-SEC-007`, `PRD-MOD-011`).
 - Restricted values inside before and after values follow field permissions (`PRD-ACS-008`, `PRD-SEC-006`).
 - Audit is not the business history. Corrections, reversals and lifecycle changes are their own records in the owning module (`PRD-ACS-014`).
-- Retention periods are OPEN (V-13, `POL-18.05`; KDPS Owner, Admin, CA; stage 1 live use). The detailed design is GC-5.
+- Retention periods are OPEN (V-13, `POL-18.05`; KDPS Owner, Admin, CA; stage 1 live use). The detailed design is [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5).
 
 ### 4.6 `numbering`
 
@@ -270,15 +272,17 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
-| Define a series | The owning module, after it has validated the scope | Creates a series for a document kind and scope key, with its format version | A live series already exists for that kind and scope |
+| Define a series | The owning module, after it has validated the scope | Creates a series for a document kind and scope key, with its format version | A live series already exists for that kind, scope and year |
 | Allocate | The owning module, inside its transaction | Returns the next number. The series row is locked last (stock-ledger 10.3, step 7), and the number commits with the document or not at all (`PRD-INT-004`) | The series is closed or paused |
 | Read series state | `pos` | Supports the offline pause and release checks, which use financial year plus next sequence (`PRD-OFF-012`) | — |
+| Pause, release, close | The owning module | Changes the series state; close is final (`PRD-LIF-015`, `PRD-OFF-010`) | The series is closed |
+| Record used numbers | `pos`, on an offline upload | Keeps numbers the device already used as allocations (`PRD-OFF-009`) | A number is already recorded with another document |
 
 - Each billing device has its own bill series per tax registration and financial year, online or offline. Devices never share a live series (`PRD-POS-020`, `PRD-OFF-002`, DEC-005). `pos` owns the device facts and defines the series.
 - A Store's switch and a replaced device each start a fresh series (`PRD-LIF-015`, `PRD-OFF-010`).
 - Business codes are unique within a stated scope; names are labels (`PRD-MOD-008`).
 - The bill-number format is set per Organisation within the statutory limits (`PRD-POS-020`). The format is OPEN (V-40, `POL-10.07`; CA; stage 4).
-- How the offline counter advances its series locally and reconciles it is GC-8 (`PRD-OFF-007`, `PRD-OFF-009`). The detailed design is GC-5.
+- How the offline counter advances its series locally and reconciles it is GC-8 (`PRD-OFF-007`, `PRD-OFF-009`). The detailed design is [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5).
 
 ### 4.7 `files-imports`
 
@@ -330,7 +334,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - A message is never sent inside a business transaction (`PRD-INT-006`). Replay never sends it twice (`PRD-INT-008`).
 - Content obeys the recipient's access and field permissions (`PRD-SEC-005`). Customer messages need the applicable consent; marketing consent is separate (`PRD-EXC-014`, `PRD-POS-012`).
-- WhatsApp and SMS arrive in stage 5 ([phases.md](../../phases.md)). Which channel, if any, earlier stages use for one-time passwords and alerts is OPEN (MM-9).
+- Email, WhatsApp and SMS arrive in stage 5 ([phases.md](../../phases.md)). Before then nothing is sent: sign-in uses the authenticator-app code, and alerts reach people in My work (`PRD-SEC-001`, `PRD-EXC-013`, DEC-099).
 - Alert thresholds and recipients are OPEN (V-70, `POL-02.25`). The daily summary goes by WhatsApp at 9 PM (`POL-02.14`); its recipients are OPEN (V-51).
 - On `kdps-test`, messages go only to named test recipients ([deployment.md](../platform/deployment.md) section 7).
 
@@ -564,14 +568,14 @@ sequenceDiagram
 
 **E. A large document posted by a job** (stock-ledger 10.6).
 
-1. The approval click records only a request to post, naming the approved version (stock-ledger 10.6). No stock or money effect.
+1. The approval click records the approval decision, its audit record and a request to post, naming the approved version (stock-ledger 10.6, DEC-097). No stock or money effect.
 2. The job, one at a time per accounting book, does the slow work, then runs steps 5 to 7 of 6.1 as one transaction.
 3. If the job fails, nothing is posted and the document shows the failure.
-4. What holds the approver's identity and time between 1 and 2, and what a failure does to the approval, is SL-22 (6.3).
+4. Between 1 and 2 the approval decision holds the approver's identity and time. The job records the decision's use with the posting; a failed job leaves the decision unused (DEC-097; 6.3).
 
-### 6.3 Where the two open stage 1 questions sit
+### 6.3 The two stage 1 posting questions
 
-Both are OPEN and block stage 1 (stock-ledger section 12). This document fixes what does not depend on the answer and marks the rest.
+SL-23 is OPEN and blocks stage 1 (stock-ledger section 12); this document fixes what does not depend on its answer and marks the rest. SL-22 is settled (DEC-097).
 
 **SL-23: no valid posting map at commit** (product owner, CA).
 
@@ -594,17 +598,12 @@ Both are OPEN and block stage 1 (stock-ledger section 12). This document fixes w
 
 - One fact for the decider: an offline bill is already issued when it is uploaded. A bill that cannot post goes to the visible reconciliation queue and is never discarded, under either outcome (`PRD-OFF-009`, `PRD-OFF-014`, stock-ledger 10.5).
 
-**SL-22: the approval between the click and the posting job** (product owner).
+**SL-22: the approval between the click and the posting job.** Settled by DEC-097. The access design holds the detail ([access-and-approvals.md](../access/access-and-approvals.md) 9.8), which settles MM-5.
 
-- The clash: `PRD-INT-004` commits approval evidence together with stock and money. A large document is approved by a click and posted later by a job (stock-ledger 10.6).
-- The reports file SL-22 under the financial posting design (GC-4). It is an approvals question, so its home is the access design (GC-3) together with this map (MM-5).
-- Fixed whatever the answer: what a decision records (approver, time, document version, value on its basis, the authority used); the job rechecks all of 10.4 under the locks; a failed job posts nothing.
-- **Proposed**, for the product owner:
-  - The click commits the approval decision in `access`, with its audit record and the posting request. It has no stock or money effect.
-  - The job's transaction locks the decision with the document, rechecks it, posts, and records in that same transaction that this decision authorised this posting. That link is the approval evidence `PRD-INT-004` commits with the stock and money records.
-  - If the job fails, the decision stays recorded and unused. A retry needs no new approval only while the document version is unchanged and its value is still within the decision's limit; otherwise it returns for renewed approval (`PRD-ACS-007`, DEC-066).
-- The alternative: the decision lapses when the job fails, and the document always returns for approval.
-- If the proposal is accepted, stock-ledger 10.6 changes with it: today it says the click "records only a request to post".
+- The click commits the approval decision in `access`, with its audit record and the posting request. It has no stock or money effect.
+- The job's transaction locks the decision with the document, rechecks it, posts, and records in that same transaction that this decision authorised this posting. That record is the approval evidence `PRD-INT-004` commits with the stock and money records.
+- If the job fails, the decision stays recorded and unused. A retry needs no new approval only while the document version is unchanged and its value is still within the decision's limit and the approved amount; otherwise it returns for renewed approval (`PRD-ACS-007`, DEC-066).
+- stock-ledger 10.6 says the same.
 
 ## 7. The stock and accounting boundary
 
@@ -659,7 +658,7 @@ One owner per adapter (rule 7). Replacing an adapter never changes the meaning o
 | Outside system | Owner | Stage | IDs |
 | --- | --- | --- | --- |
 | File storage | `files-imports` | 1 (provider OPEN, D-2) | PRD Stack: Files |
-| Email, WhatsApp, SMS | `notifications` | WhatsApp and SMS in 5 | `PRD-INT-006`, `PRD-POS-017` |
+| Email, WhatsApp, SMS | `notifications` | Email, WhatsApp and SMS in 5; none before (DEC-099) | `PRD-INT-006`, `PRD-POS-017` |
 | AI providers | `ai-gateway` | Not placed; OPEN (MM-14) | `PRD-SEC-002` |
 | Local helper: receipt printer, cash drawer, label printer | Called by the counter and the web app on the PC that has the printer | 2 (labels), 4 (receipts) | PRD Stack: Hardware; DEC-084; D-6 |
 | GSP: IRN, e-invoice, e-way bill | `finance` · operations | 4 (IRN), 5 (e-way) | `PRD-TAX-003`, `PRD-INT-010` |
@@ -694,7 +693,7 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-ORG-011` | `configuration`, with the module that owns each configured record |
 | `PRD-ORG-014`–`PRD-ORG-016` | `merchandise` · parties, with `stock` · ledger for the owner on a receipt origin |
 | `PRD-ORG-017`–`PRD-ORG-019` | `receiving` (**Proposed**, MM-7) |
-| `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-019` | `access` |
+| `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-019`, `PRD-ACS-022` | `access` |
 | `PRD-ACS-020` | `kernel` (Organisation routing), with `access` |
 | `PRD-ACS-021` | `access`, with `organisation` for the place tree |
 | `PRD-ACS-009`, `PRD-ACS-010` | `inbox`, with `access` |
@@ -729,7 +728,8 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-HRM-001`–`PRD-HRM-019` | `hr` |
 | `PRD-EXC-001`–`PRD-EXC-004` | `exceptions` |
 | `PRD-EXC-005`–`PRD-EXC-012` | `reports` |
-| `PRD-EXC-013`, `PRD-EXC-014` | `notifications` |
+| `PRD-EXC-013` | `notifications` for messages from stage 5; before then the alert reaches My work through `inbox` and `exceptions` (DEC-099) |
+| `PRD-EXC-014` | `notifications` |
 | `PRD-EXC-015` | `ai-gateway`, with `reports` |
 | `PRD-EXC-016`–`PRD-EXC-021` | `planning` |
 | `PRD-LIF-001`–`PRD-LIF-012`, `PRD-LIF-015`, `PRD-LIF-017`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-028` | `site-lifecycle`, with `files-imports` and `stock` |
@@ -758,7 +758,7 @@ Where each policy's configured values live. The policy's status and the gate are
 | Policy | Values live in |
 | --- | --- |
 | 1 Commercial ownership | `merchandise` · parties (agreements); `booking` (booking-level terms) |
-| 2 Permissions and approvals | `access`; routing in `exceptions`; alerts and the daily summary in `notifications`; count rules in `stock` · documents |
+| 2 Permissions and approvals | `access`; routing in `exceptions`; alerts in My work before stage 5 and in `notifications` from stage 5 (DEC-099); the daily summary in `notifications`; count rules in `stock` · documents |
 | 3 Source conflicts and pricing | `merchandise` · PT (costing profiles); `exceptions` |
 | 4 Merchandise tracking | `merchandise` · catalogue |
 | 5 Booking | `booking` |
@@ -785,9 +785,9 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | --- | --- | --- |
 | GC-1 Module map | This document | — |
 | GC-2 Business structure and masters | `organisation` and `merchandise`: ownership, interfaces, events (4.11, 4.12); entities in [domain-model.md](domain-model.md) | Tables, screens, validation detail: written in [structure-and-masters.md](../masters/structure-and-masters.md) |
-| GC-3 Access, approvals, inbox and exceptions | `access`, `inbox`, `exceptions`, the policy gate (4.3, 4.4, 4.8, 4.13) | Sign-in, sessions, row-level security, encryption; SL-22 |
+| GC-3 Access, approvals, inbox and exceptions | `access`, `inbox`, `exceptions`, the policy gate (4.3, 4.4, 4.8, 4.13) | Sign-in, sessions, row-level security, encryption; SL-22: written in [access-and-approvals.md](../access/access-and-approvals.md) |
 | GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; SL-23; MM-6 |
-| GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention |
+| GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions and golden cases |
 | GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else |
@@ -802,12 +802,12 @@ Nothing below has a default. "Kind" says whether the answer is a business choice
 | MM-1 | `PRD-MOD-004` and `PRD-MOD-005` name no module for Organisation structure or for plumbing. This map adds `organisation` and `kernel`, and gives modules parts (2.2, 2.3). Confirm, or name them in the PRD by a decision record | Technical | Product owner | 1 (naming before code) | Module and package names. No rule changes |
 | MM-2 | Settled: the Organisation comes from its code at sign-in; a small directory outside the Organisation databases holds only routing facts; a person serving several Organisations holds a separate user in each (DEC-093, `PRD-ACS-020`). Routing is in 4.1; the directory is placed in [deployment.md](../platform/deployment.md) section 4 | — | — | — | — |
 | MM-3 | SL-23: what a valued movement does when no valid posting map exists at commit (6.3) | Business | Product owner, CA | 1 | The result the caller of Post must handle; whether DEC-087 needs a new decision record |
-| MM-4 | SL-22: where the approval lives between the click and the posting job, and its fate if the job fails (6.3) | Technical, owner-decided | Product owner | 1 | The approval decision's lifecycle; the reading of `PRD-INT-004` |
-| MM-5 | SL-22 is filed under GC-4 in the reports, and under no design in stock-ledger.md. This map files it under GC-3 | Technical | Product owner | 1 | Which design settles it |
+| MM-4 | Settled: the click records the approval decision; the job's transaction records its use, the approval evidence of `PRD-INT-004`; a failed job leaves it unused (DEC-097, 6.3) | — | — | — | — |
+| MM-5 | Settled: the access design (GC-3) settles SL-22 (DEC-097; [access-and-approvals.md](../access/access-and-approvals.md) 9.8) | — | — | — | — |
 | MM-6 | The lock order has no step for a financial period row or for later modules' rows (6.1) | Technical | Product owner; settled in GC-4 | 1 | stock-ledger 10.3 needs a follow-up edit |
 | MM-7 | Which module owns inbound ownership records: `receiving` (proposed) or `booking` | Technical | Product owner; settled in the stage 2 design | 2 | Ownership only (`PRD-ORG-017`–`PRD-ORG-019`) |
 | MM-8 | Who approves a Site's readiness and each business unit's activity (`PRD-LIF-001`). The PRD names no approver | Business | KDPS Owner, policy 2 | 1 live use | The approval rule for readiness |
-| MM-9 | Which message channel, if any, stages 1 to 4 need, for one-time passwords (`PRD-SEC-001`) and alerts (`PRD-EXC-013`). phases.md places WhatsApp and SMS in stage 5 and names no stage for email | Business | Product owner; Admin validates sign-in (V-04) | 1 | Whether `notifications` needs a channel adapter before stage 5 |
+| MM-9 | Settled: no channel before stage 5. Sign-in uses the authenticator-app code; alerts reach people in My work; email, WhatsApp and SMS arrive in stage 5 (DEC-099) | — | — | — | — |
 | MM-10 | Whether a bill waits for its IRN, and what the customer receives meanwhile (`PRD-POS-019`, `PRD-INT-006`; section 5) | Business | CA, product owner | 4 | The bill's steps and states; e-invoice applicability is V-41 |
 | MM-11 | Where the Customer credit limit and receivable sit so `pos` can use them in one transaction (section 5) | Technical | Settled in the stage 5 design | 5 | The tier of receivables |
 | MM-12 | Whether KDPS's Tally tracks stock (alignment report 4.3). It decides whether vouchers carry items and quantities | Business | Accounts; CA | 5; the posting model is designed in 1 | What a posting event must carry for the Tally exchange |

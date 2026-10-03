@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; People, access and approvals; Merchandise and identifiers; Source conversion and imports; Module and data boundaries; and, for the stage 1 records only, Ledger and official books, Exceptions, reports and planning, Opening, closure, migration and export, and Offline counter. Other sections are outlined (section 2).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-022`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.01`–`POL-02.04`, `POL-02.06`–`POL-02.13`, `POL-02.15`–`POL-02.23`), 3 (`POL-03.04`), 4 (`POL-04.01`–`POL-04.05`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.02`, `POL-05.03`, `POL-05.09`), 7 (`POL-07.01`, `POL-07.05`, `POL-07.06`, `POL-07.09`), 9 (`POL-09.02`, `POL-09.10`–`POL-09.13`, `POL-09.19`, `POL-09.21`, `POL-09.23`), 10 (`POL-10.01`, `POL-10.06`–`POL-10.08`), 13 (`POL-13.05`), 14 (`POL-14.05`, `POL-14.07`), 16 (`POL-16.07`), 17 (`POL-17.02`, `POL-17.04`, `POL-17.07`, `POL-17.11`), 18 (`POL-18.05`), 19 (`POL-19.03`).
-- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096.
+- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100.
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
-Used by: [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), the future stage 1 designs GC-3 to GC-9 in [gaps-before-code.md](../../reports/gaps-before-code.md), and all code.
+Used by: [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), the other stage 1 designs in [gaps-before-code.md](../../reports/gaps-before-code.md), and all code.
 
 ---
 
@@ -55,7 +55,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | Module · part | Core records | Stage |
 | --- | --- | --- |
 | `organisation` | Organisation; legal entity; tax registration; accounting book (identity); Site; Store; business unit and its mapping; internal stock location; geography; grouping; route | 1 |
-| `access` | User; credential; session; device; service identity; persona held; role; permission; role assignment; approval rule; approval limit; stand-in grant; approval request; approval decision | 1 |
+| `access` | User; credential; session; device; service identity; persona held; role; permission; role assignment; approval rule; approval limit; stand-in grant; approval request; approval decision; approval use | 1 |
 | `configuration` | Organisation setting; policy status; capability control; activity grant | 1 |
 | `audit` | Audit record; access record | 1 |
 | `numbering` | Number series; allocation | 1 |
@@ -160,7 +160,7 @@ Rules:
 
 ### 3.2 People, access and approvals
 
-Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-021`; policy 2; [personas.md](../access/personas.md).
+Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-022`; policy 2; [personas.md](../access/personas.md).
 
 | Record | What it is | Identity | Relationships and rules | IDs |
 | --- | --- | --- | --- | --- |
@@ -178,14 +178,15 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 | Stand-in grant | Named, scoped, time-limited authority | — | Expires by itself. A stand-in never approves their own preparation | `PRD-ACS-018`, `POL-02.20` |
 | Approval request | A request to approve one document version | — | Holds the action type, the document and its exact version, the preparer, and the value on its basis or Unknown | `PRD-ACS-007`, `PRD-ACS-015` |
 | Approval decision | The approver's decision on a request | — | Holds the approver, the time, approve or reject, the reason, evidence and comment. **Design choice:** it also names the role assignment, limit or stand-in grant it relied on, so the recheck under the locks can repeat it | `PRD-ACS-010`, `PRD-ACS-013`, `POL-02.23` |
+| Approval use | That one decision authorised one posting | — | Written in the posting transaction, so it commits with the stock and money records; it is the approval evidence of `PRD-INT-004`. At most one per decision (DEC-097) | `PRD-INT-004` |
 
-**Scope.** A role assignment's scope names the legal entities, places and brands it covers (`PRD-ACS-001`, `POL-02.02`). For each, it is one of three: all members, which includes future members; selected members, which stays fixed; or empty, which grants nothing (`PRD-ACS-005`). Places form one tree: whole Sites, or single Stores or business units within a Site; a selected Site covers every Store and business unit at it, including ones added later (`PRD-ACS-021`, DEC-094). Self-service uses a scope of the person's own records (`PRD-ACS-021`, DEC-041). The tree is built in [structure-and-masters.md](../masters/structure-and-masters.md) 3.9.
+**Scope.** A role assignment's scope names the legal entities, places and brands it covers (`PRD-ACS-001`, `POL-02.02`). For each, it is one of three: all members, which includes future members; selected members, which stays fixed; or empty, which grants nothing (`PRD-ACS-005`). Places form one tree: whole Sites, or single Stores or business units within a Site; a selected Site covers every Store and business unit at it, and a selected Store every business unit of it, including ones added later (`PRD-ACS-021`, DEC-094, DEC-098). Self-service uses a scope of the person's own records, through an assignment of its own role that has no other scope (`PRD-ACS-021`, `PRD-ACS-022`, DEC-041, DEC-100). The tree is built in [structure-and-masters.md](../masters/structure-and-masters.md) 3.9; scope matching, sign-in, sessions and approvals are detailed in [access-and-approvals.md](../access/access-and-approvals.md) (GC-3).
 
 **Lifecycles.**
 
 - Role assignment, approval limit, stand-in grant: effective-dated. A stand-in ends on its date without anyone acting.
 - Approval request: Awaiting approval → Approved or Rejected. A material change to the document ends the request's force; the new version needs a new request (`PRD-ACS-007`). A request above the approver's limit moves to the next authorised eligible approver, or stays Awaiting approval; it is never approved by itself (`POL-02.09`).
-- Approval decision: an entry. It is never edited.
+- Approval decision: an entry. It is never edited. Its use by a posting is a separate entry, written in the posting transaction (DEC-097).
 - Session and device: Revoked when lost.
 
 **Rules.**
@@ -195,7 +196,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 - A phone approval is an authenticated action bound to the exact record version (`PRD-ACS-012`).
 - Partner staff are users with Store personas on their own Stores only (`PRD-FRN-007`, DEC-042).
 - Role, permission and approval-rule changes are themselves approved by another authorised person, and who changed what is kept (`POL-02.07`, `POL-02.06`).
-- **OPEN:** all real people, roles, scopes, limits, allowlists, stand-ins and reasons (V-01, V-02, V-04; `POL-02.10`, `POL-02.11`, `POL-02.19`, `POL-02.20`, `POL-02.22`, `POL-02.23`; KDPS Owner, Admin; stage 1 live use). SL-22 (product owner; blocks stage 1; [module-map.md](module-map.md) 6.3).
+- **OPEN:** all real people, roles, scopes, limits, allowlists, stand-ins and reasons (V-01, V-02, V-04; `POL-02.10`, `POL-02.11`, `POL-02.19`, `POL-02.20`, `POL-02.22`, `POL-02.23`; KDPS Owner, Admin; stage 1 live use). SL-22 is settled: a decision waiting for its posting job stays recorded and unused until the job's transaction records its use (DEC-097; [module-map.md](module-map.md) 6.3).
 
 ### 3.3 Work items and exceptions
 
@@ -221,6 +222,7 @@ Owner: `audit`.
 - Both are entries: append-only and protected from unauthorised alteration (`PRD-SEC-007`).
 - The actor is a user or a service identity (`PRD-SEC-018`).
 - Retention is OPEN (V-13, `POL-18.05`).
+- Detail: [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5) sections 4 and 5.
 
 ### 3.5 Numbering
 
@@ -236,6 +238,8 @@ Owner: `numbering`.
 - A Store's switch and a replaced device each get a fresh series; the old one is never continued (`PRD-LIF-015`, `PRD-OFF-010`).
 - Reprinting keeps the same bill identity (`PRD-POS-016`).
 - The format is OPEN (V-40, `POL-10.07`; CA; stage 4).
+- **Lifecycle.** A series is open, paused or closed; closed is final (`PRD-LIF-015`, `PRD-OFF-010`). The screen name for open is OPEN (DM-4).
+- Detail: [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5) section 3.
 
 ### 3.6 Policy status, capability and readiness
 
@@ -379,7 +383,7 @@ What must always be true, who enforces it, and whether the posting transaction e
 | 1 | One Organisation's data is never visible to another | `kernel` (a database per Organisation) | — | `PRD-ORG-002`, `PRD-MOD-001` |
 | 2 | Access comes only from a role assignment, inside its own scope | `access` | Yes | `PRD-ACS-002`, `PRD-ACS-004`, `PRD-INT-001` |
 | 3 | An independent approver is never the preparer | `access` | Yes | `PRD-ACS-006`, `POL-02.08` |
-| 4 | An approval authorises only the version it reviewed | `access` | Yes | `PRD-ACS-007` |
+| 4 | An approval authorises only the version it reviewed, and at most one posting | `access` | Yes | `PRD-ACS-007`, DEC-097 |
 | 5 | A missing limit grants nothing; Unknown value needs explicit authority | `access` | Yes | `POL-02.09`, `POL-02.15`, `PRD-ACS-016` |
 | 6 | An operation whose policy is not configured stays unavailable | `configuration` | — | `PRD-SEC-017`; PRD "Required policy configuration" |
 | 7 | An activity stays disabled for a Site or business unit until readiness passes | `configuration`, `site-lifecycle` | — | `PRD-LIF-001`, `PRD-LIF-002` |
@@ -461,7 +465,7 @@ Every in-scope line and exit check of stage 1 in [phases.md](../../phases.md), a
 | Brands, suppliers and other parties, SKUs, barcodes, units, product proposals | 3.7, 3.8 |
 | Effective-dated commercial terms for brands and suppliers | 3.8 |
 | File intake, saved mappings, staging, review, duplicate control | 3.9 |
-| Technical platform: stack, module and data boundaries, integrity, sign-in and sessions, access enforcement, encryption, backup and restore | The PRD Stack table; [module-map.md](module-map.md) 2, 3, 4.1, 4.3, 6; sign-in, encryption and backup detail in GC-3 and GC-9 |
+| Technical platform: stack, module and data boundaries, integrity, sign-in and sessions, access enforcement, encryption, backup and restore | The PRD Stack table; [module-map.md](module-map.md) 2, 3, 4.1, 4.3, 6; sign-in and encryption detail in [access-and-approvals.md](../access/access-and-approvals.md) (GC-3); backup detail in GC-9 |
 | Recording rules: balances from movements, balanced journals per book, chart of accounts, periods, posting rules, numbering | 3.5, 3.10, 3.11 |
 | Offline design: device registration, device bill series, shared calculation logic | 3.5, 3.12; [module-map.md](module-map.md) 4.2 |
 | The exception record | 3.3 |
@@ -485,7 +489,7 @@ Nothing below has a default. "Kind" says whether the answer is a business choice
 | DM-1 | Settled: places form one tree of whole Sites, or single Stores or business units within a Site; self-service uses own-record scope (`PRD-ACS-021`, DEC-094) | — | — | — | — |
 | DM-2 | Settled: each tax registration and each accounting book belongs to exactly one legal entity (`PRD-ORG-020`, DEC-095). The CA confirms it for KDPS (CA question 16) | — | — | — | — |
 | DM-3 | Settled: several Stores may trade at one Site; a brand counter inside the Organisation's own Store is its business unit; a relocated Store keeps its identity with a dated Site link (`PRD-ORG-021`, `PRD-LIF-029`, DEC-096). How its business units move is GC2-4 | — | — | — | — |
-| DM-4 | State names for lifecycles with no settled name in design-language section 7: Site, Store and business unit status; a master version (other than Awaiting approval); user; import batch; proposal; financial period; an exception that is raised and not yet resolved; an approval request ended by a material change | Technical | Product owner, at design review | 1 | Screen states only. The lifecycles themselves are fixed above |
+| DM-4 | State names for lifecycles with no settled name in design-language section 7: Site, Store and business unit status; a master version (other than Awaiting approval); user; import batch; proposal; financial period; an exception that is raised and not yet resolved; an approval request ended by a material change; a number series that is open | Technical | Product owner, at design review | 1 | Screen states only. The lifecycles themselves are fixed above |
 | DM-5 | Must a product proposal be confirmed by a different person from its proposer? `PRD-IMP-008` requires it for vocabulary and mapping rules; `PRD-MER-013` does not say | Business | Product owner; KDPS Owner under policy 2 | 1 live use | One row of the approval rules |
 | DM-6 | What records a policy's real values as validated, and who records it? DEC-092 covers Signed only; the PRD requires configuration that is "valid" | Business | Product owner | 1 live use | The policy status record; the gate's third condition |
 | DM-7 | When one legal person is a supplier and also a partner, a customer or an employee, are the records linked? `PRD-MER-001` keeps supplier-side parties independent and says nothing of the others | Business | Product owner | 5 | Duplicate identities; netting of payables and receivables |

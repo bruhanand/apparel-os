@@ -14,7 +14,7 @@
 
 ### Needed for stage 1 (setup)
 
-1. **Who does what?** For each actual employee: their job/personas, the places they work (whole Sites or warehouses, or just one Store or brand counter), brands and role assignments. One person may hold several. Include Operations, HR, EBO staff, CA and Auditor users; editable templates now exist for all five. · `POL-02.11` · V-01
+1. **Who does what?** For each actual employee: their job/personas, the places they work (whole Sites or warehouses, or just one Store or brand counter), brands and role assignments. One person may hold several. Include Operations, HR, EBO staff, CA and Auditor users; editable templates now exist for all five. Also say who gets self-service (their own attendance, targets, incentives and payslips); it is a role of its own. · `POL-02.11` · V-01
 2. **Approval limits.** Confirm role-level approval limits by action, then name any authorised person with an individual limit. Include PT approval by proposed acquisition cost, discount, refund, stock adjustment, write-off, transfer and supplier payment. A missing limit grants no authority. Actual amounts and names remain open. · `POL-02.10`, `POL-02.15`, `PRD-ACS-015` · V-02
 3. **Problems ("exceptions").** For each type and Site, who owns it, when is it due, and who receives an escalation? Include short delivery, damage, cash gap, supplier matter and missing EBO report. Stock routes to Operations, money to Accounts and supplier matters to Booking. · `POL-02.11`, `POL-02.16` · V-03
 4. **Logins.** Production uses authenticator-app TOTP. Initial idle locks are 5 minutes for shared POS and 15 minutes for office sessions, with a 12-hour absolute limit. Which named Admin runs the production setup and validates these settings? · `POL-02.17`, `POL-02.18` · V-04
@@ -24,6 +24,9 @@
 42. **Who approves what else.** Name the people or roles who hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs, supplier-return steps, transfers and count differences above the Store Manager's limit, and say whether the Owner approves losses or only sees them. · `POL-02.07`, `POL-02.10`, `PRD-TRF-005` · UI blueprint open item 28 · stage 1 live approvals
 45. **Approve and reject reasons.** Which reasons may an approver pick when approving or rejecting? · `POL-02.23`, `PRD-ACS-010` · stage 1
 49. **Who says a Site is ready.** Before a Store, warehouse or office may receive, move or sell goods in the app, someone must approve that it is ready. Who approves this for each Site and for each business unit in it? · `PRD-LIF-001`, `PRD-LIF-002`; no policy bullet names the approver yet (policy 2) · module map MM-8 · stage 1 live use
+50. **A lost login code or password.** When someone loses the phone with their authenticator app, or forgets their password, an authorised person resets it. Must a second person approve each reset? (With the Admin.) · policy 2; no policy bullet yet · access design GC3-4 · stage 1 live use
+51. **Standing in.** When one person stands in for another during an absence, must a second person approve the stand-in before it starts? · `POL-02.07`, `POL-02.20` · access design GC3-7 · stage 1 live use
+52. **Approvals and tasks left waiting.** When an approval or a task is not done in time, when is it overdue, and who is told or takes it over? Question 3 covers problems (exceptions) only. (With the Admin.) · `PRD-ACS-010`; no policy bullet yet · access design GC3-8 · stage 1 live approvals
 
 ### Needed for stage 2 (goods in)
 
@@ -74,6 +77,7 @@
 
 35. **Pay and incentives.** Salary make-up, leave, overtime, incentive schemes and targets, by employer, state and staff group. (With HR.) · `POL-13.06`, `POL-13.11` · V-52
 36. **Forecasts.** Set replenishment horizon from actual lead time plus review cycle and the buying horizon from the seasonal plan. Provide held-out data and define evaluation against a simple baseline, including stockout/excess outcomes and pass thresholds. (With Booking.) · `POL-15.08` · V-54
+53. **Staff seeing their own record.** Besides their own attendance, targets, incentives and payslips, may staff see their own employee record in the app, and which parts of it? (With HR.) · `PRD-HRM-012`; policies 2 and 13; no policy bullet yet · access design GC3-9 · stage 6
 
 ### Needed before the side-by-side test
 
@@ -100,6 +104,7 @@
 11. **A test Tally company.** Can a separate Tally company be set up for testing the connector, so test vouchers never reach KDPS's real books? · no POL bullet; product-owner item deployment.md D-5 · no V- number · stage 5 testing
 12. **Tally rejection target (proposed).** Is "less than 2% of vouchers rejected" an agreed goal? · PRD Business measures · DEC-050 · stage 5
 13. **Brand-by-store profit timing (proposed).** Is "fifth working day of the month" an agreed goal, given allocation bases in `POL-09.20`? · PRD Business measures · DEC-050 · stage 5
+14. **Financial year dates.** On which dates does KDPS's financial year start and end? Bill numbers and other yearly number series restart with it. (With the CA.) · no policy bullet yet · numbering design GC5-1 · stage 1 live use; bills in stage 4
 
 ## CA
 
@@ -119,6 +124,7 @@
 14. **Store value when cost is pooled for the whole book.** If stock cost is pooled across the whole book, how should each Store's stock value be shown for its monthly net asset value and at closure? (With Accounts.) · `PRD-NAV-016`, `PRD-LIF-018` · stock-ledger SL-14 · stage 5
 15. **Late entries for a closed month.** When a stock entry arrives late and its business date falls in a closed month, which accounting date should it take? (With Accounts.) · `PRD-LED-009`, `POL-09.12` · stock-ledger SL-15 · stage 5
 16. **Who owns each registration and book.** The app treats each GST registration and each set of books as belonging to exactly one legal entity, and checks that each business unit's registration and books belong to its own legal entity. Is that right for KDPS? Also: must a unit's GST registration always be in the same State as the place it trades from? · `PRD-ORG-020`, `POL-10.06`, `POL-10.08` · GC-2 GC2-1 · stage 2
+17. **Numbers on other tax documents.** Besides bills, which number format must credit notes for customer returns, and the tax documents that travel with goods moved between places, follow? (With Accounts.) · `POL-10.07`, `POL-10.11`, `PRD-TRF-023` · numbering design GC5-2 · stage 3 (movement documents); stage 4 (credit notes)
 
 ## Operations
 
@@ -151,3 +157,4 @@ These come from the UI blueprint's open items. The blueprint names KDPS, not a p
 ## Admin
 
 - See KDPS Owner 4 and 5, and Owner 6 (recovery). Name the restore operator, set the pre-launch restore-test date and confirm how often restore drills run under `POL-18.03` (V-63, stage 1).
+- **Password rules and wrong tries.** How long and how varied must a password be? After how many wrong sign-in tries does sign-in slow down or stop, and for how long? (With the product owner.) · policy 2; no policy bullet yet · access design GC3-5 · stage 1 live use

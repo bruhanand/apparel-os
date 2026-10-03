@@ -6,7 +6,7 @@ Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](..
 
 Implements these PRD sections: Operator experience; People, access and approvals; Merchandise and identifiers; Receiving and price tickets (delivery record, PT workbench); Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Technical platform (Offline counter; AI, security and operational reliability); Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 4 (piece IDs), 6 and 7 (returns, refunds, tenders), 10 (bill number), 16 (offline), 17 (held goods), 19 (offers and promotions).
 
-Requirement IDs applied: `PRD-ACS-001`–`PRD-ACS-004`, `PRD-ACS-021`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-004`, `PRD-OFF-015`, `PRD-OFF-016`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-FRN-007`, `PRD-TAX-004`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-10.11`, `POL-16.01` to `POL-16.03`, `POL-16.07`, `POL-17.05`.
+Requirement IDs applied: `PRD-ACS-001`–`PRD-ACS-004`, `PRD-ACS-021`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-EXC-013`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-004`, `PRD-OFF-015`, `PRD-OFF-016`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-FRN-007`, `PRD-TAX-004`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-10.11`, `POL-16.01` to `POL-16.03`, `POL-16.07`, `POL-17.05`.
 
 People are described by the 14 PRD personas in [personas.md](../access/personas.md). Live visual version: [design-system.html](design-system.html).
 
@@ -412,7 +412,7 @@ Each entry covers anatomy, states and usage rules.
 <!-- deps: PRD-ORG-001, PRD-ORG-005, PRD-ACS-001, PRD-ACS-004, PRD-ACS-021, PRD-FRN-007 — scope dimensions, place tree, per-assignment scope, partner lock -->
 
 - **Anatomy:** pill 30–32 px, `--tint` / `--on-tint`, 13 / 600, label + ▾.
-- **Dimensions:** legal entity · place · brand. Places are one tree: Sites, with their Stores and business units under them; ticking a Site covers everything under it (`PRD-ACS-021`). Site, Store and business unit stay separate levels and are never merged: one Site can hold units with different entities and books.
+- **Dimensions:** legal entity · place · brand. Places are one tree: Sites, with their Stores and business units under them; ticking a Site covers every Store and business unit at it, and ticking a Store every business unit of it, including ones added later; a unit ticked alone covers only itself (`PRD-ACS-021`). Site, Store and business unit stay separate levels and are never merged: one Site can hold units with different entities and books.
 - **Label:**
   - One value: its code (“BLR01”); several: “3 places”.
   - Brands follow the same rule: one brand’s name, otherwise “2 brands”.
@@ -623,7 +623,7 @@ Each entry covers anatomy, states and usage rules.
   - e3 glass, radius 12, bottom-right: glyph + message + one action (for example Withdraw or Undo).
   - Lasts 6 s (design default; validate against `PRD-PRF-001`), pauses on hover or focus, polite live region, never takes focus. **Undo** on a toast is a UI affordance only; it does not define a business undo window.
   - Moves above an open drawer’s footer.
-- In-app for now. WhatsApp and SMS follow in stage 5 ([phases.md](../../phases.md)).
+- In-app only before stage 5: alerts reach people in My work. Email, WhatsApp and SMS arrive in stage 5 ([phases.md](../../phases.md); `DEC-099`, `PRD-EXC-013`).
 
 ### 10.13 Empty, loading, error
 <!-- deps: PRD-UXP-003, PRD-PRF-004 — state, reason, next action; partial data flagged -->

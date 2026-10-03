@@ -6,9 +6,9 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-021`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-022`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
 
-Used by: [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
+Used by: [access-and-approvals.md](access-and-approvals.md) (GC-3), [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
 ---
 
@@ -28,6 +28,8 @@ Rules (PRD: People, access and approvals):
 - Independent approval needs a different person from the preparer, even when one user holds several personas (`PRD-ACS-006`, `POL-02.07`, `POL-02.08`).
 - An action uses one assignment's permissions inside that assignment's scope. It never combines one assignment's action with another's fields or locations (`PRD-ACS-004`).
 - Field restrictions (cost, margin, salary, bank details, customer contact) follow the role assignment, not the persona (`PRD-ACS-008`, `POL-02.04`).
+- Self-service has its own role. Its assignments have only own-record scope, and no other assignment grants self-service (`PRD-ACS-022`, `DEC-100`).
+- How sign-in, scope, approvals, stand-ins and My work work is in [access-and-approvals.md](access-and-approvals.md).
 
 ## 2. The 14 personas
 
@@ -54,7 +56,7 @@ In PRD order. "Work" is the PRD text. "Lands on", "Menu" and "Usual scope" are d
 
 The template column follows the proposed, Open template map in policy 2 (eleven templates, `POL-02.01`). A template label alone grants no permission.
 
-Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is granted only through a role assignment scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `DEC-041`).
+Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is granted only through an assignment of the self-service role, scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-022`, `DEC-041`, `DEC-100`).
 
 Menu names are working labels. `PRD-UXP-004` lists Store capabilities and areas, not menu labels (`DEC-056`). Sell groups billing, bills and till session; Stock Count, Damage & supplier returns and External sales keep their own menus.
 
@@ -148,7 +150,7 @@ Approve permissions that no card names (PT approval, damage confirmation, stock 
 
 | Who | How they are handled |
 | --- | --- |
-| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips) is granted only through a role assignment scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-HRM-012`) |
+| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips) is granted only through an assignment of the self-service role, scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-022`, `PRD-HRM-012`) |
 | Partner users | They hold Store personas (P-STM, P-CSH, P-SLS) on their own Stores only. Their statements and ledger come from a permission (PRD: Franchise and partner accounts; `PRD-FRN-007`) |
 | Service identities | Non-human actors with their own audit identity and least-privilege scope; no screens (`PRD-SEC-018`) |
 | Customers, suppliers | No login. They appear as records |
@@ -181,7 +183,7 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | Extra roles: ho_ops, promo, data_steward, hr_admin, payroll_reviewer, franchise_partner, ebo_reporter, analyst | P-OPS, P-BRM, P-BKG and P-ADM, P-HRS, an approval permission, Store personas, P-EBO, a report permission |
 
 ## 6. Open items
-<!-- deps: POL-02.01, POL-02.02, POL-02.07, POL-02.10, POL-02.11, PRD-FRN-007, POL-12.04, DEC-041, DEC-042 — open policy 2 and 12 items on roles, approvers, self-service and partner visibility -->
+<!-- deps: POL-02.01, POL-02.02, POL-02.07, POL-02.10, POL-02.11, PRD-FRN-007, POL-12.04, DEC-042 — open policy 2 and 12 items on roles, approvers and partner visibility -->
 
 | Item | Who decides | Needed by |
 | --- | --- | --- |
@@ -189,4 +191,3 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | Who holds the roles built from the Operations, HR, EBO staff, CA and Auditor templates (P-OPS, P-HRS, P-EBO, P-CHA, P-AUD) | KDPS, policy 2 | Their first live work |
 | Which people hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs and supplier-return steps; whether the Owner approves losses; the limits | KDPS Owner, policy 2 | Stage 1 live approvals |
 | What partner users may see in their statements and ledger | KDPS, policies 2 and 12 | Stage 5 |
-| Which template or role assignment carries own-record self-service | Product owner | Stage 1 access; stage 6 HRMS self-service |
