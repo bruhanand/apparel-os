@@ -978,3 +978,21 @@
 - **Choice.** Use the stated values. On `kdps-test`, before policy 2 is signed, sessions use the idle and absolute limits `POL-02.18` states, and sign-in still requires the authenticator code. They are settings of the test setup, not a signed policy: no other gated action is enabled by them, and on production they apply only once policy 2 is signed and the Admin has validated them (V-04).
 - **Why.** The side-by-side test needs KDPS staff to sign in, and the policy's own values are the only ones KDPS has stated.
 - **Changed.** No PRD or policy bullet changed. `access-and-approvals.md` 3.3 and GC3-3 (settled); `deployment.md` sections 1 and 3.
+
+## DEC-103 — KDPS staff get test role assignments on `kdps-test` before signing
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** GC3-11 (access design, 3 Oct 2026)
+- **Question.** Role assignments are policy 2 values, unconfigured until policy 2 is signed, and gated actions stay disabled on `kdps-test` until then (DEC-071). With DEC-102 KDPS staff can sign in there, but without a role assignment they can do nothing. How do they get the assignments they need for imports and checks?
+- **Options.** Treat them like DEC-102: role assignments on `kdps-test` are made from what KDPS tells us, as settings of the test setup that enable no gated action · No role assignments on `kdps-test` until policy 2 is signed, so staff can only sign in.
+- **Choice.** Test settings. On `kdps-test`, before policy 2 is signed, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`). They are settings of the test setup, not the signed role map of `POL-02.11`: they enable no gated action, so only imports and checks that need no gated action run (DEC-071). On production, role assignments wait for policy 2 as before.
+- **Why.** The side-by-side test needs KDPS staff to load and check data, and the gate still keeps every gated action off.
+- **Changed.** No PRD or policy bullet changed. `access-and-approvals.md` 4.3 and GC3-11 (settled); `deployment.md` section 1.
+
+## DEC-104 — A change to the reason list is decided with a free-text reason
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** GC3-10 (access design, 3 Oct 2026)
+- **Question.** The access design makes every approve or reject decision pick a reason from the configured list, and a change to that list needs a decision by a different person. So the first list of a new Organisation can never be approved. How is it approved?
+- **Options.** A decision on a change to the reason list gives a free-text reason, since it cannot use the list it changes · The setup step also loads the first list the Organisation supplies.
+- **Choice.** Free text. A decision on a change to the approve and reject reason list gives its reason as free text; every other decision picks a reason from the list in force (`POL-02.23`, `PRD-ACS-010`). The change itself still needs a different authorised person (`PRD-ACS-023`).
+- **Why.** It breaks the loop without loading any value KDPS has not approved, and keeps the reasons KDPS sets for every other decision.
+- **Changed.** No PRD or policy bullet changed. `access-and-approvals.md` 8, 9.5, section 15 and GC3-10 (settled).
