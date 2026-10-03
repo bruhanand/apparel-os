@@ -484,7 +484,9 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-POS-001` Bill by scan, search or a size-colour selector from eligible stock.
 - `PRD-POS-002` Attribute each line to a salesperson separately from the cashier.
 - `PRD-POS-003` Apply approved offers; require the configured authority and reason for manual discounts or price changes.
+- `PRD-POS-024` Never let a line's selling price, from a price list or a manual change, exceed the MRP of the goods sold; refuse it, with no override.
 - `PRD-POS-004` Allocate basket discounts across lines before applying the relevant effective tax and rounding rules.
+- `PRD-POS-023` Spread a discount that an offer gives for a group of lines, such as a basket-value or buy-X-get-Y offer, over the lines that earned it in proportion to each line's value before that discount. Round each share down to whole paise and give the paise left to the line with the largest such value, or to the first of them on the bill.
 - `PRD-POS-005` Support enabled cash, card, UPI, verified Bank transfer, Store credit, Gift voucher and approved Customer credit tenders with exact split allocation. Keep each actual instrument and its confirmation state distinct.
 - `PRD-POS-006` Start payment allocation as unallocated; total allocated tenders must equal the amount due.
 - `PRD-POS-007` Record cash received separately from cash tender. An omitted cash-received entry explicitly means exact cash; entered zero means zero.
@@ -510,6 +512,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-RET-003` Configure ordinary and defective-item cases independently, including permitted refund, exchange, store-credit or refusal outcomes.
 - `PRD-RET-004` For defective goods, assess separately and support replacement, repair where appropriate, or refund under applicable consumer rights and warranties; do not force store credit where a refund is owed.
 - `PRD-RET-005` Determine bill-backed entitlement from original paid quantity/value less prior completed or pending returns, not current MRP.
+- `PRD-RET-024` Refund returned units at the paid value the bill recorded for them, after offers and spread discounts; do not work the offer out again on the units the customer keeps. For part of a line, each returned unit takes the line's paid value ÷ sold quantity, rounded down to whole paise; the return that brings the line's returned quantity to its sold quantity takes all that remains.
 - `PRD-RET-006` Prevent concurrent requests from returning the same sold quantity or exceeding its remaining paid-value entitlement.
 - `PRD-RET-007` Use current prices and offers for replacement goods. Equal value has no difference; higher value collects the difference.
 - `PRD-RET-008` For a cheaper replacement, apply the configured refund-difference, credit-difference or refusal rule.
@@ -548,6 +551,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-OFR-001` Support percentage, flat-value, buy-X-get-Y and basket-value offers by brand, item, Store/group and effective dates.
 - `PRD-OFR-002` Require offer approval before activation; retain combination rules, source and brand/company cost shares.
 - `PRD-OFR-003` Use the same evaluation for Running Offers and checkout; show applicable items, dates and combination rules.
+- `PRD-OFR-021` When offers apply to the same lines and no effective rule permits them to combine, apply the permitted set of offers that gives the customer the largest total discount on the bill; a tie goes to the set holding the offer approved first. Running Offers and checkout make the same choice.
 - `PRD-OFR-004` Maintain end-of-season price lists and sale-sticker printing without changing historical sale prices.
 - `PRD-OFR-005` Apply only the tax-rate rules relevant to the merchandise and value basis; highlight material tax effects of discounts.
 - `PRD-OFR-006` Report offer sales, margin impact and who funded the discount.
