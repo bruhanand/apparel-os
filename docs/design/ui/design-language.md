@@ -465,7 +465,7 @@ Each entry covers anatomy, states and usage rules.
   - Never show a masked value like “₹•••”.
 
 ### 10.7 Form fields
-<!-- deps: POL-02.23, PRD-ACS-010, DEC-072 — reasons come from the configured reason list -->
+<!-- deps: POL-02.23, PRD-ACS-010, DEC-072, DEC-104 — reasons come from the configured reason list, except a decision on a change to it -->
 
 - **Anatomy:** label above (13 / 600; required = red * plus the word “Required” for screen readers) · control (36 px, radius 6, 1 px `--control`) · help or error below (12 / 16).
 - **States:**
@@ -488,7 +488,7 @@ Each entry covers anatomy, states and usage rules.
   - Checkbox (16 px, radius 4), Radio (16 px), Toggle (34 × 20).
 - **Rules:**
   - Errors show on blur and on submit, below the field, never only as a tooltip.
-  - Reasons come from Setup › Reason codes.
+  - Reasons come from Setup › Reason codes, except a decision on a change to that list, which gives a free-text reason (`DEC-104`).
 
 ### 10.8 Stepper (delivery record)
 

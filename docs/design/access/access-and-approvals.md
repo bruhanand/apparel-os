@@ -8,7 +8,7 @@ Implements these PRD sections: People, access and approvals; from Exceptions, re
 
 - PRD IDs: `PRD-ACS-001`–`PRD-ACS-023`; `PRD-EXC-001`–`PRD-EXC-004`, `PRD-EXC-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-FRN-001`, `PRD-FRN-007`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-007`, `PRD-INT-008`; `PRD-MOD-010`, `PRD-MOD-015`; `PRD-UXP-003`; `PRD-OFF-002`–`PRD-OFF-004`, `PRD-OFF-010`; `PRD-HRM-004`, `PRD-HRM-012`, `PRD-HRM-015`; `PRD-TRF-004`, `PRD-TRF-005`, `PRD-TRF-010`; `PRD-LIF-001`.
 - Policies: 2 (`POL-02.01`–`POL-02.12`, `POL-02.15`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.04`, `POL-03.05`), 10 (`POL-10.01`), 12 (`POL-12.04`), 18 (`POL-18.02`).
-- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100, DEC-101, DEC-102.
+- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100, DEC-101, DEC-102, DEC-103, DEC-104.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners and operations of `access`, `inbox` and `exceptions`; the transaction shape), [domain-model.md](../architecture/domain-model.md) (the records, invariants and approval boundaries), [structure-and-masters.md](../masters/structure-and-masters.md) (the place tree), [personas.md](personas.md) (users, personas and the KDPS templates), [stock-ledger.md](../stock/stock-ledger.md) (locks and rechecks), [deployment.md](../platform/deployment.md) (sign-in routing and database roles).
 
@@ -112,7 +112,8 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 - A role assignment is a user or service identity, a role, a scope and effective dates. It is the only thing that grants access, except a stand-in grant, which gives only the authority it names for a limited time (section 10; `PRD-ACS-018`). A user may hold several assignments, and each applies only inside its own scope (`PRD-ACS-001`–`PRD-ACS-004`, DEC-001).
 - Assignments are effective-dated. Versions never overlap, and history is kept (`PRD-ACS-005`, `PRD-MOD-010`, `POL-02.06`). A version starts today or later, as for masters ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). **Design choice**; whether any master needs a back-dated start is OPEN there (GC2-7).
-- Every change after a new Organisation's setup step (9.11, `PRD-ACS-023`), including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). To cut a person's access at once online, disable the user (2.1); that grants nothing, so it waits for no approval. Work already delegated to an offline counter ends at its bounded expiry (`PRD-SEC-008`, `PRD-OFF-003`). **Design choice.**
+- Every change after a new Organisation's setup step (9.11, `PRD-ACS-023`), including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). On `kdps-test`, before policy 2 is Signed, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other change; they are settings of the test setup, not the signed role map of `POL-02.11`, and enable no gated action (DEC-103, DEC-071). Approving them needs a reason list in force there first (9.5, GC3-12).
+- To cut a person's access at once online, disable the user (2.1); that grants nothing, so it waits for no approval. Work already delegated to an offline counter ends at its bounded expiry (`PRD-SEC-008`, `PRD-OFF-003`). **Design choice.**
 
 ## 5. Scope
 
@@ -180,7 +181,7 @@ Every request and every job step goes through steps 1 to 3, which are steps 1 an
 ## 8. Approval rules
 
 - One approval rule per action type that needs approval. Its fixed parts come from the PRD and the policies and are kept in code: whether independent approval is required (`PRD-ACS-006`, `POL-02.07`), the value basis (`PRD-ACS-015`), and what counts as a material change (`POL-02.12`, with narrower rules such as `PRD-TRF-010`). [domain-model.md](../architecture/domain-model.md) section 5 lists them. Independence that a source requires can never be switched off.
-- Its configured parts are effective-dated settings with no default: whether bulk approval is allowed (`POL-02.19`), whether phone approval is allowed (`POL-02.22`), and the approve and reject reasons (`POL-02.23`). A change to them is approved by an authorised person other than the preparer (`POL-02.07`).
+- Its configured parts are effective-dated settings with no default: whether bulk approval is allowed (`POL-02.19`), whether phone approval is allowed (`POL-02.22`), and the approve and reject reasons (`POL-02.23`). A change to them is approved by an authorised person other than the preparer (`POL-02.07`); a decision on a change to the reason list gives a free-text reason (9.5, DEC-104).
 - Where `PRD-ACS-015` names no basis for an action (DM-8), the answer is settled before that action's stage, and until then its approval rule is not in force (9.3). The mechanism supports a basis or none.
 
 ## 9. Approvals
@@ -220,7 +221,7 @@ A higher authority is a different person whose limit covers the action on its va
 
 ### 9.5 Deciding
 
-- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default. How the first reason list is approved, when deciding needs a reason and a change to the reasons needs a decision, is OPEN (GC3-10).
+- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default. The one exception is a decision on a change to the reason list itself, which gives a free-text reason, so the first list can be approved (DEC-104). On `kdps-test` before policy 2 is Signed, no reason list is in force, so the test role assignments of 4.3 cannot be decided until GC3-12 is settled.
 - Decide checks 9.3 again, that the request is still open, and that the document's current version is the one requested (`PRD-ACS-007`).
 - The decision records the approver, the time, the outcome, the reason, the evidence, the comment, the version decided, the value and its basis, the approved amount where the document states one, and the role assignment and limit version, or the stand-in grant, it relied on ([domain-model.md](../architecture/domain-model.md) 3.2). It is an entry and is never edited.
 - Then, depending on the document (module-map 6.2): a master version takes effect in the same transaction (flow A); a document posts in the same transaction; or a large document waits for its job (9.8).
@@ -414,6 +415,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 18 | A stand-in grant expires by itself; a stand-in cannot approve their own preparation | `PRD-ACS-018` |
 | 19 | An access change approved by its preparer is refused | `POL-02.07` |
 | 19a | A new Organisation's setup step creates its first Admin and first approver once; a second run is refused; the next access change needs a different approver | `PRD-ACS-023` |
+| 19b | A decision on a change to the reason list accepts a free-text reason; any other decision needs a reason from the list in force | `POL-02.23`, DEC-104 |
 | 20 | My work order, with Unknown exposure never treated as zero | `PRD-ACS-009`, `PRD-MOD-015` |
 | 21 | An exception raised after a rollback survives; a replay makes no second exception; closing waits for the resolution check | `PRD-EXC-002`, `PRD-INT-008` |
 | 22 | A service identity cannot decide an approval | `PRD-ACS-006`, `PRD-SEC-018` |
@@ -434,7 +436,8 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC3-7 | Is a stand-in grant a permission change under `POL-02.07`, so a different person must approve it? **Proposed:** yes | Business | KDPS Owner (policy 2) | 1 live use | How a stand-in is granted |
 | GC3-8 | What due time, escalation rule and recipient apply to an overdue approval or task (`PRD-ACS-010`; 9.4, 11.3)? `POL-02.16` and V-03 cover exceptions only | Business | KDPS Owner, Admin (policy 2) | 1 live approvals | Escalation of approvals and tasks |
 | GC3-9 | May staff see their own employee record through self-service, and which fields of it (5.4)? `PRD-HRM-012` names targets and incentives only | Business | KDPS Owner, HR (policies 2 and 13) | 6 | The record types own-record scope covers |
-| GC3-10 | How is a new Organisation's first approve and reject reason list approved, when deciding needs a reason from that list (9.5, `POL-02.23`)? **Proposed:** a decision on a change to the reason list gives a free-text reason, since it cannot use the list it changes | Business | Product owner; KDPS Owner, Admin (policy 2) | 1 live approvals | The first approvals of every Organisation |
-| GC3-11 | Before policy 2 is Signed, how do KDPS staff get the role assignments they need on `kdps-test` for imports and checks, given that assignments are policy 2 values (`POL-02.11`) and gated actions stay disabled there (DEC-071, DEC-102)? | Business | Product owner | KDPS side-by-side test | Whether KDPS staff can do anything on `kdps-test` before policy 2 is Signed |
+| GC3-10 | Settled: a decision on a change to the reason list gives a free-text reason (DEC-104; 9.5) | — | — | — | — |
+| GC3-11 | Settled: on `kdps-test`, KDPS staff get role assignments as test-setup settings that enable no gated action (DEC-103; 4.3) | — | — | — | — |
+| GC3-12 | On `kdps-test` before policy 2 is Signed, how does an approve and reject reason list come into force, so the test role assignments of 4.3 can be decided (DEC-103, DEC-104, `POL-02.23`)? **Proposed:** like DEC-103, a first list with the reasons KDPS gives (question 45) is a setting of the test setup, approved first with a free-text reason under DEC-104 | Business | Product owner; KDPS Owner, Admin supply the reasons | KDPS side-by-side test | Whether test approvals can run on `kdps-test` |
 
-**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4). GC3-2 (DEC-101, section 9.11); GC3-3 (DEC-102, section 3.3).
+**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4). GC3-2 (DEC-101, section 9.11); GC3-3 (DEC-102, section 3.3). GC3-10 (DEC-104, section 9.5); GC3-11 (DEC-103, section 4.3).

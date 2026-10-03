@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102, DEC-103. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -22,7 +22,7 @@ One Railway project with two environments. Each has its own services, databases,
 - Never copy data between the two. Synthetic data never becomes a default (AGENTS rule).
 - `kdps-test` holds real data only after KDPS agrees to it (KDPS Owner question 37).
 - Only the product owner has access to the Railway project. KDPS users get app logins, never Railway access.
-- On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed; that enables no other gated action (`DEC-102`). The app shows an environment banner.
+- On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed (`DEC-102`). So that they can do them, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`), as settings of the test setup and not the signed role map of `POL-02.11` (`DEC-103`). None of these enables a gated action. Approving those assignments needs a reason list in force, which is OPEN ([access-and-approvals.md](../access/access-and-approvals.md) GC3-12). The app shows an environment banner.
 
 ## 2. Services in each environment
 <!-- deps: prd.md#stack, DEC-028, prd.md#delivery-stages — Railway services, files and forecast service restate PRD hosting -->
