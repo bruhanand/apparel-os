@@ -41,6 +41,7 @@ How to read the labels:
 ## 2. The modules
 
 ### 2.1 Tiers
+<!-- deps: PRD-MOD-002, PRD-MOD-004, PRD-MOD-005 — orders the modules those rules name into call tiers -->
 
 A call goes to the same tier or a lower one, never upward (section 3).
 
@@ -166,6 +167,7 @@ All are **design choices** that implement the cited rules.
 9. **Checked.** Module boundaries are validated on every change (`PRD-SEC-015`). The check itself belongs to the code house rules ([gaps-before-code.md](../../reports/gaps-before-code.md) section 3).
 
 ## 4. Stage 1 modules in full
+<!-- deps: none — introduction to 4.1 to 4.10; each subsection cites its rules -->
 
 Each interface lists operations in words. Names, inputs and outputs become exact in the area designs and in the shared Zod schemas (PRD Stack: API). "Refuses when" lists the business refusals, not every validation error.
 
@@ -208,7 +210,7 @@ Each interface lists operations in words. Names, inputs and outputs become exact
 | Scope for the database | `kernel` | Gives PostgreSQL the actor's effective scopes for its scope controls (`PRD-SEC-005`) | — |
 | Request approval | A module with an independently approved action | Opens an approval request bound to the document, its exact version, the value on its basis and the preparer (`PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-015`) | The action has no approval rule in force (policy gate) |
 | Decide | The approver | Records approve or reject with reason, evidence and comment (`PRD-ACS-010`, `POL-02.23`). Checks that the approver is a different person from the preparer through any role (`POL-02.08`), and that the approver's limit covers the value on its basis (`POL-02.09`) | Self-approval; no limit configured, since a missing limit grants nothing (`POL-02.09`, `POL-02.15`); the value is Unknown and the approver's authority does not explicitly cover unknown value (`PRD-ACS-016`) |
-| Verify under lock | The posting module | Rechecks version, state, independence and value on its basis (stock-ledger 10.4) | The document changed after approval (`PRD-ACS-007`, `POL-02.12`); the value now exceeds the limit or the approved amount (DEC-066) |
+| Verify under lock | The posting module | Rechecks version, state, independence and value on its basis (stock-ledger 10.4) | The document changed materially after approval (`PRD-ACS-007`, `POL-02.12`); the value now exceeds the limit or the approved amount (DEC-066) |
 | Decide in bulk | The approver | Only for allowlisted action types. Shows the items and total; rechecks each item's scope, limit, state and independence; routes the rest one by one (`PRD-ACS-011`, `PRD-ACS-019`, `POL-02.19`) | The action type is not on the allowlist |
 | Grant a stand-in | An authorised person | Named, scoped, time-limited authority that expires by itself (`PRD-ACS-018`, `POL-02.20`) | The stand-in would approve their own preparation |
 | Register or revoke a device | `pos`, `hr`, Admin | Keeps the device's identity and its Revoked state (`PRD-SEC-008`). A cloned or restored device cannot continue an identity (`PRD-OFF-010`) | — |
@@ -288,7 +290,7 @@ Each interface lists operations in words. Names, inputs and outputs become exact
 | Map and stage | The preparer | Applies a saved, versioned mapping chosen by the layout's structure (`PRD-IMP-003`, `PRD-IMP-004`); keeps the original words beside the normalised values; marks each value as supplied, calculated, mapped or an AI suggestion (`PRD-IMP-006`) | A brand name alone would select an incompatible mapping (`PRD-IMP-004`) |
 | Validate and preview | The preparer | Checks references and totals; reports row and field errors and conflicts (`PRD-IMP-005`, `PRD-IMP-007`) | — |
 | Propose or confirm a mapping rule | Preparer; a different person confirms | Proposal and independent confirmation. An unapproved proposal changes no operational data (`PRD-IMP-008`, `POL-02.07`) | The confirmer is the proposer |
-| Publish | The reviewer | Hands the reviewed rows to the target module's import handler in one transaction. A required document posts whole or not at all (`PRD-IMP-012`) | The required review is missing; the handler refuses |
+| Publish | The reviewer | Hands the reviewed rows to the target module's import handler, one transaction per document. A required document posts whole or not at all (`PRD-IMP-012`) | The required review is missing; the handler refuses |
 | Register an import handler | Each target module, at start | Lets Publish reach the module that owns the records | — |
 
 - The framework never writes another module's records. The handler does (rule 6).
@@ -388,7 +390,7 @@ Each interface lists operations in words. Names, inputs and outputs become exact
 | --- | --- | --- | --- |
 | Raise | Any module, or a person | Creates an exception with its type, links to the affected records, evidence and exposure, and gives it an owner and due date by the routing for its type and Site (`PRD-EXC-001`, `POL-02.16`, DEC-037) | — |
 | Reassign, comment, add evidence | The owner or an authorised person | Keeps the history (`POL-03.05`) | — |
-| Resolve | The owner | Closes only after the linked business outcome is verified through the owning module's resolution check (`PRD-EXC-002`) | The outcome is not verified |
+| Resolve | The owner | Closes only through the required approval (`POL-03.05`) and after the linked business outcome is verified through the owning module's resolution check (`PRD-EXC-002`) | The required approval is missing, or the outcome is not verified |
 | Reopen | An authorised person | Keeps repeated, reopened and unresolved cases (`PRD-EXC-003`) | — |
 
 - An exception settles nothing. Closing it changes no stock, money or saleability (`PRD-EXC-003`, `POL-03.05`). The correction, return, reversal or reconciliation happens in the owning module.
@@ -437,10 +439,10 @@ Only its stage 1 part. **Uses:** all lower tiers.
 | --- | --- | --- | --- |
 | Run readiness checks | Operations, Admin | For a Site and a business unit, asks each module's check: mappings, users and access, locations, devices, required policies, stock plan (`PRD-LIF-002`) | — |
 | Approve an activity | The authorised approver | Combines shared Site readiness with a separate business-unit approval for receiving, movement or selling (`PRD-LIF-001`), then writes the activity grant into `configuration` | A check fails |
-| Withdraw an activity | Operations, at closure | Stops new operations (`PRD-LIF-017`) | — |
 
 - Stage 1 exit check: an activity stays disabled for a Site or business unit until its readiness checks pass.
 - Who approves each activity is not named in the PRD. OPEN (MM-8).
+- Withdrawing an activity at closure (`PRD-LIF-017`) is stage 5; see section 5.
 
 ### 4.17 `pos` · billing device (design only in stage 1)
 
@@ -613,7 +615,7 @@ Both are OPEN and block stage 1 (stock-ledger section 12). This document fixes w
 | Sale revenue, tax and tenders | `pos` | `pos` calls Post in the same transaction as the sale issue |
 | A supplier obligation | `finance` · operations | Under the recognition rule the CA approves (`POL-09.02`); never a fabricated amount |
 | A provisional amount on inbound ownership | `receiving` | It stays outside the ledger and is a reconciling item (`PRD-ORG-018`, stock-ledger 7.6). Its accounting is OPEN (V-58) |
-| Cash, bank, provider settlement, Tally, GST | `finance` · operations | Outside outcomes, through the outbox; tracked as pending, unknown, failed or succeeded (`PRD-INT-006`, `PRD-INT-007`) |
+| Bank, provider settlement, Tally, GST | `finance` · operations | Outside outcomes, through the outbox; tracked as pending, unknown, failed or succeeded (`PRD-INT-006`, `PRD-INT-007`) |
 
 - Journals balance per book at commit (`PRD-MOD-013`).
 - Each stage records its stock and money effects from its first live operation; stage 5 extends them into full accounting (`PRD-STG-002`, DEC-044). Tally remains KDPS's official book (`POL-11.01`); only the exchange waits for stage 5.
@@ -742,6 +744,7 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-ACP-001`–`PRD-ACP-020` | Acceptance conditions; each is an exit check in [phases.md](../../phases.md), tested across modules |
 
 ### 11.2 Policies
+<!-- deps: POL-01, POL-02, POL-03, POL-04, POL-05, POL-06, POL-07, POL-08, POL-09, POL-10, POL-11, POL-12, POL-13, POL-14, POL-15, POL-16, POL-17, POL-18, POL-19 — maps each policy to the module holding its values -->
 
 Where each policy's configured values live. The policy's status and the gate are always in `configuration`.
 

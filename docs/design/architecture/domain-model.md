@@ -48,6 +48,7 @@ Labels (**design choice**, **Proposed**, **OPEN**) mean what [module-map.md](mod
 **State names.** A record shows one lifecycle state, and the names are the settled list in [design-language.md](../ui/design-language.md) section 7. A new name needs a design review there. Where no settled name fits, this document describes the lifecycle by its events and leaves the name OPEN (DM-4).
 
 ## 2. The whole system in outline
+<!-- deps: PRD-MOD-002, PRD-MOD-004, PRD-MOD-005, prd.md#delivery-stages — which module owns each record and the stage that first builds it -->
 
 Each module's core records, one line each. Stage 1 records are detailed in section 3. Later records are detailed in their own designs.
 
@@ -61,7 +62,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | `files-imports` | Stored file; attachment; layout; mapping; mapping rule and proposal; import batch; staged row; row issue; import outcome | 1 |
 | `inbox` | Work item | 1 |
 | `notifications` | Message request; template; delivery outcome | See [module-map.md](module-map.md) 4.9 |
-| `ai-gateway` | AI request record | 2 |
+| `ai-gateway` | AI request record | OPEN (MM-14) |
 | `merchandise` · catalogue | Brand; category; style; SKU; size set; attribute and vocabulary; external code mapping; unit and pack conversion; tracking profile; product proposal; vocabulary proposal | 1 |
 | `merchandise` · parties | Party; agreement and its terms | 1 |
 | `exceptions` | Exception | 1 |
@@ -71,7 +72,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | `site-lifecycle` | Readiness record (1); opening manifest, switch record (4); closure record, relocation link, export (5) | 1, 4, 5 |
 | `merchandise` · PT | PT; PT revision and lines; costing profile; label job | 2 |
 | `booking` | Booking and lines; open-to-buy budget; supplier confirmation | 2 |
-| `receiving` | Arrival; receipt count; GRN; discrepancy; acceptance; inbound ownership record | 2 |
+| `receiving` | Arrival; receipt count; GRN; discrepancy; acceptance; inbound ownership record (**Proposed** home, MM-7) | 2 |
 | `stock` · documents | Damage report; transfer and dispatch; count and recount; adjustment; write-off; disposal | 2–3 |
 | `supplier-returns` | Return right and deadline; proposed return list; RTV and its shipments; supplier claim | 3 |
 | `pos` | Billing device; offline authority; till session; cart; bill and lines; tender allocation; payment attempt; return and exchange; refund; billed-retained record; customer; Store credit; Gift voucher; loyalty balance | 4 |
@@ -341,6 +342,7 @@ Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 
 - **OPEN:** the real accounts and maps (V-10); the framework, AS or Ind AS (V-07, `POL-09.10`); KDPS's formula and pool (V-08, V-09, `POL-09.19`, `POL-09.21`); tolerances (V-11); SL-23.
 
 ### 3.11 Stock
+<!-- deps: PRD-STK-001, PRD-STK-002, PRD-MOD-012 — pointer table to stock-ledger.md; five separate stock facts -->
 
 Owner: `stock` · ledger. [stock-ledger.md](../stock/stock-ledger.md) defines these records; this document does not restate them.
 
@@ -416,7 +418,7 @@ Each approved action, with what the approval binds to.
 | Mapping-rule and vocabulary confirmation | The proposal | `PRD-IMP-008`, `POL-02.07` | — | — | 1 |
 | Site readiness and business-unit activity (`PRD-LIF-001`) | The readiness record | Not stated; approver OPEN (module-map MM-8) | — | — | 1 |
 | PT approval; change to approved cost or pricing | The PT revision | `PRD-REC-017`, `POL-02.07` | Total proposed acquisition cost: proposed P RATE times covered quantity. Missing or disputed cost blocks it (`PRD-ACS-016`) | — | 2 |
-| Booking approval against open-to-buy (`PRD-BKG-004`, `POL-05.02`, `POL-05.09`) | The booking version | Not stated | Not named | `POL-05.03` | 2 |
+| Booking approval against open-to-buy (`PRD-BKG-004`, `POL-05.02`, `POL-05.09`) | The booking version | Not stated | Not named | None beyond `POL-02.12` (`POL-05.03` repeats it) | 2 |
 | Damage confirmation | The damage report | `PRD-DMG-002`, `POL-02.07` | Not named | — | 2 |
 | Acceptance of good excess (`PRD-REC-013`); of wrong or unidentified goods (`POL-17.02`, `POL-17.11`) | The discrepancy | Not stated. Explicit authority; Booking approves wrong or unidentified goods | Not named | — | 2 |
 | Transfer, by a higher authority | The transfer version: source, destination, items, quantity | `PRD-TRF-005`, `POL-02.07` | Cost | Only an increase in quantity, a change of item or a change of destination (`PRD-TRF-010`, `POL-02.12`, DEC-036) | 3 |
@@ -429,7 +431,7 @@ Each approved action, with what the approval binds to.
 | No-bill return (`PRD-RET-017`) | The exception request | `POL-07.05`, `POL-02.07` | Documented valuation; Unknown if none is accepted (`POL-07.06`, DEC-039) | — | 4 |
 | Day-close cash variance (`PRD-CSH-011`, `POL-02.13`) | The day close | Not stated. The tolerance selects the approver set | Not named | — | 4 |
 | The Store switch | The cutover record | Not stated. Owner, Accounts and Operations approve (`POL-14.05`) | — | — | 4 |
-| Supplier payment | The payment request: amount, beneficiary, bank details | `POL-02.07` | The amount paid | Amount, beneficiary, bank details and the reviewed request version (`PRD-PAY-006`) | 5 |
+| Supplier payment | The payment request: amount, beneficiary, bank details | `POL-02.07` | The amount paid | For mobile approval: amount, beneficiary, bank details and the reviewed request version (`PRD-PAY-006`) | 5 |
 | Payroll inputs, before payment instructions (`POL-13.05`) | The payroll inputs for a period | Not stated in policy 13. personas.md treats it as a different person | Not named | — | 6 |
 
 Bulk approval and phone approval apply only to allowlisted action types (`POL-02.19`, `POL-02.22`); both lists are OPEN.
