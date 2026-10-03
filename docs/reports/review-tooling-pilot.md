@@ -104,7 +104,7 @@ Graphify 0.9.74 (`graphifyy` on PyPI, commit 0b60d47, Apache-2.0 and MIT, no tel
 
 - The checker follows one hop. A sentence that restates a rule two hops away without citing it is found only by the broad sweep.
 - A decision whose Choice line cites a rule still flags every section that cites that rule, even when no rule text changes. Most of a round's sections come from this.
-- The pre-commit hook checks the working tree, not only the staged files.
+- The pre-commit hook checked the working tree, not only the staged files. Fixed later the same day: it now checks the staged snapshot (`--staged`, AGENTS.md "Checking the documents").
 - The memory of sent sections is per clone. A new clone sends everything once.
 - `record` checks the form of a reason: its length, repetition and State. It cannot tell a careful review from a careless one.
 
