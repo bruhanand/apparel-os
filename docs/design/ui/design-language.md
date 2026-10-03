@@ -2,11 +2,15 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 2 Oct 2026. If this document disagrees with them, they win; raise the clash, do not guess.
+Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 3 Oct 2026, after reading DEC-027 to DEC-035. DEC-027 to DEC-030 touch this file (the test-setup wording in 10.17, the Proposed states basis); DEC-031 to DEC-035 are stock-ledger cost and count rules, and a search found nothing here that they contradict. If this document disagrees with them, they win; raise the clash, do not guess.
 
-Implements these PRD sections: Operator experience; People, access and approvals; Receiving and price tickets (delivery record, PT workbench); Counter sales and payments; Offline counter; Exceptions, reports and planning; AI, security and operational reliability; Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 6 and 7 (returns, refunds, tenders), 16 (offline), 17 (held goods), 19 (offers and promotions).
+Implements these PRD sections: Operator experience; People, access and approvals; Merchandise and identifiers; Receiving and price tickets (delivery record, PT workbench); Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Technical platform (Offline counter; AI, security and operational reliability); Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 4 (piece IDs), 6 and 7 (returns, refunds, tenders), 10 (bill number), 16 (offline), 17 (held goods), 19 (offers and promotions).
+
+Requirement IDs applied: `PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-015`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-16.01` to `POL-16.03`, `POL-17.05`.
 
 People are described by the 14 PRD personas in [personas.md](../access/personas.md). Live visual version: [design-system.html](design-system.html).
+
+Sample values in this document and in the design-system pages (names, dates, rates, limits, times, targets, counters and amounts shown in examples) are synthetic examples. None is a KDPS setting or a policy value; real values stay OPEN until the policy that owns them is signed (AGENTS.md, "Never invent a value"). Values quoted from the PRD or the policies as rules, and design dimensions such as popover width and target size, are not examples; they stand as stated.
 
 ---
 
@@ -15,7 +19,7 @@ People are described by the 14 PRD personas in [personas.md](../access/personas.
 1. **Solid where people read and type, glass only on chrome.** Glass is used for the top bar, drawers, popovers, toasts and dialogs. Tables, forms, the PT grid and the till are always solid.
 2. **Navy means action, never state.** The accent is used only for primary actions, links, selection and focus. States have their own colour families (§7).
 3. **Colour is never the only signal.** Every state carries a word and a glyph, errors carry text, and changed cells carry a corner marker.
-4. **Numbers are exact and aligned.** Tabular figures, right-aligned, Indian grouping. Blank means unknown and 0 means known zero (§8).
+4. **Numbers are exact and aligned.** Tabular figures, right-aligned, Indian grouping. Blank means unknown and 0 means known zero (§8). One input shorthand differs: an empty Cash received field on the till means exact cash (§8, `PRD-POS-007`, `PRD-MOD-016`).
 5. **Show the limit next to the button.** Approvals show the approver's limit, and that the approver is not the preparer, right beside Approve.
 6. **Nothing hides focus.** Sticky bars, drawers and toasts never cover the focused element (§9).
 7. **Nothing live without its policy.** An action whose KDPS policy is not signed and configured says so and why (10.17).
@@ -71,7 +75,7 @@ Glass surfaces use `backdrop-filter: blur(16px) saturate(1.2)` (drawers: `blur(1
 ## 3. Typography
 
 - UI: **Source Sans 3** (400, 500, 600, 700).
-- Mono: **Source Code Pro** (400, 500), used for codes only: SKU, barcode, doc no., bill no., error reference, key caps.
+- Mono: **Source Code Pro** (400, 500), used for codes only: SKU, barcode, piece ID, doc no., bill no., persona ID, error reference, key caps.
 - Every number in a table, total, limit bar or KPI uses `font-variant-numeric: tabular-nums`.
 - The minimum size is **12 px**, for labels and captions only.
 - Hindi (stage 5): **Noto Sans Devanagari** (400, 500, 600, 700) is the next font in the stack, so Devanagari text renders with the same sizes. Labels, buttons and menus must allow about 30% longer text without clipping; never fix a width to the English text.
@@ -126,7 +130,7 @@ Lay out sibling groups with flex or grid plus `gap`, not margins.
 | Till and portal touch targets | ≥ 48 px; till Pay 64 px |
 | Mobile rows and controls | ≥ 44 px |
 | Drawer width | 420 px (640 px for a PT preview); full screen on mobile |
-| Minimum target (2.5.8) | 24 × 24 px; 16 px checkboxes sit in ≥ 40 px hit areas |
+| Minimum target (2.5.8) | 24 × 24 px hit area for every control, including 16 px checkboxes and radios, 34 × 20 toggles and the 20 px My work pill; 16 px checkboxes sit in ≥ 40 px hit areas |
 
 ### Radius
 
@@ -166,18 +170,18 @@ Rules:
 ### B · Till
 
 - **All solid, no sidebar**, keyboard and scanner first. Design size 1366 × 768.
-- A Store can run several online tills. Only its one registered offline counter may bill without a connection (PRD: Offline counter; policy 16).
+- A Store can run several online tills. Only its one registered offline counter may bill without a connection (`PRD-OFF-001`, `POL-16.01`).
 - **Status bar:** 52 px. Logo slot · Store and till · connection pill · date and time · cashier + Sign out.
   - Online till: Online ✓ Done, or Connection lost ✕ Stopped. An online till cannot finalise a bill without a connection.
-  - Offline counter: Online ✓ Done · Offline ! Attention with the queued count · Paused ! Attention · Authority expired ✕ Stopped. The pill is followed by the offline authority left (“Offline authority 19 h left”).
+  - Offline counter: Online ✓ Done · Offline ! Attention with the queued count · Paused ! Attention · Authority expired ✕ Stopped. The pill is followed by the offline authority left (“Offline authority 19 h left”, a synthetic example; the 24-hour renewal is `PRD-OFF-003`).
 - **Authority expired:** a red banner under the status bar says new bills are blocked and that viewing and upload still work. Pay is replaced by a disabled “Pay blocked · offline authority expired” button.
 - **Paused:** billing stays paused until the counter is online and the release is confirmed. Pay is disabled and says why.
-- **Device trouble:** a full storage, a wrong clock, a second open tab or an app update stops new bills on that device with a banner that says why. A finished bill is never lost or deleted (PRD: Offline counter).
+- **Device trouble:** a full storage, a wrong clock, a second open tab or an app update stops new bills on that device with a banner that says why. A finished bill is never lost or deleted (`PRD-OFF-019`).
 - **Left:** the scan field (56 px), which always has focus and takes a piece ID or a supplier barcode, a bill-level salesperson picker, and the lines table (60 px rows; salesperson per line). A piece-tracked line lists each scanned piece ID under its SKU, so returns and counts stay at piece level (PRD-MER-016).
 - **Right (420 px):** Add customer (F2) · subtotal, offers, GST included · To pay (till-total) · tenders (52 px tiles) · Pay (64 px, F12).
-  - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Bank transfer · Store credit · Gift voucher · Customer credit. Bank transfer is confirmed by bank/provider evidence; Customer credit shows its approved limit and due date. Split divides To pay across tenders; it starts unallocated and must add up exactly.
-  - Cash shows Cash received and Change. Left empty, Cash received means exact cash; 0 means zero.
-  - Start the offline pilot with Cash. Card or UPI may appear later only where policy 16's evidence procedure is explicitly configured.
+  - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Bank transfer · Store credit · Gift voucher · Customer credit. Bank transfer is confirmed by bank/provider evidence (`PRD-POS-005`, `POL-07.09`); Customer credit shows its approved limit and due date (`PRD-POS-022`) and appears only from stage 5, when receivables exist ([phases.md](../../phases.md)). Split divides To pay across tenders; it starts unallocated and must add up exactly.
+  - Cash shows Cash received and Change. Left empty, Cash received means exact cash; 0 means zero (`PRD-POS-007`). The empty field is resolved to the declared cash amount before it is saved (`PRD-MOD-016`).
+  - Start the offline pilot with Cash (`POL-16.02`). Card or UPI may appear later only where policy 16's evidence procedure is explicitly configured; the offline cash or manual tender records no provider confirmation (`PRD-OFF-017`).
 - **Function bar:** 52 px. F2 Customer · F3 Salesperson · F4 Hold cart · F5 Recall · F6 Return (online only) · F7 Manager approval · F9 Till summary · Esc Remove line.
 - **Manager approval (F7):** for a discount or price change above the cashier's limit. The manager signs in with their own login and reauthenticates as the PRD requires; the approval records that manager and the exact bill version.
 - After any action, focus returns to the scan field.
@@ -186,7 +190,7 @@ Rules:
 
 - Glass top bar (64 px) with **top tabs**, no sidebar, 48 px targets.
 - **Self-service:** Check-in · My attendance · My targets · My payslips · Profile.
-- **Check-in** records photo, location and time on a registered device. There is no face matching (PRD: HRMS and payroll).
+- **Check-in** records photo, location and time on a registered device. There is no face matching (`PRD-HRM-004`). Attendance outcomes are shown as plain text; a regularisation request is a record with a state (`PRD-HRM-006`), and weekly offs come from the roster (`PRD-HRM-007`).
 - **EBO staff:** Today (opening and closing checklist) · Uploads · Petty cash · Cash deposit (PRD: Operator experience).
 - **Partner:** Dashboard · Statements · Ledger. The scope chip is locked to the partner’s own Stores. Partner users hold Store personas on those Stores; there is no separate partner persona.
 - On the shared store tablet, a registered device, check-in signs the user out automatically.
@@ -239,9 +243,9 @@ Names follow the PRD and the KDPS policies.
 | 10 | Awaiting outcome | Pending | ◔ | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment |
 | 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch |
 | 12 | Partly received | Pending | ◔ | Booking, transfer |
-| 13 | In transit | Moving | ▸ | Transfer dispatch, supplier-return shipment, cash in transit |
+| 13 | In transit | Moving | ▸ | Transfer while any dispatch has not yet arrived (`PRD-TRF-013`), supplier-return shipment, cash in transit |
 | 14 | In progress | Moving | ▸ | Stock count, delivery steps |
-| 15 | Dispatched | Moving | ▸ | Transfer |
+| 15 | Dispatched | Moving | ▸ | One dispatch of a transfer, until its arrival is recorded (`PRD-TRF-011`, `PRD-TRF-013`) |
 | 16 | Initiated | Moving | ▸ | Supplier return, while any quantity awaits departure or confirmation |
 | 17 | Approved | Done | ✓ | Booking, transfer (stock reserved), offer, adjustment, refund |
 | 18 | Issued | Done | ✓ | Booking (sent to the supplier), GRN |
@@ -252,35 +256,45 @@ Names follow the PRD and the KDPS policies.
 | 23 | Authorised | Done | ✓ | Offline counter with valid offline authority |
 | 24 | Accepted | Done | ✓ | Delivery (put away), excess, transfer receipt |
 | 25 | Resolved | Done | ✓ | Exception |
-| 26 | Held | Attention | ! | Receiving hold, excess on hold, disputed portion |
-| 27 | Short | Attention | ! | Delivery, transfer dispatch |
-| 28 | Excess | Attention | ! | Delivery |
-| 29 | Overdue | Attention | ! | Booking balance past its delivery window, exception, billed-retained collection, supplier-return deadline |
-| 30 | Offline | Attention | ! | Offline counter |
-| 31 | Paused | Attention | ! | Offline counter billing pause |
-| 32 | Outcome unknown | Attention | ! | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment. Look it up before any retry |
-| 33 | Stale | Attention | ! | Trust chip, sync |
-| 34 | Reopened | Attention | ! | Exception |
-| 35 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
-| 36 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer |
-| 37 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment |
-| 38 | Refused | Stopped | ✕ | Offline bill refused on upload |
-| 39 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
-| 40 | Connection lost | Stopped | ✕ | Online till |
-| 41 | Authority expired | Stopped | ✕ | Offline counter |
-| 42 | Quarantine | Quarantine | ◆ | Stock bucket, quarantine movement |
-| 43 | Damaged | Quarantine | ◆ | Damage report, GRN line |
-| 44 | Wrong | Quarantine | ◆ | GRN line |
-| 45 | Unidentified | Quarantine | ◆ | GRN line, count |
-| 46 | Write-off pending | Quarantine | ◆ | Write-off |
+| 26 | Held | Attention | ! | Damage hold, excess hold, source-conflict hold, expiry hold, ordinary hold, inspection hold, disputed portion (hold kinds: [stock-ledger.md](../stock/stock-ledger.md) 6.1) |
+| 27 | Overdue | Attention | ! | Booking balance past its delivery window, exception, billed-retained collection, supplier-return deadline |
+| 28 | Offline | Attention | ! | Offline counter |
+| 29 | Paused | Attention | ! | Offline counter billing pause |
+| 30 | Outcome unknown | Attention | ! | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment. Look it up before any retry |
+| 31 | Stale | Attention | ! | Trust chip, sync |
+| 32 | Reopened | Attention | ! | Exception |
+| 33 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
+| 34 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer |
+| 35 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment |
+| 36 | Refused | Stopped | ✕ | Offline bill refused on upload |
+| 37 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
+| 38 | Connection lost | Stopped | ✕ | Online till |
+| 39 | Authority expired | Stopped | ✕ | Offline counter |
+| 40 | Quarantine | Quarantine | ◆ | Stock bucket, quarantine movement |
+| 41 | Damaged | Quarantine | ◆ | Damage report, GRN line |
+| 42 | Wrong | Quarantine | ◆ | GRN line |
+| 43 | Unidentified | Quarantine | ◆ | GRN line, count |
 
 Rules:
 
 - Badge: 22 px high, radius 999, padding 0 9 px, 12 px / 600, glyph (11 px) + word. Never show the glyph without the word.
-- A record shows **one** status badge: its lifecycle state. Line-level conditions (short, damaged…) appear as chips in the line’s Disposition cell.
+- A record shows **one** status badge: its lifecycle state. Line-level conditions (short, excess, damaged, wrong, unidentified) appear as chips in the line’s Disposition cell, with counts beside the badge, because conditions can coexist (`PRD-REC-006`). Short and excess are never a record's status. A delivery record never takes Damaged, Wrong or Unidentified as its badge.
+- A written-off piece that is still present keeps its Quarantine or Damaged state (`PRD-DMG-011`, `POL-17.05`). A write-off record itself uses Draft, Awaiting approval, Approved or Rejected.
 - A completed bill is never Cancelled or Reversed. A return is its own record, and a tax-invoice cancellation is a separate tax-document state (PRD: Tax and assets).
 - Unknown is for a value. Outcome unknown is for a result from an outside system: payment provider, GST, Tally or bank.
 - New states must join an existing family. Adding a family needs a design review.
+
+### Proposed states (for design review)
+
+Not settled and not used on any screen yet. Each fills a name that screens will need and the table above lacks. Adding them needs a design review; the product owner decides the final names.
+
+| Proposed state | Family | Glyph | Where it would appear | Basis |
+|---|---|---|---|---|
+| Signed | Done | ✓ | Policy readiness: the policy's "Signed by, date" line is complete | `kdps-policies.md` status line; DEC-029 |
+| Revoked | Stopped | ✕ | A registered device or session that was reported lost and revoked | `PRD-SEC-008`, `PRD-OFF-019` |
+
+- An unsigned policy shows the 10.17 banner, not a badge.
+- "Ended" stays in Neutral (an offer or end-of-season price list that has run its course). Whether a device registration or session that ended needs a Stopped name is part of this review.
 
 ---
 
@@ -295,12 +309,12 @@ Rules:
 | Negative | true minus sign U+2212 | −₹4,200.00 · −12 | No brackets, never red alone |
 | Quantity | Indian grouping, whole numbers | 1,08,420 pcs | |
 | Zero | 0 / 0.00 | 0 | Known zero (counted, nothing there) |
-| Unknown | **blank cell** in tables; the word “Unknown” (○) in fields and records | | Screen readers say “unknown”. Never a dash for numbers. Totals exclude blanks and a trust chip says so. |
-| Date | DD MMM YYYY | 23 Sep 2026 | Input also accepts 23/9, 23-09-26 |
+| Unknown | **blank cell** in tables; the word “Unknown” (○) in fields and records | | Screen readers say “unknown”. Never a dash for numbers. Totals exclude blanks and a trust chip says so (`PRD-MOD-015`). **Exception:** the till's Cash received field. Left empty it means exact cash, resolved to the declared cash amount before it is saved (`PRD-POS-007`, `PRD-MOD-016`); it is not an unknown. 0 still means zero. |
+| Date | DD MMM YYYY | 23 Sep 2026 | Input also accepts 23/9, 23-09-26. Examples use 2026 sample dates (synthetic) |
 | Date and time | DD MMM YYYY, HH:mm (24-hour) | 23 Sep 2026, 10:42 | |
 | Range | shared parts not repeated | 1–25 Sep 2026 | en dash |
-| Percent | integer or 1 decimal | 96% · 50.0% | Changes are shown in pp: −2.4 pp |
-| Bill no. | mono, at most 16 characters | B01C1/2627/04381 | Store B01, counter C1, FY 2026–27, then the sequence. Each counter has its own series. The format is set per Organisation; confirm the GST limit with the CA |
+| Percent | integer or 1 decimal | 96% · 50.0% | Changes are shown in pp: −2.4 pp. Ticket MARGIN always shows 2 decimals (`PRD-PTW-011`) |
+| Bill no. | mono; length limit and allowed characters **not confirmed** | B01C1/2627/04381 (synthetic layout) | Store B01, counter C1, FY 2026–27, then the sequence. Each counter has its own series per tax registration and financial year (`PRD-POS-020`). The format is set per Organisation within the statutory limit, which the CA has not confirmed (`POL-10.07`). **OPEN:** length limit and allowed characters; owner Accounts and the CA; blocks stage 4 |
 
 Alignment:
 
@@ -338,7 +352,7 @@ Alignment:
   | Tables | ↑↓ move · Space select · Enter open |
   | PT grid | arrows move one cell · Enter edit · Esc cancel · Ctrl D fill down · F8 next error |
   | Till | every action has a function key |
-- **Target size (2.5.8):** at least 24 × 24 px everywhere; 48 px on the till and portal.
+- **Target size (2.5.8):** every control has a hit area of at least 24 × 24 px, even where the drawn control is smaller (16 px checkboxes and radios, 34 × 20 toggles, the 20 px My work pill); 48 px on the till and portal.
 - **Motion:** skeleton pulses and transitions turn off under `prefers-reduced-motion`.
 - **Announcements:** toasts use a polite live region. Blocking errors use `role="alert"`.
 
@@ -397,25 +411,25 @@ Each entry covers anatomy, states and usage rules.
 
   | State | Marker | Example |
   |---|---|---|
-  | Complete | ● `--s-fg` | “as of 23 Sep 2026, 10:42 · 100%” |
-  | Partial | ◆ `--w-fg` | “… · **96% complete**” (bold amber) |
-  | Stale | ! `--d-fg` | “as of 22 Sep 2026, 18:00 · **stale**” |
+  | Complete | ✓ `--s-fg` (Done) | “as of 23 Sep 2026, 10:42 · 100%” |
+  | Partial | ! `--w-fg` (Attention) | “… · **96% complete**” (bold amber) |
+  | Stale | ! `--w-fg` (Attention, as the Stale state in §7) | “as of 22 Sep 2026, 18:00 · **stale**” |
   | Refreshing | | “Refreshing…” |
 - **Tooltip / focus:** names what is missing (“3 of 72 store days not synced”).
 - **Rules:** on every metric, KPI, dashboard tile and reconciliation. It sits next to the heading, right-aligned.
 
 ### 10.5 My work counter
 
-- **Anatomy:** “My work” (13 / 500) + a 20 px pill.
+- **Anatomy:** “My work” (13 / 500) + a 20 px pill. The pill sits in a hit area of at least 24 × 24 px (§9).
 - **States:**
 
   | State | Pill |
   |---|---|
   | Count | `--accent` / `--on-accent` |
-  | Overdue | `--danger` / `--on-danger`, “n overdue” |
+  | Overdue | Attention family: `--w-bg` / `--w-fg`, “! n overdue” (`--danger` is for destructive buttons only, §2) |
   | 100 or more | “99+” |
   | Zero | plain “0” in `--text-3`, no pill |
-- **Count:** tasks, approvals and exceptions assigned to the user that are not yet resolved (PRD: My work). One inbox covers every persona the user holds. The list is ordered by due time and exposure. Seen, Acknowledged and Resolved are tracked separately inside My work.
+- **Count:** tasks, approvals and exceptions assigned to the user that are not yet resolved (`PRD-ACS-009`; My work in the PRD's Words used). One inbox covers every persona the user holds. The list is ordered by due time and exposure. Seen, Acknowledged and Resolved are tracked separately inside My work. Approve, reject, delegation and escalation follow `PRD-ACS-010`.
 - Items delegated during someone's absence, and escalated overdue items, carry a label saying so.
 
 ### 10.6 Restricted field and cell
@@ -456,12 +470,14 @@ Each entry covers anatomy, states and usage rules.
 ### 10.8 Stepper (delivery record)
 
 - **Anatomy:** 8 steps (Arrival · Count · GRN · Problems · PT · Approval · Labels · Accept), each a 24–28 px circle, a connector line, a label and a sub-label.
+- **Labels:** piece-ID labels can print from the Count step, from the receipt count, and assert no price or sale eligibility (`PRD-MER-015`, `POL-04.06`). MRP labels print only after Approval, from official frozen PT values (`PRD-REC-020`). Every print and reprint job is recorded.
+- **Accept:** barcode or tag verification, physical acceptance at the selling Site and putaway by the people authorised at the destination (`PRD-REC-021`, `PRD-REC-022`).
 - **States:**
 
   | State | Circle | Label / connector |
   |---|---|---|
-  | Done | `--accent` fill, ✓ | connector `--accent` |
-  | Current | `--accent` ring | label weight 700 |
+  | Done | `--s-bg` fill, `--s-fg` ring, ✓ (Done family, §7) | connector `--s-fg` |
+  | Current | `--accent` ring (the accent marks where the user is, not a state) | label weight 700 |
   | Blocked | `--w-bg` fill, `--w-fg` ring, “!” | sub-label with count (“3 open”) |
   | Upcoming | `--control` ring, number | label `--text-2` |
 - **Rules:**
@@ -504,9 +520,9 @@ Each entry covers anatomy, states and usage rules.
   - SEASON · BRAND · COLOR · GENDER · SUB CATEGORY · TYPE · ITEM · FIT · SIZE · BARCODE · DESIGN · HSN · QTY · MRP · BASIC · P RATE · INPUT TAX · OUTPUT TAX · NAG · MARGIN · SUGGESTED SUB CATEGORY · SUGGESTED TYPE.
   - Plus a sticky row-number column and a review-mark column.
   - Plus **Supplier cost**, shown beside P RATE and left out of the export (policy 3).
-- **Calculated or typed:** the PT's costing profile decides (PRD: base-to-ticket, ticket-to-purchase, or both supplied and checked).
+- **Calculated or typed:** the PT's costing profile decides (`PRD-PTW-013`: base-to-ticket, ticket-to-purchase, or both supplied and checked).
   - Calculated columns show “ƒ” in the header.
-  - NAG and MARGIN are always calculated: NAG = QTY; MARGIN = (MRP − P RATE) ÷ MRP × 100, rounded half-up to 2 decimals.
+  - NAG and MARGIN are always calculated: NAG = QTY; MARGIN = (MRP − P RATE) ÷ MRP × 100, rounded half-up to 2 decimals (`PRD-PTW-011`).
   - When both values are supplied, both stay typed and a mismatch shows as an error.
   - SUGGESTED SUB CATEGORY and SUGGESTED TYPE are suggestions; a person must accept them before they change anything.
 - **Row:** 36 px. The header is 40 px with a 2 px `--control` bottom border, and is sticky.
@@ -601,9 +617,9 @@ Each entry covers anatomy, states and usage rules.
   - Body:
     - Value label + value (kpi). The label names the value basis required by `PRD-ACS-015` for that action.
     - **Limit bar:** 10 px track in `--sunken`, the approver’s limit in `--tint` ending in a 2 px `--accent` edge, and a value marker (4 × 18 px): `--accent` inside the limit, `--w-fg` outside.
-    - Scale: “₹0 · Your limit up to ₹X · Next: <next approver>”.
+    - Scale: “₹0.00 · Your limit up to ₹X · Next: <next approver>”.
     - A message block in the family tint.
-    - The policy reference and effective date.
+    - The policy reference: number and name. Show an effective date only once the policy is signed and its values are configured.
   - Footer: `--sunken` background with Reject… and the approve action.
 - **States:**
 
@@ -615,6 +631,7 @@ Each entry covers anatomy, states and usage rules.
   | Preparer | Stopped: “You prepared this, so a different person must approve.” | Approve **disabled** |
   | No upper limit | “No upper limit (set in policy 2)”. Shown only when unlimited authority is configured on purpose | **Approve** |
 - **Rules:**
+  - Approval is by an authorised person other than the preparer, never through another role (`POL-02.07`, `POL-02.08`). Limits are configured per action and approver (`POL-02.09`); their values and the approvers stay OPEN until policy 2 is signed (`POL-02.10`). Every amount on a sample panel is synthetic.
   - Limits come from Setup › Approval limits (policy 2) and are checked as **permissions**, never role names. The next approver comes from the same settings; the screen never assumes the Owner.
   - The limit is always shown next to the button.
   - Approval binds to the exact record version shown. A material change needs a fresh approval.
@@ -647,6 +664,8 @@ Each entry covers anatomy, states and usage rules.
 - **Anatomy:** a banner in the Attention family: “Live action unavailable” · the missing policy (number and name) · what is missing (signature, limit, approver, mapping) · a link to Setup › Policy readiness.
 - The action stays visible but disabled, with the same reason as its tooltip.
 - With synthetic test data the action works, and every screen shows a “Test data” chip.
+- In KDPS's side-by-side test the earlier POS stays the system of record: Apparel OS issues no tax invoice and bills no real customer (`PRD-LIF-026`). Its imports of the earlier POS's daily sales report and stock-on-hand are for checking and reports only and never move stock (`PRD-LIF-014`).
+- Show the state, the blocking reason and the next action (`PRD-UXP-003`).
 
 ### 10.18 Several personas
 
@@ -663,7 +682,7 @@ Each entry covers anatomy, states and usage rules.
 
 - Plain, short English (India) for now. All screen text is kept outside the code, so Hindi can be added in stage 5 without layout changes.
 - Use the PRD's words exactly (its “Words used” tables). Sentence case for everything except codes and the PT grid’s canonical column names.
-- Name the people and the rule (“Needs an approver whose limit covers ₹1,26,900”), not the system (“Permission denied”).
+- Name the people and the rule (“Needs an approver whose limit covers ₹1,26,900.00”), not the system (“Permission denied”).
 - Every block or error says **why** and **what to do next**.
 - Dates and numbers follow §8.
 
@@ -677,7 +696,7 @@ Each entry covers anatomy, states and usage rules.
 | Reason list (Setup › Reason codes) | KDPS | Stage 2 |
 | One real messy delivery to test the reconciliation layout | KDPS | Stage 2 |
 | Piece-label layout; label and receipt printer models | KDPS | Stage 2 |
-| Bill number format within 16 characters | KDPS and CA | Stage 4 |
+| Bill number format: length limit and allowed characters (`POL-10.07`) | Accounts and the CA | Stage 4 |
 | Logo artwork | KDPS | Pilot switch |
 | Finance screen detail | Design | Stage 5 |
 | Hindi text and a Devanagari font check | Design and KDPS | Stage 5 |

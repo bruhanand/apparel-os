@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -31,7 +31,7 @@ One Railway project with two environments. Each has its own services, database, 
 | `worker` | The same build with a different start command: pg-boss jobs and the outbox processor | Private network only |
 | `postgres` | Railway PostgreSQL. pg-boss tables live here too (Stack: Jobs) | Private network only. No public proxy on `kdps-test` |
 | File storage | S3-compatible storage for documents and photos (Stack: Files) | Private network and signed links. **OPEN:** provider (see 10) |
-| `forecast` | Python forecasting service. Added in stage 6 | Private network only |
+| `forecast` | Python forecasting service. Added in stage 6. **Proposed:** the PRD's Hosting row does not yet name it (OPEN: product owner, before stage 6) | Private network only |
 
 Services talk to each other over Railway's private network (`*.railway.internal`), which is scoped to one environment. So `dev` can never reach `kdps-test`.
 
@@ -59,7 +59,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`); production re
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
 - **Migrations** run as Railway's pre-deploy command, before the new version takes traffic. A failed migration stops the deploy, and the old version keeps running.
-- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The current POS is the system of record, so losing test data loses nothing official.
+- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The current POS is the system of record, so losing test data loses nothing official.
 
 ## 5. Live updates (SSE)
 
@@ -82,7 +82,14 @@ Railway keeps an HTTP stream open for at most 15 minutes, and closes it after 5 
 
 ## 7. What the test setup never does
 
-These follow from `PRD-LIF-016` and `PRD-LIF-026`. Each external adapter on `kdps-test` is either switched off or pointed at a sandbox:
+These follow from `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016` and `PRD-LIF-026`. The earlier POS stays the system of record, so the test setup also never does the following:
+
+- Imports from the earlier POS (daily sales report, stock-on-hand) are for checking and reports only. They never create, reduce or move stock (`PRD-LIF-014`).
+- An import never creates a tax invoice or a second sale for a bill the earlier POS issued (`PRD-LIF-016`).
+- Bills on `kdps-test` are test bills only. No tax invoice is issued and no real customer is billed (`PRD-LIF-026`).
+- A Store is never switched over on test hosting (`PRD-LIF-026`).
+
+Each external adapter on `kdps-test` is either switched off or pointed at a sandbox:
 
 | Outside system | On `kdps-test` |
 | --- | --- |
@@ -109,7 +116,7 @@ These follow from `PRD-LIF-016` and `PRD-LIF-026`. Each external adapter on `kdp
 | # | Question | Who decides | Needed by |
 | --- | --- | --- | --- |
 | D-1 | Production hosting | Product owner | Before the first Store switch (`PRD-LIF-026`) |
-| D-2 | File storage provider for the test setup. A Railway bucket fits DEC-028 and is S3-compatible | Product owner | Stage 1 build |
+| D-2 | File storage provider for the test setup. A Railway bucket is one S3-compatible option; DEC-028 does not cover file storage | Product owner | Stage 1 build |
 | D-3 | A custom domain for `kdps-test`, or the Railway-provided address | Product owner | Before KDPS's side-by-side test |
 | D-4 | KDPS's agreement to hold real data on the test setup, and whether customer details are imported | KDPS Owner (question 37) | Before KDPS's side-by-side test |
 | D-5 | A separate test Tally company for the connector | Accounts | Stage 5 testing |

@@ -2,7 +2,7 @@
 
 **Rank 3 of 4: design.** These documents say how the system implements the [PRD](../prd.md) and the [KDPS policies](../kdps-policies.md). They never contradict either. See [../README.md](../README.md) for the order.
 
-Each document starts by naming the PRD sections and policy IDs it implements, and lists its open questions. A question that needs a business decision goes up to the PRD or the policies.
+Each document starts by naming the PRD sections and the requirement and policy IDs it implements, cites the ID next to each rule it applies, and lists its open questions. A question that needs a business decision goes up to the PRD or the policies.
 
 | Folder | What it holds |
 | --- | --- |

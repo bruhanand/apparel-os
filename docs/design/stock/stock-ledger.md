@@ -6,8 +6,8 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Stock and warehouse control; Ledger and official books (cost formulas and pools); Merchandise and identifiers (piece and quantity tracking); Receiving and price tickets, Transfers and physical movement, Damage, quarantine and disposal (their stock effects); Opening, closure, migration and export (the switch); Module and data boundaries; Transaction and integration integrity.
 
-- PRD IDs: `PRD-STK-001`–`PRD-STK-005`, `PRD-STK-008`–`PRD-STK-015`; `PRD-LED-003`, `PRD-LED-005`–`PRD-LED-009`, `PRD-LED-014`–`PRD-LED-018`; `PRD-MER-003`, `PRD-MER-006`, `PRD-MER-010`–`PRD-MER-012`, `PRD-MER-014`–`PRD-MER-017`; `PRD-REC-004`, `PRD-REC-006`, `PRD-REC-008`, `PRD-REC-009`, `PRD-REC-012`, `PRD-REC-013`, `PRD-REC-015`, `PRD-REC-017`, `PRD-REC-019`, `PRD-REC-021`, `PRD-REC-022`; `PRD-PTW-010`; `PRD-ORG-005`, `PRD-ORG-012`, `PRD-ORG-014`, `PRD-ORG-015`, `PRD-ORG-017`–`PRD-ORG-019`; `PRD-TRF-004`, `PRD-TRF-006`–`PRD-TRF-013`, `PRD-TRF-016`, `PRD-TRF-018`–`PRD-TRF-020`, `PRD-TRF-022`, `PRD-TRF-023`; `PRD-DMG-001`–`PRD-DMG-003`, `PRD-DMG-005`–`PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016`; `PRD-OFR-008`, `PRD-OFR-012`, `PRD-OFR-014`, `PRD-OFR-016`, `PRD-OFR-019`; `PRD-RET-013`, `PRD-RET-017`; `PRD-POS-018`, `PRD-POS-020`; `PRD-OFF-006`, `PRD-OFF-009`, `PRD-OFF-011`, `PRD-OFF-012`, `PRD-OFF-014`; `PRD-EBO-011`; `PRD-LIF-003`–`PRD-LIF-005`, `PRD-LIF-008`, `PRD-LIF-010`, `PRD-LIF-012`–`PRD-LIF-016`, `PRD-LIF-018`, `PRD-LIF-025`–`PRD-LIF-027`; `PRD-IMP-011`, `PRD-IMP-012`; `PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-013`–`PRD-ACS-016`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-009`–`PRD-MOD-012`, `PRD-MOD-014`, `PRD-MOD-015`; `PRD-INT-002`–`PRD-INT-005`, `PRD-INT-008`; `PRD-PRF-001`, `PRD-PRF-003`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-NAV-015`, `PRD-NAV-016`; `PRD-FRN-006`; `PRD-EXC-001`; `PRD-ACP-001`–`PRD-ACP-006`, `PRD-ACP-012`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACP-020`.
-- Policies: 1 (`POL-01.05`, `POL-01.07`, `POL-01.13`), 2 (`POL-02.21`), 3 (`POL-03.03`), 4 (`POL-04.03`–`POL-04.09`), 8 (`POL-08.02`, `POL-08.03`, `POL-08.05`), 9 (`POL-09.02`, `POL-09.03`, `POL-09.05`–`POL-09.08`, `POL-09.11`, `POL-09.12`, `POL-09.19`, `POL-09.21`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 16 (`POL-16.04`, `POL-16.05`), 17 (`POL-17.01`, `POL-17.02`, `POL-17.05`, `POL-17.07`).
+- PRD IDs: `PRD-STK-001`–`PRD-STK-005`, `PRD-STK-008`–`PRD-STK-015`; `PRD-LED-003`, `PRD-LED-005`–`PRD-LED-009`, `PRD-LED-014`–`PRD-LED-018`; `PRD-MER-003`, `PRD-MER-006`, `PRD-MER-010`–`PRD-MER-012`, `PRD-MER-014`–`PRD-MER-017`; `PRD-REC-004`, `PRD-REC-006`, `PRD-REC-008`, `PRD-REC-009`, `PRD-REC-012`, `PRD-REC-013`, `PRD-REC-015`, `PRD-REC-017`, `PRD-REC-019`, `PRD-REC-021`, `PRD-REC-022`; `PRD-PTW-010`; `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-009`, `PRD-ORG-012`, `PRD-ORG-014`, `PRD-ORG-015`, `PRD-ORG-017`–`PRD-ORG-019`; `PRD-TRF-004`, `PRD-TRF-006`–`PRD-TRF-013`, `PRD-TRF-016`, `PRD-TRF-018`–`PRD-TRF-020`, `PRD-TRF-022`, `PRD-TRF-023`; `PRD-DMG-001`–`PRD-DMG-003`, `PRD-DMG-005`–`PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016`; `PRD-OFR-008`, `PRD-OFR-012`, `PRD-OFR-014`, `PRD-OFR-016`, `PRD-OFR-019`; `PRD-RET-013`, `PRD-RET-017`; `PRD-POS-018`, `PRD-POS-020`; `PRD-OFF-006`, `PRD-OFF-009`, `PRD-OFF-011`, `PRD-OFF-012`, `PRD-OFF-014`; `PRD-EBO-003`, `PRD-EBO-005`, `PRD-EBO-011`; `PRD-LIF-003`–`PRD-LIF-005`, `PRD-LIF-008`, `PRD-LIF-010`, `PRD-LIF-012`–`PRD-LIF-016`, `PRD-LIF-018`, `PRD-LIF-025`–`PRD-LIF-027`; `PRD-IMP-011`, `PRD-IMP-012`; `PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-013`–`PRD-ACS-016`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-009`–`PRD-MOD-015`; `PRD-INT-002`–`PRD-INT-005`, `PRD-INT-008`; `PRD-PRF-001`, `PRD-PRF-003`; `PRD-STG-002`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-NAV-015`, `PRD-NAV-016`; `PRD-FRN-006`; `PRD-EXC-001`; `PRD-ACP-001`–`PRD-ACP-006`, `PRD-ACP-012`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACP-020`.
+- Policies: 1 (`POL-01.05`, `POL-01.07`, `POL-01.13`), 2 (`POL-02.21`), 3 (`POL-03.03`), 4 (`POL-04.03`–`POL-04.09`), 8 (`POL-08.02`, `POL-08.03`, `POL-08.05`, `POL-08.06`), 9 (`POL-09.02`–`POL-09.08`, `POL-09.11`, `POL-09.12`, `POL-09.19`, `POL-09.21`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 16 (`POL-16.04`, `POL-16.05`), 17 (`POL-17.01`, `POL-17.02`, `POL-17.05`, `POL-17.07`).
 - Decisions: DEC-002, DEC-004, DEC-008, DEC-019, DEC-023, DEC-030, DEC-031, DEC-032, DEC-033, DEC-034, DEC-035.
 
 Used by: the future designs for receiving, PT, transfers, counts, supplier returns, the counter, EBO imports, the switch and financial posting. Each of them posts stock through this ledger.
@@ -17,7 +17,7 @@ Used by: the future designs for receiving, PT, transfers, counts, supplier retur
 ## 1. What the ledger is
 
 - One stock module owns the ledger's records. Other modules never read or write its tables; they call its interface (`PRD-MOD-002`).
-- Every stock effect of a business action is written through that interface in the same database transaction as the action (`PRD-MOD-006`, `PRD-INT-004`).
+- Every stock effect of a business action is written through that interface in the same database transaction as the action (`PRD-MOD-006`, `PRD-INT-004`). For a large document the action is its posting job, which is one transaction (10.6). Durable follow-up, such as journals and messages, goes through the outbox.
 - Reports read declared read models of the ledger with an as-of time (`PRD-MOD-003`).
 - The ledger records stock and its cost. It never writes journals; the books get its valued movements through the outbox (section 7.11).
 - Only a physical count creates stock. Invoice, booking and PT quantities never do (`PRD-REC-008`, `PRD-ACP-001`).
@@ -39,7 +39,7 @@ Used by: the future designs for receiving, PT, transfers, counts, supplier retur
 | SKU and unit | The SKU, or Unknown for goods whose identity is not yet resolved (`PRD-DMG-005`). Each SKU has one stock unit (piece, pair or pack); pack conversions use the recorded conversion version, and units are never combined silently (`PRD-MER-010`–`PRD-MER-012`, `POL-04.03`, `POL-04.04`) |
 | Batch and expiry | Only where the tracking profile requires them; missing values block the movement (`PRD-MER-011`) |
 | Quantity | A whole number in the SKU's stock unit; never negative on a balance |
-| From and to | Site; business unit, and through it the accounting book and legal entity (`PRD-ORG-005`); internal location, including display and alteration locations (`PRD-ORG-012`); condition; and how the goods are held: on hand, in transit or billed-retained. Each unit is in one place and held one way, so nothing is counted twice (`PRD-STK-001`, `PRD-STK-002`) |
+| From and to | Site; business unit, and through it the accounting book and legal entity (`PRD-ORG-005`); internal location, including display and alteration locations (`PRD-ORG-012`); condition; and how the goods are held: in custody, in transit or billed-retained. Each unit is in one place and held one way, so nothing is counted twice (`PRD-STK-001`, `PRD-STK-002`) |
 | Receipt origin | Section 4 |
 | Piece IDs | For piece-tracked goods: the exact pieces (section 5) |
 | Value | Value in or out of a cost pool, in integer paise, or **Unknown** (section 7) |
@@ -56,7 +56,7 @@ Used by: the future designs for receiving, PT, transfers, counts, supplier retur
 | Receipt count | Creates custody at the receiving Site from the GRN count; new receipt origins (`PRD-REC-008`) | 2 |
 | Opening count | Creates custody from a verified opening count at any Site that goes live, warehouse or Store; opening receipt origins (`PRD-LIF-003`, `PRD-LIF-004`, `PRD-LIF-027`) | When its Site goes live (SL-9) |
 | Location move | Within one Site: floor, backstore, rack, bin; keeps condition and acceptance (`PRD-STK-005`) | 2 |
-| Condition change | Good to damaged, wrong or unidentified. Wrong or unidentified goods return to good only through the identity route (`POL-17.02`). Damaged goods never become good stock; a mistaken damage confirmation is undone by a reversal (`PRD-DMG-002`, `PRD-DMG-010`) | 2 |
+| Condition change | Good to damaged, wrong or unidentified. Wrong or unidentified goods return to good only through the identity route (`POL-17.02`). Damaged goods never become good stock (`PRD-DMG-010`). A mistaken report is rejected before confirmation (`PRD-DMG-003`). Undoing a mistaken confirmation by a reversal is a design rule under `PRD-ACS-014` that the PRD does not state (OPEN, SL-20) | 2 |
 | Identity resolved | Goods whose SKU was Unknown get their SKU through the approved identity route, then follow the PT route (`PRD-DMG-005`, `PRD-DMG-010`, `POL-17.02`) | 2 |
 | Dispatch | Custody leaves the source Site into transit (`PRD-TRF-011`, `PRD-TRF-013`) | 3 |
 | Arrival count | Custody at the destination for counted quantities; excess goes to an excess hold; missing quantities stay on the dispatch until resolved (`PRD-TRF-016`, `PRD-TRF-018`) | 3 |
@@ -79,7 +79,7 @@ Acceptance, coverage, holds and reservations are not movements. They are append-
 
 ## 3. Five things kept apart
 
-`PRD-STK-001`, `PRD-STK-002`, `PRD-REC-009`, `PRD-LED-005`. Each is recorded on its own and changed only by its own events.
+`PRD-STK-001`, `PRD-STK-002`, `PRD-REC-009`, `PRD-LED-005`, `PRD-ORG-001`, `PRD-ORG-009`, `PRD-ORG-014`, PRD "Words used" (Custody). The five-way split combines these PRD rules with the AGENTS.md rule that keeps custody, PT coverage, availability, ownership and accounting recognition separate; ownership comes from `PRD-ORG-009` and `PRD-ORG-014`. Each is recorded on its own and changed only by its own events.
 
 | Thing | What it answers | Recorded as | Changed only by | Never changed by |
 | --- | --- | --- | --- | --- |
@@ -116,8 +116,8 @@ Acceptance, coverage, holds and reservations are not movements. They are append-
 
 **Where piece rules are off.**
 
-- A Store still selling through an earlier POS holds no stock in the app (DEC-030). Its piece rules start at its switch count, where every piece without an ID is labelled and every piece ID is verified (`PRD-MER-017`, `PRD-LIF-025`).
-- An EBO Store reporting through brand software holds piece-tracked goods as SKU quantity per receipt origin until it bills in Apparel OS; its imports name no piece (`PRD-EBO-011`). When a labelled piece arrives there, its piece record notes the arrival and stops tracking it; from then on the Store holds it only as quantity. Such pieces are left out of the one-place check (11.7). Their piece IDs count again only after a full count at that Store, as at a switch, or when they are scanned at the destination of a transfer out of it.
+- A Store still selling through an earlier POS has its earlier-POS files kept out of app stock (DEC-030, `PRD-LIF-014`). It has no real opening stock until its switch count (`PRD-LIF-027`, `POL-14.07`). Its piece rules start at that count, where every piece without an ID is labelled and every piece ID is verified (`PRD-MER-017`, `PRD-LIF-025`). How goods the app receives or moves there before the switch are held is OPEN (SL-9).
+- An EBO Store reporting through brand software holds piece-tracked goods as SKU quantity per receipt origin until it bills in Apparel OS; its imports name no piece (`PRD-EBO-011`, DEC-023). The PRD does not define the event that ends "until it bills in Apparel OS" at that Store. How piece-tracked goods arrive at, leave and are counted at such a Store is OPEN (SL-18).
 
 **Batch and expiry.** Required only where the profile says so. Goods that fail the configured shelf-life rule are held (`POL-04.05`). The categories and day limits are OPEN (V-05, `POL-04.08`).
 
@@ -146,7 +146,7 @@ Every hold and reservation is its own record: kind, the pieces or quantity it co
 
 - Handover is a sale-issue movement; it ends custody.
 - Whether value leaves the cost pool at the bill or at handover follows the recognition timing the CA sets (V-35, SL-17). Live billed-retained sales stay unavailable until then.
-- A cancellation brings the goods back at the cost they left with, into an inspection hold. They become good stock only after inspection (`POL-08.05`).
+- A cancellation sends the goods into an inspection hold. They become good stock only after inspection (`POL-08.05`). If value left the cost pool at the bill, the goods come back at the cost they left with (7.5); if value leaves only at handover, none left and none returns. Which applies is OPEN (SL-17).
 - A count records billed-retained pieces apart from the Store's own stock (8.1).
 
 ### 6.2 Rules
@@ -161,7 +161,7 @@ Every hold and reservation is its own record: kind, the pieces or quantity it co
   - each reservation claims its own units;
   - each hold claims its own units, or units inside a named reservation; holds that overlap on the same units count once;
   - a count freeze claims everything in its scope;
-  - **available = on hand − reserved − held units outside reservations**, and never below zero.
+  - **available = quantity in custody − reserved − held units outside reservations**, and never below zero. "SOH" in this design means only a quantity another system reports, such as the earlier POS's (PRD "Words used").
 
 ### 6.3 Sellable
 
@@ -203,8 +203,8 @@ A unit is in a cost pool only when the Organisation owns it **and** its cost is 
 | In transit, Site pool | No pool; held on the dispatch | The value the source pool issued, plus any later cost change (7.7) |
 
 - Units enter a pool when the later of the two events happens: ownership, or cost established. Under FIFO the new layer is dated at that moment.
-- A supplier-owned unit whose ownership passes at sale goes in and straight out at the cost its agreement gives at that moment; it never mixes with the pool's average or layers. The accounting for it is the CA's under `POL-09.03`.
-- A customer return of such a unit goes back outside the pool, still the supplier's. A loss or a supplier return of supplier-owned goods takes no pool value; it is settled under the agreement.
+- Where an agreement passes ownership at sale (`POL-01.05`), the unit is assumed to go in and straight out at the cost the agreement gives at that moment, and never to mix with the pool's average or layers. This is a working assumption, used as the synthetic example G6. The accounting for it is the CA's under `POL-09.03`, and the CA validates it (SL-4).
+- A customer return of a supplier-owned unit, and a loss or supplier return of one, follow the brand agreement (`POL-01.05`, `POL-01.13`). The CA decides their accounting (`POL-09.03`). No default is set that a customer return reverts ownership. The customer-return effect is OPEN (SL-4). Supplier-owned goods take no pool value.
 
 ### 7.3 Moving weighted average
 
@@ -241,7 +241,7 @@ A unit is in a cost pool only when the Organisation owns it **and** its cost is 
 
 - Pre-PT stock has custody but no cost. Its value stays Unknown in every report, total and approval (`PRD-DMG-005`, `PRD-ACP-004`). Totals leave unknown values out and say so (design-language §8).
 - An approval whose value basis is unknown follows `PRD-ACS-016`.
-- Moving, returning or disposing of pre-PT stock creates no cost, liability or journal (`PRD-DMG-016`).
+- Moving or returning pre-PT stock leaves its value Unknown (`PRD-ACP-004`, `PRD-DMG-008`). Disposing of it creates no fictitious cost, liability or journal (`PRD-DMG-016`, `POL-17.07`).
 - PT approval establishes the receipt origin's cost: the P RATE of the covering revision (`PRD-PTW-010`). The units enter the pool then (7.2). If they are in transit between pools at that moment, the dispatch takes the value and they enter the destination pool with it.
 - A provisional amount on inbound ownership, or a provisional valuation under `POL-09.02`, stays outside the ledger. It is a reconciling item between the ledger's inventory value and the books (`PRD-ORG-018`, `PRD-LED-008`).
 
@@ -285,7 +285,7 @@ A later approved change of a receipt origin's cost (for example a freight additi
 
 - Each committed transaction with valued movements writes an outbox event naming them (`PRD-MOD-006`). The finance module turns them into journals under the posting maps (`PRD-LED-003`, `POL-09.11`).
 - A missing or invalid map blocks the journal and raises an exception; the movement stays posted (`POL-09.12`). Replay never doubles a journal (`PRD-INT-008`).
-- Tally remains KDPS's official book (`POL-11.01`). The ledger's values feed the internal ledger and the Tally exchange in stage 5.
+- Tally remains KDPS's official book (`POL-11.01`). Valued movements reach the internal ledger from the first stage that records them (`PRD-STG-002`). Only the Tally exchange and full accounting wait for stage 5.
 
 ### 7.12 Changing the formula or pool
 
@@ -301,7 +301,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 - **Cycle count:** freeze only the counted items and locations from sale and movement while the count is open (`PRD-STK-009`).
 - The freeze blocks every movement into or out of the scope. The expected quantities are the balances at the moment of freezing; they cannot change during the count.
 - Piece-tracked goods are counted by piece-ID scan (`PRD-MER-016`). Recounts are new count records; the first count is kept (`PRD-STK-010`).
-- Before a full count freezes, the offline queue is reconciled along with the tills (`PRD-STK-008`).
+- Before a full count freezes, the tills are reconciled (`PRD-STK-008`) and the offline queue is reconciled before the freeze starts. This ordering is a design rule; the PRD does not state it (it covers only releasing protected quantity, `PRD-OFF-011`, `PRD-OFF-006`).
 - Billed-retained pieces are counted apart from the Store's own stock (6.1).
 - Value-only movements, such as a late cost change, may post during a count; they change no quantity.
 
@@ -322,7 +322,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 
 - **A piece recorded as lost:** reverse that loss. The piece comes back with its receipt origin, owner, coverage and the cost the loss took (`PRD-LED-017`).
 - **A piece recorded at another place:** a correction movement from the recorded place to the found place, under approval. Between pools it is valued like a transfer (7.8).
-- **A piece recorded as sold, returned to its supplier or disposed of** (`PRD-STK-015`, DEC-035). A mis-scan can cause it: the bill names piece A while the customer took piece B of the same SKU. An approver links A to the movement that wrongly named it, and a correction record swaps the two: A comes back on hand with its own receipt origin, coverage and cost, and B is recorded as the piece that left. The bill or other document never changes. Both pieces are the same SKU in the same pool, so no value moves. With no matching missing piece, or a different SKU, A is held with an ordinary hold and an owned exception.
+- **A piece recorded as sold, returned to its supplier or disposed of** (`PRD-STK-015`, DEC-035). A mis-scan can cause it: the bill names piece A while the customer took piece B of the same SKU. An approver links A to the movement that wrongly named it, and a correction record swaps the two: A comes back into custody with its own receipt origin, coverage and cost, and B is recorded as the piece that left. The bill or other document never changes. Both pieces are the same SKU in the same pool, so no value moves. With no matching missing piece, or a different SKU, A is held with an ordinary hold and an owned exception.
 - **Goods of a known SKU with no known receipt origin**, piece-tracked without an ID or quantity-tracked (`PRD-STK-014`, DEC-032): custody held as excess, with owner, PT coverage and cost unknown. It becomes available only when the approver links it to a recorded loss of the same SKU (that loss is reversed with its origin, owner, coverage and cost) or when its owner is established and a PT for the counted quantity is approved, as for opening stock.
 - **Goods whose SKU is unknown:** unidentified; quarantined until their identity is resolved through the applicable route (`PRD-DMG-010`, `PRD-REC-012`).
 
@@ -338,7 +338,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
   1. Run a full Store count (8.1). Label every piece of a piece-tracked profile that has no piece ID and verify every piece ID (`PRD-LIF-025`).
   2. The verified count becomes the Store's opening stock (`PRD-LIF-027`): opening count movements with opening receipt origins. Each needs a reviewed manifest, physical verification, authorised variances, an opening PT and Site acceptance (`PRD-LIF-004`), and identity, quantity, location and valuation evidence (`PRD-LIF-005`). Operations verifies the manifest, including ownership; Accounts verifies the values (`POL-14.02`, `POL-14.03`).
   3. A counted row without the valuation evidence `PRD-LIF-005` requires is not opening stock. It is held as excess, as for a count surplus (`PRD-STK-014`), until the evidence and an opening PT arrive.
-  4. Billed-retained items carried across the switch (`POL-14.04`) are counted apart. They enter held as billed-retained, with their earlier-POS bill reference and no pool value, and never become opening stock.
+  4. Billed-retained items carried across the switch (`POL-14.04`) are counted apart and keep their earlier-POS bill reference. Whether they carry cost-pool value, and whether they count as opening stock under `PRD-LIF-027`, is OPEN (SL-17). The PRD has no carve-out for them; one needs a decision record first.
   5. Opening stock creates no supplier delivery, booking, invoice, liability or automatic journal (`PRD-LIF-008`).
   6. Reconcile the count with the earlier POS's last SOH and report every difference (`PRD-LIF-027`).
   7. Piece rules apply from this count on (`PRD-MER-017`).
@@ -358,7 +358,9 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 
 ### 10.2 One transaction
 
-Number allocation, movements, balance rows, pool rows, approval evidence, audit and outbox commit together, or none of them do (`PRD-INT-004`). A document's lines post together; one failing line fails the document (`PRD-IMP-012`).
+Number allocation, movements, balance rows, pool rows, monetary records, approval evidence, audit and outbox commit together, or none of them do (`PRD-INT-004`). A document's lines post together; one failing line fails the document (`PRD-IMP-012`).
+
+The valued movement and its balance and pool rows commit with the movement. Journals follow through the outbox under the posting maps (7.11; `PRD-MOD-006`, `POL-09.12`). How `PRD-MOD-013` (balanced journals per book at commit) is met when journals follow through the outbox is OPEN (SL-21).
 
 ### 10.3 Lock order
 
@@ -390,14 +392,14 @@ Database constraints keep balances, layers and pool quantities from going below 
 
 The offline counter sells from its protected quantity (6.1). On upload, each bill posts against it in posting order (7.10). A bill that does not fit goes to the visible reconciliation queue and is never discarded (`PRD-OFF-009`, `PRD-OFF-014`). Its stock effect posts when the Store Manager resolves it; Accounts handles any money difference (`POL-16.05`).
 
-An EBO import that sells more than the app holds at that Store goes to the same kind of queue, with an owned exception (`PRD-EBO-011`, `PRD-EXC-001`).
+An EBO import that sells more than the app holds at that Store goes to the same kind of queue, with an owned exception (`PRD-EBO-003`, `PRD-EBO-005`, `PRD-EXC-001`, `PRD-INT-005`). This queue is a design rule; the PRD does not state it (OPEN, SL-19).
 
 ### 10.6 Large documents
 
 A few documents touch thousands of rows at once: approving a large PT (the PRD's performance table uses a 10,000-line PT import), posting a Site's opening stock, approving a full Store count. Under a book pool, the cost pool rows they lock are shared by every Store, so counter sales of the same SKUs would wait behind them. Counters must not wait on background work (`PRD-PRF-003`).
 
 - **Staged commit.** All slow work happens before any lock: validation, matching, and working out quantities and inflow values. Outflow values (count shortages, write-offs) depend on posting order, so they are worked out under the pool locks (7.10). The posting transaction then only locks, rechecks and writes, with set-based writes in the lock order. One document is still one transaction (`PRD-INT-004`, `PRD-IMP-012`).
-- **One at a time.** Large postings run as queued jobs, one at a time per accounting book, never inside a user's request. The document shows Posting until it commits.
+- **One at a time.** Large postings run as queued jobs, one at a time per accounting book, never inside a user's request. The approval click records only a request to post, naming the approved version, and the document shows Posting. The job then runs the whole transaction of 10.2 (number allocation, movements, balance and pool rows, monetary records, approval evidence, audit and outbox), rechecking under the locks (10.4). If the job fails, nothing is posted and the document shows the failure. Where the approver's identity and the approval time are held between the click and the job, and what happens to the approval if the job fails, is OPEN (SL-22; product owner; blocks stage 1). Only the outbox follow-up, such as journals, runs after the job's commit (`PRD-MOD-006`, `PRD-INT-004`).
 - **Measured.** Performance tests post a 10,000-line PT approval, a full Site opening and a full count approval while counters sell at the reference workload (`PRD-PRF-001`). Pass: counter finalisation stays inside its PRD target.
 - **If the test fails**, the next step is to post one document in ordered chunks, each its own short transaction, with nothing usable until the last chunk commits. That bends `PRD-INT-004` ("commit together or commit none"), so it needs a PRD decision first (SL-11).
 
@@ -504,13 +506,13 @@ In every row, stock value + cost of goods sold + value out by supplier return = 
 | G3 | Count with a shortage and a surplus | Nothing posts before approval; the tolerance only selects the approver; a quantity surplus with no origin is held excess; linking it to a recorded loss reverses that loss at its cost (`PRD-STK-012`, `PRD-STK-014`) |
 | G4 | Earlier-POS sales report and SOH loaded twice | No movement, balance or pool changes; the second load has no effect (`PRD-LIF-014`, `PRD-IMP-011`) |
 | G5 | Damage report on reserved stock, then rejected; transfer then cancelled | The damage hold blocks dispatch at once; rejection clears only the damage hold; cancellation clears only its reservation (`PRD-ACP-005`, `PRD-TRF-022`) |
-| G6 | Consignment piece received, then sold | Outside the pool while in custody; at its sale it passes through at its agreed cost (`PRD-ORG-015`) |
+| G6 | Consignment piece received, then sold | Outside the pool while in custody; at its sale it passes through at its agreed cost (`PRD-ORG-015`); a working assumption pending SL-4, as in 7.2 |
 | G7 | Site pools. After step 3's dispatch and before its arrival, R1's cost rises by ₹15.00 a piece | Moving average: W1 becomes 6 / 690.00; the dispatch goes from 400.00 to 460.00; after arrival S1 is 10 / 1,240.00 (124.00). FIFO: W1's L1 becomes 6 @ 115.00; the dispatch's 4 @ 100.00 becomes 4 @ 115.00 and arrives as L3 4 @ 115.00. No value is lost between pools (7.7) |
 | G8 | Quantity-tracked SKU with two receipt origins at one place; a sale by SKU barcode | The older origin goes down first; with batch or expiry, the soonest expiry (`PRD-STK-013`) |
 | G9 | FIFO: one quantity-tracked sale line takes units from two layers; part of it comes back | The return takes the newest-taken layer first, at that layer's cost (7.5) |
 | G10 | A moving average that does not divide into whole paise | Filled in once the rounding rule is set (SL-2). An outflow that empties the pool leaves no residue (7.3) |
 | G11 | Supplier return shipment: part handed over, part refused and brought back | Value leaves at departure; the refused part comes back at the shipment's value (7.8) |
-| G12 | A count finds piece A, which the ledger shows as sold; piece B of the same SKU is missing | After approval A is back on hand with its own history, and B is recorded as sold. The bill is unchanged. No value moves (`PRD-STK-015`) |
+| G12 | A count finds piece A, which the ledger shows as sold; piece B of the same SKU is missing | After approval A is back in custody with its own history, and B is recorded as sold. The bill is unchanged. No value moves (`PRD-STK-015`) |
 | G13 | Step 1 was miscounted: only 6 of R1's 10 pieces arrived. Found after step 2 and reversed | The reversal takes off 4 × 100.00 = 400.00, R1's own value. Book pool, both formulas: 12 / 1,380.00, average 115.00; under FIFO, L1 becomes 6 @ 100.00. W1 holds 6 (`PRD-LED-018`) |
 
 ### 11.9 Concurrency tests
@@ -535,7 +537,7 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | SL-1 | KDPS's actual cost formula and pool mode: today's method (V-08), then its confirmation (V-09) | Accounts, CA | 1 (V-08); 2 (V-09) |
 | SL-2 | Rounding rule for an outflow, or a customer return under moving average, that does not divide to whole paise | Accounts, CA | 2 |
 | SL-3 | Accounts for the supplier-return variance, late-cost shares of goods gone, late-cost excess in cost of goods sold, and the variance left by a reversal of an inflow (V-10) | Accounts, CA | 2 |
-| SL-4 | Validate these rules with real cases (`POL-09.06`). First, the supplier return: it leaves at the formula cost, not the receipt's own cost, so a variance appears even when the supplier credits the purchase price (7.5, 11.4). Then: late-cost split and its excess to cost of goods sold (7.7), reversals at their original cost, and reversals of mistaken inflows at their own value (7.5), FIFO layers dated when units enter the pool (7.4), valuation in posting order (7.10), consignment pass-through (7.2) | CA | 2 |
+| SL-4 | Validate these rules with real cases (`POL-09.06`). First, the supplier return: it leaves at the formula cost, not the receipt's own cost, so a variance appears even when the supplier credits the purchase price (7.5, 11.4). Then: late-cost split and its excess to cost of goods sold (7.7), reversals at their original cost, and reversals of mistaken inflows at their own value (7.5), FIFO layers dated when units enter the pool (7.4), valuation in posting order (7.10), consignment pass-through (7.2), including whether a customer return of a pass-through unit reverses ownership and what a supplier-owned unit's loss or supplier return costs under its agreement (`POL-01.05`, `POL-01.13`) | CA; product owner for the ownership effect | 2 |
 | SL-5 | How a net realisable value write-down is worked out and spread under each formula, and how it is reversed | CA | 5 |
 | SL-6 | How value is divided when the formula or pool mode changes (7.12) | CA | Before any change |
 | SL-7 | Count cost limits and approvers (V-21) | KDPS Owner, Operations | 3 |
@@ -545,6 +547,11 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | SL-11 | Posting one large document in ordered chunks, if the staged commit fails the counter performance test (10.6). It bends `PRD-INT-004`, so it needs a PRD decision first | Product owner | Only if that test fails |
 | SL-14 | How Store value is shown under a book pool (7.1), for Store net asset value and closure (`PRD-NAV-016`, `PRD-LIF-018`) | Accounts, CA | 5 |
 | SL-15 | The accounting date of a late valued movement whose business date falls in a locked financial period (7.10) | Accounts, CA | 5 |
-| SL-17 | Whether a billed-retained sale's value leaves the pool at the bill or at handover (6.1; V-35) | CA | 4 |
+| SL-17 | Whether a billed-retained sale's value leaves the pool at the bill or at handover (6.1; V-35); then whether a cancelled sale's goods return at a cost; and whether billed-retained items carried across the switch carry pool value or count as opening stock (9, step 4; `POL-14.04`, `POL-08.06`, `POL-09.04`). A carve-out from `PRD-LIF-027` needs a decision record | CA; product owner for the opening-stock question | 4 |
+| SL-18 | How piece-tracked goods arrive at, leave and are counted at an EBO Store that reports through brand software, and what event ends "until it bills in Apparel OS" there (5; `PRD-EBO-011`, `PRD-MER-003`, `PRD-MER-016`). Any exception to piece scanning needs a decision record | Product owner | 4 |
+| SL-19 | The reconciliation queue and owned exception for an EBO import that sells more than the app holds at that Store (10.5). The PRD does not state it | Product owner | 4 |
+| SL-20 | Undoing a mistaken damage confirmation by a reversal (2.3). The PRD covers only rejecting a report before confirmation (`PRD-DMG-003`) | Product owner | 2 |
+| SL-21 | How `PRD-MOD-013` (balanced journals per book at commit) is met when journals follow the movement through the outbox (10.2, 7.11); settled in the financial posting design (GC-4) | Product owner; CA | 1 |
+| SL-22 | Where the approver's identity and the approval time are held between the approval click and the posting job of a large document, and what happens to the approval if the job fails (10.6; `PRD-INT-004`, `PRD-ACS-006`) | Product owner | 1 |
 
 SL-12, SL-13 and SL-16 were settled by DEC-034 and DEC-035; their numbers are not reused.

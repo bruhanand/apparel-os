@@ -1,4 +1,4 @@
-// GENERATED from dc-runtime/src/*.ts — do not edit. Rebuild with `cd dc-runtime && bun run build`.
+// GENERATED runtime, copied into this folder — do not edit. Its source folder and build command are not in this repository.
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
