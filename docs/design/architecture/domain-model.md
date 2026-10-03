@@ -6,9 +6,9 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; People, access and approvals; Merchandise and identifiers; Source conversion and imports; Module and data boundaries; and, for the stage 1 records only, Ledger and official books, Exceptions, reports and planning, Opening, closure, migration and export, and Offline counter. Other sections are outlined (section 2).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-022`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.01`–`POL-02.04`, `POL-02.06`–`POL-02.13`, `POL-02.15`–`POL-02.23`), 3 (`POL-03.04`), 4 (`POL-04.01`–`POL-04.05`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.02`, `POL-05.03`, `POL-05.09`), 7 (`POL-07.01`, `POL-07.05`, `POL-07.06`, `POL-07.09`), 9 (`POL-09.02`, `POL-09.10`–`POL-09.13`, `POL-09.19`, `POL-09.21`, `POL-09.23`), 10 (`POL-10.01`, `POL-10.06`–`POL-10.08`), 13 (`POL-13.05`), 14 (`POL-14.05`, `POL-14.07`), 16 (`POL-16.07`), 17 (`POL-17.02`, `POL-17.04`, `POL-17.07`, `POL-17.11`), 18 (`POL-18.05`), 19 (`POL-19.03`).
-- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100.
+- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100, DEC-101.
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
@@ -160,7 +160,7 @@ Rules:
 
 ### 3.2 People, access and approvals
 
-Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-022`; policy 2; [personas.md](../access/personas.md).
+Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-023`; policy 2; [personas.md](../access/personas.md).
 
 | Record | What it is | Identity | Relationships and rules | IDs |
 | --- | --- | --- | --- | --- |
@@ -195,7 +195,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 - Routine billing and receiving inside approved rules need no extra approval (`POL-02.08`).
 - A phone approval is an authenticated action bound to the exact record version (`PRD-ACS-012`).
 - Partner staff are users with Store personas on their own Stores only (`PRD-FRN-007`, DEC-042).
-- Role, permission and approval-rule changes are themselves approved by another authorised person, and who changed what is kept (`POL-02.07`, `POL-02.06`).
+- Role, permission, role-assignment and approval-rule changes are themselves approved by another authorised person, and who changed what is kept (`PRD-ACS-023`, `POL-02.07`, `POL-02.06`). The one exception is a new Organisation's setup step, which creates its first Admin and first approver together under a service identity (`PRD-ACS-023`, DEC-101).
 - **OPEN:** all real people, roles, scopes, limits, allowlists, stand-ins and reasons (V-01, V-02, V-04; `POL-02.10`, `POL-02.11`, `POL-02.19`, `POL-02.20`, `POL-02.22`, `POL-02.23`; KDPS Owner, Admin; stage 1 live use). SL-22 is settled: a decision waiting for its posting job stays recorded and unused until the job's transaction records its use (DEC-097; [module-map.md](module-map.md) 6.3).
 
 ### 3.3 Work items and exceptions
@@ -417,7 +417,7 @@ Each approved action, with what the approval binds to.
 
 | Action | Document it binds to | Independent | Value basis | Narrower material-change rule | Stage |
 | --- | --- | --- | --- | --- | --- |
-| Role, permission and approval-rule change | The change version | `POL-02.07` | — | — | 1 |
+| Role, permission, role-assignment and approval-rule change | The change version | `PRD-ACS-023`, `POL-02.07` | — | — | 1 |
 | Supplier bank-detail change | The party version | `POL-02.07` | — | — | 1 |
 | Mapping-rule and vocabulary confirmation | The proposal | `PRD-IMP-008`, `POL-02.07` | — | — | 1 |
 | Site readiness and business-unit activity (`PRD-LIF-001`) | The readiness record | Not stated; approver OPEN (module-map MM-8) | — | — | 1 |

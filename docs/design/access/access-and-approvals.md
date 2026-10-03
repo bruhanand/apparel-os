@@ -6,9 +6,9 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; from Exceptions, reports and planning, the exception record and alerts; from AI, security and operational reliability, sign-in, scope controls, restricted data, revocation and service identities; from Franchise and partner accounts, partner users. It is GC-3 in [gaps-before-code.md](../../reports/gaps-before-code.md).
 
-- PRD IDs: `PRD-ACS-001`–`PRD-ACS-022`; `PRD-EXC-001`–`PRD-EXC-004`, `PRD-EXC-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-FRN-001`, `PRD-FRN-007`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-007`, `PRD-INT-008`; `PRD-MOD-010`, `PRD-MOD-015`; `PRD-UXP-003`; `PRD-OFF-002`–`PRD-OFF-004`, `PRD-OFF-010`; `PRD-HRM-004`, `PRD-HRM-012`, `PRD-HRM-015`; `PRD-TRF-004`, `PRD-TRF-005`, `PRD-TRF-010`; `PRD-LIF-001`.
+- PRD IDs: `PRD-ACS-001`–`PRD-ACS-023`; `PRD-EXC-001`–`PRD-EXC-004`, `PRD-EXC-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-FRN-001`, `PRD-FRN-007`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-007`, `PRD-INT-008`; `PRD-MOD-010`, `PRD-MOD-015`; `PRD-UXP-003`; `PRD-OFF-002`–`PRD-OFF-004`, `PRD-OFF-010`; `PRD-HRM-004`, `PRD-HRM-012`, `PRD-HRM-015`; `PRD-TRF-004`, `PRD-TRF-005`, `PRD-TRF-010`; `PRD-LIF-001`.
 - Policies: 2 (`POL-02.01`–`POL-02.12`, `POL-02.15`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.04`, `POL-03.05`), 10 (`POL-10.01`), 12 (`POL-12.04`), 18 (`POL-18.02`).
-- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100.
+- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100, DEC-101, DEC-102.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners and operations of `access`, `inbox` and `exceptions`; the transaction shape), [domain-model.md](../architecture/domain-model.md) (the records, invariants and approval boundaries), [structure-and-masters.md](../masters/structure-and-masters.md) (the place tree), [personas.md](personas.md) (users, personas and the KDPS templates), [stock-ledger.md](../stock/stock-ledger.md) (locks and rechecks), [deployment.md](../platform/deployment.md) (sign-in routing and database roles).
 
@@ -84,7 +84,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 - A session is a row in the Organisation's database: the user, the device where registered, its kind, its start, its last activity and its state. The cookie holds a random identifier; the database keeps only its hash. **Design choice.**
 - Kind: a session on a registered billing device is a shared POS session; any other is an office session. Policy 2 names these two kinds (`POL-02.18`). **Design choice** of how the kind is decided.
-- The idle-lock and absolute limits per kind are effective-dated settings in `access` (`PRD-ACS-017`, `PRD-MOD-010`). Policy 2 states 5 minutes for shared POS sessions, 15 minutes for office sessions and 12 hours absolute (`POL-02.18`). They apply once policy 2 is Signed and the Admin has validated them (V-04). Until then no value is active; synthetic tests use labelled synthetic values. What `kdps-test` uses before policy 2 is Signed is OPEN (GC3-3).
+- The idle-lock and absolute limits per kind are effective-dated settings in `access` (`PRD-ACS-017`, `PRD-MOD-010`). Policy 2 states 5 minutes for shared POS sessions, 15 minutes for office sessions and 12 hours absolute (`POL-02.18`). They apply once policy 2 is Signed and the Admin has validated them (V-04). Until then no value is active on production; synthetic tests use labelled synthetic values. On `kdps-test`, before policy 2 is Signed, sessions use the values `POL-02.18` states, as settings of the test setup that enable no other gated action (DEC-102, DEC-071).
 - When the idle limit passes, the session locks and the screen keeps the unfinished work. The same user unlocks it with their password. Someone else at the same device signs in with a session of their own. **Design choice.**
 - When the absolute limit passes, the session ends. Unfinished work is kept and offered back after the next sign-in: drafts already saved stay as Draft records; unsaved screen input is kept on the device for the same user and Organisation (`PRD-ACS-017`, `POL-02.18`, `PRD-UXP-003`). Restricted fields are never kept in that copy; the person enters them again (`PRD-SEC-006`). **Design choice.**
 - A session, every session of a user, or every session of a device can be revoked. Revocation takes effect at the next request and closes the session's live-update stream (`PRD-SEC-008`). Event: `access.session-revoked`.
@@ -106,13 +106,13 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 - A role is a named set of permissions, with a code unique in the Organisation and versions (`POL-02.01`; PRD "Words used").
 - KDPS starts from eleven editable templates: Owner, Store POS, Warehouse, Brand Manager, Accounts, Admin, Operations, HR, EBO staff, CA and Auditor (`POL-02.01`). A template is a starting set of permissions copied into a new role; its label grants nothing. The access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (3a) is the design starting point for each template's permissions; KDPS confirms them (V-01).
 - **Self-service role** (`PRD-ACS-022`, DEC-041, DEC-100). A role that holds self-service permissions holds nothing else, and every assignment of it has own-record scope (5.4). It is not one of the eleven templates.
-- A role change is a new version, prepared and then approved by an authorised person other than the preparer, effective from its start date (`POL-02.07`; module-map 6.2 flow A).
+- A role change after a new Organisation's setup step (9.11, `PRD-ACS-023`) is a new version, prepared and then approved by an authorised person other than the preparer, effective from its start date (`POL-02.07`; module-map 6.2 flow A).
 
 ### 4.3 Role assignments
 
 - A role assignment is a user or service identity, a role, a scope and effective dates. It is the only thing that grants access, except a stand-in grant, which gives only the authority it names for a limited time (section 10; `PRD-ACS-018`). A user may hold several assignments, and each applies only inside its own scope (`PRD-ACS-001`–`PRD-ACS-004`, DEC-001).
 - Assignments are effective-dated. Versions never overlap, and history is kept (`PRD-ACS-005`, `PRD-MOD-010`, `POL-02.06`). A version starts today or later, as for masters ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). **Design choice**; whether any master needs a back-dated start is OPEN there (GC2-7).
-- Every change, including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). To cut a person's access at once online, disable the user (2.1); that grants nothing, so it waits for no approval. Work already delegated to an offline counter ends at its bounded expiry (`PRD-SEC-008`, `PRD-OFF-003`). **Design choice.**
+- Every change after a new Organisation's setup step (9.11, `PRD-ACS-023`), including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). To cut a person's access at once online, disable the user (2.1); that grants nothing, so it waits for no approval. Work already delegated to an offline counter ends at its bounded expiry (`PRD-SEC-008`, `PRD-OFF-003`). **Design choice.**
 
 ## 5. Scope
 
@@ -156,7 +156,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 ### 7.1 The order
 
-Every request and every job step goes through steps 1 to 3, which are steps 1 and 3 of module-map 6.1. A command that takes locks also goes through step 4, which is step 6 of module-map 6.1. Sign-in and a user's actions on their own credentials and sessions (3.1, 3.2) are the exception: they need only step 1 once a session exists.
+Every request and every job step goes through steps 1 to 3, which are steps 1 and 3 of module-map 6.1. A command that takes locks also goes through step 4, which is step 6 of module-map 6.1. Sign-in and a user's actions on their own credentials and sessions (3.1, 3.2) are one exception: they need only step 1 once a session exists. A new Organisation's setup step (9.11) is the other.
 
 1. **Authenticate.** The session is in force, not locked and not Revoked, and the user is enabled; for a service identity, the identity is enabled and its credential is not revoked (`PRD-INT-001`, `PRD-ACS-017`, `PRD-SEC-008`, `PRD-SEC-018`).
 2. **Available.** `configuration` answers whether the operation is available here and now: the capability is on, the policy is Signed, the owning module's configured records are valid, and the activity is granted where one applies (`PRD-SEC-017`, `PRD-LIF-001`; module-map 4.4). Otherwise the request is refused with the blocking reason. This is the stage 1 exit check "an operation whose policy is not configured stays unavailable".
@@ -220,7 +220,7 @@ A higher authority is a different person whose limit covers the action on its va
 
 ### 9.5 Deciding
 
-- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default.
+- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default. How the first reason list is approved, when deciding needs a reason and a change to the reasons needs a decision, is OPEN (GC3-10).
 - Decide checks 9.3 again, that the request is still open, and that the document's current version is the one requested (`PRD-ACS-007`).
 - The decision records the approver, the time, the outcome, the reason, the evidence, the comment, the version decided, the value and its basis, the approved amount where the document states one, and the role assignment and limit version, or the stand-in grant, it relied on ([domain-model.md](../architecture/domain-model.md) 3.2). It is an entry and is never edited.
 - Then, depending on the document (module-map 6.2): a master version takes effect in the same transaction (flow A); a document posts in the same transaction; or a large document waits for its job (9.8).
@@ -268,7 +268,7 @@ A large document is approved by a click and posted later by a job, one at a time
 
 - Changes to roles, permissions, role assignments, limits, approval rules, allowlists and reasons are prepared, approved by an authorised person other than the preparer, effective-dated, and kept with their history (`POL-02.06`, `POL-02.07`; module-map 6.2 flow A).
 - Each writes an audit record and a permission-change access record ([numbering-and-audit.md](../platform/numbering-and-audit.md) 5.2; `PRD-SEC-007`).
-- How the first access of a new Organisation is approved, when nobody yet holds the authority to approve it, is OPEN (GC3-2).
+- A new Organisation's first Admin and its first approver of access changes are created together in one setup step, recorded and audited under a service identity, because no user of the Organisation can yet approve it. Every later change follows independent approval (`PRD-ACS-023`, DEC-101). The first Admin and the first approver are two different people, since an approver must differ from the preparer (`PRD-ACS-006`). The step runs once, while the Organisation has no user yet; it is the platform's own operation, so no role assignment authorises it, and its audit record names the service identity as the actor. **Design choice** of running it once and of how it is authorised.
 
 ## 10. Stand-ins
 
@@ -413,6 +413,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 17 | Bulk approval refuses an action type not on the allowlist; a failing item goes to individual review; Unknown values are never added as zero | `PRD-ACS-019` |
 | 18 | A stand-in grant expires by itself; a stand-in cannot approve their own preparation | `PRD-ACS-018` |
 | 19 | An access change approved by its preparer is refused | `POL-02.07` |
+| 19a | A new Organisation's setup step creates its first Admin and first approver once; a second run is refused; the next access change needs a different approver | `PRD-ACS-023` |
 | 20 | My work order, with Unknown exposure never treated as zero | `PRD-ACS-009`, `PRD-MOD-015` |
 | 21 | An exception raised after a rollback survives; a replay makes no second exception; closing waits for the resolution check | `PRD-EXC-002`, `PRD-INT-008` |
 | 22 | A service identity cannot decide an approval | `PRD-ACS-006`, `PRD-SEC-018` |
@@ -425,13 +426,15 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
 | GC3-1 | Who counts as the preparer of a version under approval? **Proposed:** every user who recorded a change in it, including the one who submitted it (9.1) | Business | Product owner; KDPS Owner (policy 2) | 1 live approvals | Who is barred from approving (`PRD-ACS-006`) |
-| GC3-2 | How is the first access of a new Organisation approved, when nobody yet holds the authority to approve access changes (`POL-02.07`)? **Proposed:** the platform operator records the first Admin and a first approver together, as one audited setup step under a service identity | Business | Product owner | 1 build | The setup of every Organisation |
-| GC3-3 | Before policy 2 is Signed, what session limits apply on `kdps-test`, so KDPS staff can sign in for imports and checks (DEC-071, `POL-02.18`)? | Business | Product owner; Admin validates (V-04) | KDPS side-by-side test | Whether KDPS users can sign in before policy 2 is Signed |
+| GC3-2 | Settled: one setup step, recorded under a service identity, creates the first Admin and the first approver of access changes (`PRD-ACS-023`, DEC-101; 9.11) | — | — | — | — |
+| GC3-3 | Settled: before policy 2 is Signed, `kdps-test` sessions use the values `POL-02.18` states (DEC-102; 3.3) | — | — | — | — |
 | GC3-4 | Must a reset of a lost authenticator or a forgotten password be approved by a second person (3.2)? | Business | KDPS Owner, Admin (policy 2) | 1 live use | The reset steps |
 | GC3-5 | The password rules, and after how many failed sign-ins attempts slow down or stop, for how long (3.1) | Business | Admin (V-04); product owner | 1 live use | Sign-in security settings |
 | GC3-6 | Which actions need a fresh authenticator code, and how long a fresh code lasts (`PRD-SEC-001`; 3.3) | Business | Product owner; KDPS Owner (policy 2) | 1 live use | Reauthentication prompts |
 | GC3-7 | Is a stand-in grant a permission change under `POL-02.07`, so a different person must approve it? **Proposed:** yes | Business | KDPS Owner (policy 2) | 1 live use | How a stand-in is granted |
 | GC3-8 | What due time, escalation rule and recipient apply to an overdue approval or task (`PRD-ACS-010`; 9.4, 11.3)? `POL-02.16` and V-03 cover exceptions only | Business | KDPS Owner, Admin (policy 2) | 1 live approvals | Escalation of approvals and tasks |
 | GC3-9 | May staff see their own employee record through self-service, and which fields of it (5.4)? `PRD-HRM-012` names targets and incentives only | Business | KDPS Owner, HR (policies 2 and 13) | 6 | The record types own-record scope covers |
+| GC3-10 | How is a new Organisation's first approve and reject reason list approved, when deciding needs a reason from that list (9.5, `POL-02.23`)? **Proposed:** a decision on a change to the reason list gives a free-text reason, since it cannot use the list it changes | Business | Product owner; KDPS Owner, Admin (policy 2) | 1 live approvals | The first approvals of every Organisation |
+| GC3-11 | Before policy 2 is Signed, how do KDPS staff get the role assignments they need on `kdps-test` for imports and checks, given that assignments are policy 2 values (`POL-02.11`) and gated actions stay disabled there (DEC-071, DEC-102)? | Business | Product owner | KDPS side-by-side test | Whether KDPS staff can do anything on `kdps-test` before policy 2 is Signed |
 
-**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4).
+**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4). GC3-2 (DEC-101, section 9.11); GC3-3 (DEC-102, section 3.3).
