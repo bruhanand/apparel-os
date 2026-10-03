@@ -67,7 +67,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | `merchandise` · parties | Party; agreement and its terms | 1 |
 | `exceptions` | Exception | 1 |
 | `finance` · books | Chart of accounts; account; cost-centre dimension; financial period; journal and lines; posting map; cost setting per book | 1 |
-| `finance` · tax rules | Goods classification; rate and value rule; registration applicability | 1 (shape) |
+| `finance` · tax rules | Goods classification; rate and value rule; registration applicability; price basis; rounding rule | 1 (shape) |
 | `stock` · ledger | Movement; receipt origin; piece; balance; coverage; acceptance; hold; reservation; cost pool; cost layer ([stock-ledger.md](../stock/stock-ledger.md)) | 1 (rules) |
 | `site-lifecycle` | Readiness record (1); opening manifest, switch record (4); closure record, relocation link, export (5) | 1, 4, 5 |
 | `merchandise` · PT | PT; PT revision and lines; costing profile; label job | 2 |
@@ -483,7 +483,7 @@ Every in-scope line and exit check of stage 1 in [phases.md](../../phases.md), a
 | Stage 1 exit check | What makes it testable |
 | --- | --- |
 | One physical Site with different business-unit books and registrations keeps correct mappings | 3.1; invariant 8 |
-| Shared golden cases for prices, discounts, allocation, tax and rounding pass on server and counter | [module-map.md](module-map.md) 4.2; detail in GC-7 |
+| Shared golden cases for prices, discounts, allocation, tax and rounding pass on server and counter | [module-map.md](module-map.md) 4.2; detail in [shared-calculations.md](../calculations/shared-calculations.md) (GC-7) |
 | Golden stock-and-posting scenarios pass under both formulas and both pool modes | 3.10, 3.11; stock-ledger section 11; the journals in [books-and-posting.md](../finance/books-and-posting.md) section 16 (GC-4) |
 | A backup restores with linked records and attachments | Identity convention (section 1); attachments in 3.9; detail in GC-9 |
 | An operation whose policy is not configured stays unavailable | 3.6; invariant 6 |

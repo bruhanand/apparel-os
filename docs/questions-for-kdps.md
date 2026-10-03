@@ -65,6 +65,8 @@
 44. **Offline working-set validity time.** How long may the till's cached prices, offers and tax versions be used offline before billing is blocked? (With Operations; see question 24.) · `POL-16.07`, `PRD-OFF-004` · V-66 · stage 4
 46. **Exchange and refused-return rules.** What happens on a cheaper replacement, are there any replacement-SKU restrictions, and what evidence does a refused return need? (With Operations.) · `POL-06.09`–`POL-06.11` · V-67 to V-69 · stage 4
 47. **Exception alerts.** Which alerts under `PRD-EXC-013` are on, and what are their thresholds and recipients? · `POL-02.25` · V-70 · stage 4
+55. **A manual discount on an offer item.** When an item already has an offer, may the cashier also give a manual discount on it, and is it taken before or after the offer? Until you say, the till refuses it. (With the Brand manager.) · `PRD-POS-003`, `POL-19.04`; no policy bullet yet · calculations design GC7-7 · stage 4
+56. **Settings on each offer.** For each offer, say whether it also applies to goods already marked down on a price list, and for a "buy X get Y" offer, whether the free items are the cheapest or the dearest ones. The till never guesses. Also check how the app reads each kind of offer: a flat amount comes off each item; a basket offer applies once the basket reaches its threshold; a "buy X get Y" offer repeats for every complete set; and when a rule lets two offers combine, it says whether the second applies to the price left after the first or to the full price. (The Brand manager proposes; the approver approves.) · `PRD-OFR-002`; no policy bullet yet · calculations design GC7-9 · stage 4
 
 ### Needed for stage 5 (money)
 
@@ -108,6 +110,9 @@
 13. **Brand-by-store profit timing (proposed).** Is "fifth working day of the month" an agreed goal, given allocation bases in `POL-09.20`? · PRD Business measures · DEC-050 · stage 5
 14. **Financial year dates.** On which dates does KDPS's financial year start and end? Bill numbers and other yearly number series restart with it. (With the CA.) · no policy bullet yet · numbering design GC5-1 · stage 1 live use; bills in stage 4
 15. **Accounting periods.** Inside the financial year, which periods does each set of books close and lock: months, or something else? Each journal falls in one period, and a locked period takes no new entry unless it is reopened for named corrections. (With the CA.) · `PRD-LED-009`, `PRD-LED-020` · books design GC4-1 · stage 2
+16. **Rounding the bill.** Should the amount a customer pays be rounded, for example to a whole rupee? If so, to what, and up, down or to the nearest? Which ledger takes the difference is part of question 3. (With the CA.) · policy 9; no policy bullet yet · calculations design GC7-4 · stage 4
+17. **Rounding a percentage discount.** When a percentage discount on an item comes to part of a paisa, how is it rounded? · policy 9; no policy bullet yet · calculations design GC7-5 · stage 4
+18. **Round-off and refunds.** When a rounded bill is returned in full, does the refund include the round-off? (With the CA.) · `PRD-RET-005` · calculations design GC7-6 · stage 4
 
 ## CA
 
@@ -130,6 +135,11 @@
 17. **Numbers on other tax documents.** Besides bills, which number format must credit notes for customer returns, and the tax documents that travel with goods moved between places, follow? (With Accounts.) · `POL-10.07`, `POL-10.11`, `PRD-TRF-023` · numbering design GC5-2 · stage 3 (movement documents); stage 4 (credit notes)
 18. **Approving the posting rules.** You and Accounts supply the ledger accounts and the rules for which account each kind of entry posts to, and approve them before use. Will you give your approval yourself in the app, or will Accounts record your signed approval? Should the person who approves always be different from the person who prepared them? · `POL-09.01`, `POL-09.11` · books design GC4-2 · stage 2
 19. **Fixing an entry posted to the wrong account.** If a posting rule turns out wrong after entries were made with it, the app reverses those entries and posts them again under the corrected rule, dated on the day of the fix. Should the fix instead go into the month of the original entry? (With Accounts.) · `POL-09.12` · books design GC4-3 · stage 5
+20. **Offer discounts spread over items.** When an offer gives one discount for several items (buy 2 get 1 free, or a discount on a basket), the app spreads it over those items in proportion to their price, so no item is billed at zero, and works out each item's GST on its share. Is that the correct GST treatment? · `PRD-POS-023`, `POL-10.02` · DEC-109, calculations design GC7-10 · stage 4
+21. **Do prices include GST?** Do the MRP on the tag and price-list prices include GST, so the app works the tax out of the price? (With Accounts.) · `POL-10.02` · calculations design GC7-1 · stage 4
+22. **Value slabs.** Where a GST rate depends on value, which value is compared with the slab: per piece or per line, before or after discounts, with or without tax? When a price that includes GST fits neither slab, or both, which rate applies? · `POL-10.02` · V-18, calculations design GC7-2 · stage 4
+23. **Rounding GST.** Is GST rounded on each line or on the whole bill, for each component or on the total, and up, down or to the nearest? Is the tax rounded, or the taxable value? (With Accounts.) · `POL-10.05` · calculations design GC7-3 · stage 4
+24. **GST components on a counter sale.** For each GST registration: does a counter sale carry GST, and which components, in which shares? · `POL-10.05`, `POL-10.06` · V-18, calculations design GC7-8 · stage 4
 
 ## Operations
 

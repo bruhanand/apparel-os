@@ -12,7 +12,7 @@ Implements these PRD sections: Module and data boundaries; Transaction and integ
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-6 to GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), [shared-calculations.md](../calculations/shared-calculations.md) (GC-7), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-6, GC-8 and GC-9. This document is GC-1.
 
 ---
 
@@ -78,7 +78,7 @@ flowchart TB
 | 2 | `merchandise` · parties | merchandise/PT | Suppliers, agents, ordering parties, invoicing parties, goods movers; brand and supplier agreements with effective-dated commercial terms | 1 |
 | 2 | `exceptions` | exceptions | Exception records and their history | 1 (the record); raised by every stage |
 | 2 | `finance` · books | finance | Chart of accounts, cost-centre dimensions, financial periods, journals, posting maps and rules, cost formula and cost-pool mode per book | 1 |
-| 2 | `finance` · tax rules | finance | Effective-dated goods classification, rate and value rules, registration applicability (`PRD-TAX-005`) | 1 (shape, for the golden cases); real values by 2 (policy 10) |
+| 2 | `finance` · tax rules | finance | Effective-dated goods classification, rate and value rules, registration applicability (`PRD-TAX-005`); the price basis and rounding rules the calculations read ([shared-calculations.md](../calculations/shared-calculations.md), GC-7) | 1 (shape, for the golden cases); real values by 2 (policy 10) |
 | 3 | `stock` · ledger | stock | Movements, balances, piece records, receipt origins, coverage and acceptance records, holds, reservations, cost pools and layers ([stock-ledger.md](../stock/stock-ledger.md)) | 1 (rules, synthetic data); live from 2 |
 | 4 | `merchandise` · PT | merchandise/PT | PT documents and revisions, costing profiles, label jobs | 2 |
 | 4 | `booking` | booking | Bookings, open-to-buy budgets, supplier confirmations, delivery expectations | 2; buying suggestions in 6 |
@@ -196,7 +196,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - Money is integer paise, or the configured minor unit of another enabled currency. Intermediate steps use decimal arithmetic with explicit rounding rules; never binary floating point (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`). The exact-cash shorthand becomes its declared amount before anything is stored (`PRD-MOD-016`).
 - Basket discounts are allocated across lines before tax and rounding (`PRD-POS-004`). A split-tender refund follows `PRD-RET-022`.
 - Shared golden cases prove the same result on server and counter (`PRD-ACP-018`). Incentive golden cases are completed in stage 6 ([phases.md](../../phases.md)).
-- Rounding and tolerance values are OPEN (V-11, `POL-09.24`; SL-2). The detailed design is GC-7.
+- Rounding and tolerance values are OPEN (V-11, `POL-09.24`; SL-2). The detailed design is [shared-calculations.md](../calculations/shared-calculations.md) (GC-7).
 
 ### 4.3 `access`
 
@@ -420,7 +420,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Reverse | The module that owns the source record | A linked reversal or correction. A posted entry is never edited (`PRD-LED-004`, `PRD-MOD-011`) | The period is locked, or reopened only for other corrections (`PRD-LED-020`) |
 | Lock a period; request and approve a reopening | Accounts, with authority; the reopening is approved by a different authorised person from the requester | Locks a period (`PRD-LED-009`). A reopening names the corrections it is for, and only their postings enter the period; it locks again once they have posted or the reopening is withdrawn (`PRD-LED-019`, `PRD-LED-020`) | — |
 | Maintain accounts, maps and rules | Accounts and the CA | Accounts and the CA supply the accounts and approve the framework and rules before activation (`POL-09.01`, `POL-09.11`). Versioned per Organisation and book; the applied version is kept with each posting (`POL-09.12`) | — |
-| Read tax rules | `calculations` callers | The classification, rate and value rules in force on a date (`PRD-TAX-005`, `POL-10.02`) | — |
+| Read tax rules | `calculations` callers | The classification, rate and value rules, registration applicability, price basis and rounding rules in force on a date, with their versions (`PRD-TAX-005`, `POL-10.02`; [shared-calculations.md](../calculations/shared-calculations.md)) | — |
 
 - Post knows event kinds and amounts. It knows nothing about stock. The stock ledger is one caller among several.
 - Post is idempotent on its source reference: replay never doubles a journal (`PRD-INT-008`).
@@ -715,11 +715,11 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-TRF-001`–`PRD-TRF-022`, `PRD-TRF-026` | `stock` · documents, with `supplier-returns` for `PRD-TRF-026` |
 | `PRD-TRF-023`–`PRD-TRF-025` | `finance` · operations (statutory movement documents), with `stock` · documents |
 | `PRD-DMG-001`–`PRD-DMG-017` | `stock` (ledger and documents) |
-| `PRD-POS-001`–`PRD-POS-022` | `pos`, with `numbering` for `PRD-POS-020` and `finance` · operations for `PRD-POS-019` |
-| `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023` | `pos` |
+| `PRD-POS-001`–`PRD-POS-024` | `pos`, with `numbering` for `PRD-POS-020` and `finance` · operations for `PRD-POS-019` |
+| `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-024` | `pos` |
 | `PRD-EBO-001`–`PRD-EBO-008`, `PRD-EBO-010`, `PRD-EBO-011` | `ebo-imports` |
 | `PRD-EBO-009` | `partners` |
-| `PRD-OFR-001`–`PRD-OFR-007` | `offers` |
+| `PRD-OFR-001`–`PRD-OFR-007`, `PRD-OFR-021` | `offers` |
 | `PRD-OFR-008`–`PRD-OFR-020` | `supplier-returns` |
 | `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-019`, `PRD-LED-020` | `finance` · books |
 | `PRD-LED-006`, `PRD-LED-014`–`PRD-LED-018` | `stock` · ledger, with `finance` · books for the formula and pool settings |
@@ -795,7 +795,7 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; applying the SL-23 and MM-6 baselines (DEC-105): written in [books-and-posting.md](../finance/books-and-posting.md) |
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail |
-| GC-7 Shared calculations | `calculations` (4.2) | Functions and golden cases |
+| GC-7 Shared calculations | `calculations` (4.2) | Functions, tax rule records and golden cases: written in [shared-calculations.md](../calculations/shared-calculations.md) |
 | GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else |
 | GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else |
 
