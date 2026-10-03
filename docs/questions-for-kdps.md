@@ -22,6 +22,7 @@
 7. **How long to keep records.** Confirm legal retention duration for each record class and any current legal holds. (Check with the CA.) · `POL-18.05` · V-13
 42. **Who approves what else.** Name the people or roles who hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs, supplier-return steps, transfers and count differences above the Store Manager's limit, and say whether the Owner approves losses or only sees them. · `POL-02.07`, `POL-02.10`, `PRD-TRF-005` · UI blueprint open item 28 · stage 1 live approvals
 45. **Approve and reject reasons.** Which reasons may an approver pick when approving or rejecting? · `POL-02.23`, `PRD-ACS-010` · stage 1
+49. **Who says a Site is ready.** Before a Store, warehouse or office may receive, move or sell goods in the app, someone must approve that it is ready. Who approves this for each Site and for each business unit in it? · `PRD-LIF-001`, `PRD-LIF-002`; no policy bullet names the approver yet (policy 2) · module map MM-8 · stage 1 live use
 
 ### Needed for stage 2 (goods in)
 

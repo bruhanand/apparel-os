@@ -7,6 +7,7 @@ Each document starts by naming the PRD sections and the requirement and policy I
 | Folder | What it holds |
 | --- | --- |
 | [access/](access/) | [personas.md](access/personas.md): the 14 personas, how they combine, and the earlier-code crosswalk. |
+| [architecture/](architecture/) | [module-map.md](architecture/module-map.md): the modules, what each owns, their interfaces, events and transaction boundaries. [domain-model.md](architecture/domain-model.md): the records, their identities, lifecycles and invariants. Every other design and all code follow them. |
 | [platform/](platform/) | [deployment.md](platform/deployment.md): test hosting on Railway. Production hosting is not designed yet. |
 | [stock/](stock/) | [stock-ledger.md](stock/stock-ledger.md): movements, holds, cost pools, counts and locking. Every stage posts stock through it. |
 | [ui/](ui/) | Screens, design language and design system. Start with [ui/README.md](ui/README.md). |
