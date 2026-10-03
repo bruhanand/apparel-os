@@ -8,9 +8,9 @@ This file guides AI coding agents working in this repository. `CLAUDE.md` is a l
 
 Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. The first customer is KDPS Lifestyle Pvt. Ltd. (KDPS).
 
-The repository holds documents and one tool, the doc checker (see "Checking the documents"). There is no product code, package manifest, build, lint or test command yet. Do not invent commands; add them here once the workspace exists.
+The repository holds the documents, the doc checker (see "Checking the documents") and the code workspace skeleton (see "Code workspace"). There is no business code yet. Use only the commands listed there; do not invent others.
 
-The planned toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier.
+The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with the first real screen.
 
 ## Document order
 <!-- deps: none — contributor process; restates docs/README.md order -->
@@ -107,6 +107,7 @@ The pre-commit hook in `.githooks/` runs the checker. Enable it once per clone w
 - Test hosting (Railway environments, services, one origin, what the test setup never does) is in `docs/design/platform/deployment.md`. Production hosting is not designed yet.
 - The stock ledger (movements, the five separate stock facts, holds and reservations, cost pools and layers, counts, locking, golden scenarios) is in `docs/design/stock/stock-ledger.md`. Every stage posts stock through it.
 - The module map (modules, what each owns, interfaces, events, transaction boundaries, where every PRD ID lives) is in `docs/design/architecture/module-map.md`. The domain model (records, identities, lifecycles, invariants, approval boundaries) is in `docs/design/architecture/domain-model.md`. Every other design and all code follow them. Their open questions are MM-n and DM-n.
+- The business structure and masters (legal entities, registrations, books, Sites, Stores, business units, locations, the place tree for access; brands, SKUs, external codes, units and packs, tracking profiles, parties, agreements; their tables) are in `docs/design/masters/structure-and-masters.md` (GC-2). Its open questions are GC2-n.
 - The UI was first drawn for RetailsOps, an earlier version of this product in another repo. Its codes (G-, OQ-, R-, BP-) and decisions are not requirements; anything still wanted belongs in the PRD or the policies.
 
 
@@ -116,6 +117,36 @@ The pre-commit hook in `.githooks/` runs the checker. Enable it once per clone w
 Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Stage 1 fixes the stock and money recording rules; each later live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; Hindi for stages 1 to 5 arrives in stage 5 and for stage 6 in stage 6; WhatsApp and SMS messaging arrive in stage 5.
 
 During the side-by-side test, the earlier POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
+
+## Code workspace
+pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the one `package.json` names.
+
+| Path | What it holds |
+| --- | --- |
+| `apps/server` | The NestJS modular monolith. `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
+| `apps/web` | The React web app (Vite, Tailwind CSS) |
+| `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
+| `packages/schemas` | Shared Zod schemas for the API |
+| `packages/ui` | Shared UI helpers for shadcn/ui |
+| `tools/module-check` | The module boundary check |
+
+| Command | What it does |
+| --- | --- |
+| `pnpm install` | Installs dependencies. Run it once after cloning |
+| `pnpm build` | Builds every package |
+| `pnpm lint` | Type-aware ESLint |
+| `pnpm typecheck` | Strict TypeScript |
+| `pnpm test` | Unit tests (Vitest) |
+| `pnpm test:integration` | Tests against real PostgreSQL through Testcontainers. Needs Docker |
+| `pnpm check:modules` | The module boundary check. Runs without an install |
+| `pnpm format`, `pnpm format:check` | Prettier |
+
+- Another module is imported only through its `index.ts`, and calls go to a lower tier, or to the same tier only where module-map sections 4 and 5 list the call (`PRD-MOD-002`, `PRD-SEC-015`; `module-map.md` sections 2 and 3). `pnpm check:modules` enforces both; its tier table is in `tools/module-check/check.mts` and changes with the module map.
+- Every constructor injection names its token with `@Inject(...)`; nothing relies on decorator metadata.
+- Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
+- Code and tests cite the PRD or policy ID where they enforce a rule.
+- The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
+- Not written yet: the full house rules for code (API error shape, the idempotency key on writes, migration roles, test plan). See `docs/reports/gaps-before-code.md` section 3.
 
 ## Stack
 <!-- deps: prd.md#stack — restates the PRD stack table -->
