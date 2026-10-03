@@ -924,3 +924,39 @@
 - **Choice.** Flexible. New `PRD-ORG-021`: several Stores may trade at one Site at the same time; a Store's link to its Site is effective-dated; a brand counter inside the Organisation's own Store is a business unit of that Store; the shop-in-shop Store format is the Organisation's own Store trading inside another business's premises. New `PRD-LIF-029`: on relocation the Store keeps its code, name and history, and its Site link moves to the new linked Site from the relocation date. How a relocating Store's business units move to the new Site is left to the stage 5 relocation design (OPEN; product owner).
 - **Why.** It fits how stores are laid out, and keeps a Store's sales and history together when it moves.
 - **Changed.** New `PRD-ORG-021` and `PRD-LIF-029` in `prd.md`; the "Words used" entry for Shop-in-shop, which read "A brand counter operating inside a larger store", now matches the choice; `domain-model.md` section 3.1 and DM-3 (settled); `structure-and-masters.md`.
+
+## DEC-097 — An approval waits, unused, for its posting job; a failed job keeps it
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** SL-22 (stock ledger), MM-4 and MM-5 (module map, 3 Oct 2026)
+- **Question.** A large document is approved by a click and posted later by a queued job, one at a time per accounting book (stock-ledger 10.6). Approval evidence commits with the stock and money records. Where are the approver's identity and the approval time held between the click and the job, and what happens to the approval if the job fails? Which design settles it: the financial posting design (GC-4) or the access design (GC-3)?
+- **Options.** Keep the approval: the click commits the approval decision with its audit record and a request to post, with no stock or money effect; the job locks the decision with the document, rechecks it, posts, and records in that same transaction that this decision authorised this posting; a failed job leaves the decision recorded and unused · The approval lapses when the job fails, and the document always returns for approval.
+- **Choice.** Keep the approval. The record that links the decision to its posting, written in the job's transaction, is the approval evidence that commits with the stock and money records (`PRD-INT-004`). A decision authorises at most one posting. A retry needs no new approval only while the document version is unchanged and its value on its basis is still within the decision's limit and the approved amount; otherwise the document returns for renewed approval, as DEC-066 already requires. The access design (GC-3) settles it.
+- **Why.** A job that fails for a technical reason, such as a lock wait, should not throw away a valid approval. The recheck under the locks still guards every change.
+- **Changed.** No PRD or policy bullet changed. `stock-ledger.md` 10.6 and SL-22 (settled); `module-map.md` 6.2 flow E, 6.3, 11.3, MM-4 and MM-5 (settled); `domain-model.md` 3.2; the new access design `access-and-approvals.md`.
+
+## DEC-098 — A selected Store covers its business units, including ones added later
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** GC2-8 (structure and masters, 3 Oct 2026)
+- **Question.** Selected-member scope stays fixed, and a selected Site is the one exception: it covers every Store and business unit at it, including ones added later. Does a role assignment scoped to one Store likewise cover business units added to that Store later, such as a new brand counter?
+- **Options.** Yes, the same as a Site: a selected Store covers every business unit of it, now and later · No: a selected Store covers only the units it had when the assignment was made, and a new unit needs an edited assignment.
+- **Choice.** Yes. `PRD-ACS-021` gains one sentence: a selected Store covers every business unit of it, including ones added later. A business unit selected on its own still covers only itself.
+- **Why.** Store staff work the whole Store. A new brand counter inside it should not need every assignment edited.
+- **Changed.** `PRD-ACS-021` (one sentence added; ID kept). `structure-and-masters.md` 3.9 and GC2-8 (settled); `domain-model.md` 3.2; the new access design `access-and-approvals.md`.
+
+## DEC-099 — No message channel before stage 5
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** MM-9 (module map, 3 Oct 2026)
+- **Question.** `phases.md` brings WhatsApp and SMS in stage 5 and names no stage for email. Do stages 1 to 4 need any message channel, for one-time passwords at sign-in or for alerts to responsible users?
+- **Options.** None before stage 5: sign-in uses the authenticator-app code required by `POL-02.17`, which sends nothing; alerts in stages 1 to 4 reach people as work items in My work and on screens; email, WhatsApp and SMS adapters all arrive in stage 5 · An email adapter from stage 1 for alerts and sign-in help, with WhatsApp and SMS in stage 5.
+- **Choice.** None before stage 5. In stages 1 to 4 the second factor at sign-in is the authenticator-app code; no one-time password is sent (`PRD-SEC-001`). Alerts to responsible users reach them in My work and on screens (`PRD-EXC-013`). The notifications module has no channel adapter before stage 5, and email arrives in stage 5 with WhatsApp and SMS.
+- **Why.** The authenticator app needs no channel, and the one inbox already carries tasks, exceptions and approvals. Fewer outside systems to build and test early.
+- **Changed.** No PRD or policy bullet changed. `phases.md` ("How the stages are cut"; stage 5 scope); `module-map.md` 2.2, 4.9 and MM-9 (settled); the new access design `access-and-approvals.md`; `AGENTS.md` ("Delivery").
+
+## DEC-100 — Own-record self-service has its own role
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** DEC-041 open item; module map 4.3; `personas.md` open items
+- **Question.** DEC-041 grants self-service only through a role assignment scoped to the person's own records, and left open which template or assignment carries it. One assignment's action is never combined with another assignment's scope.
+- **Options.** A separate self-service role, whose assignments have only own-record scope, held beside a person's work roles · Self-service permissions inside each work role, so one assignment holds both a place scope and an own-record scope.
+- **Choice.** A separate role. New `PRD-ACS-022`: grant self-service only through a role assignment whose only scope is the person's own records; that assignment covers no legal entity, place or brand, and an assignment scoped by legal entity, place or brand never grants self-service. The eleven KDPS templates are unchanged. Which people hold the self-service role stays with KDPS (V-01).
+- **Why.** Each assignment keeps one kind of scope, so own records never widen a work scope, and a work scope never reaches another person's own records through self-service.
+- **Changed.** New `PRD-ACS-022` in `prd.md`. `personas.md` (sections 1 and 4, open items); `module-map.md` 4.3; `domain-model.md` 3.2; `structure-and-masters.md` 3.9; the new access design `access-and-approvals.md`.

@@ -309,7 +309,8 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ACS-018` Grant a stand-in only named, scoped, time-limited authority with automatic expiry. A stand-in cannot approve their own preparation.
 - `PRD-ACS-019` For bulk approval, show the selected items and total, recheck each item's scope, limit, state and independent-approval requirement, and route exceptions individually. Enable only explicitly allowed action types.
 - `PRD-ACS-020` A user belongs to one Organisation. A person who works for several Organisations, such as a CA or an Auditor, holds a separate user in each; no login, session or role assignment crosses Organisations.
-- `PRD-ACS-021` Scope a role assignment's places by whole Sites, or by single Stores or business units within a Site. A selected Site covers every Store and business unit at it, including ones added later. Self-service uses a scope limited to the person's own records.
+- `PRD-ACS-021` Scope a role assignment's places by whole Sites, or by single Stores or business units within a Site. A selected Site covers every Store and business unit at it, including ones added later. A selected Store covers every business unit of it, including ones added later. Self-service uses a scope limited to the person's own records.
+- `PRD-ACS-022` Grant self-service only through a role assignment whose only scope is the person's own records. That assignment covers no legal entity, place or brand; an assignment scoped by legal entity, place or brand never grants self-service.
 
 ## Merchandise and identifiers
 
