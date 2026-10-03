@@ -186,7 +186,7 @@
 - **Options.** Infer terms, accounts or costing from examples · Set workflow ownership and evidence rules while retaining verified current policy and keeping actual terms open.
 - **Choice.** Use signed brand agreements for commercial terms; Booking proposes material booking changes and cancellations for authorised approval; Booking prepares buying budgets, Accounts checks, and the Owner approves. Operations proposes write-offs/disposals for independent cost-limit approval with Accounts reviewing value. Name Booking approvers by Site and brand for resolved wrong/unknown goods. Start from the current CA-approved chart, mappings, cost method and pool; verify them and do not switch methods. CA and Accounts validate real examples, framework, goods-in-transit postings, tax mappings and tolerances. Apparel and footwear use piece IDs; other categories require explicit selection.
 - **Why.** Product-owner choices establish safe process without fabricating contracts, accounts, legal facts, rates or thresholds.
-- **Changed.** `POL-04.09`, `POL-05.09`–`POL-05.10`, `POL-09.21`–`POL-09.25`, `POL-10.08`, `POL-17.10`–`POL-17.11`; stage 2 questions.
+- **Changed.** `POL-04.09`, `POL-05.09`–`POL-05.10`, `POL-09.21`–`POL-09.24`, `POL-10.08`, `POL-17.10`–`POL-17.11`; stage 2 questions. (`POL-09.25` was set by DEC-021; see DEC-081.)
 
 ## DEC-019 — Freeze counted stock and require approved variance
 
@@ -226,6 +226,8 @@
 
 ## DEC-023 — Piece tracking becomes binding at each Store's switch
 
+> **Follow-up (DEC-067):** Live PRD text now uses "side-by-side test" and Words used defines Switch and Earlier POS; this entry keeps its original wording.
+
 - **Date:** 2 Oct 2026 · **Decided by:** product owner · **Report item:** review of DEC-017 to DEC-022, finding 1
 - **Question.** Piece-tracked goods must be sold by piece ID (`PRD-MER-016`), but the parallel-run import (`PRD-LIF-013`) and EBO brand-software imports (`PRD-EBO-005`) report sales by barcode or SKU. Which piece was sold is unknown.
 - **Options.** Piece tracking binds at each Store's switch; before it, imports change SKU quantity only · Imports change SKU quantity and leave an unresolved piece until the next count.
@@ -241,6 +243,7 @@
 - **Choice.** Shadow stock. At the start of the run, load the earlier POS's SOH as each Store's shadow stock. Imported sales reduce that Store's official stock of the SKU first, then its shadow stock, so goods received during the run and sold by the earlier POS do not show as a loss at the switch. Imported returns add to shadow stock. Shadow stock is never official stock, value, PT coverage or sellable stock. The verified switch count replaces it, and every difference is reported.
 - **Why.** Drift is caught every day, not on switch day, without making unverified quantities official.
 - **Changed.** PRD "Words used": new Shadow stock; new `PRD-LIF-024`; `PRD-LIF-014`; `phases.md` stage 2 and switch-over.
+- **Follow-up (`DEC-067`).** Shadow stock was superseded by `DEC-030`. Live rule text now uses **side-by-side test** and **Earlier POS**, not "parallel run".
 
 ## DEC-025 — Customer credit goes live in stage 5
 
@@ -271,6 +274,7 @@
 - **Choice.** For testing: Railway runs the NestJS server, its pg-boss jobs and PostgreSQL; Vercel serves the web app and the counter PWA. Testing here means synthetic data. Still OPEN for the product owner: hosting for the KDPS parallel run and production; file storage provider; how the in-store local helper and the Tally local gateway reach the server.
 - **Why.** Quick to set up for building and testing; the stack itself does not change.
 - **Changed.** PRD "Technical platform › Stack": new Hosting row; `AGENTS.md` stack table; alignment report 4.15.
+- **Follow-up.** `DEC-028` superseded the Vercel split for KDPS testing. Helper and Tally gateway connectivity is **OPEN** in `deployment.md` D-6 (design proposal only; product owner, `DEC-070` batch).
 
 ## DEC-028 — Run the KDPS side-by-side test on Railway; switch Stores only on production hosting
 
@@ -291,7 +295,7 @@
 - **Options.** Ask KDPS to confirm each choice · Record that they were already agreed.
 - **Choice.** Record it. DEC-017 to DEC-022 were finalised by the product owner together with a KDPS representative. Those entries stay as written; this entry corrects their "Decided by". The representative's name is OPEN until the product owner adds it. Each policy stays Open until it is signed in its "Signed by, date" line.
 - **Why.** The log must show who agreed each KDPS choice.
-- **Changed.** Decision log only; the alignment report's summary line.
+- **Changed.** Decision log only; the alignment report's summary line. The representative's name is tracked as V-65 in the alignment report (`DEC-085`).
 
 ## DEC-030 — The old POS stays outside the app's stock
 
@@ -310,6 +314,7 @@
   - `PRD-LIF-013`, `PRD-LIF-014` and `PRD-MER-017` reworded. The PRD IDs note lists the retired ID.
   - `POL-14.01`: "after the parallel run's stock and sales reconcile" → "after the side-by-side test's go/no-go checks pass".
   - `phases.md`: stage 2, "Testing and switch-over" and the go/no-go pass marks.
+- **Follow-up (`DEC-067`).** Retired **parallel run** / **test run** in live PRD and policy wording in favour of **side-by-side test** and related Words used entries.
 
 ## DEC-031 — Cost rules: moving average, late cost changes, outflows
 
@@ -370,3 +375,516 @@
 - **Choice.** Swap with approval. An approver links A to the movement that wrongly named it. A correction record swaps A with the piece of the same SKU that actually left. A comes back with its own history, PT coverage and cost; the bill or other document never changes. With no matching missing piece, or a different SKU, A is held and an exception is raised.
 - **Why.** A keeps the history and PT it already has, so it needs no new PT before it can be sold, and the record shows what really left.
 - **Changed.** New `PRD-STK-015`.
+
+## DEC-036 — Transfers: only a quantity increase is material
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-03 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-TRF-010` requires renewed approval for changed items, increased quantity or a changed destination, but `POL-02.12` and `POL-05.03` treated any quantity change as material. Is a cut to an approved transfer a new approval?
+- **Options.** A: the PRD wins; narrow the policies for transfers only (an increase is material, a reduction is not) · B: change `PRD-TRF-010` so a reduction before dispatch also needs renewed approval.
+- **Choice.** A. For transfers only, an increase in quantity, a change of item or a change of destination is material; a reduction before dispatch is not. Other actions keep "any quantity change" as material. A smaller dispatch leaves the remainder reserved (`PRD-TRF-010`). No PRD text changes.
+- **Why.** It fixes the lower document to match the higher one and touches no PRD rule.
+- **Changed.** `POL-02.12`, `POL-05.03`.
+
+## DEC-037 — Exception routing uses POL-02.16 alone
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-04 (decision pack, 3 Oct 2026)
+- **Question.** `POL-02.16` routes stock to Operations, money to Accounts and supplier matters to Booking, but `POL-03.05` added Warehouse and `POL-16.05` added Store Manager as exception owners.
+- **Options.** A: keep `POL-02.16` as the one routing home and point `POL-03.05` and `POL-16.05` at it · B: add Warehouse and Store Manager to `POL-02.16` as routing targets.
+- **Choice.** A. `POL-02.16` is the only routing home. `POL-03.05` and `POL-16.05` read "owner as routed under `POL-02.16`". `POL-02.16` and `PRD-REC-010` are unchanged. Warehouse and Store Manager get no exception-owner role until the product owner says so. Owner names and due times stay OPEN (KDPS Owner, V-03; blocks stage 1 exception routing and stage 2 source conflicts).
+- **Why.** One home is simpler and invents no new owner role.
+- **Changed.** `POL-03.05`, `POL-16.05`.
+
+## DEC-038 — Day-close cash variance follows PRD-CSH-011
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-47 (decision pack, 3 Oct 2026)
+- **Question.** `POL-02.13` said the Store Manager approves within a limit and Accounts above it, but no decision entry records that split or a KDPS source for it (`DEC-008`, `DEC-020`, `DEC-026`). `PRD-CSH-011` is role-neutral.
+- **Options.** A: reword `POL-02.13` to follow `PRD-CSH-011` · B: keep `POL-02.13` and log the Store Manager and Accounts split with its source (only if the product owner confirms the source).
+- **Choice.** A, because no KDPS source for the split is confirmed. `POL-02.13`: within the configured cash-variance tolerance, the approver set for that tolerance approves; above it, a higher approver approves and the difference becomes an owned exception; no difference is written off automatically. Tolerances, approver sets and named approvers are OPEN (KDPS Owner and Accounts, V-38; blocks stage 4 day close). The `DEC-026` statement that Accounts is "a KDPS value already in `POL-02.13`" no longer holds.
+- **Why.** The policy must not carry a role split that no decision or KDPS source backs.
+- **Changed.** `POL-02.13`; `questions-for-kdps.md` item 25; `personas.md` (P-ACC and P-STM approval notes).
+
+## DEC-039 — No-bill return limits use documented valuation
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-55 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-ACS-015` gave bill value as the limit basis for no-bill returns, which have no bill. `POL-07.06` says use documented, evidenced valuation, not MRP; `PRD-ACS-016` says unknown value is never zero.
+- **Options.** A: bill value for discounts and bill-backed refunds, documented valuation for no-bill returns · B: limit no-bill returns by quantity and keep valuation only for store credit.
+- **Choice.** A. `PRD-ACS-015`: bill value for discounts and bill-backed refunds; documented valuation under the no-bill policy for no-bill returns; if no valuation is accepted the value is unknown and `PRD-ACS-016` applies. `POL-07.06` cross-refers to it. Partly supersedes `DEC-009` for no-bill returns only. The valuation method and limit amount stay OPEN (KDPS Owner, V-02; blocks stage 4 returns).
+- **Why.** A valuation is needed anyway to price the store credit or exchange, so the limit can use it.
+- **Changed.** `PRD-ACS-015`, `POL-07.06`.
+
+## DEC-040 — Phone and WhatsApp approvals need POL-02.22
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-57 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-ACS-012` binds approval links to the exact record version, but no `POL-02` bullet or PRD policy-2 row says which action types may use them (`POL-02.14` is only the daily summary).
+- **Options.** A: add a new bullet `POL-02.22` with an allowlist and add the item to the PRD policy-2 row · B: add no bullet and keep question 31 (V-60) as the only home.
+- **Choice.** A. New `POL-02.22`: phone and WhatsApp approval links only for explicitly allowlisted action types. The allowed types are OPEN (KDPS Owner, V-60; blocks stage 5). The PRD policy-2 row lists them. Question 31 and B-8 point at `POL-02.22`.
+- **Why.** Nothing is on by default (`PRD-SEC-017`), and a policy-dependent action needs a signed home before it goes live.
+- **Changed.** New `POL-02.22`; PRD "Required policy configuration" policy-2 row; `questions-for-kdps.md` item 31; `alignment-report.md` B-8 and V-60.
+
+## DEC-041 — Self-service via role assignment only
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-09 (decision pack, 3 Oct 2026)
+- **Question.** `personas.md` said staff self-service "comes with an employee record", but `PRD-ACS-002` and `PRD-ACS-003` say only role assignments grant access.
+- **Options.** A: self-service is a permission on a role assignment, limited to the person's own records; fix the design text · B: add an employee-record baseline to the PRD.
+- **Choice.** A. Self-service is granted only through a role assignment scoped to the person's own records. No PRD or policy change. Which template or assignment carries it is OPEN (product owner; blocks stage 1 access and stage 6 HRMS self-service).
+- **Why.** The PRD already says it, so only the lower document changes.
+- **Changed.** `personas.md` (section 4 "Every employee" row, open items); `ui-blueprint.html` (self-service note).
+
+## DEC-042 — Partner users and service identities in the PRD
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-79 (decision pack, 3 Oct 2026)
+- **Question.** `personas.md` and `design-language.md` 6C drew partner users and service identities as settled, but `PRD-FRN-001`, `PRD-ACS-002`, `PRD-SEC-007` and `PRD-INT-007` do not name them.
+- **Options.** A: confirm the design reading in the PRD, with no new persona · B: keep both provisional and OPEN in the design.
+- **Choice.** A. Partner staff are users who hold Store personas on their authorised Stores only, with statement and ledger access from role assignments (`PRD-FRN-007`). Service identities are non-human actors with their own audit identity, scoped credentials and least-privilege access, and no operator screens (`PRD-SEC-018`). No persona is added. What partners see in statements and ledgers stays OPEN (KDPS, policies 2 and 12; stage 5).
+- **Why.** The reading fits `PRD-ACS-002`, and stage 1 needs service identities for integrations and audit.
+- **Changed.** New `PRD-FRN-007` and `PRD-SEC-018`; `personas.md` (section 4 partner and service-identity rows, X-SVC row) and `design-language.md` 6C Partner now cite them.
+
+## DEC-043 — Higher authority uses the limit ladder
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** C-07 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-TRF-005` requires "independent higher-authority approval", while `POL-02.07` and `PRD-ACS-006` say only "a different authorised person". Nothing defines "higher".
+- **Options.** A: "higher" means a different person whose authority covers the transfer on its cost basis, using the existing limits (`PRD-ACS-015`, `POL-02.09`) · B: a set rank above the preparer's role, order OPEN with the KDPS Owner.
+- **Choice.** A. Higher authority is a different person whose approval limit covers the action on its value basis. New "Higher authority" row in the PRD "Words used"; `PRD-TRF-005` is unchanged; `POL-02.07` adds a transfer clause. No ranking is invented. Limits and approvers stay OPEN (KDPS Owner, V-02; blocks stage 1 live approvals and the stage 3 transfer flow).
+- **Why.** It reuses the limit ladder that already exists.
+- **Changed.** PRD "Words used" (new Higher authority row); `POL-02.07`; `personas.md` (P-OPS approval note); `alignment-report.md` E-8.
+
+## DEC-044 — Stage 1 fixes the recording rules; later stages record from their first live operation
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-01 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-STG-002` says each stage records its stock and money effects "from the start"; `phases.md` and `AGENTS.md` (Delivery) say "from its first live/enabled operation", and the `phases.md` "from day one" headings sit on stage 1 ("None are live") and stage 5 ("No new kinds").
+- **Options.** A: reword `PRD-STG-002` to "from its first enabled operation" · B: leave the PRD as it is, read it with its stage table, and reword `phases.md` and `AGENTS.md` to match.
+- **Choice.** B. `PRD-STG-002` is read as: stage 1 fixes the stock and money recording rules; each later live operational stage records its effects from its first enabled operation; stage 5 extends those records into full accounting. No PRD or policy text changes. No value is invented.
+- **Why.** The PRD already works when read with its stage table, and a lower document is fixed to match a higher one.
+- **Changed.** `phases.md` (stage 1 "Stock and money records" paragraph); `AGENTS.md` (Delivery sentence). No PRD or policy change.
+
+## DEC-045 — "Needed by stage" means the earliest stage any value is needed
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-10 (decision pack, 3 Oct 2026)
+- **Question.** The PRD "Required policy configuration" table and the `kdps-policies.md` table say policies 2, 4 and 9 are "needed by 1", but some of their values are needed at stages 2, 3 and 4 in the alignment report.
+- **Options.** A: add one sentence to the table note in the PRD and in `kdps-policies.md` saying "Needed by stage" is the earliest stage at which any value of the policy is needed · B: split the rows for policies 2, 4 and 9 per value, using only stages already in the V-items.
+- **Choice.** A. "Needed by stage" is the earliest stage at which any value of that policy is needed. Each value's own stage stays in the alignment report (section 5). Table rows and stage numbers are unchanged; no value is added.
+- **Why.** It is a small wording fix, and copying per-value stages into the PRD would let them drift from the report.
+- **Changed.** `prd.md` (note under "Required policy configuration", no ID); `kdps-policies.md` (note above the policy table, no ID).
+
+## DEC-046 — Statutory applicability: stage named for each part
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-12 (decision pack, 3 Oct 2026)
+- **Question.** The PRD Statutory applicability row and `kdps-policies.md` table row 10 read "2; e-invoice by 4, TDS by 5, payroll by 6", so movement documents and invoice-number format read as stage 2, while `phases.md` puts movement documents at stage 3 and V-40 and CA question 4 put the bill-number format at stage 4.
+- **Options.** A: name the stage for each part in the PRD row and policy row, using stages already in the documents · B: keep "2" for these parts and change the lower documents to stage 2.
+- **Choice.** A. Registration, goods/rate classification and sale-or-return tax stay at stage 2; movement documents by stage 3; invoice-number format and e-invoice by stage 4; e-way creation by stage 5; TDS by stage 5; payroll by stage 6. Any different stage for a part is OPEN (owner: product owner) until named. `POL-10.07` text is unchanged.
+- **Why.** The bill-number format is used only when a bill is issued in stage 4, so asking the CA for it at stage 2 adds no safety.
+- **Changed.** `prd.md` (Statutory applicability row of "Required policy configuration"); `kdps-policies.md` (table row 10).
+
+## DEC-047 — Old-POS imports are not incentive evidence
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-23 (decision pack, 3 Oct 2026)
+- **Question.** `phases.md` stage 6 let incentives use sales evidence "from the parallel-run import", but `PRD-LIF-014` and `PRD-LIF-010` limit earlier-POS data to checking and reports, and `PRD-HRM-011` names only POS and approved EBO evidence.
+- **Options.** A: fix `phases.md` so incentives use stage 4 bills or approved EBO imports only · B: allow old-POS data to feed incentives, which needs changes to `PRD-LIF-014`, `PRD-LIF-010` and `PRD-HRM-011` and a policy home.
+- **Choice.** A. Incentives need sales evidence from stage 4 bills or approved EBO imports (`PRD-HRM-011`). Old-POS imports are not incentive evidence. No PRD or policy text changes.
+- **Why.** Paying incentives is a money effect, and A follows the PRD without inventing anything.
+- **Changed.** `phases.md` (stage 6, "Order inside the stage"). No PRD or policy change.
+
+## DEC-048 — Business measures are recorded during the side-by-side test, with no duration
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-42 (decision pack, 3 Oct 2026)
+- **Question.** The PRD "Business measures" intro said each measure's present value is recorded "during the first month of the test run", which writes a duration into the PRD while the run length is OPEN (KDPS Owner, before the side-by-side test; questions-for-kdps.md KDPS Owner 38).
+- **Options.** A: reword to "during the side-by-side test", with no duration · B: keep a measuring window and say its length is set by the KDPS Owner and stays OPEN.
+- **Choice.** A. The present value of each measure is recorded during the side-by-side test. The PRD sets no duration. The run length stays OPEN (owner: KDPS Owner; blocks the stage 2 test run).
+- **Why.** It is shorter and cannot go wrong if the run is shorter than a month.
+- **Changed.** `prd.md` ("Business measures" intro sentence, no ID). No policy change.
+
+## DEC-049 — Go/no-go checks move into policy 14
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-43 (decision pack, 3 Oct 2026)
+- **Question.** `POL-14.01` switches a Store "after the side-by-side test's go/no-go checks pass", but only `phases.md`, which sets delivery order only, defines those checks, and "serious exception" has no meaning in the PRD.
+- **Options.** A: add a new policy 14 bullet naming the three checks, mark the rest OPEN, and have `phases.md` cite it · B: keep the checks in `phases.md` and add only a policy 14 note that the pass marks are KDPS's to set and sign.
+- **Choice.** A. New `POL-14.08` names the three checks: no unexplained material difference at the switch count; all participating staff trained; no serious exception open. OPEN, no value set: run length of the side-by-side test (KDPS Owner, before the side-by-side test); material-difference threshold per Store (KDPS Owner and Accounts, before the first switch); meaning of "serious exception" (KDPS Owner and Operations, blocks stage 4). The way back stays under `POL-14.05` and `POL-14.07`. No PRD change.
+- **Why.** A business gate belongs in a signed policy, not in a delivery plan.
+- **Changed.** `kdps-policies.md` (`POL-14.08`); `phases.md` (go/no-go pass marks cites `POL-14.08`; run-length row wording); `questions-for-kdps.md` (KDPS Owner 38 cites `POL-14.08`; new KDPS Owner 39 on serious exception and 40 on the earlier POS accepting the PT file).
+
+## DEC-050 — Two business-measure targets marked proposed
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-44 (decision pack, 3 Oct 2026)
+- **Question.** The PRD "Business measures" intro says targets marked "(proposed)" await KDPS agreement, but "Tally import rejection: Less than 2%" and "Monthly brand-by-store profit: Fifth working day" carry no marker and no record shows who agreed them; the second also depends on allocation bases that `POL-09.20` leaves unset.
+- **Options.** A: mark both "(proposed)" · B: keep them unmarked and log who agreed each, with name and date OPEN with the product owner.
+- **Choice.** A. Both targets are marked "(proposed)" and are goals awaiting KDPS agreement, not settings. No target value changes. Accounts is asked to confirm each (stage 5).
+- **Why.** No record of agreement was found, so "proposed" is the honest label.
+- **Changed.** `prd.md` ("Business measures" rows: Tally import rejection; Monthly brand-by-store profit); `questions-for-kdps.md` (Accounts 12 and 13). No policy change.
+
+## DEC-051 — Offline enabling follows policy 16 only
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-63 (decision pack, 3 Oct 2026)
+- **Question.** `phases.md` stage 4 said the offline counter is "enabled after online billing is proven", but `PRD-OFF-001` to `PRD-OFF-019`, `POL-16.01` and AGENTS.md gate offline only on the signed Offline operation policy. "Proven" has no pass mark, length or approver.
+- **Options.** Reword `phases.md` to the gates that already exist (signed policy 16 and the stage 4 offline exit check) and drop "proven" · Keep an online-billing-first gate and define its check, owner and stage.
+- **Choice.** Option A. Offline enabling follows the signed Offline operation policy (policy 16) and the stage 4 offline exit check only. "Proven" is removed. No PRD or policy text changes and no value is set.
+- **Why.** The policy and the exit check already do the job.
+- **Changed.** `phases.md` stage 4 offline line.
+
+## DEC-052 — Side-by-side test needs D-4 agreement, not signed policies
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-65 (decision pack, 3 Oct 2026)
+- **Question.** `phases.md` allows pre-signature testing "with synthetic data", but the side-by-side test runs on `kdps-test` with real KDPS data (DEC-028). Nothing said whether that test needs signed policies, or KDPS's agreement to hold real data (KDPS Owner question 37; `deployment.md` D-4).
+- **Options.** The test is not a live operation, so it needs no signed policies, only the question 37 agreement first · Real-data testing needs signed policies and configured real values first.
+- **Choice.** Option A. The side-by-side test is not a live operation: the earlier POS stays the system of record and test bills issue no tax invoice and bill no real customer (`PRD-LIF-026`). It needs the D-4 agreement first and no signed policies. Until KDPS answers question 37, imports keep no customer name or phone number (`PRD-SEC-009`, `PRD-SEC-010`). Gated actions stay disabled until their policies are signed (DEC-071).
+- **Why.** Nothing live happens in the test, so a policy signature gates nothing there.
+- **Changed.** `phases.md` "Before the test" row of Testing and switch-over. No PRD or policy change.
+
+## DEC-053 — PT export from kdps-test during the test
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-71 (decision pack, 3 Oct 2026)
+- **Question.** `deployment.md` says losing test data loses nothing official, but `phases.md` has Apparel OS export the approved PT in the KDPS layout (`PRD-PTW-008`) for the earlier POS to load. If that file comes from `kdps-test`, test output feeds the system of record.
+- **Options.** The PT export is used during the test, listed as a file a person loads into the earlier POS with no automatic link · The export is not used during the test and PT entry into the earlier POS stays manual.
+- **Choice.** Option A. The approved PT export from `kdps-test` is used during the side-by-side test. A person loads it into the earlier POS manually; there is no automatic link. A PT file already loaded into the earlier POS is that system's record. Whether the earlier POS accepts the file stays OPEN (KDPS Owner, KDPS Owner question 40; blocks the stage 2 test).
+- **Why.** It matches `phases.md`, which already assumes the export.
+- **Changed.** `deployment.md` (section 4 backup sentence; new outbound-files section); `phases.md` Testing and switch-over Rules line; `questions-for-kdps.md` KDPS Owner question 40. No PRD or policy change.
+
+## DEC-054 — Profile to piece-tracked via labelling count
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** C-12 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-MER-014` sets tracking per profile and `POL-04.09` lets other categories be selected, but `PRD-MER-017` and `PRD-LIF-025` start piece rules only at a Store's switch count. Nothing said what happens to stock held as quantity when a profile later becomes piece-tracked.
+- **Options.** Allow the change only through a labelling count of every piece of that profile at each Site · Allow no change for a profile with stock; the change applies only to goods received after it, with date and limit OPEN with the product owner.
+- **Choice.** Option A. Changing a profile from quantity-tracked to piece-tracked applies only through a labelling count: count, label and verify every piece of that profile at each Site. Piece rules start from that count. `PRD-MER-014`, `PRD-MER-017` and `PRD-LIF-025` keep their IDs.
+- **Why.** It reuses the rule already in `PRD-LIF-025` and leaves no mixed stock.
+- **Changed.** New `PRD-MER-018`; `POL-04.09` (pointer to `PRD-MER-018`); `design/ui/README.md` (PRD ID range now to `PRD-MER-018`).
+
+## DEC-055 — Putaway stage 2; general location moves stage 3
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** C-13 (decision pack, 3 Oct 2026)
+- **Question.** `stock-ledger.md` section 2.3 lists "Location move" as stage 2, while `phases.md` puts "within-Site moves" (`PRD-STK-005`) in stage 3 and putaway (`PRD-REC-022`) in stage 2.
+- **Options.** Confirm the reading: stage 2 putaway uses the location-move movement and general within-Site move screens arrive in stage 3 · Move general within-Site moves into stage 2 and edit the `phases.md` stage 2 and 3 scope.
+- **Choice.** Option A. Putaway at the selling Site (stage 2) uses the location-move movement; general within-Site move screens (floor, backstore, rack, bin) are stage 3. No PRD, policy or `phases.md` scope change.
+- **Why.** It keeps stage 2 small and needs no scope change.
+- **Changed.** `stock-ledger.md` section 2.3 (Location move row and stage column).
+
+## DEC-056 — PRD-UXP-004 lists capabilities, not menu labels
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-40 (with C-10) (decision pack, 3 Oct 2026)
+- **Question.** `PRD-UXP-004` named Store areas (Billing, Bills, Till & Sync, Receive Goods, Transfers, Stock, Offers, Money, Reports, staff self-service), while the blueprint and `personas.md` use working menu labels (Sell, Stock Count, Damage & supplier returns, External sales and others). Stock Count, Damage and External sales were in no PRD Store list. Both design documents marked this OPEN.
+- **Options.** Rename the design menus to the PRD names, leaving Stock Count, Damage and External sales with no Store menu entry · `PRD-UXP-004` lists capabilities and areas, not menu labels; Sell groups Billing, Bills and Till & Sync; the PRD wording adds counts, damage and supplier returns, and external sales.
+- **Choice.** Option B (the N-40 option B, which is C-10's option A). `PRD-UXP-004` now lists the operational areas a Store user needs, including stock and counts, damage and supplier returns, and external sales imports, and says it names capabilities and areas, not menu labels. Design menus keep their working labels. C-10's own pick in the pack was B (rename the menus); the owner is asked to confirm the applied rule (see the walkthrough log).
+- **Why.** Counts and damage must stay reachable for Store users, and the design groups them sensibly.
+- **Changed.** `PRD-UXP-004`; `personas.md` (menu-label note; OPEN row removed); `ui-blueprint.html` (gap G27 marked settled). No policy change.
+
+## DEC-057 — PRD-TAX-004 delivered in stage 4
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-05 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-TAX-004` (keep tax-document issue, cancellation or correction, and operational reversals distinct) sat in no stage. Stage 4 delivers returns, exchanges and refunds against tax invoices, `design-language.md` section 7 mentions a tax-invoice cancellation state its state table lacks, and `POL-10` had no answer on the tax-document treatment of a customer return.
+- **Options.** Place it in stage 4 with returns, in scope and exit checks · Place it in stage 5 with an explicit interim rule for stage 4 returns, OPEN with the product owner and CA.
+- **Choice.** Option A. Tax-document cancellation and correction (`PRD-TAX-004`) is delivered in stage 4. `PRD-TAX-004` keeps its text. New `POL-10.11` records that the credit-note and tax-document cancellation treatment of customer returns is to be confirmed by the CA. That treatment is OPEN (CA; blocks stage 4). No value is set.
+- **Why.** Stage 4 creates the returns that need it.
+- **Changed.** `phases.md` stage 4 scope; new `POL-10.11`; `prd.md` Required policy configuration, Statutory applicability row (cites `POL-10.11`); `questions-for-kdps.md` CA question 7 (Return credit notes).
+
+## DEC-058 — Hindi for stage 6 screens in stage 6
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-08 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-PRO-009` requires English and Hindi interfaces with no stage. `phases.md`, AGENTS.md, `ui/README.md` and `design-language.md` put the Hindi interface in stage 5 for "the screens already built", so stage 6 screens (check-in, targets, incentives, payslips, self-service, planning) had no Hindi step.
+- **Options.** Hindi follows each stage's screens, and stage 6 gets its own Hindi step after its screens are built · Keep one Hindi step in stage 5 and name one later step for all later screens, timing OPEN with the product owner.
+- **Choice.** Option A. Hindi for the screens built in stages 1 to 5 arrives in stage 5. Hindi for stage 6 screens arrives in stage 6. WhatsApp and SMS messaging stay in stage 5. No PRD or policy change, because `PRD-PRO-009` names no stage.
+- **Why.** Staff payslips and targets are the screens that most need Hindi.
+- **Changed.** `phases.md` ("How the stages are cut" Hindi bullet); `AGENTS.md` Delivery paragraph; `design/ui/README.md`; `design-language.md` section 12 (two Hindi rows).
+
+## DEC-059 — Interim unavailable for unlinked returns after switch
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-20 (decision pack, 3 Oct 2026)
+- **Question.** `SL-10` in the stock ledger keeps an EBO return not linked to its imported sale, and a return of an earlier-POS bill after a Store's switch, unavailable. `PRD-EBO-005` applies approved EBO returns to stock and `POL-06.02` gives a 15-day return window, so for 15 days after each switch a customer with an earlier-POS bill cannot return in the app.
+- **Options.** Allow these returns in the app, each with a documented cost source (OPEN; would change `PRD-LIF-010` and `PRD-LIF-015`) · Keep them unavailable for now, as a named exception to `POL-06.02` for the window after each switch.
+- **Choice.** Keep them unavailable in the app for now. `POL-06.02` carries the exception until a later plan is approved. `PRD-EBO-005` is unmet for these returns until then. How the customer is served meanwhile is OPEN (owner: product owner); it blocks stage 4, in particular the first Store switch. No-bill returns are unchanged (`PRD-RET-017`, `POL-07.08`).
+- **Why.** It needs no cost source and does not change `PRD-LIF-010`; allowing them can follow in the later data-import plan.
+- **Changed.** `POL-06.02` (exception noted); `docs/design/stock/stock-ledger.md` SL-10. No PRD ID changed.
+
+## DEC-060 — PRD-LED-011 follows Official book policy
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-24 (decision pack, 3 Oct 2026)
+- **Question.** The PRD "Words used" entry for Tally (as changed by `DEC-010`) says the Official book policy sets whether Tally is the official book, but `PRD-LED-011` says "Tally remains the official book until an authorised accounting-book transition".
+- **Options.** Reword `PRD-LED-011` (and the Official book policy row) to follow the Official book policy · Keep `PRD-LED-011` and change "Words used" to say Tally is the official book.
+- **Choice.** Reword. `PRD-LED-011` now reads: the official book is the one the Official book policy names, until an authorised accounting-book transition. `POL-11.01` to `POL-11.03`, `PRD-LED-012` and `PRD-INT-008` stand as they are.
+- **Why.** It finishes what `DEC-010` started: no KDPS values in the PRD.
+- **Changed.** `PRD-LED-011` in `docs/prd.md`.
+
+## DEC-061 — Stock-count accuracy without tolerance-as-match
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-27 (decision pack, 3 Oct 2026)
+- **Question.** The PRD Business measures row "Stock-count accuracy" counts pieces matching the system "within the configured tolerance", but `PRD-STK-012` and `DEC-008` say a tolerance only selects the approver.
+- **Options.** Reword the measure to pieces equal to the system quantity, with differences tracked by approver tier · Keep the measure and let a tolerance define "matching" for reporting only.
+- **Choice.** Reword. The measure is pieces equal to the system quantity at a count divided by pieces counted, for each operating unit; differences are tracked by approver tier. The 98% target stays "(proposed)"; Operations re-confirms it under the new wording. No new target is added.
+- **Why.** It keeps tolerance with one job, as `DEC-008` says.
+- **Changed.** PRD Business measures, "Stock-count accuracy" row, in `docs/prd.md`. `PRD-STK-012` unchanged.
+
+## DEC-062 — Offline manager approval is online-only
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-37 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-OFF-016` and `POL-16.03` say actions needing fresh approval require online authority, yet the till design greys F6 Return offline but keeps F7 Manager approval live. `PRD-OFF-004` blocks finalisation on an expired working set, but the design has a state only for expired authority.
+- **Options.** Treat an above-limit discount or price approval as needing fresh approval, so F7 is online-only · Allow it offline (how a manager is checked offline would be OPEN, and `PRD-OFF-016` or `POL-16.03` would need a carve-out).
+- **Choice.** F7 Manager approval is online-only: greyed "online only" while the till is offline, and a bill needing that approval cannot be finalised offline. `PRD-OFF-016` and `POL-16.03` stand as written. Separately, a "Working set expired" blocked state is added beside "Authority expired" (`PRD-OFF-004`); its duration is OPEN (see `DEC-064`).
+- **Why.** It follows the rule as written and invents no new mechanism.
+- **Changed.** `docs/design/ui/design-language.md` section 6B (function bar, Manager approval (F7), Working set expired state and state-pill list) and its proposed-states table. No PRD or policy ID changed.
+
+## DEC-063 — Gift-voucher tax home in policy 10
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-53 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-RET-020` and `DEC-006` say voucher tax follows the Statutory applicability policy (policy 10), but no policy 10 bullet mentions vouchers; the tax question sat under `POL-07.10`, which does not list tax.
+- **Options.** Add a policy 10 bullet for gift-voucher tax and re-point the CA question and V-30 to it · Leave tax under policy 7 and reword `PRD-RET-020` to point at policy 7.
+- **Choice.** Add `POL-10.10`: gift-voucher tax on issue and redemption remains to be confirmed by the CA. `POL-07.10` cross-refers to it. `PRD-RET-020` is unchanged. No tax value is set; the treatment is OPEN (owner: CA; blocks stage 4).
+- **Why.** It keeps `DEC-006`'s "tax via policy 10" and changes only lower documents.
+- **Changed.** New `POL-10.10`; `POL-07.10` cross-reference in `docs/kdps-policies.md`; `docs/questions-for-kdps.md` CA question 6 (now cites `POL-10.10`).
+
+## DEC-064 — Working-set validity in policy 16
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-54 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-OFF-004` needs a defined validity time for the cached working set, but only the 24-hour authority renewal (`PRD-OFF-003`, `POL-16.01`) is defined, and neither the Offline operation row nor `POL-16.01` to `POL-16.06` mentions it.
+- **Options.** Add working-set validity time to the Offline operation row and a new policy 16 bullet, marked OPEN · Do not make it a setting and state in `PRD-OFF-004` that the working set lasts as long as the device authority.
+- **Choice.** Make it a policy setting. The PRD "Offline operation" row now lists working-set validity time, and new `POL-16.07` says it remains to be configured. The value stays OPEN (owners: KDPS Owner and Operations; blocks stage 4). `PRD-OFF-004` is unchanged.
+- **Why.** It gives the missing value a home without choosing it.
+- **Changed.** PRD "Required policy configuration", Offline operation row, in `docs/prd.md`; new `POL-16.07` in `docs/kdps-policies.md`; `docs/design/ui/design-language.md` section 6B (the "Working set expired" state cites `POL-16.07`, duration OPEN).
+
+## DEC-065 — Store-credit and loyalty settings answered in policy 7
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-56 (decision pack, 3 Oct 2026)
+- **Question.** The PRD row "Customer returns" (policy 6) lists "Store-credit and loyalty settings" (Owner, Operations), but the answers live only in `POL-07.09`, `POL-07.11` and `POL-07.13`; policy 6 has no bullet on either.
+- **Options.** Add one pointer bullet to policy 6 saying these settings are answered in policy 7, and keep the PRD rows · Remove them from the policy 6 row and add loyalty to the policy 7 row in the PRD.
+- **Choice.** Add `POL-06.08`: store-credit and loyalty settings are answered in policy 7; Operations confirms them there. It carries no values. Both PRD rows are unchanged. Loyalty stays OPEN (owners: KDPS Owner and Accounts, as in alignment report B-6; blocks stage 4).
+- **Why.** It edits lower documents only and keeps loyalty in the PRD table.
+- **Changed.** New `POL-06.08` in `docs/kdps-policies.md`.
+
+## DEC-066 — Business-unit moves and approval value recheck
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-85 (decision pack, 3 Oct 2026)
+- **Question.** Stock-ledger 7.1 calls a business-unit move a "location move", but `PRD-STK-005` limits location moves to floor, backstore, rack and bin and no movement kind covers a unit change (`PRD-ORG-005`, `PRD-TRF-023`). The Custody row in section 3 omits several movement kinds. Nothing says whether a cost that changes under lock at posting needs renewed approval (`PRD-ACS-007`, `POL-02.12`).
+- **Options.** Add a new "business-unit change" movement kind · Allow a unit change as a location move only when book, legal entity and tax registration are unchanged, and send everything else through the transfer or pool-move route.
+- **Choice.** The second option, adding no new movement kind. When the book differs, use the pool-move route (7.8); when the legal entity differs, use the commercial or inter-entity process (`PRD-FRN-006`). A registration-only change at one Site is raised against `PRD-TRF-023` and stays OPEN (owner: product owner). The Custody row is rewritten from the section 2.3 kinds. If cost under lock exceeds the approver's limit or the approved amount, posting is refused and the record returns for renewed approval (`PRD-ACS-007`, `POL-02.12`); any tolerance for small cost drift stays OPEN (owner: product owner or KDPS Owner), with no number written.
+- **Why.** It adds no new movement kind and keeps the rule that an approval binds to its approved value.
+- **Changed.** `docs/design/stock/stock-ledger.md` section 3 (Custody row), section 7.1 (business-unit move bullet) and section 10.4 (value recheck). No PRD or policy ID changed.
+
+## DEC-067 — Side-by-side test vocabulary
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-88 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-LIF-012`, `-013`, `-014` and `-016` say "parallel run"; `PRD-LIF-026`, `POL-14.01` and `phases.md` say "side-by-side test"; the Business measures intro and `AGENTS.md` say "test run". Switch, Switch count, Pilot Store and Earlier POS are not in Words used, and "pilot" means two different Stores (`POL-14.07`, `POL-16.02`).
+- **Options.** A: one phrase, "side-by-side test"; add Words used entries for it, Switch, Switch count, Pilot Store and Earlier POS; retire "parallel run" and "test run" in live rule text; `POL-16.02` says "first offline Store" · B: keep "parallel run" for the earlier POS selling on any hosting and define "side-by-side test" as a parallel run on test hosting.
+- **Choice.** A. Live PRD and policy text says "side-by-side test" and "earlier POS"; "parallel run" and "test run" are retired from live rule text. Old DEC entries stay as written, with follow-up notes. Whether the earlier POS may keep selling at a Store on production hosting before its switch is **OPEN** (product owner; stage 2 waits); no default is set.
+- **Why.** DEC-028 and DEC-030 already moved the documents to "side-by-side test", so one phrase is simpler.
+- **Changed.** PRD Words used: new Side-by-side test, Switch, Switch count, Pilot Store and Earlier POS rows; `PRD-LIF-012`, `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`; PRD Business measures intro and Delivery intro (wording only); `POL-14.06`; `phases.md` (stage 2, exit check, run-length row); `AGENTS.md` (Delivery); `ui-blueprint.html` (earlier POS wording); follow-up notes on DEC-023, DEC-024, DEC-027 and DEC-030 in `decisions.md`.
+
+## DEC-068 — Billed-retained in Words used
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-89 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-POS-018`, `PRD-STK-002` and policy 8 use "billed-retained", but Words used has no row for it, and the stock ledger (6.1) coins its own wording.
+- **Options.** A: add a Billed-retained row to Words used and align the ledger to it · B: add no row; treat `PRD-POS-018` as the definition and have the ledger only cite it.
+- **Choice.** A. Words used defines Billed-retained as goods paid for but still held in the Store until handover to the customer, for collection or alteration; not a hold; not available for sale or allocation. The wording follows `PRD-POS-018` and `POL-08.02`.
+- **Why.** The documents index requires a term to be defined first in Words used, and it costs one table row.
+- **Changed.** `stock-ledger.md` 6.1 (Billed-retained paragraph). PRD Words used: new Billed-retained row.
+
+## DEC-069 — Count freeze blocks every movement
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-91 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-STK-009` freezes counted items from sale and movement, and Words used counts a change of value as a Movement, but ledger 8.1 let value-only movements post during a count. The ledger also coined book pool, Site pool, Count freeze, Inspection hold and Held-goods reservation, which Words used does not define.
+- **Options.** A: keep the carve-out, add the five words to Words used and add a sentence to `PRD-STK-009` · B: remove the carve-out and add no new words; label the ledger terms as kinds of Hold and Reservation and cite `PRD-LED-015` for pools.
+- **Choice.** B. The count freeze blocks every movement, including a change of value; a late cost change waits until the count closes. No PRD change. Any later carve-out belongs under the policy 2 item "movement during counts" (decider: product owner with the KDPS Owner).
+- **Why.** It adds no new business rule and matches the PRD as written.
+- **Changed.** `stock-ledger.md` 8.1 (value-only line removed). No PRD or policy change.
+
+## DEC-070 — Receipt origin, Crore, billing device, capitalisation
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-94 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-OFR-008` says "receipt lot" where Words used defines Receipt origin; design-language §8 uses "Cr" and "L" but Words used has only Lakh; `PRD-POS-020` gives the bill series to a "billing device" while DEC-005 and the design say "till" or "counter"; the policies capitalise "Store Manager" and "store credit" differently from the persona label and Words used.
+- **Options.** A: one word per thing across the PRD, Words used, policies and design · B: define the loose words as synonyms and leave the bullets and capitalisation alone.
+- **Choice.** A. "Receipt lot" becomes "receipt origin". Words used adds Crore (100 Lakh), with L and Cr as display shortcuts, and Billing device as the owner of a bill series. "Company-owned" in `PRD-ORG-010` and `PRD-ORG-015` stays as the ownership contrast. Policy capitalisation follows Words used (Store credit). Whether "company" in `PRD-OFR-002` becomes Organisation is **OPEN** (product owner; blocks no stage). The series-owner wording blocks stage 4.
+- **Why.** One word per thing is the rule in `docs/README.md`.
+- **Changed.** `PRD-OFR-008`; `POL-06.06`, `POL-06.07`, `POL-07.03`, `POL-07.06` and the policy 6 and 7 question lines (Store credit). PRD Words used: new Crore and Billing device rows; `ui-blueprint.html` receipt-lot wording; `design-language.md` §8 Bill no. row.
+
+## DEC-071 — Gated actions disabled on kdps-test until signed
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-81 (decision pack, 3 Oct 2026)
+- **Question.** Design-language §10.17 says a gated action works with synthetic data under a "Test data" chip, but `kdps-test` holds real KDPS data for the side-by-side test (`PRD-LIF-026`). The PRD's Required policy configuration exempts only design, development and synthetic-data tests, so a gated action on real data with an unsigned policy has no rule.
+- **Options.** A: the gate holds on `kdps-test`; gated actions stay disabled there until their policy is signed; real data is used only for imports and checks that need no gated action · B: allow gated actions on `kdps-test` as test use, with PRD wording that such use is not live.
+- **Choice.** A. On `kdps-test`, gated actions stay disabled until their policy is signed and configured, even though the data is real. On `dev` with synthetic data they may work, under a synthetic-data banner. `kdps-test` shows an environment banner. Banner wording and chip family are left to design after policy signatures. No PRD change.
+- **Why.** It needs no PRD change and never lets an unsigned policy act on real KDPS data.
+- **Changed.** `design-language.md` §10.17; `phases.md` Testing and switch-over, "Before the test" row. `design-system.html` test-setup note; `ui-blueprint.html` Policy gate row; `deployment.md` §1.
+
+## DEC-072 — Reason list in policy 2
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-83 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-ACS-010` requires approve/reject with reasons, but no PRD or policy rule says where the reason list is configured; design-language §12 gives it owner "KDPS" and stage 2, though approvals are stage 1 (policy 2).
+- **Options.** A: add the reason list to policy 2 (Permissions and approvals row, new `POL-02` bullet), needed by stage 1 · B: leave it an OPEN design item owned by the KDPS Owner, with a question in `questions-for-kdps.md`.
+- **Choice.** A. The approve/reject reason list is a policy 2 item (`POL-02.23`), decided by Owner and Admin and needed by stage 1. The reasons themselves are **OPEN** (owner: Owner and Admin; blocks stage 1).
+- **Why.** Reasons are needed for stage 1 approvals, and policy 2 already sits at stage 1.
+- **Changed.** New `POL-02.23`; PRD Required policy configuration, Permissions and approvals row; `design-language.md` §12 (Reason list row). `ui-blueprint.html` open item 18a; `questions-for-kdps.md` (reason-list question).
+
+## DEC-073 — PRD-NAV-016 follows PRD-NAV-017
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-28 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-NAV-016` says the net-profit steps (`PRD-NAV-014`) govern the Store P&L, but `PRD-NAV-017` (DEC-011) ends the Store P&L at profit before tax.
+- **Options.** Reword `PRD-NAV-016` · Leave the PRD and note in DEC-011 that `PRD-NAV-017` wins.
+- **Choice.** Reword `PRD-NAV-016`: the definitions govern the monthly Store net-asset-value snapshots; the Store P&L follows `PRD-NAV-017`. `PRD-NAV-014` is untouched because it still applies to a legal entity. No new rule; this is a consistency fix after DEC-011.
+- **Why.** DEC-011 already decided the substance, so only the sentence needed fixing.
+- **Changed.** `PRD-NAV-016`.
+
+## DEC-074 — Daily summary channel fixed as WhatsApp
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-30 (decision pack, 3 Oct 2026)
+- **Question.** `POL-02.14` (DEC-021) and `PRD-EXC-012` fix the 9 PM summary as WhatsApp, but `POL-02.11` and `personas.md` section 3 still list the channel as an unconfigured policy 2 value. The PRD "Permissions and approvals" row reads "daily summary time and recipients" although DEC-010 said it would contain "channels", and no entry logged the removal.
+- **Options.** Drop the channel from the unconfigured lists and record why the PRD row dropped "channels" · Put "channels" back into the PRD row.
+- **Choice.** The channel is decided (WhatsApp); only recipients are unconfigured. The PRD row dropped "channels" for that reason (recorded here; this entry does not edit the PRD). `POL-02.11` no longer lists the channel. `personas.md` section 3 reads "Recipients are a policy 2 value; channel and time are set (`POL-02.14`)". Recipient names stay **OPEN** with the KDPS Owner (V-51); they block stage 5.
+- **Why.** The channel is decided and only the recipients are open.
+- **Changed.** `POL-02.11`; `personas.md` section 3.
+
+## DEC-075 — POL-18.03 restore drill cadence proposed
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-41 (decision pack, 3 Oct 2026)
+- **Question.** `POL-18.03` says restore drills run "quarterly thereafter" with no decision behind it; `PRD-SEC-012` sets no frequency, and the Policy 18 question and V-63 do not ask for one. The Admin line in `questions-for-kdps.md` pointed at Owner 4 and 5 (Logins, Bulk approval), not Owner 6 (recovery).
+- **Options.** Word the cadence as proposed, awaiting sign-off, add the question and fix the pointer · Log who at KDPS agreed "quarterly" (no such agreement is known).
+- **Choice.** `POL-18.03` states the quarterly cadence as proposed, awaiting KDPS Owner and Admin sign-off, as `POL-18.01` is worded. The Admin question now points to Owner 4, 5 and 6 and asks how often restore drills run. How often and by whom stays **OPEN** (KDPS Owner and Admin); it blocks stage 1.
+- **Why.** It invents no agreement.
+- **Changed.** `POL-18.03`; `questions-for-kdps.md` (Admin pointer and cadence question; Owner 6); alignment report V-63.
+
+## DEC-076 — Contra in PRD-LED-012
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-58 (decision pack, 3 Oct 2026)
+- **Question.** "Words used" defines Contra as a Tally voucher and `POL-09.25` (DEC-021) maps it, but `PRD-LED-012` does not list contra among the voucher types sent through Tally XML.
+- **Options.** Add "contra" to `PRD-LED-012` · Leave the list and say it is not exhaustive.
+- **Choice.** `PRD-LED-012` now lists contra: "...payments, receipts, contra, journals and credit/debit vouchers through Tally XML". The Tally XML export includes contra vouchers for same-entity cash and bank transfers, consistent with `POL-09.25`.
+- **Why.** The PRD already defines Contra, so listing it is the plain fix and keeps tests and acknowledgment tracking exact.
+- **Changed.** `PRD-LED-012`.
+
+## DEC-077 — PRD-OFF-002 aligns with DEC-005
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-62 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-POS-020` (DEC-005) gives each device its own bill series per tax registration and financial year, but `PRD-OFF-002` still says "a device-specific financial-year bill series".
+- **Options.** Reword `PRD-OFF-002` · Leave it and log that `PRD-POS-020` governs.
+- **Choice.** `PRD-OFF-002` now reads "a device-specific bill series for each tax registration and financial year; devices cannot share a live series". The intent does not change.
+- **Why.** A till serving two registrations holds two series, and the offline rule should say so.
+- **Changed.** `PRD-OFF-002`.
+
+## DEC-078 — Policy 2 tolerance and movement wording
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-92 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-STK-012` and `PRD-CSH-011` say a tolerance only selects the approver (above it, a higher approver and an owned exception), but `POL-02.21` says "cost limits"; no Policy 2 answer covers movement while a count is open (`PRD-STK-009`); `POL-02.02` and `POL-02.09` scope roles by "business" where `PRD-ACS-001` says entity, Site and brand; and `POL-02.15` and Owner Q2 say "default approval limits" where the PRD says suggested values are never active defaults.
+- **Options.** Five wording edits (tolerance in `POL-02.13` and `POL-02.21`, movement answer, entity/Site/brand, role-level limits) · The same without the "business" change.
+- **Choice.** All five edits. `POL-02.21` states the count tolerance as a cost difference (`PRD-ACS-015`, `PRD-STK-012`); above it a higher approver approves and the difference becomes an owned exception. `POL-02.13` already follows `PRD-CSH-011` through DEC-038 and does not reintroduce named roles. New `POL-02.24` keeps counted items and locations frozen during a count (`PRD-STK-009`); who may move frozen items, if anyone, stays **OPEN**. `POL-02.02` and `POL-02.09` say "entity, Site and brand" (`PRD-ACS-001`). "Default approval limits" becomes "role-level approval limits" in `POL-02.15` and Owner Q2; DEC-017 stays as written and this entry records the change. Tolerances, approvers and the movement rule stay **OPEN** (KDPS Owner and Admin); policy 2 blocks stage 1 and the movement rule matters at stage 3. The new bullet is `POL-02.24` because `POL-02.22` and `POL-02.23` were already taken.
+- **Why.** The wording now matches the PRD and invents no value.
+- **Changed.** `POL-02.02`, `POL-02.09`, `POL-02.11`, `POL-02.15`, `POL-02.21`; new `POL-02.24`; `questions-for-kdps.md` Owner Q2 and Q13; `personas.md` Store Manager card; alignment report 4.8.
+
+## DEC-079 — Policy 6 question reworded for defects
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-99 (decision pack, 3 Oct 2026)
+- **Question.** The Policy 6 question asks for a return window "for a defective item", but `POL-06.05` (DEC-020) and DEC-025 say a defective item is assessed with no hard cutoff.
+- **Options.** Reword the question · Leave it.
+- **Choice.** The question now reads "How many days does a customer have for an ordinary return? How is a defective item assessed?" It asks for no defective-item day count. The ordinary-return days and the defect assessment process stay **OPEN** (KDPS Owner and Operations); they block stage 4.
+- **Why.** The question must not ask for a number the policy says not to invent.
+- **Changed.** Policy 6 question bullet 1 in `kdps-policies.md` (question bullets have no ID).
+
+## DEC-080 — PRD IDs banner reworded
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-100 (decision pack, 3 Oct 2026)
+- **Question.** The `prd.md` IDs banner says the number counts bullets "in order", but several sections have bullets out of numeric order (for example `PRD-STK-012` before `PRD-STK-011`), and IDs are never renumbered.
+- **Options.** Reword the banner · Leave it and rely on AGENTS.md.
+- **Choice.** The banner now says the number is the next free number in that section when the bullet was added; bullets are never renumbered, so page order need not follow the numbers. No ID changes.
+- **Why.** The banner must say what is true.
+- **Changed.** `prd.md` IDs banner.
+
+## DEC-081 — DEC-018 changed list corrected
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-101 (decision pack, 3 Oct 2026)
+- **Question.** DEC-018's "Changed" line lists `POL-09.21` to `POL-09.25`, but `POL-09.25` (Contra) is DEC-021's rule and DEC-018's choice covers only `POL-09.21` to `POL-09.24`.
+- **Options.** Add a correcting entry, as DEC-016 and DEC-029 did · Edit DEC-018's "Changed" line in place.
+- **Choice.** DEC-018's Changed list reads `POL-09.21` to `POL-09.24`; `POL-09.25` was set by DEC-021. This entry carries the correction, and DEC-018's Changed line carries a pointer to it.
+- **Why.** It follows the existing precedent for corrections.
+- **Changed.** `decisions.md` only (this entry; the pointer on DEC-018's Changed line). No PRD or policy IDs change.
+
+## DEC-082 — Extended offline online-only list
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-01 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-OFF-016` and `POL-16.03` name Store-credit redemption as needing online authority but not gift-voucher redemption (`PRD-RET-020`), Customer credit sales (`PRD-POS-022`) or loyalty redemption (`PRD-RET-019`), whose balance or limit lives only online.
+- **Options.** Add the three to the online-only list · Say in `PRD-OFF-017` that offline tender recording means cash only until a signed procedure says otherwise.
+- **Choice.** `PRD-OFF-016` and `POL-16.03` now also name gift-voucher redemption, Customer credit sales and loyalty redemption as requiring online authority. Which tenders may be recorded offline, and the evidence for them, stay **OPEN** (KDPS Owner and Operations); they block stage 4.
+- **Why.** A tender whose balance or limit lives only online is now named, so tests are clear.
+- **Changed.** `PRD-OFF-016`; `POL-16.03`.
+
+## DEC-083 — Policy homes for five PRD rules
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-02 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-RET-008`, `PRD-RET-009`, `PRD-RET-015`, `PRD-EXC-013` and `PRD-PAY-013` depend on something "configured", but no policy bullet switches them on (`PRD-SEC-017`).
+- **Options.** Name a policy home for each and add answer bullets, report rows and questions · Log the five as unplaced in the alignment report until stage 4.
+- **Choice.** Homes: `PRD-RET-008`, `PRD-RET-009` and `PRD-RET-015` in policy 6 (`POL-06.09` to `POL-06.11`); `PRD-EXC-013` in policy 2 (`POL-02.25`); `PRD-PAY-013` in policy 12 (`POL-12.08`). The PRD "Required policy configuration" rows for policies 2, 6 and 12 name them. Every rule, threshold and authority stays **OPEN** with the owners the PRD rows name (policy 6: Owner, Operations; policy 2: Owner, Admin; policy 12: Owner, Accounts). Stage 4 waits for the first four; stage 5 waits for `PRD-PAY-013`.
+- **Why.** Nothing runs without a policy home (`PRD-SEC-017`), and stage 4 needs these.
+- **Changed.** New `POL-06.09`–`POL-06.11`, `POL-02.25`, `POL-12.08`; PRD "Required policy configuration" rows for policies 2, 6 and 12; alignment report B-15 to B-19 and V-66 to V-70; `questions-for-kdps.md`.
+
+## DEC-084 — Label printing via local helper
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-06 (decision pack, 3 Oct 2026)
+- **Question.** The PRD Hardware row covers ESC/POS receipt printing and cash drawer through a local helper, but `PRD-MER-015`, `PRD-REC-020` and `PRD-OFR-004` print labels, price tickets and stickers at warehouses and receiving Stores in stage 2, and `deployment.md` said the helper runs on the counter PC.
+- **Options.** The same local helper runs on any PC with a label printer · Treat label printing as an unmet hardware need and use Tauri.
+- **Choice.** The same local helper serves receipt printing, cash drawer and label printing on any PC that has the printer (counter, warehouse or office). Tauri stays available only for an unmet hardware requirement. "Words used" ESC/POS is unchanged. Label printer models and the label command language stay **OPEN** (KDPS Operations); they block stage 2.
+- **Why.** It keeps the stack as it is.
+- **Changed.** PRD Stack Hardware row; `AGENTS.md` Stack Hardware row; `deployment.md` section 6; `questions-for-kdps.md` "Labels and printers".
+
+## DEC-085 — V-65 for KDPS representative name
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** X-10 (decision pack, 3 Oct 2026)
+- **Question.** DEC-029 leaves the KDPS representative's name **OPEN** with no stage and no list entry, though every OPEN must name its owner and the stage it blocks.
+- **Options.** The product owner adds the name to DEC-029 · Add V-65 to the alignment report and point DEC-029 at it.
+- **Choice.** Add V-65, "KDPS representative who agreed DEC-017 to DEC-022 with the product owner": owner product owner, blocks stage 1 (policy 2 signature). DEC-029 points to V-65. The name stays **OPEN** until the product owner supplies it.
+- **Why.** It works now, and the name can be filled in later.
+- **Changed.** `alignment-report.md` section 5 (V-65); the pointer on DEC-029. No PRD or policy IDs change.
+
+## DEC-086 — Inbound ownership records are delivered in stage 2
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-64 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-ORG-017` to `PRD-ORG-019` and `PRD-ACP-020` define inbound ownership records, but neither the PRD stage table nor the policies say which stage delivers them.
+- **Options.** Stage 2 (goods-in): the receipt count closes the record, and the Commercial ownership policy is needed by stage 2 · Stage 1 builds the record type and stage 2 only exercises it.
+- **Choice.** Stage 2. Inbound ownership records are built in the goods-in stage and closed against the receipt count. The Commercial ownership policy is needed before their live use.
+- **Why.** The receipt count is what closes the record, so the record belongs with receiving.
+- **Changed.** No document text changed. `phases.md` stage 2 already lists inbound ownership (`PRD-ORG-017` to `PRD-ORG-019`, `PRD-ACP-020`) and Commercial ownership among its policies; the pick confirms it.
+
+## DEC-087 — Journals are written in the same transaction as the valued movement
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-33 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-MOD-013` requires balanced journals per book at commit. `PRD-MOD-006` and `POL-09.12` were read as sending journals through the outbox after the movement commits. How are the two met together?
+- **Options.** Write the journals inside the same transaction as the valued movement, so they balance at commit; the financial posting design owns this · Let journals follow through the outbox and balance when they post, which needs a decision record clarifying `PRD-MOD-013`.
+- **Choice.** Same transaction. A valued movement, its balance and pool rows, and the balanced journals per book for that movement commit together (`PRD-MOD-013`, `PRD-MOD-006`). The outbox carries durable follow-up only, such as messages and the Tally exchange. What happens to the movement when no valid posting map exists at commit (`POL-09.12` preserves the operational event) is OPEN (new SL-23; owner product owner and the CA; blocks stage 1).
+- **Why.** It meets `PRD-MOD-013` as written without changing the PRD.
+- **Changed.** `stock-ledger.md` section 1 (second and fourth bullets), section 7.11 (first two bullets), section 10.2, SL-21 (settled), new SL-23 and the header's decision list. No PRD or policy bullet changed.
+
+## DEC-088 — No piece-tracking exception for EBO Stores on brand software
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-48 (decision pack, 3 Oct 2026)
+- **Question.** `PRD-EBO-011` and DEC-023 say an EBO Store on brand software holds piece-tracked goods as SKU quantity until it bills in Apparel OS. `PRD-MER-003` and `PRD-MER-016` say piece-tracked goods keep a piece ID and are billed, counted, transferred and returned by scanning it. Can such a Store take goods in, send them out or count them by quantity?
+- **Options.** No exception: piece IDs are kept and scanned as the PRD says, and EBO imports name no piece only for sales reporting · Log a decision record allowing arrival or outbound by quantity at such a Store, then align section 5 and check 11.7 of the ledger.
+- **Choice.** No exception. Piece IDs are kept and scanned (`PRD-MER-003`, `PRD-MER-016`). EBO imports name no piece only for sales reporting (`PRD-EBO-011`, DEC-023). The event that ends "until it bills in Apparel OS" at such a Store is OPEN (SL-18; product owner; blocks stage 4). Any later exception needs a decision record first.
+- **Why.** The ledger had invented a stop-tracking rule that no PRD bullet allows.
+- **Changed.** `stock-ledger.md` section 5 (EBO paragraph) and SL-18 (narrowed to the end-event question). No PRD or policy bullet changed.
+
+## DEC-089 — PRD rules for an EBO import that oversells and for a mistaken damage confirmation
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-106 (decision pack, 3 Oct 2026)
+- **Question.** The ledger held two design rules with no PRD basis: a reconciliation queue for an EBO import that sells more than the app holds (section 10.5), and undoing a mistaken damage confirmation by a reversal (section 2.3). `PRD-DMG-003` covers only rejection before confirmation; `PRD-ACS-014` and `PRD-EXC-001` are generic. Should the PRD gain these rules?
+- **Options.** Add PRD bullets through a decision record, then cite them in the ledger · Drop both rules from the ledger and leave the cases to the generic exception route (`PRD-EXC-001`, `PRD-ACS-014`).
+- **Choice.** Add the bullets. `PRD-STK-016`: when an imported EBO sale report would oversell available stock, hold the import for reconciliation before stock is reduced; do not apply the oversell silently. `PRD-STK-017`: a mistaken damage confirmation is corrected by a linked reversal that restores the prior custody and stock state; it does not edit the original confirmation.
+- **Why.** Both rules protect stock integrity and belong in the source of truth, not only in design.
+- **Changed.** New `PRD-STK-016`, `PRD-STK-017` in `prd.md`; `stock-ledger.md` section 2.3 (Condition change), section 10.5, SL-19, SL-20 and the header's PRD ID and decision lists; `ui/README.md` PRD ID range (`PRD-STK-001`–`PRD-STK-017`).
+
+## DEC-090 — Billed-retained items at the switch are counted apart, not opening stock
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-45 (decision pack, 3 Oct 2026)
+- **Question.** `POL-14.04` carries billed-retained items across a Store's switch. `PRD-LIF-027` makes the verified count the opening stock and has no carve-out. Do these items carry cost-pool value, and do they count as opening stock?
+- **Options.** They are opening stock under `PRD-LIF-027` like any counted item, valued from the CA's recognition timing · A decision record adds a carve-out: they are counted apart and valued under the CA's rule.
+- **Choice.** Carve-out. This entry is the decision record. Billed-retained items carried across a Store's switch under `POL-14.04` are counted apart from its opening stock and are not opening stock under `PRD-LIF-027`. Their value follows the recognition rule the CA sets under the Financial posting policy. That rule is OPEN (V-35, SL-17; owner the CA; blocks stage 4).
+- **Why.** The goods are paid for but still in the Store, so they should not be mixed into the opening count.
+- **Changed.** New `PRD-LIF-028` in `prd.md`; `stock-ledger.md` section 9 step 4, SL-17 and the header's PRD ID and decision lists. `PRD-LIF-027` and `POL-14.04` are not reworded.
+
+## DEC-091 — A customer return of a consignment unit follows the brand agreement
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-49 (decision pack, 3 Oct 2026)
+- **Question.** Where a brand agreement passes ownership at sale (`POL-01.05`), does a customer return of that unit revert ownership to the supplier? `POL-01.13` has consignment settlement reconcile customer returns.
+- **Options.** Follow the brand agreement per `POL-01.05` and `POL-01.13`, set per agreement · Set one default in a decision record.
+- **Choice.** Follow the agreement. The ownership effect of a customer return is whatever each brand agreement says; the ledger sets no default that ownership reverts. The CA decides the accounting (`POL-09.03`). The accounting effect of a customer return of a pass-through unit is OPEN (SL-4; owner the CA, product owner for the ownership effect; blocks stage 2).
+- **Why.** Ownership events are configured per agreement, so one default would override signed terms.
+- **Changed.** `stock-ledger.md` SL-4 (wording only: the open point is the accounting under each agreement, not a general ownership reversal). Section 7.2 already reads this way. No PRD or policy bullet changed.
+
+## DEC-092 — Signed and Revoked join the status states
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** C-11 (decision pack, 3 Oct 2026)
+- **Question.** `design-language.md` section 7 had two proposed state names the settled table lacks, one for policy readiness and one for a lost device or session. Which names does the product owner want?
+- **Options.** Signed (Done family) and Revoked (Stopped family), as proposed · Other names, or no badge: keep the 10.17 banner for policy status and treat a lost device as a Setup list outside the badge families.
+- **Choice.** Signed and Revoked. Signed (Done, ✓) shows on Policy readiness when the policy's "Signed by, date" line is complete (`DEC-029`). Revoked (Stopped, ✕) shows on a registered device or session reported lost and revoked (`PRD-SEC-008`, `PRD-OFF-019`). An unsigned policy still shows the 10.17 banner, not a badge.
+- **Why.** Both fit existing families, and screens need the names.
+- **Changed.** `design-language.md` section 7 (both states move from the proposed table into the settled states table; the proposed table keeps only Working set expired, `DEC-062`) and the states list in `design-system.html`. No PRD or policy bullet changed.

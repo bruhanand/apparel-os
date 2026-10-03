@@ -15,6 +15,8 @@
 > - An ID never changes and is never reused. A removed bullet's ID is retired.
 > - Retired IDs: `POL-13.16` (DEC-021, DEC-026).
 
+"Needed by stage" in the table below is the earliest stage at which any value of that policy is needed. Each value's own stage is listed in the alignment report.
+
 Apparel OS switches on no policy-dependent live operation by default. All 19 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
 | # | Policy | Decided by | Needed by stage | Status |
@@ -28,7 +30,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 | 7 | Refunds and no-bill returns | Owner, Accounts | 4; Customer credit by 5 | Open |
 | 8 | Billed-retained | Operations, Accounts | 4 | Open |
 | 9 | Financial posting | Accounts, CA | 1; Store P&L allocation, asset policy, vouchers and acknowledgments by 5 | Open |
-| 10 | Statutory applicability | Accounts, CA | 2; e-invoice by 4, TDS by 5, payroll by 6 | Open |
+| 10 | Statutory applicability | Accounts, CA | 2 (registration, goods/rate classification, sale-or-return tax); movement documents by 3; invoice-number format and e-invoice by 4; e-way creation by 5; TDS by 5; payroll by 6 | Open |
 | 11 | Official book | Owner, CA | 5 | Open |
 | 12 | Franchise/partner | Owner, Accounts | 5 | Open |
 | 13 | Workforce | Owner, HR | 6 | Open |
@@ -80,26 +82,30 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 **Answer:**
 
 - `POL-02.01` Start with editable KDPS role templates for Owner, Store POS, Warehouse, Brand Manager, Accounts, Admin, Operations, HR, EBO staff, CA and Auditor. Businesses can configure their own roles; a template label alone grants no permission and does not replace the PRD personas.
-- `POL-02.02` Assign each user one or more roles, each with explicit business, Site and brand scope.
+- `POL-02.02` Assign each user one or more roles, each with explicit entity, Site and brand scope (`PRD-ACS-001`).
 - `POL-02.03` Expand broad labels such as All, Full and Manage into explicit view, create, edit, approve, cancel, export and override permissions.
 - `POL-02.04` Control sensitive fields separately from module access.
 - `POL-02.05` Keep approval authority separate from ordinary access, with configurable limits and independence requirements. For refunds, use the cases identified in policy 7.
 - `POL-02.06` Preserve who changed permissions and when.
-- `POL-02.07` Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers; damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts; refund cases identified under policy 7; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
+- `POL-02.07` Require approval by an authorised person other than the preparer for every independently approved action in the PRD, including PT approval and changes to approved cost/pricing; transfers, where a higher authority is a different person whose authority covers the transfer on its cost basis (`PRD-ACS-015`, `PRD-TRF-005`); damage confirmation; offer approval; mapping-rule confirmation; supplier-return steps; stock adjustments, write-offs and discrepancy settlements; configured exceptional discounts; refund cases identified under policy 7; no-bill returns; supplier payments and supplier bank-detail changes; and role, permission and approval-rule changes.
 - `POL-02.08` A person cannot self-approve through another role, including for a refund case identified under policy 7. Routine billing and receiving within approved rules can proceed without additional approval.
-- `POL-02.09` Configure approval limits per action and approver role within the assigned business, Site and brand scope, using amount, quantity or discount percentage as relevant, including for refund cases identified under policy 7. For PT approvals, compare the limit with total proposed acquisition cost: the proposed P RATE times the covered quantity on the PT revision under approval, not MRP (`PRD-ACS-015`). A missing or disputed cost blocks value-based approval until resolved (`PRD-ACS-016`). Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
+- `POL-02.09` Configure approval limits per action and approver role within the assigned entity, Site and brand scope (`PRD-ACS-001`), using amount, quantity or discount percentage as relevant, including for refund cases identified under policy 7. For PT approvals, compare the limit with total proposed acquisition cost: the proposed P RATE times the covered quantity on the PT revision under approval, not MRP (`PRD-ACS-015`). A missing or disputed cost blocks value-based approval until resolved (`PRD-ACS-016`). Route requests above the limit to the next authorised eligible approver; if none exists, leave the request pending without auto-approval. A missing limit does not grant unlimited authority; unlimited authority must be explicitly configured.
 - `POL-02.10` Set numeric role/action limit values and name the authorised approvers before use; actual values and assignments remain undecided.
-- `POL-02.11` The actual employee-to-persona, role and scope map; exception owners, due times, recipients and escalation (including missing EBO daily reports); count cost limits and approvers; daily-summary recipients and channel; and any remaining per-user authority remain unconfigured. Do not enable affected live actions until these real values are approved and validated.
-- `POL-02.12` Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action.
-- `POL-02.13` Record every day-close cash difference. A Store Manager may approve within a configured limit; Accounts approves above it. No difference is written off automatically. Actual limits and named approvers remain unconfigured.
+- `POL-02.11` The actual employee-to-persona, role and scope map; exception owners, due times, recipients and escalation (including missing EBO daily reports); count tolerances and approvers; daily-summary recipients; and any remaining per-user authority remain unconfigured. Do not enable affected live actions until these real values are approved and validated.
+- `POL-02.12` Material changes after approval require renewed approval. These include changes to amount, quantity, price, supplier or customer, destination, commercial terms, or payment details when relevant to the action. For transfers, only an increase in quantity, a change of item or a change of destination is material (`PRD-TRF-010`); a reduction before dispatch is not.
+- `POL-02.13` Record every day-close cash difference. Within the configured cash-variance tolerance, the approver set for that tolerance approves; above it, a higher approver approves and the difference becomes an owned exception (`PRD-CSH-011`). No difference is written off automatically. Actual tolerances, approver sets and named approvers remain unconfigured.
 - `POL-02.14` Send KDPS's daily summary at 9 PM via WhatsApp to selected recipients. Recipient names remain unconfigured.
-- `POL-02.15` Provide default approval limits by role and action. Permit a different limit for an explicitly authorised individual. An absent limit grants no authority; actual amounts and assignments remain unconfigured.
+- `POL-02.15` Provide role-level approval limits by role and action. Permit a different limit for an explicitly authorised individual. An absent limit grants no authority; actual amounts and assignments remain unconfigured.
 - `POL-02.16` Route exceptions by type and Site, including stock to Operations, money to Accounts and supplier Booking matters to Booking. Record the real owner, due time and escalation before enabling the affected operation.
 - `POL-02.17` Require authenticator-app TOTP multi-factor authentication in production. Any easier test path is development-only and cannot weaken production authentication.
 - `POL-02.18` Use initial idle-lock limits of 5 minutes for shared POS sessions and 15 minutes for office sessions, with a 12-hour absolute session limit. Preserve unfinished work when locking or requiring sign-in again.
 - `POL-02.19` Enable bulk approval only for explicitly allowlisted action types. Show selected items and their total, validate every item's permission, scope, value limit, state and independence, and send exceptions through individual review.
 - `POL-02.20` Assign stand-ins by name, scope and limits for a time-limited period with automatic expiry. A stand-in cannot approve work they prepared.
-- `POL-02.21` A Store Manager may approve count differences only within configured cost limits. Escalate larger differences to a higher authorised approver; never adjust a difference automatically.
+- `POL-02.21` Count differences are approved within the configured count tolerance, stated as a cost difference (`PRD-ACS-015`, `PRD-STK-012`). Above the tolerance, a higher approver approves and the difference becomes an owned exception. Never adjust a difference automatically.
+- `POL-02.22` Permit phone and WhatsApp approval links only for explicitly allowlisted action types. The allowed types remain to be configured.
+- `POL-02.23` Maintain the configured approve/reject reason list used with `PRD-ACS-010`. The reasons themselves remain to be configured.
+- `POL-02.24` While a count is open, counted items and locations stay frozen from sale and movement as `PRD-STK-009` requires. Who may move frozen items, if anyone, remains to be configured.
+- `POL-02.25` Configure which exception alerts under `PRD-EXC-013` are enabled, their thresholds and recipients. Actual thresholds and recipients remain to be configured.
 
 **Template map (proposed, Open).** Which PRD personas each KDPS template serves. A person gets only the parts their role assignment grants.
 
@@ -131,7 +137,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-03.02` Preserve original values and record the approved resolution, evidence and approver. Imports must not silently overwrite approved data.
 - `POL-03.03` A conflict does not prevent recording physical custody, but it holds the affected line from final PT approval and saleability. Clean, independently resolved lines may proceed.
 - `POL-03.04` Automatically create an exception for detected conflicts; users may also raise one manually. Link it to the affected document/item and retain conflicting values, evidence and resolution history.
-- `POL-03.05` Assign each exception to the responsible user or team in Booking, Accounts or Warehouse based on the issue. Support comments, attachments, reassignment and escalation; resolve through the required approval. Closing an exception alone does not change saleability or accounting.
+- `POL-03.05` Assign each exception to the owner routed under `POL-02.16` for its type and Site. Support comments, attachments, reassignment and escalation; resolve through the required approval. Closing an exception alone does not change saleability or accounting.
 - `POL-03.06` Maintain an approved costing profile per brand. A booking-level override requires approval. The profile defines discounts and additions and their calculation order, allocation of freight and other charges, tax treatment (keeping recoverable tax separate from inventory cost), rounding, and permitted matching tolerances.
 - `POL-03.07` Keep BASIC, calculated P RATE and supplier-provided cost separately visible. Each brand formula must be supported by its agreement or a verified worked example; no formula or rate is assumed. Use total proposed acquisition cost for PT approval limits under `PRD-ACS-015`, not MRP; a missing or disputed cost blocks value-based approval under `PRD-ACS-016`.
 - `POL-03.08` Missing inputs or an unexplained mismatch raise an exception and block final costing approval.
@@ -155,7 +161,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-04.06` Give each physical piece of a piece-tracked profile a unique internal ID with a printable barcode, and retain supplier product barcodes for lookup.
 - `POL-04.07` Support quantity-based tracking for broader products where appropriate.
 - `POL-04.08` Specific batch/expiry categories and minimum remaining shelf-life day limits remain to be confirmed.
-- `POL-04.09` For KDPS, apparel and footwear use piece IDs by default. Other categories require explicit selection; do not extend piece tracking to them automatically.
+- `POL-04.09` For KDPS, apparel and footwear use piece IDs by default. Other categories require explicit selection; do not extend piece tracking to them automatically. Changing an in-stock profile to piece-tracked requires a labelling count (`PRD-MER-018`).
 
 **Signed by, date:**
 
@@ -169,7 +175,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 
 - `POL-05.01` Booking lifecycle: Draft is an editable buying plan; Approved is internal authorisation; Issued means it has been sent to the supplier; Confirmed records supplier acceptance against the agreed version.
 - `POL-05.02` Approval includes buying/open-to-buy budget checks, and the budget is reserved to prevent duplicate spending. Actual commercial commitment follows the governing agreement, not the status label alone.
-- `POL-05.03` Material changes after approval require renewed approval.
+- `POL-05.03` Material changes after approval require renewed approval. For transfers, only an increase in quantity, a change of item or a change of destination is material; a reduction before dispatch is not (`PRD-TRF-010`, `POL-02.12`).
 - `POL-05.04` After issue, amendments and cancellation follow the supplier agreement; record the communication with the supplier and its response. Cancellation cannot erase quantities already received.
 - `POL-05.05` Set a delivery window per booking and line-level delivery dates for staggered deliveries. Partial receipts reduce outstanding quantity; shortages remain visible.
 - `POL-05.06` When the delivery window expires, mark the remaining balance overdue and raise a follow-up exception. Expiry alone does not cancel the balance.
@@ -182,20 +188,24 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 
 ## 6. Customer returns
 
-- How many days does a customer have for an ordinary return, and for a defective item?
+- How many days does a customer have for an ordinary return? How is a defective item assessed?
 - From which date are the days counted?
-- What can the customer get in each case: refund, exchange, store credit, or refusal?
+- What can the customer get in each case: refund, exchange, Store credit, or refusal?
 - Does any Store follow a different rule?
 
 **Answer:**
 
 - `POL-06.01` Each Store inherits its Organisation’s customer-return policy, including return windows, eligibility and permitted remedies. A Store-specific override is permitted only when explicitly authorised by the Organisation.
-- `POL-06.02` KDPS’s ordinary apparel and footwear return window is 15 days from customer handover. The Organisation may edit its policy. A Store-specific override is permitted only when explicitly authorised by the Organisation and must be effective-dated. Eligibility requires the item to be unused, with its original tags and a sale that can be traced.
+- `POL-06.02` KDPS’s ordinary apparel and footwear return window is 15 days from customer handover. Returns of earlier-POS bills and unlinked EBO returns after a Store's switch stay unavailable in the app until a later plan is approved (`DEC-059`). The Organisation may edit its policy. A Store-specific override is permitted only when explicitly authorised by the Organisation and must be effective-dated. Eligibility requires the item to be unused, with its original tags and a sale that can be traced.
 - `POL-06.03` Count the ordinary return window from customer handover. For billed-retained goods, start it on collection.
 - `POL-06.04` Preserve the policy that applied at the time of sale; a later policy change cannot retrospectively reduce that sale’s return eligibility.
 - `POL-06.05` Handle defective items through a separate assessment and remedy process. Do not reject one solely because the ordinary return window has elapsed; assess applicable consumer rights and warranties without inventing a universal hard cutoff.
-- `POL-06.06` For eligible ordinary returns, offer refund, exchange or store credit, with the customer choosing among remedies permitted by policy. Record an exchange's return and replacement separately and collect or refund any price difference; refund routing is governed by the Refunds and no-bill returns policy.
-- `POL-06.07` For defective goods, support assessment followed by replacement, repair where appropriate, or refund under applicable consumer rights and warranties. Do not force store credit where a refund is owed.
+- `POL-06.06` For eligible ordinary returns, offer refund, exchange or Store credit, with the customer choosing among remedies permitted by policy. Record an exchange's return and replacement separately and collect or refund any price difference; refund routing is governed by the Refunds and no-bill returns policy.
+- `POL-06.07` For defective goods, support assessment followed by replacement, repair where appropriate, or refund under applicable consumer rights and warranties. Do not force Store credit where a refund is owed.
+- `POL-06.08` Store-credit and loyalty settings are answered in policy 7; Operations confirms them there.
+- `POL-06.09` Configure the cheaper-replacement rule for exchanges (`PRD-RET-008`: refund-difference, credit-difference or refusal). The choice remains to be configured.
+- `POL-06.10` Configure replacement-SKU restrictions for exchanges (`PRD-RET-009`). The rules remain to be configured.
+- `POL-06.11` Configure evidence required for refused return attempts (`PRD-RET-015`). The requirements remain to be configured.
 
 **Signed by, date:**
 
@@ -204,7 +214,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - Does a refund go back to the original payment method?
 - When may cash be given in place of the original method?
 - Are returns without a bill allowed? If so, who may approve one, at what value, and with what evidence?
-- Which tenders may be enabled online, and how are store credit, gift vouchers and loyalty issued, valued, expired and redeemed?
+- Which tenders may be enabled online, and how are Store credit, gift vouchers and loyalty issued, valued, expired and redeemed?
 - Which refund cases require independent approval, and what policy-defined exception or value basis applies?
 - What customer notice, consent and permitted contact use apply when contact details are collected?
 
@@ -212,14 +222,14 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 
 - `POL-07.01` Route each refund to its original tender(s), capped at each tender’s remaining refundable amount; a cash purchase may be refunded in cash. For split payments, retain the original tender allocations and split each refund across them in proportion, as the PRD requires. A cash substitution or other tender override requires an independent authorised approval.
 - `POL-07.02` Keep refund entitlement separate from permitted tender routing. Prevent duplicate refunds; while the original refund outcome is unknown, do not issue a second refund. Keep approved, pending, failed and confirmed outcomes distinct; a failed payment remains an outstanding customer obligation.
-- `POL-07.03` Issue store credit only with the customer’s agreement.
+- `POL-07.03` Issue Store credit only with the customer’s agreement.
 - `POL-07.04` For a no-bill request, first search the original sale using receipt details, customer details or payment reference. If found, handle it as an ordinary bill-backed return.
 - `POL-07.05` If no original sale is found, raise an exception request with item details, evidence and reason. An independent authorised approver must approve it within the configured value limit.
-- `POL-07.06` An approved ordinary no-bill exception may be handled by exchange or store credit; it does not receive an automatic cash refund. Use documented, evidenced valuation rather than assuming MRP.
+- `POL-07.06` An approved ordinary no-bill exception may be handled by exchange or Store credit; it does not receive an automatic cash refund. Use documented, evidenced valuation rather than assuming MRP. No-bill return approval limits use that valuation as their value basis (`PRD-ACS-015`).
 - `POL-07.07` Assess defective-goods claims separately under applicable rights and warranties.
 - `POL-07.08` Each Organisation may enable or disable ordinary no-bill exceptions. Keep them unavailable until eligibility, valuation and approval limits are configured.
 - `POL-07.09` The in-scope Tender set is cash, card, UPI, verified Bank transfer, customer-linked Store credit, the Organisation's own Gift vouchers and approved Customer credit/pay-later. Require independent approval for no-bill returns, cash substitution, tender/return overrides and refunds above the authorised limit. Policy 2 defines approvers and authority. Bank transfer needs bank/provider confirmation; a screenshot alone is insufficient. Store credit/Gift voucher validity, Customer credit limits and due dates, loyalty settings, provider confirmation, customer notices and applicable CA/tax treatment remain unconfigured; affected live actions stay unavailable until configured.
-- `POL-07.10` Gift-voucher validity, partial redemption, refund of an unused balance and treatment of a lost voucher remain to be confirmed.
+- `POL-07.10` Gift-voucher validity, partial redemption, refund of an unused balance and treatment of a lost voucher remain to be confirmed. Gift-voucher tax on issue and redemption is set under policy 10 (`POL-10.10`).
 - `POL-07.11` Store credit is redeemable only at authorised Stores within the same legal entity. Validity and any narrower scope remain to be configured.
 - `POL-07.12` Customer phone is optional for ordinary billing; explain its purpose when collected and keep marketing consent separate.
 - `POL-07.13` Keep loyalty disabled until an approved scheme, earning, redemption, liability and expiry rules are configured.
@@ -305,6 +315,8 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-10.07` The bill-number format for each tax registration, within the statutory limit, remains to be confirmed by the CA.
 - `POL-10.08` Use verified business-unit-to-GST registration and goods mappings before statutory goods-in processing; a missing or unverified mapping blocks the affected live action.
 - `POL-10.09` Verify each supplier's MSME classification and applicable payment deadlines against evidence and law before configuring payment controls; do not infer either value.
+- `POL-10.10` Gift-voucher tax on issue and redemption remains to be confirmed by the CA.
+- `POL-10.11` The credit-note and tax-document cancellation treatment of customer returns remains to be confirmed by the CA.
 
 **Signed by, date:**
 
@@ -340,6 +352,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-12.05` Obtain actual rates and terms from each signed agreement; they remain to be supplied.
 - `POL-12.06` Apply the configured EBO brand commission and settlement basis to imported sales, returns and adjustments. Actual basis, rates and terms remain to be supplied from each applicable agreement.
 - `POL-12.07` Configure franchise terms from the signed contract and EBO commission, return and settlement formulas from each signed brand agreement. Do not infer rates or terms.
+- `POL-12.08` Configure Owner authority for onward commission under partner agreements (`PRD-PAY-013`). The authority remains to be configured.
 
 **Signed by, date:**
 
@@ -386,7 +399,8 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-14.03` Accounts verifies opening values, supplier and customer dues, advances and deposits against the last closed books. Complete a through-cutoff reconciliation that prevents omissions and double counting.
 - `POL-14.04` Carry unfinished transfers, bookings, supplier/customer returns and refunds, claims and billed-retained items with their original references.
 - `POL-14.05` Owner, Accounts and Operations approve the switch and its fallback.
-- `POL-14.06` Opening stock records physically counted and verified stock without creating a fabricated purchase or supplier liability. Historical sales are reporting-only. After a Store switches, the old POS is reference-only; Tally remains the official book.
+- `POL-14.06` Opening stock records physically counted and verified stock without creating a fabricated purchase or supplier liability. Historical sales are reporting-only. After a Store switches, the earlier POS is reference-only; the official book follows the Official book policy.
+- `POL-14.08` Before the first Store switch, these go/no-go checks must pass: no unexplained material difference at the switch count; all participating staff trained; no serious exception open (meaning of serious exception remains to be configured). Run length and material-difference threshold remain to be configured.
 - `POL-14.07` Build and test opening import layouts and reconciliation tools with labelled sample data in stage 1. Load real opening stock and balances only at each Store's approved day-close switch in stage 4. Before the pilot switch, record the verified manifest and balances, cutoff and day-close date, carried work, approvals and fallback.
 
 **Signed by, date:**
@@ -423,11 +437,12 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 **Answer:**
 
 - `POL-16.01` Enable offline billing only for approved Stores, through one registered counter per Store, with authority renewed online every 24 hours.
-- `POL-16.02` The approved offline pilot starts cash-first. Later offline use of an external terminal remains supported only under an explicit evidence and reconciliation procedure; a screenshot alone is not provider confirmation.
-- `POL-16.03` Refunds and returns/exchanges require online authority; store-credit redemption and actions requiring fresh approval also require online authority.
+- `POL-16.02` The approved first offline Store starts cash-first. Later offline use of an external terminal remains supported only under an explicit evidence and reconciliation procedure; a screenshot alone is not provider confirmation.
+- `POL-16.03` Refunds and returns/exchanges require online authority; Store-credit redemption, gift-voucher redemption, Customer credit sales and loyalty redemption, and actions requiring fresh approval also require online authority.
 - `POL-16.04` Permit only reserved eligible counter stock and valid cached prices, offers and tax versions. Configure allocation limits per Store; actual limits remain unset.
-- `POL-16.05` Expired authority, required data or statutory documents block finalisation while preserving work. Uploads must be duplicate-free; refused or conflicting bills create exceptions for the Store Manager, with Accounts handling monetary differences.
+- `POL-16.05` Expired authority, required data or statutory documents block finalisation while preserving work. Uploads must be duplicate-free; refused or conflicting bills create exceptions routed under `POL-02.16`; monetary differences follow the money route.
 - `POL-16.06` Obtain required statutory documents before the applicable invoice is issued or goods are released.
+- `POL-16.07` The offline working-set validity time remains to be configured.
 
 **Signed by, date:**
 
@@ -467,7 +482,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 
 - `POL-18.01` Use provisional targets of 15 minutes for recovery point (maximum recent data loss) and 4 hours for recovery time, subject to measured restore tests and KDPS business-impact acceptance. These targets are not a proven guarantee.
 - `POL-18.02` Protect encrypted backups of records and attachments.
-- `POL-18.03` Admin conducts a restore drill before go-live, quarterly thereafter, and after major recovery changes. Operations and Accounts validate stock, bills and financial totals before reopening.
+- `POL-18.03` Admin conducts a restore drill before go-live and after major recovery changes. A quarterly drill thereafter is proposed, awaiting KDPS Owner and Admin sign-off. Operations and Accounts validate stock, bills and financial totals before reopening.
 - `POL-18.04` Reconcile any recovery gap against counter, provider and Tally records. Do not silently lose or duplicate transactions.
 - `POL-18.05` Set retention by record class, including financial, stock, employee, customer and audit records. Validate actual durations against applicable legal retention requirements; legal holds override routine deletion.
 
