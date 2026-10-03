@@ -250,6 +250,8 @@ function sweepNeeded(src: Sources, id: string): boolean {
 
 // ---------- gated sections ----------
 
+type Pointer = { file: string; nums: string[] }; // numbered sections of a document named in words
+
 type Unit = {
   key: string;
   file: string;
@@ -257,8 +259,64 @@ type Unit = {
   text: string;
   own: Set<string>; // IDs and source sections cited in the section itself
   refs: Set<string>; // other sections it points at (one hop)
+  pointers: Pointer[]; // "stock-ledger 10.4" and the like; turned into refs once every file is read
   marker: boolean;
 };
+
+// Documents a section can name in words. A one-word name counts only with ".md" ("personas.md 1");
+// a hyphenated one also without it ("stock-ledger 10.4"). Names shared by two files (README) never count.
+const DOC_BY_NAME = (() => {
+  const all = [...walk('docs').filter((f) => f.endsWith('.md')), 'AGENTS.md'];
+  const name = (f: string) => posix.basename(f, '.md');
+  const count = (n: string) => all.filter((f) => name(f) === n).length;
+  return new Map(all.filter((f) => count(name(f)) === 1).map((f) => [name(f), f]));
+})();
+
+// "stock-ledger 10.4", "stock-ledger.md section 7", "[module-map.md](module-map.md) 2, 3, 4.1", "stock-ledger 10.2 to 10.4".
+const NUM = String.raw`\d{1,2}(?:\.\d{1,2})?`;
+const DOC_NAMES = [...DOC_BY_NAME.keys()].sort((a, b) => b.length - a.length);
+const POINTER_RE = new RegExp(
+  String.raw`(?:\[[^\]]*\]\(([^)\s#]+\.md)\)|(?<![\w/.-])(?:(${DOC_NAMES.filter((n) => n.includes('-')).join('|')})(?:\.md)?|(${DOC_NAMES.join('|')})\.md))` +
+    String.raw`(?:'s)?,?[ \t]+(?:sections?[ \t]+|§[ \t]*)?(${NUM}(?:(?:[ \t]*,[ \t]*|[ \t]+and[ \t]+|[ \t]+to[ \t]+|[ \t]*–[ \t]*)${NUM})*)(?![\w]|\.\d)`,
+  'g',
+);
+
+// "2, 3, 4.1" -> 2, 3, 4.1; "10.2 to 10.4" -> 10.2, 10.3, 10.4; "4 to 6" -> 4, 5, 6.
+function sectionNumbers(list: string): string[] {
+  const parts = [...list.matchAll(new RegExp(String.raw`(${NUM})|to|–`, 'g'))].map((m) => m[1] ?? 'to');
+  const out: string[] = [];
+  parts.forEach((p, i) => {
+    if (p === 'to') return;
+    const from = parts[i - 1] === 'to' ? parts[i - 2] : undefined;
+    const [a, b] = [from?.split('.').map(Number) ?? [], p.split('.').map(Number)];
+    const level = a.length === 1 && b.length === 1 ? 0 : a.length === 2 && b.length === 2 && a[0] === b[0] ? 1 : -1;
+    if (level < 0) out.push(p);
+    else for (let n = a[level] + 1; n <= b[level]; n++) out.push(level ? `${a[0]}.${n}` : String(n));
+  });
+  return out;
+}
+
+// A pointer inside backticks is an example, not a pointer.
+function pointers(file: string, text: string): Pointer[] {
+  return [...text.replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length)).matchAll(POINTER_RE)].flatMap((m) => {
+    const target = m[1] ? posix.normalize(posix.join(posix.dirname(file), m[1])) : DOC_BY_NAME.get(m[2] ?? m[3]);
+    return target ? [{ file: target, nums: sectionNumbers(m[4]) }] : [];
+  });
+}
+
+// Numbered headings ("## 7. Cost", "### 7.6 Unknown cost") and the lines they span, subsections included.
+function numberedSpans(text: string): Map<string, [number, number]> {
+  const hs = headings(text);
+  const end = text.split('\n').length + 1;
+  const spans = new Map<string, [number, number]>();
+  hs.forEach((h, i) => {
+    const num = /^(\d+(?:\.\d+)*)\.?\s/.exec(h.title);
+    if (!num || spans.has(num[1])) return;
+    const next = hs.slice(i + 1).find((o) => o.level <= h.level);
+    spans.set(num[1], [h.line, next ? next.line : end]);
+  });
+  return spans;
+}
 
 function sourceLinks(text: string): string[] {
   return [...text.matchAll(SOURCE_LINK_RE)].map((m) => `docs/${m[1]}#${m[2]}`);
@@ -272,6 +330,7 @@ function makeUnit(key: string, file: string, line: number, text: string, src: So
     text,
     own: new Set([...extractIds(text, src), ...sourceLinks(text)]),
     refs: new Set(),
+    pointers: pointers(file, text),
     marker: MARKER_RE.test(text),
   };
 }
@@ -297,7 +356,8 @@ function markdownUnits(file: string, text: string, src: Sources): Unit[] {
   }
   const slugs = new Set(hs.map((h) => `${file}#${h.slug}`));
   for (const u of units) {
-    const body = u.text.split('\n').slice(1).join('\n');
+    // A number inside a pointer to a named document ("stock-ledger 2.3") is not a section of this one.
+    const body = u.text.split('\n').slice(1).join('\n').replace(POINTER_RE, (m) => ' '.repeat(m.length));
     for (const m of body.matchAll(/(?<![\w.\-₹])(\d{1,2}\.\d{1,2})(?![\w]|\.\d)/g)) {
       const key = numbered.get(m[1]);
       if (key && key !== u.key) u.refs.add(key);
@@ -357,16 +417,27 @@ function designSystemPage(text: string): string | null {
 
 function gatedUnits(src: Sources): Unit[] {
   const units: Unit[] = [];
+  const spans = new Map<string, Map<string, [number, number]>>();
   for (const file of GATED.flatMap(walk)) {
     const text = read(file);
-    if (file.endsWith('.md')) units.push(...markdownUnits(file, text, src));
-    else if (file === BLUEPRINT) units.push(...blueprintUnits(file, text, src));
+    if (file.endsWith('.md')) {
+      spans.set(file, numberedSpans(text));
+      units.push(...markdownUnits(file, text, src));
+    } else if (file === BLUEPRINT) units.push(...blueprintUnits(file, text, src));
     else if (file === DESIGN_SYSTEM) {
       const page = designSystemPage(text);
       if (page === null) errors.push({ where: file, text: 'The __bundler/template block does not unpack to a page string.' });
       else units.push(makeUnit(`${file}#page`, file, 1, page, src));
     } else if (file.endsWith('.html')) units.push(makeUnit(`${file}#page`, file, 1, text, src));
   }
+  // "stock-ledger 10.4" points at that section; "stock-ledger section 7" at 7 and its subsections.
+  for (const u of units)
+    for (const p of u.pointers)
+      for (const num of p.nums) {
+        const span = spans.get(p.file)?.get(num);
+        if (!span) continue;
+        for (const o of units) if (o.file === p.file && o.key !== u.key && o.line >= span[0] && o.line < span[1]) u.refs.add(o.key);
+      }
   return units;
 }
 
@@ -445,8 +516,7 @@ function staleness(unit: Unit, record: ReviewRecord | undefined, byKey: Map<stri
     const old = record.deps[id];
     let changed = false;
     if (!old) {
-      reasons.push(`${id}${tag(id)}: newly cited since the last review.`);
-      changed = true;
+      reasons.push(`${id}${tag(id)}: newly cited since the last review.`); // the rule itself did not change: no sweep
     } else {
       if (old.hash !== dep.hash) {
         reasons.push(`${id}${tag(id)}: ${id.startsWith('DEC-') ? 'decision entry' : id.includes('#') ? 'source section' : 'rule text'} changed.`);
