@@ -17,7 +17,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - A stage ends only when its exit checks pass. Exit checks come from "Acceptance conditions" in the PRD.
 - This plan carries no dates. Dates depend on team size, which is not yet set.
 - The phone client is not yet placed in a stage.
-- Build screens in English first, ready for Hindi: screen text is kept apart from code and layouts allow longer text. The Hindi interface for screens built in stages 1 to 5 arrives in stage 5; stage 6 screens get Hindi in stage 6. WhatsApp and SMS messaging arrive in stage 5.
+- Build screens in English first, ready for Hindi: screen text is kept apart from code and layouts allow longer text. The Hindi interface for screens built in stages 1 to 5 arrives in stage 5; stage 6 screens get Hindi in stage 6. Email, WhatsApp and SMS messaging arrive in stage 5. Before then nothing is sent: sign-in uses the authenticator-app code, and alerts reach people in My work (`PRD-SEC-001`, `PRD-EXC-013`, `DEC-099`).
 
 | Stage | Delivers | Replaces at KDPS |
 | --- | --- | --- |
@@ -180,7 +180,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - EBO brand-settlement statements and the configured commission and partner basis (`PRD-EBO-009`).
 - Site closure, relocation and complete export.
 - Hindi interface for the screens built in stages 1 to 5 (`PRD-PRO-009`).
-- WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the daily summary and alerts.
+- Email, WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the daily summary and alerts (`DEC-099`).
 
 **Out of scope.** Payroll posting (stage 6).
 
