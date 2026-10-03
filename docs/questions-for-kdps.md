@@ -41,7 +41,7 @@
 15. **Store exceptions.** Does any Store get a different return rule? Which, and what rule? · `POL-06.01` · V-24
 16. **How customers may pay.** In-scope instruments are cash, card, UPI, verified Bank transfer, Store credit, own Gift vouchers and approved Customer credit/pay-later. Confirm provider arrangements and evidence for each; that is needed for stage 4 (V-25). Actual Customer credit limits and due dates are needed by stage 5, when Customer credit goes live (V-59). (With Accounts.) · `POL-07.09` · V-25, V-59
 17. **Refund approvers.** Name the independent authorised people and scopes for no-bill returns, cash substitution, tender/return overrides and refunds above limit. The actual limits are in V-02. · `POL-07.09`, `POL-02.15` · V-02, V-01
-18. **Returns without a bill.** Allowed or not? If yes: up to what value, who approves, and how is the item valued? (With Accounts.) · `POL-07.08` · V-28
+18. **Returns without a bill.** Allowed or not? If yes: up to what value, who approves, and how is the item valued? (With Accounts.) · `POL-07.06`, `POL-07.08`, `PRD-ACS-015` · V-28, V-02
 19. **Store credit.** How long is it valid, and which authorised Stores within the same legal entity may redeem it? (With Accounts.) · `POL-07.11` · V-29
 20. **Gift vouchers.** KDPS issues its own vouchers. Confirm validity, partial redemption, refund of unused balance and lost-voucher treatment. The CA confirms tax on issue and redemption (CA question 6). · `POL-07.10`, `POL-10.10` · V-30
 21. **Loyalty.** Should KDPS enable a points scheme? If so, how are points earned, used and expired? Keep it disabled until the scheme is approved. (With Accounts.) · `POL-07.13` · V-31
@@ -52,7 +52,7 @@
 26. **EBO reports.** By what time must each EBO's daily report arrive before it counts as missing, and who owns a late-report exception? (With Operations.) · `POL-02.11` · V-42
 27. **Offers and promotions.** Offers do not stack unless a rule explicitly allows it. Provide each brand agreement's cost shares and name the Brand manager who proposes and authorised approver who approves those shares and markdowns. · `POL-19.01`–`POL-19.05` · V-43
 28. **The pilot switch.** Which Store goes first, on which date? Who verifies and signs its opening stock, balances and carried work at the day-close switch, and what is the fallback if the switch fails? (With Accounts and Operations.) · `POL-14.02`–`POL-14.07` · V-44
-29. **Switch pass marks.** Set the material-difference threshold per Store for the switch count against the earlier POS's last SOH, before the first switch. (How long the side-by-side test runs is question 38.) Pass requires training for all participating staff and, at each switch, no unexplained material difference. · `phases.md`, `PRD-LIF-027` · V-45
+29. **Switch pass marks.** Set the material-difference threshold per Store for the switch count against the earlier POS's last SOH, before the first switch. (How long the side-by-side test runs is question 38.) Pass requires training for all participating staff and, at each switch, no unexplained material difference. · `POL-14.08`, `PRD-LIF-027` · V-45
 39. **Serious exception at go/no-go.** What counts as a serious exception that must be closed before the first switch? (With Operations.) · `POL-14.08` · stage 4
 43. **Returns of earlier-POS bills.** For the 15 days after a Store switches, such returns and EBO returns not linked to their sale are unavailable in the app. How should the Store serve these customers meanwhile? (The product owner decides.) · `POL-06.02`, `DEC-059` · stock-ledger SL-10 · no V- number · before the first switch
 44. **Offline working-set validity time.** How long may the till's cached prices, offers and tax versions be used offline before billing is blocked? (With Operations; see question 24.) · `POL-16.07`, `PRD-OFF-004` · V-66 · stage 4
@@ -75,7 +75,7 @@
 
 ### Needed before the side-by-side test
 
-37. **Your data on the test setup.** The side-by-side test holds your real product, stock and sales data with Railway, a hosting company whose servers are outside India. It is a test, not your official system. Do you agree? Should customer names and phone numbers from the old POS reports be left out of the import? · `PRD-LIF-026` · alignment report 4.15 · before the side-by-side test
+37. **Your data on the test setup.** The side-by-side test holds your real product, stock and sales data with Railway, a hosting company whose servers are outside India. It is a test, not your official system. Do you agree? Should customer names and phone numbers from the earlier POS reports be left out of the import? Until you answer, imports keep no customer name or phone number (`PRD-SEC-009`, `PRD-SEC-010`). · `PRD-LIF-026` · alignment report 4.15 · before the side-by-side test
 38. **How long the side-by-side test runs.** Set the run length before the test starts. (The switch threshold is question 29.) · `phases.md`, `POL-14.08` · V-45 · before the side-by-side test
 40. **Earlier POS PT file.** Does the earlier POS accept the approved PT export from Apparel OS in the KDPS layout during the test? · `DEC-053`, `PRD-PTW-008` · before the side-by-side test
 
@@ -107,7 +107,7 @@
 4. **Bill number format.** Each till will have its own number series per GST registration per financial year. Please confirm the length limit and allowed characters, and approve a format. · `POL-10.07` · V-40 · stage 4
 5. **Altered or held goods.** When a customer has paid but the goods stay in the Store (for alteration or pickup), when is the sale recognised? Does the goods' cost leave stock at the bill or at handover? · `POL-08.06`, `POL-09.10` · V-35, stock-ledger SL-17 · stage 4
 6. **Gift vouchers and tax.** How is GST handled when a voucher is sold and when it is used? · `POL-10.10` · V-30 · stage 4
-7. **Return credit notes.** How should tax-document cancellation and credit notes treat customer returns? · `POL-10.11` · stage 4
+7. **Return credit notes.** How should tax-document cancellation and credit notes treat customer returns? · `POL-10.11` · V-72 · stage 4
 8. **TDS.** Which payments (rent, contractors, professionals, commission) need TDS, and at which rates? · `POL-10.04` · V-48 · stage 5
 9. **MSME suppliers.** Provide evidence of each supplier's MSME classification and confirm its applicable payment deadline. · `POL-10.09` · V-61 · stage 5
 10. **Fixed assets.** Category-specific capitalisation thresholds, depreciation methods and actual rates. · `POL-09.26` · V-50 · stage 5
