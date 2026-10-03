@@ -27,6 +27,7 @@ Sample values in this document and in the design-system pages (names, dates, rat
 ---
 
 ## 2. Colour tokens
+<!-- deps: none — colour tokens and contrast design target -->
 
 Palette: **Sand & Navy** (option 2b). Colour pairs target WCAG 2.2 AA in both themes (a design target; no PRD requirement sets it yet): text 4.5:1 (1.4.3), control boundaries and focus 3:1 (1.4.11).
 
@@ -51,6 +52,7 @@ Palette: **Sand & Navy** (option 2b). Colour pairs target WCAG 2.2 AA in both th
 | `--on-danger` | Text on destructive | `#ffffff` | `#111214` | 6.54 / 8.21 vs `--danger` (min 4.5) |
 
 ### Glass, scrim, shadow
+<!-- deps: none — glass, scrim and shadow tokens -->
 
 | Token | Light | Dark |
 |---|---|---|
@@ -64,6 +66,7 @@ Palette: **Sand & Navy** (option 2b). Colour pairs target WCAG 2.2 AA in both th
 Glass surfaces use `backdrop-filter: blur(16px) saturate(1.2)` (drawers: `blur(18px)`) with a 1 px `--glass-border` hairline. Text on glass always uses the normal text tokens.
 
 ### Theme
+<!-- deps: none — theme choice is a design preference -->
 
 - The default is **Match device** (`prefers-color-scheme`). It updates live when the OS setting changes.
 - The user can override it in **My profile › Theme**: Match device · Light · Dark. The choice is stored on the user, not the browser.
@@ -102,6 +105,7 @@ Till and portal body text is 15 / 22.
 ## 4. Spacing, sizes, radius
 
 ### Spacing (4 px base)
+<!-- deps: none — spacing scale only -->
 
 | Token | px | Typical use |
 |---|---|---|
@@ -119,6 +123,7 @@ Till and portal body text is 15 / 22.
 Lay out sibling groups with flex or grid plus `gap`, not margins.
 
 ### Sizes (comfortable density)
+<!-- deps: none — control sizes and design target sizes -->
 
 | Element | Size |
 |---|---|
@@ -133,12 +138,14 @@ Lay out sibling groups with flex or grid plus `gap`, not margins.
 | Minimum target (2.5.8) | 24 × 24 px hit area for every control, including 16 px checkboxes and radios, 34 × 20 toggles and the 20 px My work pill; 16 px checkboxes sit in ≥ 40 px hit areas |
 
 ### Radius
+<!-- deps: none — corner radius tokens -->
 
 4 (checkbox, keycap, restricted chip) · 6 (inputs, buttons, table frame) · 8 (cards, menus, till tiles) · 12 (drawers, dialogs, popovers, toasts, portal cards) · 999 (badges, chips, counters).
 
 ---
 
 ## 5. Elevation and glass rules
+<!-- deps: none — elevation and glass styling rules -->
 
 | Level | Surface | Shadow | Radius | Used for |
 |---|---|---|---|---|
@@ -160,6 +167,7 @@ Rules:
 ## 6. Layout: shells
 
 ### A · Back office (desktop-first, responsive)
+<!-- deps: PRD-ACS-002, PRD-ACS-003, PRD-ACS-009, PRD-UXP-002 — sidebar follows role grants; My work; scan/search -->
 
 - **Top bar:** 56 px of glass, sticky, and content scrolls under it. Order: logo slot (200 × 32, empty until supplied) · scope chip · search/scan field (“Search or scan: SKU, barcode, piece ID, doc no., bill”, Ctrl K) · My work counter · Alerts · theme switch · avatar.
 - **Sidebar:** solid, 232 px, collapsible to 64 px. It lists only the sections the user's role assignments grant. The active item uses `--tint` / `--on-tint` at weight 600. Open-item counts are right-aligned in `--text-2`.
@@ -199,6 +207,7 @@ Rules:
 - On phones the tabs become a bottom bar.
 
 ### D · Mobile (responsive web)
+<!-- deps: PRD-REC-004, PRD-REC-005, PRD-REC-006, PRD-PRO-009, prd.md#stack — scan-to-receive, condition split, phone client and scanner hardware -->
 
 - The same web routes in a phone browser. The separate phone client in the PRD stack is parked and not yet in a stage.
 - Glass top bar with menu (44 px), logo slot and My work.
@@ -216,6 +225,7 @@ Rules:
 ## 7. State colours
 
 ### Families
+<!-- deps: PRD-UXP-003, PRD-INT-007, PRD-ACS-014, PRD-STK-001, prd.md#words-used — meaning of each state family -->
 
 | Family | Glyph | Tokens | Light bg / fg (ratio) | Dark bg / fg (ratio) | Meaning |
 |---|---|---|---|---|---|
@@ -332,6 +342,7 @@ Alignment:
 ---
 
 ## 9. Accessibility (design target: WCAG 2.2 AA)
+<!-- deps: none — WCAG design target, not a PRD rule -->
 
 - **Contrast:** see §2 and §7. All text is ≥ 4.5:1, and control borders and the focus ring are ≥ 3:1, in both themes.
 - **Focus visible (2.4.7):**
@@ -365,10 +376,12 @@ Alignment:
 ---
 
 ## 10. Components
+<!-- deps: none — one-line intro to components -->
 
 Each entry covers anatomy, states and usage rules.
 
 ### 10.1 Button
+<!-- deps: PRD-UXP-003, PRD-ACS-010, PRD-ACS-013 — disabled shows reason; destructive asks reason -->
 
 - **Anatomy:** label (14 / 500–600), optional key hint (mono 12, 1 px border, radius 4).
 - **Variants:**
@@ -396,6 +409,7 @@ Each entry covers anatomy, states and usage rules.
 - Never make a badge clickable. Filters use filter chips (10.9).
 
 ### 10.3 Scope chip
+<!-- deps: PRD-ORG-001, PRD-ORG-005, PRD-ACS-001, PRD-ACS-004, PRD-FRN-007 — scope dimensions, per-assignment scope, partner lock -->
 
 - **Anatomy:** pill 30–32 px, `--tint` / `--on-tint`, 13 / 600, label + ▾.
 - **Dimensions:** legal entity · Site · Store · business unit · brand (PRD: Organisation, sites and ownership). Never merge Site, Store and business unit: one Site can hold units with different entities and books.
@@ -412,6 +426,7 @@ Each entry covers anatomy, states and usage rules.
 - The chip shows the union of the user's role assignments, but each action is checked inside one assignment's scope (10.18).
 
 ### 10.4 Trust chip, “as of · complete %”
+<!-- deps: PRD-PRF-004, PRD-MOD-003, PRD-EXC-010 — as-of time, partial and stale data shown -->
 
 - **Anatomy:** 24 px pill, `--sunken` + `--border`, 12 px `--text-2`, with a state marker:
 
@@ -439,6 +454,7 @@ Each entry covers anatomy, states and usage rules.
 - Items delegated during someone's absence, and escalated overdue items, carry a label saying so.
 
 ### 10.6 Restricted field and cell
+<!-- deps: PRD-ACS-008, PRD-SEC-005, PRD-SEC-006, POL-02.04 — restricted values never sent, excluded from sort and export -->
 
 - **Field:** 36 px, `--sunken`, 1 px `--border` (not `--control`, so it doesn’t look editable), with a lock glyph and “Restricted” in `--text-2` / 500. Help: “You don’t have permission to see this value.”
 - **Table cell:** a right-aligned chip, 24 px, radius 4, `--sunken`, lock + “Restricted” 12 / 600. `aria-label="<column>: restricted"`.
@@ -449,6 +465,7 @@ Each entry covers anatomy, states and usage rules.
   - Never show a masked value like “₹•••”.
 
 ### 10.7 Form fields
+<!-- deps: POL-02.23, PRD-ACS-010, DEC-072 — reasons come from the configured reason list -->
 
 - **Anatomy:** label above (13 / 600; required = red * plus the word “Required” for screen readers) · control (36 px, radius 6, 1 px `--control`) · help or error below (12 / 16).
 - **States:**
@@ -569,6 +586,7 @@ Each entry covers anatomy, states and usage rules.
 - **Status bar:** the selected cell’s row, column, origin and message, plus key hints.
 
 ### 10.11 Reconciliation table (PRD: Receiving and price tickets)
+<!-- deps: PRD-REC-006, PRD-REC-010, PRD-REC-012, PRD-REC-013, PRD-REC-015, PRD-REC-016, PRD-REC-017, POL-17.02 — conservation rule, dispositions, approve blocked -->
 
 - **Columns:** Style · size · Invoice · GRN · Existing (earlier PTs) · Proposed (this PT) · Held · Returned / disposed · Disposition.
 - **Conservation rule, per line:** `GRN = Existing + Proposed + Held + Returned/disposed`.
@@ -608,6 +626,7 @@ Each entry covers anatomy, states and usage rules.
 - In-app for now. WhatsApp and SMS follow in stage 5 ([phases.md](../../phases.md)).
 
 ### 10.13 Empty, loading, error
+<!-- deps: PRD-UXP-003, PRD-PRF-004 — state, reason, next action; partial data flagged -->
 
 | State | Content | Rules |
 |---|---|---|
@@ -645,6 +664,7 @@ Each entry covers anatomy, states and usage rules.
   - Reject always asks for a reason.
 
 ### 10.15 Right drawer
+<!-- deps: none — drawer anatomy, width and focus behaviour -->
 
 - **Anatomy:**
   - e3 glass, full height under the top bar.
@@ -660,6 +680,7 @@ Each entry covers anatomy, states and usage rules.
   - Content behind it reflows to the remaining width when it is open, and back to full width when it closes.
 
 ### 10.16 Theme setting (My profile › Theme)
+<!-- deps: none — theme setting UI, no PRD rule -->
 
 - Three radio cards: Match device (default), Light, Dark. Each has a 64 px preview, a radio and a one-line description.
 - Selected card: 2 px `--accent` border. The group uses `role="radiogroup"`.
@@ -687,6 +708,7 @@ Each entry covers anatomy, states and usage rules.
 ---
 
 ## 11. Content style
+<!-- deps: PRD-PRO-009, DEC-058, PRD-UXP-003, prd.md#words-used — Hindi timing, PRD words, reason and next action -->
 
 - Plain, short English (India) for now. All screen text is kept outside the code, so Hindi can be added in stage 5 (and for stage 6 screens in stage 6) without layout changes.
 - Use the PRD's words exactly (its “Words used” tables). Sentence case for everything except codes and the PT grid’s canonical column names.

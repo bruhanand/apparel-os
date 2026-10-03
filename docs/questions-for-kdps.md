@@ -1,4 +1,5 @@
 # Questions for KDPS and the CA
+<!-- deps: prd.md#required-policy-configuration — sample-data work never waits for policy answers -->
 
 > **Not ranked.** These are questions, not answers. Each answer goes into [kdps-policies.md](kdps-policies.md) (logged in [decisions.md](decisions.md) first if it changes a rule). See [README.md](README.md).
 
@@ -137,10 +138,12 @@ These come from the UI blueprint's open items. The blueprint names KDPS, not a p
 - **Logo.** Artwork for the empty logo slot. · no POL bullet; design input · UI blueprint open item 23 · answerer: unassigned · before the pilot switch
 
 ## Booking
+<!-- deps: none — cross-reference to other question numbers -->
 
 - See KDPS Owner 9, 10 and 36, Accounts 6 and Operations 1 and 2. These are shared with Booking.
 
 ## HR
+<!-- deps: none — cross-reference to other question numbers -->
 
 - See KDPS Owner 35 and CA 10.
 
