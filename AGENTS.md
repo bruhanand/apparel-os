@@ -65,9 +65,9 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 
 ## Delivery
 
-Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Each live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; the Hindi interface and WhatsApp and SMS messaging arrive in stage 5.
+Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Stage 1 fixes the stock and money recording rules; each later live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; Hindi for stages 1 to 5 arrives in stage 5 and for stage 6 in stage 6; WhatsApp and SMS messaging arrive in stage 5.
 
-During the test run, the existing POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
+During the side-by-side test, the earlier POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
 
 ## Stack
 
@@ -86,7 +86,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Live updates    | Server-Sent Events carrying identifiers, then an authorised refetch                                                     |
 | Web             | React, Vite, TanStack Router/Query/Table, React Hook Form, Zod, Tailwind CSS, shadcn/ui                                 |
 | Counter         | Chrome/Edge PWA with Dexie/IndexedDB and Workbox                                                                        |
-| Hardware        | Keyboard-input scanners; ESC/POS printing and cash drawer through a local helper; Tauri only for an unmet hardware need |
+| Hardware        | Keyboard-input scanners; ESC/POS receipt printing, cash drawer and label printing through a local helper on any PC that has the printer; Tauri only for an unmet hardware need |
 | Phone           | React Native and Expo, sharing domain logic and schemas (not yet placed in a stage)                                     |
 | Authentication  | PostgreSQL server sessions, secure cookies, Argon2, OTP and TOTP                                                        |
 | Files           | S3-compatible storage; MinIO for local development                                                                      |
