@@ -2,7 +2,7 @@
 
 > **Not ranked.** This report decides nothing and changes nothing. Any further PRD or policy change needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
-**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed on 3 Oct 2026 against DEC-001 to DEC-035 (first written after DEC-017 to DEC-029) and re-checks the findings of the earlier audit (in git history); audit codes (B-04, D-06 …) are given where they match.
+**What was checked.** [prd.md](../prd.md) against [kdps-policies.md](../kdps-policies.md), and both against [phases.md](../phases.md) and the design files in [design/](../design/). Refreshed on 3 Oct 2026 against DEC-001 to DEC-092 (first written after DEC-017 to DEC-029) and re-checks the findings of the earlier audit (in git history); audit codes (B-04, D-06 …) are given where they match.
 
 **How to read it.**
 
@@ -12,20 +12,22 @@
 
 ## 1. Short version
 
-**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-035 in [decisions.md](../decisions.md). DEC-030 to DEC-035 came from the stock-ledger design ([design/stock/stock-ledger.md](../design/stock/stock-ledger.md)): the old POS stays outside app stock, moving average and cost rules, receipt-origin rules, and four new words. DEC-034 and DEC-035 settled its review questions: undoing a mistaken inflow, late-cost excess, and a counted piece the ledger shows as gone. Product-owner items left, none of them a PRD or policy clash:
+**Since this report:** the product-owner decisions are logged as DEC-001 to DEC-092 in [decisions.md](../decisions.md). DEC-030 to DEC-035 came from the stock-ledger design ([design/stock/stock-ledger.md](../design/stock/stock-ledger.md)): the earlier POS stays outside app stock, moving average and cost rules, receipt-origin rules, and four new words. DEC-034 and DEC-035 settled its review questions: undoing a mistaken inflow, late-cost excess, and a counted piece the ledger shows as gone. DEC-036 to DEC-092 log the product owner's answers to the [decision pack](decision-pack.md) (see the [walkthrough log](decision-walkthrough-log.md)): approvals and exception routing, stage gating, ledger and accounting rules, new Words used terms, and PRD and policy tidy-ups. Product-owner items left, none of them a PRD or policy clash:
 
   - **Holds up code or its division:** who builds and how many people or agents (GC-11 in [gaps-before-code.md](gaps-before-code.md), task division).
-  - **Holds up the stage 1 build:** the file storage provider (D-2 in [deployment.md](../design/platform/deployment.md) section 10, the same item as GC-10 in [gaps-before-code.md](gaps-before-code.md)).
+  - **Holds up the stage 1 build:** the file storage provider (D-2 in [deployment.md](../design/platform/deployment.md) section 10, the same item as GC-10 in [gaps-before-code.md](gaps-before-code.md)); SL-22 and SL-23 in the stock-ledger design (product owner; SL-23 also the CA), which the financial posting design settles (GC-4).
+  - **Needed by stage 2:** whether the earlier POS may keep selling at a Store on production hosting before its switch (DEC-067; no default).
   - **Needed before KDPS's side-by-side test:** the custom domain or Railway address (D-3).
   - **Needed before the first Store switch:** production hosting (D-1).
   - **Before first live use on production, not a build blocker:** the rollout order on production (SL-9 in the stock-ledger design).
-  - **Stage named:** how the local helper and the Tally local gateway reach the server (4.15, deployment.md D-6; needed by stage 4 for the helper, stage 5 for Tally).
+  - **Needed by stage 4:** what event ends "until it bills in Apparel OS" at an EBO Store that reports through brand software (SL-18).
+  - **No stage named yet:** how the local helper and the Tally local gateway reach the server (4.15, deployment.md D-6); a registration-only change at one Site (`PRD-TRF-023`, DEC-066).
   - **Waiting on something else:** SL-10 (returns with no sale in the app): after a Store's switch these returns stay unavailable (`POL-06.02`, `DEC-059`) until the later plan brings the earlier POS's data into the app (needs a decision record, `PRD-LIF-010`). `PRD-EBO-005` is unmet for them until then. How the customer is served meanwhile is OPEN (product owner); it blocks stage 4 and the first Store switch. SL-11 only if a performance test fails.
 
   Questions only KDPS or the CA can answer are in [questions-for-kdps.md](../questions-for-kdps.md).
 
 1. **No PRD/policy clash remains open.** The provisional supplier amount (A-2) is settled on the product side by DEC-003; the CA's accounting treatment of goods owned before receipt is an open value (V-58).
-2. **Settled product-owner findings are logged through DEC-035.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the parallel run (DEC-024, since replaced by DEC-030), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026); Railway test hosting (DEC-027, DEC-028); the record that DEC-017 to DEC-022 were agreed with KDPS (DEC-029); and the stock-ledger decisions (DEC-030 to DEC-035, above).
+2. **Settled product-owner findings are logged through DEC-092.** This includes the eleven access templates and controls (DEC-017), stage 2 evidence rules (DEC-018), count freezes (DEC-019), store-day instruments and controls (DEC-020), WhatsApp summaries and allocation evidence (DEC-021), and stage 6 validation approach (DEC-022); then piece tracking binding at each Store's switch (DEC-023), shadow stock for the side-by-side test (DEC-024, since replaced by DEC-030), Customer credit in stage 5 (DEC-025) and clean-ups (DEC-026); Railway test hosting (DEC-027, DEC-028); the record that DEC-017 to DEC-022 were agreed with KDPS (DEC-029); the stock-ledger decisions (DEC-030 to DEC-035, above); and the decision-pack answers (DEC-036 to DEC-092).
 3. **Remaining structural questions** are listed in section 4. Their product rules and policy homes are identified; KDPS/CA values remain OPEN where applicable.
 4. **Policy homes are now recorded for offers and promotions, EBO report timing and settlement, and Store P&L allocation** (DEC-014). Their real terms, rates, bases and formulas remain OPEN.
 5. **The open values** are listed in section 5 with their owners and delivery stages.
@@ -179,7 +181,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.10 Store credit and gift vouchers
 
-**Product side settled: DEC-006 and DEC-020.** The in-scope instruments include customer-linked store credit and KDPS's own bearer vouchers, held as a liability, as well as bank transfer and approved customer credit. Store-credit scope is within the same legal entity. Validity, customer-credit terms, provider evidence and gift-voucher terms (`POL-07.10`) and tax (`POL-10.10`) remain open (V-25, V-29, V-30; Customer credit limits and due dates V-59).
+**Product side settled: DEC-006 and DEC-020.** The in-scope instruments include customer-linked Store credit and KDPS's own bearer vouchers, held as a liability, as well as bank transfer and approved customer credit. Store credit scope is within the same legal entity. Validity, customer-credit terms, provider evidence and gift-voucher terms (`POL-07.10`) and tax (`POL-10.10`) remain open (V-25, V-29, V-30; Customer credit limits and due dates V-59).
 
 - **Where:** `PRD-RET-016`, `PRD-POS-005`, `POL-07.03`, `POL-07.09`.
 - **The point.** The product supports KDPS's own bearer vouchers, not outside vouchers. Actual validity, partial redemption, lost-voucher, refund and tax terms remain open.
@@ -189,7 +191,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.11 Value basis of approval limits
 
-**Settled: DEC-009 and DEC-015.** Each limit names its basis; PT approval limits use total proposed acquisition cost for covered quantities, never MRP. Unknown values stay distinct from zero. Actual KDPS limit amounts and approvers remain OPEN (V-02).
+**Settled: DEC-009 and DEC-015.** Each limit names its basis; PT approval limits use total proposed acquisition cost for covered quantities, never MRP. Unknown values stay distinct from zero. Bill value applies to discounts and bill-backed refunds; no-bill returns use documented valuation (DEC-039, `POL-07.06`), and if none is accepted the value is unknown (`PRD-ACS-016`). Actual KDPS limit amounts, approvers and the valuation method remain OPEN (V-02).
 
 - **Where:** `POL-02.09`, `POL-03.07`, `PRD-ACS-015`, `PRD-ACS-016`.
 - **The rule.** PT approval cost is the proposed P RATE times the covered quantity on the PT revision under approval (DEC-016). Missing or disputed cost blocks value-based approval until resolved; this approval valuation does not determine supplier-liability recognition.
@@ -208,24 +210,24 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.13 Imported sales of piece-tracked goods
 
-**Settled: DEC-023, DEC-030.** Piece rules at a Store start at its switch count, where every unlabelled piece is labelled. Old-POS imports change no stock at all (DEC-030). EBO Stores reporting through brand software hold piece-tracked goods as SKU quantity.
+**Settled: DEC-023, DEC-030.** Piece rules at a Store start at its switch count, where every unlabelled piece is labelled. Earlier-POS imports change no stock at all (DEC-030). EBO Stores reporting through brand software keep and scan piece IDs for piece-tracked goods (`PRD-MER-003`, `PRD-MER-016`); their imports name no piece only for sales reporting (`PRD-EBO-011`, DEC-088). What ends "until it bills in Apparel OS" is OPEN (SL-18; product owner; stage 4).
 
 - **Where:** `PRD-MER-016`, `PRD-MER-017`, `PRD-LIF-013`, `PRD-LIF-025`, `PRD-EBO-005`, `PRD-EBO-011`.
-- **The point.** Neither the earlier POS nor brand software can say which piece was sold. The open part is the size of each Store's labelling job (V-57).
+- **The point.** Neither the earlier POS nor brand software can say in its report which piece was sold. The open part is the size of each Store's labelling job (V-57).
 - **Who decides:** Me (the product rule); KDPS Owner and Operations (the labelling plan).
 - **Blocks:** 4, before each Store's switch.
 
 ### 4.14 Earlier POS evidence and the switch reconciliation
 
-**Replaced: DEC-030** (DEC-024 is superseded). The earlier POS does all real billing while active. Its end-of-day sales report and SOH are evidence for checking and reports only and never move app stock. At each Store's switch, the verified count becomes opening stock and is reconciled with the last SOH.
+**Replaced: DEC-030** (DEC-024 is superseded). The earlier POS does all real billing while active. Its end-of-day sales report and SOH are evidence for checking and reports only and never move app stock. At each Store's switch, the verified count becomes opening stock and is reconciled with the last SOH. Billed-retained items carried across the switch are counted apart and are not opening stock (`PRD-LIF-028`, DEC-090).
 
 - **Where:** `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-027` (`PRD-LIF-024` retired); `phases.md` stage 2 and switch-over.
 - **Who decides:** Me.
-- **Blocks:** 4, the switch count reconciled with the last SOH (threshold V-45, before the first switch). Nothing else remains open here.
+- **Blocks:** 4, the switch count reconciled with the last SOH (threshold V-45, before the first switch). Also OPEN: whether the earlier POS may keep selling at a Store on production hosting before its switch (product owner; stage 2; no default, DEC-067).
 
 ### 4.15 Deployment topology
 
-**Testing settled: DEC-027, DEC-028.** Railway runs the server, jobs, PostgreSQL, web app and counter PWA for testing, including KDPS's side-by-side test with real KDPS data. The current POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
+**Testing settled: DEC-027, DEC-028.** Railway runs the server, jobs, PostgreSQL, web app and counter PWA for testing, including KDPS's side-by-side test with real KDPS data. The earlier POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
 
 - **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37); the rollout order on production: when a warehouse goes live with its opening stock, and how goods move to a Store not yet switched ([stock-ledger](../design/stock/stock-ledger.md) SL-9; not a build blocker).
 - **The point.** The test setup is designed in [design/platform/deployment.md](../design/platform/deployment.md); its open questions D-1 to D-6 are listed there.
@@ -240,7 +242,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | --- | --- | --- | --- | --- |
 | V-01 | Which person holds which persona, role and scope | `POL-02.11` | KDPS Owner, Admin | 1 |
 | V-02 | Approval limit amounts per action and approver | `POL-02.10` | KDPS Owner | 1 |
-| V-03 | Exception owners, due times, escalation and alert recipients | `POL-02.11` | KDPS Owner, Admin | 1 |
+| V-03 | Exception owners, due times, escalation and alert recipients | `POL-02.11`, `POL-02.16` | KDPS Owner, Admin | 1 (exception routing); 2 (source conflicts) |
 | V-04 | Validate production TOTP and the selected 5/15-minute idle and 12-hour absolute limits | `POL-02.17`, `POL-02.18` | Admin | 1 |
 | V-05 | Categories needing batch or expiry; shelf-life days for receiving and selling | `POL-04.08` | Booking, Operations | 1 |
 | V-06 | Any additional piece-tracked categories beyond apparel and footwear | `POL-04.09` | Booking, Operations | 2 |
@@ -266,7 +268,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-26 | ~~Refund order for split-tender bills~~ Settled: DEC-007 | `PRD-RET-022` | — | — |
 | V-27 | ~~Which refund cases require independent approval~~ Triggers settled by DEC-020; named approvers and limits remain V-02 | `POL-07.09`, `POL-02.15` | — | — |
 | V-28 | No-bill returns on or off; value limit; valuation method | `POL-07.08` | KDPS Owner, Accounts | 4 |
-| V-29 | Store-credit validity and authorised Store list within the same legal entity | `POL-07.11`, `PRD-RET-023` | KDPS Owner, Accounts | 4 |
+| V-29 | Store credit validity and authorised Store list within the same legal entity | `POL-07.11`, `PRD-RET-023` | KDPS Owner, Accounts | 4 |
 | V-30 | Own gift-voucher validity, partial redemption, unused-balance refund, lost voucher and tax | `POL-07.10`, `POL-10.10` | KDPS Owner, Accounts, CA | 4 |
 | V-31 | Loyalty terms | `POL-07.13`, `POL-07.09`, `PRD-RET-019` | KDPS Owner, Accounts | 4 |
 | V-32 | Customer notice and consent text; permitted uses | `POL-07.12`, `POL-07.09`, `PRD-POS-012` | KDPS Owner | 4 |
@@ -275,7 +277,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-35 | Revenue timing for billed-retained goods | `POL-08.06`, `POL-09.10` | CA | 4 |
 | V-36 | Approved pilot Store/counter and reserved stock; pilot is cash-first | `POL-16.01`, `POL-16.02`, `POL-16.04` | KDPS Owner, Operations | 4 |
 | V-37 | Later external-terminal evidence and reconciliation procedure | `POL-16.02` | KDPS Owner, Accounts | 4 |
-| V-38 | Cash-variance tolerance and approver at day close | B-1 | Accounts, KDPS Owner | 4 |
+| V-38 | Cash-variance tolerance, approver sets and higher approver at day close | `POL-02.13`, `PRD-CSH-011`, B-1 | Accounts, KDPS Owner | 4 |
 | V-39 | Petty-cash float and limits per Store | `POL-09.14` | Accounts | 4 |
 | V-40 | Bill number format within the GST limit | B-3 | CA | 4 |
 | V-41 | E-invoice applicability per entity | `POL-10.03` | Accounts, CA | 4 |
@@ -309,8 +311,9 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-69 | Evidence for refused return attempts (B-17) | `POL-06.11`, `PRD-RET-015` | KDPS Owner, Operations | 4 |
 | V-70 | Exception alert thresholds and recipients (B-18) | `POL-02.25`, `PRD-EXC-013` | KDPS Owner, Admin | 4 |
 | V-71 | Owner authority for onward commission (B-19) | `POL-12.08`, `PRD-PAY-013` | KDPS Owner, Accounts | 5 |
+| V-72 | Return credit-note and tax-document cancellation treatment | `POL-10.11`, `PRD-TAX-004` | CA | 4 |
 
-**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-035 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
+**Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-092 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
 
 ## 6. Design files that show open values as decided
 
@@ -320,11 +323,11 @@ Report only. Design is fixed after the PRD and policies settle.
 | --- | --- | --- | --- |
 | E-1 | `design/ui/design-system.html`, `design/ui/design-language.md` §8 | Fixed: the Bill no. sample is labelled a synthetic layout; length limit and allowed characters are marked not confirmed (`POL-10.07`, V-40), owner Accounts and the CA, stage 4. | 4.9, V-40 |
 | E-2 | `design/ui/design-system.html` | **Fixed by DEC-015:** the PT approval card uses total proposed acquisition cost: proposed P RATE times covered quantity (DEC-016). Its synthetic example shows 1,096 pieces and ₹14,27,500, calculated from its displayed quantities and unit costs; the total follows quantity changes. | `PRD-ACS-015`, V-55 |
-| E-3 | `design/ui/design-system.html` | Sample values with no "example" label: limits ₹50,000 and ₹50,00,000; day close "due 21:30"; shift 10:00–19:00 with no grace; P RATE = MRP × 0.5 (this one is labelled). | AGENTS.md "Never invent a value" |
+| E-3 | `design/ui/design-system.html` | Fixed: the sample limits, the day-close time and the shift are gone, and the page labels its sample values as synthetic. | AGENTS.md "Never invent a value" |
 | E-4 | `design/ui/ui-blueprint.html` | **Fixed:** the Owner now has View in the access grid. Open item 12 (Held goods) still correctly leaves write-off and disposal approvers and limits OPEN. | `POL-17.04`, V-19 |
 | E-5 | `design/ui/design-system.html`, `design/ui/ui-blueprint.html` | Fixed: both files now show Cash only on the offline counter (DEC-020); later card/UPI requires an explicit evidence procedure. The design-system till also lists each piece ID under a piece-tracked line. | `POL-16.02` |
 | E-6 | `design/ui/ui-blueprint.html` | Piece-level actions apply to configured piece-tracked profiles; DEC-018 sets apparel/footwear by default and leaves additional categories explicit. No open clash. | `POL-04.09` |
-| E-7 | `design/ui/ui-blueprint.html` | Ledger, trial balance and period close sit beside "Tally is the sole official book". Fine only if marked as the internal ledger. | `PRD-LED-011`, `POL-11.01` |
+| E-7 | `design/ui/ui-blueprint.html` | Fixed by DEC-060: the internal ledger is reconciled with the official book named in the Official book policy (`PRD-LED-011`, `POL-11.01`). | `PRD-LED-011`, `POL-11.01` |
 | E-8 | `design/ui/ui-blueprint.html` | Settled: DEC-043. Higher authority is a different person whose approval limit covers the transfer on its cost basis (`POL-02.07`, `PRD-ACS-015`). Limits and approvers remain OPEN (V-02). | V-02 |
 
 ## 7. Follow-ups, no decision needed
