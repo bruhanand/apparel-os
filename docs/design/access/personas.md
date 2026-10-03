@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-019`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`; `POL-02.01` to `POL-02.11`, `POL-02.13`, `POL-02.15` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-019`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13`, `POL-02.15` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
 
 Used by: [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
@@ -50,11 +50,13 @@ In PRD order. "Work" is the PRD text. "Lands on", "Menu" and "Usual scope" are d
 | P-HRS | HR | Head office | Back office | People › Attendance | Employers in scope | HR |
 | P-AUD | Auditor | Outside | Back office (read-only) | Setup › Audit log | Records in scope | Auditor |
 
+**Phone and scan.** "Phone" means responsive web on a handset unless a separate phone client is placed in a stage. Camera scanning is **OPEN** (product owner); handheld or Bluetooth scanners follow the PRD Hardware row.
+
 The template column follows the proposed, Open template map in policy 2 (eleven templates, `POL-02.01`). A template label alone grants no permission.
 
 Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is open to every employee.
 
-Menu names are working labels. `PRD-UXP-004` names the Store areas differently (Billing, Bills, Till & Sync, Receive Goods, Transfers, Stock, Offers, Money, Reports and staff self-service). Whether the menus are renamed to match, or the PRD wording changes, is **OPEN** (product owner; blocks stage 1 screens). Nothing is renamed until it is decided.
+Menu names are working labels. `PRD-UXP-004` lists Store capabilities and areas, not menu labels (`DEC-056`). Sell groups billing, bills and till session; Stock Count, Damage & supplier returns and External sales keep their own menus.
 
 ### Persona cards
 
@@ -73,7 +75,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 **P-ACC · Accounts**
 - Work: cash, bank, payables, receivables, claims, tax, journals, Tally and period close.
 - Menu: Home (finance) · Money (all) · Receive Goods (invoice matching) · Damage & supplier returns (claims register) · External sales (settlement) · Partners (statements, ledgers) · Reports (all, profit) · Setup (posting maps) · Sell (bills), Booking, Transfer, Stock Count, Stock (value), Offers & price, People (payroll) as view only.
-- Approvals in this work: supplier payments and supplier bank-detail changes, discrepancy settlements, refunds routed to finance, and day-close cash differences above the Store manager's limit (`POL-02.13`). Accounts checks the buying budget (`POL-05.09`); the Owner approves it. The preparer and the approver are never the same person.
+- Approvals in this work: supplier payments and supplier bank-detail changes, discrepancy settlements, refunds routed to finance, and day-close cash differences above the configured tolerance, where a higher approver is needed (`POL-02.13`, `PRD-CSH-011`). Accounts checks the buying budget (`POL-05.09`); the Owner approves it. The preparer and the approver are never the same person.
 
 **P-CHA · Chartered Accountant (CA)**
 - Work: authorised book and report access, comments and document requests.
@@ -88,7 +90,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 **P-OPS · Operations**
 - Work: distribution, transfers, counts, exceptions and Site lifecycle.
 - Menu: Home (exception dashboard) · Transfer (in transit, approvals as set in policy 2) · Stock Count (plan, differences above the Store manager's limit as set in policy 2) · Damage & supplier returns (return deadlines, supplier returns) · External sales (old POS imports, EBO uploads; view) · Setup (Site opening and closure) · Sell, Booking, Receive Goods, Stock, Offers & price, Reports as view only.
-- Approvals in this work: proposes write-offs and disposals for independent approval within configured cost limits (`POL-17.10`). Transfers, supplier-return steps and stock adjustments need approval by an authorised person other than the preparer (`POL-02.07`); who holds those approvals is set in policy 2 and is **OPEN** (KDPS Owner; blocks stage 1 live approvals). Count differences above the Store manager's limit go to a higher authorised approver named in policy 2 (`POL-02.21`).
+- Approvals in this work: proposes write-offs and disposals for independent approval within configured cost limits (`POL-17.10`). Transfers need approval by a higher authority: a different person whose approval limit covers the transfer on its cost basis (`PRD-TRF-005`, `POL-02.07`, `POL-02.09`). Supplier-return steps and stock adjustments need approval by an authorised person other than the preparer (`POL-02.07`); who holds those approvals is set in policy 2 and is **OPEN** (KDPS Owner; blocks stage 1 live approvals). Count differences above the Store manager's limit go to a higher authorised approver named in policy 2 (`POL-02.21`).
 
 **P-WHS · Warehouse**
 - Work: receiving, labels, putaway, picking, dispatch and supplier returns.
@@ -103,7 +105,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 **P-STM · Store manager**
 - Work: Store operation, authorised discounts and returns, and day close.
 - Menu: Home (Store numbers, My work) · Sell (till, bills, customers, billed-retained, approvals within limit) · Receive Goods (own Store inbox) · Transfer (request, receive) · Stock Count (own Store, differences within limit) · Damage & supplier returns (report damage) · Stock (own Store, other Stores for sizes) · External sales (old POS import during the test) · Money (Store day, petty cash) · Offers & price (running offers) · Reports (own Store) · People (team attendance, view).
-- Approvals in this work: discounts and returns within the configured limit; count differences within the configured cost limit (`POL-02.21`); and day-close cash differences within the configured limit, with Accounts above it (`POL-02.13`). The limits come from policy 2 and are not yet set.
+- Approvals in this work: discounts and returns within the configured limit; count differences within the configured count tolerance (`POL-02.21`); and day-close cash differences within the configured cash-variance tolerance, if the Store manager is in the approver set for it, with a higher approver above it (`POL-02.13`). The tolerances and limits come from policy 2 and are not yet set.
 
 **P-CSH · Cashier**
 - Work: billing, tender recording and authorised customer returns.
@@ -140,15 +142,15 @@ Approve permissions that no card names (PT approval, damage confirmation, stock 
 - An action is enabled only where one role assignment covers the current scope. Otherwise it is disabled and the reason names what is missing, for example "Your Store manager assignment covers BLR01 only".
 - A user who prepared a record can never approve it through another persona.
 - At the till, a person bills as themselves. Manager approval (F7) comes from a different authorised person whenever policy 2 makes it independent.
-- Daily summaries follow personas. Who receives them, and through which channel, are policy 2 values.
+- Daily summaries follow personas. Recipients are a policy 2 value; channel and time are set (`POL-02.14`).
 
 ## 4. Not personas
 
 | Who | How they are handled |
 | --- | --- |
-| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips) comes with an employee record (PRD: HRMS and payroll; Operator experience) |
-| Partner users | They hold Store personas (P-STM, P-CSH, P-SLS) on their own Stores only. Their statements and ledger come from a permission (PRD: Franchise and partner accounts) |
-| Service identities | Non-human actors with their own audit identity and least-privilege scope; no screens |
+| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips) is granted only through a role assignment scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-HRM-012`) |
+| Partner users | They hold Store personas (P-STM, P-CSH, P-SLS) on their own Stores only. Their statements and ledger come from a permission (PRD: Franchise and partner accounts; `PRD-FRN-007`) |
+| Service identities | Non-human actors with their own audit identity and least-privilege scope; no screens (`PRD-SEC-018`) |
 | Customers, suppliers | No login. They appear as records |
 
 ## 5. Where the earlier codes land
@@ -174,7 +176,7 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | C-PAY Payroll reviewer | An approval permission held by someone other than the HR preparer |
 | C-EMP Employee | Self-service, not a persona |
 | C-ANL Analytics user | Report access granted by role, not a persona |
-| X-SVC Support / service identity | A service identity, not a persona |
+| X-SVC Support / service identity | A service identity, not a persona (`PRD-SEC-018`) |
 | RBAC v1 roles: owner, store_person, warehouse, brand_manager, accounts, it_admin | The first six of the eleven KDPS templates in policy 2 (`POL-02.01`). store_person (Store manager and staff merged) is now Store POS, serving P-STM, P-CSH and P-SLS |
 | Extra roles: ho_ops, promo, data_steward, hr_admin, payroll_reviewer, franchise_partner, ebo_reporter, analyst | P-OPS, P-BRM, P-BKG and P-ADM, P-HRS, an approval permission, Store personas, P-EBO, a report permission |
 
@@ -185,5 +187,5 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | Which people hold which personas, roles and scopes | KDPS, policy 2 | Each live operation |
 | Who holds the roles built from the Operations, HR, EBO staff, CA and Auditor templates (P-OPS, P-HRS, P-EBO, P-CHA, P-AUD) | KDPS, policy 2 | Their first live work |
 | Which people hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs and supplier-return steps; whether the Owner approves losses; the limits | KDPS Owner, policy 2 | Stage 1 live approvals |
-| Whether menus are renamed to the Store area names in `PRD-UXP-004`, or the PRD wording changes | Product owner | Stage 1 screens |
 | What partner users may see in their statements and ledger | KDPS, policies 2 and 12 | Stage 5 |
+| Which template or role assignment carries own-record self-service | Product owner | Stage 1 access; stage 6 HRMS self-service |

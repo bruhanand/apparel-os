@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -22,6 +22,7 @@ One Railway project with two environments. Each has its own services, database, 
 - Never copy data between the two. Synthetic data never becomes a default (AGENTS rule).
 - `kdps-test` holds real data only after KDPS agrees to it (KDPS Owner question 37).
 - Only the product owner has access to the Railway project. KDPS users get app logins, never Railway access.
+- On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). The app shows an environment banner.
 
 ## 2. Services in each environment
 
@@ -48,7 +49,7 @@ Why one origin:
 
 A custom domain is optional. The Railway-provided address works for testing. **OPEN:** whether `kdps-test` gets a custom domain (see 10).
 
-Idle and absolute session limits come from policy 2 (`POL-02.18`); production requires TOTP (`POL-02.17`). Hosting changes neither.
+Idle and absolute session limits come from policy 2 (`POL-02.18`); production and `kdps-test` require TOTP (`PRD-SEC-001`, `POL-02.17`). Development test access stays apart from production login (`PRD-ACS-017`). Hosting changes none of this.
 
 ## 4. Database
 
@@ -59,7 +60,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`); production re
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
 - **Migrations** run as Railway's pre-deploy command, before the new version takes traffic. A failed migration stops the deploy, and the old version keeps running.
-- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The current POS is the system of record, so losing test data loses nothing official.
+- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The current POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
 
 ## 5. Live updates (SSE)
 
@@ -70,24 +71,26 @@ Railway keeps an HTTP stream open for at most 15 minutes, and closes it after 5 
 
 ## 6. Devices in Stores and offices
 
-**The server never connects into a Store or office.** Everything there connects outwards, or stays on the local machine.
+**Proposal, not decided (D-6, product owner):** the server does not connect into a Store or office; devices there connect outwards or stay on the local machine.
 
-- **Local helper (printers, cash drawer).** It runs on the counter PC. The counter PWA calls it on `localhost` on that PC. The helper has no link to the server (Stack: Hardware).
-- **Tally connector (stage 5).** It runs on the office PC beside TallyPrime (`PRD-INT-009`):
+- **Local helper (printers, cash drawer).** It runs on any PC with a receipt or label printer attached (counter, warehouse or office). The counter PWA calls it on `localhost` on that PC. How the helper and the Tally local gateway reach the server is **OPEN** (see D-6; product owner).
+- **Proposed: Tally local gateway (stage 5).** It runs on the office PC beside TallyPrime (`PRD-INT-009`):
   - It fetches pending vouchers from the server over HTTPS.
   - It posts them to Tally's local XML interface.
   - It reports Tally's response back.
   - Outcomes stay pending, unknown, failed or succeeded until reconciled (`PRD-INT-006`, `PRD-INT-007`).
+  - File-export fallback as in `PRD-INT-009`.
 - **Scanners** are keyboard input. They need nothing on the server.
 
 ## 7. What the test setup never does
 
-These follow from `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016` and `PRD-LIF-026`. The earlier POS stays the system of record, so the test setup also never does the following:
+These follow from `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016` and `PRD-LIF-026`. The earlier POS stays the system of record, so the test setup also never does the following, with one exception:
 
 - Imports from the earlier POS (daily sales report, stock-on-hand) are for checking and reports only. They never create, reduce or move stock (`PRD-LIF-014`).
 - An import never creates a tax invoice or a second sale for a bill the earlier POS issued (`PRD-LIF-016`).
 - Bills on `kdps-test` are test bills only. No tax invoice is issued and no real customer is billed (`PRD-LIF-026`).
 - A Store is never switched over on test hosting (`PRD-LIF-026`).
+- Exception: one file does leave the test setup for the earlier POS: the approved PT export in the KDPS layout (`PRD-PTW-008`). A person loads it into the earlier POS manually. There is no automatic link (`DEC-053`).
 
 Each external adapter on `kdps-test` is either switched off or pointed at a sandbox:
 
@@ -120,3 +123,4 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 | D-3 | A custom domain for `kdps-test`, or the Railway-provided address | Product owner | Before KDPS's side-by-side test |
 | D-4 | KDPS's agreement to hold real data on the test setup, and whether customer details are imported | KDPS Owner (question 37) | Before KDPS's side-by-side test |
 | D-5 | A separate test Tally company for the connector | Accounts | Stage 5 testing |
+| D-6 | How the local helper and the Tally local gateway reach the server; whether development may use an easier login path | Product owner; Admin validates login (V-04) | Helper and Tally gateway: not yet named (product owner). Login path: before KDPS's side-by-side test |
