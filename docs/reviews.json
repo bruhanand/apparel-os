@@ -14,19 +14,19 @@
       }
     },
     "AGENTS.md#change-gate": {
-      "status": "baseline",
-      "by": "product owner",
-      "date": "2026-10-03",
-      "reason": "Starting point after the alignment sweep of 3 Oct 2026, with DEC-036 to DEC-092 applied. Not a review.",
-      "unitHash": "d60cdb09b293",
+      "status": "reviewed",
+      "by": "AI review",
+      "date": "2026-10-04",
+      "reason": "Step 5 now offers review for a finding judged not a clash, matching ai-review.md step 5 and runReview, and the remaining steps, impact sentence, pre-commit hook and workflow agree with the code and the other file.",
+      "unitHash": "53ca88b96dd1",
       "deps": {}
     },
     "AGENTS.md#checking-the-documents": {
       "status": "reviewed",
       "by": "AI review",
-      "date": "2026-10-03",
-      "reason": "Dependencies bullet now describes pointers to other documents. Compared with check.mts: same-file N.M pointers, named-document pointers with a whole number covering subsections, one-word names only with .md, backticked examples ignored; the broad-sweep warning now fires only on a changed rule, as step 3 says. Consistent.",
-      "unitHash": "c6b722a0960d",
+      "date": "2026-10-04",
+      "reason": "Read runPacket (blocking filter on docs/reviews.json, --force, --all), runRecord (multiple files, tab fields) and ran impact with prd.md#stack, which now maps to docs/prd.md#stack with 8 hits; every table row and bullet matches the code.",
+      "unitHash": "019e167d1cf2",
       "deps": {}
     },
     "AGENTS.md#code-workspace": {
@@ -577,9 +577,9 @@
     "AGENTS.md#honest-reviews": {
       "status": "reviewed",
       "by": "AI review",
-      "date": "2026-10-03",
-      "reason": "Reworded the loop rule: each record carries its own section's reason; no blanket reasons. Process text only.",
-      "unitHash": "e911ab27a749",
+      "date": "2026-10-04",
+      "reason": "The four refusal groups in the record sentence match runRecord line by line: changed state, under 8 words, duplicate reason in the files or in recordedBy for another section, and repeat of the last record.",
+      "unitHash": "e55942240fe8",
       "deps": {}
     },
     "AGENTS.md#never-invent-a-value": {
@@ -4018,8 +4018,8 @@
       "status": "reviewed",
       "by": "AI review",
       "date": "2026-10-04",
-      "reason": "The `PRD-ORG-017` to `PRD-ORG-019` row (`receiving`, MM-7) and the `PRD-SEC-009`/`PRD-SEC-010` row match the MM-7 and MM-15 picks, no ID range changed and no value is invented.",
-      "unitHash": "0fe60e5c9fa3",
+      "reason": "The git diff shows only the header-not-listed marker was added and no table row changed; without the marker only this ownership table has IDs absent from the header, so its stated reason is true.",
+      "unitHash": "37a0de87bc01",
       "deps": {
         "DEC-099": {"hash":"e0294fa280d6","decs":[]},
         "DEC-105": {"hash":"aebdef2fb796","decs":[]},
@@ -6673,8 +6673,8 @@
       "status": "reviewed",
       "by": "AI review",
       "date": "2026-10-04",
-      "reason": "I compared the header, which adds DEC-105 to the decision list, with DEC-105, and it cites no pick the decision lacks; the Proposed legend row is allowed to stay.",
-      "unitHash": "a3e5348e9710",
+      "reason": "Grepped module-map.md for POL-10.08 (cited at line 358 in section 4.11), confirmed kdps-policies.md:316 defines it, and a script found the header policy list matches the body-cited policy IDs exactly with none missing.",
+      "unitHash": "9122e5cfc0ed",
       "deps": {
         "DEC-003": {"hash":"8f7f06cc0a84","decs":[]},
         "DEC-005": {"hash":"d9f11492dc0d","decs":[]},
@@ -6746,6 +6746,7 @@
         "POL-10.01": {"hash":"84b87d43b1b6","decs":[]},
         "POL-10.02": {"hash":"599407f816ec","decs":[]},
         "POL-10.07": {"hash":"46f86a808d18","decs":["DEC-046"]},
+        "POL-10.08": {"hash":"5965e73d18fc","decs":["DEC-018"]},
         "POL-11": {"hash":"0e68f4f2fbd7","decs":["DEC-060"]},
         "POL-11.01": {"hash":"d1f8e7273d2f","decs":["DEC-060"]},
         "POL-12": {"hash":"82e087d82bfd","decs":["DEC-014","DEC-021","DEC-083"]},

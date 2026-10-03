@@ -61,7 +61,9 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 | Command | What it does |
 | --- | --- |
 | `node tools/doc-check/check.mts` | Runs every check. Exit code 1 means errors. |
-| `node tools/doc-check/check.mts packet --out <file>` | Writes the review packet for the stale sections. |
+| `node tools/doc-check/check.mts impact <ID> [<ID> ...]` | Lists the sections a change to these rules, decisions or source headings (`prd.md#…`) would flag, before you make it. |
+| `node tools/doc-check/check.mts packet --out <file> [--split <n>]` | Writes the review packet for the stale sections, in `n` parts. Refuses while any error other than "Review required" is open, except a record left by a removed section (`--force` writes it anyway). Leaves out sections already sent unchanged (`--all` sends them again). |
+| `node tools/doc-check/check.mts record <file> [<file> ...] --by "<name>"` | Records the verdicts in the files: one line per section with its key, the State from the packet and its own reason, separated by tabs. |
 | `node tools/doc-check/check.mts review "<section>" --by "<name>" --reason "<text>"` | Records the review of one section. |
 | `node tools/doc-check/check.mts drop "<section>"` | Forgets the record of a section that no longer exists. |
 | `node tools/doc-check/check.mts list [<filter>]` | Lists the sections and what each depends on. |
@@ -70,7 +72,8 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 - **Dependencies.** A section depends on the IDs it cites and on any `prd.md#…` or `kdps-policies.md#…` heading it names. One hop further, it depends on what the sections it points at cite: "(10.6)" in the same document, or a numbered section of another document named in words, such as `stock-ledger 10.4` or `deployment.md section 7`. A whole-section number covers its subsections. A pointer inside backticks is an example and does not count. A new decision entry whose Choice or Changed line cites a rule counts as a change to that rule.
 - **Declaring.** A section that applies no rule carries `<!-- deps: none — reason -->` (in the blueprint script, `/* deps: none — reason */`). A section that rests on rules its text does not cite names them the same way: `<!-- deps: <IDs> — reason -->`.
 - **Stale.** A section is stale when its own text, a source's text or a source's decisions changed since its record in `docs/reviews.json`. The check fails until each stale section is fixed or confirmed.
-- **Decision log.** A PRD or policy bullet changed since the last commit needs a decision entry, added or edited since the PRD or policies were last committed, that cites it. A removed bullet's ID must be listed as retired.
+- **Decision log.** A PRD or policy bullet changed since the last commit needs a decision entry, added or edited since the PRD or policies were last committed, that cites it. A removed bullet's ID must be listed as retired. A new bullet that no section cites yet gets a warning: run the broad sweep.
+- **Headers.** A design document whose header lists its IDs ("- PRD IDs:", "- Policies:", "- Decisions:") lists every ID its sections cite, outside `<!-- -->` comments. A section that only places IDs, such as an ownership table, carries `<!-- header: not listed — reason -->`.
 - **Reports** get the ID, link and table checks only. `alignment-sweep.md` and `decision-pack.md` are frozen proposals and may name IDs that were never added.
 
 ### Change gate
@@ -78,19 +81,21 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 
 1. Log the decision entry.
 2. Edit the PRD or the policies. The entry and the edit may be separate commits, entry first.
-3. Run the checker. It lists the sections to review, and warns when a stock, money or access rule changed.
+3. Run the checker. Fix every error that is not "Review required" first. It warns when a stock, money or access rule changed.
 4. Write the packet and run the AI review in `tools/doc-check/ai-review.md`. Run its broad sweep when warned.
-5. Fix each flagged section, or confirm it with `review` and a reason.
+5. Record the verdicts with `record`. Fix each finding, or record a finding judged not to be a clash with `review` and a reason. Then write the packet again: it holds only what changed since.
 6. Run the checker until it passes, then commit.
+
+Gather the decisions of a round before step 3, so each section is reviewed once; `impact` shows what a round will flag.
 
 The pre-commit hook in `.githooks/` runs the checker. Enable it once per clone with `git config core.hooksPath .githooks`. GitHub runs it on every push and pull request (`.github/workflows/doc-check.yml`).
 
 ### Honest reviews
 <!-- deps: none — how the doc checker works -->
 
-- The checker never writes records. Only `review`, `drop` and the one-time `baseline` do.
+- The checker never writes records. Only `review`, `record`, `drop` and the one-time `baseline` do.
 - Record a review only after reading the section against its current sources. The reason says what was compared and what was found.
-- One section per `review` call, with that section's own reason from an actual review. Never record sections with one blanket reason to make the check pass.
+- One section per `review` call or `record` line, with that section's own reason from an actual review. Never record sections with one blanket reason to make the check pass. `record` refuses a verdict whose section changed after the reviewer read it, a reason of fewer than 8 words, a reason given for another section in the same files or already recorded for another section, and a reason that repeats the section's last record.
 - Records marked `baseline` were taken on 3 Oct 2026 after the alignment sweep. They are a starting point, not reviews.
 
 
