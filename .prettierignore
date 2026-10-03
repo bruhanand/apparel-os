@@ -1,0 +1,8 @@
+docs/**
+*.md
+tools/doc-check/**
+pnpm-lock.yaml
+dist
+.turbo
+.*/
+!.github/

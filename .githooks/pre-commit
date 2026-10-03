@@ -1,3 +1,12 @@
 #!/bin/sh
 # Runs the doc checker before each commit. See AGENTS.md, "Checking the documents".
-exec node tools/doc-check/check.mts --base HEAD
+node tools/doc-check/check.mts --base HEAD || exit 1
+# Then, only when staged files touch code or workspace config, runs lint, typecheck and the module check.
+if git diff --cached --name-only | grep -Eq '^(apps/|packages/|tools/module-check/|package\.json$|pnpm-workspace\.yaml$|pnpm-lock\.yaml$|turbo\.json$|tsconfig\.base\.json$|eslint\.config\.mjs$|\.prettierrc\.json$|\.prettierignore$|\.editorconfig$|\.nvmrc$)'; then
+  node tools/module-check/check.mts || exit 1
+  if [ -d node_modules ]; then
+    pnpm -s lint && pnpm -s typecheck || exit 1
+  else
+    echo "Lint and typecheck skipped: dependencies are not installed. Run pnpm install." >&2
+  fi
+fi

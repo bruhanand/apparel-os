@@ -1,0 +1,33 @@
+{
+  "name": "apparel-os",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Apparel OS workspace root",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint && pnpm lint:tools",
+    "lint:tools": "eslint tools/module-check",
+    "typecheck": "turbo run typecheck && pnpm typecheck:tools",
+    "typecheck:tools": "tsc -p tools/module-check/tsconfig.json",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "check:modules": "node tools/module-check/check.mts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "catalog:",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.7",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.71.0"
+  }
+}
