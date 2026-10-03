@@ -5,7 +5,8 @@ The checker (`check.mts`) knows which sections depend on which rules and flags t
 ## When to run it
 
 - The checker reports "Review required" for one or more sections, and no other error. Fix the other errors first: each fix can change which sections are stale.
-- The checker warns "broad sweep": a stock, money or access rule changed, or a new rule is cited nowhere yet. Run the broad sweep as well as the targeted review.
+- The checker warns "broad sweep": a stock, money or access rule changed, or a decision cites one. Run the broad sweep as well as the targeted review.
+- The checker warns that a new or changed rule is cited by no section. Nothing goes stale for it, so only the sweep finds where it belongs; the packet lists it.
 - Before a decision entry that changes stock, money or access rules is approved, run `impact` with the IDs it would cite to see what it would touch.
 
 ## Steps
@@ -22,6 +23,8 @@ A packet never goes out twice for unchanged sections: the checker remembers what
 ## Rules for the reviewer
 
 - Compare each flagged section with the current text of its sources and the new decisions listed in the packet. Read more of the source documents when a rule refers to another.
+- When the packet says "Baseline record only", the section was never reviewed: compare all of it, not only the change.
+- For a rule the packet lists as cited by no section, run the broad sweep for it and say which section should cite it, or that none needs to.
 - Report a finding when a sentence in the section:
   - says something the source does not allow;
   - drops a condition, approver, stage or OPEN mark the source requires;

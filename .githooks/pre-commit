@@ -1,6 +1,11 @@
 #!/bin/sh
-# Runs the doc checker before each commit. See AGENTS.md, "Checking the documents".
-node tools/doc-check/check.mts --base HEAD || exit 1
+# Runs the doc checker on exactly what this commit will hold: the staged documents and the staged
+# checker, read from a copy of the index. See AGENTS.md, "Checking the documents".
+node tools/doc-check/check.mts --staged || exit 1
+# Runs the checker's own tests, as staged, when the checker changes.
+if git diff --cached --name-only | grep -q '^tools/doc-check/'; then
+  node tools/doc-check/check.mts test --staged || exit 1
+fi
 # Then, only when staged files touch code or workspace config, runs lint, typecheck and the module check.
 if git diff --cached --name-only | grep -Eq '^(apps/|packages/|tools/module-check/|package\.json$|pnpm-workspace\.yaml$|pnpm-lock\.yaml$|turbo\.json$|tsconfig\.base\.json$|eslint\.config\.mjs$|\.prettierrc\.json$|\.prettierignore$|\.editorconfig$|\.nvmrc$)'; then
   node tools/module-check/check.mts || exit 1

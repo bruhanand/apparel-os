@@ -10,17 +10,96 @@
 //   node tools/doc-check/check.mts drop <section>            forget a record whose section is gone
 //   node tools/doc-check/check.mts baseline --by <name> --reason <text>   once, on an empty record file
 //   node tools/doc-check/check.mts list [<filter>]           sections and what they depend on
+//   node tools/doc-check/check.mts coverage                  PRD and policy IDs no gated section cites
+//   node tools/doc-check/check.mts test                      the checker's own tests (check.test.mts)
+//
+// --staged checks the snapshot staged for commit instead of the working tree: the staged documents
+// and the staged checker, copied out of a copy of the index (the pre-commit hook uses it).
+// --root <dir> reads the documents from another directory; --repo <dir> answers git questions there.
 //
 // The checker never writes review records on its own. Only `review`, `record`, `drop` and `baseline` do.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+// ---------- options and roots ----------
+
+const SWITCHES = new Set(['all', 'force', 'staged']); // flags that take no value
+
+function options(args: string[]): { positional: string[]; flags: Record<string, string> } {
+  const positional: string[] = [];
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--')) {
+      const name = args[i].slice(2);
+      if (SWITCHES.has(name)) flags[name] = 'yes';
+      else {
+        flags[name] = args[i + 1] ?? '';
+        i++;
+      }
+    } else positional.push(args[i]);
+  }
+  return { positional, flags };
+}
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(2);
+}
+
+const ARGS = process.argv.slice(2);
+const command = !ARGS[0] || ARGS[0].startsWith('--') ? 'check' : ARGS[0];
+const { positional, flags } = options(command === 'check' && ARGS[0] !== 'check' ? ARGS : ARGS.slice(1));
+
+const SELF = fileURLToPath(import.meta.url);
+// ROOT is where the documents are read; REPO answers git questions. They differ for --staged and the tests.
+const ROOT = resolve(flags.root || resolve(dirname(SELF), '../..'));
+const REPO = resolve(flags.repo || ROOT);
+
+// The paths a snapshot needs: the documents, the checker and its tests, and the hook the tests run.
+const SNAPSHOT_PATHS = ['docs', 'AGENTS.md', 'tools/doc-check', '.githooks'];
+
+// Checks exactly what the next commit will hold. A copy of the index is written as a tree, so the
+// index and the working tree are only read; the tree's documents and checker go to a temporary
+// directory, and the staged checker runs there with git questions answered by the repository.
+function runStaged(): number {
+  if (!['check', 'list', 'impact', 'coverage', 'test'].includes(command)) fail(`--staged only reads the staged snapshot; run "${command}" without it.`);
+  const dir = mkdtempSync(join(tmpdir(), 'doc-check-staged-'));
+  try {
+    const run = (args: string[], env?: NodeJS.ProcessEnv) => execFileSync('git', args, { cwd: REPO, env: env ?? process.env, maxBuffer: 1 << 30 });
+    const index = resolve(REPO, run(['rev-parse', '--git-path', 'index']).toString().trim());
+    const copy = join(dir, '.index');
+    if (existsSync(index)) copyFileSync(index, copy);
+    const tree = run(['write-tree'], { ...process.env, GIT_INDEX_FILE: copy }).toString().trim();
+    const paths = SNAPSHOT_PATHS.filter((p) => spawnSync('git', ['cat-file', '-e', `${tree}:${p}`], { cwd: REPO }).status === 0);
+    const out = join(dir, 'snapshot');
+    mkdirSync(out);
+    if (paths.length) {
+      const x = spawnSync('tar', ['-x', '-C', out], { input: run(['archive', '--format=tar', tree, '--', ...paths]) });
+      if (x.status !== 0) fail(`Could not unpack the staged snapshot: ${x.stderr}`);
+    }
+    const staged = join(out, 'tools/doc-check/check.mts');
+    const rest: string[] = [];
+    for (let i = 0; i < ARGS.length; i++) {
+      if (ARGS[i] === '--staged') continue;
+      if (ARGS[i] === '--root' || ARGS[i] === '--repo') i++;
+      else rest.push(ARGS[i]);
+    }
+    // GIT_DIR lets a staged checker that predates --repo still answer git questions from the snapshot.
+    const gitDir = run(['rev-parse', '--absolute-git-dir']).toString().trim();
+    const child = spawnSync(process.execPath, [existsSync(staged) ? staged : SELF, ...rest, '--root', out, '--repo', REPO], { stdio: 'inherit', env: { ...process.env, GIT_DIR: gitDir } });
+    return child.status ?? 1;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+if (flags.staged) process.exit(runStaged());
+
 const PRD = 'docs/prd.md';
 const POLICIES = 'docs/kdps-policies.md';
 const DECISIONS = 'docs/decisions.md';
@@ -40,7 +119,8 @@ const SWEEP_PRD_PREFIXES = ['STK', 'TRF', 'DMG', 'REC', 'LED', 'CSH', 'PAY', 'TA
 const SWEEP_POLICIES = ['01', '02', '04', '09', '11'];
 
 const ID_RE = /PRD-[A-Z]{3}-\d{3}|POL-\d{2}\.\d{2}|POL-\d{2}(?!\.\d|\d)|DEC-\d{3}/g;
-const RANGE_RE = /`?(PRD-[A-Z]{3}-|POL-\d{2}\.|DEC-)(\d{2,3})`?\s*(?:to|–)\s*`?\1(\d{2,3})`?/g;
+// "PRD-STK-001 to PRD-STK-010", "POL-02.01–POL-02.05", "`POL-01`–`POL-19`" (whole policies).
+const RANGE_RE = /`?(PRD-[A-Z]{3}-|POL-\d{2}\.|DEC-|POL-)(\d{2,3})`?\s*(?:to|–)\s*`?\1(\d{2,3})(?!\.\d)`?/g;
 const RULE_LINE_RE = /^- `(PRD-[A-Z]{3}-\d{3}|POL-\d{2}\.\d{2})` (.*)$/;
 const SOURCE_LINK_RE = /(?:^|[\s(/])((?:prd|kdps-policies)\.md)#([\w-]+)/g;
 const MARKER_RE = /(?:<!--|\/\*)\s*deps:\s*none\b/;
@@ -119,6 +199,7 @@ type Decision = { id: string; title: string; line: number; text: string; cites: 
 type Sources = {
   rules: Map<string, Rule>;
   retired: Set<string>;
+  retiredIn: Map<string, string>; // retired ID -> where it is listed
   decisions: Map<string, Decision>;
   touchedBy: Map<string, Set<string>>; // source ID -> decisions whose Choice or Changed line cites it
   policies: Map<string, string[]>; // '02' -> its bullet IDs
@@ -156,6 +237,7 @@ function parseSources(prd: string, policies: string, decisions: string, report: 
   const src: Sources = {
     rules: new Map(),
     retired: new Set(),
+    retiredIn: new Map(),
     decisions: new Map(),
     touchedBy: new Map(),
     policies: new Map(),
@@ -167,7 +249,12 @@ function parseSources(prd: string, policies: string, decisions: string, report: 
   ] as const) {
     sourceSections(file, text, src.sections);
     text.split('\n').forEach((l, i) => {
-      if (/^> - Retired IDs:/.test(l)) for (const id of l.match(ID_RE) ?? []) src.retired.add(id);
+      if (/^> - Retired IDs:/.test(l))
+        for (const id of l.match(ID_RE) ?? []) {
+          if (id.startsWith('DEC-')) continue; // the decision that retired it
+          src.retired.add(id);
+          src.retiredIn.set(id, `${file}:${i + 1}`);
+        }
       const m = RULE_LINE_RE.exec(l);
       if (!m) {
         if (report && /^- `(PRD|POL)-/.test(l)) errors.push({ where: `${file}:${i + 1}`, text: 'Malformed rule ID at the start of this bullet.' });
@@ -187,7 +274,7 @@ function parseSources(prd: string, policies: string, decisions: string, report: 
       }
     });
   }
-  if (report) for (const id of src.retired) if (src.rules.has(id)) errors.push({ where: POLICIES, text: `${id} is listed as retired but still defined.` });
+  if (report) for (const id of src.retired) if (src.rules.has(id)) errors.push({ where: src.retiredIn.get(id)!, text: `${id} is listed as retired but still defined.` });
 
   const lines = decisions.split('\n');
   const starts: number[] = [];
@@ -256,7 +343,7 @@ function sweepNeeded(src: Sources, id: string): boolean {
 
 // ---------- gated sections ----------
 
-type Pointer = { file: string; nums: string[] }; // numbered sections of a document named in words
+type Pointer = { file: string; nums: string[]; line: number; text: string }; // numbered sections of a document named in words
 
 type Unit = {
   key: string;
@@ -270,19 +357,23 @@ type Unit = {
 };
 
 // Documents a section can name in words. A one-word name counts only with ".md" ("personas.md 1");
-// a hyphenated one also without it ("stock-ledger 10.4"). Names shared by two files (README) never count.
-const DOC_BY_NAME = (() => {
-  const all = [...walk('docs').filter((f) => f.endsWith('.md')), 'AGENTS.md'];
-  const name = (f: string) => posix.basename(f, '.md');
-  const count = (n: string) => all.filter((f) => name(f) === n).length;
-  return new Map(all.filter((f) => count(name(f)) === 1).map((f) => [name(f), f]));
-})();
+// a hyphenated one also without it ("stock-ledger 10.4"). A name two files share (README) is ambiguous.
+const DOC_FILES = [...walk('docs'), ...walk('AGENTS.md')].filter((f) => f.endsWith('.md'));
+const docName = (f: string) => posix.basename(f, '.md');
+const DOC_BY_NAME = new Map(DOC_FILES.filter((f) => DOC_FILES.filter((o) => docName(o) === docName(f)).length === 1).map((f) => [docName(f), f]));
+const SHARED_NAMES = sorted(DOC_FILES.map(docName).filter((n) => !DOC_BY_NAME.has(n)));
+
+// Longest name first, escaped; a group that never matches when the list is empty.
+function alt(names: Iterable<string>): string {
+  const list = [...names].sort((a, b) => b.length - a.length).map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return list.length ? list.join('|') : '(?!)';
+}
 
 // "stock-ledger 10.4", "stock-ledger.md section 7", "[module-map.md](module-map.md) 2, 3, 4.1", "stock-ledger 10.2 to 10.4".
 const NUM = String.raw`\d{1,2}(?:\.\d{1,2})?`;
-const DOC_NAMES = [...DOC_BY_NAME.keys()].sort((a, b) => b.length - a.length);
+const DOC_NAMES = [...DOC_BY_NAME.keys()];
 const POINTER_RE = new RegExp(
-  String.raw`(?:\[[^\]]*\]\(([^)\s#]+\.md)\)|(?<![\w/.-])(?:(${DOC_NAMES.filter((n) => n.includes('-')).join('|')})(?:\.md)?|(${DOC_NAMES.join('|')})\.md))` +
+  String.raw`(?:\[[^\]]*\]\(([^)\s#]+\.md)\)|(?<![\w/.-])(?:(${alt(DOC_NAMES.filter((n) => n.includes('-')))})(?:\.md)?|(${alt(DOC_NAMES)})\.md|(${alt(SHARED_NAMES)})\.md))` +
     String.raw`(?:'s)?,?[ \t]+(?:sections?[ \t]+|§[ \t]*)?(${NUM}(?:(?:[ \t]*,[ \t]*|[ \t]+and[ \t]+|[ \t]+to[ \t]+|[ \t]*–[ \t]*)${NUM})*)(?![\w]|\.\d)`,
   'g',
 );
@@ -303,21 +394,41 @@ function sectionNumbers(list: string): string[] {
 }
 
 // A pointer inside backticks is an example, not a pointer.
-function pointers(file: string, text: string): Pointer[] {
+function pointers(file: string, text: string, firstLine: number): Pointer[] {
   return [...text.replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length)).matchAll(POINTER_RE)].flatMap((m) => {
-    const target = m[1] ? posix.normalize(posix.join(posix.dirname(file), m[1])) : DOC_BY_NAME.get(m[2] ?? m[3]);
-    return target ? [{ file: target, nums: sectionNumbers(m[4]) }] : [];
+    const line = firstLine + lineOf(text, m.index!) - 1;
+    if (m[4]) {
+      errors.push({ where: `${file}:${line}`, text: `"${m[0].trim()}" is ambiguous: more than one document is named ${m[4]}.md. Link to the one you mean.` });
+      return [];
+    }
+    const target = m[1] ? resolveLink(file, m[1]) : DOC_BY_NAME.get(m[2] ?? m[3]);
+    return target ? [{ file: target, nums: sectionNumbers(m[5]), line, text: m[0].trim() }] : [];
   });
 }
 
+function resolveLink(file: string, path: string): string {
+  let decoded = path;
+  try {
+    decoded = decodeURI(path);
+  } catch {
+    // a malformed escape: keep the raw path
+  }
+  return posix.normalize(posix.join(posix.dirname(file), decoded));
+}
+
 // Numbered headings ("## 7. Cost", "### 7.6 Unknown cost") and the lines they span, subsections included.
-function numberedSpans(text: string): Map<string, [number, number]> {
+// A number used twice makes pointers to it ambiguous.
+function numberedSpans(file: string, text: string): Map<string, [number, number]> {
   const hs = headings(text);
   const end = text.split('\n').length + 1;
   const spans = new Map<string, [number, number]>();
   hs.forEach((h, i) => {
     const num = /^(\d+(?:\.\d+)*)\.?\s/.exec(h.title);
-    if (!num || spans.has(num[1])) return;
+    if (!num) return;
+    if (spans.has(num[1])) {
+      errors.push({ where: `${file}:${h.line}`, text: `Two sections are numbered ${num[1]}. Pointers to ${num[1]} are ambiguous; renumber one.` });
+      return;
+    }
     const next = hs.slice(i + 1).find((o) => o.level <= h.level);
     spans.set(num[1], [h.line, next ? next.line : end]);
   });
@@ -336,7 +447,7 @@ function makeUnit(key: string, file: string, line: number, text: string, src: So
     text,
     own: new Set([...extractIds(text, src), ...sourceLinks(text)]),
     refs: new Set(),
-    pointers: pointers(file, text),
+    pointers: pointers(file, text, line),
     marker: MARKER_RE.test(text),
   };
 }
@@ -369,7 +480,7 @@ function markdownUnits(file: string, text: string, src: Sources): Unit[] {
       if (key && key !== u.key) u.refs.add(key);
     }
     for (const m of body.matchAll(/\]\(([^)\s#]*)#([^)\s]+)\)/g)) {
-      const target = m[1] ? posix.normalize(posix.join(posix.dirname(file), m[1])) : file;
+      const target = m[1] ? resolveLink(file, m[1]) : file;
       const key = `${target}#${m[2]}`;
       if (target === file && slugs.has(key) && key !== u.key) u.refs.add(key);
       else if (target !== file) u.refs.add(key);
@@ -427,7 +538,7 @@ function gatedUnits(src: Sources): Unit[] {
   for (const file of GATED.flatMap(walk)) {
     const text = read(file);
     if (file.endsWith('.md')) {
-      spans.set(file, numberedSpans(text));
+      spans.set(file, numberedSpans(file, text));
       units.push(...markdownUnits(file, text, src));
     } else if (file === BLUEPRINT) units.push(...blueprintUnits(file, text, src));
     else if (file === DESIGN_SYSTEM) {
@@ -441,7 +552,11 @@ function gatedUnits(src: Sources): Unit[] {
     for (const p of u.pointers)
       for (const num of p.nums) {
         const span = spans.get(p.file)?.get(num);
-        if (!span) continue;
+        if (!span) {
+          // Only tracked documents are known section by section; a report's sections are not checked.
+          if (spans.has(p.file)) errors.push({ where: `${u.file}:${p.line}`, text: `"${p.text}" points at section ${num} of ${p.file}, which has no section numbered ${num}.` });
+          continue;
+        }
         for (const o of units) if (o.file === p.file && o.key !== u.key && o.line >= span[0] && o.line < span[1]) u.refs.add(o.key);
       }
   return units;
@@ -471,12 +586,41 @@ type ReviewRecord = {
 };
 type Records = { version: 1; units: Record<string, ReviewRecord> };
 
-function loadRecords(): Records {
-  if (!existsSync(join(ROOT, REVIEWS))) return { version: 1, units: {} };
-  return JSON.parse(read(REVIEWS)) as Records;
+// Reads the records and says what is wrong with them. The file must be exactly as the checker writes
+// it, so a record duplicated by a merge or edited by hand is caught.
+function loadRecords(): { records: Records; problems: string[] } {
+  const empty: Records = { version: 1, units: {} };
+  if (!existsSync(join(ROOT, REVIEWS))) return { records: empty, problems: [] };
+  const text = read(REVIEWS);
+  let raw: { version?: unknown; units?: unknown };
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    return { records: empty, problems: [`Not valid JSON: ${(e as Error).message}`] };
+  }
+  if (raw?.version !== 1 || !raw.units || typeof raw.units !== 'object') return { records: empty, problems: ['Expected {"version": 1, "units": {…}}.'] };
+  const records = raw as Records;
+  const problems: string[] = [];
+  for (const [key, r] of Object.entries(records.units)) {
+    const bad = (what: string) => problems.push(`Record ${key}: ${what}.`);
+    if (r.status !== 'reviewed' && r.status !== 'baseline') bad(`status must be "reviewed" or "baseline", not ${JSON.stringify(r.status)}`);
+    if (typeof r.by !== 'string' || !r.by.trim()) bad('"by" is empty');
+    if (typeof r.reason !== 'string' || !r.reason.trim()) bad('"reason" is empty');
+    if (typeof r.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) bad('"date" is not YYYY-MM-DD');
+    if (typeof r.unitHash !== 'string') bad('"unitHash" is missing');
+    if (!r.deps || typeof r.deps !== 'object') bad('"deps" is missing');
+    else for (const [id, d] of Object.entries(r.deps)) if (typeof d?.hash !== 'string' || !Array.isArray(d.decs)) bad(`dependency ${id} is malformed`);
+  }
+  if (!problems.length && serialize(records) !== text)
+    problems.push('The file is not in the form the checker writes: a merge may have duplicated a record, or it was edited by hand. Records change only through review, record, drop and baseline.');
+  return { records, problems };
 }
 
 function saveRecords(records: Records): void {
+  writeFileSync(join(ROOT, REVIEWS), serialize(records));
+}
+
+function serialize(records: Records): string {
   const keys = Object.keys(records.units).sort();
   const out = ['{', '  "version": 1,', '  "units": {'];
   keys.forEach((key, i) => {
@@ -496,7 +640,7 @@ function saveRecords(records: Records): void {
     );
   });
   out.push('  }', '}', '');
-  writeFileSync(join(ROOT, REVIEWS), out.join('\n'));
+  return out.join('\n');
 }
 
 function snapshot(unit: Unit, byKey: Map<string, Unit>, src: Sources): { unitHash: string; deps: Record<string, Dep> } {
@@ -538,7 +682,9 @@ function staleness(unit: Unit, record: ReviewRecord | undefined, byKey: Map<stri
       changedSources.push({ id, newDecs });
     } else {
       if (old.hash !== dep.hash) {
-        reasons.push(`${id}${tag(id)}: ${id.startsWith('DEC-') ? 'decision entry' : id.includes('#') ? 'source section' : 'rule text'} changed.`);
+        const what =
+          dep.hash === 'retired' ? `rule retired${dep.decs.length ? ` (${dep.decs.join(', ')})` : ''}; cite what replaced it` : `${id.startsWith('DEC-') ? 'decision entry' : id.includes('#') ? 'source section' : 'rule text'} changed`;
+        reasons.push(`${id}${tag(id)}: ${what}.`);
         changed = true;
       }
       newDecs = dep.decs.filter((d) => !old.decs.includes(d));
@@ -551,13 +697,14 @@ function staleness(unit: Unit, record: ReviewRecord | undefined, byKey: Map<stri
     if (changed && sweepNeeded(src, id)) sweep.push(id);
   }
   for (const id of Object.keys(record.deps)) if (!now.deps[id]) reasons.push(`${id}: no longer cited.`);
+  if (reasons.length && record.status === 'baseline') reasons.unshift('Baseline record only: this section was never reviewed. Read all of it, not only the change.');
   return reasons.length ? { unit, reasons, sweep, textChanged, changed: changedSources, state } : null;
 }
 
 // ---------- checks over every document ----------
 
 function checkCitations(src: Sources, units: Unit[]): void {
-  const files = [...walk('docs').filter((f) => f.endsWith('.md')), 'AGENTS.md'];
+  const files = [...walk('docs'), ...walk('AGENTS.md')].filter((f) => f.endsWith('.md'));
   const scan = (where: string, text: string, firstLine: number) => {
     for (const m of text.matchAll(ID_RE))
       if (!isKnown(src, m[0])) errors.push({ where: `${where}:${firstLine + lineOf(text, m.index!) - 1}`, text: `${m[0]} is not defined and not retired.` });
@@ -570,7 +717,7 @@ function checkCitations(src: Sources, units: Unit[]): void {
 }
 
 function checkLinks(): void {
-  const files = [...walk('docs').filter((f) => f.endsWith('.md')), 'AGENTS.md'];
+  const files = [...walk('docs'), ...walk('AGENTS.md')].filter((f) => f.endsWith('.md'));
   const anchors = new Map<string, Set<string>>();
   const anchorsOf = (f: string) => {
     if (!anchors.has(f)) anchors.set(f, new Set(headings(read(f)).map((h) => h.slug)));
@@ -586,7 +733,7 @@ function checkLinks(): void {
         const href = m[1];
         if (/^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
         const [path, anchor] = href.split('#');
-        const target = path ? posix.normalize(posix.join(posix.dirname(file), decodeURI(path))) : file;
+        const target = path ? resolveLink(file, path) : file;
         const where = `${file}:${i + 1}`;
         if (!existsSync(join(ROOT, target))) {
           errors.push({ where, text: `Broken link: ${href}` });
@@ -599,7 +746,7 @@ function checkLinks(): void {
 }
 
 function checkTables(): void {
-  const files = [...walk('docs').filter((f) => f.endsWith('.md')), 'AGENTS.md'];
+  const files = [...walk('docs'), ...walk('AGENTS.md')].filter((f) => f.endsWith('.md'));
   const cells = (row: string) => row.replace(/^\s*(?:>\s*)?\|/, '').replace(/\|\s*$/, '').split(/(?<!\\)\|/).length;
   for (const file of files) {
     const lines = read(file).split('\n');
@@ -659,7 +806,7 @@ function checkHeaders(src: Sources, units: Unit[]): void {
 
 function git(args: string[]): string | null {
   try {
-    return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 28 });
   } catch {
     return null;
   }
@@ -667,28 +814,44 @@ function git(args: string[]): string | null {
 
 // A PRD or policy bullet that changed since the base needs a decision entry added or edited
 // since the last commit that touched the PRD or the policies (the entry comes first).
-// Returns the rules added since the base.
-function checkDecisionLog(src: Sources, base: string): Rule[] {
+type Delta = { base: string; changed: Rule[]; added: Set<string>; removed: Rule[]; decisions: Decision[] };
+
+// What changed in the PRD, the policies and the decision log since the base, and the log's rules:
+// a PRD or policy bullet that changed needs a decision entry added or edited since the last commit
+// that touched the PRD or the policies (the entry comes first); a removed bullet is retired; a
+// retired ID stays retired; a decision entry is never removed. A base named with --base must exist.
+function compareBase(src: Sources, base: string, explicit: boolean): Delta | null {
   if (git(['rev-parse', '--verify', '--quiet', `${base}^{commit}`]) === null) {
-    warnings.push({ where: base, text: 'Git base not found; skipped the decision-log check.' });
-    return [];
+    if (explicit) errors.push({ where: base, text: 'Git base not found, so the decision log cannot be checked against it. Pass a commit that exists.' });
+    else warnings.push({ where: base, text: 'Git base not found; skipped the decision-log check.' });
+    return null;
   }
   const at = (ref: string, path: string) => git(['show', `${ref}:${path}`]) ?? '';
   const old = parseSources(at(base, PRD), at(base, POLICIES), at(base, DECISIONS), false);
   const changed = [...src.rules.values()].filter((r) => old.rules.get(r.id)?.text !== r.text);
   const removed = [...old.rules.values()].filter((r) => !src.rules.has(r.id));
-  const added = changed.filter((r) => !old.rules.has(r.id));
   for (const r of removed)
     if (!src.retired.has(r.id)) errors.push({ where: `${r.file}`, text: `${r.id} was removed but is not listed under "Retired IDs".` });
-  if (!changed.length && !removed.length) return added;
-  const last = git(['log', '-1', '--format=%H', base, '--', PRD, POLICIES])?.trim();
-  const before = last ? parseSources('', '', at(last, DECISIONS), false).decisions : new Map<string, Decision>();
-  const pending = [...src.decisions.values()].filter((d) => before.get(d.id)?.text !== d.text);
-  for (const r of [...changed, ...removed]) {
-    if (pending.some((d) => extractIds(d.text).has(r.id))) continue;
-    errors.push({ where: `${r.file}:${r.line}`, text: `${r.id} changed with no new or edited decision entry citing it. Log it in ${DECISIONS} first.` });
+  for (const id of old.retired)
+    if (!src.retired.has(id)) errors.push({ where: old.retiredIn.get(id)!.split(':')[0], text: `${id} was retired at ${base} and is no longer listed as retired. A retired ID is never reused.` });
+  for (const id of old.decisions.keys())
+    if (!src.decisions.has(id)) errors.push({ where: DECISIONS, text: `${id} existed at ${base} and is gone. Decision entries are never removed; a removed number would be reused.` });
+  if (changed.length || removed.length) {
+    const last = git(['log', '-1', '--format=%H', base, '--', PRD, POLICIES])?.trim();
+    const before = last ? parseSources('', '', at(last, DECISIONS), false).decisions : new Map<string, Decision>();
+    const pending = [...src.decisions.values()].filter((d) => before.get(d.id)?.text !== d.text);
+    for (const r of [...changed, ...removed]) {
+      if (pending.some((d) => extractIds(d.text).has(r.id))) continue;
+      errors.push({ where: `${r.file}:${r.line}`, text: `${r.id} changed with no new or edited decision entry citing it. Log it in ${DECISIONS} first.` });
+    }
   }
-  return added;
+  return {
+    base,
+    changed,
+    added: new Set(changed.filter((r) => !old.rules.has(r.id)).map((r) => r.id)),
+    removed,
+    decisions: [...src.decisions.values()].filter((d) => old.decisions.get(d.id)?.text !== d.text),
+  };
 }
 
 // ---------- commands ----------
@@ -697,34 +860,18 @@ function today(): string {
   return new Date().toLocaleDateString('en-CA');
 }
 
-const SWITCHES = new Set(['all', 'force']); // flags that take no value
-
-function options(args: string[]): { positional: string[]; flags: Record<string, string> } {
-  const positional: string[] = [];
-  const flags: Record<string, string> = {};
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--')) {
-      const name = args[i].slice(2);
-      if (SWITCHES.has(name)) flags[name] = 'yes';
-      else {
-        flags[name] = args[i + 1] ?? '';
-        i++;
-      }
-    } else positional.push(args[i]);
-  }
-  return { positional, flags };
-}
-
-function fail(message: string): never {
-  console.error(message);
-  process.exit(2);
-}
-
 function load() {
   const src = parseSources(read(PRD), read(POLICIES), read(DECISIONS), true);
   const units = gatedUnits(src);
   const byKey = new Map(units.map((u) => [u.key, u]));
-  return { src, units, byKey, records: loadRecords() };
+  const { records, problems } = loadRecords();
+  return { src, units, byKey, records, recordProblems: problems };
+}
+
+// Commands that write records refuse to build on a broken record file.
+function usable(loaded: ReturnType<typeof load>): ReturnType<typeof load> {
+  if (loaded.recordProblems.length) fail(`${REVIEWS}: ${loaded.recordProblems.join(' ')}`);
+  return loaded;
 }
 
 function printFindings(title: string, list: Finding[]): void {
@@ -738,22 +885,41 @@ function printFindings(title: string, list: Finding[]): void {
 
 // The cheap, exact checks. They run before any semantic review: each fix they ask for can change
 // which sections are stale, so a review started before they pass would have to be repeated.
-function deterministicChecks(loaded: ReturnType<typeof load>, base: string): void {
-  const { src, units, byKey, records } = loaded;
+function deterministicChecks(loaded: ReturnType<typeof load>, flags: Record<string, string>): { sweep: Set<string>; uncovered: Rule[] } {
+  const { src, units, byKey, records, recordProblems } = loaded;
   checkCitations(src, units);
   checkLinks();
   checkTables();
   checkHeaders(src, units);
-  // A new rule flags no section until one cites it; only the broad sweep finds where it applies.
-  const cited = new Set(units.flatMap((u) => [...effectiveDeps(u, byKey).keys()]));
-  for (const r of checkDecisionLog(src, base))
-    if (!cited.has(r.id))
-      warnings.push({ where: `${r.file}:${r.line}`, text: `${r.id} is new and no gated section cites it yet. Run the broad sweep in tools/doc-check/ai-review.md to find where it applies.` });
+  for (const p of recordProblems) errors.push({ where: REVIEWS, text: p });
+  const sweep = new Set<string>();
+  const uncovered: Rule[] = [];
+  const delta = compareBase(src, flags.base || 'HEAD', Boolean(flags.base));
+  if (delta) {
+    // A changed rule asks for the sweep whether or not a section cites it; so does a decision entry about it.
+    for (const id of [...delta.changed, ...delta.removed].map((r) => r.id).concat(delta.decisions.flatMap((d) => [...d.cites])))
+      if (sweepNeeded(src, id)) sweep.add(id);
+    // A rule no section cites flags nothing: only the broad sweep finds where it applies.
+    const cited = new Set(units.flatMap((u) => [...effectiveDeps(u, byKey).keys()]));
+    const isCited = (id: string) => cited.has(id) || cited.has(id.slice(0, 6));
+    for (const r of delta.changed)
+      if (!isCited(r.id)) {
+        uncovered.push(r);
+        warnings.push({ where: `${r.file}:${r.line}`, text: `${r.id} is ${delta.added.has(r.id) ? 'new' : 'changed'} since ${delta.base} and no gated section cites it. Run the broad sweep in tools/doc-check/ai-review.md to find where it applies, or confirm no section needs it.` });
+      }
+  }
   for (const u of units)
     if (!u.marker && !effectiveDeps(u, byKey).size)
       errors.push({ where: `${u.file}:${u.line}`, text: `${u.key} cites no rule. Cite the IDs it applies, or add <!-- deps: none — reason -->.` });
-  for (const key of Object.keys(records.units))
-    if (!byKey.has(key)) errors.push({ where: REVIEWS, text: `Record for ${key}, which no longer exists. Review the renamed section, then: check.mts drop "${key}"` });
+  const unrecorded = units.filter((u) => !records.units[u.key]);
+  for (const [key, r] of Object.entries(records.units)) {
+    if (byKey.has(key)) continue;
+    const same = unrecorded.filter((u) => hash(norm(u.text)) === r.unitHash);
+    const near = same.length ? same : unrecorded.filter((u) => u.file === key.split('#')[0]);
+    const hint = near.length ? ` It may now be ${near.slice(0, 3).map((u) => u.key).join(' or ')}.` : '';
+    errors.push({ where: REVIEWS, text: `Record for ${key}, which no longer exists.${hint} Review the moved or renamed section, then: check.mts drop "${key}"` });
+  }
+  return { sweep, uncovered };
 }
 
 function staleUnits(loaded: ReturnType<typeof load>): Staleness[] {
@@ -764,9 +930,7 @@ function staleUnits(loaded: ReturnType<typeof load>): Staleness[] {
 function runCheck(flags: Record<string, string>): number {
   const loaded = load();
   const { units, records } = loaded;
-  deterministicChecks(loaded, flags.base || 'HEAD');
-
-  const sweep = new Set<string>();
+  const { sweep } = deterministicChecks(loaded, flags);
   for (const stale of staleUnits(loaded)) {
     stale.sweep.forEach((id) => sweep.add(id));
     errors.push({ where: `${stale.unit.file}:${stale.unit.line}`, text: `Review required: ${stale.unit.key}`, detail: stale.reasons });
@@ -788,7 +952,7 @@ function runCheck(flags: Record<string, string>): number {
 // never committed: it only stops the same unchanged sections going out twice.
 function sentPath(): string | null {
   const p = git(['rev-parse', '--git-path', 'doc-check-sent.json'])?.trim();
-  return p ? resolve(ROOT, p) : null;
+  return p ? resolve(REPO, p) : null;
 }
 
 function loadSent(): Record<string, string> {
@@ -866,9 +1030,9 @@ function splitParts(list: Staleness[], n: number): Staleness[][] {
 function runPacket(flags: Record<string, string>): number {
   const loaded = load();
   const { src } = loaded;
-  deterministicChecks(loaded, flags.base || 'HEAD');
+  const { uncovered } = deterministicChecks(loaded, flags);
   // A record left by a renamed or removed section changes nothing that is stale; every other error can.
-  const blocking = errors.filter((e) => e.where !== REVIEWS);
+  const blocking = errors.filter((e) => !(e.where === REVIEWS && e.text.startsWith('Record for ')));
   if (blocking.length && !flags.force) {
     printFindings('Errors', blocking);
     console.log(`\nNo packet written: fix these ${blocking.length} error(s) first. Each fix can change which sections are stale, so a review started now would be repeated. (--force writes it anyway.)`);
@@ -879,12 +1043,16 @@ function runPacket(flags: Record<string, string>): number {
   const sent = loadSent();
   const fresh = flags.all ? stale : stale.filter((s) => sent[s.unit.key] !== s.state);
   const held = stale.length - fresh.length;
+  const sweepNote = uncovered.length
+    ? ['# Rules that no section cites', '', 'Nothing goes stale for these. Run the broad sweep for each: find the sentences that restate it, and say which section should cite it, or that none needs to.', '', ...uncovered.map((r) => `- \`${r.id}\` (${r.file}:${r.line}): ${r.text}`), '']
+    : [];
   if (!stale.length) {
-    console.log('Nothing is stale.');
+    console.log(['Nothing is stale.', ...(sweepNote.length ? ['', ...sweepNote] : [])].join('\n'));
     return 0;
   }
   if (!fresh.length) {
     console.log(`Nothing new to review: all ${held} stale section(s) went out in an earlier packet with the same text and sources. Record their verdicts with "record", or pass --all to send them again.`);
+    if (sweepNote.length) console.log(['', ...sweepNote].join('\n'));
     return 0;
   }
   const n = Math.max(1, Math.min(Number(flags.split || 1) || 1, fresh.length));
@@ -906,6 +1074,7 @@ function runPacket(flags: Record<string, string>): number {
       '',
       'Follow tools/doc-check/ai-review.md. For each section with no clash, write one line to your verdict file: the section key, a tab, its State, a tab, and the reason (what you compared and what you found). Write no line for a section with a finding; report the finding instead.',
       '',
+      ...(k === 0 ? sweepNote : []),
       '# Changed sources',
       '',
       ...(sources.size ? [...sources.values()].flatMap((c) => sourceEntry(src, c)) : ['None: these sections changed themselves or are new.']),
@@ -971,7 +1140,7 @@ function runReview(positional: string[], flags: Record<string, string>): number 
   const reason = (flags.reason ?? '').trim();
   if (!by) fail('--by is required: who checked this section.');
   if (!reason) fail('--reason is required: what you compared and why the section is right.');
-  const { src, byKey, records } = load();
+  const { src, byKey, records } = usable(load());
   const unit = byKey.get(key);
   if (!unit) fail(`No section ${key}. Use "list" to see section keys.`);
   const missing = [...effectiveDeps(unit, byKey).keys()].filter((id) => !fingerprint(src, id));
@@ -992,7 +1161,7 @@ function runRecord(positional: string[], flags: Record<string, string>): number 
   if (!positional.length) fail('record <verdict file> [<file> ...] --by <name>. One line per section: key, tab, state, tab, reason.');
   const by = (flags.by ?? '').trim();
   if (!by) fail('--by is required: who checked these sections.');
-  const { src, byKey, records } = load();
+  const { src, byKey, records } = usable(load());
   const said = (r: string) => r.toLowerCase().replace(/\s+/g, ' ').trim();
   const rows = positional.flatMap((file) =>
     readFileSync(resolve(file), 'utf8')
@@ -1056,7 +1225,7 @@ function runRecord(positional: string[], flags: Record<string, string>): number 
 
 function runDrop(positional: string[]): number {
   if (positional.length !== 1) fail('Drop one record at a time: drop <section>.');
-  const { byKey, records } = load();
+  const { byKey, records } = usable(load());
   const key = positional[0];
   if (!records.units[key]) fail(`No record for ${key}.`);
   if (byKey.has(key)) fail(`${key} still exists. Records of live sections change only through "review".`);
@@ -1070,7 +1239,7 @@ function runBaseline(flags: Record<string, string>): number {
   const by = (flags.by ?? '').trim();
   const reason = (flags.reason ?? '').trim();
   if (!by || !reason) fail('baseline needs --by and --reason.');
-  const { src, units, byKey, records } = load();
+  const { src, units, byKey, records } = usable(load());
   if (Object.keys(records.units).length) fail(`${REVIEWS} already has records. A baseline is taken once; use "review" from now on.`);
   for (const u of units) records.units[u.key] = { status: 'baseline', by, date: today(), reason, ...snapshot(u, byKey, src) };
   saveRecords(records);
@@ -1089,9 +1258,31 @@ function runList(positional: string[]): number {
   return 0;
 }
 
-const [first, ...restArgs] = process.argv.slice(2);
-const command = !first || first.startsWith('--') ? 'check' : first;
-const { positional, flags } = options(!first || first.startsWith('--') ? process.argv.slice(2) : restArgs);
+// PRD and policy bullets that no gated section cites itself (a whole-policy citation covers its bullets).
+function runCoverage(): number {
+  const { src, units } = load();
+  const cited = new Set(units.flatMap((u) => [...u.own]));
+  const ids = [...src.rules.keys()];
+  const missing = ids.filter((id) => !cited.has(id) && !(id.startsWith('POL-') && cited.has(id.slice(0, 6))));
+  const groups = new Map<string, string[]>();
+  for (const id of missing) {
+    const prefix = id.startsWith('PRD-') ? id.slice(0, 7) : id.slice(0, 6);
+    groups.set(prefix, [...(groups.get(prefix) ?? []), id.slice(prefix.length + 1)]);
+  }
+  const count = (p: string, list: string[]) => list.filter((id) => id.startsWith(p)).length;
+  console.log(`Cited by no gated section: ${count('PRD-', missing)} of ${count('PRD-', ids)} PRD bullets, ${count('POL-', missing)} of ${count('POL-', ids)} policy bullets.`);
+  for (const [prefix, nums] of groups) console.log(`  ${prefix}: ${nums.join(' ')}`);
+  return 0;
+}
+
+// The checker's own tests, on synthetic repositories. With --staged, the staged tests and checker run.
+function runTests(): number {
+  const tests = join(ROOT, 'tools/doc-check/check.test.mts');
+  if (!existsSync(tests)) fail(`No tests at ${tests}.`);
+  // Inside a hook git sets GIT_INDEX_FILE and the like; the tests' own repositories must not inherit them.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')));
+  return spawnSync(process.execPath, ['--test', tests], { stdio: 'inherit', env }).status ?? 1;
+}
 
 const commands: Record<string, () => number> = {
   check: () => runCheck(flags),
@@ -1102,6 +1293,8 @@ const commands: Record<string, () => number> = {
   drop: () => runDrop(positional),
   baseline: () => runBaseline(flags),
   list: () => runList(positional),
+  coverage: () => runCoverage(),
+  test: () => runTests(),
 };
 if (!commands[command]) fail(`Unknown command "${command}". Commands: ${Object.keys(commands).join(', ')}.`);
-process.exit(commands[command]());
+process.exitCode = commands[command](); // not process.exit: it can cut off output still going to a pipe
