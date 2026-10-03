@@ -90,7 +90,7 @@ The pre-commit hook in `.githooks/` runs the checker. Enable it once per clone w
 
 - The checker never writes records. Only `review`, `drop` and the one-time `baseline` do.
 - Record a review only after reading the section against its current sources. The reason says what was compared and what was found.
-- One section per `review` call. Never loop `review` over many sections to make the check pass.
+- One section per `review` call, with that section's own reason from an actual review. Never record sections with one blanket reason to make the check pass.
 - Records marked `baseline` were taken on 3 Oct 2026 after the alignment sweep. They are a starting point, not reviews.
 
 
