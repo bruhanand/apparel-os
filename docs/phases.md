@@ -2,7 +2,7 @@
 
 > **Delivery plan.** Sets the order of work only. If this document disagrees with the PRD or the KDPS policies, they win. See [README.md](README.md).
 
-This document divides the product in [prd.md](prd.md) into six delivery stages and describes how each is tested beside the current system at KDPS. The PRD holds the rules; this document holds only the order of delivery.
+This document divides the product in [prd.md](prd.md) into six delivery stages and describes how each is tested beside the earlier POS at KDPS. The PRD holds the rules; this document holds only the order of delivery.
 
 ## How the stages are cut
 
@@ -12,18 +12,18 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Design offline billing from stage 1, even though it is enabled later.
 - HRMS can progress alongside the core once staff and permissions exist.
 - Basic operational reports belong in every stage. Forecasting waits for dependable history.
-- A stage may be designed, developed and tested with synthetic data before policy signatures. A policy-dependent live operation may be enabled only after the policy is signed and its real values, authorities and evidence are configured and validated. See [kdps-policies.md](kdps-policies.md).
+- A stage may be designed, developed and tested with synthetic data before policy signatures. A policy-dependent live operation may be enabled only after the policy is signed and its real values, authorities and evidence are configured and validated. See [kdps-policies.md](kdps-policies.md). The side-by-side test on real KDPS data is not a live operation: it needs KDPS's agreement to hold real data (deployment D-4), not signed policies; gated actions stay disabled until their policies are signed (`DEC-071`).
 - A stage ends only when its exit checks pass. Exit checks come from "Acceptance conditions" in the PRD.
 - This plan carries no dates. Dates depend on team size, which is not yet set.
 - The phone client is not yet placed in a stage.
-- Build screens in English first, ready for Hindi: screen text is kept apart from code and layouts allow longer text. The Hindi interface and WhatsApp and SMS messaging arrive in stage 5.
+- Build screens in English first, ready for Hindi: screen text is kept apart from code and layouts allow longer text. The Hindi interface for screens built in stages 1 to 5 arrives in stage 5; stage 6 screens get Hindi in stage 6. WhatsApp and SMS messaging arrive in stage 5.
 
 | Stage | Delivers | Replaces at KDPS |
 | --- | --- | --- |
 | 1. Shared foundation | Structure, access, products, parties, numbering, audit, recording rules | Scattered master sheets |
 | 2. Goods-in | Booking to accepted stock | Excel PT conversion; calls about what arrived |
 | 3. Stock movement | Allocation to store receipt, counts, supplier returns, claims | WhatsApp and phone tracking of goods |
-| 4. Store day | Opening till to day-close reconciliation | The current POS |
+| 4. Store day | Opening till to day-close reconciliation | The earlier POS |
 | 5. Financial control | Full accounting, Tally, bank, tax, franchise settlement | Retyping into Tally; hand matching of bank lines |
 | 6. People and planning | HRMS, incentives, payroll, forecasting | Incentive sheets; hand-built reports |
 
@@ -47,7 +47,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Out of scope.** Live Store selling and policy-dependent stock or financial posting. Build and exercise these paths with synthetic data; do not activate them without signed policies and validated production configuration. Opening balances are prepared but not loaded.
 
-**Stock and money records from day one.** None are live. The rules that every later stage posts under are fixed and tested here.
+**Stock and money records.** None are live yet. Stage 1 fixes the recording rules that every later stage posts under; they are tested here.
 
 **Policies needed before live use.** Permissions and approvals; Merchandise tracking; Financial posting; Recovery and retention. Opening and cutover is needed before the stage 4 pilot switch; its import layouts are built and tested here with sample data.
 
@@ -70,18 +70,18 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
-- Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site.
+- Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site. A profile changed to piece-tracked after stock exists needs a labelling count first (`PRD-MER-018`).
 - Inbound ownership: goods owned under an agreement before receipt, recorded outside stock, with an amount only from invoice or agreement-price evidence, and closed against the receipt count (`PRD-ORG-017` to `PRD-ORG-019`).
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.
 - PT corrections and reversals through linked records.
 - Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
 - Stock search by product, brand, size, barcode, location and condition.
 - Receiving is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
-- The parallel-run import of the current POS's daily sales report and SOH, for checking and reports only; it never moves stock (`PRD-LIF-013`, `PRD-LIF-014`). Piece rules at that Store start at its switch (`PRD-MER-017`).
+- The side-by-side test import of the earlier POS's daily sales report and SOH, for checking and reports only; it never moves stock (`PRD-LIF-013`, `PRD-LIF-014`). Piece rules at that Store start at its switch (`PRD-MER-017`).
 
 **Out of scope.** Inter-Site transfers, supplier returns, disposal, payment runs.
 
-**Stock and money records from day one.** Physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement, with inbound ownership kept outside stock and closed against the receipt count; the supplier obligation under the approved recognition rule.
+**Stock and money records.** From its first live operation in this stage: physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement, with inbound ownership kept outside stock and closed against the receipt count; the supplier obligation under the approved recognition rule.
 
 **Policies needed before live use.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (goods classification and rates); Held-goods outcomes.
 
@@ -94,7 +94,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Primary and supplemental PT coverage cannot overlap.
 - Supplier, direct-store and opening goods meet the same selling-Site acceptance and hold checks.
 - Damage immediately blocks stock; independent rejection clears only the mistaken damage hold.
-- A parallel-run import changes no stock: after a daily load, every stock quantity and value in Apparel OS is unchanged (`PRD-LIF-014`).
+- A side-by-side test import changes no stock: after a daily load, every stock quantity and value in Apparel OS is unchanged (`PRD-LIF-014`).
 
 ## Stage 3 — Complete stock-movement workflow
 
@@ -112,7 +112,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Out of scope.** Recommended replenishment and rebalancing (stage 6). Creation of e-way bills through a GSP (stage 5). Supplier payment (stage 5).
 
-**Stock and money records from day one.** Every movement keeps receipt origin, PT revision, quantity, ownership and cost; write-off records loss of established value; claims record amounts due from suppliers.
+**Stock and money records.** From its first live operation in this stage: every movement keeps receipt origin, PT revision, quantity, ownership and cost; write-off records loss of established value; claims record amounts due from suppliers.
 
 **Policies needed before live use.** Held-goods outcomes (write-off and disposal); Commercial ownership (return rights); Statutory applicability (movement documents).
 
@@ -139,15 +139,17 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - EBO sales and external billing imports. EBO brand-settlement statements wait for stage 5.
 - Selling is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
 - IRN evidence through a GSP where a tax invoice requires it.
+- Tax-document cancellation and correction distinct from operational reversals (`PRD-TAX-004`).
 - Store operator experience: Billing, Bills, Till & Sync, opening and closing checklists.
-- Offline counter, enabled after online billing is proven.
-- The pilot Store switch from the current POS, on production hosting only (`PRD-LIF-026`). See "Testing and switch-over".
+- Offline counter, enabled only under the signed Offline operation policy and after the offline exit check below.
+- Earlier-POS-bill returns and EBO returns not linked to their imported sale stay unavailable in the app after a Store's switch until a later plan is approved (`POL-06.02`, `DEC-059`, stock-ledger SL-10). How the customer is served meanwhile is OPEN (product owner).
+- The pilot Store switch from the earlier POS, on production hosting only (`PRD-LIF-026`). See "Testing and switch-over".
 
 **Out of scope.** Bank matching, provider settlement matching and Tally vouchers (stage 5). Hindi screens and WhatsApp or SMS bills (stage 5).
 
-**Stock and money records from day one.** Immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit, gift-voucher and loyalty liabilities.
+**Stock and money records.** From its first live operation in this stage: immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit, gift-voucher and loyalty liabilities.
 
-**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (e-invoice).
+**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (invoice-number format, e-invoice; customer-return credit-note treatment, `POL-10.11`).
 
 **Reports.** Sales by Store, brand, category, size, salesperson and hour; day-close variance; offer sales and who funded the discount.
 
@@ -159,6 +161,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - A PT correction after sale or transfer preserves origins and respects dependent quantities.
 - Duplicate or corrected EBO uploads affect stock, incentives and finance once and create no second GST invoice.
 - Opening unknown season excludes season-specific offers; later correction cannot rewrite past bills or labels.
+- A cancelled or corrected tax document stays distinct from the operational reversal of the bill or return (`PRD-TAX-004`).
 - Before offline is enabled: power loss, restart, expiry, full storage, duplicate tabs, wrong clock, device replacement, repeated upload and year-spanning pause preserve bills, quantities and numbering.
 
 ## Stage 5 — Complete financial control
@@ -175,14 +178,14 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Franchise and partner accounts.
 - EBO brand-settlement statements and the configured commission and partner basis (`PRD-EBO-009`).
 - Site closure, relocation and complete export.
-- Hindi interface for the screens already built.
+- Hindi interface for the screens built in stages 1 to 5 (`PRD-PRO-009`).
 - WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the daily summary and alerts.
 
 **Out of scope.** Payroll posting (stage 6).
 
-**Stock and money records from day one.** No new kinds. The records written since stage 2 are reconciled, closed by period and exchanged with Tally.
+**Stock and money records.** From its first live operation in this stage: no new kinds. The records written since stage 2 are reconciled, closed by period and exchanged with Tally.
 
-**Policies needed before live use.** Official book; Franchise/partner (including the EBO brand commission and settlement basis); Refunds and no-bill returns (Customer credit); Financial posting (Store P&L allocation, asset policy, vouchers and acknowledgments); Statutory applicability (TDS).
+**Policies needed before live use.** Official book; Franchise/partner (including the EBO brand commission and settlement basis); Refunds and no-bill returns (Customer credit); Financial posting (Store P&L allocation, asset policy, vouchers and acknowledgments); Statutory applicability (e-way creation, TDS).
 
 **Reports.** Trial balance and ledgers; payables and receivables ageing; bank reconciliation; GST registers; Store NAV; brand-by-store profit; Store P&L.
 
@@ -202,15 +205,16 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - HRMS and payroll: employee records, attendance, rosters, leave, targets, incentives, payroll, advances.
 - Planning: buying and size suggestions, replenishment and rebalancing recommendations, markdown suggestions, demand forecasts, opening-stock proposals.
 - Plain-language questions answered from the asker's authorised data.
+- Hindi interface for the stage 6 screens: check-in, targets, incentives, payslips, Self-service and planning (`PRD-PRO-009`).
 
 **Order inside the stage**
 
 - Employee records, attendance, rosters and leave can start after stage 1.
-- Incentives need sales evidence, from the parallel-run import or from stage 4.
+- Incentives need sales evidence from stage 4 bills or approved EBO imports (`PRD-HRM-011`).
 - Payroll posting needs the books in stage 5.
 - Forecasting starts only when the history meets the quality rule in the Planning policy.
 
-**Stock and money records from day one.** Raw attendance events; incentive calculations with their policy versions; payroll inputs, liabilities and payments kept distinct.
+**Stock and money records.** From its first live operation in this stage: raw attendance events; incentive calculations with their policy versions; payroll inputs, liabilities and payments kept distinct.
 
 **Policies needed before live use.** Workforce; Planning; Statutory applicability (payroll).
 
@@ -225,34 +229,36 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Testing and switch-over
 
-The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, cutoff and day-close date, run length and material-difference threshold remain to be set (`POL-14.05`, `POL-14.07`). While the current POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
+The built system is tested beside the earlier POS before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the earlier POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, cutoff and day-close date, run length and material-difference threshold remain to be set (`POL-14.05`, `POL-14.07`). While the earlier POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
-| Before the test | Load product masters and approved mappings | Current |
-| Side-by-side test (Railway test setup) | Test the app: goods-in, transfers and test bills. Load the current POS's end-of-day sales report and SOH for checking and reports only; they never move stock in Apparel OS (`PRD-LIF-014`) | Current |
-| Go or no-go check | No serious exception is open, all participating staff are trained, and Site readiness is verified: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Current |
-| Switch day (production hosting) | One pilot Store, at its day close (`PRD-LIF-015`). Stop billing on the current POS and take its last SOH; record the cutoff and day-close date; carry unfinished work with its original references (`POL-14.04`, `POL-14.07`). Then run the full Store count (`PRD-STK-008`): physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID. Reconcile the count with the current POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, allocate each billing device its fresh bill series (`PRD-LIF-015`, `PRD-POS-020`), then start billing in Apparel OS | Apparel OS for that Store |
-| After the switch | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
+| Before the test | KDPS agreement to hold real data on the test setup (deployment D-4); load product masters and approved mappings. The side-by-side test is not a live operation and needs no signed policies, but gated actions stay disabled until their policies are signed (`DEC-071`). | Earlier POS |
+| Side-by-side test (Railway test setup) | Test the app: goods-in and transfers. Test bills and other gated actions wait for their signed policy (`DEC-071`). Load the earlier POS's end-of-day sales report and SOH for checking and reports only; they never move stock in Apparel OS (`PRD-LIF-014`) | Earlier POS |
+| Go or no-go check | No serious exception is open, all participating staff are trained, and Site readiness is verified: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Earlier POS |
+| Switch day (production hosting) | One pilot Store, at its day close (`PRD-LIF-015`). Stop billing on the earlier POS and take its last SOH; record the cutoff and day-close date; carry unfinished work with its original references (`POL-14.04`, `POL-14.07`). Then run the full Store count (`PRD-STK-008`): physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID. Reconcile the count with the earlier POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, allocate each billing device its fresh bill series (`PRD-LIF-015`, `PRD-POS-020`), then start billing in Apparel OS | Apparel OS for that Store |
+| After the switch | Apparel OS runs for real. The earlier POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
 
 - Switch one pilot Store first, never every Store on one day.
 - Never switch a Store on the test setup. It issues no tax invoice and bills no real customer.
 - Plan each Store's labelling before its switch day: how many pieces, who labels them, and the label stock needed (`PRD-LIF-025`).
-- Write the way back before the switch: the checks that would send the pilot Store back to the current POS, who decides, and how bills made in Apparel OS are carried back.
-- Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the current POS can load it. This depends on the current POS accepting that file and must be confirmed.
-- A parallel-run import creates no tax invoice and no second sale.
+- Write the way back before the switch: the checks that would send the pilot Store back to the earlier POS, who decides, and how bills made in Apparel OS are carried back.
+- Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the earlier POS can load it manually during the test (`DEC-053`). Whether the earlier POS accepts that file remains to be confirmed.
+- A side-by-side test import creates no tax invoice and no second sale.
+- Decide, before the first Store switch, how a customer with an earlier-POS bill is served during the return window (stock-ledger SL-10; OPEN, product owner).
 - Every difference found at the switch count is reported and explained; none is closed by editing a number to match.
 
-**Go or no-go pass marks.** KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained, no serious exception may remain open, and Site readiness must be verified (`PRD-LIF-002`). At each switch, no unexplained material difference may remain between the count and the current POS's last SOH.
+**Go or no-go pass marks.** See `POL-14.08`. KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained, no serious exception may remain open, and Site readiness must be verified (`PRD-LIF-002`). At each switch, no unexplained material difference may remain between the count and the earlier POS's last SOH.
 
 | Check | Pass mark |
 | --- | --- |
-| Run length of the side-by-side test | OPEN — KDPS Owner, before test run |
+| Run length of the side-by-side test | OPEN — KDPS Owner, before the side-by-side test |
 | Material-difference threshold per Store, at the switch count | OPEN — KDPS Owner and Accounts, before the first switch |
 | Unexplained material differences at the switch count | None |
-| Open serious exceptions | None |
+| Meaning of "serious exception" | OPEN — KDPS Owner and Operations, before the first switch (blocks stage 4) |
+| Open serious exceptions | None, as defined by the row above |
 | Participating staff trained | All |
 | Site readiness: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Verified |
 | Who signs the switch | Owner, Accounts and Operations |
