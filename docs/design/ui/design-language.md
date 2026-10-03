@@ -272,7 +272,7 @@ Names follow the PRD and the KDPS policies.
 | 27 | Provider-confirmed | Done | ✓ | Card or UPI payment confirmed by the provider (`PRD-POS-010`) |
 | 28 | Settled | Done | ✓ | Card or UPI payment settled in the bank (`PRD-POS-010`) |
 | 29 | Signed | Done | ✓ | Policy readiness: the policy's "Signed by, date" line is complete (`DEC-029`, `DEC-092`) |
-| 30 | Held | Attention | ! | Damage hold, excess hold, source-conflict hold, expiry hold, ordinary hold, inspection hold, disputed portion (hold kinds: [stock-ledger.md](../stock/stock-ledger.md) 6.1) |
+| 30 | Held | Attention | ! | Damage hold, excess hold, source-conflict hold, expiry hold, ordinary hold, inspection hold (hold kinds: [stock-ledger.md](../stock/stock-ledger.md) 6.1) |
 | 31 | Overdue | Attention | ! | Booking balance past its delivery window, exception, billed-retained collection, supplier-return deadline |
 | 32 | Offline | Attention | ! | Offline counter |
 | 33 | Paused | Attention | ! | Offline counter billing pause |

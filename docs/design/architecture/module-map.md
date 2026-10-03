@@ -167,9 +167,9 @@ All are **design choices** that implement the cited rules.
 9. **Checked.** Module boundaries are validated on every change (`PRD-SEC-015`). The check itself belongs to the code house rules ([gaps-before-code.md](../../reports/gaps-before-code.md) section 3).
 
 ## 4. Stage 1 modules in full
-<!-- deps: none — introduction to 4.1 to 4.10; each subsection cites its rules -->
+<!-- deps: none — introduction to 4.1 to 4.17; each subsection cites its rules -->
 
-Each interface lists operations in words. Names, inputs and outputs become exact in the area designs and in the shared Zod schemas (PRD Stack: API). "Refuses when" lists the business refusals, not every validation error.
+Where a module has an interface, it lists the operations in words. Names, inputs and outputs become exact in the area designs and in the shared Zod schemas (PRD Stack: API). "Refuses when" lists the business refusals, not every validation error.
 
 ### 4.1 `kernel`
 
@@ -608,7 +608,7 @@ Both are OPEN and block stage 1 (stock-ledger section 12). This document fixes w
 
 | Fact | Recorded by | How it reaches the books |
 | --- | --- | --- |
-| A stock movement with a value: cost established, sale issue, a transfer between pools, supplier-return departure, count difference, write-off, disposal, cost adjustment, a reversal | `stock` · ledger | It calls Post in `finance` · books in the same transaction (DEC-087). The ledger writes no journal itself |
+| A stock movement with a value, such as cost established, sale issue, a transfer between pools, supplier-return departure, count difference, write-off, disposal, cost adjustment, a reversal | `stock` · ledger | It calls Post in `finance` · books in the same transaction (DEC-087). The ledger writes no journal itself |
 | A stock movement with no value in a pool: a pre-PT receipt count, a location move, a move in the same pool | `stock` · ledger | No journal. Unknown stays Unknown (`PRD-DMG-005`, `PRD-ACP-004`) |
 | Acceptance, coverage, holds and reservations | `stock` · ledger | They are status records, not movements (stock-ledger 2.3). No journal |
 | Opening stock | `stock` · ledger | No supplier delivery, booking, invoice, liability or automatic journal (`PRD-LIF-008`) |
@@ -618,7 +618,7 @@ Both are OPEN and block stage 1 (stock-ledger section 12). This document fixes w
 | Bank, provider settlement, Tally, GST | `finance` · operations | Outside outcomes, through the outbox; tracked as pending, unknown, failed or succeeded (`PRD-INT-006`, `PRD-INT-007`) |
 
 - Journals balance per book at commit (`PRD-MOD-013`).
-- Each stage records its stock and money effects from its first live operation; stage 5 extends them into full accounting (`PRD-STG-002`, DEC-044). Tally remains KDPS's official book (`POL-11.01`); only the exchange waits for stage 5.
+- Each stage records its stock and money effects from its first live operation; stage 5 extends them into full accounting (`PRD-STG-002`, DEC-044). Tally remains KDPS's official book (`POL-11.01`); the Tally exchange and full accounting wait for stage 5.
 - Inventory value in the books is reconciled against the stock ledger's read model (`PRD-LED-008`).
 
 ## 8. Events
@@ -673,7 +673,7 @@ From [deployment.md](../platform/deployment.md) section 2, with two **design cho
 - `app` runs every module behind the API, the live-update stream and the static web app and counter PWA.
 - `worker` is the same build. It runs the outbox processor and the queued jobs. **Design choice:** a job acts as a service identity with its own audit identity (`PRD-SEC-018`).
 - The counter PWA uses `calculations` and its own IndexedDB records, and commits a bill locally in one IndexedDB transaction (`PRD-OFF-007`). It never receives cost, margin or receipt-origin value (`PRD-OFF-004`).
-- `forecast` is the separate Python service. **Design choice:** only `planning` calls it.
+- `forecast` is the separate Python service, added in stage 6. Its hosting is **Proposed**: the PRD's Hosting row does not name it yet (OPEN: product owner, before stage 6). **Design choice:** only `planning` calls it.
 - Reports, imports and background work must not delay counter finalisation (`PRD-PRF-003`).
 
 ## 11. Coverage

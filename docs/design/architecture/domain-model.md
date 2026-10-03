@@ -195,7 +195,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 - A phone approval is an authenticated action bound to the exact record version (`PRD-ACS-012`).
 - Partner staff are users with Store personas on their own Stores only (`PRD-FRN-007`, DEC-042).
 - Role, permission and approval-rule changes are themselves approved by another authorised person, and who changed what is kept (`POL-02.07`, `POL-02.06`).
-- **OPEN:** all real people, roles, scopes, limits, allowlists, stand-ins and reasons (V-01, V-02, V-04; `POL-02.10`, `POL-02.11`, `POL-02.19`, `POL-02.20`, `POL-02.22`, `POL-02.23`; KDPS Owner, Admin; stage 1 live use). SL-22 ([module-map.md](module-map.md) 6.3).
+- **OPEN:** all real people, roles, scopes, limits, allowlists, stand-ins and reasons (V-01, V-02, V-04; `POL-02.10`, `POL-02.11`, `POL-02.19`, `POL-02.20`, `POL-02.22`, `POL-02.23`; KDPS Owner, Admin; stage 1 live use). SL-22 (product owner; blocks stage 1; [module-map.md](module-map.md) 6.3).
 
 ### 3.3 Work items and exceptions
 
@@ -372,9 +372,9 @@ The working-set validity time is OPEN (V-66, `POL-16.07`).
 
 ## 4. Business invariants
 
-What must always be true, who enforces it, and whether it is rechecked under the locks (stock-ledger 10.4). Stage 1 builds and tests each on synthetic data.
+What must always be true, who enforces it, and whether the posting transaction enforces it: rechecked under the locks (stock-ledger 10.4), or guarded by what commits with the write, such as the idempotency key and the one transaction (stock-ledger 10.1, 10.2). Stage 1 builds and tests each on synthetic data.
 
-| # | Invariant | Enforced by | Under lock | IDs |
+| # | Invariant | Enforced by | In the transaction | IDs |
 | --- | --- | --- | --- | --- |
 | 1 | One Organisation's data is never visible to another | `kernel` (a database per Organisation) | — | `PRD-ORG-002`, `PRD-MOD-001` |
 | 2 | Access comes only from a role assignment, inside its own scope | `access` | Yes | `PRD-ACS-002`, `PRD-ACS-004`, `PRD-INT-001` |
