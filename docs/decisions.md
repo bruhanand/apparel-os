@@ -1078,7 +1078,7 @@
 - **Options.** Best for the customer: apply the permitted set of offers that gives the largest total discount on the bill · A priority set on each offer at approval: the higher priority wins.
 - **Choice.** Best for the customer. New `PRD-OFR-021`: when offers apply to the same lines and no effective rule permits them to combine, apply the permitted set of offers that gives the customer the largest total discount on the bill; a tie goes to the set holding the offer approved first. Running Offers and checkout make the same choice. Which offers may combine, and in what order combined offers apply, stay KDPS's (policy 19, V-43).
 - **Why.** No extra setting on every offer. The customer always gets the lowest price the approved offers allow, and Running Offers can show why.
-- **Changed.** New `PRD-OFR-021` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7).
+- **Changed.** New `PRD-OFR-021` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7); `module-map.md` 11.1.
 
 ## DEC-109 — A discount earned by several lines is spread by price
 
@@ -1087,7 +1087,7 @@
 - **Options.** Spread over the lines that earned it, in proportion to their price, with leftover paise to the largest line · Each offer chooses at approval: spread by price, or only on the reward lines.
 - **Choice.** Spread by price. New `PRD-POS-023`: a discount that an offer gives for a group of lines, such as a basket-value or buy-X-get-Y offer, is spread over the lines that earned it in proportion to each line's value before that discount. Each share is rounded down to whole paise; the paise left go to the line with the largest such value, and a tie to the first of those lines on the bill. The CA confirms the tax effect (CA question 20).
 - **Why.** One rule for every offer, built like the split-tender refund of `PRD-RET-022`. No unit is billed at zero, so a later return of one unit refunds a fair share.
-- **Changed.** New `PRD-POS-023` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7).
+- **Changed.** New `PRD-POS-023` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7); `module-map.md` 11.1.
 
 ## DEC-110 — A return from an offer bill refunds what was paid for the returned units
 
@@ -1096,7 +1096,7 @@
 - **Options.** The paid value recorded for the returned units; the offer is not worked out again · Work the offer out again on the units kept and take the lost benefit off the refund.
 - **Choice.** The paid value. New `PRD-RET-024`: the refund for returned units is the paid value the bill recorded for them, after offers and spread discounts; the offer is not worked out again on the units the customer keeps. For part of a line, the units share the line's paid value the same way as `PRD-POS-023`: each returned unit takes the line's paid value ÷ sold quantity, rounded down to whole paise, and the return that brings the line's returned quantity to its sold quantity takes all that remains.
 - **Why.** Simple to explain at the till, and it fits the paid-value cap. With DEC-109 every unit carries its share of the discount, so returning one unit never refunds more than was paid for it.
-- **Changed.** New `PRD-RET-024` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7).
+- **Changed.** New `PRD-RET-024` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7); `module-map.md` 11.1.
 
 ## DEC-111 — A selling price never exceeds MRP
 
@@ -1105,4 +1105,4 @@
 - **Options.** Never: the counter refuses any price above MRP, from a price list or a manual change · Allowed with the configured authority and reason.
 - **Choice.** Never. New `PRD-POS-024`: a line's selling price, whether from a price list or a manual change, never exceeds the MRP of the goods sold; it is refused, with no override.
 - **Why.** MRP is the maximum retail price printed on the tag. Charging more is never a routine exception to approve.
-- **Changed.** New `PRD-POS-024` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7).
+- **Changed.** New `PRD-POS-024` in `prd.md`. The new design `calculations/shared-calculations.md` (GC-7); `module-map.md` 11.1.
