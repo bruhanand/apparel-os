@@ -960,3 +960,21 @@
 - **Choice.** A separate role. New `PRD-ACS-022`: grant self-service only through a role assignment whose only scope is the person's own records; that assignment covers no legal entity, place or brand, and an assignment scoped by legal entity, place or brand never grants self-service. The eleven KDPS templates are unchanged. Which people hold the self-service role stays with KDPS (V-01).
 - **Why.** Each assignment keeps one kind of scope, so own records never widen a work scope, and a work scope never reaches another person's own records through self-service.
 - **Changed.** New `PRD-ACS-022` in `prd.md`. `personas.md` (sections 1 and 4, open items); `module-map.md` 4.3; `domain-model.md` 3.2; `structure-and-masters.md` 3.9; the new access design `access-and-approvals.md`.
+
+## DEC-101 — A new Organisation's first access is set up in one recorded step
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** GC3-2 (access design, 3 Oct 2026)
+- **Question.** Role, permission and approval-rule changes need approval by an authorised person other than the preparer. In a new Organisation nobody holds that authority yet. How is its first access set up and approved?
+- **Options.** One setup step, recorded under a service identity, creates the first Admin and a first approver of access changes together; every later change follows independent approval · Another route, such as two people from outside the Organisation preparing and approving the first assignments.
+- **Choice.** One setup step. New `PRD-ACS-023`: create a new Organisation's first Admin and its first approver of access changes together, in one setup step recorded under a service identity, since no user of the Organisation can yet approve it; from then on every change to roles, permissions, role assignments and approval rules needs approval by a different authorised person (`POL-02.07`). The step is audited like any other change.
+- **Why.** It gives every Organisation a working pair from the start, so the independent-approval rule can apply to everything after it.
+- **Changed.** New `PRD-ACS-023` in `prd.md`. `access-and-approvals.md` 4.2, 4.3, 7.1, 9.11 and GC3-2 (settled); `module-map.md` header, 4.3 and 11.1; `domain-model.md` header, 3.2 and section 5; `ui/README.md`; KDPS Owner question 4.
+
+## DEC-102 — `kdps-test` uses the policy 2 session limits before signing
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** GC3-3 (access design, 3 Oct 2026)
+- **Question.** Session limits come from policy 2, which is not signed, and on `kdps-test` gated actions stay disabled until their policy is signed (DEC-071). What session limits apply on `kdps-test`, so KDPS staff can sign in for imports and checks?
+- **Options.** Use the values policy 2 already states · Keep sign-in closed on `kdps-test` until policy 2 is signed.
+- **Choice.** Use the stated values. On `kdps-test`, before policy 2 is signed, sessions use the idle and absolute limits `POL-02.18` states, and sign-in still requires the authenticator code. They are settings of the test setup, not a signed policy: no other gated action is enabled by them, and on production they apply only once policy 2 is signed and the Admin has validated them (V-04).
+- **Why.** The side-by-side test needs KDPS staff to sign in, and the policy's own values are the only ones KDPS has stated.
+- **Changed.** No PRD or policy bullet changed. `access-and-approvals.md` 3.3 and GC3-3 (settled); `deployment.md` sections 1 and 3.
