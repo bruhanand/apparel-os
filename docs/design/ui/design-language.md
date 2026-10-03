@@ -2,11 +2,11 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 3 Oct 2026, after reading DEC-027 to DEC-035. DEC-027 to DEC-030 touch this file (the test-setup wording in 10.17, the Proposed states basis); DEC-031 to DEC-035 are stock-ledger cost and count rules, and a search found nothing here that they contradict. If this document disagrees with them, they win; raise the clash, do not guess.
+Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 3 Oct 2026, after reading DEC-027 to DEC-092. DEC-027 to DEC-030 touch this file (the test-setup wording in 10.17, the Proposed states basis), and so do DEC-042, DEC-057, DEC-058, DEC-062, DEC-064, DEC-070 to DEC-072 and DEC-092. A search found nothing here that the others contradict. If this document disagrees with them, they win; raise the clash, do not guess.
 
 Implements these PRD sections: Operator experience; People, access and approvals; Merchandise and identifiers; Receiving and price tickets (delivery record, PT workbench); Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Technical platform (Offline counter; AI, security and operational reliability); Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 4 (piece IDs), 6 and 7 (returns, refunds, tenders), 10 (bill number), 16 (offline), 17 (held goods), 19 (offers and promotions).
 
-Requirement IDs applied: `PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-015`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-16.01` to `POL-16.03`, `POL-17.05`.
+Requirement IDs applied: `PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-004`, `PRD-OFF-015`, `PRD-OFF-016`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-FRN-007`, `PRD-TAX-004`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-10.11`, `POL-16.01` to `POL-16.03`, `POL-16.07`, `POL-17.05`.
 
 People are described by the 14 PRD personas in [personas.md](../access/personas.md). Live visual version: [design-system.html](design-system.html).
 
@@ -182,7 +182,8 @@ Rules:
 - **Right (420 px):** Add customer (F2) · subtotal, offers, GST included · To pay (till-total) · tenders (52 px tiles) · Pay (64 px, F12).
   - Tender tiles show only the tenders enabled under policy 7: Cash · Card · UPI · Bank transfer · Store credit · Gift voucher · Customer credit. Bank transfer is confirmed by bank/provider evidence (`PRD-POS-005`, `POL-07.09`); Customer credit shows its approved limit and due date (`PRD-POS-022`) and appears only from stage 5, when receivables exist ([phases.md](../../phases.md)). Split divides To pay across tenders; it starts unallocated and must add up exactly.
   - Cash shows Cash received and Change. Left empty, Cash received means exact cash; 0 means zero (`PRD-POS-007`). The empty field is resolved to the declared cash amount before it is saved (`PRD-MOD-016`).
-  - Start the offline pilot with Cash (`POL-16.02`). Card or UPI may appear later only where policy 16's evidence procedure is explicitly configured; the offline cash or manual tender records no provider confirmation (`PRD-OFF-017`).
+  - Store credit, Gift voucher, Customer credit and loyalty redemption need online authority and are unavailable while the till is offline (`PRD-OFF-016`, `POL-16.03`). Which tenders may be recorded offline, and their evidence, are OPEN (KDPS Owner and Operations, policy 16; stage 4).
+  - The first offline Store starts with Cash (`POL-16.02`). Card or UPI may appear later only where policy 16's evidence procedure is explicitly configured; the offline cash or manual tender records no provider confirmation (`PRD-OFF-017`).
 - **Function bar:** 52 px. F2 Customer · F3 Salesperson · F4 Hold cart · F5 Recall · F6 Return (online only) · F7 Manager approval (online only) · F9 Till summary · Esc Remove line.
 - **Manager approval (F7):** for a discount or price change above the cashier's limit. Needs online authority (`PRD-OFF-016`, `DEC-062`): greyed online only while the till is offline; a bill needing it cannot be finalised offline. When online, the manager signs in with their own login and reauthenticates as the PRD requires; the approval records that manager and the exact bill version.
 - After any action, focus returns to the scan field.
@@ -622,7 +623,7 @@ Each entry covers anatomy, states and usage rules.
   - Body:
     - Value label + value (kpi). The label names the value basis required by `PRD-ACS-015` for that action. An unknown value is never shown as zero (`PRD-ACS-016`).
     - **Limit bar:** 10 px track in `--sunken`, the approver’s limit in `--tint` ending in a 2 px `--accent` edge, and a value marker (4 × 18 px): `--accent` inside the limit, `--w-fg` outside.
-    - Scale: “₹0.00 · Your limit up to ₹X · Next: <next approver>”. The scale follows the limit's value basis and unit (`PRD-ACS-015`): money for cost, bill value or amount paid; a quantity in the product's unit or a discount percentage where the limit is configured that way.
+    - Scale: “₹0.00 · Your limit up to ₹X · Next: <next approver>”. The scale follows the limit's value basis and unit (`PRD-ACS-015`): money for cost, bill value, documented valuation (no-bill returns, `DEC-039`) or amount paid; a quantity in the product's unit or a discount percentage where the limit is configured that way.
     - A message block in the family tint.
     - The policy reference: number and name. Show an effective date only once the policy is signed and its values are configured.
   - Footer: `--sunken` background with Reject… and the approve action.
@@ -702,7 +703,7 @@ Each entry covers anatomy, states and usage rules.
 | Approval limit values and approvers | Owner and Admin, policy 2 (**OPEN**) | Stage 1, live approvals |
 | Reason list (Setup › Reason codes) (`POL-02.23`) | Owner and Admin, policy 2 (**OPEN**) | Stage 1 |
 | One real messy delivery to test the reconciliation layout | KDPS Owner (**OPEN**) | Stage 2 |
-| Piece-label layout; label and receipt printer models | KDPS Owner (**OPEN**) | Stage 2 |
+| Piece-label layout; label and receipt printer models; the label printers' command language. Labels print through the local helper on any PC with the printer (`DEC-084`) | KDPS Operations and design (**OPEN**) | Stage 2 |
 | Bill number format: length limit and allowed characters (`POL-10.07`) | Accounts and the CA (**OPEN**) | Stage 4 |
 | Logo artwork | KDPS Owner (**OPEN**) | Stage 4, before the pilot switch |
 | Finance screen detail | Product owner (**OPEN**) | Stage 5 |

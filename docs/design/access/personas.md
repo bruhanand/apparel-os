@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-019`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13`, `POL-02.15` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-019`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
 
 Used by: [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
@@ -54,7 +54,7 @@ In PRD order. "Work" is the PRD text. "Lands on", "Menu" and "Usual scope" are d
 
 The template column follows the proposed, Open template map in policy 2 (eleven templates, `POL-02.01`). A template label alone grants no permission.
 
-Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is open to every employee.
+Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is granted only through a role assignment scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `DEC-041`).
 
 Menu names are working labels. `PRD-UXP-004` lists Store capabilities and areas, not menu labels (`DEC-056`). Sell groups billing, bills and till session; Stock Count, Damage & supplier returns and External sales keep their own menus.
 
@@ -89,7 +89,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 
 **P-OPS · Operations**
 - Work: distribution, transfers, counts, exceptions and Site lifecycle.
-- Menu: Home (exception dashboard) · Transfer (in transit, approvals as set in policy 2) · Stock Count (plan, differences above the Store manager's limit as set in policy 2) · Damage & supplier returns (return deadlines, supplier returns) · External sales (old POS imports, EBO uploads; view) · Setup (Site opening and closure) · Sell, Booking, Receive Goods, Stock, Offers & price, Reports as view only.
+- Menu: Home (exception dashboard) · Transfer (in transit, approvals as set in policy 2) · Stock Count (plan, differences above the Store manager's limit as set in policy 2) · Damage & supplier returns (return deadlines, supplier returns) · External sales (earlier-POS imports, EBO uploads; view) · Setup (Site opening and closure) · Sell, Booking, Receive Goods, Stock, Offers & price, Reports as view only.
 - Approvals in this work: proposes write-offs and disposals for independent approval within configured cost limits (`POL-17.10`). Transfers need approval by a higher authority: a different person whose approval limit covers the transfer on its cost basis (`PRD-TRF-005`, `POL-02.07`, `POL-02.09`). Supplier-return steps and stock adjustments need approval by an authorised person other than the preparer (`POL-02.07`); who holds those approvals is set in policy 2 and is **OPEN** (KDPS Owner; blocks stage 1 live approvals). Count differences above the Store manager's limit go to a higher authorised approver named in policy 2 (`POL-02.21`).
 
 **P-WHS · Warehouse**
@@ -104,7 +104,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 
 **P-STM · Store manager**
 - Work: Store operation, authorised discounts and returns, and day close.
-- Menu: Home (Store numbers, My work) · Sell (till, bills, customers, billed-retained, approvals within limit) · Receive Goods (own Store inbox) · Transfer (request, receive) · Stock Count (own Store, differences within limit) · Damage & supplier returns (report damage) · Stock (own Store, other Stores for sizes) · External sales (old POS import during the test) · Money (Store day, petty cash) · Offers & price (running offers) · Reports (own Store) · People (team attendance, view).
+- Menu: Home (Store numbers, My work) · Sell (till, bills, customers, billed-retained, approvals within limit) · Receive Goods (own Store inbox) · Transfer (request, receive) · Stock Count (own Store, differences within limit) · Damage & supplier returns (report damage) · Stock (own Store, other Stores for sizes) · External sales (earlier-POS import during the side-by-side test) · Money (Store day, petty cash) · Offers & price (running offers) · Reports (own Store) · People (team attendance, view).
 - Approvals in this work: discounts and returns within the configured limit; count differences within the configured count tolerance (`POL-02.21`); and day-close cash differences within the configured cash-variance tolerance, if the Store manager is in the approver set for it, with a higher approver above it (`POL-02.13`). The tolerances and limits come from policy 2 and are not yet set.
 
 **P-CSH · Cashier**

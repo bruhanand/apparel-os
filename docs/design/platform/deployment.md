@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -60,7 +60,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`); production an
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
 - **Migrations** run as Railway's pre-deploy command, before the new version takes traffic. A failed migration stops the deploy, and the old version keeps running.
-- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The current POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
+- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The earlier POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
 
 ## 5. Live updates (SSE)
 
@@ -88,7 +88,7 @@ These follow from `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016` and `PRD-LIF-026`.
 
 - Imports from the earlier POS (daily sales report, stock-on-hand) are for checking and reports only. They never create, reduce or move stock (`PRD-LIF-014`).
 - An import never creates a tax invoice or a second sale for a bill the earlier POS issued (`PRD-LIF-016`).
-- Bills on `kdps-test` are test bills only. No tax invoice is issued and no real customer is billed (`PRD-LIF-026`).
+- Bills on `kdps-test` are test bills only. No tax invoice is issued and no real customer is billed (`PRD-LIF-026`). Billing stays disabled there until its policy is signed (`DEC-071`).
 - A Store is never switched over on test hosting (`PRD-LIF-026`).
 - Exception: one file does leave the test setup for the earlier POS: the approved PT export in the KDPS layout (`PRD-PTW-008`). A person loads it into the earlier POS manually. There is no automatic link (`DEC-053`).
 
@@ -110,7 +110,7 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 
 ## 9. Personal data and logs
 
-- Until KDPS answers question 37, imports keep **no customer name or phone number** from the current POS reports (`PRD-SEC-009`, `PRD-SEC-010`). Nothing personal is kept by default.
+- Until KDPS answers question 37, imports keep **no customer name or phone number** from the earlier POS reports (`PRD-SEC-009`, `PRD-SEC-010`). Nothing personal is kept by default.
 - Logs are pino JSON to standard output, read in Railway's log view (Stack: Diagnostics). Logs carry no secrets or unneeded personal data (`PRD-SEC-014`).
 - Secrets live in each environment's Railway variables, never in the repository.
 
