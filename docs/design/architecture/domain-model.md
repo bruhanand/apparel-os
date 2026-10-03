@@ -6,9 +6,9 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; People, access and approvals; Merchandise and identifiers; Source conversion and imports; Module and data boundaries; and, for the stage 1 records only, Ledger and official books, Exceptions, reports and planning, Opening, closure, migration and export, and Offline counter. Other sections are outlined (section 2).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`, `PRD-LED-019`, `PRD-LED-020`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.01`–`POL-02.04`, `POL-02.06`–`POL-02.13`, `POL-02.15`–`POL-02.23`), 3 (`POL-03.04`), 4 (`POL-04.01`–`POL-04.05`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.02`, `POL-05.03`, `POL-05.09`), 7 (`POL-07.01`, `POL-07.05`, `POL-07.06`, `POL-07.09`), 9 (`POL-09.02`, `POL-09.10`–`POL-09.13`, `POL-09.19`, `POL-09.21`, `POL-09.23`), 10 (`POL-10.01`, `POL-10.06`–`POL-10.08`), 13 (`POL-13.05`), 14 (`POL-14.05`, `POL-14.07`), 16 (`POL-16.07`), 17 (`POL-17.02`, `POL-17.04`, `POL-17.07`, `POL-17.11`), 18 (`POL-18.05`), 19 (`POL-19.03`).
-- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100, DEC-101, DEC-105.
+- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100, DEC-101, DEC-105, DEC-106, DEC-107.
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
@@ -330,14 +330,14 @@ Owner: `files-imports`. `PRD-IMP-001`–`PRD-IMP-013`.
 
 ### 3.10 Books
 
-Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 9.
+Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 9. The detail is in [books-and-posting.md](../finance/books-and-posting.md) (GC-4).
 
 | Record | What it is | Identity | Rules | IDs |
 | --- | --- | --- | --- | --- |
 | Chart of accounts | The accounts of one accounting book | Per book | Starts from KDPS's current chart, reviewed by Accounts and the CA | `PRD-LED-001`, `POL-09.23` |
 | Account | One ledger account | Account code, unique in its book | — | `PRD-LED-001` |
 | Cost-centre dimension | Store and brand, carried on journal lines | — | Dimensions, not separate ledgers per Store | `PRD-LED-001`, `POL-09.11` |
-| Financial period | A period of a book | Period code, unique in its book | Can be locked. Posting into a locked period needs authorised reopening | `PRD-LED-009` |
+| Financial period | A period of a book | Period code, unique in its book | Can be locked. Posting into a locked period needs a reopening, approved by a different authorised person from its requester, that names the correction; only named corrections enter | `PRD-LED-009`, `PRD-LED-019`, `PRD-LED-020` |
 | Journal | A balanced set of lines in one book, linked to its source document | Journal number from a series | Immutable once posted. Undone only by a linked reversal or correction | `PRD-LED-004`, `PRD-MOD-011`, `PRD-MOD-013` |
 | Posting map | For a posting event kind in a book: the accounts and rules to use | Per Organisation and book, versioned | The applied version is kept with each journal | `PRD-LED-003`, `POL-09.11`, `POL-09.12` |
 | Cost setting | The cost formula and the cost-pool mode of a book | Per book, effective-dated | FIFO or moving weighted average; one pool per SKU across the book or per SKU at each Site. A change is effective-dated and reconciled | `PRD-LED-014`, `PRD-LED-015`, DEC-004, DEC-031 |
@@ -345,7 +345,7 @@ Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 
 - **Balanced at commit.** Each journal balances in its book when the transaction commits (`PRD-MOD-013`). Unbalanced journals, duplicate postings and unexplained missing transactions have zero tolerance (`POL-09.13`).
 - **Kept distinct:** operational quantities, provisional commercial amounts and accounting recognition (`PRD-LED-005`).
 - **Never fabricated.** If the inputs do not support a value, the amount stays Unknown and an exception is raised; no payable, inventory value or journal is invented (`POL-09.02`, `PRD-ORG-018`).
-- **Lifecycles.** A journal is posted, and may later be Reversed by a linked entry. A period is opened, locked, and reopened with authority; its states are Open, Locked and Reopened (DM-4, DEC-105). A posting map is effective-dated.
+- **Lifecycles.** A journal is posted, and may later be Reversed by a linked entry. A period is opened, locked, and reopened for named corrections with a second person's approval, then locked again once they have posted (`PRD-LED-019`, `PRD-LED-020`); its states are Open, Locked and Reopened (DM-4, DEC-105). A posting map is effective-dated.
 - Baseline (SL-23 Outcome A, DEC-105; the CA confirms; [module-map.md](module-map.md) 6.3 sets it against `POL-09.12`): a valued movement with no valid posting map does not commit. The document stays as it was, and an exception is raised in its own transaction.
 - **OPEN:** the real accounts and maps (V-10); the framework, AS or Ind AS (V-07, `POL-09.10`); KDPS's formula and pool (V-08, V-09, `POL-09.19`, `POL-09.21`); tolerances (V-11).
 
@@ -442,6 +442,7 @@ Each approved action, with what the approval binds to.
 | Refund cases chosen under policy 7; cash substitution or another tender override | The refund request | `PRD-RET-010`, `POL-07.01`, `POL-07.09` | Bill value | — | 4 |
 | No-bill return (`PRD-RET-017`) | The exception request | `POL-07.05`, `POL-02.07` | Documented valuation; Unknown if none is accepted (`POL-07.06`, DEC-039) | — | 4 |
 | Day-close cash variance (`PRD-CSH-011`, `POL-02.13`) | The day close | Not stated. The tolerance selects the approver set | The difference (DM-8, DEC-105) | — | 4 |
+| Reopening a locked financial period | The reopening request: the period, its reason and the corrections it names | A different authorised person from the requester (`PRD-LED-019`) | — | — | 5 (built in 1) |
 | The Store switch | The cutover record | Not stated. Owner, Accounts and Operations approve (`POL-14.05`) | — | — | 4 |
 | Supplier payment | The payment request: amount, beneficiary, bank details | `POL-02.07` | The amount paid | For mobile approval: amount, beneficiary, bank details and the reviewed request version (`PRD-PAY-006`) | 5 |
 | Payroll inputs, before payment instructions (`POL-13.05`) | The payroll inputs for a period | Not stated in policy 13. personas.md treats it as a different person | The period's net pay (DM-8, DEC-105) | — | 6 |
@@ -483,7 +484,7 @@ Every in-scope line and exit check of stage 1 in [phases.md](../../phases.md), a
 | --- | --- |
 | One physical Site with different business-unit books and registrations keeps correct mappings | 3.1; invariant 8 |
 | Shared golden cases for prices, discounts, allocation, tax and rounding pass on server and counter | [module-map.md](module-map.md) 4.2; detail in GC-7 |
-| Golden stock-and-posting scenarios pass under both formulas and both pool modes | 3.10, 3.11; stock-ledger section 11; the journals in GC-4 |
+| Golden stock-and-posting scenarios pass under both formulas and both pool modes | 3.10, 3.11; stock-ledger section 11; the journals in [books-and-posting.md](../finance/books-and-posting.md) section 16 (GC-4) |
 | A backup restores with linked records and attachments | Identity convention (section 1); attachments in 3.9; detail in GC-9 |
 | An operation whose policy is not configured stays unavailable | 3.6; invariant 6 |
 | An activity stays disabled for a Site or business unit until its readiness checks pass | 3.6; invariant 7 |

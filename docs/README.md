@@ -20,7 +20,7 @@ All project documents live in this folder. When two of them disagree, the one hi
 | Path | What it is |
 | --- | --- |
 | [prd.md](prd.md), [kdps-policies.md](kdps-policies.md) | Ranks 1 and 2. |
-| [design/](design/) | Rank 3. One folder per area: `access/`, `architecture/`, `masters/`, `platform/`, `stock/`, `ui/`. |
+| [design/](design/) | Rank 3. One folder per area: `access/`, `architecture/`, `finance/`, `masters/`, `platform/`, `stock/`, `ui/`. |
 | [phases.md](phases.md) | Delivery order. |
 | [decisions.md](decisions.md) | Log of changes to the PRD and policies. |
 | [questions-for-kdps.md](questions-for-kdps.md) | Open questions for KDPS and the CA, by person. |
@@ -45,6 +45,6 @@ All project documents live in this folder. When two of them disagree, the one hi
 
 ## Design documents
 
-- Design documents live in [design/](design/), one folder per area. The user interface design is in [design/ui/](design/ui/). Personas, roles, access, approvals, My work and exceptions are in [design/access/](design/access/). Hosting and environments, document numbering and audit history are in [design/platform/](design/platform/). The stock ledger, which every stage posts stock through, is in [design/stock/](design/stock/). The module map and the domain model, which every other design and all code follow, are in [design/architecture/](design/architecture/). The business structure and the masters are in [design/masters/](design/masters/).
+- Design documents live in [design/](design/), one folder per area. The user interface design is in [design/ui/](design/ui/). Personas, roles, access, approvals, My work and exceptions are in [design/access/](design/access/). Hosting and environments, document numbering and audit history are in [design/platform/](design/platform/). The stock ledger, which every stage posts stock through, is in [design/stock/](design/stock/). The module map and the domain model, which every other design and all code follow, are in [design/architecture/](design/architecture/). The business structure and the masters are in [design/masters/](design/masters/). The books, their periods, journals and posting maps are in [design/finance/](design/finance/).
 - Each design document starts by naming the PRD sections and KDPS policies it implements, with the requirement and policy IDs (`PRD-…`, `POL-…`) it applies. It cites the ID next to each rule it applies.
 - A design document lists its open questions. A question that needs a business decision is raised against the PRD or the KDPS policies.

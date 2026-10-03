@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Module and data boundaries; Transaction and integration integrity; Delivery stages. For ownership only, it places every other PRD section in a module (section 11).
 
-- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
+- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`, `PRD-LED-019`, `PRD-LED-020`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
 - Policies: 1 (`POL-01.02`–`POL-01.04`, `POL-01.06`, `POL-01.07`), 2 (`POL-02.06`–`POL-02.09`, `POL-02.12`, `POL-02.14`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.05`), 4 (`POL-04.03`, `POL-04.04`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.01`), 9 (`POL-09.01`, `POL-09.02`, `POL-09.04`, `POL-09.11`–`POL-09.13`, `POL-09.24`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.07`, `POL-10.08`), 11 (`POL-11.01`), 14 (`POL-14.07`), 18 (`POL-18.05`). Section 11.2 places all 19 policies.
-- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100, DEC-101, DEC-105.
+- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100, DEC-101, DEC-105, DEC-106, DEC-107.
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-4 and GC-6 to GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-6 to GC-9. This document is GC-1.
 
 ---
 
@@ -415,10 +415,10 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
-| Post | `stock` · ledger for a valued movement; any module for its own money effect | Inside the caller's transaction: takes the posting event kind, the business unit (and through it the book), the source reference, amounts in paise and the Store and brand dimensions; finds the posting map version in force; writes balanced journals per book; returns the journals and the map version used (`PRD-LED-001`–`PRD-LED-004`, `PRD-MOD-013`, `POL-09.11`, `POL-09.12`, DEC-087) | No valid posting map (SL-23 Outcome A, section 6.3, DEC-105); the financial period is locked (`PRD-LED-009`); the journal would not balance (`POL-09.13`) |
+| Post | `stock` · ledger for a valued movement; any module for its own money effect | Inside the caller's transaction: takes the posting event kind, the business unit (and through it the book), the source reference, amounts in paise and the Store and brand dimensions; finds the posting map version in force; writes balanced journals per book; returns the journals and the map version used (`PRD-LED-001`–`PRD-LED-004`, `PRD-MOD-013`, `POL-09.11`, `POL-09.12`, DEC-087) | No valid posting map (SL-23 Outcome A, section 6.3, DEC-105); the financial period is locked (`PRD-LED-009`), or reopened only for other corrections (`PRD-LED-020`); the journal would not balance (`POL-09.13`) |
 | Check postable | The caller, before any lock | The same map and period lookup, with no write. It is repeated inside Post under the locks. **Design choice** | — |
-| Reverse | The module that owns the source record | A linked reversal or correction. A posted entry is never edited (`PRD-LED-004`, `PRD-MOD-011`) | The period is locked and not reopened |
-| Lock or reopen a period | Accounts, with authority | (`PRD-LED-009`) | — |
+| Reverse | The module that owns the source record | A linked reversal or correction. A posted entry is never edited (`PRD-LED-004`, `PRD-MOD-011`) | The period is locked, or reopened only for other corrections (`PRD-LED-020`) |
+| Lock a period; request and approve a reopening | Accounts, with authority; the reopening is approved by a different authorised person from the requester | Locks a period (`PRD-LED-009`). A reopening names the corrections it is for, and only their postings enter the period; it locks again once they have posted or the reopening is withdrawn (`PRD-LED-019`, `PRD-LED-020`) | — |
 | Maintain accounts, maps and rules | Accounts and the CA | Accounts and the CA supply the accounts and approve the framework and rules before activation (`POL-09.01`, `POL-09.11`). Versioned per Organisation and book; the applied version is kept with each posting (`POL-09.12`) | — |
 | Read tax rules | `calculations` callers | The classification, rate and value rules in force on a date (`PRD-TAX-005`, `POL-10.02`) | — |
 
@@ -430,7 +430,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - **Events:** `finance.journal-posted`, `finance.period-locked`, `finance.period-reopened`, `finance.posting-map-changed`.
 - **Read models:** ledgers and trial balance per book, on synthetic data in stage 1.
 - **Baseline (DEC-105).** SL-23 is Outcome A: a valued movement with no valid posting map does not commit, and an exception is raised in its own transaction (6.3; the CA confirms). The Tally voucher model supports vouchers with and without items, and a setting per book chooses (MM-12; Accounts and the CA confirm).
-- **OPEN:** the accounts and posting maps (V-10); AS or Ind AS (V-07); KDPS's cost formula and pool (V-08, V-09, SL-1); which voucher shape each book uses (Accounts; CA; needed by 5, designed in 1); tax values (V-18). The detailed design is GC-4.
+- **OPEN:** the accounts and posting maps (V-10); AS or Ind AS (V-07); KDPS's cost formula and pool (V-08, V-09, SL-1); which voucher shape each book uses (Accounts; CA; needed by 5, designed in 1); tax values (V-18). The detailed design is [books-and-posting.md](../finance/books-and-posting.md) (GC-4).
 
 ### 4.15 `stock` · ledger
 
@@ -721,7 +721,7 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-EBO-009` | `partners` |
 | `PRD-OFR-001`–`PRD-OFR-007` | `offers` |
 | `PRD-OFR-008`–`PRD-OFR-020` | `supplier-returns` |
-| `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009` | `finance` · books |
+| `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-019`, `PRD-LED-020` | `finance` · books |
 | `PRD-LED-006`, `PRD-LED-014`–`PRD-LED-018` | `stock` · ledger, with `finance` · books for the formula and pool settings |
 | `PRD-LED-007`, `PRD-LED-008`, `PRD-LED-010`–`PRD-LED-013` | `finance` · operations |
 | `PRD-CSH-001`–`PRD-CSH-011` | `finance` · operations, with `pos` for the till |
@@ -792,7 +792,7 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | GC-1 Module map | This document | — |
 | GC-2 Business structure and masters | `organisation` and `merchandise`: ownership, interfaces, events (4.11, 4.12); entities in [domain-model.md](domain-model.md) | Tables, screens, validation detail: written in [structure-and-masters.md](../masters/structure-and-masters.md) |
 | GC-3 Access, approvals, inbox and exceptions | `access`, `inbox`, `exceptions`, the policy gate (4.3, 4.4, 4.8, 4.13) | Sign-in, sessions, row-level security, encryption; SL-22: written in [access-and-approvals.md](../access/access-and-approvals.md) |
-| GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; applying the SL-23 and MM-6 baselines (DEC-105) |
+| GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; applying the SL-23 and MM-6 baselines (DEC-105): written in [books-and-posting.md](../finance/books-and-posting.md) |
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions and golden cases |

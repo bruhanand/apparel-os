@@ -107,6 +107,7 @@
 12. **Tally rejection target (proposed).** Is "less than 2% of vouchers rejected" an agreed goal? · PRD Business measures · DEC-050 · stage 5
 13. **Brand-by-store profit timing (proposed).** Is "fifth working day of the month" an agreed goal, given allocation bases in `POL-09.20`? · PRD Business measures · DEC-050 · stage 5
 14. **Financial year dates.** On which dates does KDPS's financial year start and end? Bill numbers and other yearly number series restart with it. (With the CA.) · no policy bullet yet · numbering design GC5-1 · stage 1 live use; bills in stage 4
+15. **Accounting periods.** Inside the financial year, which periods does each set of books close and lock: months, or something else? Each journal falls in one period, and a locked period takes no new entry unless it is reopened for named corrections. (With the CA.) · `PRD-LED-009`, `PRD-LED-020` · books design GC4-1 · stage 2
 
 ## CA
 
@@ -127,6 +128,8 @@
 15. **Late entries for a closed month.** When a stock entry arrives late and its business date falls in a closed month, which accounting date should it take? (With Accounts.) · `PRD-LED-009`, `POL-09.12` · stock-ledger SL-15 · stage 5
 16. **Who owns each registration and book.** The app treats each GST registration and each set of books as belonging to exactly one legal entity, and checks that each business unit's registration and books belong to its own legal entity. Is that right for KDPS? Also: must a unit's GST registration always be in the same State as the place it trades from? Baseline (`DEC-105`): a business unit's tax registration must be in the State of its Site, and the mapping check compares them. · `PRD-ORG-020`, `POL-10.06`, `POL-10.08` · GC-2 GC2-1 · stage 2
 17. **Numbers on other tax documents.** Besides bills, which number format must credit notes for customer returns, and the tax documents that travel with goods moved between places, follow? (With Accounts.) · `POL-10.07`, `POL-10.11`, `PRD-TRF-023` · numbering design GC5-2 · stage 3 (movement documents); stage 4 (credit notes)
+18. **Approving the posting rules.** You and Accounts supply the ledger accounts and the rules for which account each kind of entry posts to, and approve them before use. Will you give your approval yourself in the app, or will Accounts record your signed approval? Should the person who approves always be different from the person who prepared them? · `POL-09.01`, `POL-09.11` · books design GC4-2 · stage 2
+19. **Fixing an entry posted to the wrong account.** If a posting rule turns out wrong after entries were made with it, the app reverses those entries and posts them again under the corrected rule, dated on the day of the fix. Should the fix instead go into the month of the original entry? (With Accounts.) · `POL-09.12` · books design GC4-3 · stage 5
 
 ## Operations
 
