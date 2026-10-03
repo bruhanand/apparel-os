@@ -37,8 +37,8 @@
 
 14. **Defective items.** What assessment and evidence process applies under the relevant consumer rights and warranties? Do not set a universal hard cutoff without an applicable legal or warranty basis. (With Operations.) · `POL-06.05` · V-23
 15. **Store exceptions.** Does any Store get a different return rule? Which, and what rule? · `POL-06.01` · V-24
-16. **How customers may pay.** In-scope instruments are cash, card, UPI, verified Bank transfer, Store credit, own Gift vouchers and approved Customer credit/pay-later. Confirm provider arrangements and evidence for each. Set actual Customer credit limits and due dates. (With Accounts.) · `POL-07.09` · V-25
-17. **Refund approvers.** Name the independent authorised people and scopes for no-bill returns, cash substitution, tender/return overrides and refunds above limit. The actual limits are in V-02. · `POL-07.09`, `POL-02.15` · V-27
+16. **How customers may pay.** In-scope instruments are cash, card, UPI, verified Bank transfer, Store credit, own Gift vouchers and approved Customer credit/pay-later. Confirm provider arrangements and evidence for each; that is needed for stage 4 (V-25). Actual Customer credit limits and due dates are needed by stage 5, when Customer credit goes live (V-59). (With Accounts.) · `POL-07.09` · V-25, V-59
+17. **Refund approvers.** Name the independent authorised people and scopes for no-bill returns, cash substitution, tender/return overrides and refunds above limit. The actual limits are in V-02. · `POL-07.09`, `POL-02.15` · V-02, V-01
 18. **Returns without a bill.** Allowed or not? If yes: up to what value, who approves, and how is the item valued? (With Accounts.) · `POL-07.08` · V-28
 19. **Store credit.** How long is it valid, and which authorised Stores within the same legal entity may redeem it? (With Accounts.) · `POL-07.11` · V-29
 20. **Gift vouchers.** KDPS issues its own vouchers. Confirm validity, partial redemption, refund of unused balance and lost-voucher treatment. The CA confirms tax on issue and redemption. · `POL-07.10` · V-30
@@ -49,13 +49,13 @@
 25. **Day-close cash.** What cash difference may a Store Manager approve, and which named Accounts approver handles a larger difference? Never write off automatically. · `POL-02.13` · V-38
 26. **EBO reports.** By what time must each EBO's daily report arrive before it counts as missing, and who owns a late-report exception? (With Operations.) · `POL-02.11` · V-42
 27. **Offers and promotions.** Offers do not stack unless a rule explicitly allows it. Provide each brand agreement's cost shares and name the Brand manager who proposes and authorised approver who approves those shares and markdowns. · `POL-19.01`–`POL-19.05` · V-43
-28. **The pilot switch.** Which Store goes first, on which date? Who verifies and signs its opening stock, balances and carried work at the day-close switch? (With Accounts and Operations.) · `POL-14.02`–`POL-14.07` · V-44
-29. **Test-run pass marks.** Set how long the side-by-side test runs. Set the material-difference threshold per Store for the switch count against the old POS's last SOH. Pass requires training for all participating staff and, at each switch, no unexplained material difference. · `phases.md`, `PRD-LIF-027` · V-45
+28. **The pilot switch.** Which Store goes first, on which date? Who verifies and signs its opening stock, balances and carried work at the day-close switch, and what is the fallback if the switch fails? (With Accounts and Operations.) · `POL-14.02`–`POL-14.07` · V-44
+29. **Switch pass marks.** Set the material-difference threshold per Store for the switch count against the old POS's last SOH, before the first switch. (How long the side-by-side test runs is question 38.) Pass requires training for all participating staff and, at each switch, no unexplained material difference. · `phases.md`, `PRD-LIF-027` · V-45
 
 ### Needed for stage 5 (money)
 
 30. **Daily summary.** Name the recipients for the 9 PM WhatsApp summary. · `POL-02.14`, `POL-02.11` · V-51
-31. **Phone approvals.** Which approval types may use an authenticated notification link tied to the exact record version? A plain “yes” is not approval. · `PRD-ACS-012`
+31. **Phone approvals.** Which approval types may use an authenticated notification link tied to the exact record version? A plain “yes” is not approval. · `PRD-ACS-012` · V-60
 32. **Franchise deals.** For each franchise partner: commission, royalty, minimum guarantee, deposit, credit limit and payment terms. (With Accounts.) · `POL-12.05` · V-47
 33. **EBO commission and settlement.** How is each brand's commission calculated and settled, including returns and adjustments? (With Accounts.) · `POL-12.06` · V-56
 34. **Store profit.** Accounts and the CA choose causal allocation drivers for shared costs (for example, floor area or headcount where suitable). Show results before and after allocation. (With Accounts and the CA.) · `POL-09.20` · V-49
@@ -68,6 +68,11 @@
 ### Needed before the side-by-side test
 
 37. **Your data on the test setup.** The side-by-side test holds your real product, stock and sales data with Railway, a hosting company whose servers are outside India. It is a test, not your official system. Do you agree? Should customer names and phone numbers from the old POS reports be left out of the import? · `PRD-LIF-026` · alignment report 4.15 · before the side-by-side test
+38. **How long the side-by-side test runs.** Set the run length before the test starts. (The switch threshold is question 29.) · `phases.md` · V-45 · before the side-by-side test
+
+### Needed before first live use on production
+
+39. **When a warehouse goes live.** `POL-14.07` today allows real opening stock only at a Store's switch. When does each warehouse go live and load its opening stock? How do goods move between a Site already on the app and a Store not yet switched, and how are direct deliveries to such a Store handled? (With Operations; the product owner decides the rollout order.) · `POL-14.07`, `PRD-REC-004` · stock-ledger SL-9 · alignment report 4.15 · no V- number · before the first live use on production, not a build blocker
 
 ## Accounts
 
@@ -75,23 +80,24 @@
 2. **Does Tally track stock?** Do sales and purchase entries carry item quantities or only amounts? Send real sample vouchers of each kind. · `POL-09.16` · V-46 · shapes stage 1 design; needed by stage 5
 3. **Ledger accounts.** Provide KDPS's current CA-approved chart of accounts and identify the ledger each transaction should post to, including the difference between a supplier's credit and the stock value a supplier return removes, late cost changes for goods already sold (and any excess shown on its own line in cost of goods sold), and the variance left when a mistaken receipt is undone. (With the CA.) · `POL-09.11`, `POL-09.23` · V-10 · stage 2
 4. **Small differences.** How much rounding or invoice-matching difference is acceptable before it becomes a problem to chase? · `POL-09.14` · V-11 · stage 2
-5. **GST numbers.** Which GST registration covers each Store, warehouse and office unit? (With the CA.) · `POL-10.06` · V-18 · stage 2
+5. **GST numbers.** Which GST registration covers each Store, warehouse and office unit? Also provide the HSN codes, GST rates and slabs for your goods. (With the CA.) · `POL-10.06`, `POL-10.08` · V-18 · stage 2
 6. **Each brand's cost formula.** For each brand: how do you get from BASIC to P RATE? Which discounts, freight and other charges, in what order, with what rounding? One real worked example per brand. (With Booking.) · `POL-03.06`, `POL-03.07` · V-15 · stage 2
 7. **Petty cash.** Float and spending limit for each Store. · `POL-09.14` · V-39 · stage 4
 8. **E-invoices.** Which of your legal entities must issue e-invoices? (With the CA.) · `POL-10.03` · V-41 · stage 4
 9. **Tally voucher types.** Validate the starting map against real Tally samples. Contra covers only cash/bank transfers within one legal entity, never stock transfers. · `POL-09.15`, `POL-09.16`, `POL-09.25` · V-46 · stage 5
-10. **Rounding stock cost.** When an average cost does not divide into whole paise, how should each sale's cost be rounded? (With the CA.) · `PRD-MOD-014` · stock-ledger SL-2 · stage 2
+10. **Rounding stock cost.** When an average cost does not divide into whole paise, how should each sale's cost be rounded? (With the CA.) · `PRD-MOD-014` · stock-ledger SL-2 · V-64 · stage 2
+11. **A test Tally company.** Can a separate Tally company be set up for testing the connector, so test vouchers never reach KDPS's real books? · no POL bullet; product-owner item deployment.md D-5 · no V- number · stage 5 testing
 
 ## CA
 
 1. **AS or Ind AS?** Which accounting standards apply to KDPS Lifestyle Pvt. Ltd.? · `POL-09.10` · V-07 · stage 2
 2. **Cost formula and pool.** Confirm the existing applicable method and pool with Accounts. KDPS retains these initially; provide a future change proposal only if needed, with representative validation. Please also check the stock-ledger cost rules with real cases. First: a supplier return leaves stock at the formula cost, not its own purchase cost, so a gap to the supplier's credit can show even at the purchase price. Then: a late cost change follows its goods, and any excess it cannot put on stock goes to cost of goods sold; customer returns come back at their sale's cost; a mistaken receipt is undone at its own value; costs are worked out in posting order. · `POL-09.06`, `POL-09.19`, `POL-09.21`, `PRD-LED-016`–`PRD-LED-018` · V-09, stock-ledger SL-4 · stage 2
-3. **Goods owned before they arrive.** When a deal makes KDPS the owner at supplier dispatch, how should those goods and the supplier liability be recorded before they are counted? The system will show an amount only when backed by an invoice or the deal's price. · `POL-09.02` · stage 2
+3. **Goods owned before they arrive.** When a deal makes KDPS the owner at supplier dispatch, how should those goods and the supplier liability be recorded before they are counted? The system will show an amount only when backed by an invoice or the deal's price. · `POL-09.02`, `POL-09.22` · V-58 · stage 2
 4. **Bill number format.** Each till will have its own number series per GST registration per financial year. Please confirm the length limit and allowed characters, and approve a format. · `POL-10.07` · V-40 · stage 4
 5. **Altered or held goods.** When a customer has paid but the goods stay in the Store (for alteration or pickup), when is the sale recognised? Does the goods' cost leave stock at the bill or at handover? · `POL-08.06`, `POL-09.10` · V-35, stock-ledger SL-17 · stage 4
 6. **Gift vouchers and tax.** How is GST handled when a voucher is sold and when it is used? · `POL-07.10` · V-30 · stage 4
 7. **TDS.** Which payments (rent, contractors, professionals, commission) need TDS, and at which rates? · `POL-10.04` · V-48 · stage 5
-8. **MSME suppliers.** Provide evidence of each supplier's MSME classification and confirm its applicable payment deadline. · `POL-10.09` · stage 5
+8. **MSME suppliers.** Provide evidence of each supplier's MSME classification and confirm its applicable payment deadline. · `POL-10.09` · V-61 · stage 5
 9. **Fixed assets.** Category-specific capitalisation thresholds, depreciation methods and actual rates. · `POL-09.26` · V-50 · stage 5
 10. **Payroll law.** Which PF, ESI and other payroll rules apply to each employer and state? (With Accounts and HR.) · `POL-10.04` · V-53 · stage 6
 11. **Record keeping.** Validate the legal retention period for each record class and identify records under a legal hold. · `POL-18.05` · V-13 · stage 1
@@ -104,9 +110,18 @@
 1. **Batch and expiry.** Which product categories need batch or expiry tracking? How many days of shelf life must remain to receive, and to sell? (With Booking.) · `POL-04.08` · V-05 · stage 1
 2. **Piece labels.** Apparel and footwear use piece IDs by default. Which additional categories, if any, should be explicitly piece-tracked? (With Booking.) · `POL-04.09` · V-06 · stage 2
 3. **Supplier-return reminders.** Set the actual reminder schedule from each supplier agreement and its return deadline; the example intervals are not defaults. · `PRD-OFR-009` · V-22 · stage 3
-4. **Transfer routes.** Provide the actual Store/warehouse route matrix, including each Store's default warehouse and any allowed alternatives. · `PRD-ORG-013` · stage 3
+4. **Transfer routes.** Provide the actual Store/warehouse route matrix, including each Store's default warehouse and any allowed alternatives. · `PRD-ORG-013` · V-62 · stage 3
 5. **Altered or held goods.** How long may a Store keep paid goods waiting for collection, and when are reminders sent? · `POL-08.04` · V-33 · stage 4
 6. **Piece labels at the switch.** How many pieces are in each Store today? Who labels them, and on which days before that Store's switch? Every apparel and footwear piece needs its own label by the switch count. · `PRD-LIF-025` · V-57 · stage 4, before each switch
+
+## KDPS (answerer not yet named)
+
+These come from the UI blueprint's open items. The blueprint names KDPS, not a person. The product owner names who answers each.
+
+- **Partner statements.** What may a franchise partner user see in their statements and ledger? · `POL-02`, `POL-12` (policies 2 and 12; no single bullet named) · UI blueprint open item 14 · answerer: unassigned · stage 5
+- **Reconciliation sample.** One real messy delivery to test the reconciliation layout, and the reason list. · no POL bullet; design input · UI blueprint open item 18 · answerer: unassigned · stage 2
+- **Labels and printers.** The piece-label layout, and the label and receipt printer models. · no POL bullet; design input · UI blueprint open item 19 · answerer: unassigned · stage 2
+- **Logo.** Artwork for the empty logo slot. · no POL bullet; design input · UI blueprint open item 23 · answerer: unassigned · before the pilot switch
 
 ## Booking
 
@@ -118,4 +133,4 @@
 
 ## Admin
 
-- See KDPS Owner 4 and 5. Name the restore operator and set the pre-launch restore-test date under `POL-18.03`.
+- See KDPS Owner 4 and 5. Name the restore operator and set the pre-launch restore-test date under `POL-18.03` (V-63, stage 1).
