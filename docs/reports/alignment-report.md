@@ -19,8 +19,8 @@
   - **Needed before KDPS's side-by-side test:** the custom domain or Railway address (D-3).
   - **Needed before the first Store switch:** production hosting (D-1).
   - **Before first live use on production, not a build blocker:** the rollout order on production (SL-9 in the stock-ledger design).
-  - **No stage named yet:** how the in-store local helper and the Tally local gateway reach the server (4.15).
-  - **Waiting on something else:** SL-10 (returns with no sale in the app) waits for the later plan to bring the earlier POS's data into the app, which needs a decision record because `PRD-LIF-010` imports old sales for reports only; SL-11 only if a performance test fails.
+  - **Stage named:** how the local helper and the Tally local gateway reach the server (4.15, deployment.md D-6; needed by stage 4 for the helper, stage 5 for Tally).
+  - **Waiting on something else:** SL-10 (returns with no sale in the app): after a Store's switch these returns stay unavailable (`POL-06.02`, `DEC-059`) until the later plan brings the earlier POS's data into the app (needs a decision record, `PRD-LIF-010`). `PRD-EBO-005` is unmet for them until then. How the customer is served meanwhile is OPEN (product owner); it blocks stage 4 and the first Store switch. SL-11 only if a performance test fails.
 
   Questions only KDPS or the CA can answer are in [questions-for-kdps.md](../questions-for-kdps.md).
 
@@ -40,7 +40,7 @@
 | A-1 | **Settled: DEC-001** · Conflict | `POL-02.02` vs `PRD-ACS-001`, `PRD-ACS-004` | Policy: "Assign each user **a** role with explicit … scope." PRD: a person may hold **several** roles, each scope applied inside its own assignment. Read literally, the policy forbids what the PRD allows, and the persona design (several personas per person) needs several roles. | Me | 1 |
 | A-2 | **Settled: DEC-003** · Unclear | `POL-09.02` vs `PRD-LED-005`, `PRD-DMG-016`, `PRD-ACP-004`, `PRD-LIF-008` | Policy 9 lets a supplier obligation carry a **provisional valuation** while the invoice is missing or the PT is pending, "under CA-approved posting rules". The PRD keeps "provisional commercial amounts" distinct (`PRD-LED-005`) and forbids a fictitious payable for unknown pre-PT value (`PRD-ACP-004`). No PRD rule says what evidence makes a provisional amount allowed rather than fictitious. Audit B-08, still open. | Me (the rule); CA (the posting treatment) | 2 |
 | A-3 | **Settled: DEC-010** · Layering | `PRD-RET-001`, `POL-06.02` | The PRD now describes the Organisation-level return rule and effective-dated Store overrides; KDPS's 15-day ordinary window belongs in policy 6; defective goods are assessed under `POL-06.05` with no assumed cutoff. | Me | 4 |
-| A-4 | **Settled: DEC-002, DEC-010** · Layering | PRD "Words used": Tally, Piece ID; `PRD-MER-003` | The PRD now defines Piece ID and Piece-tracked without KDPS-specific wording; Tally remains an external book whose official status is policy-controlled. No open clash remains. | — | — |
+| A-4 | **Settled: DEC-002, DEC-010** · Layering | PRD "Words used": Tally, Piece ID; `PRD-MER-003` | The PRD now defines Piece ID and Piece-tracked without KDPS-specific wording; Tally remains an external book whose official status is policy-controlled. `PRD-LED-011` and the Official book row followed in DEC-060. | — | — |
 | A-5 | **Settled: DEC-010, DEC-021** · Layering | `PRD-EXC-012`, `POL-02.14` | The 9 PM WhatsApp summary and channel are set; recipient names remain open under policy 2. | KDPS Owner | 5 |
 | A-6 | **Settled: DEC-012** · Policy ownership | `POL-07.09`, `POL-02.07`–`POL-02.09`; PRD policy rows 2 and 7 | Policy 7 selects refund cases requiring independent approval. Policy 2 assigns approvers, authority and limits, and enforces no-self-approval; it cross-references policy 7 without duplicating triggers. Audit D-05. | Me | 4 |
 | A-7 | **Settled: DEC-013** · Stage timing | `POL-14.07`; PRD policy row 14 | Stage 1 builds and tests import layouts with labelled sample data. Verified real opening stock, balances and sign-off are required at the stage 4 pilot switch. Audit D-03. | Me | 1 for sample-data layouts; 4 for verified opening data and sign-off |
@@ -76,15 +76,20 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 | B-3 | **Settled: DEC-005** · Bill and document number formats, including the GST limit | `PRD-MOD-004`, `PRD-OFF-002`, `PRD-LIF-015` | None | A numbering line (format per registration and year) | Me (shape); CA (compliance) | 4 |
 | B-4 | **Settled: DEC-014 (policy home)** · Store P&L and brand-by-Store profit allocation bases | `PRD-EXC-008` | `POL-09.20` | Merchandise cost, commission, support and expense allocation bases remain OPEN | Accounts, CA | 5 |
 | B-5 | **Settled: DEC-014 (policy homes)** · EBO report lateness; brand commission and settlement basis | `PRD-EBO-007`, `PRD-EBO-009` | `POL-02.11` for missing-report timing; `POL-12.06` for commission/settlement | Expected/overdue timing, escalation, and agreement-specific basis and rates remain OPEN | KDPS Owner, Operations (timing); Owner, Accounts (commission/settlement) | 4 (report timing); 5 (settlement) |
-| B-6 | Loyalty earning, redemption and expiry | `PRD-RET-019` | `POL-07.13` keeps loyalty disabled until an approved scheme, earning, redemption, liability and expiry rules are configured; `POL-07.09` lists loyalty settings as unconfirmed | The scheme itself | KDPS Owner, Accounts | 4 |
-| B-7 | Gift voucher issue, validity and redemption | `PRD-POS-005`, `POL-07.10` | Own bearer vouchers are in scope | Validity, partial redemption, unused-balance refund, lost-voucher and tax terms | KDPS Owner, Accounts, CA | 4 |
-| B-8 | Which actions may be approved by phone or WhatsApp | `PRD-ACS-012` | 2 | Authenticated notification links bind approval to the exact record version; action types to enable remain to be confirmed (V-60) | KDPS Owner | 5 |
+| B-6 | Loyalty earning, redemption and expiry | `PRD-RET-019` | `POL-07.13` keeps loyalty disabled until an approved scheme, earning, redemption, liability and expiry rules are configured; `POL-07.09` lists loyalty settings as unconfirmed | The scheme itself. Settings are answered in policy 7 (`POL-06.08`, DEC-065); Operations confirms there. The scheme itself remains OPEN | KDPS Owner, Accounts | 4 |
+| B-7 | Gift voucher issue, validity and redemption | `PRD-POS-005`, `POL-07.10`, `POL-10.10` | Own bearer vouchers are in scope | Validity, partial redemption, unused-balance refund, lost-voucher and tax terms | KDPS Owner, Accounts, CA | 4 |
+| B-8 | Which actions may be approved by phone or WhatsApp | `POL-02.22`, `PRD-ACS-012` | 2 | Settled: DEC-040 (policy home). Allowlisted action types remain to be confirmed (V-60) | KDPS Owner | 5 |
 | B-9 | Bulk approval allowlist and named stand-ins | `PRD-ACS-010`, `PRD-ACS-011`, `POL-02.19`, `POL-02.20` | 2 | Item-by-item permission/limit/independence checks and expiry are set; action allowlist and actual assignments remain open | KDPS Owner, Admin | 1 |
 | B-10 | **Settled: DEC-018** (`POL-05.09`) · Open-to-buy budget: who sets and approves it | `PRD-BKG-004`, `POL-05.02`, `POL-05.09` | 5 | Booking prepares, Accounts checks, the Owner approves; actual budgets, approver names and authority remain open (V-17) | KDPS Owner, Booking | 2 |
 | B-11 | Supplier-return reminder schedule | `PRD-OFR-009` | 1 has return windows, no reminders | The reminder schedule per agreement | Operations | 3 |
 | B-12 | MSME payment obligations | `PRD-PAY-010`, `POL-10.09` | `POL-10.09` | Verified supplier classification and legal deadlines (V-61) | Accounts, CA | 5 |
 | B-13 | Category-specific fixed-asset policy | `PRD-TAX-009`, `POL-09.26` | `POL-09.26` | Capitalisation thresholds, methods and actual rates | CA | 5 |
 | B-14 | Default warehouse and permitted transfer routes per Store | `PRD-ORG-013`, `PRD-TRF-004` | None (setup data) | Routes and who may change them (V-62) | Operations | 3 |
+| B-15 | **Settled: DEC-083** (`POL-06.09`) · Cheaper-replacement rule for exchanges | `PRD-RET-008` | 6 | Refund-difference, credit-difference or refusal choice remains OPEN (V-67) | KDPS Owner, Operations | 4 |
+| B-16 | **Settled: DEC-083** (`POL-06.10`) · Replacement-SKU restrictions | `PRD-RET-009` | 6 | Restriction rules remain OPEN (V-68) | KDPS Owner, Operations | 4 |
+| B-17 | **Settled: DEC-083** (`POL-06.11`) · Evidence for refused return attempts | `PRD-RET-015` | 6 | Evidence requirements remain OPEN (V-69) | KDPS Owner, Operations | 4 |
+| B-18 | **Settled: DEC-083** (`POL-02.25`) · Exception alert thresholds and recipients | `PRD-EXC-013` | 2 | Thresholds and recipients remain OPEN (V-70) | KDPS Owner, Admin | 4 |
+| B-19 | **Settled: DEC-083** (`POL-12.08`) · Onward commission disbursement authority | `PRD-PAY-013` | 12 | Owner authority remains OPEN (V-71) | KDPS Owner, Accounts | 5 |
 
 ## 4. Open points that change the data model
 
@@ -154,7 +159,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.8 Count and cash tolerances
 
-**Product side settled: DEC-008 and DEC-019.** A tolerance only selects an approver; nothing is adjusted automatically. Full counts stop selling and counted scope is frozen. Store Managers approve only within configured cost limits. Values and approver names remain open (V-21, V-38).
+**Product side settled: DEC-008 and DEC-019.** A tolerance only selects an approver; nothing is adjusted automatically. Full counts stop selling and counted scope is frozen. A count difference is approved by the approver set for its configured tolerance, stated as a cost difference; above it a higher approver approves and the difference becomes an owned exception. Values and approver names remain open (V-21, V-38).
 
 - **Where:** `PRD-STK-008`, `PRD-CSH-001`, `POL-02.11`, `POL-02.13`, `POL-02.21`.
 - **The point.** A tolerance only selects an approver. Cash differences are recorded and never automatically written off.
@@ -174,7 +179,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 
 ### 4.10 Store credit and gift vouchers
 
-**Product side settled: DEC-006 and DEC-020.** The in-scope instruments include customer-linked store credit and KDPS's own bearer vouchers, held as a liability, as well as bank transfer and approved customer credit. Store-credit scope is within the same legal entity. Validity, customer-credit terms, provider evidence and gift-voucher terms/tax remain open (V-25, V-29, V-30; Customer credit limits and due dates V-59).
+**Product side settled: DEC-006 and DEC-020.** The in-scope instruments include customer-linked store credit and KDPS's own bearer vouchers, held as a liability, as well as bank transfer and approved customer credit. Store-credit scope is within the same legal entity. Validity, customer-credit terms, provider evidence and gift-voucher terms (`POL-07.10`) and tax (`POL-10.10`) remain open (V-25, V-29, V-30; Customer credit limits and due dates V-59).
 
 - **Where:** `PRD-RET-016`, `PRD-POS-005`, `POL-07.03`, `POL-07.09`.
 - **The point.** The product supports KDPS's own bearer vouchers, not outside vouchers. Actual validity, partial redemption, lost-voucher, refund and tax terms remain open.
@@ -210,9 +215,9 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 - **Who decides:** Me (the product rule); KDPS Owner and Operations (the labelling plan).
 - **Blocks:** 4, before each Store's switch.
 
-### 4.14 Old POS evidence and the switch reconciliation
+### 4.14 Earlier POS evidence and the switch reconciliation
 
-**Replaced: DEC-030** (DEC-024 is superseded). The old POS does all real billing while active. Its end-of-day sales report and SOH are evidence for checking and reports only and never move app stock. At each Store's switch, the verified count becomes opening stock and is reconciled with the last SOH.
+**Replaced: DEC-030** (DEC-024 is superseded). The earlier POS does all real billing while active. Its end-of-day sales report and SOH are evidence for checking and reports only and never move app stock. At each Store's switch, the verified count becomes opening stock and is reconciled with the last SOH.
 
 - **Where:** `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-027` (`PRD-LIF-024` retired); `phases.md` stage 2 and switch-over.
 - **Who decides:** Me.
@@ -223,7 +228,7 @@ The PRD says these are "configured" or "under policy". Nothing is on by default 
 **Testing settled: DEC-027, DEC-028.** Railway runs the server, jobs, PostgreSQL, web app and counter PWA for testing, including KDPS's side-by-side test with real KDPS data. The current POS stays the system of record; no Store switches on test hosting (`PRD-LIF-026`).
 
 - **Still OPEN:** production hosting, chosen before the first Store switch; the file storage provider for the test setup; how the in-store local helper (PRD stack, Hardware) and the Tally local gateway (`PRD-INT-009`) reach the server; KDPS's agreement to hold its real data on the test setup (Owner question 37); the rollout order on production: when a warehouse goes live with its opening stock, and how goods move to a Store not yet switched ([stock-ledger](../design/stock/stock-ledger.md) SL-9; not a build blocker).
-- **The point.** The test setup is designed in [design/platform/deployment.md](../design/platform/deployment.md); its open questions D-1 to D-5 are listed there.
+- **The point.** The test setup is designed in [design/platform/deployment.md](../design/platform/deployment.md); its open questions D-1 to D-6 are listed there.
 - **Who decides:** Me; KDPS Owner for the data agreement.
 - **Blocks:** 1 (file storage provider, D-2 / GC-10); 2 (side-by-side test with real data); 4 (first Store switch).
 
@@ -262,7 +267,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-27 | ~~Which refund cases require independent approval~~ Triggers settled by DEC-020; named approvers and limits remain V-02 | `POL-07.09`, `POL-02.15` | — | — |
 | V-28 | No-bill returns on or off; value limit; valuation method | `POL-07.08` | KDPS Owner, Accounts | 4 |
 | V-29 | Store-credit validity and authorised Store list within the same legal entity | `POL-07.11`, `PRD-RET-023` | KDPS Owner, Accounts | 4 |
-| V-30 | Own gift-voucher validity, partial redemption, unused-balance refund, lost voucher and tax | `POL-07.10` | KDPS Owner, Accounts, CA | 4 |
+| V-30 | Own gift-voucher validity, partial redemption, unused-balance refund, lost voucher and tax | `POL-07.10`, `POL-10.10` | KDPS Owner, Accounts, CA | 4 |
 | V-31 | Loyalty terms | `POL-07.13`, `POL-07.09`, `PRD-RET-019` | KDPS Owner, Accounts | 4 |
 | V-32 | Customer notice and consent text; permitted uses | `POL-07.12`, `POL-07.09`, `PRD-POS-012` | KDPS Owner | 4 |
 | V-33 | Billed-retained collection period and reminders | `POL-08.04` | Operations | 4 |
@@ -277,7 +282,7 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-42 | Expected/overdue time and escalation for a missing EBO daily report | `POL-02.11` | KDPS Owner, Operations | 4 |
 | V-43 | Explicitly permitted offer combinations, agreement-based cost shares, named proposer and approver | `POL-19.01`–`POL-19.05` | KDPS Owner, Brand manager | 4 |
 | V-44 | Opening manifest, balances, cutoff, switch date, carried work, approvals and fallback for the pilot Store | `POL-14.05`, `POL-14.07` | KDPS Owner, Accounts, Operations | before the pilot switch (4) |
-| V-45 | Run length of the side-by-side test; material-difference threshold for the switch count against the old POS's last SOH. The no-unexplained-difference and all-staff-trained checks are set | [phases.md](../phases.md) | KDPS Owner, Accounts | Run length before the test run; threshold before the first switch |
+| V-45 | Run length of the side-by-side test; material-difference threshold for the switch count against the earlier POS's last SOH; meaning of "serious exception" (KDPS Owner and Operations, blocks stage 4). The no-unexplained-difference and all-staff-trained checks are set | `POL-14.08`, [phases.md](../phases.md) | KDPS Owner, Accounts, Operations | Run length before the side-by-side test; threshold and meaning of "serious exception" before the first switch |
 | V-46 | Tally voucher types checked against KDPS's real Tally | `POL-09.15`, `POL-09.16` | Accounts | 5 |
 | V-47 | Franchise rates and terms per agreement | `POL-12.05` | KDPS Owner, Accounts | 5 |
 | V-48 | TDS rules | `POL-10.04` | CA | 5 |
@@ -292,11 +297,18 @@ Every active value below is unset. None may be invented; each stays OPEN until i
 | V-57 | Pieces in each Store today, who labels them and when, before its switch | `PRD-LIF-025` | KDPS Owner, Operations | 4 (before each switch) |
 | V-58 | How goods owned before receipt and the supplier liability are recorded before they are counted (the AS or Ind AS framework is V-07) | `POL-09.02`, `POL-09.22`, `PRD-ORG-018` | Accounts, CA | 2 |
 | V-59 | Customer credit limits and due dates | `POL-07.09`, `PRD-POS-022` | KDPS Owner, Accounts | 5 |
-| V-60 | Which approval types may use an authenticated notification link (B-8) | `PRD-ACS-012` | KDPS Owner | 5 |
+| V-60 | Which approval types may use an authenticated notification link (B-8) | `POL-02.22`, `PRD-ACS-012` | KDPS Owner | 5 |
 | V-61 | Verified MSME classification per supplier and its payment deadline (B-12) | `POL-10.09` | Accounts, CA | 5 |
 | V-62 | Each Store's default warehouse and permitted transfer routes (B-14) | `PRD-ORG-013` | Operations | 3 |
-| V-63 | Restore operator and pre-launch restore-test date | `POL-18.03` | Admin | 1 |
+| V-63 | Restore operator, pre-launch restore-test date and how often restore drills run (proposed quarterly) | `POL-18.03` | Admin, KDPS Owner | 1 |
 | V-64 | Rounding rule for a stock cost that does not divide into whole paise (stock-ledger SL-2) | `PRD-MOD-014` | Accounts, CA | 2 |
+| V-65 | KDPS representative who agreed DEC-017 to DEC-022 with the product owner | DEC-029 | Product owner | 1 (policy 2 signature) |
+| V-66 | Offline working-set validity time | `POL-16.07`, `PRD-OFF-004` | KDPS Owner, Operations | 4 |
+| V-67 | Cheaper-replacement rule for exchanges (B-15) | `POL-06.09`, `PRD-RET-008` | KDPS Owner, Operations | 4 |
+| V-68 | Replacement-SKU restrictions (B-16) | `POL-06.10`, `PRD-RET-009` | KDPS Owner, Operations | 4 |
+| V-69 | Evidence for refused return attempts (B-17) | `POL-06.11`, `PRD-RET-015` | KDPS Owner, Operations | 4 |
+| V-70 | Exception alert thresholds and recipients (B-18) | `POL-02.25`, `PRD-EXC-013` | KDPS Owner, Admin | 4 |
+| V-71 | Owner authority for onward commission (B-19) | `POL-12.08`, `PRD-PAY-013` | KDPS Owner, Accounts | 5 |
 
 **Product-owner decisions (Me)** behind the values above: DEC-001 to DEC-035 (DEC-017 to DEC-022 agreed with KDPS, see DEC-029), including A-1 to A-7, A-9, B-1 to B-5, D-02, and 4.1, 4.2, 4.4, 4.6 to 4.12. They are the interview topics in step 4; settled product rules and policy homes are distinguished from values that KDPS or the CA still needs to supply.
 
@@ -306,14 +318,14 @@ Report only. Design is fixed after the PRD and policies settle.
 
 | # | File | Finding | Rule it breaks |
 | --- | --- | --- | --- |
-| E-1 | `design/ui/design-system.html`, `design/ui/design-language.md` §8 | Bill no. `B01C1/2627/04381` shown as the format. `ui-blueprint.html` open item 20 (Bill number) says the format is open. | 4.9, V-40 |
+| E-1 | `design/ui/design-system.html`, `design/ui/design-language.md` §8 | Fixed: the Bill no. sample is labelled a synthetic layout; length limit and allowed characters are marked not confirmed (`POL-10.07`, V-40), owner Accounts and the CA, stage 4. | 4.9, V-40 |
 | E-2 | `design/ui/design-system.html` | **Fixed by DEC-015:** the PT approval card uses total proposed acquisition cost: proposed P RATE times covered quantity (DEC-016). Its synthetic example shows 1,096 pieces and ₹14,27,500, calculated from its displayed quantities and unit costs; the total follows quantity changes. | `PRD-ACS-015`, V-55 |
 | E-3 | `design/ui/design-system.html` | Sample values with no "example" label: limits ₹50,000 and ₹50,00,000; day close "due 21:30"; shift 10:00–19:00 with no grace; P RATE = MRP × 0.5 (this one is labelled). | AGENTS.md "Never invent a value" |
 | E-4 | `design/ui/ui-blueprint.html` | **Fixed:** the Owner now has View in the access grid. Open item 12 (Held goods) still correctly leaves write-off and disposal approvers and limits OPEN. | `POL-17.04`, V-19 |
 | E-5 | `design/ui/design-system.html`, `design/ui/ui-blueprint.html` | Fixed: both files now show Cash only on the offline counter (DEC-020); later card/UPI requires an explicit evidence procedure. The design-system till also lists each piece ID under a piece-tracked line. | `POL-16.02` |
 | E-6 | `design/ui/ui-blueprint.html` | Piece-level actions apply to configured piece-tracked profiles; DEC-018 sets apparel/footwear by default and leaves additional categories explicit. No open clash. | `POL-04.09` |
 | E-7 | `design/ui/ui-blueprint.html` | Ledger, trial balance and period close sit beside "Tally is the sole official book". Fine only if marked as the internal ledger. | `PRD-LED-011`, `POL-11.01` |
-| E-8 | `design/ui/ui-blueprint.html` | Transfer approval needs "a higher authority". `PRD-TRF-005` says "independent higher-authority approval", so this agrees; but `POL-02.07` only says "other than the preparer". Who counts as higher is not set. | V-02 |
+| E-8 | `design/ui/ui-blueprint.html` | Settled: DEC-043. Higher authority is a different person whose approval limit covers the transfer on its cost basis (`POL-02.07`, `PRD-ACS-015`). Limits and approvers remain OPEN (V-02). | V-02 |
 
 ## 7. Follow-ups, no decision needed
 
