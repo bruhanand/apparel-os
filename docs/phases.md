@@ -14,9 +14,10 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - HRMS can progress alongside the core once staff and permissions exist.
 - Basic operational reports belong in every stage. Forecasting waits for dependable history.
 - A stage may be designed, developed and tested with synthetic data before policy signatures. A policy-dependent live operation may be enabled only after the policy is signed and its real values, authorities and evidence are configured and validated. See [kdps-policies.md](kdps-policies.md). The side-by-side test on real KDPS data is not a live operation: it needs KDPS's agreement to hold real data (deployment D-4), not signed policies; gated actions stay disabled until their policies are signed (`DEC-071`).
+- The whole application is built to the `DEC-105` baseline; every policy-dependent feature is built complete and ships switched off until its settings are valid and its policy is signed (`DEC-105`, `PRD-SEC-017`).
 - A stage ends only when its exit checks pass. Exit checks come from "Acceptance conditions" in the PRD.
 - This plan carries no dates. Dates depend on team size, which is not yet set.
-- The phone client is not yet placed in a stage.
+- Responsive web serves phones through stage 6; a native phone client needs a later decision (`DEC-105`).
 - Build screens in English first, ready for Hindi: screen text is kept apart from code and layouts allow longer text. The Hindi interface for screens built in stages 1 to 5 arrives in stage 5; stage 6 screens get Hindi in stage 6. Email, WhatsApp and SMS messaging arrive in stage 5. Before then nothing is sent: sign-in uses the authenticator-app code, and alerts reach people in My work (`PRD-SEC-001`, `PRD-EXC-013`, `DEC-099`).
 
 | Stage | Delivers | Replaces at KDPS |
@@ -39,7 +40,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - People, access and approvals: personas, roles, scoped permissions, independent approval, one inbox, audit record.
 - Merchandise and identifiers: brands, suppliers and other parties, SKUs, barcodes, units, product proposals.
 - Effective-dated commercial terms for brands and suppliers.
-- Source conversion and imports: file intake, saved mappings, staging, review, duplicate control.
+- Source conversion and imports: file intake, saved mappings, staging, review, duplicate control. Stage 1 imports use the manual route only (`DEC-105`).
 - Technical platform: stack, module and data boundaries, transaction and integration integrity, login and sessions, access enforcement, encryption, backup and restore.
 - Recording rules: stock balances derived from movements, balanced journals per book, chart of accounts, financial periods, posting rules, document numbering.
 - Offline design: device registration, device bill series, and pricing, tax, discount allocation and rounding logic shared by server and counter (`PRD-MOD-007`). The shared module also holds incentive logic; its golden cases are completed in stage 6.
@@ -71,6 +72,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
+- The AI gateway for PT source files (`DEC-105`), switched off by default as a capability control (`PRD-SEC-017`).
 - Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site. A profile changed to piece-tracked after stock exists needs a labelling count first (`PRD-MER-018`).
 - Inbound ownership: goods owned under an agreement before receipt, recorded outside stock, with an amount only from invoice or agreement-price evidence, and closed against the receipt count (`PRD-ORG-017` to `PRD-ORG-019`).
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.
@@ -143,7 +145,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Tax-document cancellation and correction distinct from operational reversals (`PRD-TAX-004`).
 - Store operator experience: Billing, Bills, Till & Sync, opening and closing checklists.
 - Offline counter, enabled only under the signed Offline operation policy and after the offline exit check below.
-- Earlier-POS-bill returns and EBO returns not linked to their imported sale stay unavailable in the app after a Store's switch until a later plan is approved (`POL-06.02`, `DEC-059`, stock-ledger SL-10). How the customer is served meanwhile is OPEN (product owner).
+- Earlier-POS-bill returns and EBO returns not linked to their imported sale stay unavailable in the app after a Store's switch until a later plan is approved (`POL-06.02`, `DEC-059`, stock-ledger SL-10). Until then the customer is served under the no-bill return route where policy 7 allows it, and is otherwise refused with the reason shown (`DEC-105`).
 - The pilot Store switch from the earlier POS, on production hosting only (`PRD-LIF-026`). See "Testing and switch-over".
 
 **Out of scope.** Bank matching, provider settlement matching and Tally vouchers (stage 5). Hindi screens and WhatsApp or SMS bills (stage 5).
@@ -248,7 +250,7 @@ The built system is tested beside the earlier POS before it replaces it. KDPS ru
 - Write the way back before the switch: the checks that would send the pilot Store back to the earlier POS, who decides, and how bills made in Apparel OS are carried back.
 - Avoid double typing. Apparel OS exports the approved PT in the KDPS layout so the earlier POS can load it manually during the test (`DEC-053`). Whether the earlier POS accepts that file remains to be confirmed.
 - A side-by-side test import creates no tax invoice and no second sale.
-- Decide, before the first Store switch, how a customer with an earlier-POS bill is served during the return window (stock-ledger SL-10; OPEN, product owner).
+- A customer with an earlier-POS bill is served during the return window under the no-bill return route where policy 7 allows it, and is otherwise refused with the reason shown (stock-ledger SL-10, `DEC-105`).
 - Every difference found at the switch count is reported and explained; none is closed by editing a number to match.
 
 **Go or no-go pass marks.** See `POL-14.08`. KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained, no serious exception may remain open, and Site readiness must be verified (`PRD-LIF-002`). At each switch, no unexplained material difference may remain between the count and the earlier POS's last SOH.
