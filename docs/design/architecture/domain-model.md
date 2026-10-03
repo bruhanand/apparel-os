@@ -8,7 +8,7 @@ Implements these PRD sections: Organisation, sites and ownership; People, access
 
 - PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.01`–`POL-02.04`, `POL-02.06`–`POL-02.13`, `POL-02.15`–`POL-02.23`), 3 (`POL-03.04`), 4 (`POL-04.01`–`POL-04.05`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.02`, `POL-05.03`, `POL-05.09`), 7 (`POL-07.01`, `POL-07.05`, `POL-07.06`, `POL-07.09`), 9 (`POL-09.02`, `POL-09.10`–`POL-09.13`, `POL-09.19`, `POL-09.21`, `POL-09.23`), 10 (`POL-10.01`, `POL-10.06`–`POL-10.08`), 13 (`POL-13.05`), 14 (`POL-14.05`, `POL-14.07`), 16 (`POL-16.07`), 17 (`POL-17.02`, `POL-17.04`, `POL-17.07`, `POL-17.11`), 18 (`POL-18.05`), 19 (`POL-19.03`).
-- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100, DEC-101.
+- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096, DEC-097, DEC-098, DEC-100, DEC-101, DEC-105.
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
@@ -38,14 +38,14 @@ Labels (**design choice**, **Proposed**, **OPEN**) mean what [module-map.md](mod
 
 | Kind | Behaviour | Examples |
 | --- | --- | --- |
-| Master | Effective-dated versions; changed through an approved edit; history kept | Site, SKU, agreement, role assignment |
+| Master | Effective-dated versions; changed through an approved edit; history kept. A version never starts on a past date (GC2-7, DEC-105) | Site, SKU, agreement, role assignment |
 | Document | Drafted, submitted, approved under its exact version; its official payload is then frozen; corrected by linked records | PT, booking, transfer, bill |
 | Entry | Append-only; undone only by a linked entry | Movement, journal, audit record |
 | Status record | Append-only status on something else | Hold, reservation, coverage, acceptance |
 | Projection | Rebuildable from entries; never the source of truth | Stock balance, My work list |
 | Setting | An effective-dated configured value with no default | Approval limit, posting map |
 
-**State names.** A record shows one lifecycle state, and the names are the settled list in [design-language.md](../ui/design-language.md) section 7. A new name needs a design review there. Where no settled name fits, this document describes the lifecycle by its events and leaves the name OPEN (DM-4).
+**State names.** A record shows one lifecycle state, and the names are the settled list in [design-language.md](../ui/design-language.md) section 7, including those the baseline added (DM-4, DEC-105). A new name needs a design review there.
 
 ## 2. The whole system in outline
 <!-- deps: PRD-MOD-002, PRD-MOD-004, PRD-MOD-005, prd.md#delivery-stages — which module owns each record and the stage that first builds it -->
@@ -62,7 +62,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | `files-imports` | Stored file; attachment; layout; mapping; mapping rule and proposal; import batch; staged row; row issue; import outcome | 1 |
 | `inbox` | Work item | 1 |
 | `notifications` | Message request; template; delivery outcome | See [module-map.md](module-map.md) 4.9 |
-| `ai-gateway` | AI request record | OPEN (MM-14) |
+| `ai-gateway` | AI request record | 2 (MM-14, DEC-105) |
 | `merchandise` · catalogue | Brand; category; style; SKU; size set; attribute and vocabulary; external code mapping; unit and pack conversion; tracking profile; product proposal; vocabulary proposal | 1 |
 | `merchandise` · parties | Party; agreement and its terms | 1 |
 | `exceptions` | Exception | 1 |
@@ -72,7 +72,7 @@ Each module's core records, one line each. Stage 1 records are detailed in secti
 | `site-lifecycle` | Readiness record (1); opening manifest, switch record (4); closure record, relocation link, export (5) | 1, 4, 5 |
 | `merchandise` · PT | PT; PT revision and lines; costing profile; label job | 2 |
 | `booking` | Booking and lines; open-to-buy budget; supplier confirmation | 2 |
-| `receiving` | Arrival; receipt count; GRN; discrepancy; acceptance; inbound ownership record (**Proposed** home, MM-7) | 2 |
+| `receiving` | Arrival; receipt count; GRN; discrepancy; acceptance; inbound ownership record (MM-7, DEC-105) | 2 |
 | `stock` · documents | Damage report; transfer and dispatch; count and recount; adjustment; write-off; disposal | 2–3 |
 | `supplier-returns` | Return right and deadline; proposed return list; RTV and its shipments; supplier claim | 3 |
 | `pos` | Billing device; offline authority; till session; cart; bill and lines; tender allocation; payment attempt; return and exchange; refund; billed-retained record; customer; Store credit; Gift voucher; loyalty balance | 4 |
@@ -149,14 +149,14 @@ The Organisation contains its legal entities, Sites and books (`PRD-ORG-002`, `P
 
 Rules:
 
-- **The mapping is explicit and dated.** Each business unit maps to its legal entity, tax registration and accounting book; the registration and the book must belong to that legal entity (`PRD-ORG-020`). The mapping is never inferred from the Site (`PRD-ORG-005`, `POL-10.01`). It is effective-dated, and each transaction keeps the mapping it used (`PRD-MOD-010`, `PRD-ACP-013`).
+- **The mapping is explicit and dated.** Each business unit maps to its legal entity, tax registration and accounting book; the registration and the book must belong to that legal entity (`PRD-ORG-020`). The mapping is never inferred from the Site (`PRD-ORG-005`, `POL-10.01`). The registration must also be in the State of the unit's Site; the mapping check compares them (GC2-1, DEC-105). The mapping is effective-dated, and each transaction keeps the mapping it used (`PRD-MOD-010`, `PRD-ACP-013`).
 - **Units at one Site may differ.** Two business units at one Site can map to different entities, registrations and books; a transaction uses its own unit's mapping (`PRD-ORG-005`, `PRD-ACP-013`).
 - **Brand coverage by unit kind.** Whole-store and warehouse units can cover several brands; a brand-counter unit covers one brand; an office unit needs no brand (`PRD-ORG-006`).
-- **Five things kept independent** on Sites and Stores: physical Site kind, Store format, operating model, inventory ownership and settlement terms (`PRD-ORG-009`). Supported kinds and formats are those in `PRD-ORG-010`.
+- **Five things kept independent** on Sites and Stores: physical Site kind, Store format, operating model, inventory ownership and settlement terms (`PRD-ORG-009`). Supported kinds and formats are those in `PRD-ORG-010`; a Site where Stores trade is a retail site (GC2-3, DEC-105).
 - **Not locations.** Damage, holds and transit are stock and custody conditions. They never appear as a Site or a location (`PRD-ORG-012`).
-- **Names can change; the place cannot.** Renaming never replaces the physical identity. Relocation creates a new linked Site (`PRD-LIF-021`); the Store keeps its code, name and history, and its Site link moves to the new Site (`PRD-LIF-029`). Aliases are kept (`PRD-ORG-008`).
-- **Lifecycle.** A Site and a Store carry opening and closing dates and a status (`PRD-ORG-008`). A business unit's activities are enabled through readiness (`PRD-LIF-001`). The events are: created; each activity (receiving, movement, selling) granted after its readiness approval (`PRD-LIF-001`, section 3.6); closure started, which stops new operations (`PRD-LIF-017`); retired, only when every outstanding item is resolved (`PRD-LIF-019`); reopened, only with fresh readiness, mapping and access approval (`PRD-LIF-020`). Identity and history stay after closure. The state names are OPEN (DM-4).
-- **OPEN:** KDPS's real structure, registrations and mappings (V-18, `POL-10.06`, `POL-10.08`); routes (V-62). The structural points DM-2 and DM-3 are settled (DEC-095, DEC-096), except how a relocating Store's business units move (GC2-4; product owner; stage 5).
+- **Names can change; the place cannot.** Renaming never replaces the physical identity. Relocation creates a new linked Site (`PRD-LIF-021`); the Store keeps its code, name and history, and its Site link moves to the new Site (`PRD-LIF-029`). Its business units do not move: it gets new units at the new Site, linked to its old ones, and stock moves between them by transfer (GC2-4, DEC-105). Aliases are kept (`PRD-ORG-008`).
+- **Lifecycle.** A Site and a Store carry opening and closing dates and a status (`PRD-ORG-008`). A business unit's activities are enabled through readiness (`PRD-LIF-001`). The events are: created; each activity (receiving, movement, selling) granted after its readiness approval (`PRD-LIF-001`, section 3.6); closure started, which stops new operations (`PRD-LIF-017`); retired, only when every outstanding item is resolved (`PRD-LIF-019`); reopened, only with fresh readiness, mapping and access approval (`PRD-LIF-020`). Identity and history stay after closure. The states of a Site, Store and business unit are Setting up, Active, Closing and Closed (DM-4, DEC-105).
+- **OPEN:** KDPS's real structure, registrations and mappings (V-18, `POL-10.06`, `POL-10.08`); routes (V-62). The structural points DM-2 and DM-3 are settled (DEC-095, DEC-096, DEC-105).
 
 ### 3.2 People, access and approvals
 
@@ -176,7 +176,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 | Approval rule | For one action type: whether independent approval is needed, its value basis, what counts as a material change, and whether bulk or phone approval is allowed | Action type | The independently approved actions are those of `POL-02.07` | `PRD-ACS-006`, `PRD-ACS-015`, `POL-02.12`, `POL-02.19`, `POL-02.22` |
 | Approval limit | For an action and an approver role inside a scope, or for a named individual: the limit and its basis | — | A missing limit grants nothing. Unlimited authority and authority over Unknown value must each be explicit | `POL-02.09`, `POL-02.15`, `PRD-ACS-016` |
 | Stand-in grant | Named, scoped, time-limited authority | — | Expires by itself. A stand-in never approves their own preparation | `PRD-ACS-018`, `POL-02.20` |
-| Approval request | A request to approve one document version | — | Holds the action type, the document and its exact version, the preparer, and the value on its basis or Unknown | `PRD-ACS-007`, `PRD-ACS-015` |
+| Approval request | A request to approve one document version | — | Holds the action type, the document and its exact version, the preparers (everyone who recorded a change in the version; GC3-1, DEC-105), and the value on its basis or Unknown | `PRD-ACS-007`, `PRD-ACS-015` |
 | Approval decision | The approver's decision on a request | — | Holds the approver, the time, approve or reject, the reason, evidence and comment. **Design choice:** it also names the role assignment, limit or stand-in grant it relied on, so the recheck under the locks can repeat it | `PRD-ACS-010`, `PRD-ACS-013`, `POL-02.23` |
 | Approval use | That one decision authorised one posting | — | Written in the posting transaction, so it commits with the stock and money records; it is the approval evidence of `PRD-INT-004`. At most one per decision (DEC-097) | `PRD-INT-004` |
 
@@ -185,7 +185,8 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 **Lifecycles.**
 
 - Role assignment, approval limit, stand-in grant: effective-dated. A stand-in ends on its date without anyone acting.
-- Approval request: Awaiting approval → Approved or Rejected. A material change to the document ends the request's force; the new version needs a new request (`PRD-ACS-007`). A request above the approver's limit moves to the next authorised eligible approver, or stays Awaiting approval; it is never approved by itself (`POL-02.09`).
+- User: Active, Disabled or Ended (DM-4, DEC-105).
+- Approval request: Awaiting approval → Approved or Rejected. A material change to the document ends the request's force, and the request is then Superseded (DM-4, DEC-105); the new version needs a new request (`PRD-ACS-007`). A request above the approver's limit moves to the next authorised eligible approver, or stays Awaiting approval; it is never approved by itself (`POL-02.09`).
 - Approval decision: an entry. It is never edited. Its use by a posting is a separate entry, written in the posting transaction (DEC-097).
 - Session and device: Revoked when lost.
 
@@ -205,7 +206,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 | Work item | `inbox` | A pointer to a task, an approval to decide or an exception, in someone's My work | A projection of the owner's record: kind, reference and version, assignee or scope of people who may act, due time, exposure. Ordered by due time and exposure. Changes no business record | `PRD-ACS-009`, `PRD-ACS-010` |
 | Exception | `exceptions` | A tracked unresolved condition or difference | Has an owner, due date, status, evidence and exposure. Linked to the records it is about. Exposure is an amount or Unknown | `PRD-EXC-001`, PRD "Words used" |
 
-- **Exception lifecycle.** An exception is raised and stays unresolved; that first state has no settled name (DM-4). It is Resolved once the permitted correction, return, reversal or reconciliation is recorded, and Closed only after the linked business outcome is verified (`PRD-EXC-002`). Overdue when past its due date. Reopened when it comes back. Repeated, reopened and unresolved cases are kept (`PRD-EXC-003`).
+- **Exception lifecycle.** An exception is raised and stays Unresolved (DM-4, DEC-105). It is Resolved once the permitted correction, return, reversal or reconciliation is recorded, and Closed only after the linked business outcome is verified (`PRD-EXC-002`). Overdue when past its due date. Reopened when it comes back. Repeated, reopened and unresolved cases are kept (`PRD-EXC-003`).
 - An exception is not a price tag and not a support ticket. Closing a support ticket settles no stock or money (`PRD-EXC-003`, PRD "Words used": Price tag).
 - Kinds named by the PRD: shortage, excess, damage, mismatch, transit gap, cash variance, uncertain payment, missing report, unfinished operation (`PRD-EXC-001`). A source conflict raises one automatically (`POL-03.04`).
 - The owner comes from routing by type and Site (`POL-02.16`, DEC-037). Real owners, due times and escalation are OPEN (V-03).
@@ -238,7 +239,7 @@ Owner: `numbering`.
 - A Store's switch and a replaced device each get a fresh series; the old one is never continued (`PRD-LIF-015`, `PRD-OFF-010`).
 - Reprinting keeps the same bill identity (`PRD-POS-016`).
 - The format is OPEN (V-40, `POL-10.07`; CA; stage 4).
-- **Lifecycle.** A series is open, paused or closed; closed is final (`PRD-LIF-015`, `PRD-OFF-010`). The screen name for open is OPEN (DM-4).
+- **Lifecycle.** A series is open, paused or closed; closed is final (`PRD-LIF-015`, `PRD-OFF-010`). The screen names are Open, Paused and Closed (DM-4, DEC-105).
 - Detail: [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5) section 3.
 
 ### 3.6 Policy status, capability and readiness
@@ -246,7 +247,7 @@ Owner: `numbering`.
 | Record | Owner | What it is | IDs |
 | --- | --- | --- | --- |
 | Organisation setting | `configuration` | An effective-dated setting of the Organisation, such as its timezone and enabled currencies | `PRD-ORG-011`, `PRD-MOD-009`, `PRD-MOD-014` |
-| Policy status | `configuration` | For each of the 19 policies: Open until Signed, with who signed and when | PRD "Required policy configuration"; [kdps-policies.md](../../kdps-policies.md) status table; DEC-092 |
+| Policy status | `configuration` | For each of the 19 policies: Open until Signed, with who signed and when; and whether its real values are recorded as validated, with the evidence and who validated them (DM-6) | PRD "Required policy configuration"; [kdps-policies.md](../../kdps-policies.md) status table; DEC-092, DEC-105 |
 | Capability control | `configuration` | Whether a feature is on for the Organisation | `PRD-SEC-017` |
 | Activity grant | `configuration`, written by `site-lifecycle` | Receiving, movement or selling enabled for a Site or business unit | `PRD-LIF-001` |
 | Readiness record | `site-lifecycle` | The checks verified for a Site and a business unit before an activity is enabled: mappings, users and access, locations, devices, required policies, stock plan; and the approval | `PRD-LIF-001`, `PRD-LIF-002` |
@@ -254,7 +255,9 @@ Owner: `numbering`.
 - A policy-dependent operation is available only when its capability is on, its policy is Signed, its required configuration is valid, and its activity is granted where one applies ([module-map.md](module-map.md) 4.4).
 - Signed means the policy's "Signed by, date" line is complete (DEC-092). All 19 policies are Open today.
 - Shared Site readiness and each business unit's activity approval are separate (`PRD-LIF-001`). An empty stock-operating unit declares zero opening stock; a non-stock office needs no stock opening (`PRD-LIF-003`).
-- **OPEN:** what records a policy's real values as validated, and who does it (DM-6); who approves readiness (module-map MM-8).
+- A policy's real values are recorded as validated, with the evidence, by a person holding the validate permission who did not enter them (DM-6, DEC-105). The gate's third condition, valid configuration, reads that record ([module-map.md](module-map.md) 4.4). **Design choice.**
+- Readiness and activity approval is given by a different person from the one who ran the checks (module-map MM-8, DEC-105).
+- **OPEN:** who holds the readiness and activity approval; that is KDPS's to name (KDPS Owner, question 49; stage 1 live use).
 
 ### 3.7 Merchandise
 
@@ -267,16 +270,16 @@ Owner: `merchandise` · catalogue. `PRD-MER-002`–`PRD-MER-018`; policy 4.
 | Style | A style or article | Code, unique in the Organisation | Carries season, collection, launch date, gender, fabric, fit, category and HSN, each a value or Unknown | `PRD-MER-002`, `PRD-MER-004`, `PRD-MER-005` |
 | SKU | One merchandise variant: for apparel and footwear, one style, colour and size | Internal SKU identity, stable | Has one stock unit: piece, pair or pack | `PRD-MER-002`, `POL-04.02`, `POL-04.03` |
 | Size set | The sizes of a category, and the size-colour grid | Code | Missing size is distinct from an explicit Free Size | `PRD-MER-002`, `PRD-MER-005` |
-| Vocabulary | The approved values of a merchandise attribute | — | A proposed value is not a master until independently confirmed | `PRD-MER-013`, `PRD-IMP-008` |
+| Vocabulary | The approved values of a merchandise attribute | — | Every list-type attribute carries one; which attributes exist is configured per Organisation (GC2-9, DEC-105). A proposed value is not a master until independently confirmed | `PRD-MER-013`, `PRD-IMP-008`, `PRD-ORG-011` |
 | External code mapping | An external barcode or supplier code mapped to a SKU and unit | The code, its scope and its validity dates | Identical pieces may share one. An ambiguous active mapping is rejected. Leading zeros and historical aliases are kept | `PRD-MER-006`, `PRD-MER-007` |
-| Unit and pack conversion | The stock unit and each purchasing and selling pack's conversion | — | History is kept, so a later change never rewrites past quantities. Mixed packs are itemised by content. Units are never combined silently | `PRD-MER-010`, `PRD-MER-012`, `POL-04.03`, `POL-04.04` |
+| Unit and pack conversion | The stock unit and each purchasing and selling pack's conversion | — | History is kept, so a later change never rewrites past quantities. A SKU's stock unit cannot change while any stock of it is recorded (GC2-5, DEC-105). Mixed packs are itemised by content. Units are never combined silently | `PRD-MER-010`, `PRD-MER-012`, `POL-04.03`, `POL-04.04` |
 | Tracking profile | Whether goods are piece-tracked or held as quantity; whether batch and expiry are required; required identifiers; expiry eligibility | Code | Set per profile. A missing required identifier blocks the affected operation | `PRD-MER-010`, `PRD-MER-011`, `PRD-MER-014`, `POL-04.01`, `POL-04.05` |
 | Product proposal | A proposed new product or SKU | — | Kept apart from approved masters. Unconfirmed identity cannot enter an official PT | `PRD-MER-013`, `PRD-PTW-001`, `PRD-PTW-006` |
 
 - **Prices are kept apart.** Purchase cost, PT MRP, selling price, tax and discount are separate, and each transaction keeps its own snapshot (`PRD-MER-009`). The approved cost and the ticket MRP come from the PT (`PRD-PTW-010`; stage 2).
 - **Piece ID.** A piece-tracked piece has a unique internal ID, kept through custody, PT coverage, sale, return and count (`PRD-MER-003`). The piece record belongs to the stock ledger (stock-ledger section 5). A supplier barcode names the SKU, never the piece (`PRD-MER-016`).
 - **Changing a profile.** A change to piece-tracked takes effect only through a labelling count at each Site (`PRD-MER-018`, `POL-04.09`, DEC-054). At a Store still on an earlier POS, piece rules start at its switch count (`PRD-MER-017`).
-- **Lifecycle of a proposal.** Proposed, then confirmed into a master or rejected. The state names are OPEN (DM-4). Whether a product proposal's confirmer must differ from its proposer is OPEN (DM-5).
+- **Lifecycle of a proposal.** Proposed, then Confirmed into a master or Rejected (DM-4, DEC-105). A product proposal is confirmed by a different person from its proposer (DM-5, DEC-105); `PRD-IMP-008` already requires it for vocabulary and mapping rules.
 - **OPEN:** batch and expiry categories and shelf-life days (V-05, SL-8, `POL-04.08`); further piece-tracked categories (V-06).
 
 ### 3.8 Parties and agreements
@@ -285,7 +288,7 @@ Owner: `merchandise` · parties. `PRD-MER-001`, `PRD-ORG-014`–`PRD-ORG-016`; p
 
 | Record | What it is | Identity | Rules | IDs |
 | --- | --- | --- | --- | --- |
-| Party | A supplier, agent, ordering party, invoicing party or goods mover | Party code, unique in the Organisation | Each kind is maintained independently. Bank details are restricted fields | `PRD-MER-001`, `PRD-ACS-008` |
+| Party | A supplier, agent, ordering party, invoicing party or goods mover | Party code, unique in the Organisation | Each kind is maintained independently. Bank details are restricted fields, and every party's bank-detail change needs a different authorised approver (GC2-6, DEC-105) | `PRD-MER-001`, `PRD-ACS-008` |
 | Agreement | The commercial terms with a brand or supplier | Agreement code, unique in the Organisation | Effective-dated versions. Bookings inherit it and may override it | `PRD-ORG-016`, `POL-01.02`, `POL-01.03` |
 
 An agreement version holds, as the governing agreement sets them:
@@ -301,7 +304,7 @@ Rules:
 - Sale-or-return rights are separate from ownership transfer. PT approval does not change legal ownership by itself (`POL-01.07`).
 - There is no universal return window (`POL-01.11`).
 - **Lifecycle.** An agreement has effective-dated versions and may be revised later (`PRD-ORG-016`, `POL-01.03`). On a booking, terms are edited directly while the booking is a Draft; once goods or accounting entries exist, a change is a recorded amendment that keeps history (`POL-01.04`).
-- Customers belong to `pos`, partners to `partners` and employees to `hr`. Whether one legal person appearing in several of these is linked is OPEN (DM-7).
+- Customers belong to `pos`, partners to `partners` and employees to `hr`. Records stay separate in each module. An optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically (DM-7, DEC-105).
 - **OPEN:** each brand's real model and terms (V-14; KDPS Owner, Accounts; stage 2).
 
 ### 3.9 Files and imports
@@ -320,7 +323,7 @@ Owner: `files-imports`. `PRD-IMP-001`–`PRD-IMP-013`.
 | Row issue | A row or field error, or a conflict of identity, quantity, price, tax or date | Says what correction is needed | `PRD-IMP-007` |
 | Import outcome | What happened | Accepted, rejected, pending and duplicate quantities and values, reconciled. Kept for failures as well as successes | `PRD-IMP-012`, `PRD-IMP-013` |
 
-- **Lifecycle of a batch.** Staged, validated, previewed, reviewed, then published; or failed, with its outcome kept (`PRD-IMP-005`, `PRD-IMP-012`). The state names are OPEN (DM-4).
+- **Lifecycle of a batch.** Staged, validated, previewed, reviewed, then published; or failed, with its outcome kept (`PRD-IMP-005`, `PRD-IMP-012`). The states are Staged, Validated, Published and Failed (DM-4, DEC-105).
 - **Once.** A repeated upload, a corrected file or a retry never causes a second business effect. A reused source identity with different content is a conflict or a governed revision (`PRD-IMP-011`).
 - **Whole or not at all.** A required document is never partly posted because one line failed (`PRD-IMP-012`).
 - **Opening data.** Opening stock, dues, advances and deposits have their own import layouts ([phases.md](../../phases.md) stage 1, `POL-14.07`). Opening dues, advances, deposits and outstanding commercial stock are imported separately and reconciled with the last closed books (`PRD-LIF-009`). Opening balances, historical reference and live corrections stay distinct (`PRD-LIF-011`). Historical sales are for reports only (`PRD-LIF-010`). In stage 1 the layouts run on labelled sample data only (`POL-14.07`).
@@ -342,8 +345,9 @@ Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 
 - **Balanced at commit.** Each journal balances in its book when the transaction commits (`PRD-MOD-013`). Unbalanced journals, duplicate postings and unexplained missing transactions have zero tolerance (`POL-09.13`).
 - **Kept distinct:** operational quantities, provisional commercial amounts and accounting recognition (`PRD-LED-005`).
 - **Never fabricated.** If the inputs do not support a value, the amount stays Unknown and an exception is raised; no payable, inventory value or journal is invented (`POL-09.02`, `PRD-ORG-018`).
-- **Lifecycles.** A journal is posted, and may later be Reversed by a linked entry. A period is opened, locked, and reopened with authority; state names OPEN (DM-4). A posting map is effective-dated.
-- **OPEN:** the real accounts and maps (V-10); the framework, AS or Ind AS (V-07, `POL-09.10`); KDPS's formula and pool (V-08, V-09, `POL-09.19`, `POL-09.21`); tolerances (V-11); SL-23.
+- **Lifecycles.** A journal is posted, and may later be Reversed by a linked entry. A period is opened, locked, and reopened with authority; its states are Open, Locked and Reopened (DM-4, DEC-105). A posting map is effective-dated.
+- Baseline (SL-23 Outcome A, DEC-105; the CA confirms; [module-map.md](module-map.md) 6.3 sets it against `POL-09.12`): a valued movement with no valid posting map does not commit. The document stays as it was, and an exception is raised in its own transaction.
+- **OPEN:** the real accounts and maps (V-10); the framework, AS or Ind AS (V-07, `POL-09.10`); KDPS's formula and pool (V-08, V-09, `POL-09.19`, `POL-09.21`); tolerances (V-11).
 
 ### 3.11 Stock
 <!-- deps: PRD-STK-001, PRD-STK-002, PRD-MOD-012 — pointer table to stock-ledger.md; five separate stock facts -->
@@ -387,7 +391,7 @@ What must always be true, who enforces it, and whether the posting transaction e
 | 5 | A missing limit grants nothing; Unknown value needs explicit authority | `access` | Yes | `POL-02.09`, `POL-02.15`, `PRD-ACS-016` |
 | 6 | An operation whose policy is not configured stays unavailable | `configuration` | — | `PRD-SEC-017`; PRD "Required policy configuration" |
 | 7 | An activity stays disabled for a Site or business unit until readiness passes | `configuration`, `site-lifecycle` | — | `PRD-LIF-001`, `PRD-LIF-002` |
-| 8 | A business unit always has one explicit legal entity, tax registration and book, and the registration and book belong to that legal entity; versions never overlap | `organisation` | — | `PRD-ORG-005`, `PRD-ORG-020`, `PRD-MOD-010` |
+| 8 | A business unit always has one explicit legal entity, tax registration and book, and the registration and book belong to that legal entity, and the registration is in the State of the unit's Site (GC2-1, DEC-105); versions never overlap | `organisation` | — | `PRD-ORG-005`, `PRD-ORG-020`, `PRD-MOD-010` |
 | 9 | An active external code never maps ambiguously | `merchandise` | — | `PRD-MER-007` |
 | 10 | Unconfirmed identity never enters an official PT | `merchandise` | Yes | `PRD-MER-013` |
 | 11 | The same request has its effect once; changed content under the same key is rejected and kept | `kernel`, every module | Yes | `PRD-INT-002` |
@@ -411,32 +415,36 @@ What must always be true, who enforces it, and whether the posting transaction e
 Each approved action, with what the approval binds to.
 
 - **Independent** says whether a source requires an approver other than the preparer. `POL-02.07` lists the independently approved actions. "Not stated" means no source says so.
-- **Value basis** is from `PRD-ACS-015`. "—" means the action has no value. "Not named" means `PRD-ACS-015` names none (DM-8).
+- **Value basis** is from `PRD-ACS-015`. "—" means the action has no value. Where `PRD-ACS-015` names none, the baseline sets one and the cell says so (DM-8, DEC-105). "No value limit" means the baseline does not limit the action by value.
 - **Material change.** `POL-02.12` applies to every row: a change to amount, quantity, price, supplier or customer, destination, commercial terms or payment details, when relevant to the action, needs renewed approval (`PRD-ACS-007`). The column names a narrower or extra rule only where a source gives one.
 - Who approves, and every limit, is OPEN under policy 2 (V-01, V-02) unless a policy names a persona.
 
 | Action | Document it binds to | Independent | Value basis | Narrower material-change rule | Stage |
 | --- | --- | --- | --- | --- | --- |
-| Role, permission, role-assignment and approval-rule change | The change version | `PRD-ACS-023`, `POL-02.07` | — | — | 1 |
+| Role, permission, role-assignment and approval-rule change; stand-in grant (GC3-7, DEC-105) | The change version | `PRD-ACS-023`, `POL-02.07`; DEC-105 for stand-in grants | — | — | 1 |
 | Supplier bank-detail change | The party version | `POL-02.07` | — | — | 1 |
+| Bank-detail change of any other party | The party version | A different authorised person from the preparer (GC2-6, DEC-105); `POL-02.07` names suppliers only | — | — | 1 |
+| Structure, business-unit mapping and agreement-version change | The change version | A different authorised person from the preparer (GC2-2, DEC-105); `POL-02.07` lists none of these | — | — | 1 |
+| Verification of a business-unit mapping (`POL-10.08`) | The mapping version | A different person from the one who made the mapping, under a separate verify permission (GC2-2, DEC-105) | — | — | 1 |
 | Mapping-rule and vocabulary confirmation | The proposal | `PRD-IMP-008`, `POL-02.07` | — | — | 1 |
-| Site readiness and business-unit activity (`PRD-LIF-001`) | The readiness record | Not stated; approver OPEN (module-map MM-8) | — | — | 1 |
+| Product proposal confirmation (`PRD-MER-013`) | The proposal | A different person from the proposer (DM-5, DEC-105) | — | — | 1 |
+| Site readiness and business-unit activity (`PRD-LIF-001`) | The readiness record | Not stated by a source. Baseline: a different person from the one who ran the checks; who holds it is OPEN (KDPS Owner, question 49; MM-8, DEC-105) | — | — | 1 |
 | PT approval; change to approved cost or pricing | The PT revision | `PRD-REC-017`, `POL-02.07` | Total proposed acquisition cost: proposed P RATE times covered quantity. Missing or disputed cost blocks it (`PRD-ACS-016`) | — | 2 |
-| Booking approval against open-to-buy (`PRD-BKG-004`, `POL-05.02`, `POL-05.09`) | The booking version | Not stated | Not named | None beyond `POL-02.12` (`POL-05.03` repeats it) | 2 |
-| Damage confirmation | The damage report | `PRD-DMG-002`, `POL-02.07` | Not named | — | 2 |
-| Acceptance of good excess (`PRD-REC-013`); of wrong or unidentified goods (`POL-17.02`, `POL-17.11`) | The discrepancy | Not stated. Explicit authority; Booking approves wrong or unidentified goods | Not named | — | 2 |
+| Booking approval against open-to-buy (`PRD-BKG-004`, `POL-05.02`, `POL-05.09`) | The booking version | Not stated | The booking's value at cost (DM-8, DEC-105) | None beyond `POL-02.12` (`POL-05.03` repeats it) | 2 |
+| Damage confirmation | The damage report | `PRD-DMG-002`, `POL-02.07` | Cost (DM-8, DEC-105) | — | 2 |
+| Acceptance of good excess (`PRD-REC-013`); of wrong or unidentified goods (`POL-17.02`, `POL-17.11`) | The discrepancy | Not stated. Explicit authority; Booking approves wrong or unidentified goods | Cost (DM-8, DEC-105) | — | 2 |
 | Transfer, by a higher authority | The transfer version: source, destination, items, quantity | `PRD-TRF-005`, `POL-02.07` | Cost | Only an increase in quantity, a change of item or a change of destination (`PRD-TRF-010`, `POL-02.12`, DEC-036) | 3 |
 | Stock adjustment, write-off, disposal, discrepancy settlement | The adjustment or case | `POL-02.07`, `POL-17.04` | Cost. Unknown pre-PT cost has nothing to write off (`POL-17.07`) | — | 3 |
 | Count difference (`PRD-STK-012`, `POL-02.21`) | The count | Every difference is approved before any adjustment (`PRD-STK-012`); `POL-02.07` lists stock adjustments | Cost. The tolerance only selects the approver | — | 3 |
-| Supplier-return step | Each leg of the RTV | `PRD-OFR-011`, `POL-02.07` | Not named | — | 3 |
-| Offer approval (`PRD-OFR-002`, `POL-19.03`) | The offer version | `POL-02.07` | Not named | — | 4 |
+| Supplier-return step | Each leg of the RTV | `PRD-OFR-011`, `POL-02.07` | Cost (DM-8, DEC-105) | — | 3 |
+| Offer approval (`PRD-OFR-002`, `POL-19.03`) | The offer version | `POL-02.07` | No value limit (DM-8, DEC-105) | — | 4 |
 | Configured exceptional discount (`PRD-POS-003`) | The bill being built | `POL-02.07` | Bill value, or discount percentage where configured | — | 4 |
 | Refund cases chosen under policy 7; cash substitution or another tender override | The refund request | `PRD-RET-010`, `POL-07.01`, `POL-07.09` | Bill value | — | 4 |
 | No-bill return (`PRD-RET-017`) | The exception request | `POL-07.05`, `POL-02.07` | Documented valuation; Unknown if none is accepted (`POL-07.06`, DEC-039) | — | 4 |
-| Day-close cash variance (`PRD-CSH-011`, `POL-02.13`) | The day close | Not stated. The tolerance selects the approver set | Not named | — | 4 |
+| Day-close cash variance (`PRD-CSH-011`, `POL-02.13`) | The day close | Not stated. The tolerance selects the approver set | The difference (DM-8, DEC-105) | — | 4 |
 | The Store switch | The cutover record | Not stated. Owner, Accounts and Operations approve (`POL-14.05`) | — | — | 4 |
 | Supplier payment | The payment request: amount, beneficiary, bank details | `POL-02.07` | The amount paid | For mobile approval: amount, beneficiary, bank details and the reviewed request version (`PRD-PAY-006`) | 5 |
-| Payroll inputs, before payment instructions (`POL-13.05`) | The payroll inputs for a period | Not stated in policy 13. personas.md treats it as a different person | Not named | — | 6 |
+| Payroll inputs, before payment instructions (`POL-13.05`) | The payroll inputs for a period | Not stated in policy 13. personas.md treats it as a different person | The period's net pay (DM-8, DEC-105) | — | 6 |
 
 Bulk approval and phone approval apply only to allowlisted action types (`POL-02.19`, `POL-02.22`); both lists are OPEN.
 
@@ -449,7 +457,7 @@ The records each stage 1 flow touches. The call order and the transaction are in
 | A master change with approval | Owner: the new master version. `access`: approval request and decision. `audit`: audit record. `kernel`: outbox rows | The decision, the version taking effect, audit and outbox |
 | Publishing an import | `files-imports`: batch, outcome. Target module: its own records. `audit`. `kernel`: outbox rows | All of them; a failing line fails a required document |
 | Granting an activity | `site-lifecycle`: readiness record. `access`: approval decision. `configuration`: activity grant. `audit` | All of them |
-| PT approval that establishes cost (golden scenario) | `merchandise` · PT: the frozen revision. `access`: the approval evidence. `stock` · ledger: coverage, cost-established movement, pool rows. `finance` · books: journals. `numbering`: allocations. `audit`. `kernel`: outbox rows | All of them (`PRD-INT-004`, DEC-087). SL-23 bites at the journals |
+| PT approval that establishes cost (golden scenario) | `merchandise` · PT: the frozen revision. `access`: the approval evidence. `stock` · ledger: coverage, cost-established movement, pool rows. `finance` · books: journals. `numbering`: allocations. `audit`. `kernel`: outbox rows | All of them (`PRD-INT-004`, DEC-087). With no valid posting map at the journals, none of it commits; the document stays as it was and an exception is raised in its own transaction (SL-23, Outcome A, DEC-105) |
 | Sale and customer return (golden scenario) | `pos`: the bill or return. `stock` · ledger: sale issue or customer return, pool rows. `finance` · books: journals. `numbering`: the bill number. `audit`. `kernel`: outbox rows | All of them |
 | Raising an exception | `exceptions`: the exception. `inbox`: a work item. `audit` | With the transaction that found the problem; or alone, after a rollback |
 
@@ -482,16 +490,16 @@ Every in-scope line and exit check of stage 1 in [phases.md](../../phases.md), a
 
 ## 8. Open questions
 
-Nothing below has a default. "Kind" says whether the answer is a business choice or a technical one. Open values that KDPS, Accounts or the CA must supply are cited where they apply and listed in [alignment-report.md](../../reports/alignment-report.md) section 5; they are not repeated here.
+Nothing below has a default. "Kind" says whether the answer is a business choice or a technical one. DM-4 to DM-8 carry their baseline pick (DEC-105); the "Who decides" column of such a row names who confirms the pick or asks for a change. Open values that KDPS, Accounts or the CA must supply are cited where they apply and listed in [alignment-report.md](../../reports/alignment-report.md) section 5; they are not repeated here.
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
 | DM-1 | Settled: places form one tree of whole Sites, or single Stores or business units within a Site; self-service uses own-record scope (`PRD-ACS-021`, DEC-094) | — | — | — | — |
 | DM-2 | Settled: each tax registration and each accounting book belongs to exactly one legal entity (`PRD-ORG-020`, DEC-095). The CA confirms it for KDPS (CA question 16) | — | — | — | — |
-| DM-3 | Settled: several Stores may trade at one Site; a brand counter inside the Organisation's own Store is its business unit; a relocated Store keeps its identity with a dated Site link (`PRD-ORG-021`, `PRD-LIF-029`, DEC-096). How its business units move is GC2-4 | — | — | — | — |
-| DM-4 | State names for lifecycles with no settled name in design-language section 7: Site, Store and business unit status; a master version (other than Awaiting approval); user; import batch; proposal; financial period; an exception that is raised and not yet resolved; an approval request ended by a material change; a number series that is open | Technical | Product owner, at design review | 1 | Screen states only. The lifecycles themselves are fixed above |
-| DM-5 | Must a product proposal be confirmed by a different person from its proposer? `PRD-IMP-008` requires it for vocabulary and mapping rules; `PRD-MER-013` does not say | Business | Product owner; KDPS Owner under policy 2 | 1 live use | One row of the approval rules |
-| DM-6 | What records a policy's real values as validated, and who records it? DEC-092 covers Signed only; the PRD requires configuration that is "valid" | Business | Product owner | 1 live use | The policy status record; the gate's third condition |
-| DM-7 | When one legal person is a supplier and also a partner, a customer or an employee, are the records linked? `PRD-MER-001` keeps supplier-side parties independent and says nothing of the others | Business | Product owner | 5 | Duplicate identities; netting of payables and receivables |
-| DM-8 | `PRD-ACS-015` names a value basis for stock adjustments, write-offs, disposals, transfers, discounts, refunds, no-bill returns, payments and PT approval. It names none for booking approval, damage confirmation, excess or wrong-goods acceptance, supplier-return steps, offers, day-close cash variance or payroll. Are those limited by value, and on what basis? | Business | Product owner; KDPS Owner for the limits | 2 to 6, by action | Whether each of those approval limits can be configured at all |
+| DM-3 | Settled: several Stores may trade at one Site; a brand counter inside the Organisation's own Store is its business unit; a relocated Store keeps its identity with a dated Site link (`PRD-ORG-021`, `PRD-LIF-029`, DEC-096). Its business units are replaced by new units at the new Site, linked to the old ones (GC2-4, DEC-105) | — | — | — | — |
+| DM-4 | Baseline (DEC-105), in design-language section 7. Site, Store and business unit: Setting up, Active, Closing, Closed. Master version: Awaiting approval, Scheduled, In force, Ended, Rejected. User: Active, Disabled, Ended. Import batch: Staged, Validated, Published, Failed. Proposal: Proposed, Confirmed, Rejected. Financial period: Open, Locked, Reopened. Number series: Open, Paused, Closed. An exception not yet resolved: Unresolved. An approval request ended by a material change: Superseded | Technical | Design review | — | — |
+| DM-5 | Baseline (DEC-105): a product proposal is confirmed by a different person from its proposer | Business | KDPS Owner | — | — |
+| DM-6 | Baseline (DEC-105): a policy's real values are recorded as validated, with the evidence, by a person holding the validate permission who did not enter them | Business | — | — | — |
+| DM-7 | Baseline (DEC-105): records stay separate in each module; an optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically | Business | — | — | — |
+| DM-8 | Baseline (DEC-105), value bases: booking approval, the booking's value at cost; damage confirmation, acceptance of excess, wrong or unidentified goods, and each supplier-return step, cost; day-close cash variance, the difference; payroll inputs, the period's net pay; offers, no value limit. The limits are KDPS's and stay OPEN (V-02) | Business | KDPS Owner (limits) | — | — |
 | DM-9 | Settled in [structure-and-masters.md](../masters/structure-and-masters.md) 3.5: a location belongs to one Site and one business unit at that Site | — | — | — | — |

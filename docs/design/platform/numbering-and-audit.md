@@ -8,7 +8,7 @@ Implements these PRD sections: Module and data boundaries (numbering, audit, bus
 
 - PRD IDs: `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-011`; `PRD-ACS-008`, `PRD-ACS-013`, `PRD-ACS-014`; `PRD-SEC-005`–`PRD-SEC-007`, `PRD-SEC-012`, `PRD-SEC-014`, `PRD-SEC-018`; `PRD-INT-002`–`PRD-INT-004`; `PRD-POS-016`, `PRD-POS-020`; `PRD-OFF-002`, `PRD-OFF-007`, `PRD-OFF-009`, `PRD-OFF-010`, `PRD-OFF-012`; `PRD-LIF-015`, `PRD-LIF-020`; `PRD-TRF-023`; `PRD-ACP-019`.
 - Policies: 10 (`POL-10.07`, `POL-10.11`), 18 (`POL-18.01`, `POL-18.04`, `POL-18.05`).
-- Decisions: DEC-005, DEC-093, DEC-097.
+- Decisions: DEC-005, DEC-093, DEC-097, DEC-105.
 
 Depends on: [module-map.md](../architecture/module-map.md) (4.5 and 4.6: owners and operations), [domain-model.md](../architecture/domain-model.md) (3.4 and 3.5: the records), [stock-ledger.md](../stock/stock-ledger.md) (10.2 and 10.3: one transaction, the series row locked last), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3: actors, scope, restricted fields, sign-in), [structure-and-masters.md](../masters/structure-and-masters.md) (2.1: master codes).
 
@@ -38,12 +38,12 @@ It fixes no number format, no financial-year date and no retention period. Label
 
 - A series gives numbers for one document kind in one scope ([domain-model.md](../architecture/domain-model.md) 3.5). It is identified by the kind, an opaque scope key that the owning module supplies after validating the scope, and the financial year where the kind restarts each year (module-map section 3, rule 6).
 - The owning module declares each kind it numbers: whether it restarts each financial year, what its scope key stands for, and its display scope (3.5). **Design choice.**
-- A series is open, paused or closed. Closed is final: a closed series is never reopened or continued (`PRD-LIF-015`, `PRD-OFF-010`). An open or paused series is live, and one kind, scope and year has at most one live series (`PRD-POS-020`). Screens may use the settled names Paused and Closed ([design-language.md](../ui/design-language.md) section 7); the name for open is OPEN (DM-4).
+- A series is Open, Paused or Closed (the state names of DEC-105, DM-4; [design-language.md](../ui/design-language.md) section 7). Closed is final: a closed series is never reopened or continued (`PRD-LIF-015`, `PRD-OFF-010`). An open or paused series is live, and one kind, scope and year has at most one live series (`PRD-POS-020`).
 - `numbering` calls no other module (module-map 4.6).
 
 ### 3.2 Giving a number
 
-- Allocate runs inside the owning module's transaction. It locks the series row last (stock-ledger 10.3, step 7), takes the next sequence number, records the allocation and returns the formatted number. The number commits with its document, or neither does (`PRD-INT-004`; stock-ledger 10.2).
+- Allocate runs inside the owning module's transaction. It locks the series row last (stock-ledger 10.3, step 8), takes the next sequence number, records the allocation and returns the formatted number. The number commits with its document, or neither does (`PRD-INT-004`; stock-ledger 10.2).
 - So an online series has no gaps: a transaction that rolls back never gave its number away. **Design choice**, following from `PRD-INT-004`.
 - Allocate refuses when no open series exists for the kind, scope and year, or the series is paused or closed.
 - Each allocation records the series, the sequence number, the formatted text, the document kind and reference, and the time. A replayed command returns its first result, with the same number (`PRD-INT-002`).
@@ -134,7 +134,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 - Retention is set by record class, including audit records, and checked against legal requirements (`POL-18.05`). The periods are OPEN (V-13; KDPS Owner, Admin, CA; stage 1 live use). Until they are set, nothing is deleted.
 - A legal hold overrides routine deletion (`POL-18.05`).
 - Deletion after retention runs only through the retention function, one sealed block at a time, and records which block went, when and under which schedule. **Design choice.**
-- Which design details consent, notices, deletion and legal holds in general is OPEN (module-map MM-15).
+- Retention, deletion and legal holds are designed with backup, restore and export (GC-9). Customer consent and notices are designed with the stage 4 counter, and employee data with the stage 6 HR design (DEC-105, module-map MM-15). **Design choice.**
 
 ## 5. The access record
 
@@ -202,7 +202,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 
 ## 8. Open questions
 
-Nothing below has a default. Questions already open elsewhere are pointed to, not repeated: the bill-number format (V-40, `POL-10.07`); retention periods (V-13, `POL-18.05`); consent, notices and deletion (module-map MM-15); state names (DM-4); the offline series detail (GC-8); the restore steps (GC-9).
+Nothing below has a default. Questions already open elsewhere are pointed to, not repeated: the bill-number format (V-40, `POL-10.07`); retention periods (V-13, `POL-18.05`); the offline series detail (GC-8); the restore steps (GC-9). The series state names (DM-4) and where consent, notices, deletion and legal holds are designed (module-map MM-15) are baseline picks of DEC-105 (3.1, 4.6).
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |

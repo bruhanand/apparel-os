@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102, DEC-103. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102, DEC-103, DEC-105. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -22,7 +22,7 @@ One Railway project with two environments. Each has its own services, databases,
 - Never copy data between the two. Synthetic data never becomes a default (AGENTS rule).
 - `kdps-test` holds real data only after KDPS agrees to it (KDPS Owner question 37).
 - Only the product owner has access to the Railway project. KDPS users get app logins, never Railway access.
-- On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed (`DEC-102`). So that they can do them, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`), as settings of the test setup and not the signed role map of `POL-02.11` (`DEC-103`). None of these enables a gated action. Approving those assignments needs a reason list in force, which is OPEN ([access-and-approvals.md](../access/access-and-approvals.md) GC3-12). The app shows an environment banner.
+- On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed (`DEC-102`). So that they can do them, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`), as settings of the test setup and not the signed role map of `POL-02.11` (`DEC-103`). None of these enables a gated action. Approving those assignments needs a reason list in force: the first list, with the reasons KDPS gives, is a setting of the test setup, approved first with a free-text reason (`DEC-105`, `DEC-104`; [access-and-approvals.md](../access/access-and-approvals.md) GC3-12). The app shows an environment banner.
 
 ## 2. Services in each environment
 <!-- deps: prd.md#stack, DEC-028, prd.md#delivery-stages — Railway services, files and forecast service restate PRD hosting -->
@@ -32,8 +32,8 @@ One Railway project with two environments. Each has its own services, databases,
 | `app` | NestJS server: the API under `/api`, live updates (SSE), and the built web app and counter PWA as static files | The public internet over HTTPS (one public address) |
 | `worker` | The same build with a different start command: pg-boss jobs and the outbox processor | Private network only |
 | `postgres` | Railway PostgreSQL. pg-boss tables live here too (Stack: Jobs) | Private network only. No public proxy on `kdps-test` |
-| File storage | S3-compatible storage for documents and photos (Stack: Files) | Private network and signed links. **OPEN:** provider (see 10) |
-| `forecast` | Python forecasting service. Added in stage 6. **Proposed:** the PRD's Hosting row does not yet name it (OPEN: product owner, before stage 6) | Private network only |
+| File storage | A Railway bucket: S3-compatible storage for documents and photos (Stack: Files; D-2, `DEC-105`) | Private network and signed links |
+| `forecast` | Python forecasting service. Added in stage 6, as one more service in the same hosting as the app (`DEC-105`; module-map section 10) | Private network only |
 
 Services talk to each other over Railway's private network (`*.railway.internal`), which is scoped to one environment. So `dev` can never reach `kdps-test`.
 
@@ -49,9 +49,9 @@ Why one origin:
 - Sign-in asks for the Organisation code as well as the login (DEC-093). The server finds the Organisation in the directory (section 4), then the user and the session in that Organisation's database. A user belongs to one Organisation (`PRD-ACS-020`). **Design choice:** a browser is signed in to one Organisation at a time.
 - The cost: web, counter and server deploy together. That is acceptable for testing, since they share one repository.
 
-A custom domain is optional. The Railway-provided address works for testing. **OPEN:** whether `kdps-test` gets a custom domain (see 10).
+`kdps-test` uses the Railway-provided address. A custom domain can be added later (D-3, `DEC-105`).
 
-Idle and absolute session limits come from policy 2 (`POL-02.18`). On production they apply once policy 2 is signed and the Admin has validated them (V-04); on `kdps-test` the stated values apply before signing (`DEC-102`, section 1). Production and `kdps-test` require TOTP (`PRD-SEC-001`, `POL-02.17`). Development test access stays apart from production login (`PRD-ACS-017`). Hosting changes none of this.
+Idle and absolute session limits come from policy 2 (`POL-02.18`). On production they apply once policy 2 is signed and the Admin has validated them (V-04); on `kdps-test` the stated values apply before signing (`DEC-102`, section 1). Production and `kdps-test` require TOTP (`PRD-SEC-001`, `POL-02.17`). Development uses the same sign-in as production, with synthetic users, so it has no easier path, nothing in it weakens production login, and its test access stays apart from production authentication (`PRD-ACS-017`, `POL-02.17`; D-6, `DEC-105`). Hosting changes none of this.
 
 ## 4. Database
 
@@ -63,7 +63,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`). On production
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
 - **Migrations** run as Railway's pre-deploy command, before the new version takes traffic. A failed migration stops the deploy, and the old version keeps running.
-- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). How file storage is backed up depends on the provider chosen in D-2 (OPEN: product owner, stage 1 build); name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The earlier POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
+- **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). Files are held in a Railway bucket (D-2, `DEC-105`); its backup steps are in the backup and restore design (GC-9). Name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The earlier POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
 
 ## 5. Live updates (SSE)
 <!-- deps: prd.md#stack — SSE carries identifiers, then refetch -->
@@ -75,10 +75,10 @@ Railway keeps an HTTP stream open for at most 15 minutes, and closes it after 5 
 
 ## 6. Devices in Stores and offices
 
-**Proposal, not decided (D-6, product owner):** the server does not connect into a Store or office; devices there connect outwards or stay on the local machine.
+**Baseline (D-6, `DEC-105`):** the server never calls into a Store or office. The local helper and the Tally local gateway call the server over HTTPS with a service-identity credential ([access-and-approvals.md](../access/access-and-approvals.md) 2.3). Anything else there stays on the local machine.
 
-- **Local helper (printers, cash drawer).** It runs on any PC with a receipt or label printer attached (counter, warehouse or office). The counter PWA calls it on `localhost` on that PC. How the helper and the Tally local gateway reach the server is **OPEN** (see D-6; product owner).
-- **Proposed: Tally local gateway (stage 5).** It runs on the office PC beside TallyPrime (`PRD-INT-009`):
+- **Local helper (printers, cash drawer).** It runs on any PC with a receipt or label printer attached (counter, warehouse or office). The counter PWA calls it on `localhost` on that PC. The helper calls the server over HTTPS with its service-identity credential; nothing calls into the PC.
+- **Tally local gateway (stage 5).** It runs on the office PC beside TallyPrime (`PRD-INT-009`) and calls the server over HTTPS with its service-identity credential; nothing calls into the office:
   - It fetches pending vouchers from the server over HTTPS.
   - It posts them to Tally's local XML interface.
   - It reports Tally's response back.
@@ -123,8 +123,8 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 | # | Question | Who decides | Needed by |
 | --- | --- | --- | --- |
 | D-1 | Production hosting | Product owner | Before the first Store switch (`PRD-LIF-026`) |
-| D-2 | File storage provider for the test setup. A Railway bucket is one S3-compatible option; DEC-028 does not cover file storage | Product owner | Stage 1 build |
-| D-3 | A custom domain for `kdps-test`, or the Railway-provided address | Product owner | Before KDPS's side-by-side test |
+| D-2 | Baseline (`DEC-105`): a Railway bucket, S3-compatible, holds files on the test setup | — | — |
+| D-3 | Baseline (`DEC-105`): `kdps-test` uses the Railway-provided address; a custom domain can be added later | — | — |
 | D-4 | KDPS's agreement to hold real data on the test setup, and whether customer details are imported | KDPS Owner (question 37) | Before KDPS's side-by-side test |
 | D-5 | A separate test Tally company for the connector | Accounts | Stage 5 testing |
-| D-6 | How the local helper and the Tally local gateway reach the server; whether development may use an easier login path | Product owner; Admin validates login (V-04) | Helper and Tally gateway: not yet named (product owner). Login path: before KDPS's side-by-side test |
+| D-6 | Baseline (`DEC-105`): the local helper and the Tally local gateway call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office. Development uses the same sign-in as production, with synthetic users | — | — |

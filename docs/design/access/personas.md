@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-022`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-022`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05`; `DEC-105` (cited beside the persona cards and notes that use them).
 
 Used by: [access-and-approvals.md](access-and-approvals.md) (GC-3), [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
@@ -52,7 +52,7 @@ In PRD order. "Work" is the PRD text. "Lands on", "Menu" and "Usual scope" are d
 | P-HRS | HR | Head office | Back office | People › Attendance | Employers in scope | HR |
 | P-AUD | Auditor | Outside | Back office (read-only) | Setup › Audit log | Records in scope | Auditor |
 
-**Phone and scan.** "Phone" means responsive web on a handset unless a separate phone client is placed in a stage. Camera scanning is **OPEN** (product owner); handheld or Bluetooth scanners follow the PRD Hardware row.
+**Phone and scan.** "Phone" means responsive web on a handset, which serves phones through stage 6; a native phone client needs a later decision (`DEC-105`). Camera scanning is built for phones in the browser, for lookup, receiving and counts, and is switched off by default (`DEC-105`); handheld or Bluetooth scanners follow the PRD Hardware row.
 
 The template column follows the proposed, Open template map in policy 2 (eleven templates, `POL-02.01`). A template label alone grants no permission.
 
@@ -66,8 +66,8 @@ Each card lists the approvals the persona's work involves. Who actually approves
 
 **P-OWN · Owner**
 - Work: business results, significant approvals, payments, offers and losses.
-- Menu: Home (daily summary, approvals, exceptions) · Sell, Receive Goods, Transfer, Stock Count, Damage & supplier returns, Stock, External sales, People (view) · Booking (open-to-buy, approve) · Offers & price (approve) · Money (payments to approve) · Reports (all, profit, business measures) · Partners (approve) · Setup (policy readiness, approval limits, approve changes).
-- Approvals in this work: payments, offers, bookings and the buying budget (`POL-05.09`), and anything routed up as the next approver, each only where policy 2 names the Owner (and, for offers, policy 19). Losses: Operations proposes write-offs and disposals and an independent approver acts within configured cost limits (`POL-17.10`). Whether the Owner approves losses or only sees them is **OPEN** (KDPS Owner, policy 2; blocks stage 3). The grid shows the Owner as View on Damage and Stock Count until then.
+- Menu: Home (daily summary, approvals, exceptions) · Sell, Receive Goods, Transfer, Stock, External sales, People (view) · Stock Count (approve differences above the Store manager's tolerance) · Damage & supplier returns (approve write-offs and disposals) · Booking (open-to-buy, approve) · Offers & price (approve) · Money (payments to approve) · Reports (all, profit, business measures) · Partners (approve) · Setup (policy readiness, approval limits, approve changes).
+- Approvals in this work: payments, offers, bookings and the buying budget (`POL-05.09`), and anything routed up as the next approver, each only where policy 2 names the Owner (and, for offers, policy 19). Losses: Operations proposes write-offs and disposals and an independent approver acts within configured cost limits (`POL-17.10`). The Owner template approves write-offs, disposals and count differences above the Store manager's tolerance, within limits KDPS sets (`DEC-105`); the grid shows the Owner as an approver on Damage and Stock Count. The limits, and who holds the Owner role, stay **OPEN** (KDPS Owner, policy 2; blocks stage 3).
 
 **P-ADM · Admin**
 - Work: users, permissions, masters, configuration and integration administration.
@@ -134,7 +134,7 @@ Each card lists the approvals the persona's work involves. Who actually approves
 - Menu: all sections read-only within scope · Setup (audit log).
 - Approvals in this work: none.
 
-Approve permissions that no card names (PT approval, damage confirmation, stock adjustments, write-offs and disposals, supplier-return steps) are permissions assigned under policy 2 (`POL-02.07`). No persona holds them by default; the real holders are **OPEN** (KDPS Owner, policy 2; blocks stage 1 live approvals).
+Approve permissions that no card names (PT approval, damage confirmation, stock adjustments, supplier-return steps) are permissions assigned under policy 2 (`POL-02.07`). No persona holds them by default; the real holders are **OPEN** (KDPS Owner, policy 2; blocks stage 1 live approvals).
 
 ## 3. Several personas on screen
 
@@ -150,7 +150,7 @@ Approve permissions that no card names (PT approval, damage confirmation, stock 
 
 | Who | How they are handled |
 | --- | --- |
-| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips) is granted only through an assignment of the self-service role, scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-022`, `PRD-HRM-012`) |
+| Every employee | Self-service (attendance check-in, own targets, own incentives, payslips, and their own employee record, read-only, whose restricted fields follow the self-service role's field permissions; `DEC-105`) is granted only through an assignment of the self-service role, scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-022`, `PRD-HRM-012`) |
 | Partner users | They hold Store personas (P-STM, P-CSH, P-SLS) on their own Stores only. Their statements and ledger come from a permission (PRD: Franchise and partner accounts; `PRD-FRN-007`) |
 | Service identities | Non-human actors with their own audit identity and least-privilege scope; no screens (`PRD-SEC-018`) |
 | Customers, suppliers | No login. They appear as records |
@@ -189,5 +189,5 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | --- | --- | --- |
 | Which people hold which personas, roles and scopes | KDPS, policy 2 | Each live operation |
 | Who holds the roles built from the Operations, HR, EBO staff, CA and Auditor templates (P-OPS, P-HRS, P-EBO, P-CHA, P-AUD) | KDPS, policy 2 | Their first live work |
-| Which people hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs and supplier-return steps; whether the Owner approves losses; the limits | KDPS Owner, policy 2 | Stage 1 live approvals |
+| Which people hold the approve permissions for PT approval, damage confirmation, stock adjustments, write-offs and supplier-return steps; the limits, including the Owner's for write-offs, disposals and count differences above the Store manager's tolerance (`DEC-105`) | KDPS Owner, policy 2 | Stage 1 live approvals |
 | What partner users may see in their statements and ledger | KDPS, policies 2 and 12 | Stage 5 |

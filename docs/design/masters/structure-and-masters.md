@@ -6,9 +6,9 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; Merchandise and identifiers; and, from People, access and approvals, the place scope of a role assignment, restricted fields, audit and the approvals these masters need. It is GC-2 in [gaps-before-code.md](../../reports/gaps-before-code.md).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-008`, `PRD-ACS-020`–`PRD-ACS-022`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
-- Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.02`, `POL-02.07`), 4 (`POL-04.01`–`POL-04.09`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.08`, `POL-10.09`).
-- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096, DEC-098, DEC-100.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-006`, `PRD-ACS-008`, `PRD-ACS-020`–`PRD-ACS-022`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
+- Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.02`, `POL-02.07`, `POL-02.08`), 4 (`POL-04.01`–`POL-04.09`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.08`, `POL-10.09`).
+- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096, DEC-098, DEC-100, DEC-105.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners, interfaces and events of `organisation` and `merchandise`), [domain-model.md](../architecture/domain-model.md) (the records and invariants this document makes concrete), [stock-ledger.md](../stock/stock-ledger.md) (the place facts a movement carries).
 
@@ -40,7 +40,7 @@ It fixes no screen beyond pointers (section 8), no approval limit and no KDPS va
 - Versions in force for one master never overlap. PostgreSQL enforces it with an exclusion constraint on the master and its date range, applied only to versions in force (`PRD-MOD-010`). **Design choice.**
 - Where a master must always have a version in force, such as a business unit's mapping (section 3.4), a new version ends the one before it on its start date, so no gap opens.
 - A version in force is never edited, so the version a transaction used stays as it was (`PRD-MOD-010`). A change is a new version with its own start date. **Design choice.**
-- A version may start today or later, never on a past date, because a transaction keeps the version it used and a back-dated version would disagree with it. A draft whose start date passes before approval is re-dated before it takes effect. A change found late is recorded from today, with its real date noted on it. **Design choice.** Whether any master ever needs a back-dated start is OPEN (GC2-7). A relocation is recorded before its date in the stage 5 relocation flow (`PRD-LIF-029`).
+- A version may start today or later, never on a past date, because a transaction keeps the version it used and a back-dated version would disagree with it. A draft whose start date passes before approval is re-dated before it takes effect. A change found late is recorded from today, with its real date noted on it. **Design choice.** There is no exception: no master version ever starts on a past date (GC2-7, DEC-105). A relocation is recorded before its date in the stage 5 relocation flow (`PRD-LIF-029`).
 - A transaction stores the identifier of each version it used (`PRD-MOD-010`, `PRD-ACP-013`).
 - History is kept: earlier versions, who recorded them and when (`PRD-ACS-005`, `PRD-ACS-013`).
 
@@ -48,9 +48,9 @@ It fixes no screen beyond pointers (section 8), no approval limit and no KDPS va
 
 - A change follows flow A of module-map 6.2: a draft version, approval where a rule needs it, then the version takes effect from its start date, with the audit record and outbox rows in the same transaction.
 - Independent approval applies where `POL-02.07` or the PRD requires it. For the records in this document that is: a supplier's bank-detail change (`POL-02.07`) and the confirmation of a vocabulary value or mapping rule (`PRD-IMP-008`, `POL-02.07`).
-- Accounts and the CA approve statutory settings (`POL-10.05`), and a business unit's mapping to a tax registration is verified before statutory goods-in processing (`POL-10.08`). Whether the mapping counts as a statutory setting under `POL-10.05`, and so who approves it, is part of GC2-2.
-- Who approves other structure, mapping and agreement changes, and whether the approver must differ from the preparer, is OPEN (GC2-2).
-- A version waiting for approval shows Awaiting approval ([design-language.md](../ui/design-language.md) section 7). The names of the other states of a master version are OPEN (DM-4).
+- Accounts and the CA approve statutory settings (`POL-10.05`), and a business unit's mapping to a tax registration is verified before statutory goods-in processing (`POL-10.08`). Under the baseline, verifying a mapping is a separate permission, held by a different person from the one who made the mapping (GC2-2, DEC-105). Accounts and the CA confirm the verification rule, and whether a mapping also counts as a statutory setting under `POL-10.05`.
+- **Baseline (DEC-105).** A different authorised person from the preparer also approves: every change to the structure, to a business-unit mapping and to an agreement version (GC2-2); every other party's bank-detail change, not only a supplier's (5.1, GC2-6); and the confirmation of a product proposal (4.2, DM-5). **Design choice.** Who holds that authority is a KDPS setting with no default (OPEN, V-01; KDPS Owner, Admin; stage 1 live use).
+- A version waiting for approval shows Awaiting approval. The states of a master version are Awaiting approval, Scheduled, In force, Ended and Rejected ([design-language.md](../ui/design-language.md) section 7; DM-4, DEC-105).
 
 ### 2.4 Unknown and blank
 
@@ -78,14 +78,14 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 | Accounting book | The Organisation | Its legal entity (`PRD-ORG-020`) | Name. The ledger itself is in `finance` · books | `PRD-ORG-001`, `PRD-ORG-020`, `PRD-LED-002` |
 | Site | The Organisation | — | Name, aliases, addresses, Area, physical kind, classifications, opening and closing dates, status | `PRD-ORG-003`, `PRD-ORG-007`–`PRD-ORG-010` |
 | Store | The Organisation | — | Name, aliases, format, operating model, classifications, opening and closing dates, status, partner associations; its Site link (3.3) | `PRD-ORG-003`, `PRD-ORG-008`–`PRD-ORG-010`, `PRD-ORG-021` |
-| Business unit | The Organisation | Its Site (3.3, GC2-4); its kind; its Store, for a Store's unit | Name; its mapping (3.4); its brand coverage, kept by `merchandise` (3.3) | `PRD-ORG-004`–`PRD-ORG-006` |
+| Business unit | The Organisation | Its Site (3.3); its kind; its Store, for a Store's unit; the old unit it replaces, for a unit a relocation created (3.3, GC2-4) | Name; its mapping (3.4); its brand coverage, kept by `merchandise` (3.3) | `PRD-ORG-004`–`PRD-ORG-006` |
 | Internal stock location | Its Site | Its Site and business unit (3.5) | Name, kind, parent location, active dates | `PRD-ORG-012` |
 | Country, State, City, Area | Its parent level; Country in the Organisation | Its parent | Name | `PRD-ORG-007`, `PRD-ORG-011` |
 | Grouping | The Organisation | Its kind: region, cluster or another configured kind | Name; members (3.6) | `PRD-ORG-007` |
 | Default warehouse link | — | From a Store; to a warehouse unit | Dates (3.6). Other routes are OPEN (3.6) | `PRD-ORG-013` |
 
 - The Organisation's own row lives in its database. The directory outside the Organisation databases holds only each Organisation's code and where its database is; it holds no users, sessions or business records (DEC-093, `PRD-ACS-020`). [deployment.md](../platform/deployment.md) section 4 places it.
-- The physical kinds of a Site are those `PRD-ORG-010` names for offices and warehouses: head office, regional office, central warehouse and regional warehouse. A Site where Stores trade needs a kind as well; the PRD gives it no word (GC2-3).
+- The physical kinds of a Site are those `PRD-ORG-010` names: head office, regional office, central warehouse, regional warehouse and retail site. A retail site is a Site where one or more Stores trade (PRD "Words used"; GC2-3, DEC-105).
 - Store formats are MBO, EBO, shop-in-shop and kiosk. Operating models are company-owned, franchise-owned and franchise-owned company-operated (`PRD-ORG-010`).
 
 ### 3.2 Legal entities, registrations and books
@@ -99,11 +99,11 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 - **Several Stores at one Site.** Several Stores may trade at one Site at the same time (`PRD-ORG-021`).
 - **The Store's Site link is dated.** A Store is at one Site on any date. The link is a versioned record, so it can move (`PRD-ORG-021`). On relocation the Store keeps its code, name and history, and the link moves to the new linked Site from the relocation date (`PRD-LIF-029`, `PRD-LIF-021`). Renaming never replaces a Site's identity (`PRD-LIF-021`).
 - **Business-unit kinds.** A business unit is one of the four kinds the PRD names: whole-store, brand counter, warehouse or office (`PRD-ORG-004`, `PRD-ORG-006`). **Design choice:** no other kind until the PRD names one.
-  - A whole-store unit and a brand-counter unit belong to one Store. A Store has exactly one whole-store unit, for its trading outside any brand counter, and any number of brand-counter units. **Design choice** (`PRD-ORG-004`, `PRD-ORG-021`).
+  - A whole-store unit and a brand-counter unit belong to one Store. A Store has exactly one whole-store unit at the Site it is linked to, for its trading outside any brand counter, and any number of brand-counter units there. A relocation leaves the old units at the old Site until they close (below). **Design choice** (`PRD-ORG-004`, `PRD-ORG-021`).
   - A brand counter inside the Organisation's own Store is a brand-counter unit of that Store. A Store of the shop-in-shop format is the Organisation's own Store trading inside another business's premises (`PRD-ORG-021`).
   - A Store's unit is created at the Site the Store is linked to on that date. **Design choice.**
   - A warehouse unit and an office unit sit at a Site and belong to no Store.
-  - A business unit stays at the Site where it was created. **Design choice** for stages 1 to 4, where no relocation happens. How a relocating Store's business units move to its new Site is OPEN, with both options open (GC2-4; stage 5).
+  - A business unit stays at the Site where it was created. **Design choice.** When a Store relocates, it gets new business units at its new Site, linked to its old ones, and stock moves between them by transfer (GC2-4, DEC-096, DEC-105). Each new unit carries a link to the old unit it replaces. An old unit closes under 3.7 once its outstanding items, stock included, are resolved (`PRD-LIF-019`). No relocation happens before stage 5, where the relocation flow is built (`PRD-LIF-029`).
 - **Brand coverage.** A whole-store or warehouse unit may cover several brands; a brand-counter unit covers exactly one brand; an office unit operates without a brand (`PRD-ORG-006`). The coverage is a dated record kept by `merchandise`, which owns brands; it checks the unit's kind through `organisation`. **Design choice:** it follows the allowed call direction of module-map section 3.
 - **Five independent facts.** Physical Site kind is on the Site. Store format and operating model are on the Store. Inventory ownership and settlement terms come from agreements (section 5) and, for partners, from partner agreements (stage 5); ownership is carried on each receipt origin by the stock ledger. None is inferred from another (`PRD-ORG-009`, `PRD-ORG-014`, `PRD-FRN-005`).
 
@@ -113,8 +113,8 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 - A business unit is created with its first mapping version, and always has one in force after that (domain-model invariant 8). A new version ends the one before it (2.2).
 - The mapping is refused unless the tax registration and the book both belong to the mapped legal entity (`PRD-ORG-020`).
 - Two units at one Site may map differently. A transaction uses its own unit's mapping and stores the mapping version it used (`PRD-ORG-005`, `PRD-ACP-013`).
-- A mapping version's verification is a separate, append-only record linked to it: who verified it, when, and the evidence (`POL-10.08`). The version itself is never edited (2.2). Who may verify it is part of GC2-2. A missing or unverified registration mapping blocks the affected live statutory action (`POL-10.08`). Readiness checks the mapping before an activity is granted (`PRD-LIF-002`).
-- Whether a unit's tax registration must be in the State of its Site is OPEN (GC2-1).
+- A mapping version's verification is a separate, append-only record linked to it: who verified it, when, and the evidence (`POL-10.08`). The version itself is never edited (2.2). Verifying it is a separate permission, held by a different person from the one who made the mapping (GC2-2, DEC-105). A missing or unverified registration mapping blocks the affected live statutory action (`POL-10.08`). Readiness checks the mapping before an activity is granted (`PRD-LIF-002`).
+- A unit's tax registration must be in the State of its Site. The mapping is refused unless the registration's State is the State of the unit's Site on the mapping's start date; the check compares them (GC2-1, DEC-105; the CA confirms it, question 16). A new Site Area version or registration State version that would put a mapping in force out of step is refused too, so the rule holds at all times (domain-model invariant 8). **Design choice.**
 
 ### 3.5 Internal stock locations
 
@@ -134,7 +134,7 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 ### 3.7 Lifecycle
 
 - A Site and a Store carry opening and closing dates and a status (`PRD-ORG-008`). The events are those of domain-model 3.1: created; each activity granted after readiness (`PRD-LIF-001`, `PRD-LIF-002`); closure started, which stops new operations (`PRD-LIF-017`); retired only when every outstanding item is resolved (`PRD-LIF-019`); reopened only with fresh readiness, mapping and access approval (`PRD-LIF-020`).
-- Identity and history stay after closure (`PRD-LIF-020`). The state names are OPEN (DM-4).
+- Identity and history stay after closure (`PRD-LIF-020`). The states of a Site, Store and business unit are Setting up, Active, Closing and Closed (DM-4, DEC-105; [design-language.md](../ui/design-language.md) section 7).
 - `organisation` answers the readiness checks for mappings and locations; `site-lifecycle` asks them (module-map 4.16).
 
 ### 3.8 Interface
@@ -149,7 +149,7 @@ The operations of module-map 4.11, made concrete:
 | Expand a place for access | The Stores and business units a Site or Store covers on a date (3.9), for `access` through the scope contract (module-map 4.11) | — |
 | Check scope membership | Whether a legal entity, Site, Store or business unit exists and sits where an assignment says, for the scope contract of module-map section 3 | — |
 | List allowed destinations | Names and codes only (`PRD-TRF-004`); the default warehouse and other routes (`PRD-ORG-013`) | — |
-| Maintain the structure | New records and versions under 2.2 and 2.3 | A version would overlap another in force; a unit would be left with no mapping; a registration or book belongs to another legal entity (`PRD-ORG-020`); a location's unit is at another Site; a Store's unit would be at a Site the Store is not linked to; a kind rule in 3.3 is broken; a location to retire still has stock recorded (3.5) |
+| Maintain the structure | New records and versions under 2.2 and 2.3, and a mapping's verification record (3.4) | A version would overlap another in force; a version would start on a past date (2.2); a unit would be left with no mapping; a registration or book belongs to another legal entity (`PRD-ORG-020`); a registration is in another State than the unit's Site (3.4, GC2-1); a location's unit is at another Site; a Store's unit would be at a Site the Store is not linked to; a kind rule in 3.3 is broken; a location to retire still has stock recorded (3.5); a change is approved by its preparer, or a mapping is verified by the person who made it or by someone without the verify permission (2.3, 3.4, GC2-2) |
 
 Events: `organisation.structure-changed`, `organisation.mapping-changed` (module-map section 8).
 
@@ -158,7 +158,7 @@ Events: `organisation.structure-changed`, `organisation.mapping-changed` (module
 - A role assignment's places form one tree: a Site, the Stores linked to it on a date, and the business units of each Store; warehouse and office units hang directly under their Site (`PRD-ACS-021`, DEC-094).
 - Its place scope is all members, selected members or empty (`PRD-ACS-005`). All members covers every Site, now and later. A selected member may be a Site, a Store or a business unit. Empty grants nothing.
 - A selected Site covers every Store and business unit at it, including ones added later. A selected Store covers every business unit of it, including ones added later (`PRD-ACS-021`, DEC-098). A selected business unit covers only itself.
-- From stage 5, when a Store can relocate: a Store-scoped assignment follows the Store, and a Site-scoped assignment covers the Stores linked to the Site on the record's business date. **Design choice.** Where the relocated Store's business units sit waits for GC2-4.
+- From stage 5, when a Store can relocate: a Store-scoped assignment follows the Store, and a Site-scoped assignment covers the Stores linked to the Site on the record's business date. **Design choice.** The relocated Store's new business units sit at its new Site, and its old units stay at the old Site until they close (3.3; GC2-4, DEC-105). Until then an old unit is covered both by a selection of its own Site and by a selection of its Store, since a selected Site covers every unit at it and a selected Store every unit of it (`PRD-ACS-021`).
 - Legal entity and brand stay separate scope dimensions (`PRD-ACS-001`, `POL-02.02`). Self-service uses a scope of the person's own records, through its own role (`PRD-ACS-021`, `PRD-ACS-022`, DEC-041, DEC-100); it is not a place.
 - `organisation` builds and expands the tree; `access` decides. How a record without a Store, a brand or a business unit is matched, and how the tree reaches PostgreSQL scope controls, is in [access-and-approvals.md](../access/access-and-approvals.md) 5.3 and 7.2.
 
@@ -190,11 +190,11 @@ Owner: `merchandise` · catalogue. Merchandise tracking policy (`POL-04`).
 
 ### 4.2 Vocabulary and proposals
 
-- Merchandise attributes take their values from approved vocabularies. The Setup screen of [ui-blueprint.html](../ui/ui-blueprint.html) lists Season, Brand, Colour, Gender, Sub category, Type, Item, Fit and Size. Type and Item have no field in 4.1, and collection and fabric have no entry on that screen; which attributes carry a vocabulary is OPEN (GC2-9).
+- Every list-type merchandise attribute takes its values from an approved vocabulary, and which attributes exist is configured per Organisation (`PRD-ORG-011`; GC2-9, DEC-105). The Setup screen of [ui-blueprint.html](../ui/ui-blueprint.html) lists Season, Brand, Colour, Gender, Sub category, Type, Item, Fit and Size. Type and Item have no field in 4.1, and collection and fabric have no entry on that screen; the Organisation configures each as an attribute, with a vocabulary where it is list-type.
 - On that screen, Brand edits the brand records, Size edits the size sets and Sub category edits the category tree of 4.1; the other attributes are vocabulary values. **Design choice.**
 - A source word is turned into a vocabulary value, brand, size or category by a mapping rule. The mapping rule is a `files-imports` record with its own proposal and confirmation, and it refers to the value by its identifier; the original words are kept with the import (`PRD-IMP-003`, `PRD-IMP-008`; module-map 4.7). The vocabulary keeps only its approved values.
 - A new value is a proposal until a different person confirms it. An unconfirmed proposal changes no operational data (`PRD-IMP-008`, `POL-02.07`).
-- A product proposal is kept apart from the approved masters until confirmed or rejected. Unconfirmed identity cannot enter an official PT (`PRD-MER-013`). Whether its confirmer must differ from its proposer is OPEN (DM-5). State names are OPEN (DM-4).
+- A product proposal is kept apart from the approved masters until confirmed or rejected. Unconfirmed identity cannot enter an official PT (`PRD-MER-013`). A product proposal is confirmed by a different person from its proposer (DM-5, DEC-105). Its states are Proposed, Confirmed and Rejected (DM-4, DEC-105).
 - A new style or SKU enters the catalogue only by confirming a product proposal; Maintain changes the versioned fields of existing ones (`PRD-MER-013`). **Design choice.**
 - A suggestion is offered for manual selection only; identity is never filled from an unaccepted guess (`PRD-IMP-009`).
 
@@ -211,7 +211,7 @@ Owner: `merchandise` · catalogue. Merchandise tracking policy (`POL-04`).
 ### 4.4 Units and packs
 
 - Each SKU has one stock unit at a time: piece, pair or pack (`POL-04.03`). Quantities are whole numbers of that unit. **Design choice**, following `POL-04.03`.
-- The stock unit is a versioned field, so its history is kept (`POL-04.04`). Whether a SKU's stock unit may change once stock of it exists, and how that stock is then restated, is OPEN (GC2-5).
+- The stock unit is a versioned field, so its history is kept (`POL-04.04`). A SKU's stock unit cannot change while any stock of it is recorded; a change is refused until none is (GC2-5, DEC-105). `merchandise` asks the stock ledger through a contract whether stock is recorded; it does not read stock tables (module-map section 3, rules 4 and 6).
 - Each purchasing and selling pack has an explicit conversion to stock units. A mixed size or colour pack is itemised by its contents, SKU by SKU (`POL-04.03`).
 - A conversion change is a new version; past quantities keep the conversion they used (`POL-04.04`).
 - A quantity always carries its unit. Quantities in different units are never added without a stated conversion (`PRD-MER-012`).
@@ -236,8 +236,8 @@ The operations of module-map 4.12, made concrete:
 | --- | --- | --- |
 | Resolve a code | The SKU and unit, given the code, its kind, a supplier or brand where known, and a date (`PRD-MER-006`) | More than one target matches (`PRD-MER-007`); none matches |
 | Read a SKU as of a date | Identity, stock unit, packs, tracking profile in force at a Site, HSN and attributes, with the version identifiers to store (`PRD-MER-002`, `PRD-MER-004`, `PRD-MER-014`) | — |
-| Propose; confirm or reject | Product and vocabulary proposals (4.2) | A vocabulary confirmer is the proposer (`PRD-IMP-008`) |
-| Maintain masters | New records and versions under 2.2 and 2.3, including a business unit's brand coverage | A rule of 4.1 to 4.6 is broken; a brand-coverage rule of 3.3 is broken (`PRD-ORG-006`) |
+| Propose; confirm or reject | Product and vocabulary proposals (4.2) | A confirmer is the proposer (`PRD-IMP-008`; for a product proposal, DM-5, DEC-105) |
+| Maintain masters | New records and versions under 2.2 and 2.3, including a business unit's brand coverage | A rule of 4.1 to 4.6 is broken; a SKU's stock unit changes while stock of it is recorded (4.4, GC2-5); a brand-coverage rule of 3.3 is broken (`PRD-ORG-006`) |
 | Change a tracking profile | 4.6 | Stock exists at a Site and no labelling count is planned there (`PRD-MER-018`) |
 
 Events: `merchandise.product-confirmed`, `merchandise.code-mapping-changed`, `merchandise.tracking-profile-changed` (module-map section 8).
@@ -252,8 +252,8 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 - A party holds one or more roles: supplier, agent, ordering party, invoicing party, goods mover. Each role is its own dated record, so each is maintained independently (`PRD-MER-001`). **Design choice:** one party record per legal person, with roles, rather than one record per role.
 - A brand is not a party. Brands and suppliers are kept apart (`PRD-MER-001`).
 - Versioned fields: legal name; tax identity numbers, kept as text; MSME classification, verified against evidence before any payment control uses it (`POL-10.09`); each supplier's classification is OPEN (V-61; Accounts, CA; stage 5); contacts.
-- **Bank details** of any party are restricted fields (`PRD-ACS-008`), encrypted at rest and kept out of logs and unauthorised caches (`PRD-SEC-006`). A change is a new version. A supplier's change takes effect only after approval by a different authorised person (`POL-02.07`). Whether other parties' bank-detail changes need the same is OPEN (GC2-6).
-- Customers, partners and employees are not parties here. Whether one legal person appearing in several of those is linked is OPEN (DM-7).
+- **Bank details** of any party are restricted fields (`PRD-ACS-008`), encrypted at rest and kept out of logs and unauthorised caches (`PRD-SEC-006`). A change is a new version. A supplier's change takes effect only after approval by a different authorised person (`POL-02.07`). Every other party's bank-detail change needs the same approval, not only a supplier's (GC2-6, DEC-105).
+- Customers, partners and employees are not parties here. Records stay separate in each module. An optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically (DM-7, DEC-105).
 
 ### 5.2 Agreements
 
@@ -283,7 +283,7 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 
 ### 5.4 Inbound ownership
 
-- Inbound ownership records are delivered in stage 2 (DEC-086) and are not designed here. Their home is **Proposed** as `receiving` (module-map MM-7). They are not stock (`PRD-ORG-017`).
+- Inbound ownership records are delivered in stage 2 (DEC-086) and are not designed here. Their home is `receiving` (module-map MM-7, DEC-105). They are not stock (`PRD-ORG-017`).
 
 ### 5.5 Interface
 
@@ -291,8 +291,8 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | --- | --- | --- |
 | Read a party | The party, its roles in force and, only for a permitted reader, its bank details (`PRD-ACS-008`) | — |
 | Read the terms in force | The agreement version in force for a brand or supplier on a date, with its identifier (`PRD-ORG-016`) | No version is in force |
-| Maintain a party or agreement | New records and versions under 2.2 and 2.3 | A version would overlap another in force (`PRD-MOD-010`) |
-| Change bank details | A new version; a supplier's waits for independent approval (`POL-02.07`) | A supplier's change is approved by its preparer |
+| Maintain a party or agreement | New records and versions under 2.2 and 2.3 | A version would overlap another in force (`PRD-MOD-010`); an agreement version is approved by its preparer (2.3, GC2-2) |
+| Change bank details | A new version; it waits for approval by a different authorised person: a supplier's under `POL-02.07`, every other party's under the baseline (GC2-6, DEC-105) | A change is approved by its preparer |
 
 Event: `merchandise.agreement-changed` (module-map section 8).
 
@@ -312,8 +312,9 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 | `site` + versions, `site_alias` | code | — |
 | `store` + versions, `store_alias` | code | — |
 | `store_site` (dated link) | — | one link in force per Store |
-| `business_unit` + versions | code | Site, kind and Store fixed; Store set for whole-store and brand-counter, empty otherwise; one whole-store unit per Store; a Store's unit created at the Store's linked Site, checked by a trigger |
-| `business_unit_mapping` (dated) | — | no gap and no overlap per unit; registration and book belong to the mapped legal entity, checked by a trigger |
+| `business_unit` + versions | code | Site, kind and Store fixed; Store set for whole-store and brand-counter, empty otherwise; one whole-store unit per Store at the Store's linked Site; a Store's unit created at the Store's linked Site, checked by a trigger; a unit created by a relocation names the old unit of the same Store that it replaces, fixed at creation (3.3, GC2-4) |
+| `business_unit_mapping` (dated) | — | no gap and no overlap per unit; registration and book belong to the mapped legal entity, and the registration's State is the State of the unit's Site (GC2-1), checked by a trigger on the mapping and on new Site Area and registration State versions |
+| `business_unit_mapping_verification` (append-only) | — | linked to one mapping version; the verifier is not the person who made the mapping, checked by a trigger; the verify permission is checked by the service (GC2-2) |
 | `location` + versions | Site and code | Site and business unit fixed; the unit is at the location's Site |
 | `country`, `state`, `city`, `area` + versions | parent and code | — |
 | `grouping` + versions, `grouping_member` (dated) | code | members are Stores |
@@ -327,16 +328,16 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 | `brand` + versions, `brand_alias` | code | — |
 | `category` + versions, `category_tracking_profile` (dated) | code | — |
 | `style` + versions | code | brand and category fixed |
-| `sku` + versions | code; style and identity values with nulls not distinct | identity fixed; stock unit versioned |
+| `sku` + versions | code; style and identity values with nulls not distinct | identity fixed; stock unit versioned, and a new unit version is refused while stock of the SKU is recorded, asked of the stock ledger through its contract (4.4, GC2-5) |
 | `size_set` + versions, `size_set_member` | code | category fixed |
-| `attribute`, `vocabulary_value` + versions | attribute and code | — |
-| `vocabulary_proposal`, `product_proposal` | — | confirmer differs from proposer for vocabulary |
+| `attribute`, `vocabulary_value` + versions | attribute and code | attributes are configured per Organisation; a list-type attribute takes only its approved vocabulary values (GC2-9) |
+| `vocabulary_proposal`, `product_proposal` | — | confirmer differs from proposer, for vocabulary (`PRD-IMP-008`) and for product proposals (DM-5) |
 | `external_code` | — | exclusion: same code, kind and scope, overlapping dates, different target |
 | `pack` + versions, `pack_content` | SKU and code | contents only for a mixed pack |
 | `tracking_profile` + versions, `tracking_profile_site_change` | code | — |
 | `business_unit_brand` (dated) | — | brand-counter unit: exactly one brand in force; office unit: none |
 | `party` + versions, `party_role` (dated) | code | — |
-| `party_bank_details` (versions) | — | encrypted; a supplier's version is in force only with an approval by a different person |
+| `party_bank_details` (versions) | — | encrypted; every party's version is in force only with an approval by a different person (`POL-02.07` for a supplier; GC2-6 for every other party) |
 | `agreement` + versions, `agreement_attachment` | code | — |
 
 ## 7. Master imports
@@ -351,7 +352,7 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 
 - The Setup section of [ui-blueprint.html](../ui/ui-blueprint.html) holds these screens: Organisation structure; Geography and groupings; Products; Suppliers and agreements; Agreement; Merchandise tracking profiles; Vocabularies.
 - GC-2 adds three things to them:
-  - The mapping of a business unit shows its legal entity, tax registration and book together, and a mismatch is refused with its reason (`PRD-ORG-020`).
+  - The mapping of a business unit shows its legal entity, tax registration and book together, and a mismatch is refused with its reason (`PRD-ORG-020`). A registration in another State than the unit's Site is refused with its reason too (3.4, GC2-1).
   - Each master shows its version history and the version in force on a chosen date.
   - Restricted fields are masked or left out by field permission (`PRD-ACS-008`). An unavailable action names what is missing (`PRD-UXP-003`).
 
@@ -375,21 +376,28 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 12 | A supplier's bank-detail change approved by its preparer is refused; bank details are hidden without the field permission | `POL-02.07`, `PRD-ACS-008` |
 | 13 | Agreement terms left Unknown stay Unknown | `POL-01.11`, `PRD-MOD-015` |
 | 14 | Two Organisations: nothing of one is visible from the other | `PRD-ORG-002`, `PRD-ACS-020` |
+| 15 | A mapping whose tax registration is in another State than the unit's Site is refused; one in the same State is accepted (3.4, GC2-1) | `PRD-ORG-005`, `POL-10.06` |
+| 16 | A change to the structure, to a mapping or to an agreement version, approved by its preparer, is refused. A mapping verified by the person who made it, or by someone without the verify permission, is refused (2.3, 3.4, GC2-2) | `PRD-ACS-006`, `POL-02.08`, `POL-10.08` |
+| 17 | A Store relocates: new business units are created at the new Site, each linked to the old unit it replaces; the old units stay at the old Site; stock moves from the old units to the new ones by transfer; an old unit closes only when its stock and other items are resolved (3.3, GC2-4; stage 5) | `PRD-LIF-029`, `PRD-LIF-021`, `PRD-LIF-019` |
+| 18 | A SKU's stock unit change is refused while stock of it is recorded, and accepted as a new version when none is (4.4, GC2-5) | `POL-04.03`, `POL-04.04` |
+| 19 | A master version that starts on a past date is refused, with no exception (2.2, GC2-7) | `PRD-MOD-010` |
+| 20 | A product proposal confirmed by its proposer is refused (4.2, DM-5). A value for a list-type attribute that is not an approved vocabulary value is refused (GC2-9) | `PRD-MER-013`, `PRD-IMP-008` |
+| 21 | A non-supplier party's bank-detail change approved by its preparer is refused (5.1, GC2-6) | `PRD-ACS-008`, `PRD-ACS-006` |
 
 ## 10. Open questions
 
-Nothing below has a default. Questions already open elsewhere are pointed to, not repeated: state names (DM-4), product-proposal independence (DM-5), one legal person in several roles (DM-7), readiness approver (MM-8), inbound ownership's home (MM-7), and KDPS's values V-05, V-06, V-14, V-18, V-61 and V-62.
+Nothing below has a default. Each question carries its baseline pick (DEC-105); the "Who decides" column of such a row names who confirms the pick or asks for a change. Questions kept in other documents are pointed to, not repeated: state names (DM-4), product-proposal independence (DM-5), one legal person in several roles (DM-7), readiness approver (MM-8) and inbound ownership's home (MM-7), each with its baseline pick (DEC-105); and KDPS's values V-05, V-06, V-14, V-18, V-61 and V-62, which stay open.
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
-| GC2-1 | Must a business unit's tax registration be in the State of its Site? (`POL-10.06`, `POL-10.08`) | Business, statutory | CA | 2 | Whether the mapping check also compares States |
-| GC2-2 | Who approves changes to the structure, to business-unit mappings and to agreement versions, and must that person differ from the preparer? Who verifies a mapping (`POL-10.08`)? `POL-02.07` lists none of these; `POL-10.05` has Accounts and the CA approve statutory settings | Business | KDPS Owner, Admin (policy 2); Accounts, CA (policy 10) for mappings | 1 live use | The approval and verification rules for these masters |
-| GC2-3 | The word for the physical kind of a Site where Stores trade. `PRD-ORG-010` names office and warehouse kinds only | Business (vocabulary) | Product owner | 1 | One value of the Site kind; a "Words used" entry first |
-| GC2-4 | How a relocating Store's business units move to the new Site: new units at the new Site, or units that move with the Store (DEC-096) | Business | Product owner | 5 | Unit codes, locations and stock positions on relocation |
-| GC2-5 | May a SKU's stock unit change once stock of it exists, and how is that stock restated? `POL-04.04` keeps unit history but says no more | Business | Booking, Operations (policy 4) | 1 live use | Whether a unit change is refused or needs a conversion of stock |
-| GC2-6 | Must a bank-detail change for an agent, goods mover or other non-supplier party also be approved by a different person? `POL-02.07` names suppliers only | Business | KDPS Owner, Admin (policy 2) | 5 (payments) | One row of the approval rules |
-| GC2-7 | Does any master ever need a version that starts on a past date (2.2)? | Business | Product owner | 1 | Whether the no-back-dating rule needs an exception and its controls |
+| GC2-1 | Baseline (DEC-105): a business unit's tax registration must be in the State of its Site; the mapping check compares them | Business, statutory | CA (question 16) | — | — |
+| GC2-2 | Baseline (DEC-105): changes to the structure, to business-unit mappings and to agreement versions need approval by a different authorised person; verifying a mapping is a separate permission, held by a different person from the one who made the mapping | Business | KDPS Owner, Admin; Accounts, CA | — | — |
+| GC2-3 | Baseline (DEC-105): the Site kind where Stores trade is a retail site (new "Words used" row; `PRD-ORG-010`) | Business (vocabulary) | — | — | — |
+| GC2-4 | Baseline (DEC-105): a relocating Store gets new business units at its new Site, linked to its old ones; stock moves between them by transfer | Business | — | — | — |
+| GC2-5 | Baseline (DEC-105): a SKU's stock unit cannot change while any stock of it is recorded | Business | Booking, Operations | — | — |
+| GC2-6 | Baseline (DEC-105): every party's bank-detail change needs approval by a different authorised person, not only a supplier's | Business | KDPS Owner, Admin | — | — |
+| GC2-7 | Baseline (DEC-105): no master version ever starts on a past date | Business | — | — | — |
 | GC2-8 | Settled: a selected Store covers every business unit of it, including ones added later (`PRD-ACS-021`, DEC-098) | — | — | — | — |
-| GC2-9 | Which merchandise attributes carry an approved vocabulary? The blueprint's Setup list (Type, Item) and the style fields of `PRD-MER-004` (collection, fabric) differ (4.2) | Business | Product owner; Booking | 1 | The vocabulary records and the catalogue screens |
+| GC2-9 | Baseline (DEC-105): every list-type merchandise attribute carries an approved vocabulary; which attributes exist is configured per Organisation (`PRD-ORG-011`) | Business | Booking | — | — |
 
-**Settled here:** DM-9 (section 3.5). **Settled since:** GC2-8 (DEC-098).
+**Settled here:** DM-9 (section 3.5). **Settled since:** GC2-8 (DEC-098). **Baseline (DEC-105):** GC2-1 to GC2-7 and GC2-9, for the person named to confirm or change.

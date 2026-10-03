@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 3 Oct 2026, after reading DEC-027 to DEC-092. DEC-027 to DEC-030 touch this file (the test-setup wording in 10.17, the Proposed states basis), and so do DEC-042, DEC-057, DEC-058, DEC-062, DEC-064, DEC-070 to DEC-072 and DEC-092. A search found nothing here that the others contradict. If this document disagrees with them, they win; raise the clash, do not guess.
+Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](../../kdps-policies.md) on 3 Oct 2026, after reading DEC-027 to DEC-092 and DEC-105. DEC-027 to DEC-030 touch this file (the test-setup wording in 10.17, the Proposed states basis), and so do DEC-042, DEC-057, DEC-058, DEC-062, DEC-064, DEC-070 to DEC-072, DEC-092 and DEC-105 (the state names in 7, camera scanning in 6 D and the accessibility target in 12). A search found nothing here that the others contradict. If this document disagrees with them, they win; raise the clash, do not guess.
 
 Implements these PRD sections: Operator experience; People, access and approvals; Merchandise and identifiers; Receiving and price tickets (delivery record, PT workbench); Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Technical platform (Offline counter; AI, security and operational reliability); Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 4 (piece IDs), 6 and 7 (returns, refunds, tenders), 10 (bill number), 16 (offline), 17 (held goods), 19 (offers and promotions).
 
@@ -207,13 +207,13 @@ Rules:
 - On phones the tabs become a bottom bar.
 
 ### D · Mobile (responsive web)
-<!-- deps: PRD-REC-004, PRD-REC-005, PRD-REC-006, PRD-PRO-009, prd.md#stack — scan-to-receive, condition split, phone client and scanner hardware -->
+<!-- deps: PRD-REC-004, PRD-REC-005, PRD-REC-006, PRD-PRO-009, prd.md#stack, DEC-105 — scan-to-receive, condition split, phone client, scanner hardware and camera scanning -->
 
 - The same web routes in a phone browser. The separate phone client in the PRD stack is parked and not yet in a stage.
 - Glass top bar with menu (44 px), logo slot and My work.
 - The sidebar becomes a glass drawer from the left: 300 px wide, scope chip at the top, 44 px rows, profile at the bottom.
 - **Scan to receive:**
-  - Scan field: handheld or Bluetooth scanner (PRD Hardware). Camera viewfinder is **OPEN** (product owner); not approved until the PRD adds it.
+  - Scan field: handheld or Bluetooth scanner (PRD Hardware). Camera scanning is built for phones in the browser, for lookup, receiving and counts, and is switched off by default (`DEC-105`).
   - Condition segmented control: Good · Damaged · Wrong · Unidentified (48 px). It stays selected until changed.
   - A last-scanned card with a running count (“1,186 counted”), compared with the invoice when there is one (“of 1,252 on invoice”), and a split by condition. Counting never waits for an invoice.
   - A recent-scans list.
@@ -239,16 +239,16 @@ Rules:
 
 ### All states
 
-Names follow the PRD and the KDPS policies.
+Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names.
 
 | # | State | Family | Glyph | Where it appears |
 |---|---|---|---|---|
 | 1 | Draft | Neutral | ○ | Booking, PT, adjustment, offer, count, transfer request, supplier return |
 | 2 | Cancelled | Neutral | ○ | Booking, transfer before dispatch, held cart, refund request |
 | 3 | Cancelled before departure | Neutral | ○ | Supplier return |
-| 4 | Closed | Neutral | ○ | Booking, count, exception |
+| 4 | Closed | Neutral | ○ | Booking, count, exception; Site, Store and business unit; number series |
 | 5 | Closed—partially returned | Neutral | ○ | Supplier return |
-| 6 | Ended | Neutral | ○ | Offer, end-of-season price list |
+| 6 | Ended | Neutral | ○ | Offer, end-of-season price list, master version, user |
 | 7 | Unknown | Neutral | ○ | A value not known yet, such as pre-PT cost, season or identity. In tables the cell is blank instead (§8) |
 | 8 | Submitted | Pending | ◔ | PT, adjustment, offer, damage report |
 | 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval |
@@ -262,7 +262,7 @@ Names follow the PRD and the KDPS policies.
 | 17 | Initiated | Moving | ▸ | Supplier return, while any quantity awaits departure or confirmation |
 | 18 | Approved | Done | ✓ | Booking, transfer (stock reserved), offer, adjustment, refund |
 | 19 | Issued | Done | ✓ | Booking (sent to the supplier), GRN |
-| 20 | Confirmed | Done | ✓ | Booking (supplier accepted), damage report, refund |
+| 20 | Confirmed | Done | ✓ | Booking (supplier accepted), damage report, refund, proposal |
 | 21 | Official | Done | ✓ | PT |
 | 22 | Completed | Done | ✓ | Bill, transfer, supplier return |
 | 23 | Live | Done | ✓ | Offer |
@@ -275,13 +275,13 @@ Names follow the PRD and the KDPS policies.
 | 30 | Held | Attention | ! | Damage hold, excess hold, source-conflict hold, expiry hold, ordinary hold, inspection hold (hold kinds: [stock-ledger.md](../stock/stock-ledger.md) 6.1) |
 | 31 | Overdue | Attention | ! | Booking balance past its delivery window, exception, billed-retained collection, supplier-return deadline |
 | 32 | Offline | Attention | ! | Offline counter |
-| 33 | Paused | Attention | ! | Offline counter billing pause |
+| 33 | Paused | Attention | ! | Offline counter billing pause, number series |
 | 34 | Outcome unknown | Attention | ! | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment. Look it up before any retry |
 | 35 | Stale | Attention | ! | Trust chip, sync |
-| 36 | Reopened | Attention | ! | Exception |
+| 36 | Reopened | Attention | ! | Exception, financial period |
 | 37 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
-| 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer |
-| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment |
+| 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer, master version, proposal |
+| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch |
 | 40 | Refused | Stopped | ✕ | Offline bill refused on upload |
 | 41 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
 | 42 | Connection lost | Stopped | ✕ | Online till |
@@ -292,6 +292,20 @@ Names follow the PRD and the KDPS policies.
 | 47 | Damaged | Quarantine | ◆ | Damage report, GRN line |
 | 48 | Wrong | Quarantine | ◆ | GRN line |
 | 49 | Unidentified | Quarantine | ◆ | GRN line, count |
+| 50 | Setting up | Neutral | ○ | Site, Store and business unit before any activity is granted |
+| 51 | Active | Done | ✓ | Site, Store and business unit; user |
+| 52 | Closing | Moving | ▸ | Site, Store and business unit after closure starts |
+| 53 | Scheduled | Pending | ◔ | Master version approved with a later start date |
+| 54 | In force | Done | ✓ | Master version |
+| 55 | Disabled | Stopped | ✕ | User |
+| 56 | Staged | Neutral | ○ | Import batch |
+| 57 | Validated | Pending | ◔ | Import batch waiting for review |
+| 58 | Published | Done | ✓ | Import batch |
+| 59 | Proposed | Pending | ◔ | Product and vocabulary proposals |
+| 60 | Open | Done | ✓ | Financial period, number series |
+| 61 | Locked | Done | ✓ | Financial period |
+| 62 | Unresolved | Attention | ! | Exception raised and not yet resolved |
+| 63 | Superseded | Neutral | ○ | Approval request ended by a material change |
 
 Rules:
 
@@ -731,4 +745,4 @@ Each entry covers anatomy, states and usage rules.
 | Finance screen detail | Product owner (**OPEN**) | Stage 5 |
 | Hindi text and a Devanagari font check for stages 1–5 | Product owner and KDPS Owner (**OPEN**) | Stage 5 |
 | Hindi for stage 6 screens (HRMS self-service, incentives, payslips) | Product owner and KDPS Owner (**OPEN**) | Stage 6 |
-| Formal accessibility target (WCAG 2.2 AA is a design target only) | Product owner (**OPEN**) | Stage 1 screens |
+| WCAG 2.2 AA is the target for every screen (`DEC-105`) | — | Stage 1 screens |

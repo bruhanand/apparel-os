@@ -8,7 +8,7 @@ Implements these PRD sections: Stock and warehouse control; Ledger and official 
 
 - PRD IDs: `PRD-STK-001`–`PRD-STK-005`, `PRD-STK-008`–`PRD-STK-017`; `PRD-LED-003`, `PRD-LED-005`–`PRD-LED-009`, `PRD-LED-014`–`PRD-LED-018`; `PRD-MER-003`, `PRD-MER-006`, `PRD-MER-010`–`PRD-MER-012`, `PRD-MER-014`–`PRD-MER-018`; `PRD-REC-004`, `PRD-REC-006`, `PRD-REC-008`, `PRD-REC-009`, `PRD-REC-012`, `PRD-REC-013`, `PRD-REC-015`, `PRD-REC-017`, `PRD-REC-019`, `PRD-REC-021`, `PRD-REC-022`; `PRD-PTW-010`; `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-009`, `PRD-ORG-012`, `PRD-ORG-014`, `PRD-ORG-015`, `PRD-ORG-017`–`PRD-ORG-020`; `PRD-TRF-004`, `PRD-TRF-006`–`PRD-TRF-013`, `PRD-TRF-016`, `PRD-TRF-018`–`PRD-TRF-020`, `PRD-TRF-022`, `PRD-TRF-023`; `PRD-DMG-001`–`PRD-DMG-003`, `PRD-DMG-005`–`PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016`; `PRD-OFR-008`, `PRD-OFR-012`, `PRD-OFR-014`, `PRD-OFR-016`, `PRD-OFR-019`; `PRD-RET-013`, `PRD-RET-017`; `PRD-POS-018`, `PRD-POS-020`; `PRD-OFF-006`, `PRD-OFF-009`, `PRD-OFF-011`, `PRD-OFF-012`, `PRD-OFF-014`; `PRD-EBO-003`, `PRD-EBO-005`, `PRD-EBO-011`; `PRD-LIF-003`–`PRD-LIF-005`, `PRD-LIF-008`, `PRD-LIF-010`, `PRD-LIF-012`–`PRD-LIF-016`, `PRD-LIF-018`, `PRD-LIF-025`–`PRD-LIF-028`; `PRD-IMP-011`, `PRD-IMP-012`; `PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-013`–`PRD-ACS-016`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-009`–`PRD-MOD-015`; `PRD-INT-002`–`PRD-INT-005`, `PRD-INT-008`; `PRD-PRF-001`, `PRD-PRF-003`; `PRD-STG-002`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-NAV-015`, `PRD-NAV-016`; `PRD-FRN-006`; `PRD-EXC-001`; `PRD-ACP-001`–`PRD-ACP-006`, `PRD-ACP-012`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACP-020`.
 - Policies: 1 (`POL-01.05`, `POL-01.07`, `POL-01.13`), 2 (`POL-02.12`, `POL-02.16`, `POL-02.21`, `POL-02.24`), 3 (`POL-03.03`), 4 (`POL-04.03`–`POL-04.09`), 6 (`POL-06.02`), 7 (`POL-07.08`), 8 (`POL-08.02`, `POL-08.03`, `POL-08.05`, `POL-08.06`), 9 (`POL-09.02`–`POL-09.08`, `POL-09.11`, `POL-09.12`, `POL-09.19`, `POL-09.21`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 16 (`POL-16.04`, `POL-16.05`), 17 (`POL-17.01`, `POL-17.02`, `POL-17.05`, `POL-17.07`).
-- Decisions: DEC-002, DEC-004, DEC-008, DEC-019, DEC-023, DEC-030, DEC-031, DEC-032, DEC-033, DEC-034, DEC-035, DEC-054, DEC-055, DEC-059, DEC-066, DEC-069, DEC-071, DEC-087, DEC-088, DEC-089, DEC-090, DEC-091, DEC-097.
+- Decisions: DEC-002, DEC-004, DEC-008, DEC-019, DEC-023, DEC-030, DEC-031, DEC-032, DEC-033, DEC-034, DEC-035, DEC-054, DEC-055, DEC-059, DEC-066, DEC-069, DEC-071, DEC-087, DEC-088, DEC-089, DEC-090, DEC-091, DEC-097, DEC-105.
 
 Used by: the future designs for receiving, PT, transfers, counts, supplier returns, the counter, EBO imports, the switch and financial posting. Each of them posts stock through this ledger.
 
@@ -117,7 +117,7 @@ Acceptance, coverage, holds and reservations are not movements. They are append-
 **Where piece rules are off.**
 
 - A Store still selling through an earlier POS has its earlier-POS files kept out of app stock (DEC-030, `PRD-LIF-014`). It has no real opening stock until its switch count (`PRD-LIF-027`, `POL-14.07`). Its piece rules start at that count, where every piece without an ID is labelled and every piece ID is verified (`PRD-MER-017`, `PRD-LIF-025`). How goods the app receives or moves there before the switch are held is OPEN (SL-9).
-- An EBO Store on brand software follows `PRD-MER-003` and `PRD-MER-016` for piece-tracked goods: piece IDs are kept and scanned; EBO imports name no piece only for sales reporting (`PRD-EBO-011`, DEC-023, DEC-088). What event ends "until it bills in Apparel OS" at such a Store remains OPEN (SL-18).
+- An EBO Store on brand software follows `PRD-MER-003` and `PRD-MER-016` for piece-tracked goods: piece IDs are kept and scanned; EBO imports name no piece only for sales reporting (`PRD-EBO-011`, DEC-023, DEC-088). The event that ends "until it bills in Apparel OS" at such a Store is the Store's switch to billing in Apparel OS (SL-18, DEC-105).
 - A profile changed from quantity-tracked to piece-tracked while stock exists starts piece rules only at a labelling count: every piece of that profile is counted, labelled and verified at each Site, and piece rules start from that count (`PRD-MER-018`, `POL-04.09`, `DEC-054`).
 
 **Batch and expiry.** Required only where the profile says so. Goods that fail the configured shelf-life rule are held (`POL-04.05`). The categories and day limits are OPEN (V-05, `POL-04.08`).
@@ -188,7 +188,7 @@ Ownership does not block a sale: supplier-owned consignment stock can be sellabl
   - **Site pool:** one pool per SKU per Site per book.
 - A pool runs in the SKU's one stock unit (`POL-04.03`).
 - The book comes from the business unit holding the stock (2.2), never from the Site (`PRD-ORG-005`, `PRD-ACP-013`). Two units at one Site in different books have different pools.
-- A move between business units at one Site is a location move only when book, legal entity and tax registration are unchanged (`PRD-STK-005`, `DEC-066`). When the book differs but the legal entity is the same, use the pool-move route (7.8). When the legal entity differs, which always means a different book (`PRD-ORG-020`), use the commercial or inter-entity process (`PRD-FRN-006`). A registration-only change at one Site is raised against `PRD-TRF-023` and remains **OPEN** (product owner).
+- A move between business units at one Site is a location move only when book, legal entity and tax registration are unchanged (`PRD-STK-005`, `DEC-066`). When the book differs but the legal entity is the same, use the pool-move route (7.8). When the legal entity differs, which always means a different book (`PRD-ORG-020`), use the commercial or inter-entity process (`PRD-FRN-006`). A registration-only change at one Site always needs its statutory document (`PRD-TRF-023`); it is never a location move (MM-13, DEC-105; the CA confirms).
 - **Store value under a book pool.** Store reports need a value per Store (`PRD-NAV-016`, `PRD-LIF-018`), but under a book pool the value belongs to the book. How it is shown per Store is OPEN (SL-14). Until then, reports show the book's value and each Store's quantities only.
 - The formula and mode are effective-dated configuration (`PRD-MOD-010`). KDPS's actual formula and pool are OPEN (V-08, V-09, `POL-09.19`); KDPS first keeps its current CA-approved method (`POL-09.21`).
 
@@ -287,7 +287,7 @@ A later approved change of a receipt origin's cost (for example a freight additi
 ### 7.11 Hand-off to the books
 
 - Each valued movement and its balanced journals per book commit in one transaction. The finance module writes the journals under the posting maps (`PRD-MOD-006`, `PRD-MOD-013`, `PRD-LED-003`, `POL-09.11`, DEC-087).
-- A missing or invalid map blocks the affected posting and raises an exception (`POL-09.12`). Whether the valued movement then waits or posts without its journal is OPEN (SL-23). Replay never doubles a journal (`PRD-INT-008`).
+- A missing or invalid map blocks the affected posting and raises an exception (`POL-09.12`). The valued movement then does not commit: the document stays as it was, and an exception is raised in its own transaction (SL-23 Outcome A, DEC-105; the CA confirms). Replay never doubles a journal (`PRD-INT-008`).
 - Tally remains KDPS's official book (`POL-11.01`). Valued movements reach the internal ledger from the first stage that records them (`PRD-STG-002`). Only the Tally exchange and full accounting wait for stage 5.
 
 ### 7.12 Changing the formula or pool
@@ -344,7 +344,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
   5. Opening stock creates no supplier delivery, booking, invoice, liability or automatic journal (`PRD-LIF-008`).
   6. Reconcile the count with the earlier POS's last SOH and report every difference (`PRD-LIF-027`).
   7. Piece rules apply from this count on (`PRD-MER-017`).
-- A customer return of a bill made on the earlier POS has no sale in the app to take its cost from. It waits for the later plan to bring the earlier POS's data into the app (SL-10, `DEC-059`).
+- A customer return of a bill made on the earlier POS has no sale in the app to take its cost from. It waits for the later plan to bring the earlier POS's data into the app (SL-10, `DEC-059`). Until then the customer is served under the no-bill return route where policy 7 allows it (`POL-07.08`), and is otherwise refused with the reason shown (SL-10, DEC-105).
 
 ## 10. Doing it safely when people act at once
 
@@ -374,7 +374,8 @@ Every transaction takes row locks in this order, and in ascending ID order insid
 4. Piece rows.
 5. Hold and reservation rows.
 6. Cost pool rows, and dispatch or shipment value rows.
-7. Number series rows, last, so a shared series is held for the shortest time (10.2).
+7. The financial period row, in shared mode (`PRD-LED-009`; DEC-105, module-map MM-6).
+8. Number series rows, last, so a shared series is held for the shortest time (10.2).
 
 All locks are taken before the first write. Two transactions therefore always queue in the same order and cannot deadlock each other.
 
@@ -388,7 +389,7 @@ After locking, before writing, recheck (`PRD-INT-003`):
 - the document state;
 - independent approval: the approver is not the preparer (`PRD-ACS-006`);
 - the quantity: available stock covers the request, the pieces are where the document says, and no freeze has started;
-- the value on its basis: if cost under lock exceeds the approver's limit or the approved amount, posting is refused and the record returns for renewed approval (`PRD-ACS-007`, `POL-02.12`, `DEC-066`). Any tolerance for small cost drift is OPEN (product owner or KDPS Owner); no number is set.
+- the value on its basis: if cost under lock exceeds the approver's limit or the approved amount, posting is refused and the record returns for renewed approval (`PRD-ACS-007`, `POL-02.12`, `DEC-066`). There is no tolerance for cost drift: any rise above the limit or the approved amount needs renewed approval (DEC-105; the KDPS Owner confirms).
 
 Database constraints keep balances, layers and pool quantities from going below zero, as a last guard (`PRD-INT-005`).
 
@@ -554,16 +555,16 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | SL-7 | Count cost limits and approvers (V-21) | KDPS Owner, Operations | 3 |
 | SL-8 | Batch/expiry categories and shelf-life days (V-05, `POL-04.08`) | Booking, Operations | 1 |
 | SL-9 | Rollout order on production: when a warehouse goes live and loads its opening stock (`POL-14.07` now allows it only at a Store's switch); how goods move between a Site on the app and a Store not yet switched; direct deliveries to such a Store (`PRD-REC-004`). No answer changes the ledger | Product owner; KDPS for `POL-14.07` | Before the first live use on production. Not a build blocker |
-| SL-10 | A customer return with no sale in the app to take its cost from: an EBO return not linked to its imported sale, a return of an earlier-POS bill after the switch (`DEC-059`), and a return at a Store in another book or legal entity. Which receipt origin, owner and cost it takes when a later plan allows them. Until a later plan allows them, these returns stay unavailable in the app (`DEC-059`, `POL-06.02`); `PRD-EBO-005` is unmet for them. How the customer is served meanwhile is OPEN (product owner). No-bill returns are unchanged (`PRD-RET-017`, `POL-07.08`) | Product owner; CA for another legal entity | 4 |
+| SL-10 | A customer return with no sale in the app to take its cost from: an EBO return not linked to its imported sale, a return of an earlier-POS bill after the switch (`DEC-059`), and a return at a Store in another book or legal entity. Baseline (DEC-105): until a later plan allows those returns, the customer is served under the no-bill return route where policy 7 allows it, and is otherwise refused with the reason shown. The returns stay unavailable in the app (`DEC-059`, `POL-06.02`); `PRD-EBO-005` is unmet for them. No-bill returns are unchanged (`PRD-RET-017`, `POL-07.08`). Which receipt origin, owner and cost these returns take stays OPEN for that later plan | Product owner; CA for another legal entity (the later plan) | The later plan |
 | SL-11 | Posting one large document in ordered chunks, if the staged commit fails the counter performance test (10.6). It bends `PRD-INT-004`, so it needs a PRD decision first | Product owner | Only if that test fails |
 | SL-14 | How Store value is shown under a book pool (7.1), for Store net asset value and closure (`PRD-NAV-016`, `PRD-LIF-018`) | Accounts, CA | 5 |
 | SL-15 | The accounting date of a late valued movement whose business date falls in a locked financial period (7.10) | Accounts, CA | 5 |
 | SL-17 | Whether a billed-retained sale's value leaves the pool at the bill or at handover (6.1; V-35); then whether a cancelled sale's goods return at a cost; and what value billed-retained items carried across the switch carry; they are not opening stock (9, step 4; `PRD-LIF-028`, `DEC-090`; `POL-14.04`, `POL-08.06`, `POL-09.04`) | CA | 4 |
-| SL-18 | What event ends "until it bills in Apparel OS" at an EBO Store that reports through brand software (5; `PRD-EBO-011`). Piece IDs are kept and scanned there (`PRD-MER-003`, `PRD-MER-016`, DEC-088); any exception needs a decision record | Product owner | 4 |
+| SL-18 | Baseline (DEC-105): the event that ends "until it bills in Apparel OS" at an EBO Store that reports through brand software is the Store's switch to billing in Apparel OS (5; `PRD-EBO-011`). Piece IDs are kept and scanned there (`PRD-MER-003`, `PRD-MER-016`, DEC-088); any exception needs a decision record | — | — |
 | SL-19 | Settled by `PRD-STK-016` (EBO import that would oversell available stock is held for reconciliation; DEC-089) | — | — |
 | SL-20 | Settled by `PRD-STK-017` (mistaken damage confirmation reversal) | — | — |
 | SL-21 | Settled: journals for valued movements are written in the same transaction as the movement so books balance at commit (`DEC-087`, `PRD-MOD-013`) | — | — |
 | SL-22 | Settled: the click records the approval decision; the job's transaction records its use, which is the approval evidence; a failed job leaves the decision unused (10.6; `DEC-097`; [access-and-approvals.md](../access/access-and-approvals.md) 9.8) | — | — |
-| SL-23 | What happens to a valued movement when no valid posting map exists at commit, given journals commit with the movement (`PRD-MOD-013`, `POL-09.12`, DEC-087); settled in the financial posting design | Product owner; CA | 1 |
+| SL-23 | Baseline (DEC-105): Outcome A. A valued movement with no valid posting map does not commit; the document stays as it was, and an exception is raised in its own transaction (`PRD-MOD-013`, `POL-09.12`, DEC-087; 7.11; module-map 6.3) | CA (confirms) | — |
 
 SL-12, SL-13 and SL-16 were settled by DEC-034 and DEC-035; their numbers are not reused.

@@ -8,7 +8,7 @@ Implements these PRD sections: People, access and approvals; from Exceptions, re
 
 - PRD IDs: `PRD-ACS-001`–`PRD-ACS-023`; `PRD-EXC-001`–`PRD-EXC-004`, `PRD-EXC-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-FRN-001`, `PRD-FRN-007`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-007`, `PRD-INT-008`; `PRD-MOD-010`, `PRD-MOD-015`; `PRD-UXP-003`; `PRD-OFF-002`–`PRD-OFF-004`, `PRD-OFF-010`; `PRD-HRM-004`, `PRD-HRM-012`, `PRD-HRM-015`; `PRD-TRF-004`, `PRD-TRF-005`, `PRD-TRF-010`; `PRD-LIF-001`.
 - Policies: 2 (`POL-02.01`–`POL-02.12`, `POL-02.15`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.04`, `POL-03.05`), 10 (`POL-10.01`), 12 (`POL-12.04`), 18 (`POL-18.02`).
-- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100, DEC-101, DEC-102, DEC-103, DEC-104.
+- Decisions: DEC-001, DEC-036, DEC-037, DEC-041, DEC-042, DEC-043, DEC-066, DEC-071, DEC-092, DEC-093, DEC-094, DEC-097, DEC-098, DEC-099, DEC-100, DEC-101, DEC-102, DEC-103, DEC-104, DEC-105.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners and operations of `access`, `inbox` and `exceptions`; the transaction shape), [domain-model.md](../architecture/domain-model.md) (the records, invariants and approval boundaries), [structure-and-masters.md](../masters/structure-and-masters.md) (the place tree), [personas.md](personas.md) (users, personas and the KDPS templates), [stock-ledger.md](../stock/stock-ledger.md) (locks and rechecks), [deployment.md](../platform/deployment.md) (sign-in routing and database roles).
 
@@ -32,7 +32,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 - A user is one person's login in one Organisation, with one My work. A person who serves several Organisations holds a separate user in each; no login, session or role assignment crosses Organisations (`PRD-ACS-020`, DEC-093).
 - A user has a UUIDv7 identifier and a login identifier unique in the Organisation, compared without regard to letter case. A login identifier is never given to another person, even after the user ends. **Design choice.**
-- A user is enabled or disabled, and may be ended; it is never deleted, so its history stays (`PRD-ACS-013`). Disabling takes effect at once: no new sign-in, and every session of the user is revoked (`PRD-SEC-008`). State names are OPEN (DM-4).
+- A user is Active or Disabled, and may be Ended; it is never deleted, so its history stays (`PRD-ACS-013`). Disabling takes effect at once: no new sign-in, and every session of the user is revoked (`PRD-SEC-008`). The state names are the baseline of DEC-105 (DM-4; [design-language.md](../ui/design-language.md) section 7).
 - A user holds personas, with dates. A persona sets home screens, menus and summaries and grants nothing (`PRD-ACS-002`, `PRD-ACS-003`; [personas.md](personas.md) section 1).
 - Customers and suppliers are records, not users ([personas.md](personas.md) section 4).
 
@@ -47,7 +47,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 - A service identity is a non-human actor with its own audit identity, scoped credentials and least-privilege access. It has no screens (`PRD-SEC-018`).
 - Two kinds. **Design choice.**
   - An internal identity, under which the worker runs a job or delivers the outbox (module-map section 10).
-  - An outside caller with its own credential, such as an authenticated adapter callback (`PRD-INT-007`). The local helper or the proposed Tally local gateway would be one too if it calls the server; how they reach the server is OPEN ([deployment.md](../platform/deployment.md) section 6, D-6; product owner). The secret is shown once, stored only as an Argon2 hash, revocable and never logged (`PRD-SEC-014`).
+  - An outside caller with its own credential, such as an authenticated adapter callback (`PRD-INT-007`). The local helper and the Tally local gateway are this kind too: they call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office (DEC-105; [deployment.md](../platform/deployment.md) section 6, D-6). The secret is shown once, stored only as an Argon2 hash, revocable and never logged (`PRD-SEC-014`).
 - It gets access only through role assignments, scoped as narrowly as its work needs (`PRD-SEC-018`).
 - It never decides an approval: an approver is an authorised person (`PRD-ACS-006`).
 - When a job carries out a person's decision, the audit record names the service identity as the actor and the person on whose behalf it acts (section 9.8). **Design choice.**
@@ -71,24 +71,25 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 - One refusal message covers a wrong Organisation code, login, password or code, so a failed attempt does not say which part was wrong. **Design choice.**
 - Every attempt in a known Organisation writes an access record ([numbering-and-audit.md](../platform/numbering-and-audit.md) 5.2; `PRD-SEC-007`). An attempt with an unknown Organisation code goes only to the service log, without what was typed (`PRD-SEC-014`). **Design choice.**
 - Repeated failures slow or stop further attempts. The thresholds, and the password rules, are OPEN (GC3-5).
-- Production and `kdps-test` require the authenticator code. An easier path may exist only in development and never weakens production login (`POL-02.17`, `PRD-ACS-017`); whether development has one is OPEN ([deployment.md](../platform/deployment.md) D-6).
+- Production and `kdps-test` require the authenticator code. Development uses the same sign-in as production, with synthetic users, so it has no easier path and nothing in it weakens production login (`POL-02.17`, `PRD-ACS-017`; DEC-105, [deployment.md](../platform/deployment.md) D-6). **Design choice.**
 
 ### 3.2 Passwords and the second factor
 
 - At the first sign-in the user enrols an authenticator app and confirms it with a code. The secret is encrypted at rest (section 6) and never shown again. **Design choice.**
 - A user changes their own password after giving a fresh authenticator code. **Design choice.**
-- A lost authenticator or a forgotten password is reset by a person who holds edit on the user's credentials, never by the user alone. The user enrols again or sets a new password at the next sign-in, and every session of the user is revoked. Before stage 5 nothing is sent (DEC-099), so a temporary password is handed over in person. **Design choice.** Each reset writes an access record. Whether a reset needs a second person's approval is OPEN (GC3-4).
+- A lost authenticator or a forgotten password is reset by a person who holds edit on the user's credentials, never by the user alone. The user enrols again or sets a new password at the next sign-in, and every session of the user is revoked. Before stage 5 nothing is sent (DEC-099), so a temporary password is handed over in person. **Design choice.** Each reset writes an access record.
+- A reset needs no second approver. It is a protected action (3.3), so the person who resets gives a fresh authenticator code, and nobody resets their own credential, even if they hold edit on all credentials (DEC-105, GC3-4). **Design choice.**
 - Signing in, changing one's own password or second factor, and ending one's own sessions are part of authentication (`PRD-SEC-001`), not access to a record (`PRD-INT-001`), so they need no role assignment. They act only on the signed-in user's own credentials and sessions, grant nothing and reach no other record. **Design choice.**
 
 ### 3.3 Sessions
 
 - A session is a row in the Organisation's database: the user, the device where registered, its kind, its start, its last activity and its state. The cookie holds a random identifier; the database keeps only its hash. **Design choice.**
 - Kind: a session on a registered billing device is a shared POS session; any other is an office session. Policy 2 names these two kinds (`POL-02.18`). **Design choice** of how the kind is decided.
-- The idle-lock and absolute limits per kind are effective-dated settings in `access` (`PRD-ACS-017`, `PRD-MOD-010`). Policy 2 states 5 minutes for shared POS sessions, 15 minutes for office sessions and 12 hours absolute (`POL-02.18`). They apply once policy 2 is Signed and the Admin has validated them (V-04). Until then no value is active on production; synthetic tests use labelled synthetic values. On `kdps-test`, before policy 2 is Signed, sessions use the values `POL-02.18` states, as settings of the test setup that enable no other gated action (DEC-102, DEC-071).
+- The idle-lock and absolute limits per kind are effective-dated settings in `access` (`PRD-ACS-017`, `PRD-MOD-010`). Policy 2 states 5 minutes for shared POS sessions, 15 minutes for office sessions and 12 hours absolute (`POL-02.18`). They apply once policy 2 is Signed and the Admin has validated them (V-04), as DM-6 requires: a person holding the validate permission who did not enter them (DEC-105). Until then no value is active on production; synthetic tests use labelled synthetic values. On `kdps-test`, before policy 2 is Signed, sessions use the values `POL-02.18` states, as settings of the test setup that enable no other gated action (DEC-102, DEC-071).
 - When the idle limit passes, the session locks and the screen keeps the unfinished work. The same user unlocks it with their password. Someone else at the same device signs in with a session of their own. **Design choice.**
 - When the absolute limit passes, the session ends. Unfinished work is kept and offered back after the next sign-in: drafts already saved stay as Draft records; unsaved screen input is kept on the device for the same user and Organisation (`PRD-ACS-017`, `POL-02.18`, `PRD-UXP-003`). Restricted fields are never kept in that copy; the person enters them again (`PRD-SEC-006`). **Design choice.**
 - A session, every session of a user, or every session of a device can be revoked. Revocation takes effect at the next request and closes the session's live-update stream (`PRD-SEC-008`). Event: `access.session-revoked`.
-- Protected actions ask for a fresh authenticator code (`PRD-SEC-001`). **Proposed:** deciding an approval, changing access, changing bank details, and showing or exporting an encrypted field. The list and how long a fresh code lasts are OPEN (GC3-6).
+- Protected actions ask for a fresh authenticator code (`PRD-SEC-001`): deciding an approval, changing access, changing bank details, showing or exporting an encrypted field, resetting another user's credential, and changing one's own password (3.2). The first four are the baseline of GC3-6 (DEC-105); the reset follows from GC3-4, and the own-password change is a **Design choice**. How long a code stays fresh is a setting with no default; it stays OPEN (GC3-6; KDPS Owner; stage 1 live use). Until it is set, each protected action asks for a new code. **Design choice** (fail-safe; no duration chosen).
 - A browser is signed in to one Organisation at a time ([deployment.md](../platform/deployment.md) section 3).
 
 ## 4. Permissions, roles and role assignments
@@ -111,8 +112,8 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 ### 4.3 Role assignments
 
 - A role assignment is a user or service identity, a role, a scope and effective dates. It is the only thing that grants access, except a stand-in grant, which gives only the authority it names for a limited time (section 10; `PRD-ACS-018`). A user may hold several assignments, and each applies only inside its own scope (`PRD-ACS-001`–`PRD-ACS-004`, DEC-001).
-- Assignments are effective-dated. Versions never overlap, and history is kept (`PRD-ACS-005`, `PRD-MOD-010`, `POL-02.06`). A version starts today or later, as for masters ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). **Design choice**; whether any master needs a back-dated start is OPEN there (GC2-7).
-- Every change after a new Organisation's setup step (9.11, `PRD-ACS-023`), including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). On `kdps-test`, before policy 2 is Signed, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other change; they are settings of the test setup, not the signed role map of `POL-02.11`, and enable no gated action (DEC-103, DEC-071). Approving them needs a reason list in force there first (9.5, GC3-12).
+- Assignments are effective-dated. Versions never overlap, and history is kept (`PRD-ACS-005`, `PRD-MOD-010`, `POL-02.06`). A version starts today or later, as for masters ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2), and none starts on a past date; there is no exception (DEC-105, GC2-7). **Design choice.**
+- Every change after a new Organisation's setup step (9.11, `PRD-ACS-023`), including ending an assignment early, is prepared and then approved by an authorised person other than the preparer, and takes effect from its date (`POL-02.07`). On `kdps-test`, before policy 2 is Signed, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other change; they are settings of the test setup, not the signed role map of `POL-02.11`, and enable no gated action (DEC-103, DEC-071). Approving them needs a reason list in force there first: the first list, with the reasons KDPS gives, is a setting of the test setup, approved first with a free-text reason (DEC-105, DEC-104; 9.5, GC3-12).
 - To cut a person's access at once online, disable the user (2.1); that grants nothing, so it waits for no approval. Work already delegated to an offline counter ends at its bounded expiry (`PRD-SEC-008`, `PRD-OFF-003`). **Design choice.**
 
 ## 5. Scope
@@ -127,7 +128,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 - Places form one tree: a Site, the Stores linked to it on a date, and the business units of each Store; warehouse and office units hang directly under their Site ([structure-and-masters.md](../masters/structure-and-masters.md) 3.9; `PRD-ACS-021`).
 - A selected Site covers every Store and business unit at it, including ones added later. A selected Store covers every business unit of it, including ones added later (`PRD-ACS-021`, DEC-094, DEC-098). A selected business unit covers only itself (`PRD-ACS-005`).
-- From stage 5, when a Store can relocate, a Store-scoped assignment follows the Store and a Site-scoped one covers the Stores linked to the Site on the record's business date ([structure-and-masters.md](../masters/structure-and-masters.md) 3.9). **Design choice.** Where a relocated Store's business units sit, and so which Site-scoped assignment covers them, is OPEN (GC2-4; product owner; stage 5).
+- From stage 5, when a Store can relocate, a Store-scoped assignment follows the Store and a Site-scoped one covers the Stores linked to the Site on the record's business date ([structure-and-masters.md](../masters/structure-and-masters.md) 3.9). **Design choice.** A business unit stays at its Site, so a Site-scoped assignment covers it through that Site. A relocating Store gets new business units at its new Site, linked to its old ones, and stock moves between them by transfer (DEC-105, GC2-4; [structure-and-masters.md](../masters/structure-and-masters.md) 3.3).
 
 ### 5.3 Matching a record
 
@@ -142,7 +143,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 ### 5.4 Own records
 
 - Each module declares which of its record types have a subject person. Own-record scope covers those records whose subject is the signed-in user (`PRD-ACS-021`, `PRD-ACS-022`, DEC-041). **Design choice.**
-- From stage 6 that includes the person's attendance, targets, incentives and payslips, which `hr` links to the user ([personas.md](personas.md) section 4; `PRD-HRM-012`, `PRD-HRM-015`). Whether staff also see their own employee record is OPEN (GC3-9). A salesperson's own attributed sale lines are declared by `pos` in stage 4 ([personas.md](personas.md), P-SLS).
+- From stage 6 that includes the person's attendance, targets, incentives and payslips, which `hr` links to the user ([personas.md](personas.md) section 4; `PRD-HRM-012`, `PRD-HRM-015`). Staff also see their own employee record, read-only, through self-service. Its restricted fields follow the self-service role's field permissions (DEC-105, GC3-9). Field-class permissions of the self-service role count as self-service permissions and apply only to own records. **Design choice.** which field classes that role grants is KDPS's and stays OPEN (KDPS question 53; stage 6). A salesperson's own attributed sale lines are declared by `pos` in stage 4 ([personas.md](personas.md), P-SLS).
 - Own-record scope never covers another person's record, a legal entity, a place or a brand. An assignment scoped by legal entity, place or brand never grants a self-service permission (`PRD-ACS-022`). Maintain refuses a role that mixes self-service permissions with others, and an assignment of the self-service role with any other scope. **Design choice** that enforces `PRD-ACS-022`.
 
 ## 6. Restricted fields and encryption
@@ -159,7 +160,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 
 Every request and every job step goes through steps 1 to 3, which are steps 1 and 3 of module-map 6.1. A command that takes locks also goes through step 4, which is step 6 of module-map 6.1. Sign-in and a user's actions on their own credentials and sessions (3.1, 3.2) are one exception: they need only step 1 once a session exists. A new Organisation's setup step (9.11) is the other.
 
-1. **Authenticate.** The session is in force, not locked and not Revoked, and the user is enabled; for a service identity, the identity is enabled and its credential is not revoked (`PRD-INT-001`, `PRD-ACS-017`, `PRD-SEC-008`, `PRD-SEC-018`).
+1. **Authenticate.** The session is in force, not locked and not Revoked, and the user is Active (2.1); for a service identity, the identity is enabled and its credential is not revoked (`PRD-INT-001`, `PRD-ACS-017`, `PRD-SEC-008`, `PRD-SEC-018`).
 2. **Available.** `configuration` answers whether the operation is available here and now: the capability is on, the policy is Signed, the owning module's configured records are valid, and the activity is granted where one applies (`PRD-SEC-017`, `PRD-LIF-001`; module-map 4.4). Otherwise the request is refused with the blocking reason. This is the stage 1 exit check "an operation whose policy is not configured stays unavailable".
 3. **Authorise.** Find one role assignment, or for an approval decision one stand-in grant (section 10), that, on the date of the action, grants the action on the record type, covers the record's scope facts (5.3), and grants every restricted field class the action reads or writes (`PRD-ACS-001`, `PRD-ACS-004`, `PRD-INT-001`). Authorise returns the assignment it used; the audit record and any approval decision store it.
 4. **Under the locks.** Repeat step 3 for the same assignment, and the approval checks of 9.7 (`PRD-INT-003`; stock-ledger 10.4).
@@ -182,21 +183,21 @@ Every request and every job step goes through steps 1 to 3, which are steps 1 an
 
 - One approval rule per action type that needs approval. Its fixed parts come from the PRD and the policies and are kept in code: whether independent approval is required (`PRD-ACS-006`, `POL-02.07`), the value basis (`PRD-ACS-015`), and what counts as a material change (`POL-02.12`, with narrower rules such as `PRD-TRF-010`). [domain-model.md](../architecture/domain-model.md) section 5 lists them. Independence that a source requires can never be switched off.
 - Its configured parts are effective-dated settings with no default: whether bulk approval is allowed (`POL-02.19`), whether phone approval is allowed (`POL-02.22`), and the approve and reject reasons (`POL-02.23`). A change to them is approved by an authorised person other than the preparer (`POL-02.07`); a decision on a change to the reason list gives a free-text reason (9.5, DEC-104).
-- Where `PRD-ACS-015` names no basis for an action (DM-8), the answer is settled before that action's stage, and until then its approval rule is not in force (9.3). The mechanism supports a basis or none.
+- Where `PRD-ACS-015` names no basis for an action, the value bases of DEC-105 apply (DM-8; [domain-model.md](../architecture/domain-model.md) section 5): booking approval, the booking's value at cost; damage confirmation, acceptance of excess, wrong or unidentified goods, and each supplier-return step, cost; day-close cash variance, the difference; payroll inputs, the period's net pay; offers, no value limit. **Design choice.** The limits on those bases are KDPS's and stay OPEN (V-02). The mechanism supports a basis or none.
 
 ## 9. Approvals
 
 ### 9.1 Requesting approval
 
 - The owning module calls Request approval with: the action type; the document and its exact version; the material facts (source, destination, items, quantity, amount and beneficiary, as they apply); the value on its basis, or Unknown; the scope facts; and the preparers (`PRD-ACS-007`, `PRD-ACS-015`).
-- **Proposed:** the preparers are every user who recorded a change in the version under approval, including the one who submitted it (GC3-1).
+- The preparers are every user who recorded a change in the version under approval, including the one who submitted it (DEC-105, GC3-1). **Design choice.**
 - Refused when the action has no approval rule in force or the operation is unavailable (7.1 step 2).
 - One open request per document version and action type. **Design choice.**
 - `access` publishes the request to My work through the outbox (module-map section 3, rule 6).
 
 ### 9.2 Approval limits
 
-- A limit is set for one action type, either for an approver role within a scope or for a named individual (`POL-02.09`, `POL-02.15`). It states its basis from the action's rule (`PRD-ACS-015`): cost, bill value, documented valuation or the amount paid, in paise; a quantity with its unit; or a discount percentage where configured. The basis is shown beside the limit (`PRD-ACS-015`, `POL-02.09`).
+- A limit is set for one action type, either for an approver role within a scope or for a named individual (`POL-02.09`, `POL-02.15`). It states its basis from the action's rule (`PRD-ACS-015`): cost, bill value, documented valuation, the amount paid, the difference of a day-close cash variance or the period's net pay, in paise (DM-8, DEC-105); a quantity with its unit; or a discount percentage where configured. The basis is shown beside the limit (`PRD-ACS-015`, `POL-02.09`).
 - A missing limit grants nothing. Unlimited authority is an explicit setting (`POL-02.09`, `POL-02.15`). Authority over Unknown value is a separate explicit setting (`PRD-ACS-016`).
 - An individual limit names the user and the assignment it applies to, and replaces the role's limit for that user and action. **Design choice.**
 - A limit covers a value when the value on its basis is at most the limit. **Design choice.**
@@ -207,7 +208,7 @@ Every request and every job step goes through steps 1 to 3, which are steps 1 an
 An eligible approver for a request is a person who, when deciding:
 
 - holds an assignment in force that grants approve on the action's record type and covers the request's scope facts (`PRD-ACS-001`, `PRD-ACS-004`), or holds a stand-in grant that covers the request (section 10);
-- has, through that same assignment or stand-in grant, a limit that covers the value on its basis, or explicit authority over Unknown value when the value is Unknown (`PRD-ACS-004`, `POL-02.09`, `PRD-ACS-016`). For PT approval, a missing or disputed proposed acquisition cost blocks value-based approval until it is resolved (`PRD-ACS-016`, `POL-02.09`). An action whose approval has no value ([domain-model.md](../architecture/domain-model.md) section 5, "—") needs only the approve permission. For an action whose basis `PRD-ACS-015` does not name, no approval rule is in force until DM-8 is settled for it;
+- has, through that same assignment or stand-in grant, a limit that covers the value on its basis, or explicit authority over Unknown value when the value is Unknown (`PRD-ACS-004`, `POL-02.09`, `PRD-ACS-016`). For PT approval, a missing or disputed proposed acquisition cost blocks value-based approval until it is resolved (`PRD-ACS-016`, `POL-02.09`). An action whose approval has no value ("—") or no value limit (offers, DM-8; [domain-model.md](../architecture/domain-model.md) section 5) needs only the approve permission. For an action whose basis `PRD-ACS-015` does not name, the value basis is the one DEC-105 sets (section 8; [domain-model.md](../architecture/domain-model.md) section 5);
 - is not one of the preparers, through any role (`PRD-ACS-006`, `POL-02.08`);
 - is a person, never a service identity (2.3).
 
@@ -217,11 +218,11 @@ A higher authority is a different person whose limit covers the action on its va
 
 - The request is offered to the eligible approvers with the lowest limit that covers its value; explicit unlimited authority comes after every finite limit. If nobody is eligible, it stays Awaiting approval and is never approved automatically (`POL-02.09`, DEC-043). **Design choice** of the order.
 - Eligibility is worked out when My work is read and again at Decide, so a change to assignments, limits or stand-ins applies as soon as it is in force. **Design choice.**
-- Overdue requests escalate under a configured rule (`PRD-ACS-010`). No policy names the due time, the recipient or the timing for an approval: OPEN (GC3-8).
+- Overdue requests escalate under a configured rule (`PRD-ACS-010`). An approval gets a due time and an escalation recipient per action type and Site, set like exception routing (12.2) as effective-dated settings (DEC-105, GC3-8). An escalation adds the recipient and keeps the owner (11.3). **Design choice.** No policy names the values, so they are KDPS's and stay OPEN (KDPS question 52; stage 1 live approvals).
 
 ### 9.5 Deciding
 
-- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default. The one exception is a decision on a change to the reason list itself, which gives a free-text reason, so the first list can be approved (DEC-104). On `kdps-test` before policy 2 is Signed, no reason list is in force, so the test role assignments of 4.3 cannot be decided until GC3-12 is settled.
+- The approver approves or rejects, with a reason from the configured list, evidence and a comment (`PRD-ACS-010`, `POL-02.23`). Until the list is configured, deciding is unavailable, since nothing is on by default. The one exception is a decision on a change to the reason list itself, which gives a free-text reason, so the first list can be approved (DEC-104). On `kdps-test` before policy 2 is Signed, the first reason list, with the reasons KDPS gives (KDPS Owner question 45), is a setting of the test setup, approved first by a different authorised person with a free-text reason; it enables no gated action (DEC-105, DEC-104, DEC-071; GC3-12). Until it is in force, the test role assignments of 4.3 cannot be decided.
 - Decide checks 9.3 again, that the request is still open, and that the document's current version is the one requested (`PRD-ACS-007`).
 - The decision records the approver, the time, the outcome, the reason, the evidence, the comment, the version decided, the value and its basis, the approved amount where the document states one, and the role assignment and limit version, or the stand-in grant, it relied on ([domain-model.md](../architecture/domain-model.md) 3.2). It is an entry and is never edited.
 - Then, depending on the document (module-map 6.2): a master version takes effect in the same transaction (flow A); a document posts in the same transaction; or a large document waits for its job (9.8).
@@ -229,7 +230,7 @@ A higher authority is a different person whose limit covers the action on its va
 
 ### 9.6 Material change
 
-- A change to a material fact after a request or a decision ends its force. The new version needs a new request (`PRD-ACS-007`, `POL-02.12`).
+- A change to a material fact after a request or a decision ends its force. The new version needs a new request (`PRD-ACS-007`, `POL-02.12`). The request that the change ended is shown as Superseded (DEC-105, DM-4; [design-language.md](../ui/design-language.md) section 7).
 - The owning module declares, per action type, which of the facts bound by `PRD-ACS-007` and listed in `POL-02.12` are relevant to it. A narrower rule applies only where a source gives one: for a transfer, only an increase in quantity, a change of item or a change of destination is material (`PRD-TRF-010`, DEC-036).
 - When a change that is not material makes a new version, the decision stays in force, and the module records that it carried to the new version. **Design choice.**
 
@@ -267,7 +268,7 @@ A large document is approved by a click and posted later by a job, one at a time
 
 ### 9.11 Changes to access
 
-- Changes to roles, permissions, role assignments, limits, approval rules, allowlists and reasons are prepared, approved by an authorised person other than the preparer, effective-dated, and kept with their history (`POL-02.06`, `POL-02.07`; module-map 6.2 flow A).
+- Changes to roles, permissions, role assignments, limits, approval rules, allowlists and reasons are prepared, approved by an authorised person other than the preparer, effective-dated, and kept with their history (`POL-02.06`, `POL-02.07`; module-map 6.2 flow A). Stand-in grants follow the same route (DEC-105, GC3-7).
 - Each writes an audit record and a permission-change access record ([numbering-and-audit.md](../platform/numbering-and-audit.md) 5.2; `PRD-SEC-007`).
 - A new Organisation's first Admin and its first approver of access changes are created together in one setup step, recorded and audited under a service identity, because no user of the Organisation can yet approve it. Every later change follows independent approval (`PRD-ACS-023`, DEC-101). The first Admin and the first approver are two different people, since an approver must differ from the preparer (`PRD-ACS-006`). The step runs once, while the Organisation has no user yet; it is the platform's own operation, so no role assignment authorises it, and its audit record names the service identity as the actor. **Design choice** of running it once and of how it is authorised.
 
@@ -276,7 +277,7 @@ A large document is approved by a click and posted later by a job, one at a time
 - A stand-in grant names the stand-in, the person they stand in for, the actions, scope and limits it gives, and its start and end. It ends by itself at the end time (`PRD-ACS-018`, `POL-02.20`).
 - A grant is never wider than the authority of the person stood in for on those dates. **Design choice.**
 - A stand-in never approves work they prepared; 9.3 applies to them as to anyone (`PRD-ACS-018`, `POL-02.20`).
-- A person who holds the stand-in permission records the grant. Whether a grant also needs approval by a different person, as a permission change under `POL-02.07`, is OPEN (GC3-7).
+- A person who holds the stand-in permission records the grant. A grant needs approval by a different authorised person from the one who recorded it before it takes effect (DEC-105, GC3-7; KDPS confirms, question 51).
 - The stand-in sees in My work the items the grant covers (`PRD-ACS-010`), and a decision records the grant it relied on.
 - The real names, scopes, limits and periods are OPEN (`POL-02.20`; KDPS Owner question 5).
 
@@ -285,7 +286,7 @@ A large document is approved by a click and posted later by a job, one at a time
 ### 11.1 Work items
 
 - A work item belongs to `inbox` and is a projection of the owner's record ([domain-model.md](../architecture/domain-model.md) 3.3). It holds: the kind (task, approval or exception); the owning module, record type, record and version; who may act, as named users or as the owner's rule for who is eligible; the due time; the exposure in paise or Unknown; and the scope facts.
-- The owning module publishes, updates and closes its items (module-map 4.8). `exceptions` and higher modules call `inbox` in their own transaction; `access` publishes through the outbox (module-map section 3, rule 6).
+- The owning module publishes, updates and closes its items (module-map 4.8). `exceptions` and higher modules call `inbox` in their own transaction; `access` publishes through the outbox (module-map section 3, rule 6). For a task or an approval, `inbox` sets the due time and escalation recipient from `work_item_routing` when it receives the item (GC3-8, DEC-105). **Design choice.**
 - An item is keyed by the owner's record, version and kind, so a replay never makes a second item (`PRD-INT-008`).
 
 ### 11.2 The list
@@ -297,7 +298,7 @@ A large document is approved by a click and posted later by a job, one at a time
 
 ### 11.3 Escalation and alerts
 
-- For an exception, a job escalates an open item past its due time under the rule routed for its type and Site (`POL-02.16`); the rules are OPEN (V-03). For a task or an approval no policy names a due time or a rule: OPEN (GC3-8). **Design choice:** an escalation adds the recipient, keeps the original owner and is recorded (`PRD-ACS-010`). The item shows Overdue ([design-language.md](../ui/design-language.md) section 7).
+- For an exception, a job escalates an open item past its due time under the rule routed for its type and Site (`POL-02.16`); the rules are OPEN (V-03). For a task or an approval, a due time and an escalation recipient are set per action type and Site, like exception routing (12.2), as effective-dated settings (DEC-105, GC3-8). No policy names the values, so they stay OPEN (KDPS question 52; KDPS Owner, Admin; stage 1 live approvals). **Design choice:** an escalation adds the recipient, keeps the original owner and is recorded (`PRD-ACS-010`). The item shows Overdue ([design-language.md](../ui/design-language.md) section 7).
 - Before stage 5 nothing is sent (DEC-099). An alert to responsible users about cash gaps, large discounts, missing reports, overdue transit or return deadlines reaches them as a work item or an exception in My work, and on the screen concerned (`PRD-EXC-013`). Which alerts are on, their thresholds and recipients are OPEN (V-70, `POL-02.25`). From stage 5, `notifications` may also send them.
 - Live updates carry the item's identifier only; the screen refetches it through `inbox` ([deployment.md](../platform/deployment.md) section 5).
 
@@ -319,7 +320,7 @@ A large document is approved by a click and posted later by a job, one at a time
 
 ### 12.3 Lifecycle
 
-- **Raised.** It stays unresolved; that first state has no settled name (DM-4).
+- **Raised.** Its first state is Unresolved (DEC-105, DM-4; [design-language.md](../ui/design-language.md) section 7).
 - While open, it can be reassigned, commented on, given evidence and escalated (`POL-03.05`).
 - **Resolved** when the permitted correction, return, reversal or reconciliation is recorded in its owning module (`PRD-EXC-002`).
 - **Closed** only after the owning module's resolution check verifies the linked business outcome (`PRD-EXC-002`) and any required approval is in force (`POL-03.05`). The required approval is the approval of the linked correction in its owning module; a type that needs an approval of its own names it in its stage design. **Design choice.**
@@ -352,7 +353,7 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `approval_rule_setting` + versions | action type | bulk allowed; phone allowed |
 | `approval_reason` + versions | code | approve or reject |
 | `approval_limit` (dated) | — | for a role and scope or a named user; basis stated; a value, explicit unlimited, and explicit authority over Unknown kept apart; no overlap for one action and holder |
-| `stand_in_grant` | — | ends after it starts; expires by itself |
+| `stand_in_grant` | — | ends after it starts; expires by itself; takes effect only when approved by a different person from its preparer |
 | `approval_request` | document, version and action type, for open requests | value on its basis or Unknown |
 | `approval_decision` | request | append-only; names the assignment and limit version, or the stand-in grant, it relied on |
 | `approval_carry` | decision and version | only to a version with no material change |
@@ -367,6 +368,7 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `work_item` | owner module, record, version and kind | exposure in paise or Unknown; rebuildable by the owners |
 | `work_item_actor` | — | a named user, or the owner's eligibility reference |
 | `work_item_escalation` | — | append-only |
+| `work_item_routing` + versions | action type and Site | due-time rule and escalation recipient for tasks and approvals; no default (9.4, 11.3) |
 
 ### 13.3 Schema `exceptions`
 <!-- deps: PRD-EXC-001, PRD-EXC-002, PRD-EXC-003, PRD-EXC-004, PRD-INT-008, POL-02.16, POL-03.04, POL-03.05 — table list for the exception record (12) -->
@@ -398,46 +400,56 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 1 | **Stage 1 exit check.** An operation whose policy is not Signed stays unavailable and names its blocking reason | `PRD-SEC-017`, `PRD-UXP-003` |
 | 2 | Two Organisations: a user of one cannot sign in with the other's code, and no row crosses | `PRD-ACS-020` |
 | 3 | Sign-in needs the password and the authenticator code; every wrong part gets the same refusal; attempts are recorded | `PRD-SEC-001`, `PRD-SEC-007` |
+| 3a | A protected action asks for a fresh authenticator code; with no freshness setting, each one asks again | `PRD-SEC-001`, DEC-105 |
+| 3b | A reset of another user's credential needs a fresh code, revokes every session of that user and writes an access record; a user cannot reset their own credential, even holding edit on all credentials | `PRD-SEC-001`, `PRD-SEC-007`, `PRD-SEC-008`, DEC-105 |
+| 3c | In `dev`, sign-in needs a password and an authenticator code, as in production, and its users are labelled synthetic | `PRD-ACS-017`, `POL-02.17`, DEC-105 |
 | 4 | Idle lock and absolute limit with synthetic values; unfinished work is offered back | `PRD-ACS-017` |
 | 5 | Revoking a device or a user's sessions refuses the next request | `PRD-SEC-008` |
+| 5a | A role assignment version that starts on a past date is refused | `PRD-ACS-005`, `PRD-MOD-010`, DEC-105 |
 | 6 | A persona alone grants nothing | `PRD-ACS-002`, `PRD-ACS-003` |
 | 7 | One user, two assignments: cost is visible at the Store whose assignment grants it and masked at the other | `PRD-ACS-004`, `PRD-ACS-008` |
 | 8 | A selected Site covers a new Store and unit; a selected Store covers a new brand counter; a selected unit does not cover a new unit | `PRD-ACS-021`, `PRD-ACS-005` |
 | 9 | All members covers a new Site; an empty dimension grants nothing | `PRD-ACS-005` |
 | 10 | The self-service role reaches only its user's records; a role mixing self-service with other permissions is refused | `PRD-ACS-022` |
+| 10a | A user of the self-service role reads their own employee record, read-only, and cannot edit it; a restricted field of it shows only where the role's field permissions grant it | `PRD-ACS-022`, `PRD-ACS-008`, DEC-105 |
 | 11 | Row-level security: with no actor set no scoped row shows; with an actor, only covered rows | `PRD-SEC-005` |
 | 12 | Self-approval is refused, also through another role | `PRD-ACS-006`, `POL-02.08` |
+| 12a | Every user who recorded a change in a version, not only the one who submitted it, is refused as its approver | `PRD-ACS-006`, `POL-02.08`, DEC-105 |
 | 13 | A missing limit grants nothing; Unknown value needs explicit authority; a request above every limit stays Awaiting approval | `POL-02.09`, `PRD-ACS-016` |
+| 13a | Each action the PRD gives no basis is limited on its DEC-105 basis, with synthetic limits (a booking on its value at cost; day-close cash variance on the difference); an offer has no value limit and needs only the approve permission | `PRD-ACS-015`, DEC-105 |
 | 14 | A material change ends an approval; a transfer reduced before dispatch keeps it | `PRD-ACS-007`, `PRD-TRF-010` |
 | 15 | A value under the lock above the decision's limit is refused for renewed approval | `PRD-ACS-007`, DEC-066 |
 | 16 | A queued posting whose job fails keeps its decision unused; a retry on the same version posts once with its use record; a changed version needs a new approval | `PRD-INT-004`, `PRD-INT-008`, DEC-097 |
 | 17 | Bulk approval refuses an action type not on the allowlist; a failing item goes to individual review; Unknown values are never added as zero | `PRD-ACS-019` |
 | 18 | A stand-in grant expires by itself; a stand-in cannot approve their own preparation | `PRD-ACS-018` |
+| 18a | A stand-in grant approved by the person who recorded it is refused, and it takes no effect until a different authorised person approves it | `PRD-ACS-018`, DEC-105 |
 | 19 | An access change approved by its preparer is refused | `POL-02.07` |
 | 19a | A new Organisation's setup step creates its first Admin and first approver once; a second run is refused; the next access change needs a different approver | `PRD-ACS-023` |
 | 19b | A decision on a change to the reason list accepts a free-text reason; any other decision needs a reason from the list in force | `POL-02.23`, DEC-104 |
+| 19c | On `kdps-test` before policy 2 is Signed, the first reason list is approved with a free-text reason, after which the test role assignments can be decided; nothing gated is enabled | `POL-02.23`, DEC-104, DEC-105 |
 | 20 | My work order, with Unknown exposure never treated as zero | `PRD-ACS-009`, `PRD-MOD-015` |
+| 20a | An approval or task past its due time, with a synthetic due time and recipient set for its action type and Site, escalates: the recipient is added, the owner is kept and the escalation is recorded | `PRD-ACS-010`, DEC-105 |
 | 21 | An exception raised after a rollback survives; a replay makes no second exception; closing waits for the resolution check | `PRD-EXC-002`, `PRD-INT-008` |
 | 22 | A service identity cannot decide an approval | `PRD-ACS-006`, `PRD-SEC-018` |
 | 23 | A restricted value never appears in logs or live updates, and an encrypted value never appears in an audit record | `PRD-SEC-006`, `PRD-SEC-014` |
 
 ## 16. Open questions
 
-Nothing below has a default. Questions already open elsewhere are pointed to, not repeated: who holds which role, scope and limit (V-01, V-02); exception owners, due times and escalation (V-03); validating sign-in settings (V-04); approve and reject reasons (`POL-02.23`; KDPS Owner question 45; stage 1); the bulk allowlist and stand-ins (alignment report B-9); phone approval types (V-60); alert thresholds (V-70); state names (DM-4); value bases not named (DM-8); the readiness approver (MM-8); what partners see (`POL-12.04`); whether the Owner approves losses ([personas.md](personas.md) section 6).
+Nothing below has a default. A row marked Baseline (DEC-105) is settled for the build; the person named confirms it or asks for a change, which is a new decision entry. Questions already open elsewhere are pointed to, not repeated: who holds which role, scope and limit (V-01, V-02); exception owners, due times and escalation (V-03); approval and task due times and escalation recipients (KDPS question 52); validating sign-in settings (V-04); approve and reject reasons (`POL-02.23`; KDPS Owner question 45; stage 1); the bulk allowlist and stand-ins (alignment report B-9); phone approval types (V-60); alert thresholds (V-70); the readiness approver (MM-8); what partners see (`POL-12.04`); the limits and holders for the Owner's loss approvals ([personas.md](personas.md) section 6). The state names (DM-4) and the value bases not named by the PRD (DM-8) are baseline picks of DEC-105 (2.1, 9.6, 12.3; section 8).
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
-| GC3-1 | Who counts as the preparer of a version under approval? **Proposed:** every user who recorded a change in it, including the one who submitted it (9.1) | Business | Product owner; KDPS Owner (policy 2) | 1 live approvals | Who is barred from approving (`PRD-ACS-006`) |
+| GC3-1 | Baseline (DEC-105): the preparers of a version are everyone who recorded a change in it, including the one who submitted it (9.1) | Business | KDPS Owner | — | — |
 | GC3-2 | Settled: one setup step, recorded under a service identity, creates the first Admin and the first approver of access changes (`PRD-ACS-023`, DEC-101; 9.11) | — | — | — | — |
 | GC3-3 | Settled: before policy 2 is Signed, `kdps-test` sessions use the values `POL-02.18` states (DEC-102; 3.3) | — | — | — | — |
-| GC3-4 | Must a reset of a lost authenticator or a forgotten password be approved by a second person (3.2)? | Business | KDPS Owner, Admin (policy 2) | 1 live use | The reset steps |
+| GC3-4 | Baseline (DEC-105): a credential reset needs no second approver; it is a protected action, it is recorded, and nobody resets their own (3.2) | Business | KDPS Owner, Admin | — | — |
 | GC3-5 | The password rules, and after how many failed sign-ins attempts slow down or stop, for how long (3.1) | Business | Admin (V-04); product owner | 1 live use | Sign-in security settings |
-| GC3-6 | Which actions need a fresh authenticator code, and how long a fresh code lasts (`PRD-SEC-001`; 3.3) | Business | Product owner; KDPS Owner (policy 2) | 1 live use | Reauthentication prompts |
-| GC3-7 | Is a stand-in grant a permission change under `POL-02.07`, so a different person must approve it? **Proposed:** yes | Business | KDPS Owner (policy 2) | 1 live use | How a stand-in is granted |
-| GC3-8 | What due time, escalation rule and recipient apply to an overdue approval or task (`PRD-ACS-010`; 9.4, 11.3)? `POL-02.16` and V-03 cover exceptions only | Business | KDPS Owner, Admin (policy 2) | 1 live approvals | Escalation of approvals and tasks |
-| GC3-9 | May staff see their own employee record through self-service, and which fields of it (5.4)? `PRD-HRM-012` names targets and incentives only | Business | KDPS Owner, HR (policies 2 and 13) | 6 | The record types own-record scope covers |
+| GC3-6 | Baseline (DEC-105): the protected actions are those in 3.3 (the first four from GC3-6; the reset follows from GC3-4) (`PRD-SEC-001`). **OPEN:** how long a fresh code lasts is a setting with no default (3.3; KDPS Owner question 54) | Business | KDPS Owner | 1 live use (the freshness setting) | How long a fresh code is trusted |
+| GC3-7 | Baseline (DEC-105): a stand-in grant needs approval by a different authorised person (10) | Business | KDPS Owner | — | — |
+| GC3-8 | Baseline (DEC-105): approvals and tasks get a due time and an escalation recipient per action type and Site, set like exception routing; an escalation adds the recipient and keeps the owner (9.4, 11.3). The values are KDPS's (KDPS question 52) | Business | KDPS Owner, Admin | — | — |
+| GC3-9 | Baseline (DEC-105): staff see their own employee record, read-only, through self-service; its restricted fields follow the self-service role's field permissions (5.4). Which field classes the role grants is KDPS's (KDPS question 53) | Business | KDPS Owner, HR | — | — |
 | GC3-10 | Settled: a decision on a change to the reason list gives a free-text reason (DEC-104; 9.5) | — | — | — | — |
 | GC3-11 | Settled: on `kdps-test`, KDPS staff get role assignments as test-setup settings that enable no gated action (DEC-103; 4.3) | — | — | — | — |
-| GC3-12 | On `kdps-test` before policy 2 is Signed, how does an approve and reject reason list come into force, so the test role assignments of 4.3 can be decided (DEC-103, DEC-104, `POL-02.23`)? **Proposed:** like DEC-103, a first list with the reasons KDPS gives (question 45) is a setting of the test setup, approved first with a free-text reason under DEC-104 | Business | Product owner; KDPS Owner, Admin supply the reasons | KDPS side-by-side test | Whether test approvals can run on `kdps-test` |
+| GC3-12 | Baseline (DEC-105): on `kdps-test`, the first reason list, with the reasons KDPS gives (question 45), is a setting of the test setup, approved first with a free-text reason under DEC-104 (4.3, 9.5) | Business | KDPS Owner, Admin | — | — |
 
-**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4). GC3-2 (DEC-101, section 9.11); GC3-3 (DEC-102, section 3.3). GC3-10 (DEC-104, section 9.5); GC3-11 (DEC-103, section 4.3).
+**Settled here:** SL-22 and MM-4 (DEC-097, section 9.8); MM-5 (this document settles SL-22); MM-9 (DEC-099, sections 3.1 and 11.3); GC2-8 (DEC-098, section 5.2); which assignment carries self-service (DEC-100, sections 4.2 and 5.4). GC3-2 (DEC-101, section 9.11); GC3-3 (DEC-102, section 3.3). GC3-10 (DEC-104, section 9.5); GC3-11 (DEC-103, section 4.3). Baseline picks of DEC-105: GC3-1 (9.1), GC3-4 (3.2), GC3-6 (3.3; how long a fresh code lasts stays OPEN), GC3-7 (10), GC3-8 (9.4, 11.3), GC3-9 (5.4), GC3-12 (4.3, 9.5); GC2-4 (5.2); GC2-7 (4.3); DM-4 (2.1, 9.6, 12.3); DM-8 (8, 9.3); D-6, for service identities and the development sign-in (2.3, 3.1).
