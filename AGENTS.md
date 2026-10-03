@@ -1,16 +1,19 @@
 # AGENTS.md
+<!-- deps: none — contributor guide intro -->
 
 This file guides AI coding agents working in this repository. `CLAUDE.md` is a link to this file; edit this one.
 
 ## Current state
+<!-- deps: prd.md#stack — planned toolchain sentence restates PRD stack rows -->
 
 Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. The first customer is KDPS Lifestyle Pvt. Ltd. (KDPS).
 
-The repository holds documents only. There is no code, package manifest, build, lint or test command yet. Do not invent commands; add them here once the workspace exists.
+The repository holds documents and one tool, the doc checker (see "Checking the documents"). There is no product code, package manifest, build, lint or test command yet. Do not invent commands; add them here once the workspace exists.
 
 The planned toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier.
 
 ## Document order
+<!-- deps: none — contributor process; restates docs/README.md order -->
 
 `docs/README.md` is binding. When two documents disagree, the higher one wins:
 
@@ -29,6 +32,7 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 
 
 ## Never invent a value
+<!-- deps: prd.md#required-policy-configuration, PRD-SEC-017, DEC-071 — no invented values, no active defaults -->
 
 - Never invent a policy value, threshold, tolerance, account, rate, limit, formula, date or approver. Not in documents, not in code, not in configuration.
 - Mark every unknown as **OPEN** and name its owner: the product owner, the KDPS Owner, the CA or Accounts (or another PRD persona the PRD names as decider). Say which delivery stage it blocks.
@@ -49,7 +53,50 @@ The planned toolchain, from the PRD's "Technical platform" section, is pnpm work
 
 
 
+## Checking the documents
+<!-- deps: none — how the doc checker works -->
+
+`tools/doc-check/check.mts` checks IDs, decision entries, links and tables, and keeps the review gate. It needs only Node.js 22.18 or later, which runs TypeScript directly.
+
+| Command | What it does |
+| --- | --- |
+| `node tools/doc-check/check.mts` | Runs every check. Exit code 1 means errors. |
+| `node tools/doc-check/check.mts packet --out <file>` | Writes the review packet for the stale sections. |
+| `node tools/doc-check/check.mts review "<section>" --by "<name>" --reason "<text>"` | Records the review of one section. |
+| `node tools/doc-check/check.mts drop "<section>"` | Forgets the record of a section that no longer exists. |
+| `node tools/doc-check/check.mts list [<filter>]` | Lists the sections and what each depends on. |
+
+- **Sections.** Every section of `docs/design/`, `docs/phases.md`, `docs/questions-for-kdps.md` and this file is tracked, as is each data block of `ui-blueprint.html` and the page of each other HTML file in `docs/design/`.
+- **Dependencies.** A section depends on the IDs it cites and on any `prd.md#…` or `kdps-policies.md#…` heading it names. One hop further, it depends on what the sections it points at, such as "(10.6)", cite. A new decision entry whose Choice or Changed line cites a rule counts as a change to that rule.
+- **Declaring.** A section that applies no rule carries `<!-- deps: none — reason -->` (in the blueprint script, `/* deps: none — reason */`). A section that rests on rules its text does not cite names them the same way: `<!-- deps: <IDs> — reason -->`.
+- **Stale.** A section is stale when its own text, a source's text or a source's decisions changed since its record in `docs/reviews.json`. The check fails until each stale section is fixed or confirmed.
+- **Decision log.** A PRD or policy bullet changed since the last commit needs a decision entry, added or edited since the PRD or policies were last committed, that cites it. A removed bullet's ID must be listed as retired.
+- **Reports** get the ID, link and table checks only. `alignment-sweep.md` and `decision-pack.md` are frozen proposals and may name IDs that were never added.
+
+### Change gate
+<!-- deps: none — how the doc checker works -->
+
+1. Log the decision entry.
+2. Edit the PRD or the policies. The entry and the edit may be separate commits, entry first.
+3. Run the checker. It lists the sections to review, and warns when a stock, money or access rule changed.
+4. Write the packet and run the AI review in `tools/doc-check/ai-review.md`. Run its broad sweep when warned.
+5. Fix each flagged section, or confirm it with `review` and a reason.
+6. Run the checker until it passes, then commit.
+
+The pre-commit hook in `.githooks/` runs the checker. Enable it once per clone with `git config core.hooksPath .githooks`. GitHub runs it on every push and pull request (`.github/workflows/doc-check.yml`).
+
+### Honest reviews
+<!-- deps: none — how the doc checker works -->
+
+- The checker never writes records. Only `review`, `drop` and the one-time `baseline` do.
+- Record a review only after reading the section against its current sources. The reason says what was compared and what was found.
+- One section per `review` call. Never loop `review` over many sections to make the check pass.
+- Records marked `baseline` were taken on 3 Oct 2026 after the alignment sweep. They are a starting point, not reviews.
+
+
+
 ## Working on the documents
+<!-- deps: PRD-ACS-002, PRD-ACS-003, prd.md#people-access-and-approvals — 14 personas; a persona grants no access -->
 
 - Do not delete or reword existing PRD rules as a side effect of another edit.
 - PRD style: short imperative bullets, British spelling (Organisation, colour), capitalised defined nouns (Site, Store, Organisation).
@@ -70,6 +117,7 @@ Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock 
 During the side-by-side test, the earlier POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
 
 ## Stack
+<!-- deps: prd.md#stack — restates the PRD stack table -->
 
 From the PRD's "Technical platform" section. Use these; do not add others without a PRD change.
 
@@ -103,6 +151,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 
 
 ## Planned architecture
+<!-- deps: prd.md#stack, PRD-MOD-001, PRD-MOD-002, PRD-MOD-003, PRD-MOD-006, PRD-MOD-007, PRD-MOD-011, PRD-MOD-012, PRD-MOD-014, PRD-MOD-015, PRD-INT-002, PRD-INT-003, PRD-INT-006, PRD-INT-007 — shape, tenancy, transactions, append-only, money, integrity -->
 
 These come from the PRD's "Technical platform" section and apply to all future code.
 
@@ -119,6 +168,7 @@ These come from the PRD's "Technical platform" section and apply to all future c
 
 
 ## Domain rules that cut across modules
+<!-- deps: PRD-REC-008, PRD-STK-003, PRD-STK-001, PRD-REC-009, PRD-LED-005, PRD-ACS-006, PRD-ACS-007, PRD-SEC-017, PRD-SEC-003, PRD-SEC-004, PRD-ACP-001, PRD-REC-021, PRD-ORG-014, POL-02.07 — count creates stock, sellable test, separate facts, approvals, default off, AI drafts -->
 
 - Only a physical count creates stock. Invoice, booking or price ticket (PT) quantities never do.
 - A piece is sellable only with official PT coverage, barcode verification and physical acceptance at its selling Site, and no conflicting hold or reservation.

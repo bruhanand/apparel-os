@@ -13,6 +13,8 @@ All project documents live in this folder. When two of them disagree, the one hi
 
 [decisions.md](decisions.md) logs each change to the PRD or the KDPS policies: the question, the options, the choice and why, and the IDs it changed. The entry comes first; the edit follows it. [questions-for-kdps.md](questions-for-kdps.md) lists what only KDPS or the CA can answer. [reports/](reports/) holds one-time reports. Neither is ranked; they decide nothing on their own.
 
+[reviews.json](reviews.json) records when each section of the design, the delivery plan, the questions and `AGENTS.md` was last checked against the rules it depends on. It is not ranked and decides nothing. Only the doc checker's review commands write it; [AGENTS.md](../AGENTS.md) ("Checking the documents") explains the checker and the change gate.
+
 ## Folder map
 
 | Path | What it is |
@@ -23,6 +25,7 @@ All project documents live in this folder. When two of them disagree, the one hi
 | [decisions.md](decisions.md) | Log of changes to the PRD and policies. |
 | [questions-for-kdps.md](questions-for-kdps.md) | Open questions for KDPS and the CA, by person. |
 | [reports/](reports/) | One-time reports. |
+| [reviews.json](reviews.json) | Review records kept by the doc checker. |
 
 ## When two documents disagree
 
