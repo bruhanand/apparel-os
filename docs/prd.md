@@ -584,6 +584,8 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-LED-018` A reversal of an inflow made in error takes off the value that inflow added. Any part that would take a cost pool below zero is shown as a separate variance.
 - `PRD-LED-008` Reconcile inventory value, receivables, payables, cash, bank and controlling ledger balances.
 - `PRD-LED-009` Lock financial periods; require authorised reopening for affected posting.
+- `PRD-LED-019` Reopening a locked financial period needs a request with its reason, approved by a different authorised person from the requester.
+- `PRD-LED-020` A reopening names the corrections it is for. Only their postings may enter the reopened period; every other posting stays refused. The period locks again once they have posted or the reopening is withdrawn.
 - `PRD-LED-010` Provide month-close checklists, owners, due dates, reconciliations and unresolved amounts.
 - `PRD-LED-011` The official book is the one the Official book policy names, until an authorised accounting-book transition. Keep the internal ledger and external book reconciled.
 - `PRD-LED-012` Send approved masters before sales, purchases, payments, receipts, contra, journals and credit/debit vouchers through Tally XML.

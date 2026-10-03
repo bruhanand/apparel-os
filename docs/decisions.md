@@ -1052,3 +1052,21 @@
 - **Left open.** KDPS's values (alignment report section 5, V-01 onwards, and the KDPS questions); the accounting and statutory rules Accounts and the CA set (SL-1 to SL-8, SL-14, SL-15, SL-17, GC5-1, GC5-2); sign-in security values (GC3-5); production hosting (D-1, chosen before the first switch); KDPS's agreement to real data and a test Tally company (D-4, D-5); the rollout order on production (SL-9); chunked posting, needed only if the performance test fails (SL-11); where the Customer credit receivable sits (MM-11, the stage 5 design); team size (GC-11).
 - **Why.** Builders and KDPS see one defined scope now. KDPS can adapt to it or ask for changes, and nothing it has not approved goes live.
 - **Changed.** `PRD-ORG-010` and a new "Words used" row, Retail site. Each open question above is marked with its baseline pick where it is listed and where its text points to it: `structure-and-masters.md`, `access-and-approvals.md`, `numbering-and-audit.md`, `domain-model.md`, `module-map.md`, `stock-ledger.md`, `deployment.md`, `personas.md`, `design-language.md`, `design-system.html`, `ui-blueprint.html`, `phases.md` and `questions-for-kdps.md`. No policy bullet changed.
+
+## DEC-106 — Reopening a locked period needs a second person
+
+- **Date:** 4 Oct 2026 · **Decided by:** product owner · **Report item:** GC-4 (books and posting design, 4 Oct 2026)
+- **Question.** `PRD-LED-009` locks financial periods and requires "authorised reopening for affected posting". It does not say whether one authorised person may reopen a locked period alone, or whether a second person must approve it, as for structure, mapping and access changes.
+- **Options.** Two people: one authorised person requests the reopening with its reason, and a different authorised person approves it · One person: an authorised Accounts person reopens the period alone, with a reason.
+- **Choice.** Two people. New `PRD-LED-019`: reopening a locked financial period needs a request with its reason, approved by a different authorised person from the requester. It is then an independently approved action of the PRD, which policy 2 already requires to be approved by a different person, so no policy edit is needed. Who may request and who may approve stays KDPS's (V-01).
+- **Why.** A locked period holds figures already closed and reconciled. A second person checks every change to them, as for every other control on money.
+- **Changed.** New `PRD-LED-019` in `prd.md`. The new design `finance/books-and-posting.md` (GC-4); `module-map.md` 4.14 and 11.1; `domain-model.md` section 5.
+
+## DEC-107 — A reopening lets in only the corrections it names
+
+- **Date:** 4 Oct 2026 · **Decided by:** product owner · **Report item:** GC-4 (books and posting design, 4 Oct 2026)
+- **Question.** Once a locked period is reopened, may any posting enter it until someone locks it again, or only the corrections the reopening was for? `PRD-LED-009` speaks of reopening "for affected posting".
+- **Options.** Only named corrections: the reopening names the corrections it is for, only their postings enter the period, and the period locks again when they are done · Anything until relocked: the whole period accepts any posting until a person locks it again.
+- **Choice.** Only named corrections. New `PRD-LED-020`: a reopening names the corrections it is for; only their postings may enter the reopened period, and every other posting stays refused; the period locks again once they have posted or the reopening is withdrawn. Which accounting date a late movement takes when its business date falls in a locked period stays OPEN (stock-ledger SL-15; Accounts, CA).
+- **Why.** Late or unrelated entries cannot slip into a closed month while it is open for one fix, and nobody has to remember to lock it again.
+- **Changed.** New `PRD-LED-020` in `prd.md`. The new design `finance/books-and-posting.md` (GC-4); `module-map.md` 4.14 and 11.1; `domain-model.md` section 5.
