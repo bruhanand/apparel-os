@@ -2,13 +2,16 @@
 // How to use it, and the change gate it enforces: AGENTS.md, "Checking the documents".
 //
 //   node tools/doc-check/check.mts [--base <git ref>]       run every check (default base: HEAD)
-//   node tools/doc-check/check.mts packet [--out <file>]     review packet for stale sections
-//   node tools/doc-check/check.mts review <section> --by <name> --reason <text>
+//   node tools/doc-check/check.mts impact <ID> [<ID> ...]    sections a change to these IDs would flag
+//   node tools/doc-check/check.mts packet [--out <file>] [--split <n>] [--all] [--force]
+//                                                            review packet for stale sections
+//   node tools/doc-check/check.mts record <verdict file> [<file> ...] --by <name>   record the verdicts of a review
+//   node tools/doc-check/check.mts review <section> --by <name> --reason <text> [--state <state>]
 //   node tools/doc-check/check.mts drop <section>            forget a record whose section is gone
 //   node tools/doc-check/check.mts baseline --by <name> --reason <text>   once, on an empty record file
 //   node tools/doc-check/check.mts list [<filter>]           sections and what they depend on
 //
-// The checker never writes review records on its own. Only `review`, `drop` and `baseline` do.
+// The checker never writes review records on its own. Only `review`, `record`, `drop` and `baseline` do.
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -41,6 +44,9 @@ const RANGE_RE = /`?(PRD-[A-Z]{3}-|POL-\d{2}\.|DEC-)(\d{2,3})`?\s*(?:to|–)\s*`
 const RULE_LINE_RE = /^- `(PRD-[A-Z]{3}-\d{3}|POL-\d{2}\.\d{2})` (.*)$/;
 const SOURCE_LINK_RE = /(?:^|[\s(/])((?:prd|kdps-policies)\.md)#([\w-]+)/g;
 const MARKER_RE = /(?:<!--|\/\*)\s*deps:\s*none\b/;
+// A section whose IDs a design header need not list, such as an ownership table: <!-- header: not listed — reason -->
+const HEADER_MARKER_RE = /<!--\s*header:\s*not listed\b/;
+const HEADER_LIST_RE = /^- (?:PRD IDs|Policies|Decisions):/;
 
 // ---------- small helpers ----------
 
@@ -502,36 +508,50 @@ function snapshot(unit: Unit, byKey: Map<string, Unit>, src: Sources): { unitHas
   return { unitHash: hash(norm(unit.text)), deps };
 }
 
-type Staleness = { unit: Unit; reasons: string[]; sweep: string[] };
+// The state a reviewer reads: the section text and every dependency fingerprint. A verdict is recorded
+// only while the state is unchanged, so a review never stands for text or sources it did not see.
+function stateOf(snap: { unitHash: string; deps: Record<string, Dep> }): string {
+  const ids = Object.keys(snap.deps).sort();
+  return hash([snap.unitHash, ...ids.map((id) => `${id} ${snap.deps[id].hash} ${snap.deps[id].decs.join(',')}`)].join('\n'));
+}
+
+type ChangedSource = { id: string; newDecs: string[] };
+type Staleness = { unit: Unit; reasons: string[]; sweep: string[]; textChanged: boolean; changed: ChangedSource[]; state: string };
 
 function staleness(unit: Unit, record: ReviewRecord | undefined, byKey: Map<string, Unit>, src: Sources): Staleness | null {
-  if (!record) return { unit, reasons: ['Not reviewed yet.'], sweep: [] };
+  const now = snapshot(unit, byKey, src);
+  const state = stateOf(now);
+  if (!record) return { unit, reasons: ['Not reviewed yet.'], sweep: [], textChanged: true, changed: [], state };
   const reasons: string[] = [];
   const sweep: string[] = [];
-  const now = snapshot(unit, byKey, src);
+  const changedSources: ChangedSource[] = [];
   const via = effectiveDeps(unit, byKey);
   const tag = (id: string) => (via.get(id) ? ` (via ${via.get(id)!.split('#')[1]})` : '');
-  if (now.unitHash !== record.unitHash) reasons.push('Section text changed since the last review.');
+  const textChanged = now.unitHash !== record.unitHash;
+  if (textChanged) reasons.push('Section text changed since the last review.');
   for (const [id, dep] of Object.entries(now.deps)) {
     const old = record.deps[id];
     let changed = false;
+    let newDecs: string[] = [];
     if (!old) {
       reasons.push(`${id}${tag(id)}: newly cited since the last review.`); // the rule itself did not change: no sweep
+      changedSources.push({ id, newDecs });
     } else {
       if (old.hash !== dep.hash) {
         reasons.push(`${id}${tag(id)}: ${id.startsWith('DEC-') ? 'decision entry' : id.includes('#') ? 'source section' : 'rule text'} changed.`);
         changed = true;
       }
-      const added = dep.decs.filter((d) => !old.decs.includes(d));
-      if (added.length) {
-        reasons.push(`${id}${tag(id)}: new decision ${added.join(', ')}.`);
+      newDecs = dep.decs.filter((d) => !old.decs.includes(d));
+      if (newDecs.length) {
+        reasons.push(`${id}${tag(id)}: new decision ${newDecs.join(', ')}.`);
         changed = true;
       }
+      if (changed) changedSources.push({ id, newDecs });
     }
     if (changed && sweepNeeded(src, id)) sweep.push(id);
   }
   for (const id of Object.keys(record.deps)) if (!now.deps[id]) reasons.push(`${id}: no longer cited.`);
-  return reasons.length ? { unit, reasons, sweep } : null;
+  return reasons.length ? { unit, reasons, sweep, textChanged, changed: changedSources, state } : null;
 }
 
 // ---------- checks over every document ----------
@@ -606,6 +626,37 @@ function checkTables(): void {
   }
 }
 
+// A design document that lists its IDs in its header ("- PRD IDs:", "- Policies:", "- Decisions:")
+// lists every ID its sections cite (AGENTS.md, "Alignment rules"). IDs in <!-- --> comments and in
+// sections marked <!-- header: not listed — reason --> do not count.
+function checkHeaders(src: Sources, units: Unit[]): void {
+  for (const file of walk('docs/design').filter((f) => f.endsWith('.md'))) {
+    const lines = read(file).split('\n');
+    const end = lines.findIndex((l) => /^## /.test(l));
+    const head = lines.slice(0, end < 0 ? lines.length : end);
+    const listed = head.filter((l) => HEADER_LIST_RE.test(l));
+    if (!listed.length) continue;
+    const inHeader = extractIds(listed.join('\n'), src);
+    const covered = (id: string) => {
+      if (inHeader.has(id)) return true;
+      const whole = /^POL-(\d{2})$/.exec(id);
+      return Boolean(whole && [...inHeader].some((h) => h.startsWith(`POL-${whole[1]}`)));
+    };
+    const missing = new Map<string, string>();
+    for (const u of units) {
+      if (u.file !== file || u.key === `${file}#top` || HEADER_MARKER_RE.test(u.text)) continue;
+      for (const id of extractIds(u.text.replace(/<!--[\s\S]*?-->/g, ''), src))
+        if (!covered(id) && !missing.has(id)) missing.set(id, u.key.split('#')[1]);
+    }
+    if (missing.size)
+      errors.push({
+        where: `${file}:${head.findIndex((l) => HEADER_LIST_RE.test(l)) + 1}`,
+        text: `${missing.size} ID(s) cited in the sections are missing from the header lists. List them, or mark an ownership-only section <!-- header: not listed — reason -->.`,
+        detail: [[...missing].slice(0, 15).map(([id, at]) => `${id} (${at})`).join(', ') + (missing.size > 15 ? `, and ${missing.size - 15} more` : '')],
+      });
+  }
+}
+
 function git(args: string[]): string | null {
   try {
     return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -616,18 +667,20 @@ function git(args: string[]): string | null {
 
 // A PRD or policy bullet that changed since the base needs a decision entry added or edited
 // since the last commit that touched the PRD or the policies (the entry comes first).
-function checkDecisionLog(src: Sources, base: string): void {
+// Returns the rules added since the base.
+function checkDecisionLog(src: Sources, base: string): Rule[] {
   if (git(['rev-parse', '--verify', '--quiet', `${base}^{commit}`]) === null) {
     warnings.push({ where: base, text: 'Git base not found; skipped the decision-log check.' });
-    return;
+    return [];
   }
   const at = (ref: string, path: string) => git(['show', `${ref}:${path}`]) ?? '';
   const old = parseSources(at(base, PRD), at(base, POLICIES), at(base, DECISIONS), false);
   const changed = [...src.rules.values()].filter((r) => old.rules.get(r.id)?.text !== r.text);
   const removed = [...old.rules.values()].filter((r) => !src.rules.has(r.id));
+  const added = changed.filter((r) => !old.rules.has(r.id));
   for (const r of removed)
     if (!src.retired.has(r.id)) errors.push({ where: `${r.file}`, text: `${r.id} was removed but is not listed under "Retired IDs".` });
-  if (!changed.length && !removed.length) return;
+  if (!changed.length && !removed.length) return added;
   const last = git(['log', '-1', '--format=%H', base, '--', PRD, POLICIES])?.trim();
   const before = last ? parseSources('', '', at(last, DECISIONS), false).decisions : new Map<string, Decision>();
   const pending = [...src.decisions.values()].filter((d) => before.get(d.id)?.text !== d.text);
@@ -635,6 +688,7 @@ function checkDecisionLog(src: Sources, base: string): void {
     if (pending.some((d) => extractIds(d.text).has(r.id))) continue;
     errors.push({ where: `${r.file}:${r.line}`, text: `${r.id} changed with no new or edited decision entry citing it. Log it in ${DECISIONS} first.` });
   }
+  return added;
 }
 
 // ---------- commands ----------
@@ -643,13 +697,19 @@ function today(): string {
   return new Date().toLocaleDateString('en-CA');
 }
 
+const SWITCHES = new Set(['all', 'force']); // flags that take no value
+
 function options(args: string[]): { positional: string[]; flags: Record<string, string> } {
   const positional: string[] = [];
   const flags: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith('--')) {
-      flags[args[i].slice(2)] = args[i + 1] ?? '';
-      i++;
+      const name = args[i].slice(2);
+      if (SWITCHES.has(name)) flags[name] = 'yes';
+      else {
+        flags[name] = args[i + 1] ?? '';
+        i++;
+      }
     } else positional.push(args[i]);
   }
   return { positional, flags };
@@ -676,32 +736,46 @@ function printFindings(title: string, list: Finding[]): void {
   }
 }
 
-function runCheck(flags: Record<string, string>): number {
-  const { src, units, byKey, records } = load();
+// The cheap, exact checks. They run before any semantic review: each fix they ask for can change
+// which sections are stale, so a review started before they pass would have to be repeated.
+function deterministicChecks(loaded: ReturnType<typeof load>, base: string): void {
+  const { src, units, byKey, records } = loaded;
   checkCitations(src, units);
   checkLinks();
   checkTables();
-  checkDecisionLog(src, flags.base || 'HEAD');
-
-  const sweep = new Set<string>();
-  let reviewed = 0;
-  let baseline = 0;
-  for (const u of units) {
+  checkHeaders(src, units);
+  // A new rule flags no section until one cites it; only the broad sweep finds where it applies.
+  const cited = new Set(units.flatMap((u) => [...effectiveDeps(u, byKey).keys()]));
+  for (const r of checkDecisionLog(src, base))
+    if (!cited.has(r.id))
+      warnings.push({ where: `${r.file}:${r.line}`, text: `${r.id} is new and no gated section cites it yet. Run the broad sweep in tools/doc-check/ai-review.md to find where it applies.` });
+  for (const u of units)
     if (!u.marker && !effectiveDeps(u, byKey).size)
       errors.push({ where: `${u.file}:${u.line}`, text: `${u.key} cites no rule. Cite the IDs it applies, or add <!-- deps: none — reason -->.` });
-    const record = records.units[u.key];
-    if (record?.status === 'reviewed') reviewed++;
-    if (record?.status === 'baseline') baseline++;
-    const stale = staleness(u, record, byKey, src);
-    if (!stale) continue;
-    stale.sweep.forEach((id) => sweep.add(id));
-    errors.push({ where: `${u.file}:${u.line}`, text: `Review required: ${u.key}`, detail: stale.reasons });
-  }
   for (const key of Object.keys(records.units))
     if (!byKey.has(key)) errors.push({ where: REVIEWS, text: `Record for ${key}, which no longer exists. Review the renamed section, then: check.mts drop "${key}"` });
+}
+
+function staleUnits(loaded: ReturnType<typeof load>): Staleness[] {
+  const { src, units, byKey, records } = loaded;
+  return units.flatMap((u) => staleness(u, records.units[u.key], byKey, src) ?? []);
+}
+
+function runCheck(flags: Record<string, string>): number {
+  const loaded = load();
+  const { units, records } = loaded;
+  deterministicChecks(loaded, flags.base || 'HEAD');
+
+  const sweep = new Set<string>();
+  for (const stale of staleUnits(loaded)) {
+    stale.sweep.forEach((id) => sweep.add(id));
+    errors.push({ where: `${stale.unit.file}:${stale.unit.line}`, text: `Review required: ${stale.unit.key}`, detail: stale.reasons });
+  }
   if (sweep.size)
     warnings.push({ where: 'broad sweep', text: `Stock, money or access sources changed: ${sorted(sweep).join(', ')}. Run the broad sweep in tools/doc-check/ai-review.md.` });
 
+  const reviewed = units.filter((u) => records.units[u.key]?.status === 'reviewed').length;
+  const baseline = units.filter((u) => records.units[u.key]?.status === 'baseline').length;
   printFindings('Errors', errors);
   printFindings('Warnings', warnings);
   console.log(`\nDoc check: ${errors.length} error(s), ${warnings.length} warning(s).`);
@@ -710,40 +784,182 @@ function runCheck(flags: Record<string, string>): number {
   return errors.length ? 1 : 0;
 }
 
-function runPacket(flags: Record<string, string>): number {
-  const { src, units, byKey, records } = load();
-  const out: string[] = ['# Review packet', '', 'For each section: why it was flagged, its text, and the current text of every source that changed. Follow tools/doc-check/ai-review.md.', ''];
-  let count = 0;
-  for (const u of units) {
-    const record = records.units[u.key];
-    const stale = staleness(u, record, byKey, src);
-    if (!stale) continue;
-    count++;
-    out.push(`## ${u.key}`, '', `Location: ${u.file}:${u.line}`, '', 'Why flagged:', ...stale.reasons.map((r) => `- ${r}`), '');
-    out.push('Section text:', '', '````', u.text.length > 12000 ? `${u.text.slice(0, 12000)}\n[… cut at 12,000 characters; read the file]` : u.text, '````', '');
-    const changedIds = new Set(stale.reasons.map((r) => r.split(/[ :]/)[0]).filter((id) => fingerprint(src, id)));
-    if (changedIds.size) out.push('Changed sources:', '');
-    for (const id of changedIds) {
-      const rule = src.rules.get(id);
-      const dec = src.decisions.get(id);
-      if (rule) out.push(`- \`${id}\` (${rule.file}:${rule.line}): ${rule.text}`);
-      else if (dec) out.push(`- \`${id}\` (${DECISIONS}:${dec.line}): ${dec.title}`);
-      else out.push(`- \`${id}\``);
-      const old = record?.deps[id]?.decs ?? [];
-      for (const d of fingerprint(src, id)!.decs.filter((x) => !old.includes(x))) {
-        const entry = src.decisions.get(d)!;
-        const choice = entry.text.split('\n').find((l) => l.startsWith('- **Choice.**')) ?? '';
-        out.push(`  - New decision ${d} (${DECISIONS}:${entry.line}) — ${entry.title}`, `    ${choice}`);
-      }
-    }
-    out.push('');
+// Sections already sent for review, with the state they were sent in. Kept in the git directory,
+// never committed: it only stops the same unchanged sections going out twice.
+function sentPath(): string | null {
+  const p = git(['rev-parse', '--git-path', 'doc-check-sent.json'])?.trim();
+  return p ? resolve(ROOT, p) : null;
+}
+
+function loadSent(): Record<string, string> {
+  const p = sentPath();
+  if (!p || !existsSync(p)) return {};
+  try {
+    return (JSON.parse(readFileSync(p, 'utf8')) as { sections: Record<string, string> }).sections ?? {};
+  } catch {
+    return {};
   }
-  if (!count) out.push('Nothing is stale.');
-  const text = out.join('\n');
-  if (flags.out) {
-    writeFileSync(resolve(flags.out), text);
-    console.log(`Wrote ${count} section(s) to ${flags.out}.`);
-  } else console.log(text);
+}
+
+function saveSent(sections: Record<string, string>): void {
+  const p = sentPath();
+  if (p) writeFileSync(p, `${JSON.stringify({ written: new Date().toISOString(), sections }, null, 2)}\n`);
+}
+
+function sourceEntry(src: Sources, c: ChangedSource): string[] {
+  const choice = (d: Decision) => (d.text.split('\n').find((l) => l.startsWith('- **Choice.**')) ?? '').slice(0, 1500);
+  const out: string[] = [];
+  const rule = src.rules.get(c.id);
+  const dec = src.decisions.get(c.id);
+  if (rule) out.push(`- \`${c.id}\` (${rule.file}:${rule.line}): ${rule.text}`);
+  else if (dec) out.push(`- \`${c.id}\` (${DECISIONS}:${dec.line}) — ${dec.title}`, `    ${choice(dec)}`);
+  else if (c.id.includes('#')) out.push(`- \`${c.id}\`: read this heading of the source.`);
+  else out.push(`- \`${c.id}\``);
+  for (const d of c.newDecs) {
+    const entry = src.decisions.get(d)!;
+    out.push(`  - New decision ${d} (${DECISIONS}:${entry.line}) — ${entry.title}`, `    ${choice(entry)}`);
+  }
+  return out;
+}
+
+function sectionEntry(s: Staleness): string {
+  const u = s.unit;
+  return [
+    `## ${u.key}`,
+    '',
+    `Location: ${u.file}:${u.line}`,
+    `State: ${s.state}`,
+    '',
+    'Why flagged:',
+    ...s.reasons.map((r) => `- ${r}`),
+    '',
+    'Section text:',
+    '',
+    '````',
+    u.text.length > 12000 ? `${u.text.slice(0, 12000)}\n[… cut at 12,000 characters; read the file]` : u.text,
+    '````',
+    '',
+  ].join('\n');
+}
+
+// Cut the sections into n parts of about equal size, keeping each document's sections together
+// unless one document alone is much larger than a part.
+function splitParts(list: Staleness[], n: number): Staleness[][] {
+  const size = (s: Staleness) => sectionEntry(s).length;
+  let left = list.reduce((a, s) => a + size(s), 0); // not yet placed
+  const parts: Staleness[][] = [[]];
+  let current = 0;
+  list.forEach((s, i) => {
+    const share = (current + left) / (n - parts.length + 1); // a fair size for the open part
+    const newFile = i > 0 && list[i - 1].unit.file !== s.unit.file;
+    if (parts.length < n && current && ((newFile && current >= share * 0.75) || current + size(s) > share * 1.25)) {
+      parts.push([]);
+      current = 0;
+    }
+    parts.at(-1)!.push(s);
+    current += size(s);
+    left -= size(s);
+  });
+  return parts;
+}
+
+function runPacket(flags: Record<string, string>): number {
+  const loaded = load();
+  const { src } = loaded;
+  deterministicChecks(loaded, flags.base || 'HEAD');
+  // A record left by a renamed or removed section changes nothing that is stale; every other error can.
+  const blocking = errors.filter((e) => e.where !== REVIEWS);
+  if (blocking.length && !flags.force) {
+    printFindings('Errors', blocking);
+    console.log(`\nNo packet written: fix these ${blocking.length} error(s) first. Each fix can change which sections are stale, so a review started now would be repeated. (--force writes it anyway.)`);
+    return 1;
+  }
+  printFindings('Warnings', warnings);
+  const stale = staleUnits(loaded);
+  const sent = loadSent();
+  const fresh = flags.all ? stale : stale.filter((s) => sent[s.unit.key] !== s.state);
+  const held = stale.length - fresh.length;
+  if (!stale.length) {
+    console.log('Nothing is stale.');
+    return 0;
+  }
+  if (!fresh.length) {
+    console.log(`Nothing new to review: all ${held} stale section(s) went out in an earlier packet with the same text and sources. Record their verdicts with "record", or pass --all to send them again.`);
+    return 0;
+  }
+  const n = Math.max(1, Math.min(Number(flags.split || 1) || 1, fresh.length));
+  if (n > 1 && !flags.out) fail('--split needs --out <file>: the parts are written next to it.');
+  const head = git(['rev-parse', '--short', 'HEAD'])?.trim() ?? 'no commit';
+  const dirty = git(['status', '--porcelain', '--', 'docs', 'AGENTS.md'])?.trim() ? ', with uncommitted edits' : '';
+  const written: string[] = [];
+  splitParts(fresh, n).forEach((part, k) => {
+    const sources = new Map<string, ChangedSource>();
+    for (const s of part)
+      for (const c of s.changed) {
+        const seen = sources.get(c.id);
+        sources.set(c.id, { id: c.id, newDecs: sorted([...(seen?.newDecs ?? []), ...c.newDecs]) });
+      }
+    const text = [
+      `# Review packet${n > 1 ? ` ${k + 1} of ${n}` : ''}`,
+      '',
+      `Written ${today()} from ${head}${dirty}. ${part.length} section(s): ${part.filter((s) => s.textChanged).length} with changed or new text, ${part.filter((s) => !s.textChanged).length} flagged only by their sources.`,
+      '',
+      'Follow tools/doc-check/ai-review.md. For each section with no clash, write one line to your verdict file: the section key, a tab, its State, a tab, and the reason (what you compared and what you found). Write no line for a section with a finding; report the finding instead.',
+      '',
+      '# Changed sources',
+      '',
+      ...(sources.size ? [...sources.values()].flatMap((c) => sourceEntry(src, c)) : ['None: these sections changed themselves or are new.']),
+      '',
+      '# Sections',
+      '',
+      ...part.map(sectionEntry),
+    ].join('\n');
+    if (!flags.out) return console.log(text);
+    const file = n > 1 ? resolve(flags.out).replace(/(\.md)?$/, (ext) => `-${k + 1}${ext || '.md'}`) : resolve(flags.out);
+    writeFileSync(file, text);
+    written.push(`${file} (${part.length} section(s), ${Math.round(text.length / 1000)}k characters)`);
+  });
+  saveSent({ ...Object.fromEntries(stale.filter((s) => sent[s.unit.key] === s.state).map((s) => [s.unit.key, s.state])), ...Object.fromEntries(fresh.map((s) => [s.unit.key, s.state])) });
+  if (written.length) console.log(`Wrote ${fresh.length} section(s):\n${written.map((w) => `  ${w}`).join('\n')}`);
+  if (held) console.log(`Left out ${held} section(s) already sent with the same text and sources. Record their verdicts, or pass --all.`);
+  return 0;
+}
+
+function runImpact(positional: string[]): number {
+  if (!positional.length) fail('impact <ID> [<ID> ...]: name the rules, decisions or source headings a change would touch.');
+  const loaded = load();
+  const { src, units, byKey } = loaded;
+  positional = positional.map((id) => id.replace(/^(?:\.\/)?(?=(?:prd|kdps-policies)\.md#)/, 'docs/')); // prd.md#stack names docs/prd.md#stack
+  const ids = new Set<string>(positional);
+  for (const id of positional) for (const c of src.decisions.get(id)?.cites ?? []) ids.add(c); // a decision touches what its Choice and Changed lines cite
+  const unknown = [...ids].filter((id) => !fingerprint(src, id));
+  const stale = new Set(staleUnits(loaded).map((s) => s.unit.key));
+  // A rule named here is reworded, which also changes every PRD or policy heading that holds it and so the
+  // sections that link to that heading. A rule a decision only cites keeps its text.
+  const holders = (id: string) =>
+    positional.includes(id) ? [...src.sections].filter(([, text]) => text.includes(`- \`${id}\` `)).map(([key]) => key) : [];
+  const hits: { u: Unit; via: string[] }[] = [];
+  for (const u of units) {
+    const deps = effectiveDeps(u, byKey);
+    const via = [...ids].flatMap((id) => {
+      const whole = /^POL-(\d{2})\.\d{2}$/.exec(id);
+      const key = deps.has(id) ? id : whole && deps.has(`POL-${whole[1]}`) ? `POL-${whole[1]}` : (holders(id).find((h) => deps.has(h)) ?? null);
+      if (!key) return [];
+      const how = key === id ? '' : ` as ${key.replace('docs/', '')}`;
+      return [deps.get(key) ? `${id}${how} via ${deps.get(key)!.split('#')[1]}` : `${id}${how}`];
+    });
+    if (via.length) hits.push({ u, via });
+  }
+  const files = sorted(hits.map((h) => h.u.file));
+  for (const f of files) {
+    const inFile = hits.filter((h) => h.u.file === f);
+    console.log(`\n${f}: ${inFile.length} section(s)`);
+    for (const h of inFile) console.log(`  ${h.u.key.split('#')[1]}${stale.has(h.u.key) ? '  [already stale]' : ''} — ${h.via.join(', ')}`);
+  }
+  const chars = hits.reduce((a, h) => a + h.u.text.length, 0);
+  console.log(`\nImpact of ${sorted(ids).join(', ')}: ${hits.length} section(s) in ${files.length} document(s), about ${Math.round(chars / 1000)}k characters of section text; ${hits.filter((h) => stale.has(h.u.key)).length} already stale.`);
+  if ([...ids].some((id) => sweepNeeded(src, id))) console.log('A stock, money or access rule is among them: the broad sweep applies too.');
+  if (unknown.length) console.log(`Not found (a new rule or decision cites nothing yet): ${unknown.join(', ')}.`);
   return 0;
 }
 
@@ -760,10 +976,82 @@ function runReview(positional: string[], flags: Record<string, string>): number 
   if (!unit) fail(`No section ${key}. Use "list" to see section keys.`);
   const missing = [...effectiveDeps(unit, byKey).keys()].filter((id) => !fingerprint(src, id));
   if (missing.length) fail(`Fix these unknown citations first: ${missing.join(', ')}.`);
-  records.units[key] = { status: 'reviewed', by, date: today(), reason, ...snapshot(unit, byKey, src) };
+  const snap = snapshot(unit, byKey, src);
+  if (flags.state && flags.state !== stateOf(snap)) fail(`${key} changed since state ${flags.state} was reviewed (now ${stateOf(snap)}). Review it again.`);
+  records.units[key] = { status: 'reviewed', by, date: today(), reason, ...snap };
   saveRecords(records);
   console.log(`Recorded the review of ${key}.`);
   return 0;
+}
+
+// Records many verdicts at once, each for its own section with its own reason. A line is refused
+// when its section changed after the reviewer read it, when its reason is too short, or when its
+// reason is also given for another section (in these files or in another section's record) or
+// repeats the section's previous record.
+function runRecord(positional: string[], flags: Record<string, string>): number {
+  if (!positional.length) fail('record <verdict file> [<file> ...] --by <name>. One line per section: key, tab, state, tab, reason.');
+  const by = (flags.by ?? '').trim();
+  if (!by) fail('--by is required: who checked these sections.');
+  const { src, byKey, records } = load();
+  const said = (r: string) => r.toLowerCase().replace(/\s+/g, ' ').trim();
+  const rows = positional.flatMap((file) =>
+    readFileSync(resolve(file), 'utf8')
+      .split('\n')
+      .map((l, i) => ({ line: `${posix.basename(file)}:${i + 1}`, fields: l.split('\t') }))
+      .filter((r) => r.fields.join('').trim() && !r.fields[0].startsWith('#')),
+  );
+  const uses = new Map<string, number>();
+  for (const r of rows) if (r.fields.length >= 3) uses.set(said(r.fields.slice(2).join(' ')), (uses.get(said(r.fields.slice(2).join(' '))) ?? 0) + 1);
+  const recordedBy = new Map<string, string>(); // reason -> a section already recorded with it
+  for (const [key, r] of Object.entries(records.units)) if (r.status === 'reviewed') recordedBy.set(said(r.reason), key);
+  const refused: string[] = [];
+  const current: string[] = [];
+  const seen = new Set<string>();
+  let recorded = 0;
+  for (const { line, fields } of rows) {
+    const no = (why: string) => refused.push(`${line} ${fields[0]}: ${why}`);
+    if (fields.length < 3) {
+      no('needs three fields: section key, state, reason.');
+      continue;
+    }
+    const [key, state] = fields.map((f) => f.trim());
+    const reason = fields.slice(2).join(' ').trim();
+    const unit = byKey.get(key);
+    if (!unit) {
+      no('no such section.');
+      continue;
+    }
+    if (seen.has(key)) {
+      no('listed twice.');
+      continue;
+    }
+    seen.add(key);
+    const record = records.units[key];
+    const stale = staleness(unit, record, byKey, src);
+    const snap = snapshot(unit, byKey, src);
+    if (stateOf(snap) !== state) {
+      no(`changed since the review (reviewed state ${state}, now ${stateOf(snap)}). Review it again.`);
+      continue;
+    }
+    if (!stale) {
+      current.push(key);
+      continue;
+    }
+    if (reason.split(/\s+/).length < 8) no('the reason is too short to say what was compared and found.');
+    else if ((uses.get(said(reason)) ?? 0) > 1) no('the same reason is given for another section. Each section needs its own.');
+    else if (recordedBy.has(said(reason)) && recordedBy.get(said(reason)) !== key) no(`the same reason is already recorded for ${recordedBy.get(said(reason))}. Each section needs its own.`);
+    else if (record && said(record.reason) === said(reason)) no('the reason repeats the previous record word for word. Say what was compared this time.');
+    else if ([...effectiveDeps(unit, byKey).keys()].some((id) => !fingerprint(src, id))) no('it cites an unknown ID. Fix the citation first.');
+    else {
+      records.units[key] = { status: 'reviewed', by, date: today(), reason, ...snap };
+      recorded++;
+    }
+  }
+  if (recorded) saveRecords(records);
+  console.log(`Recorded ${recorded} review(s).`);
+  if (current.length) console.log(`Already recorded for their current text and sources, left as they are: ${current.length}.`);
+  if (refused.length) console.log(`Not recorded (${refused.length}):\n${refused.map((r) => `  ${r}`).join('\n')}`);
+  return refused.length ? 1 : 0;
 }
 
 function runDrop(positional: string[]): number {
@@ -807,7 +1095,9 @@ const { positional, flags } = options(!first || first.startsWith('--') ? process
 
 const commands: Record<string, () => number> = {
   check: () => runCheck(flags),
+  impact: () => runImpact(positional),
   packet: () => runPacket(flags),
+  record: () => runRecord(positional, flags),
   review: () => runReview(positional, flags),
   drop: () => runDrop(positional),
   baseline: () => runBaseline(flags),
