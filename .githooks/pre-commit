@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the doc checker before each commit. See AGENTS.md, "Checking the documents".
+exec node tools/doc-check/check.mts --base HEAD
