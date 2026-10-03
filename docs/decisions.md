@@ -996,3 +996,59 @@
 - **Choice.** Free text. A decision on a change to the approve and reject reason list gives its reason as free text; every other decision picks a reason from the list in force (`POL-02.23`, `PRD-ACS-010`). The change itself still needs a different authorised person (`PRD-ACS-023`).
 - **Why.** It breaks the loop without loading any value KDPS has not approved, and keeps the reasons KDPS sets for every other decision.
 - **Changed.** No PRD or policy bullet changed. `access-and-approvals.md` 8, 9.5, section 15 and GC3-10 (settled).
+
+## DEC-105 — Baseline scope: build the whole application to the decisions taken so far
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** baseline request (3 Oct 2026)
+- **Question.** Many design questions are open and no KDPS policy is signed. Should design and build wait for each answer, or go ahead to one fixed baseline that KDPS then reviews?
+- **Options.** A baseline now: design and build the whole application to the decisions taken so far and to the picks below; KDPS reviews it in the next policy round and asks for changes, each a new decision entry · Wait for each answer before designing or building what depends on it.
+- **Choice.** A baseline now. (1) Every PRD feature is designed and built, in the stage order of `phases.md`, to this baseline. (2) The KDPS policy answers as written in `kdps-policies.md` are the baseline behaviour; live use still needs the policy signed (`PRD-SEC-017`). (3) KDPS's own values (limits, tolerances, names, dates, reasons, recipients, number formats, retention periods) stay settings with no default; tests use labelled synthetic data. (4) Every policy-dependent feature is built complete and ships switched off; an Admin switches it on per Organisation once its settings are valid and its policy is signed. (5) The open questions in the table below take the baseline pick shown. (6) Any change KDPS asks for is a new decision entry.
+- **Baseline picks.** The person named last confirms the pick or asks for a change.
+
+| Question | Baseline pick | Confirms |
+| --- | --- | --- |
+| GC2-1 | A business unit's tax registration must be in the State of its Site; the mapping check compares them | CA (question 16) |
+| GC2-2 | Changes to the structure, to business-unit mappings and to agreement versions need approval by a different authorised person. Verifying a mapping is a separate permission, held by a different person from the one who made the mapping | KDPS Owner, Admin; Accounts, CA |
+| GC2-3 | The Site kind where Stores trade is a retail site (new "Words used" row; `PRD-ORG-010`) | — |
+| GC2-4 | A relocating Store gets new business units at its new Site, linked to its old ones; stock moves between them by transfer | — |
+| GC2-5 | A SKU's stock unit cannot change while any stock of it is recorded | Booking, Operations |
+| GC2-6 | Every party's bank-detail change needs approval by a different authorised person, not only a supplier's | KDPS Owner, Admin |
+| GC2-7 | No master version ever starts on a past date | — |
+| GC2-9 | Every list-type merchandise attribute carries an approved vocabulary; which attributes exist is configured per Organisation (`PRD-ORG-011`) | Booking |
+| GC3-1 | The preparers of a version are everyone who recorded a change in it, including the one who submitted it | KDPS Owner |
+| GC3-4 | A credential reset needs no second approver; it is a protected action, it is recorded, and nobody resets their own | KDPS Owner, Admin |
+| GC3-6 | A fresh authenticator code is asked for when deciding an approval, changing access, changing bank details, and showing or exporting an encrypted field; how long a code stays fresh is a setting | KDPS Owner |
+| GC3-7 | A stand-in grant needs approval by a different authorised person | KDPS Owner |
+| GC3-8 | Approvals and tasks have a due time and an escalation recipient per action type and Site, set like exception routing; an escalation adds the recipient and keeps the owner | KDPS Owner, Admin |
+| GC3-9 | Staff see their own employee record, read-only, through self-service; its restricted fields follow the self-service role's field permissions | KDPS Owner, HR |
+| GC3-12 | On `kdps-test`, the first reason list, with the reasons KDPS gives, is a setting of the test setup, approved first with a free-text reason | KDPS Owner, Admin |
+| DM-4 | State names. Site, Store and business unit: Setting up, Active, Closing, Closed. Master version: Awaiting approval, Scheduled, In force, Ended, Rejected. User: Active, Disabled, Ended. Import batch: Staged, Validated, Published, Failed. Proposal: Proposed, Confirmed, Rejected. Financial period: Open, Locked, Reopened. Number series: Open, Paused, Closed. An exception not yet resolved: Unresolved. An approval request ended by a material change: Superseded | Design review |
+| DM-5 | A product proposal is confirmed by a different person from its proposer | KDPS Owner |
+| DM-6 | A policy's real values are recorded as validated, with the evidence, by a person holding the validate permission who did not enter them | — |
+| DM-7 | Records stay separate in each module; an optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically | — |
+| DM-8 | Value bases: booking approval, the booking's value at cost; damage confirmation, acceptance of excess, wrong or unidentified goods, and each supplier-return step, cost; day-close cash variance, the difference; payroll inputs, the period's net pay; offers, no value limit | KDPS Owner (limits) |
+| MM-1 | `organisation` and `kernel` are confirmed module names, and modules keep their parts | — |
+| MM-3, SL-23 | Outcome A: a valued movement with no valid posting map does not commit; the document stays as it was, and an exception is raised in its own transaction | CA |
+| MM-6 | The financial period row is locked in shared mode after cost pool rows and before number series | — |
+| MM-7 | `receiving` owns inbound ownership records | — |
+| MM-8 | Readiness and activity approval is given by a different person from the one who ran the checks; who holds it is KDPS's (question 49) | KDPS Owner |
+| MM-10 | An e-invoice-applicable bill waits for its IRN before the tax invoice prints and the goods are handed over. Meanwhile the customer gets nothing that looks like a tax invoice, and an unknown or failed outcome keeps the bill pending until it is resolved | CA |
+| MM-12 | The Tally voucher model supports vouchers with and without items; a setting per book chooses | Accounts, CA |
+| MM-13 | A registration-only change between business units at one Site always needs its statutory document; it is never a location move | CA |
+| MM-14 | The AI gateway is built in stage 2, for PT source files; stage 1 imports use the manual route only | — |
+| MM-15 | Retention, deletion and legal holds are designed with backup, restore and export (GC-9); customer consent and notices in the stage 4 counter design; employee data in the stage 6 HR design | — |
+| SL-10 | Until a later plan allows those returns, the customer is served under the no-bill return route where policy 7 allows it, and is otherwise refused with the reason shown | — |
+| SL-18 | The event is the Store's switch to billing in Apparel OS | — |
+| Cost drift (stock-ledger 10.4) | No tolerance: any rise above the decision's limit or the approved amount needs renewed approval | KDPS Owner |
+| D-2 | A Railway bucket, S3-compatible, holds files on the test setup | — |
+| D-3 | `kdps-test` uses the Railway-provided address; a custom domain can be added later | — |
+| D-6 | The local helper and the Tally local gateway call the server over HTTPS with a service-identity credential; nothing calls into a Store or office. Development uses the same sign-in as production, with synthetic users | — |
+| Owner and losses (personas) | The Owner template approves write-offs, disposals and count differences above the Store manager's tolerance, within limits KDPS sets | KDPS Owner |
+| Camera scanning (personas) | Built for phones in the browser, for lookup, receiving and counts; switched off by default | — |
+| Phone client (PRD Stack) | Responsive web serves phones through stage 6; a native phone client needs a later decision | — |
+| Forecast service hosting (module-map 10) | It runs as one more service in the same hosting as the app | — |
+| Accessibility (design-language 12) | WCAG 2.2 AA is the target for every screen | — |
+
+- **Left open.** KDPS's values (alignment report section 5, V-01 onwards, and the KDPS questions); the accounting and statutory rules Accounts and the CA set (SL-1 to SL-8, SL-14, SL-15, SL-17, GC5-1, GC5-2); sign-in security values (GC3-5); production hosting (D-1, chosen before the first switch); KDPS's agreement to real data and a test Tally company (D-4, D-5); the rollout order on production (SL-9); chunked posting, needed only if the performance test fails (SL-11); where the Customer credit receivable sits (MM-11, the stage 5 design); team size (GC-11).
+- **Why.** Builders and KDPS see one defined scope now. KDPS can adapt to it or ask for changes, and nothing it has not approved goes live.
+- **Changed.** `PRD-ORG-010` and a new "Words used" row, Retail site. Each open question above is marked with its baseline pick where it is listed and where its text points to it: `structure-and-masters.md`, `access-and-approvals.md`, `numbering-and-audit.md`, `domain-model.md`, `module-map.md`, `stock-ledger.md`, `deployment.md`, `personas.md`, `design-language.md`, `design-system.html`, `ui-blueprint.html`, `phases.md` and `questions-for-kdps.md`. No policy bullet changed.

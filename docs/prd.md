@@ -166,6 +166,7 @@ Business words:
 | Quarantine | A hold that keeps damaged, wrong or unidentified goods apart from sellable stock |
 | Receipt origin | The counted receipt, opening stock or other counted source a quantity of stock came from. It carries its PT revision, ownership and cost through every move |
 | Reservation | Stock set aside for an approved purpose and unavailable for another allocation |
+| Retail site | A Site where one or more Stores trade |
 | Role | A named set of permissions, granted to a person through scoped role assignments |
 | RTV | Supplier return: goods sent back to a supplier under an agreement or approved claim |
 | Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
@@ -259,7 +260,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ORG-007` Maintain geography as Country → State → City → Area → Site. Regions and clusters are additional configurable groupings.
 - `PRD-ORG-008` Maintain Site and Store names, aliases, addresses, classifications, opening and closing dates, status and partner associations.
 - `PRD-ORG-009` Keep physical Site kind, Store format, operating model, inventory ownership and settlement terms independent.
-- `PRD-ORG-010` Support head and regional offices, central and regional warehouses, MBO, EBO, shop-in-shop and kiosk formats, and company-owned, franchise-owned and franchise-owned company-operated stores.
+- `PRD-ORG-010` Support head and regional offices, central and regional warehouses, retail sites, MBO, EBO, shop-in-shop and kiosk formats, and company-owned, franchise-owned and franchise-owned company-operated stores.
 - `PRD-ORG-011` Configure countries, currencies, merchandise categories, product identity, commercial terms, workforce rules and accounting interfaces for each Organisation.
 - `PRD-ORG-012` Maintain floor, backstore, zones, racks, bins, fixtures, display and alteration locations. Damage, holds and transit are stock/custody conditions, not invented Sites.
 - `PRD-ORG-013` Assign each Store a default warehouse for replenishment and returns; permit other authorised routes.
