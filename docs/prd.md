@@ -171,7 +171,7 @@ Business words:
 | Sale-or-return | Commercial terms where unsold pieces can go back to the supplier under the agreement |
 | SBU | Short for business unit |
 | Sell-through | The share of received pieces sold in a period |
-| Shop-in-shop | A brand counter operating inside a larger store |
+| Shop-in-shop | A Store format: the Organisation's own Store trading inside another business's premises. A brand counter inside the Organisation's own Store is a business unit of that Store, not a shop-in-shop |
 | Side-by-side test | The period in which the earlier POS stays the selling system for a Store while Apparel OS is tested beside it (`PRD-LIF-012`, `PRD-LIF-026`) |
 | Site | A physical place with a permanent identity |
 | SKU | Stock keeping unit: one merchandise variant, such as one style, colour and size |
@@ -253,7 +253,9 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ORG-003` A Site is a physical place with a permanent identity and site code. A Store is a trading business at a Site, with a separate store code, name and history.
 - `PRD-ORG-004` A business unit, or SBU, is the whole Store or one of several units within it. Offices and warehouses can also have business units.
 - `PRD-ORG-005` Map each business unit explicitly to its legal entity, tax registration and accounting book. Units at one Site may have different mappings; transactions use the relevant unit's mappings.
+- `PRD-ORG-020` Each tax registration and each accounting book belongs to exactly one legal entity, fixed when it is created. A legal entity may hold several of each. A business unit's tax registration and accounting book must belong to its mapped legal entity.
 - `PRD-ORG-006` Allow whole-store and warehouse units to cover several brands, brand-counter units to cover one brand, and office units to operate without a brand.
+- `PRD-ORG-021` Several Stores may trade at one Site at the same time. A Store's link to its Site is effective-dated. A brand counter inside the Organisation's own Store is a business unit of that Store; the shop-in-shop Store format is the Organisation's own Store trading inside another business's premises.
 - `PRD-ORG-007` Maintain geography as Country → State → City → Area → Site. Regions and clusters are additional configurable groupings.
 - `PRD-ORG-008` Maintain Site and Store names, aliases, addresses, classifications, opening and closing dates, status and partner associations.
 - `PRD-ORG-009` Keep physical Site kind, Store format, operating model, inventory ownership and settlement terms independent.
@@ -306,6 +308,8 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-ACS-017` Apply the configured idle-lock and absolute session limits; preserve unfinished work when a session locks or expires. Keep development test access separate from production authentication.
 - `PRD-ACS-018` Grant a stand-in only named, scoped, time-limited authority with automatic expiry. A stand-in cannot approve their own preparation.
 - `PRD-ACS-019` For bulk approval, show the selected items and total, recheck each item's scope, limit, state and independent-approval requirement, and route exceptions individually. Enable only explicitly allowed action types.
+- `PRD-ACS-020` A user belongs to one Organisation. A person who works for several Organisations, such as a CA or an Auditor, holds a separate user in each; no login, session or role assignment crosses Organisations.
+- `PRD-ACS-021` Scope a role assignment's places by whole Sites, or by single Stores or business units within a Site. A selected Site covers every Store and business unit at it, including ones added later. Self-service uses a scope limited to the person's own records.
 
 ## Merchandise and identifiers
 
@@ -741,6 +745,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-019` Final retirement requires all outstanding items resolved; unresolved items cannot be waived solely to retire a unit.
 - `PRD-LIF-020` Preserve identities and history after closure; reopening requires fresh readiness, mapping and access approval.
 - `PRD-LIF-021` Relocation creates a new linked Site. Renaming does not replace the physical identity.
+- `PRD-LIF-029` On relocation the Store keeps its code, name and history; its Site link moves to the new linked Site from the relocation date.
 - `PRD-LIF-022` Export masters, documents, lines, stock/accounting movements, attachments, mappings and audit history with reconstructible relationships and reconciled totals.
 - `PRD-LIF-023` Retain customer history and in-progress work through migration. Demo-data retirement cannot authorise deletion of real business records.
 - `PRD-LIF-025` At a Store's switch count, label every piece of a piece-tracked profile that has no piece ID, and verify every piece ID counted. Plan each Store's labelling before its switch day.

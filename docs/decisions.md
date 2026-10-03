@@ -888,3 +888,39 @@
 - **Choice.** Signed and Revoked. Signed (Done, ✓) shows on Policy readiness when the policy's "Signed by, date" line is complete (`DEC-029`). Revoked (Stopped, ✕) shows on a registered device or session reported lost and revoked (`PRD-SEC-008`, `PRD-OFF-019`). An unsigned policy still shows the 10.17 banner, not a badge.
 - **Why.** Both fit existing families, and screens need the names.
 - **Changed.** `design-language.md` section 7 (both states move from the proposed table into the settled states table; the proposed table keeps only Working set expired, `DEC-062`) and the states list in `design-system.html`. No PRD or policy bullet changed.
+
+## DEC-093 — The Organisation is found by its code at sign-in; one user per Organisation
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** MM-2 (module map, 3 Oct 2026)
+- **Question.** With one database per Organisation (`PRD-MOD-001`), how is the Organisation found before sign-in (`PRD-INT-001`), where is the list of Organisations kept, and does a person who serves several Organisations, such as a CA or an Auditor, get one login or one per Organisation?
+- **Options.** An Organisation code at sign-in; a small directory outside the Organisation databases holds only what routing needs; users and sessions live in each Organisation's database; a person serving several Organisations holds a separate user in each · One shared login per person across Organisations, kept in a shared store outside the Organisation databases; after sign-in the person picks an Organisation.
+- **Choice.** An Organisation code, and one user per Organisation. New `PRD-ACS-020`: a user belongs to one Organisation; a person who works for several holds a separate user in each, and no login, session or role assignment crosses Organisations. The routing itself is design: the directory holds only each Organisation's code and where its database is, sign-in asks for the code, and a custom domain may fill it in later.
+- **Why.** Every Organisation stays fully walled off: its people, passwords and sessions never sit outside its own database.
+- **Changed.** New `PRD-ACS-020` in `prd.md`; `module-map.md` section 4.1 (Organisation routing) and MM-2 (settled); `deployment.md` sections 3 and 4.
+
+## DEC-094 — A role assignment's places: whole Sites, or single Stores or business units within a Site
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** DM-1 (domain model, 3 Oct 2026)
+- **Question.** `PRD-ACS-001` and `POL-02.02` scope a role assignment by entity, Site and brand. `personas.md` also names Store and business unit, and self-service needs a scope of the person's own records (DEC-041). Are Store and business unit scope dimensions of their own, or selections inside a Site?
+- **Options.** One place tree: whole Sites, or single Stores or business units within a Site; legal entity and brand stay separate filters · Whole Sites only: a person given a Site sees every Store and business unit at it.
+- **Choice.** The place tree. New `PRD-ACS-021`: scope a role assignment's places by whole Sites, or by single Stores or business units within a Site; a selected Site covers every Store and business unit at it, including ones added later; self-service uses a scope limited to the person's own records. `PRD-ACS-001`, `PRD-ACS-005` and `POL-02.02` are not reworded: Site scope still exists, and all, selected and empty scope apply as before.
+- **Why.** Two trading units at one Site, such as a brand counter inside a Store, can be kept apart, while a Site-wide assignment works as before.
+- **Changed.** New `PRD-ACS-021` in `prd.md`; `domain-model.md` section 3.2 (Scope) and DM-1 (settled); `structure-and-masters.md` (the place tree).
+
+## DEC-095 — Each tax registration and each accounting book belongs to one legal entity
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** DM-2 (domain model, 3 Oct 2026)
+- **Question.** `PRD-ORG-005` maps each business unit to a legal entity, a tax registration and an accounting book, and says nothing of how the three relate. Does a book belong to exactly one legal entity? Does a tax registration?
+- **Options.** Yes, both: each belongs to one legal entity, which may hold several of each, and a business unit's mapping is checked for consistency · No link: any combination is allowed and nothing is checked.
+- **Choice.** Yes, both. New `PRD-ORG-020`: each tax registration and each accounting book belongs to exactly one legal entity, fixed when it is created; a legal entity may hold several of each; a business unit's tax registration and accounting book must belong to its mapped legal entity. The CA is asked to confirm this for KDPS's GST registrations and books (CA question 16 in `questions-for-kdps.md`).
+- **Why.** A GST registration belongs to one PAN, and a book is one entity's books. The check stops a wrong mapping before any transaction uses it, and makes a move between legal entities visible.
+- **Changed.** New `PRD-ORG-020` in `prd.md`; `domain-model.md` section 3.1 and DM-2 (settled); `structure-and-masters.md`; CA question 16 in `questions-for-kdps.md`.
+
+## DEC-096 — Several Stores may share a Site; a brand counter is a business unit; a relocated Store keeps its identity
+
+- **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** DM-3 (domain model, 3 Oct 2026)
+- **Question.** Can more than one Store trade at one Site at the same time? Is a shop-in-shop a Store, or a business unit of its host Store (`PRD-ORG-006`, `PRD-ORG-010`)? On relocation (`PRD-LIF-021`), does the Store keep its identity at the new linked Site?
+- **Options.** Flexible: several Stores per Site; a brand counter inside the Organisation's own Store is a business unit of that Store; the shop-in-shop format is the Organisation's own Store inside another business's premises; a relocated Store keeps its code and history, with a dated Site link · Strict: one Store per Site at a time; a relocation closes the Store and opens a new one, linked to the old.
+- **Choice.** Flexible. New `PRD-ORG-021`: several Stores may trade at one Site at the same time; a Store's link to its Site is effective-dated; a brand counter inside the Organisation's own Store is a business unit of that Store; the shop-in-shop Store format is the Organisation's own Store trading inside another business's premises. New `PRD-LIF-029`: on relocation the Store keeps its code, name and history, and its Site link moves to the new linked Site from the relocation date. How a relocating Store's business units move to the new Site is left to the stage 5 relocation design (OPEN; product owner).
+- **Why.** It fits how stores are laid out, and keeps a Store's sales and history together when it moves.
+- **Changed.** New `PRD-ORG-021` and `PRD-LIF-029` in `prd.md`; the "Words used" entry for Shop-in-shop, which read "A brand counter operating inside a larger store", now matches the choice; `domain-model.md` section 3.1 and DM-3 (settled); `structure-and-masters.md`.
