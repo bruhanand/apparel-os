@@ -14,7 +14,7 @@
 
 ### Needed for stage 1 (setup)
 
-1. **Who does what?** For each actual employee: their job/personas, Sites or warehouses, brands and role assignments. One person may hold several. Include Operations, HR, EBO staff, CA and Auditor users; editable templates now exist for all five. · `POL-02.11` · V-01
+1. **Who does what?** For each actual employee: their job/personas, the places they work (whole Sites or warehouses, or just one Store or brand counter), brands and role assignments. One person may hold several. Include Operations, HR, EBO staff, CA and Auditor users; editable templates now exist for all five. · `POL-02.11` · V-01
 2. **Approval limits.** Confirm role-level approval limits by action, then name any authorised person with an individual limit. Include PT approval by proposed acquisition cost, discount, refund, stock adjustment, write-off, transfer and supplier payment. A missing limit grants no authority. Actual amounts and names remain open. · `POL-02.10`, `POL-02.15`, `PRD-ACS-015` · V-02
 3. **Problems ("exceptions").** For each type and Site, who owns it, when is it due, and who receives an escalation? Include short delivery, damage, cash gap, supplier matter and missing EBO report. Stock routes to Operations, money to Accounts and supplier matters to Booking. · `POL-02.11`, `POL-02.16` · V-03
 4. **Logins.** Production uses authenticator-app TOTP. Initial idle locks are 5 minutes for shared POS and 15 minutes for office sessions, with a 12-hour absolute limit. Which named Admin runs the production setup and validates these settings? · `POL-02.17`, `POL-02.18` · V-04
@@ -91,7 +91,7 @@
 2. **Does Tally track stock?** Do sales and purchase entries carry item quantities or only amounts? Send real sample vouchers of each kind. · `POL-09.16` · V-46 · shapes stage 1 design; needed by stage 5
 3. **Ledger accounts.** Provide KDPS's current CA-approved chart of accounts and identify the ledger each transaction should post to, including the difference between a supplier's credit and the stock value a supplier return removes, late cost changes for goods already sold (and any excess shown on its own line in cost of goods sold), and the variance left when a mistaken receipt is undone. (With the CA.) · `POL-09.11`, `POL-09.23` · V-10 · stage 2
 4. **Small differences.** How much rounding or invoice-matching difference is acceptable before it becomes a problem to chase? · `POL-09.14` · V-11 · stage 2
-5. **GST numbers.** Which GST registration covers each Store, warehouse and office unit? Also provide the HSN codes, GST rates and slabs for your goods. (With the CA.) · `POL-10.06`, `POL-10.08` · V-18 · stage 2
+5. **GST numbers.** Which GST registration covers each business unit: each whole Store, brand counter, warehouse and office? Also provide the HSN codes, GST rates and slabs for your goods. (With the CA.) · `POL-10.06`, `POL-10.08` · V-18 · stage 2
 6. **Each brand's cost formula.** For each brand: how do you get from BASIC to P RATE? Which discounts, freight and other charges, in what order, with what rounding? One real worked example per brand. (With Booking.) · `POL-03.06`, `POL-03.07` · V-15 · stage 2
 7. **Petty cash.** Float and spending limit for each Store. · `POL-09.14` · V-39 · stage 4
 8. **E-invoices.** Which of your legal entities must issue e-invoices? (With the CA.) · `POL-10.03` · V-41 · stage 4
@@ -118,6 +118,7 @@
 13. **Writing stock down to what it can sell for.** How should a net realisable value write-down be worked out and spread, under FIFO and under moving average, and how is it reversed? · `PRD-LED-007`, `POL-09.08` · stock-ledger SL-5 · stage 5
 14. **Store value when cost is pooled for the whole book.** If stock cost is pooled across the whole book, how should each Store's stock value be shown for its monthly net asset value and at closure? (With Accounts.) · `PRD-NAV-016`, `PRD-LIF-018` · stock-ledger SL-14 · stage 5
 15. **Late entries for a closed month.** When a stock entry arrives late and its business date falls in a closed month, which accounting date should it take? (With Accounts.) · `PRD-LED-009`, `POL-09.12` · stock-ledger SL-15 · stage 5
+16. **Who owns each registration and book.** The app treats each GST registration and each set of books as belonging to exactly one legal entity, and checks that each business unit's registration and books belong to its own legal entity. Is that right for KDPS? Also: must a unit's GST registration always be in the same State as the place it trades from? · `PRD-ORG-020`, `POL-10.06`, `POL-10.08` · GC-2 GC2-1 · stage 2
 
 ## Operations
 

@@ -21,7 +21,7 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
   <div style="font-family:'Source Code Pro',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6b6c70">Apparel OS · UI blueprint · Revision 6 · 3 Oct 2026</div>
   <h1 style="margin:0;font-size:34px;font-weight:600;letter-spacing:-.01em">Screens, menus and personas</h1>
   <p style="margin:0;max-width:800px;font-size:15px;line-height:1.55;color:#45464b;text-wrap:pretty">What the screens are and who sees them. The rules come from the <a href="../../prd.md">PRD</a> and the <a href="../../kdps-policies.md">KDPS policies</a>; this page only places them on screens. If it disagrees with them, they win. Amber tags such as <span style="font-family:'Source Code Pro',monospace;font-size:12px;background:#fbeed6;color:#7a4a00;padding:1px 6px;border-radius:3px">Policy 2</span> name the KDPS policy a page needs before it can be used live. Green tags carry a PRD rule. Visual rules are in <a href="design-language.md">design-language.md</a>.</p>
-  <p style="margin:0;max-width:800px;font-size:12px;line-height:1.55;color:#6b6c70">IDs applied: PRD-ACS-001 to PRD-ACS-009, PRD-ACS-015 to PRD-ACS-019; PRD-UXP-001 to PRD-UXP-010; PRD-MER-015, PRD-MER-017; PRD-REC-020 to PRD-REC-022; PRD-STK-008; PRD-DMG-001, PRD-DMG-002; PRD-TRF-026; PRD-RET-010; PRD-OFR-009; PRD-EBO-009; PRD-TAX-007; PRD-EXC-012; PRD-LED-011; PRD-SEC-013; PRD-POS-020; PRD-LIF-013, PRD-LIF-014, PRD-LIF-025, PRD-LIF-027; POL-02.01 to POL-02.23; POL-04.06; POL-05.09; POL-07.01; POL-08.04; POL-10.07; POL-12.06; POL-13.13; POL-15.01; POL-17.10; POL-19.03, POL-19.05.</p>
+  <p style="margin:0;max-width:800px;font-size:12px;line-height:1.55;color:#6b6c70">IDs applied: PRD-ACS-001 to PRD-ACS-009, PRD-ACS-015 to PRD-ACS-021; PRD-UXP-001 to PRD-UXP-010; PRD-MER-015, PRD-MER-017; PRD-REC-020 to PRD-REC-022; PRD-STK-008; PRD-DMG-001, PRD-DMG-002; PRD-TRF-026; PRD-RET-010; PRD-OFR-009; PRD-EBO-009; PRD-TAX-007; PRD-EXC-012; PRD-LED-011; PRD-SEC-013; PRD-POS-020; PRD-LIF-013, PRD-LIF-014, PRD-LIF-025, PRD-LIF-027; POL-02.01 to POL-02.23; POL-04.06; POL-05.09; POL-07.01; POL-08.04; POL-10.07; POL-12.06; POL-13.13; POL-15.01; POL-17.10; POL-19.03, POL-19.05.</p>
   <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
     <strong style="font-size:13px">What changed in Revision 6</strong>
     <sc-for list="{{ changes }}" as="c" hint-placeholder-count="9">
@@ -219,7 +219,7 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
       <div style="border:1px solid #cfcfca;border-radius:4px;overflow:hidden;font-size:11px;font-family:'Source Code Pro',monospace;color:#45464b">
         <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:#1c1d1f;color:#e9e9e6;flex-wrap:wrap">
           <span style="border:1px dashed #6b6c70;padding:2px 8px;border-radius:3px;color:#9a9ba0">logo</span>
-          <span style="border:1px solid #4a4b50;padding:2px 8px;border-radius:3px">Entity ▾ · Store ▾ · Unit ▾ · Brand ▾</span>
+          <span style="border:1px solid #4a4b50;padding:2px 8px;border-radius:3px">Entity ▾ · Place ▾ · Brand ▾</span>
           <span style="flex:1;min-width:120px;border:1px solid #4a4b50;padding:2px 8px;border-radius:3px;color:#9a9ba0">Search or scan: SKU · barcode · piece ID · doc no. · bill  Ctrl K</span>
           <span>My work 12</span><span>Alerts</span><span>☾</span><span>AK ▾</span>
         </div>
@@ -239,7 +239,7 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
         </div>
       </div>
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:#45464b">
-        <li><strong>Scope picker</strong> covers legal entity, Site, Store, business unit and brand, several at once, never merged. Every page shows its active scope as a chip.</li>
+        <li><strong>Scope picker</strong> covers legal entity, brand and one place tree: Sites, with their Stores and business units under them; a ticked Site covers everything under it (PRD-ACS-021). Several at once; Site, Store and business unit are never merged. Every page shows its active scope as a chip.</li>
         <li><strong>Restricted fields</strong> show a lock and the word “Restricted”; the value itself never reaches the browser.</li>
         <li><strong>Notifications</strong> are in-app for now; WhatsApp and SMS arrive in stage 5. <strong>My work</strong> collects tasks, approvals and exceptions, ordered by due time and exposure, with Resolved tracked separately (no Seen/Acknowledged; PRD has no such states).</li>
         <li><strong>Live action unavailable</strong> replaces an action whose policy is not signed and configured, and says what is missing.</li>
@@ -365,7 +365,7 @@ class Component extends DCLogic {
         L('Users'), S('Personas and roles', 'PRD personas · KDPS templates · Role assignments', 'Policy 2'), S('Approval limits', null, 'Policy 2'), S('Exception rules', 'Owner · Due time · Escalation · Alerts', 'Policy 2'),
         S('Customer return policy', 'Organisation · Authorised Store overrides', 'Policy 6'), S('Tax configuration', null, 'Policy 10'), S('Posting maps', null, 'Policy 9'), L('Devices, tills and bill series', null, 'Policies 10, 16'), S('Reason codes'), S('Label templates'),
         L('Golden pricing cases'), L('Audit log', 'Changes · Sign-ins · Sensitive access'), W('Backup and restore drills', null, 'Policy 18'), W('Opening and cutover', 'Sources · Mapping (saved layouts from File intake) · Reconcile the count with the earlier POS’s last SOH (PRD-LIF-027) · Sign-off', 'Policy 14'), W('Site opening and closure', 'Readiness · Closure checklist'), W('Data export'),
-        W('Sign in · password reset'), R('My profile', 'Details · Sessions · Theme · Language (stage 5)')], actions: 'Approve a configuration change · set its effective date · register / retire a device · sign a checklist · run a restore drill.' }
+        W('Sign in · password reset', 'Organisation code · Login (DEC-093)'), R('My profile', 'Details · Sessions · Theme · Language (stage 5)')], actions: 'Approve a configuration change · set its effective date · register / retire a device · sign a checklist · run a restore drill.' }
     ];
     const pageCount = modules.reduce((a, m) => a + m.pages.length, 0);
     const moduleCount = modules.length;

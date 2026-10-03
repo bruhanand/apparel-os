@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-019`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-021`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05` (cited beside the persona cards that use them).
 
 Used by: [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
@@ -16,10 +16,10 @@ Used by: [design-language.md](../ui/design-language.md), [ui-blueprint.html](../
 
 | Word | Meaning | Grants access? |
 | --- | --- | --- |
-| User | One person: one login and one My work | — |
+| User | One person's login in one Organisation, with one My work. A person serving several Organisations has a user in each (`PRD-ACS-020`) | — |
 | Persona | One of the PRD's 14 kinds of work, each with a short ID. A user can hold several | **No.** It sets the home screen, landing page, menu order, daily summary and test journeys |
 | Role | A named set of permissions. KDPS starts from eleven editable templates (`POL-02.01`) | Yes: actions and fields |
-| Role assignment | A user, a role, a scope (legal entity, Site, Store, business unit, brand) and effective dates | Yes, only inside its own scope |
+| Role assignment | A user, a role, a scope (legal entity, brand, and places: whole Sites, or single Stores or business units within a Site, `PRD-ACS-021`) and effective dates | Yes, only inside its own scope |
 
 Rules (PRD: People, access and approvals):
 
@@ -136,7 +136,7 @@ Approve permissions that no card names (PT approval, damage confirmation, stock 
 
 ## 3. Several personas on screen
 
-- One login and one My work across all personas.
+- One login and one My work across all personas, within one Organisation (`PRD-ACS-020`).
 - The sidebar is the union of the sections the user's role assignments grant. A section appears once, with the tabs of every persona merged.
 - Home shows one block per persona held. The user picks which persona's home opens first; by default it is the first assignment.
 - An action is enabled only where one role assignment covers the current scope. Otherwise it is disabled and the reason names what is missing, for example "Your Store manager assignment covers BLR01 only".

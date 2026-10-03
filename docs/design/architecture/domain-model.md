@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Organisation, sites and ownership; People, access and approvals; Merchandise and identifiers; Source conversion and imports; Module and data boundaries; and, for the stage 1 records only, Ledger and official books, Exceptions, reports and planning, Opening, closure, migration and export, and Offline counter. Other sections are outlined (section 2).
 
-- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`; `PRD-ACS-001`–`PRD-ACS-019`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
+- PRD IDs: `PRD-ORG-001`–`PRD-ORG-016`, `PRD-ORG-018`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-IMP-001`–`PRD-IMP-013`; `PRD-BKG-004`; `PRD-REC-008`, `PRD-REC-013`, `PRD-REC-017`; `PRD-PTW-001`, `PRD-PTW-006`, `PRD-PTW-010`; `PRD-STK-012`; `PRD-TRF-005`, `PRD-TRF-010`; `PRD-DMG-002`; `PRD-POS-003`, `PRD-POS-016`, `PRD-POS-020`; `PRD-RET-010`, `PRD-RET-017`; `PRD-OFR-001`, `PRD-OFR-002`, `PRD-OFR-011`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`, `PRD-LED-014`, `PRD-LED-015`; `PRD-CSH-011`; `PRD-PAY-006`; `PRD-FRN-007`; `PRD-EXC-001`–`PRD-EXC-003`; `PRD-LIF-001`–`PRD-LIF-003`, `PRD-LIF-009`–`PRD-LIF-011`, `PRD-LIF-015`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-001`, `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-001`, `PRD-INT-002`, `PRD-INT-004`–`PRD-INT-008`; `PRD-OFF-001`–`PRD-OFF-005`, `PRD-OFF-010`; `PRD-SEC-001`, `PRD-SEC-004`–`PRD-SEC-008`, `PRD-SEC-011`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.01`–`POL-02.04`, `POL-02.06`–`POL-02.13`, `POL-02.15`–`POL-02.23`), 3 (`POL-03.04`), 4 (`POL-04.01`–`POL-04.05`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.02`, `POL-05.03`, `POL-05.09`), 7 (`POL-07.01`, `POL-07.05`, `POL-07.06`, `POL-07.09`), 9 (`POL-09.02`, `POL-09.10`–`POL-09.13`, `POL-09.19`, `POL-09.21`, `POL-09.23`), 10 (`POL-10.01`, `POL-10.06`–`POL-10.08`), 13 (`POL-13.05`), 14 (`POL-14.05`, `POL-14.07`), 16 (`POL-16.07`), 17 (`POL-17.02`, `POL-17.04`, `POL-17.07`, `POL-17.11`), 18 (`POL-18.05`), 19 (`POL-19.03`).
-- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092.
+- Decisions: DEC-001, DEC-004, DEC-005, DEC-031, DEC-036, DEC-037, DEC-039, DEC-041, DEC-042, DEC-054, DEC-087, DEC-092, DEC-093, DEC-094, DEC-095, DEC-096.
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
-Used by: the future stage 1 designs GC-2 to GC-9 in [gaps-before-code.md](../../reports/gaps-before-code.md), and all code.
+Used by: [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), the future stage 1 designs GC-3 to GC-9 in [gaps-before-code.md](../../reports/gaps-before-code.md), and all code.
 
 ---
 
@@ -112,59 +112,59 @@ flowchart LR
 
 ### 3.1 Organisation structure
 
-Owner: `organisation`. `PRD-ORG-001`–`PRD-ORG-013`. The eight records of `PRD-ORG-001` are kept separate.
+Owner: `organisation`. `PRD-ORG-001`–`PRD-ORG-013`, `PRD-ORG-020`, `PRD-ORG-021`. The eight records of `PRD-ORG-001` are kept separate.
 
 ```mermaid
 flowchart TB
   O["Organisation"] --> LE["Legal entity"]
-  TR["Tax registration"]
-  O --> BK["Accounting book"]
+  LE --> TR["Tax registration"]
+  LE --> BK["Accounting book"]
   O --> S
   G["Geography: Country, State, City, Area"]
   G --> S["Site"]
-  S --> ST["Store"]
+  S -- "dated link" --> ST["Store"]
   S --> BU["Business unit"]
   ST -.- BU
-  S --> L["Internal stock location"]
+  BU --> L["Internal stock location"]
   BU -- "maps to" --> LE
   BU -- "maps to" --> TR
   BU -- "maps to" --> BK
 ```
 
-The Organisation contains its legal entities, Sites and books (`PRD-ORG-002`, `PRD-MOD-001`). The diagram draws no line from a tax registration or a book to a legal entity, because the PRD states none (DM-2).
+The Organisation contains its legal entities, Sites and books (`PRD-ORG-002`, `PRD-MOD-001`). Each tax registration and each accounting book belongs to one legal entity (`PRD-ORG-020`, DEC-095). Fields, codes, versions and tables are in [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2).
 
 | Record | What it is | Identity | Relationships | IDs |
 | --- | --- | --- | --- | --- |
 | Organisation | An independent retail business group. Its data is isolated from other Organisations | One per database | Contains its legal entities, Sites and books | `PRD-ORG-002`, `PRD-MOD-001` |
 | Legal entity | A registered company or other legal person with its own statutory and accounting identity | Code, unique in the Organisation | — | PRD "Words used"; `PRD-ORG-001` |
-| Tax registration | A tax registration. The PRD keeps it as its own record and defines it no further | Code, unique in the Organisation | Whether it belongs to exactly one legal entity is not stated (DM-2) | `PRD-ORG-001`, `PRD-ORG-005` |
-| Accounting book | A book with its own ledger. The identity is here; the ledger is in `finance` · books | Code, unique in the Organisation | Whether it belongs to exactly one legal entity is not stated (DM-2) | `PRD-ORG-001`, `PRD-LED-001`, `PRD-LED-002` |
+| Tax registration | A tax registration. The PRD keeps it as its own record and defines it no further | Code, unique in the Organisation | Belongs to exactly one legal entity, fixed at creation | `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-020` |
+| Accounting book | A book with its own ledger. The identity is here; the ledger is in `finance` · books | Code, unique in the Organisation | Belongs to exactly one legal entity, fixed at creation | `PRD-ORG-001`, `PRD-LED-001`, `PRD-LED-002`, `PRD-ORG-020` |
 | Site | A physical place with a permanent identity | Site code, unique in the Organisation, permanent | Sits in one Area. Has a physical kind | `PRD-ORG-003`, `PRD-ORG-007`, `PRD-ORG-009` |
-| Store | A trading business at a Site, with its own code, name and history | Store code, unique in the Organisation | At one Site. Has a format and an operating model. May have partner associations | `PRD-ORG-003`, `PRD-ORG-008`–`PRD-ORG-010` |
-| Business unit | The whole Store, or one of several operating units at a Site. Offices and warehouses also have business units | Unit code, unique in the Organisation | At one Site. Is a whole Store, part of a Store, or a unit of an office or warehouse. Maps to one legal entity, one tax registration and one accounting book at a time | `PRD-ORG-004`–`PRD-ORG-006` |
-| Internal stock location | Floor, backstore, zone, rack, bin, fixture, display or alteration location | Code, unique in its Site | Inside one Site | `PRD-ORG-012` |
+| Store | A trading business at a Site, with its own code, name and history | Store code, unique in the Organisation | At one Site on any date, through an effective-dated link; several Stores may trade at one Site. Has a format and an operating model. May have partner associations | `PRD-ORG-003`, `PRD-ORG-008`–`PRD-ORG-010`, `PRD-ORG-021` |
+| Business unit | The whole Store, or one of several operating units at a Site. Offices and warehouses also have business units | Unit code, unique in the Organisation | At one Site. Is a whole Store, part of a Store, or a unit of an office or warehouse. A brand counter inside the Organisation's own Store is a unit of that Store. Maps to one legal entity, one tax registration and one accounting book at a time | `PRD-ORG-004`–`PRD-ORG-006`, `PRD-ORG-021` |
+| Internal stock location | Floor, backstore, zone, rack, bin, fixture, display or alteration location | Code, unique in its Site | Inside one Site, and belongs to one business unit at that Site (DM-9, settled in GC-2) | `PRD-ORG-012` |
 | Geography | Country → State → City → Area → Site | Code per level | A Site sits in one Area | `PRD-ORG-007` |
 | Grouping | A region, a cluster or another configurable grouping | Code, unique in the Organisation | The PRD does not say what a grouping groups. Offers apply by Store or group (`PRD-OFR-001`) | `PRD-ORG-007` |
 | Route | A Store's default warehouse for replenishment and returns, and other authorised routes | — | From a Store to its default warehouse; the other authorised routes are OPEN (V-62) | `PRD-ORG-013` |
 
 Rules:
 
-- **The mapping is explicit and dated.** Each business unit maps to its legal entity, tax registration and accounting book. The mapping is never inferred from the Site (`PRD-ORG-005`, `POL-10.01`). It is effective-dated, and each transaction keeps the mapping it used (`PRD-MOD-010`, `PRD-ACP-013`).
+- **The mapping is explicit and dated.** Each business unit maps to its legal entity, tax registration and accounting book; the registration and the book must belong to that legal entity (`PRD-ORG-020`). The mapping is never inferred from the Site (`PRD-ORG-005`, `POL-10.01`). It is effective-dated, and each transaction keeps the mapping it used (`PRD-MOD-010`, `PRD-ACP-013`).
 - **Units at one Site may differ.** Two business units at one Site can map to different entities, registrations and books; a transaction uses its own unit's mapping (`PRD-ORG-005`, `PRD-ACP-013`).
 - **Brand coverage by unit kind.** Whole-store and warehouse units can cover several brands; a brand-counter unit covers one brand; an office unit needs no brand (`PRD-ORG-006`).
 - **Five things kept independent** on Sites and Stores: physical Site kind, Store format, operating model, inventory ownership and settlement terms (`PRD-ORG-009`). Supported kinds and formats are those in `PRD-ORG-010`.
 - **Not locations.** Damage, holds and transit are stock and custody conditions. They never appear as a Site or a location (`PRD-ORG-012`).
-- **Names can change; the place cannot.** Renaming never replaces the physical identity. Relocation creates a new linked Site (`PRD-LIF-021`). Aliases are kept (`PRD-ORG-008`).
+- **Names can change; the place cannot.** Renaming never replaces the physical identity. Relocation creates a new linked Site (`PRD-LIF-021`); the Store keeps its code, name and history, and its Site link moves to the new Site (`PRD-LIF-029`). Aliases are kept (`PRD-ORG-008`).
 - **Lifecycle.** A Site and a Store carry opening and closing dates and a status (`PRD-ORG-008`). A business unit's activities are enabled through readiness (`PRD-LIF-001`). The events are: created; each activity (receiving, movement, selling) granted after its readiness approval (`PRD-LIF-001`, section 3.6); closure started, which stops new operations (`PRD-LIF-017`); retired, only when every outstanding item is resolved (`PRD-LIF-019`); reopened, only with fresh readiness, mapping and access approval (`PRD-LIF-020`). Identity and history stay after closure. The state names are OPEN (DM-4).
-- **OPEN:** KDPS's real structure, registrations and mappings (V-18, `POL-10.06`, `POL-10.08`); routes (V-62). Three structural points the PRD does not state: DM-2 and DM-3.
+- **OPEN:** KDPS's real structure, registrations and mappings (V-18, `POL-10.06`, `POL-10.08`); routes (V-62). The structural points DM-2 and DM-3 are settled (DEC-095, DEC-096), except how a relocating Store's business units move (GC2-4; product owner; stage 5).
 
 ### 3.2 People, access and approvals
 
-Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-019`; policy 2; [personas.md](../access/personas.md).
+Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-021`; policy 2; [personas.md](../access/personas.md).
 
 | Record | What it is | Identity | Relationships and rules | IDs |
 | --- | --- | --- | --- | --- |
-| User | One person: one login and one My work | Login identifier, unique in the Organisation | Holds personas and role assignments. Customers and suppliers are not users | personas.md 1, 4 |
+| User | One person: one login and one My work | Login identifier, unique in the Organisation | Belongs to one Organisation; a person serving several holds a user in each (`PRD-ACS-020`). Holds personas and role assignments. Customers and suppliers are not users | personas.md 1, 4 |
 | Credential | The password and the configured second factor | — | A secret: kept out of logs. Production needs authenticator-app TOTP | `PRD-SEC-001`, `PRD-SEC-014`, `POL-02.17` |
 | Session | A signed-in period on a device | — | Idle lock and absolute limit; unfinished work is preserved when it locks or ends. Can be Revoked | `PRD-ACS-017`, `POL-02.18`, `PRD-SEC-008` |
 | Device | A registered device | Device code, unique in the Organisation | Can be Revoked. A cloned or restored device cannot continue the identity. Billing facts are in `pos` | `PRD-SEC-008`, `PRD-OFF-010` |
@@ -179,7 +179,7 @@ Owner: `access`. `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `P
 | Approval request | A request to approve one document version | — | Holds the action type, the document and its exact version, the preparer, and the value on its basis or Unknown | `PRD-ACS-007`, `PRD-ACS-015` |
 | Approval decision | The approver's decision on a request | — | Holds the approver, the time, approve or reject, the reason, evidence and comment. **Design choice:** it also names the role assignment, limit or stand-in grant it relied on, so the recheck under the locks can repeat it | `PRD-ACS-010`, `PRD-ACS-013`, `POL-02.23` |
 
-**Scope.** A role assignment's scope names the legal entities, Sites and brands it covers (`PRD-ACS-001`, `POL-02.02`). For each, it is one of three: all members, which includes future members; selected members, which stays fixed; or empty, which grants nothing (`PRD-ACS-005`). personas.md also lists Store and business unit, and own-record access for self-service (DEC-041). How those three fit the scope is OPEN (DM-1).
+**Scope.** A role assignment's scope names the legal entities, places and brands it covers (`PRD-ACS-001`, `POL-02.02`). For each, it is one of three: all members, which includes future members; selected members, which stays fixed; or empty, which grants nothing (`PRD-ACS-005`). Places form one tree: whole Sites, or single Stores or business units within a Site; a selected Site covers every Store and business unit at it, including ones added later (`PRD-ACS-021`, DEC-094). Self-service uses a scope of the person's own records (`PRD-ACS-021`, DEC-041). The tree is built in [structure-and-masters.md](../masters/structure-and-masters.md) 3.9.
 
 **Lifecycles.**
 
@@ -383,7 +383,7 @@ What must always be true, who enforces it, and whether the posting transaction e
 | 5 | A missing limit grants nothing; Unknown value needs explicit authority | `access` | Yes | `POL-02.09`, `POL-02.15`, `PRD-ACS-016` |
 | 6 | An operation whose policy is not configured stays unavailable | `configuration` | — | `PRD-SEC-017`; PRD "Required policy configuration" |
 | 7 | An activity stays disabled for a Site or business unit until readiness passes | `configuration`, `site-lifecycle` | — | `PRD-LIF-001`, `PRD-LIF-002` |
-| 8 | A business unit always has one explicit legal entity, tax registration and book; versions never overlap | `organisation` | — | `PRD-ORG-005`, `PRD-MOD-010` |
+| 8 | A business unit always has one explicit legal entity, tax registration and book, and the registration and book belong to that legal entity; versions never overlap | `organisation` | — | `PRD-ORG-005`, `PRD-ORG-020`, `PRD-MOD-010` |
 | 9 | An active external code never maps ambiguously | `merchandise` | — | `PRD-MER-007` |
 | 10 | Unconfirmed identity never enters an official PT | `merchandise` | Yes | `PRD-MER-013` |
 | 11 | The same request has its effect once; changed content under the same key is rejected and kept | `kernel`, every module | Yes | `PRD-INT-002` |
@@ -482,12 +482,12 @@ Nothing below has a default. "Kind" says whether the answer is a business choice
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
-| DM-1 | `PRD-ACS-001` and `POL-02.02` scope a role assignment by entity, Site and brand. personas.md adds Store and business unit, and self-service needs own-record scope (DEC-041). Are Store and business unit scope dimensions of their own, or selections inside a Site? | Business | Product owner | 1 | The shape of a role assignment's scope and of the database scope controls |
-| DM-2 | Does an accounting book belong to exactly one legal entity? Does a tax registration? The PRD maps a business unit to each of the three (`PRD-ORG-005`) and does not say how they relate to each other | Business | Product owner, CA | 1 | Whether a mapping can be checked for consistency; what an inter-entity move is |
-| DM-3 | Can more than one Store trade at one Site at the same time? Is a shop-in-shop a Store or a business unit of its host Store (`PRD-ORG-006`, `PRD-ORG-010`)? On relocation (`PRD-LIF-021`), does the Store keep its identity at the new linked Site? | Business | Product owner | 1 for the Store–Site link; 5 for relocation | Whether a Store's Site is fixed or dated; "own Store" scope |
-| DM-4 | State names for lifecycles with no settled name in design-language section 7: Site, Store and business unit status; user; import batch; proposal; financial period; an exception that is raised and not yet resolved; an approval request ended by a material change | Technical | Product owner, at design review | 1 | Screen states only. The lifecycles themselves are fixed above |
+| DM-1 | Settled: places form one tree of whole Sites, or single Stores or business units within a Site; self-service uses own-record scope (`PRD-ACS-021`, DEC-094) | — | — | — | — |
+| DM-2 | Settled: each tax registration and each accounting book belongs to exactly one legal entity (`PRD-ORG-020`, DEC-095). The CA confirms it for KDPS (CA question 16) | — | — | — | — |
+| DM-3 | Settled: several Stores may trade at one Site; a brand counter inside the Organisation's own Store is its business unit; a relocated Store keeps its identity with a dated Site link (`PRD-ORG-021`, `PRD-LIF-029`, DEC-096). How its business units move is GC2-4 | — | — | — | — |
+| DM-4 | State names for lifecycles with no settled name in design-language section 7: Site, Store and business unit status; a master version (other than Awaiting approval); user; import batch; proposal; financial period; an exception that is raised and not yet resolved; an approval request ended by a material change | Technical | Product owner, at design review | 1 | Screen states only. The lifecycles themselves are fixed above |
 | DM-5 | Must a product proposal be confirmed by a different person from its proposer? `PRD-IMP-008` requires it for vocabulary and mapping rules; `PRD-MER-013` does not say | Business | Product owner; KDPS Owner under policy 2 | 1 live use | One row of the approval rules |
 | DM-6 | What records a policy's real values as validated, and who records it? DEC-092 covers Signed only; the PRD requires configuration that is "valid" | Business | Product owner | 1 live use | The policy status record; the gate's third condition |
 | DM-7 | When one legal person is a supplier and also a partner, a customer or an employee, are the records linked? `PRD-MER-001` keeps supplier-side parties independent and says nothing of the others | Business | Product owner | 5 | Duplicate identities; netting of payables and receivables |
 | DM-8 | `PRD-ACS-015` names a value basis for stock adjustments, write-offs, disposals, transfers, discounts, refunds, no-bill returns, payments and PT approval. It names none for booking approval, damage confirmation, excess or wrong-goods acceptance, supplier-return steps, offers, day-close cash variance or payroll. Are those limited by value, and on what basis? | Business | Product owner; KDPS Owner for the limits | 2 to 6, by action | Whether each of those approval limits can be configured at all |
-| DM-9 | Does an internal stock location belong to one business unit, or only to its Site? Movements carry both (stock-ledger 2.2) | Technical | Settled in GC-2 | 1 | Validation of a movement's place |
+| DM-9 | Settled in [structure-and-masters.md](../masters/structure-and-masters.md) 3.5: a location belongs to one Site and one business unit at that Site | — | — | — | — |

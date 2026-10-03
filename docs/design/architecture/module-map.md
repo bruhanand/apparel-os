@@ -6,13 +6,13 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Module and data boundaries; Transaction and integration integrity; Delivery stages. For ownership only, it places every other PRD section in a module (section 11).
 
-- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-019`; `PRD-ACS-001`–`PRD-ACS-019`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-028`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
+- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-021`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
 - Policies: 1 (`POL-01.02`–`POL-01.04`, `POL-01.06`, `POL-01.07`), 2 (`POL-02.06`–`POL-02.09`, `POL-02.12`, `POL-02.14`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.05`), 4 (`POL-04.03`, `POL-04.04`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.01`), 9 (`POL-09.01`, `POL-09.02`, `POL-09.04`, `POL-09.11`–`POL-09.13`, `POL-09.24`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.07`), 11 (`POL-11.01`), 14 (`POL-14.07`), 18 (`POL-18.05`). Section 11.2 places all 19 policies.
-- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092.
+- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093.
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), and the future stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-2 to GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), and the future stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-3 to GC-9. This document is GC-1.
 
 ---
 
@@ -103,7 +103,7 @@ All 24 PRD names are present. Two names are added: `kernel` and `organisation` (
 
 | Area | Placed in | Why | IDs |
 | --- | --- | --- | --- |
-| Organisation structure | `organisation` (new name) | Access scopes, numbering, books and stock all need it, so it must sit low. Site lifecycle uses it but sits high | `PRD-ORG-001`–`PRD-ORG-013`, `PRD-ACP-013` |
+| Organisation structure | `organisation` (new name) | Access scopes, numbering, books and stock all need it, so it must sit low. Site lifecycle uses it but sits high | `PRD-ORG-001`–`PRD-ORG-013`, `PRD-ORG-020`, `PRD-ORG-021`, `PRD-ACP-013` |
 | Parties and agreements | `merchandise` · parties | The PRD lists parties under Merchandise. Barcode mappings and PTs need suppliers and brands at the same level | `PRD-MER-001`, `PRD-ORG-014`–`PRD-ORG-016`, policy 1 |
 | Inbound ownership | `receiving` (**Proposed**, MM-7) | The receipt count closes it | `PRD-ORG-017`–`PRD-ORG-019`, DEC-003, DEC-086 |
 | Approvals | `access` | Authority is rechecked under the locks, so it must sit below every posting module. The inbox only shows approvals | `PRD-ACS-006`, `PRD-ACS-007`, `PRD-INT-003` |
@@ -154,12 +154,14 @@ All are **design choices** that implement the cited rules.
 
 | Cycle | How it is broken |
 | --- | --- |
-| `access` needs Site, legal-entity and brand scopes that `organisation` and `merchandise` own | A role assignment stores a typed scope reference: kind, and all members, selected members or none (`PRD-ACS-005`). The caller passes the scope facts of its own record to Authorise. `access` defines a scope contract; `organisation` and `merchandise` implement it for validation when an assignment is edited. `access` reaches them only through that contract and does not depend on them |
+| `access` needs place (Site, Store, business unit), legal-entity and brand scopes that `organisation` and `merchandise` own (`PRD-ACS-021`) | A role assignment stores a typed scope reference: kind, and all members, selected members or none (`PRD-ACS-005`). The caller passes the scope facts of its own record to Authorise. `access` defines a scope contract; `organisation` and `merchandise` implement it for validation when an assignment is edited, and to expand a selected Site or Store into the places it covers on a date (`PRD-ACS-021`). `access` reaches them only through that contract and does not depend on them |
 | `stock` calls the finance posting interface; finance reconciles inventory value from stock | `stock` · ledger (tier 3) calls `finance` · books (tier 2), which knows posting event kinds and amounts, not stock. The reconciliation (`PRD-LED-008`) is in `finance` · operations (tier 5) and reads the stock ledger's declared read model |
 | `inbox` shows approvals and exceptions other modules own | The owner publishes a work item to `inbox`: `exceptions` (tier 2) calls it directly; `access` (same tier) publishes through the outbox. `inbox` keeps only a reference and opens the owner's record; it never reads the owner's tables |
 | `numbering` series are scoped by tax registration and billing device | A series is identified by its kind and an opaque scope key the owning module supplies after it has validated the scope. `numbering` calls no one |
 | Every module asks the policy gate; the gate depends on every module's configuration | `configuration` calls no one. Each module registers a validity check for its own configured records. `site-lifecycle` writes activity grants into `configuration` |
 | `files-imports` publishes rows into other modules' records | The target module registers an import handler. Publish calls the handler; the handler writes its own records |
+| `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it |
+| `merchandise` must not make a profile piece-tracked at a Site holding its stock without a planned labelling count (`PRD-MER-018`; 4.12) | `merchandise` defines a stock-presence contract; `stock` implements it |
 | `exceptions` must verify the business outcome before closure (`PRD-EXC-002`) | `exceptions` defines a resolution-check contract; the module that owns the linked record implements it |
 
 7. **External systems.** One module owns each adapter. Outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction (`PRD-INT-006`, `PRD-INT-007`; section 9).
@@ -177,7 +179,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 | Mechanism | What it does | IDs |
 | --- | --- | --- |
-| Organisation routing | Finds the Organisation for a request or job and binds its database. One PostgreSQL database per Organisation. How the Organisation is found before sign-in is **Proposed** in MM-2 | `PRD-MOD-001`, `PRD-ORG-002`, `PRD-INT-001` |
+| Organisation routing | Finds the Organisation for a request or job and binds its database. One PostgreSQL database per Organisation. Before sign-in, the Organisation comes from the Organisation code the person gives; a small directory outside the Organisation databases holds only each Organisation's code and where its database is. Users, sessions and all business records live in the Organisation's own database (DEC-093) | `PRD-MOD-001`, `PRD-ORG-002`, `PRD-INT-001`, `PRD-ACS-020` |
 | Transaction context | One database transaction per command. Called modules join it | `PRD-MOD-006`, `PRD-INT-004` |
 | Lock order | Takes row locks in the order of [stock-ledger.md](../stock/stock-ledger.md) 10.3, ascending by ID inside each step | `PRD-INT-003` |
 | Idempotency | A helper each module uses to keep, in the command's transaction, the scoped key, a hash of the request and the result. Same key and content: the first result. Same key, different content: rejected and kept | `PRD-INT-002`; stock-ledger 10.1 |
@@ -347,16 +349,18 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
 | Read the structure | Every module | Returns Sites, Stores, business units and locations, and for a business unit its legal entity, tax registration and accounting book as of a date (`PRD-ORG-001`, `PRD-ORG-005`) | — |
+| Answer readiness checks | `site-lifecycle` | Says whether a business unit's mapping is in force and verified, and whether its locations exist (`PRD-LIF-002`, `POL-10.08`) | — |
 | Check scope membership | `access`, only through its scope contract (rule 6), when an assignment is edited | Says whether a legal entity, Site, Store or business unit exists and belongs where the assignment says | — |
 | List allowed destinations | `stock` · documents | Names and codes of permitted destinations, without access to their operational data (`PRD-TRF-004`); default warehouse and other authorised routes (`PRD-ORG-013`) | — |
-| Maintain the structure | Admin, Operations | Effective-dated changes with history (`PRD-MOD-010`) | A mapping would overlap another version in the same scope; a business unit would have no explicit legal entity, tax registration or book (`PRD-ORG-005`, `POL-10.01`) |
+| Expand a place for access | `access`, through its scope contract | The Stores and business units a Site or Store covers on a date (`PRD-ACS-021`) | — |
+| Maintain the structure | Admin, Operations | Effective-dated changes with history (`PRD-MOD-010`) | A mapping would overlap another version in the same scope; a business unit would have no explicit legal entity, tax registration or book (`PRD-ORG-005`, `POL-10.01`); the unit's tax registration or book belongs to another legal entity (`PRD-ORG-020`); a location to retire still holds stock, asked through the location-in-use contract (section 3) |
 
 - Mappings are never inferred from the Site (`POL-10.01`). Two units at one Site may map differently, and a transaction uses its own unit's mapping (`PRD-ORG-005`, `PRD-ACP-013`).
 - Damage, holds and transit are stock conditions, not Sites or locations (`PRD-ORG-012`).
 - The accounting book's identity is here; its content is in `finance` · books. **Design choice.**
 - **Events:** `organisation.structure-changed`, `organisation.mapping-changed`.
 - **Read model:** master lists (a stage 1 report).
-- Stage 1 exit check: one physical Site with different business-unit books and registrations keeps correct mappings. The detailed design is GC-2.
+- Stage 1 exit check: one physical Site with different business-unit books and registrations keeps correct mappings. The detailed design is GC-2, [structure-and-masters.md](../masters/structure-and-masters.md).
 
 ### 4.12 `merchandise` (catalogue and parties)
 
@@ -378,7 +382,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - A supplier's bank details are restricted fields, and a change to them is independently approved (`PRD-ACS-008`, `POL-02.07`).
 - `merchandise` implements the scope contract for brand (rule 6).
 - **Events:** `merchandise.product-confirmed`, `merchandise.code-mapping-changed`, `merchandise.tracking-profile-changed`, `merchandise.agreement-changed`.
-- **OPEN:** batch and expiry categories and shelf-life days (V-05, SL-8, `POL-04.08`); each brand's commercial model and terms (V-14). The detailed design is GC-2.
+- **OPEN:** batch and expiry categories and shelf-life days (V-05, SL-8, `POL-04.08`); each brand's commercial model and terms (V-14). The detailed design is GC-2, [structure-and-masters.md](../masters/structure-and-masters.md).
 
 ### 4.13 `exceptions`
 
@@ -467,7 +471,7 @@ Outline only. Each gets its own design before its stage. Every module below also
 | `partners` | 5 | Partner agreements, ledgers, credit controls, monthly statements; EBO brand settlement | `finance`, `pos` and `ebo-imports` read models, `organisation` | `PRD-FRN-001`–`PRD-FRN-007`, `PRD-EBO-009`, policy 12 |
 | `hr` | 6 | Employee records, attendance, rosters, leave, targets, incentives, payroll | `calculations` (incentives), `access` (devices, own-record access), `finance` · books (payroll postings); sales evidence arrives by outbox | `PRD-HRM-001`–`PRD-HRM-019`, policy 13 |
 | `planning` | 6 | Forecasts and proposals; a proposal cannot buy, transfer or change a price without the relevant approval | Read models; the forecasting service; `ai-gateway` | `PRD-EXC-016`–`PRD-EXC-021`, `PRD-BKG-012`, `PRD-OFR-007`, policy 15 |
-| `site-lifecycle` | 4, 5 | Opening stock and balances, the Store switch; closure, reopening, relocation; complete export | `stock`, `finance`, `files-imports`, `numbering`, `pos` | `PRD-LIF-003`–`PRD-LIF-012`, `PRD-LIF-015`, `PRD-LIF-017`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-028`, policy 14 |
+| `site-lifecycle` | 4, 5 | Opening stock and balances, the Store switch; closure, reopening, relocation; complete export | `stock`, `finance`, `files-imports`, `numbering`, `pos`, `organisation` (the Store's dated Site link on relocation) | `PRD-LIF-003`–`PRD-LIF-012`, `PRD-LIF-015`, `PRD-LIF-017`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`, policy 14 |
 | `reports` | Every | One definition per metric; reports and exports restricted to permitted data; as-of time, estimates and missing data shown | The read-model gateway only | `PRD-EXC-005`–`PRD-EXC-012`, `PRD-NAV-001`–`PRD-NAV-017`, `PRD-STG-001` |
 
 Two boundaries are flagged now so the later designs do not settle them by accident:
@@ -686,11 +690,13 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | --- | --- |
 | `PRD-PRO-001`–`PRD-PRO-010` | Product scope statements; delivered by the modules of their sections. `PRD-PRO-010` lists what is outside the product |
 | `PRD-STG-001`, `PRD-STG-002` | `reports`; `stock` · ledger with `finance` · books |
-| `PRD-ORG-001`–`PRD-ORG-010`, `PRD-ORG-012`, `PRD-ORG-013` | `organisation` |
+| `PRD-ORG-001`–`PRD-ORG-010`, `PRD-ORG-012`, `PRD-ORG-013`, `PRD-ORG-020`, `PRD-ORG-021` | `organisation` |
 | `PRD-ORG-011` | `configuration`, with the module that owns each configured record |
 | `PRD-ORG-014`–`PRD-ORG-016` | `merchandise` · parties, with `stock` · ledger for the owner on a receipt origin |
 | `PRD-ORG-017`–`PRD-ORG-019` | `receiving` (**Proposed**, MM-7) |
 | `PRD-ACS-001`–`PRD-ACS-008`, `PRD-ACS-011`, `PRD-ACS-012`, `PRD-ACS-015`–`PRD-ACS-019` | `access` |
+| `PRD-ACS-020` | `kernel` (Organisation routing), with `access` |
+| `PRD-ACS-021` | `access`, with `organisation` for the place tree |
 | `PRD-ACS-009`, `PRD-ACS-010` | `inbox`, with `access` |
 | `PRD-ACS-013`, `PRD-ACS-014` | `audit`, with every module for its own corrections |
 | `PRD-MER-001` | `merchandise` · parties |
@@ -727,6 +733,7 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-EXC-015` | `ai-gateway`, with `reports` |
 | `PRD-EXC-016`–`PRD-EXC-021` | `planning` |
 | `PRD-LIF-001`–`PRD-LIF-012`, `PRD-LIF-015`, `PRD-LIF-017`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-028` | `site-lifecycle`, with `files-imports` and `stock` |
+| `PRD-LIF-029` | `site-lifecycle`, with `organisation` for the Store's dated Site link |
 | `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016` | `ebo-imports` |
 | `PRD-UXP-001`–`PRD-UXP-010` | The web app and counter ([design/ui/](../ui/)); every module serves them |
 | `PRD-MOD-001`–`PRD-MOD-006`, `PRD-MOD-008`–`PRD-MOD-013` | This document; `kernel` |
@@ -777,7 +784,7 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | Design | Fixed here | Left to it |
 | --- | --- | --- |
 | GC-1 Module map | This document | — |
-| GC-2 Business structure and masters | `organisation` and `merchandise`: ownership, interfaces, events (4.11, 4.12); entities in [domain-model.md](domain-model.md) | Tables, screens, validation detail |
+| GC-2 Business structure and masters | `organisation` and `merchandise`: ownership, interfaces, events (4.11, 4.12); entities in [domain-model.md](domain-model.md) | Tables, screens, validation detail: written in [structure-and-masters.md](../masters/structure-and-masters.md) |
 | GC-3 Access, approvals, inbox and exceptions | `access`, `inbox`, `exceptions`, the policy gate (4.3, 4.4, 4.8, 4.13) | Sign-in, sessions, row-level security, encryption; SL-22 |
 | GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; SL-23; MM-6 |
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention |
@@ -793,7 +800,7 @@ Nothing below has a default. "Kind" says whether the answer is a business choice
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
 | MM-1 | `PRD-MOD-004` and `PRD-MOD-005` name no module for Organisation structure or for plumbing. This map adds `organisation` and `kernel`, and gives modules parts (2.2, 2.3). Confirm, or name them in the PRD by a decision record | Technical | Product owner | 1 (naming before code) | Module and package names. No rule changes |
-| MM-2 | With one database per Organisation (`PRD-MOD-001`), where is the list of Organisations, and how is the Organisation found before sign-in (`PRD-INT-001`)? **Proposed:** users, sessions and all business records live inside the Organisation's database; a small directory outside holds only what routing needs; the Organisation comes from the address or an Organisation code at sign-in. Also: does an outside person (CA, Auditor) serving several Organisations get one login per Organisation? | Technical; the last part is a product choice | Product owner | 1 | Sign-in, routing, the `dev` setup with two Organisations ([deployment.md](../platform/deployment.md) section 4), D-3 |
+| MM-2 | Settled: the Organisation comes from its code at sign-in; a small directory outside the Organisation databases holds only routing facts; a person serving several Organisations holds a separate user in each (DEC-093, `PRD-ACS-020`). Routing is in 4.1; the directory is placed in [deployment.md](../platform/deployment.md) section 4 | — | — | — | — |
 | MM-3 | SL-23: what a valued movement does when no valid posting map exists at commit (6.3) | Business | Product owner, CA | 1 | The result the caller of Post must handle; whether DEC-087 needs a new decision record |
 | MM-4 | SL-22: where the approval lives between the click and the posting job, and its fate if the job fails (6.3) | Technical, owner-decided | Product owner | 1 | The approval decision's lifecycle; the reading of `PRD-INT-004` |
 | MM-5 | SL-22 is filed under GC-4 in the reports, and under no design in stock-ledger.md. This map files it under GC-3 | Technical | Product owner | 1 | Which design settles it |

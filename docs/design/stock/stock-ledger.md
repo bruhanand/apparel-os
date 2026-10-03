@@ -188,7 +188,7 @@ Ownership does not block a sale: supplier-owned consignment stock can be sellabl
   - **Site pool:** one pool per SKU per Site per book.
 - A pool runs in the SKU's one stock unit (`POL-04.03`).
 - The book comes from the business unit holding the stock (2.2), never from the Site (`PRD-ORG-005`, `PRD-ACP-013`). Two units at one Site in different books have different pools.
-- A move between business units at one Site is a location move only when book, legal entity and tax registration are unchanged (`PRD-STK-005`, `DEC-066`). When the book differs, use the pool-move route (7.8). When the legal entity differs, use the commercial or inter-entity process (`PRD-FRN-006`). A registration-only change at one Site is raised against `PRD-TRF-023` and remains **OPEN** (product owner).
+- A move between business units at one Site is a location move only when book, legal entity and tax registration are unchanged (`PRD-STK-005`, `DEC-066`). When the book differs but the legal entity is the same, use the pool-move route (7.8). When the legal entity differs, which always means a different book (`PRD-ORG-020`), use the commercial or inter-entity process (`PRD-FRN-006`). A registration-only change at one Site is raised against `PRD-TRF-023` and remains **OPEN** (product owner).
 - **Store value under a book pool.** Store reports need a value per Store (`PRD-NAV-016`, `PRD-LIF-018`), but under a book pool the value belongs to the book. How it is shown per Store is OPEN (SL-14). Until then, reports show the book's value and each Store's quantities only.
 - The formula and mode are effective-dated configuration (`PRD-MOD-010`). KDPS's actual formula and pool are OPEN (V-08, V-09, `POL-09.19`); KDPS first keeps its current CA-approved method (`POL-09.21`).
 

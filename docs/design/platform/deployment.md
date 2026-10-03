@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
+Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
@@ -12,7 +12,7 @@ Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updat
 
 ## 1. Two environments, never mixed
 
-One Railway project with two environments. Each has its own services, database, variables and private network.
+One Railway project with two environments. Each has its own services, databases, variables and private network.
 
 | Environment | Data | Who uses it | Deploys |
 | --- | --- | --- | --- |
@@ -46,6 +46,7 @@ Why one origin:
 - Sessions are PostgreSQL-backed server sessions in a cookie (`PRD-SEC-001`; Stack: Authentication). With one origin, the cookie is first-party. It needs no cross-site settings, which browsers increasingly block, and no CORS.
 - Cookie: `Secure`, `HttpOnly`, `SameSite=Lax`, host-only (no `Domain` attribute), path `/`.
 - The PWA service worker and IndexedDB belong to the same origin as the API that registers the device (`PRD-OFF-002`).
+- Sign-in asks for the Organisation code as well as the login (DEC-093). The server finds the Organisation in the directory (section 4), then the user and the session in that Organisation's database. A user belongs to one Organisation (`PRD-ACS-020`). **Design choice:** a browser is signed in to one Organisation at a time.
 - The cost: web, counter and server deploy together. That is acceptable for testing, since they share one repository.
 
 A custom domain is optional. The Railway-provided address works for testing. **OPEN:** whether `kdps-test` gets a custom domain (see 10).
@@ -57,6 +58,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`); production an
 - **One database per Organisation** (`PRD-MOD-001`).
   - `kdps-test`: one database for KDPS.
   - `dev`: at least two synthetic Organisations, so tests prove one cannot see the other.
+- **A small directory database** beside them holds only each Organisation's code and where its database is. It holds no users, sessions or business records (DEC-093, `PRD-ACS-020`). It lives in the same `postgres` service, with its own migrations.
 - **Two database roles:**
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
