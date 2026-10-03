@@ -179,7 +179,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Messaging       | Email, WhatsApp Business Platform and SMS adapters                                                                      |
 | Diagnostics     | pino structured JSON logs; OpenTelemetry-ready traces                                                                   |
 | Verification    | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier                                            |
-| Hosting         | Test, including KDPS's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. File storage provider for test is OPEN (product owner; `deployment.md` D-2). Production chosen before the first Store switch |
+| Hosting         | Test, including KDPS's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. Files on test: a Railway bucket, S3-compatible (`deployment.md` D-2, DEC-105). Production chosen before the first Store switch |
 
 
 
