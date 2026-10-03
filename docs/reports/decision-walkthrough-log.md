@@ -27,7 +27,7 @@
 | N-71 | A | PT export used during test | DEC-053 |
 | C-12 | A | Profile → piece via labelling count | DEC-054 |
 | C-13 | A | Putaway stage 2; general location moves stage 3 | DEC-055 |
-| C-10 / N-40 | N-40 B (equals C-10 A) | PRD-UXP-004 lists capabilities/areas; C-10's own pick B (rename design menus) conflicts and was not applied. Owner to confirm | DEC-056 |
+| C-10 / N-40 | N-40 B (equals C-10 A) | PRD-UXP-004 lists capabilities/areas; C-10's own pick B (rename design menus) conflicts and was not applied. Product owner confirmed N-40 B on 3 Oct 2026 | DEC-056 |
 | X-05 | A | PRD-TAX-004 in stage 4 | DEC-057 |
 | X-08 | A | Hindi step per stage including stage 6 | DEC-058 |
 | N-20 | B | Interim unavailable for unlinked returns | DEC-059 |
