@@ -83,7 +83,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records.** From its first live operation in this stage: physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement, with inbound ownership kept outside stock and closed against the receipt count; the supplier obligation under the approved recognition rule.
 
-**Policies needed before live use.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (goods classification and rates); Held-goods outcomes.
+**Policies needed before live use.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (registration, goods/rate classification, sale-or-return tax); Held-goods outcomes.
 
 **Reports.** Ordered, delivered, outstanding and cancelled by booking; receipt discrepancies; PT lines right first time; supplier fill rate and timeliness; stock by product, size, location, condition and owner.
 
@@ -133,7 +133,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **In scope (PRD sections)**
 
 - Counter sales and payments. Customer credit waits for receivables in stage 5.
-- Customer returns, exchanges and credit, including store credit, gift vouchers and loyalty.
+- Customer returns, exchanges and credit, including Store credit, gift vouchers and loyalty.
 - Offers and price lists, with one evaluation shared by Running Offers and checkout.
 - Store day close: denomination count, variance, petty expenses, cash pickup and deposit.
 - EBO sales and external billing imports. EBO brand-settlement statements wait for stage 5.
@@ -147,9 +147,9 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Out of scope.** Bank matching, provider settlement matching and Tally vouchers (stage 5). Hindi screens and WhatsApp or SMS bills (stage 5).
 
-**Stock and money records.** From its first live operation in this stage: immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit, gift-voucher and loyalty liabilities.
+**Stock and money records.** From its first live operation in this stage: immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; Store credit, gift-voucher and loyalty liabilities.
 
-**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (invoice-number format, e-invoice; customer-return credit-note treatment, `POL-10.11`).
+**Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (invoice-number format, e-invoice; gift-voucher tax, `POL-10.10`; customer-return credit-note treatment, `POL-10.11`).
 
 **Reports.** Sales by Store, brand, category, size, salesperson and hour; day-close variance; offer sales and who funded the discount.
 
@@ -229,14 +229,14 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Testing and switch-over
 
-The built system is tested beside the earlier POS before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the earlier POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, cutoff and day-close date, run length and material-difference threshold remain to be set (`POL-14.05`, `POL-14.07`). While the earlier POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
+The built system is tested beside the earlier POS before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the earlier POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, cutoff and day-close date, run length and material-difference threshold remain to be set (`POL-14.05`, `POL-14.07`, `POL-14.08`). While the earlier POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
 | Before the test | KDPS agreement to hold real data on the test setup (deployment D-4); load product masters and approved mappings. The side-by-side test is not a live operation and needs no signed policies, but gated actions stay disabled until their policies are signed (`DEC-071`). | Earlier POS |
 | Side-by-side test (Railway test setup) | Test the app: goods-in and transfers. Test bills and other gated actions wait for their signed policy (`DEC-071`). Load the earlier POS's end-of-day sales report and SOH for checking and reports only; they never move stock in Apparel OS (`PRD-LIF-014`) | Earlier POS |
 | Go or no-go check | No serious exception is open, all participating staff are trained, and Site readiness is verified: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Earlier POS |
-| Switch day (production hosting) | One pilot Store, at its day close (`PRD-LIF-015`). Stop billing on the earlier POS and take its last SOH; record the cutoff and day-close date; carry unfinished work with its original references (`POL-14.04`, `POL-14.07`). Then run the full Store count (`PRD-STK-008`): physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID. Reconcile the count with the earlier POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, allocate each billing device its fresh bill series (`PRD-LIF-015`, `PRD-POS-020`), then start billing in Apparel OS | Apparel OS for that Store |
+| Switch day (production hosting) | One pilot Store, at its day close (`PRD-LIF-015`). Stop billing on the earlier POS and take its last SOH; record the cutoff and day-close date; carry unfinished work with its original references (`POL-14.04`, `POL-14.07`). Then run the full Store count (`PRD-STK-008`): physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID. Reconcile the count with the earlier POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock (billed-retained items carried across the switch under `POL-14.04` are counted apart and are not opening stock, `PRD-LIF-028`), allocate each billing device its fresh bill series (`PRD-LIF-015`, `PRD-POS-020`), then start billing in Apparel OS | Apparel OS for that Store |
 | After the switch | Apparel OS runs for real. The earlier POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
