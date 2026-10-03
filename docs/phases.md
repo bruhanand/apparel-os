@@ -34,13 +34,14 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **In scope (PRD sections)**
 
 - Organisation, sites and ownership: Organisations, legal entities, tax registrations, books, Sites, Stores, business units, locations and their mappings.
+- Site and business-unit readiness for receiving, movement and selling (`PRD-LIF-001`, `PRD-LIF-002`): the readiness record and its gating rules, exercised with synthetic data.
 - People, access and approvals: personas, roles, scoped permissions, independent approval, one inbox, audit record.
 - Merchandise and identifiers: brands, suppliers and other parties, SKUs, barcodes, units, product proposals.
 - Effective-dated commercial terms for brands and suppliers.
 - Source conversion and imports: file intake, saved mappings, staging, review, duplicate control.
 - Technical platform: stack, module and data boundaries, transaction and integration integrity, login and sessions, access enforcement, encryption, backup and restore.
 - Recording rules: stock balances derived from movements, balanced journals per book, chart of accounts, financial periods, posting rules, document numbering.
-- Offline design: device registration, device bill series, and pricing, tax and rounding logic shared by server and counter.
+- Offline design: device registration, device bill series, and pricing, tax, discount allocation and rounding logic shared by server and counter (`PRD-MOD-007`). The shared module also holds incentive logic; its golden cases are completed in stage 6.
 - The exception record: owner, due date, status, evidence and exposure.
 - Opening-data layouts for stock, dues, advances and deposits.
 
@@ -55,10 +56,11 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **Exit checks**
 
 - One physical Site with different business-unit books and registrations keeps correct mappings.
-- Shared golden cases for prices, discounts, tax and rounding pass on server and counter code.
+- Shared golden cases for prices, discounts, discount allocation, tax and rounding pass on server and counter code (`PRD-ACP-018`, `PRD-MOD-007`).
 - Golden stock-and-posting scenarios on synthetic data pass: receipt, transfer, sale, return and late cost adjustment, under both cost formulas and both cost-pool modes (`PRD-LED-014`, `PRD-LED-015`).
 - A backup restores with linked records and attachments.
 - An operation whose policy is not configured stays unavailable.
+- An activity stays disabled for a Site or business unit until its readiness checks pass (`PRD-LIF-002`).
 
 ## Stage 2 — Complete goods-in workflow
 
@@ -69,15 +71,17 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
 - Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site.
+- Inbound ownership: goods owned under an agreement before receipt, recorded outside stock, with an amount only from invoice or agreement-price evidence, and closed against the receipt count (`PRD-ORG-017` to `PRD-ORG-019`).
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.
 - PT corrections and reversals through linked records.
 - Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
 - Stock search by product, brand, size, barcode, location and condition.
+- Receiving is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
 - The parallel-run import of the current POS's daily sales report and SOH, for checking and reports only; it never moves stock (`PRD-LIF-013`, `PRD-LIF-014`). Piece rules at that Store start at its switch (`PRD-MER-017`).
 
 **Out of scope.** Inter-Site transfers, supplier returns, disposal, payment runs.
 
-**Stock and money records from day one.** Physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement; the supplier obligation under the approved recognition rule.
+**Stock and money records from day one.** Physical custody from the actual count; official PT coverage and receipt cost; ownership from the agreement, with inbound ownership kept outside stock and closed against the receipt count; the supplier obligation under the approved recognition rule.
 
 **Policies needed before live use.** Commercial ownership; Source conflicts and pricing; Booking; Statutory applicability (goods classification and rates); Held-goods outcomes.
 
@@ -86,6 +90,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **Exit checks**
 
 - Invoice or booking quantities never create uncounted physical stock; clean accepted quantity proceeds while damage, excess or identity discrepancies stay held.
+- Goods owned before receipt appear as inbound ownership, never as stock; they carry an amount only with invoice or agreement-price evidence, and close against the receipt count (`PRD-ACP-020`).
 - Primary and supplemental PT coverage cannot overlap.
 - Supplier, direct-store and opening goods meet the same selling-Site acceptance and hold checks.
 - Damage immediately blocks stock; independent rejection clears only the mistaken damage hold.
@@ -103,6 +108,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Supplier returns: eligibility and deadlines, proposed return lists, pickup or warehouse consolidation, RTV outcomes.
 - The supplier-claims register and its debit requests and credit notes.
 - Statutory movement documents recorded and linked; a missing document is an owned compliance exception.
+- Movement is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
 
 **Out of scope.** Recommended replenishment and rebalancing (stage 6). Creation of e-way bills through a GSP (stage 5). Supplier payment (stage 5).
 
@@ -127,10 +133,11 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **In scope (PRD sections)**
 
 - Counter sales and payments. Customer credit waits for receivables in stage 5.
-- Customer returns, exchanges and credit, including store credit and loyalty.
+- Customer returns, exchanges and credit, including store credit, gift vouchers and loyalty.
 - Offers and price lists, with one evaluation shared by Running Offers and checkout.
 - Store day close: denomination count, variance, petty expenses, cash pickup and deposit.
-- EBO sales and external billing imports.
+- EBO sales and external billing imports. EBO brand-settlement statements wait for stage 5.
+- Selling is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
 - IRN evidence through a GSP where a tax invoice requires it.
 - Store operator experience: Billing, Bills, Till & Sync, opening and closing checklists.
 - Offline counter, enabled after online billing is proven.
@@ -138,7 +145,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Out of scope.** Bank matching, provider settlement matching and Tally vouchers (stage 5). Hindi screens and WhatsApp or SMS bills (stage 5).
 
-**Stock and money records from day one.** Immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit and loyalty liabilities.
+**Stock and money records from day one.** Immutable bills with price, discount, tax and tender snapshots; cash movements; sales and returns posted under the approved rules; store-credit, gift-voucher and loyalty liabilities.
 
 **Policies needed before live use.** Customer returns; Refunds and no-bill returns; Billed-retained; Offers and promotions; Offline operation; Opening and cutover (before the pilot switch); Statutory applicability (e-invoice).
 
@@ -160,12 +167,13 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **In scope (PRD sections)**
 
-- Ledger and official books: reconciliations, period locks, month close, Tally XML exchange.
+- Ledger and official books: reconciliations, period locks, month close, Tally XML exchange, net realisable value write-downs (`PRD-LED-007`).
 - Cash, collections and bank: provider settlement matching, bank statement import and matching.
 - Payables, receivables and payments: payment plans and runs, bank files, supplier-credit application, receivables, commission, and Customer credit at the till.
 - Tax and assets: GST registers, GSTR-2B matching, e-way bills through a GSP, TDS, statutory calendar, fixed assets.
 - Net asset value and profitability; brand-by-store profit and Store P&L.
 - Franchise and partner accounts.
+- EBO brand-settlement statements and the configured commission and partner basis (`PRD-EBO-009`).
 - Site closure, relocation and complete export.
 - Hindi interface for the screens already built.
 - WhatsApp and SMS messaging: digital bills, phone and WhatsApp approvals, the daily summary and alerts.
@@ -174,7 +182,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **Stock and money records from day one.** No new kinds. The records written since stage 2 are reconciled, closed by period and exchanged with Tally.
 
-**Policies needed before live use.** Official book; Franchise/partner; Financial posting (vouchers and acknowledgments); Statutory applicability (TDS).
+**Policies needed before live use.** Official book; Franchise/partner (including the EBO brand commission and settlement basis); Refunds and no-bill returns (Customer credit); Financial posting (Store P&L allocation, asset policy, vouchers and acknowledgments); Statutory applicability (TDS).
 
 **Reports.** Trial balance and ledgers; payables and receivables ageing; bank reconciliation; GST registers; Store NAV; brand-by-store profit; Store P&L.
 
@@ -211,19 +219,20 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 **Exit checks**
 
 - Attendance correction, returned-sale incentives and payroll replay preserve raw evidence and one approved period outcome.
+- Shared golden cases for incentives, including returned-sale reversals and policy versions, pass on the shared logic (`PRD-ACP-018`, `PRD-MOD-007`).
 - Planning proposals cannot purchase, transfer or change prices without the relevant approval.
 - Forecasts are evaluated against the configured horizon, baseline and quality measures.
 
 ## Testing and switch-over
 
-The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, run length and material-difference threshold remain to be set. While the current POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
+The built system is tested beside the current system before it replaces it. KDPS runs the side-by-side test on the Railway test setup; the current POS keeps selling and stays the system of record throughout. A Store switches only after the checks pass and only on production hosting, chosen before the first switch (`PRD-LIF-026`). One Store at a time. The Store switch needs stage 4. Policy 14 names Owner, Accounts and Operations as switch approvers; the date, manifest, balances, cutoff and day-close date, run length and material-difference threshold remain to be set (`POL-14.05`, `POL-14.07`). While the current POS is active it does all real billing and nobody scans goods twice; bills made in Apparel OS during the test only test the app.
 
 | Step | What happens | System of record |
 | --- | --- | --- |
 | Before the test | Load product masters and approved mappings | Current |
 | Side-by-side test (Railway test setup) | Test the app: goods-in, transfers and test bills. Load the current POS's end-of-day sales report and SOH for checking and reports only; they never move stock in Apparel OS (`PRD-LIF-014`) | Current |
-| Go or no-go check | No serious exception is open, and all participating staff are trained | Current |
-| Switch day (production hosting) | One pilot Store. At day close: physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID, stop billing on the current POS, reconcile the count with the current POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, then start billing in Apparel OS | Apparel OS for that Store |
+| Go or no-go check | No serious exception is open, all participating staff are trained, and Site readiness is verified: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Current |
+| Switch day (production hosting) | One pilot Store, at its day close (`PRD-LIF-015`). Stop billing on the current POS and take its last SOH; record the cutoff and day-close date; carry unfinished work with its original references (`POL-14.04`, `POL-14.07`). Then run the full Store count (`PRD-STK-008`): physically count stock, label every piece of a piece-tracked profile that has no piece ID and verify every piece ID. Reconcile the count with the current POS's last SOH and report every difference (`PRD-LIF-027`), reconcile it against the reviewed opening PT and verified balances, approve the cutover, record the verified count as opening stock, allocate each billing device its fresh bill series (`PRD-LIF-015`, `PRD-POS-020`), then start billing in Apparel OS | Apparel OS for that Store |
 | After the switch | Apparel OS runs for real. The current POS is kept for reference only. Other Stores switch one at a time | Apparel OS |
 
 **Rules**
@@ -236,7 +245,7 @@ The built system is tested beside the current system before it replaces it. KDPS
 - A parallel-run import creates no tax invoice and no second sale.
 - Every difference found at the switch count is reported and explained; none is closed by editing a number to match.
 
-**Go or no-go pass marks.** KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained and no serious exception may remain open. At each switch, no unexplained material difference may remain between the count and the current POS's last SOH.
+**Go or no-go pass marks.** KDPS sets the run length before the test starts and the material-difference threshold before the first switch. All participating staff must be trained, no serious exception may remain open, and Site readiness must be verified (`PRD-LIF-002`). At each switch, no unexplained material difference may remain between the count and the current POS's last SOH.
 
 | Check | Pass mark |
 | --- | --- |
@@ -245,4 +254,5 @@ The built system is tested beside the current system before it replaces it. KDPS
 | Unexplained material differences at the switch count | None |
 | Open serious exceptions | None |
 | Participating staff trained | All |
+| Site readiness: mappings, users and access, locations, devices, required policies and stock plan (`PRD-LIF-002`) | Verified |
 | Who signs the switch | Owner, Accounts and Operations |
