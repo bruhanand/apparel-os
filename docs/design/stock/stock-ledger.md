@@ -413,6 +413,7 @@ Stage 1 exit check: receipt, transfer, sale, return and late cost adjustment pas
 > **All data in this section is SYNTHETIC.** It is test data only and never becomes a default, a KDPS value or a policy value.
 
 ### 11.1 The story
+<!-- deps: PRD-ACP-018, PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, PRD-PTW-010, DEC-031 — synthetic story exercising cost formulas and pools -->
 
 - One book, BK-SYN. Two Sites: warehouse W1 and Store S1, both in BK-SYN and both live on the app (S1 has already switched).
 - One SKU, X, piece-tracked. All goods owned from receipt. Costs come from approved PTs.
@@ -430,6 +431,7 @@ Stage 1 exit check: receipt, transfer, sale, return and late cost adjustment pas
 Pieces at the end: W1 has 6 (all R1); S1 has 5 (2 R1, 3 R2). Total cost in: 1,000.00 + 780.00 + 150.00 = **1,930.00**.
 
 ### 11.2 Moving average, book pool
+<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.06, DEC-031 — moving average, whole-book pool worked example -->
 
 One pool: BK-SYN · X. Values in ₹.
 
@@ -444,6 +446,7 @@ One pool: BK-SYN · X. Values in ₹.
 | 7 | 11 | 1,333.75 | 121.25 | 475.00 | Out at 121.25; variance to credit 8.75 |
 
 ### 11.3 Moving average, Site pools
+<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, DEC-031 — moving average, Site pools, transfer carries source cost -->
 
 | Step | W1: quantity / value (average) | S1: quantity / value (average) | In transit | Cost of goods sold | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -457,6 +460,7 @@ One pool: BK-SYN · X. Values in ₹.
 | 7 | 6 / 690.00 | 5 / 615.00 (123.00) | — | 502.00 | Out at 123.00; variance to credit 7.00 |
 
 ### 11.4 FIFO, book pool
+<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.07, DEC-031 — FIFO whole-book pool worked example -->
 
 Layers are written as quantity @ unit cost.
 
@@ -471,6 +475,7 @@ Layers are written as quantity @ unit cost.
 | 7 | L1 4 @ 115.00 · L2 6 @ 130.00 · L3 1 @ 115.00 | 11 / 1,355.00 | 460.00 | Out from L1 at 115.00; variance to credit 15.00 |
 
 ### 11.5 FIFO, Site pools
+<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.07, DEC-031 — FIFO Site pools, layer per source layer on arrival -->
 
 | Step | W1 layers | S1 layers | Cost of goods sold | Notes |
 | --- | --- | --- | --- | --- |
@@ -483,6 +488,7 @@ Layers are written as quantity @ unit cost.
 | 7 | L1 6 @ 115.00 (690.00) | L3 4 @ 115.00 · L4 1 @ 130.00 (590.00) | 520.00 | Out from L2 at 130.00; variance to credit 0.00 |
 
 ### 11.6 Expected end state
+<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, PRD-MOD-014, DEC-031 — end values per formula and pool, whole paise -->
 
 | Formula and pool | Stock value | Cost of goods sold | Value out by supplier return | Variance to the ₹130.00 credit |
 | --- | --- | --- | --- | --- |
@@ -494,6 +500,7 @@ Layers are written as quantity @ unit cost.
 In every row, stock value + cost of goods sold + value out by supplier return = 1,930.00. Every amount is whole paise.
 
 ### 11.7 Checks run after every step
+<!-- deps: PRD-MOD-011, PRD-MOD-012, PRD-MOD-015, PRD-LED-016, PRD-MER-003, PRD-ACP-018 — ledger invariants checked after each step -->
 
 - Each balance equals the sum of its movements; rebuilding the balance tables from movements gives the same rows.
 - Each FIFO pool's quantity and value equal the sum of its layers.

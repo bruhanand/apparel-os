@@ -1,4 +1,5 @@
 # Design documents
+<!-- deps: none — folder index and reading guide -->
 
 **Rank 3 of 4: design.** These documents say how the system implements the [PRD](../prd.md) and the [KDPS policies](../kdps-policies.md). They never contradict either. See [../README.md](../README.md) for the order.
 

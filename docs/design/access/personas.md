@@ -181,6 +181,7 @@ History only. RetailsOps, the earlier version of this product, used these codes.
 | Extra roles: ho_ops, promo, data_steward, hr_admin, payroll_reviewer, franchise_partner, ebo_reporter, analyst | P-OPS, P-BRM, P-BKG and P-ADM, P-HRS, an approval permission, Store personas, P-EBO, a report permission |
 
 ## 6. Open items
+<!-- deps: POL-02.01, POL-02.02, POL-02.07, POL-02.10, POL-02.11, PRD-FRN-007, POL-12.04, DEC-041, DEC-042 — open policy 2 and 12 items on roles, approvers, self-service and partner visibility -->
 
 | Item | Who decides | Needed by |
 | --- | --- | --- |
