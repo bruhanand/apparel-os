@@ -768,7 +768,7 @@
 - **Date:** 3 Oct 2026 · **Decided by:** product owner · **Report item:** N-99 (decision pack, 3 Oct 2026)
 - **Question.** The Policy 6 question asks for a return window "for a defective item", but `POL-06.05` (DEC-020) and DEC-025 say a defective item is assessed with no hard cutoff.
 - **Options.** Reword the question · Leave it.
-- **Choice.** The question now reads "How many days does a customer have for an ordinary return? How is a defective item assessed?" It asks for no defective-item day count. The ordinary-return days and the defect assessment process stay **OPEN** (KDPS Owner and Operations); they block stage 4.
+- **Choice.** The question now reads "How many days does a customer have for an ordinary return? How is a defective item assessed?" It asks for no defective-item day count. KDPS's answers stand: 15 days for an ordinary return (`POL-06.02`) and a separate assessment process for defective items (`POL-06.05`); the assessment details remain V-23 (KDPS Owner and Operations; stage 4).
 - **Why.** The question must not ask for a number the policy says not to invent.
 - **Changed.** Policy 6 question bullet 1 in `kdps-policies.md` (question bullets have no ID).
 
