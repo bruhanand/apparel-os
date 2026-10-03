@@ -1,4 +1,5 @@
 # Apparel OS — Delivery stages
+<!-- deps: prd.md#delivery-stages, PRD-LIF-012 — six stages and side-by-side test come from the PRD -->
 
 > **Delivery plan.** Sets the order of work only. If this document disagrees with the PRD or the KDPS policies, they win. See [README.md](README.md).
 
