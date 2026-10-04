@@ -1,0 +1,3317 @@
+[
+ {
+  "id": "sales-bill-line-25",
+  "name": "Bill-line sales report, 25 columns, bill fields on the first line",
+  "kind": "sales",
+  "producer_guess": "Earlier POS used at Vaishnavi Deoghar, Vaishnavi Singh More, Jainsons Hazaribagh and Allen Solly Deogarh; product name not stated (TEN or Retail Ji, guess)",
+  "seen_in": [
+   "Q&A-req-recieved/SALE REPORT FORMAT.xlsx [Sheet1]",
+   "store-analysis/VAISHNAVI/SALE REPORT 1 APRIL 25 TO 31 MARCH 26.xlsx [Sheet1]",
+   "store-analysis/VAISHNAVI/SALE REPORT 1st Apr 26 TO 13th Jun 26.xlsx [Sheet1]",
+   "store-analysis/jsl/fy 25-26 sales.xlsx [Sheet1]",
+   "store-analysis/jsl/fy 26-27 sales.xlsx [Sheet1]",
+   "store-analysis/jsl/june sales report.xlsx [Sheet1]",
+   "monthly-reports-april-may-2026/2026-04/DATA/AS  & LP2  APR 26 SALE  AND SOH AS-DEO.xlsx ['AS SALE ', 'LP2 SALE ']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": true,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the bill.",
+    "type": "date",
+    "notes": "Excel date at midnight, never text; no time of day. First line of a bill only in layout sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number: financial year, store code and serial, as YY-YY/CODE/n.",
+    "type": "text",
+    "notes": "Serial starts at 1 on 1 April and has no gaps in the full-period files. First line only in sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Customer",
+    "meaning": "Customer name keyed at the counter; CASH for a walk-in. Personal data.",
+    "type": "text",
+    "notes": "First line of a bill only. CASH is common. MANUAL BILL UPDATE on 30 bills in the Vaishnavi FY 2025-26 file. One cell holds the formula error #NAME? (bill 26-27/JSL/199)."
+   },
+   {
+    "name": "Phone",
+    "meaning": "Customer mobile number. Personal data.",
+    "type": "integer",
+    "notes": "First line only. Held as a number, so a leading zero cannot survive. Blank on about half the bills; 9-digit and 11-digit values seen; 0 seen."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type, for example SHIRT, JEANS, CARRY BAG.",
+    "type": "text",
+    "notes": "Blank on a few lines (5 and 7 in the two Vaishnavi Deoghar files); those lines carry NA in other attribute columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name, or a brand or division code such as LP, LY, LR, VH, VS, VF, AS, AL.",
+    "type": "text",
+    "notes": "Names and codes mix. Carry bags carry the store's own name as brand."
+   },
+   {
+    "name": "Color",
+    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "type": "text",
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed: number, letters, FREE SIZE, FS, kids age, pack or measure.",
+    "type": "text_or_number",
+    "notes": "Numbers are stored as numbers, letters as text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code as keyed by the store.",
+    "type": "text_or_number",
+    "notes": "Some values become dates in Excel (75 cells in Sales_Hazaribagh.xlsx; the same cell reads 2513-01-05 in one export and 2513-05-01 in another)."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house item code.",
+    "type": "text_or_number",
+    "notes": "All-digit values are numbers, alphanumeric values are text. Classes seen: 7-digit in-house, 13-digit EAN, other 5 to 15 digit codes."
+   },
+   {
+    "name": "SalesMan",
+    "meaning": "Salesperson name for the line. Personal data.",
+    "type": "text",
+    "notes": "Line level; can differ within a bill. Blank on 30% to 45% of lines in the Jainsons Hazaribagh exports."
+   },
+   {
+    "name": "Sub Category",
+    "meaning": "Category word or code of the bill's first line item, printed on the first line of a bill only.",
+    "type": "text",
+    "notes": "Words (CASUAL WEAR) and codes (USM, UTP) mix. Blank on continuation lines."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group as keyed.",
+    "type": "text",
+    "notes": "12 spellings in Sales_Hazaribagh.xlsx (for example KIDSM, KIDS, FEAMAL)."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit as keyed. Also holds the codes LM, MM, VLM, HM and product words.",
+    "type": "text",
+    "notes": "Some values end in a non-breaking space (182 lines in Sales_Hazaribagh.xlsx)."
+   },
+   {
+    "name": "season",
+    "meaning": "Season label as keyed. The header is lower case here, upper case in stock layouts.",
+    "type": "text_or_date",
+    "notes": "Several formats (see data-quality note). In Sales_Hazaribagh.xlsx 597 cells are real dates and 267 are text dd-mm-yyyy."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Signed quantity of the line. Negative on a return or exchange line.",
+    "type": "integer",
+    "notes": "A returned item is a negative line inside a bill; no link to the original bill."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Sale-time MRP per unit. Qty x Rate = Gross Amt on every line. Not cost.",
+    "type": "money_rupees",
+    "notes": "The text NaN on 1 line (Vaishnavi FY 2025-26) and 5 lines (Sales_Hazaribagh.xlsx); 2 lines hold a half rupee."
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Qty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on many lines that carry a rupee Disc Amt (1,308 of 26,195 lines in Sales_Hazaribagh.xlsx). 100 on free-gift and carry-bag lines. On a few lines it disagrees with Disc Amt / Gross Amt."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Rupee discount. Negative on sale lines, positive on return lines.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Gross Amt + Disc Amt: line value after discount.",
+    "type": "money_rupees",
+    "notes": "Paise kept (two decimals). One cell holds a space (text)."
+   },
+   {
+    "name": "Bill Amount",
+    "meaning": "Bill total in whole rupees, on the first line of the bill only.",
+    "type": "money_rupees",
+    "notes": "Equals Cash + Card + Credit on every bill. Equals the sum of the bill's Net Amount rounded half up on almost every bill; 19 of 5,383 bills in the Vaishnavi FY 2025-26 file differ by more than 1 rupee."
+   },
+   {
+    "name": "Cash",
+    "meaning": "Cash part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Card",
+    "meaning": "Card part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": "Whether UPI is inside Card is not stated; there is no UPI column."
+   },
+   {
+    "name": "Credit",
+    "meaning": "Credit part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": "0 on every bill in every file seen."
+   }
+  ],
+  "row_meaning": "One bill line: one barcode and quantity on one bill. Bill-level fields sit on the first line of the bill; continuation lines leave them blank.",
+  "bill_level_fields_on_first_line_only": true,
+  "bill_fields_repeated_on_every_line": [],
+  "total_rows": "Most files end with a total row (Qty, Gross Amt, Disc Amt, Net Amount, Bill Amount, Cash, Card; Credit left blank), then a row with the label SALES RETURN in the Customer column and nothing else, a blank row, and the total row again. The Vaishnavi FY 2025-26 file has no total row. Files cut down by brand (AS-DEO sheets, LP HZB sheet) have none.",
+  "quirks": [
+   "Header starts in column B; column A is empty.",
+   "Bill-level fields on the first line only: Bill Date, Bill No, Customer, Phone, Sub Category, Bill Amount, Cash, Card, Credit.",
+   "A return is a negative-quantity line inside a normal bill (an exchange); no link to the original bill. 326 of 327 bills with a return line also carry a sale line (Vaishnavi FY 2025-26).",
+   "Carry bags are sold as items (CARRY BAG) at a few rupees with Disc% 100.",
+   "Free gifts are lines with Disc% 100 and an ordinary item.",
+   "Disc% is 0 on many lines that carry a rupee Disc Amt.",
+   "Disc Amt is negative on sale lines and positive on return lines.",
+   "Brand-cut files (AS-DEO sheets) start with lines that have no bill header (3 and 4 lines) and Bill Amount and tenders belong to the whole bill, so they do not add up to the lines.",
+   "No tax, HSN, time of day, UPI column, cost or billing device.",
+   "Dates are real dates; season and Design No can be turned into dates by Excel."
+  ]
+ },
+ {
+  "id": "sales-bill-line-25-repeat",
+  "name": "Bill-line sales report, 25 columns, date and bill number repeated on every line",
+  "kind": "sales",
+  "producer_guess": "Same report as sales-bill-line-25 with the date and bill number repeated (Jainsons Hazaribagh exports; Sanskar sheet); product not stated",
+  "seen_in": [
+   "store-analysis/hazaribagh/Sales_Hazaribagh.xlsx [Sheet1] (header in column A)",
+   "monthly-reports-april-may-2026/2026-04/DATA/LP sales & soh HAZARIBAGH.xlsx [Sheet1] (header in column A)",
+   "monthly-reports-april-may-2026/2026-04/DATA/SANSKAR LOUIS PHILIPPE SALE REPORT .xlsx [Sheet1] (header in column B)"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the bill.",
+    "type": "date",
+    "notes": "Excel date at midnight, never text; no time of day. First line of a bill only in layout sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number: financial year, store code and serial, as YY-YY/CODE/n.",
+    "type": "text",
+    "notes": "Serial starts at 1 on 1 April and has no gaps in the full-period files. First line only in sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Customer",
+    "meaning": "Customer name keyed at the counter; CASH for a walk-in. Personal data.",
+    "type": "text",
+    "notes": "First line of a bill only. CASH is common. MANUAL BILL UPDATE on 30 bills in the Vaishnavi FY 2025-26 file. One cell holds the formula error #NAME? (bill 26-27/JSL/199)."
+   },
+   {
+    "name": "Phone",
+    "meaning": "Customer mobile number. Personal data.",
+    "type": "integer",
+    "notes": "First line only. Held as a number, so a leading zero cannot survive. Blank on about half the bills; 9-digit and 11-digit values seen; 0 seen."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type, for example SHIRT, JEANS, CARRY BAG.",
+    "type": "text",
+    "notes": "Blank on a few lines (5 and 7 in the two Vaishnavi Deoghar files); those lines carry NA in other attribute columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name, or a brand or division code such as LP, LY, LR, VH, VS, VF, AS, AL.",
+    "type": "text",
+    "notes": "Names and codes mix. Carry bags carry the store's own name as brand."
+   },
+   {
+    "name": "Color",
+    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "type": "text",
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed: number, letters, FREE SIZE, FS, kids age, pack or measure.",
+    "type": "text_or_number",
+    "notes": "Numbers are stored as numbers, letters as text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code as keyed by the store.",
+    "type": "text_or_number",
+    "notes": "Some values become dates in Excel (75 cells in Sales_Hazaribagh.xlsx; the same cell reads 2513-01-05 in one export and 2513-05-01 in another)."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house item code.",
+    "type": "text_or_number",
+    "notes": "All-digit values are numbers, alphanumeric values are text. Classes seen: 7-digit in-house, 13-digit EAN, other 5 to 15 digit codes."
+   },
+   {
+    "name": "SalesMan",
+    "meaning": "Salesperson name for the line. Personal data.",
+    "type": "text",
+    "notes": "Line level; can differ within a bill. Blank on 30% to 45% of lines in the Jainsons Hazaribagh exports."
+   },
+   {
+    "name": "Sub Category",
+    "meaning": "Category word or code of the bill's first line item, printed on the first line of a bill only.",
+    "type": "text",
+    "notes": "Words (CASUAL WEAR) and codes (USM, UTP) mix. Blank on continuation lines."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group as keyed.",
+    "type": "text",
+    "notes": "12 spellings in Sales_Hazaribagh.xlsx (for example KIDSM, KIDS, FEAMAL)."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit as keyed. Also holds the codes LM, MM, VLM, HM and product words.",
+    "type": "text",
+    "notes": "Some values end in a non-breaking space (182 lines in Sales_Hazaribagh.xlsx)."
+   },
+   {
+    "name": "season",
+    "meaning": "Season label as keyed. The header is lower case here, upper case in stock layouts.",
+    "type": "text_or_date",
+    "notes": "Several formats (see data-quality note). In Sales_Hazaribagh.xlsx 597 cells are real dates and 267 are text dd-mm-yyyy."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Signed quantity of the line. Negative on a return or exchange line.",
+    "type": "integer",
+    "notes": "A returned item is a negative line inside a bill; no link to the original bill."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Sale-time MRP per unit. Qty x Rate = Gross Amt on every line. Not cost.",
+    "type": "money_rupees",
+    "notes": "The text NaN on 1 line (Vaishnavi FY 2025-26) and 5 lines (Sales_Hazaribagh.xlsx); 2 lines hold a half rupee."
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Qty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on many lines that carry a rupee Disc Amt (1,308 of 26,195 lines in Sales_Hazaribagh.xlsx). 100 on free-gift and carry-bag lines. On a few lines it disagrees with Disc Amt / Gross Amt."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Rupee discount. Negative on sale lines, positive on return lines.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Gross Amt + Disc Amt: line value after discount.",
+    "type": "money_rupees",
+    "notes": "Paise kept (two decimals). One cell holds a space (text)."
+   },
+   {
+    "name": "Bill Amount",
+    "meaning": "Bill total in whole rupees, on the first line of the bill only.",
+    "type": "money_rupees",
+    "notes": "Equals Cash + Card + Credit on every bill. Equals the sum of the bill's Net Amount rounded half up on almost every bill; 19 of 5,383 bills in the Vaishnavi FY 2025-26 file differ by more than 1 rupee."
+   },
+   {
+    "name": "Cash",
+    "meaning": "Cash part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Card",
+    "meaning": "Card part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": "Whether UPI is inside Card is not stated; there is no UPI column."
+   },
+   {
+    "name": "Credit",
+    "meaning": "Credit part of the bill. First line only.",
+    "type": "money_rupees",
+    "notes": "0 on every bill in every file seen."
+   }
+  ],
+  "row_meaning": "One bill line. Bill Date and Bill No repeat on every line of a bill; Customer, Phone, Sub Category, Bill Amount, Cash, Card and Credit are on the first line only.",
+  "bill_level_fields_on_first_line_only": false,
+  "bill_fields_repeated_on_every_line": [
+   "Bill Date",
+   "Bill No"
+  ],
+  "total_rows": "Sales_Hazaribagh.xlsx ends with the total row, the SALES RETURN label row, a blank row and the total row again; its total covers only the financial year 2026-27 part (9,323 pieces) although the file holds two years. The LP HZB sheet has no total row (cut by brand; 272 rows hidden by a filter).",
+  "quirks": [
+   "Sales_Hazaribagh.xlsx and the JSL files describe the same bills for 4 Sep 2025 to 30 Jun 2026: 6,639 bill numbers are in both. One bill, 26-27/JSL/2014, is in the JSL file and absent from the later Sales_Hazaribagh.xlsx.",
+   "One bill number has two header lines in Sales_Hazaribagh.xlsx (a header line is a line with Bill Amount and tenders).",
+   "The Season of the same line differs between the two exports on 1,017 of 17,004 uniquely matched lines.",
+   "LP sales & soh HAZARIBAGH.xlsx has a filter on Brand (LOUIS PHILIPPE, LP, LR, LY) hiding 272 of 371 lines; its Bill Amount and tenders belong to whole bills, so they do not add up to the visible lines.",
+   "Sanskar sheet: 51 lines, 30 bills, bill numbers 26-27/SAN/34 to /1238."
+  ]
+ },
+ {
+  "id": "sales-banka-19",
+  "name": "Bill-line sales report without customer and tender columns (19 columns)",
+  "kind": "sales",
+  "producer_guess": "The 25-column report with Customer, Phone, Bill Amount, Cash, Card and Credit removed (guess)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/APR SALE & STOCK REPORT BANKA.xlsx ['sale report']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": true,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the bill.",
+    "type": "date",
+    "notes": "Excel date at midnight, never text; no time of day. First line of a bill only in layout sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number: financial year, store code and serial, as YY-YY/CODE/n.",
+    "type": "text",
+    "notes": "Serial starts at 1 on 1 April and has no gaps in the full-period files. First line only in sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type, for example SHIRT, JEANS, CARRY BAG.",
+    "type": "text",
+    "notes": "Blank on a few lines (5 and 7 in the two Vaishnavi Deoghar files); those lines carry NA in other attribute columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name, or a brand or division code such as LP, LY, LR, VH, VS, VF, AS, AL.",
+    "type": "text",
+    "notes": "Names and codes mix. Carry bags carry the store's own name as brand."
+   },
+   {
+    "name": "Color",
+    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "type": "text",
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed: number, letters, FREE SIZE, FS, kids age, pack or measure.",
+    "type": "text_or_number",
+    "notes": "Numbers are stored as numbers, letters as text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code as keyed by the store.",
+    "type": "text_or_number",
+    "notes": "Some values become dates in Excel (75 cells in Sales_Hazaribagh.xlsx; the same cell reads 2513-01-05 in one export and 2513-05-01 in another)."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house item code.",
+    "type": "text_or_number",
+    "notes": "All-digit values are numbers, alphanumeric values are text. Classes seen: 7-digit in-house, 13-digit EAN, other 5 to 15 digit codes."
+   },
+   {
+    "name": "SalesMan",
+    "meaning": "Salesperson name for the line. Personal data.",
+    "type": "text",
+    "notes": "Line level; can differ within a bill. Blank on 30% to 45% of lines in the Jainsons Hazaribagh exports."
+   },
+   {
+    "name": "Sub Category",
+    "meaning": "Category word or code of the bill's first line item, printed on the first line of a bill only.",
+    "type": "text",
+    "notes": "Words (CASUAL WEAR) and codes (USM, UTP) mix. Blank on continuation lines."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group as keyed.",
+    "type": "text",
+    "notes": "12 spellings in Sales_Hazaribagh.xlsx (for example KIDSM, KIDS, FEAMAL)."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit as keyed. Also holds the codes LM, MM, VLM, HM and product words.",
+    "type": "text",
+    "notes": "Some values end in a non-breaking space (182 lines in Sales_Hazaribagh.xlsx)."
+   },
+   {
+    "name": "season",
+    "meaning": "Season label as keyed. The header is lower case here, upper case in stock layouts.",
+    "type": "text_or_date",
+    "notes": "Several formats (see data-quality note). In Sales_Hazaribagh.xlsx 597 cells are real dates and 267 are text dd-mm-yyyy."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Signed quantity of the line. Negative on a return or exchange line.",
+    "type": "integer",
+    "notes": "A returned item is a negative line inside a bill; no link to the original bill."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Sale-time MRP per unit. Qty x Rate = Gross Amt on every line. Not cost.",
+    "type": "money_rupees",
+    "notes": "The text NaN on 1 line (Vaishnavi FY 2025-26) and 5 lines (Sales_Hazaribagh.xlsx); 2 lines hold a half rupee."
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Qty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on many lines that carry a rupee Disc Amt (1,308 of 26,195 lines in Sales_Hazaribagh.xlsx). 100 on free-gift and carry-bag lines. On a few lines it disagrees with Disc Amt / Gross Amt."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Rupee discount. Negative on sale lines, positive on return lines.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Gross Amt + Disc Amt: line value after discount.",
+    "type": "money_rupees",
+    "notes": "Paise kept (two decimals). One cell holds a space (text)."
+   }
+  ],
+  "row_meaning": "One bill line. Bill Date and Bill No on every line; Sub Category on the first line of a bill only; SalesMan on every line.",
+  "bill_level_fields_on_first_line_only": false,
+  "bill_fields_repeated_on_every_line": [
+   "Bill Date",
+   "Bill No"
+  ],
+  "total_rows": "One total row (Qty, Gross Amt, Disc Amt, Net Amount), two blank rows, and the same total row again. No SALES RETURN label (there is no Customer column).",
+  "quirks": [
+   "Autofilter on Item and Brand hides 1,558 of 1,588 rows (Van Heusen family and four item types visible).",
+   "No payment information at all.",
+   "1,586 lines, 566 bills (26-27/VAB/1 to /566), 1 to 30 April 2026.",
+   "56 lines carry Disc% 100."
+  ]
+ },
+ {
+  "id": "sales-vasdeo-15",
+  "name": "Bill-line sales report, 15 columns",
+  "kind": "sales",
+  "producer_guess": "The 25-column report with Color, SalesMan, Sub Category, Gender, Fit, season, Bill Amount and tenders removed (guess)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP SALE REPORT & STOCK REPORT APRIL'2026 VAS-DEO.xlsx ['SALE REPORT']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the bill.",
+    "type": "date",
+    "notes": "Excel date at midnight, never text; no time of day. First line of a bill only in layout sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number: financial year, store code and serial, as YY-YY/CODE/n.",
+    "type": "text",
+    "notes": "Serial starts at 1 on 1 April and has no gaps in the full-period files. First line only in sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Customer",
+    "meaning": "Customer name keyed at the counter; CASH for a walk-in. Personal data.",
+    "type": "text",
+    "notes": "First line of a bill only. CASH is common. MANUAL BILL UPDATE on 30 bills in the Vaishnavi FY 2025-26 file. One cell holds the formula error #NAME? (bill 26-27/JSL/199)."
+   },
+   {
+    "name": "Phone",
+    "meaning": "Customer mobile number. Personal data.",
+    "type": "integer",
+    "notes": "First line only. Held as a number, so a leading zero cannot survive. Blank on about half the bills; 9-digit and 11-digit values seen; 0 seen."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type, for example SHIRT, JEANS, CARRY BAG.",
+    "type": "text",
+    "notes": "Blank on a few lines (5 and 7 in the two Vaishnavi Deoghar files); those lines carry NA in other attribute columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name, or a brand or division code such as LP, LY, LR, VH, VS, VF, AS, AL.",
+    "type": "text",
+    "notes": "Names and codes mix. Carry bags carry the store's own name as brand."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed: number, letters, FREE SIZE, FS, kids age, pack or measure.",
+    "type": "text_or_number",
+    "notes": "Numbers are stored as numbers, letters as text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code as keyed by the store.",
+    "type": "text_or_number",
+    "notes": "Some values become dates in Excel (75 cells in Sales_Hazaribagh.xlsx; the same cell reads 2513-01-05 in one export and 2513-05-01 in another)."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house item code.",
+    "type": "text_or_number",
+    "notes": "All-digit values are numbers, alphanumeric values are text. Classes seen: 7-digit in-house, 13-digit EAN, other 5 to 15 digit codes."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Signed quantity of the line. Negative on a return or exchange line.",
+    "type": "integer",
+    "notes": "A returned item is a negative line inside a bill; no link to the original bill."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Sale-time MRP per unit. Qty x Rate = Gross Amt on every line. Not cost.",
+    "type": "money_rupees",
+    "notes": "The text NaN on 1 line (Vaishnavi FY 2025-26) and 5 lines (Sales_Hazaribagh.xlsx); 2 lines hold a half rupee."
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Qty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on many lines that carry a rupee Disc Amt (1,308 of 26,195 lines in Sales_Hazaribagh.xlsx). 100 on free-gift and carry-bag lines. On a few lines it disagrees with Disc Amt / Gross Amt."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Rupee discount. Negative on sale lines, positive on return lines.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Gross Amt + Disc Amt: line value after discount.",
+    "type": "money_rupees",
+    "notes": "Paise kept (two decimals). One cell holds a space (text)."
+   }
+  ],
+  "row_meaning": "One bill line. Bill Date and Bill No on every line; Customer and Phone on the first line of a bill only.",
+  "bill_level_fields_on_first_line_only": false,
+  "bill_fields_repeated_on_every_line": [
+   "Bill Date",
+   "Bill No"
+  ],
+  "total_rows": "None.",
+  "quirks": [
+   "138 lines, 57 bills (26-27/DEO/1 to /374), 1 to 30 April 2026, Louis Philippe only.",
+   "Bill Date is a real date; no total row."
+  ]
+ },
+ {
+  "id": "sales-bokaro-13",
+  "name": "Bill-line sales report, 13 columns plus a lookup column",
+  "kind": "sales",
+  "producer_guess": "Reworked by KDPS staff from the 25-column report (guess); it is already worked: Disc% is 30 or 0",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP Sale with Closing SOH report April 2026_BOKARO.xlsx [Sale]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the bill.",
+    "type": "date",
+    "notes": "Excel date at midnight, never text; no time of day. First line of a bill only in layout sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number: financial year, store code and serial, as YY-YY/CODE/n.",
+    "type": "text",
+    "notes": "Serial starts at 1 on 1 April and has no gaps in the full-period files. First line only in sales-bill-line-25; every line in sales-bill-line-25-repeat."
+   },
+   {
+    "name": "Customer",
+    "meaning": "Customer name keyed at the counter; CASH for a walk-in. Personal data.",
+    "type": "text",
+    "notes": "First line of a bill only. CASH is common. MANUAL BILL UPDATE on 30 bills in the Vaishnavi FY 2025-26 file. One cell holds the formula error #NAME? (bill 26-27/JSL/199)."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type, for example SHIRT, JEANS, CARRY BAG.",
+    "type": "text",
+    "notes": "Blank on a few lines (5 and 7 in the two Vaishnavi Deoghar files); those lines carry NA in other attribute columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name, or a brand or division code such as LP, LY, LR, VH, VS, VF, AS, AL.",
+    "type": "text",
+    "notes": "Names and codes mix. Carry bags carry the store's own name as brand."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed: number, letters, FREE SIZE, FS, kids age, pack or measure.",
+    "type": "text_or_number",
+    "notes": "Numbers are stored as numbers, letters as text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code as keyed by the store.",
+    "type": "text_or_number",
+    "notes": "Some values become dates in Excel (75 cells in Sales_Hazaribagh.xlsx; the same cell reads 2513-01-05 in one export and 2513-05-01 in another)."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house item code.",
+    "type": "text_or_number",
+    "notes": "All-digit values are numbers, alphanumeric values are text. Classes seen: 7-digit in-house, 13-digit EAN, other 5 to 15 digit codes."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Signed quantity of the line. Negative on a return or exchange line.",
+    "type": "integer",
+    "notes": "A returned item is a negative line inside a bill; no link to the original bill."
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Qty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on many lines that carry a rupee Disc Amt (1,308 of 26,195 lines in Sales_Hazaribagh.xlsx). 100 on free-gift and carry-bag lines. On a few lines it disagrees with Disc Amt / Gross Amt."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Rupee discount. Negative on sale lines, positive on return lines.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Gross Amt + Disc Amt: line value after discount.",
+    "type": "money_rupees",
+    "notes": "Paise kept (two decimals). One cell holds a space (text)."
+   },
+   {
+    "name": "(no header)",
+    "meaning": "Lookup result added by staff: Discount, No Discount or #N/A.",
+    "type": "text",
+    "notes": "#N/A on 49 lines and the total row because the lookup file was closed."
+   }
+  ],
+  "row_meaning": "One bill line. Bill Date, Bill No and Customer (CASH) on every line.",
+  "bill_level_fields_on_first_line_only": false,
+  "bill_fields_repeated_on_every_line": [
+   "Bill Date",
+   "Bill No",
+   "Customer"
+  ],
+  "total_rows": "One total row at the end (Gross Amt, Disc Amt, Net Amount) with #N/A in the lookup column.",
+  "quirks": [
+   "No Rate column.",
+   "Disc Amt is positive on every line, unlike the 25-column report.",
+   "90 lines, 54 bills (26-27/LBKR/3 to /149), 1 to 30 April 2026, Louis Philippe only."
+  ]
+ },
+ {
+  "id": "sales-dumka-headerless",
+  "name": "Headerless sales sheets with misplaced amount columns",
+  "kind": "sales",
+  "producer_guess": "Unknown; hand-built from POS data (guess)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP_APRIL SALE REPOT_DUMKA.xlsx ['AS-SALE', 'LP-SALE', 'VH-SALE']"
+  ],
+  "header_row": null,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "A",
+    "meaning": "Bill date.",
+    "type": "date",
+    "notes": "Real date."
+   },
+   {
+    "name": "B",
+    "meaning": "Empty on every row.",
+    "type": "empty",
+    "notes": ""
+   },
+   {
+    "name": "C",
+    "meaning": "Bill number.",
+    "type": "text",
+    "notes": "26-27/DMK/n."
+   },
+   {
+    "name": "D",
+    "meaning": "Empty on every row.",
+    "type": "empty",
+    "notes": ""
+   },
+   {
+    "name": "E",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "F",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": "Names and codes mix (AS, ALLEN SOLLY, LP, VX, VF)."
+   },
+   {
+    "name": "G",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "H",
+    "meaning": "Design number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "I",
+    "meaning": "Unknown; 0 on every row.",
+    "type": "integer",
+    "notes": "Position matches no standard column."
+   },
+   {
+    "name": "J",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "K",
+    "meaning": "Quantity.",
+    "type": "integer",
+    "notes": "Negative on 3 lines."
+   },
+   {
+    "name": "L",
+    "meaning": "Rate (MRP).",
+    "type": "money_rupees",
+    "notes": "Equals M on all but 3 lines."
+   },
+   {
+    "name": "M",
+    "meaning": "Gross amount.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "N or O",
+    "meaning": "Net amount after discount.",
+    "type": "money_rupees",
+    "notes": "In N on 73 rows and in O on 20 rows across the three sheets; both filled on 2 rows."
+   }
+  ],
+  "row_meaning": "One bill line; the bill number repeats on every line; no customer, no tender.",
+  "total_rows": "None.",
+  "quirks": [
+   "No header row; a reader that takes row 1 as header drops or mislabels the first data row. In AS-SALE row 1 is empty and the filter on column E hides 24 rows (Allen Solly family visible).",
+   "71, 16 and 8 data rows; 1 to 30 April 2026."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-movement-23",
+  "name": "Stock movement statement with Color (23 columns)",
+  "kind": "stock",
+  "producer_guess": "Same POS as the bill-line report; store not named (the Singh More sale sample's 46 distinct barcodes are all in it, so probably Vaishnavi Singh More; inferred)",
+  "seen_in": [
+   "Q&A-req-recieved/SOH REPORT FORMAT.xlsx [Sheet1]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": true,
+  "columns": [
+   {
+    "name": "Item Name",
+    "meaning": "Item type, for example SHIRT.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": "Names and codes mix; see data-quality note."
+   },
+   {
+    "name": "Color",
+    "meaning": "Colour name, or a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) or a code.",
+    "type": "text",
+    "notes": "6,237 PREMIUM, 3,799 ASSO., 2,647 MEDIUM, 696 ECONOMY, 458 WORK among 22,387 rows."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed.",
+    "type": "text_or_number",
+    "notes": "Blank on 250 rows (with Color file) or 14 rows (without)."
+   },
+   {
+    "name": "Supplier",
+    "meaning": "Supplier legal name as held on the item; the store's own legal name for own or transferred stock.",
+    "type": "text",
+    "notes": "KDPS appears as supplier under 3 spellings; Madura group under 3 legal names. Blank on 21 to 33 rows."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house code. One row per barcode.",
+    "type": "text_or_number",
+    "notes": "No duplicates. All-digit values are numbers."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code.",
+    "type": "text_or_number",
+    "notes": "112 cells become dates in Excel (soh30626.xlsx)."
+   },
+   {
+    "name": "Category",
+    "meaning": "Category word or code.",
+    "type": "text",
+    "notes": "Words and codes mix (CASUAL WEAR, USM, UTP)."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group.",
+    "type": "text",
+    "notes": "24 spellings in the file with Color."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit, or an LM/MM/VLM/HM code, or a product word.",
+    "type": "text",
+    "notes": "Non-breaking space on some values."
+   },
+   {
+    "name": "Season",
+    "meaning": "Season label.",
+    "type": "text_or_date",
+    "notes": "7,135 of 22,387 cells are real dates in the file with Color."
+   },
+   {
+    "name": "Op Qty",
+    "meaning": "Opening quantity at the start of the period.",
+    "type": "integer",
+    "notes": "Blank on some rows, 0 on others; the period start is not in the file."
+   },
+   {
+    "name": "Purchase",
+    "meaning": "Quantity purchased in the period.",
+    "type": "integer",
+    "notes": "Empty on every row of both files."
+   },
+   {
+    "name": "Sale",
+    "meaning": "Quantity sold in the period, negative; sales returns appear netted in it (inferred).",
+    "type": "integer",
+    "notes": "Equals minus the net sales quantity 1 Apr to 29 Jun 2026 on all 29,368 barcodes of soh30626.xlsx. A few rows are positive."
+   },
+   {
+    "name": "Adjustment",
+    "meaning": "Stock adjustment in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Sl Ret",
+    "meaning": "Sales return in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "St Trf",
+    "meaning": "Stock transferred out, negative.",
+    "type": "integer",
+    "notes": "Store transfer out."
+   },
+   {
+    "name": "Stf Reciept",
+    "meaning": "Stock received by transfer, positive. The header is spelled this way.",
+    "type": "integer",
+    "notes": "All stock arrives by transfer in soh30626.xlsx."
+   },
+   {
+    "name": "Pur Ret",
+    "meaning": "Purchase return in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Tqty",
+    "meaning": "Closing quantity. Op Qty + Purchase + Sale + Adjustment + Sl Ret + St Trf + Stf Reciept + Pur Ret.",
+    "type": "integer",
+    "notes": "The identity holds on every row of both files. No negative balances."
+   },
+   {
+    "name": "Mrp",
+    "meaning": "Current MRP per unit.",
+    "type": "money_rupees",
+    "notes": "Not the sale-time price: it changes over time."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Unit cost (inferred). Not MRP.",
+    "type": "money_rupees",
+    "notes": "Above Mrp on 47 of 22,387 rows (with Color) and on 29 of 29,368 rows (without). Whether GST is inside is not stated. Shown to 2 decimals."
+   },
+   {
+    "name": "Amount",
+    "meaning": "Tqty x Rate, kept unrounded.",
+    "type": "money_rupees",
+    "notes": "Differs from Tqty x displayed Rate by a few paise on 17 and 11 rows."
+   }
+  ],
+  "row_meaning": "One barcode (one style-colour-size). Opening quantity plus signed movements equals closing quantity Tqty. Zero-balance rows are kept.",
+  "total_rows": "One total row at the end with no barcode: Op Qty, Purchase, Sale, Adjustment, Sl Ret, St Trf, Stf Reciept, Pur Ret, Tqty and Amount. It reconciles with the lines in both files.",
+  "quirks": [
+   "22,387 barcode rows: 9,985 with stock, 12,402 at zero. Closing 17,615 pieces; Amount Rs 1,70,00,216.02.",
+   "No store name and no period in the file.",
+   "Purchase, Adjustment, Sl Ret and Pur Ret are empty on every row.",
+   "Rate is above Mrp on 47 rows; Mrp is 0 or blank on 1 row.",
+   "Season is a date on 7,135 rows (Excel turned Mon-YY text into dates); 2,074 blank."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-movement-22",
+  "name": "Stock movement statement without Color (22 columns)",
+  "kind": "stock",
+  "producer_guess": "Same POS and report as soh-movement-23 with Color left out; Jainsons Hazaribagh",
+  "seen_in": [
+   "store-analysis/jsl/soh30626.xlsx [Sheet1]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": true,
+  "columns": [
+   {
+    "name": "Item Name",
+    "meaning": "Item type, for example SHIRT.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": "Names and codes mix; see data-quality note."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed.",
+    "type": "text_or_number",
+    "notes": "Blank on 250 rows (with Color file) or 14 rows (without)."
+   },
+   {
+    "name": "Supplier",
+    "meaning": "Supplier legal name as held on the item; the store's own legal name for own or transferred stock.",
+    "type": "text",
+    "notes": "KDPS appears as supplier under 3 spellings; Madura group under 3 legal names. Blank on 21 to 33 rows."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house code. One row per barcode.",
+    "type": "text_or_number",
+    "notes": "No duplicates. All-digit values are numbers."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code.",
+    "type": "text_or_number",
+    "notes": "112 cells become dates in Excel (soh30626.xlsx)."
+   },
+   {
+    "name": "Category",
+    "meaning": "Category word or code.",
+    "type": "text",
+    "notes": "Words and codes mix (CASUAL WEAR, USM, UTP)."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group.",
+    "type": "text",
+    "notes": "24 spellings in the file with Color."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit, or an LM/MM/VLM/HM code, or a product word.",
+    "type": "text",
+    "notes": "Non-breaking space on some values."
+   },
+   {
+    "name": "Season",
+    "meaning": "Season label.",
+    "type": "text_or_date",
+    "notes": "7,135 of 22,387 cells are real dates in the file with Color."
+   },
+   {
+    "name": "Op Qty",
+    "meaning": "Opening quantity at the start of the period.",
+    "type": "integer",
+    "notes": "Blank on some rows, 0 on others; the period start is not in the file."
+   },
+   {
+    "name": "Purchase",
+    "meaning": "Quantity purchased in the period.",
+    "type": "integer",
+    "notes": "Empty on every row of both files."
+   },
+   {
+    "name": "Sale",
+    "meaning": "Quantity sold in the period, negative; sales returns appear netted in it (inferred).",
+    "type": "integer",
+    "notes": "Equals minus the net sales quantity 1 Apr to 29 Jun 2026 on all 29,368 barcodes of soh30626.xlsx. A few rows are positive."
+   },
+   {
+    "name": "Adjustment",
+    "meaning": "Stock adjustment in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Sl Ret",
+    "meaning": "Sales return in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "St Trf",
+    "meaning": "Stock transferred out, negative.",
+    "type": "integer",
+    "notes": "Store transfer out."
+   },
+   {
+    "name": "Stf Reciept",
+    "meaning": "Stock received by transfer, positive. The header is spelled this way.",
+    "type": "integer",
+    "notes": "All stock arrives by transfer in soh30626.xlsx."
+   },
+   {
+    "name": "Pur Ret",
+    "meaning": "Purchase return in the period.",
+    "type": "integer",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Tqty",
+    "meaning": "Closing quantity. Op Qty + Purchase + Sale + Adjustment + Sl Ret + St Trf + Stf Reciept + Pur Ret.",
+    "type": "integer",
+    "notes": "The identity holds on every row of both files. No negative balances."
+   },
+   {
+    "name": "Mrp",
+    "meaning": "Current MRP per unit.",
+    "type": "money_rupees",
+    "notes": "Not the sale-time price: it changes over time."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Unit cost (inferred). Not MRP.",
+    "type": "money_rupees",
+    "notes": "Above Mrp on 47 of 22,387 rows (with Color) and on 29 of 29,368 rows (without). Whether GST is inside is not stated. Shown to 2 decimals."
+   },
+   {
+    "name": "Amount",
+    "meaning": "Tqty x Rate, kept unrounded.",
+    "type": "money_rupees",
+    "notes": "Differs from Tqty x displayed Rate by a few paise on 17 and 11 rows."
+   }
+  ],
+  "row_meaning": "One barcode. Opening quantity plus signed movements equals closing quantity Tqty. Zero-balance rows are kept.",
+  "total_rows": "One total row at the end with no barcode: Op Qty, Purchase, Sale, Adjustment, Sl Ret, St Trf, Stf Reciept, Pur Ret, Tqty and Amount. It reconciles with the lines in both files.",
+  "quirks": [
+   "29,368 barcode rows: 17,643 with stock, 11,725 at zero. Closing 58,727 pieces, of which 31,032 are carry bags.",
+   "Period inferred 1 Apr to 29 Jun 2026 (Sale equals minus the net sales quantity of the sales file for those dates on all 29,368 barcodes); the file name says 30-06-26.",
+   "All stock arrives by transfer (Stf Reciept); Purchase is empty.",
+   "Rate is above Mrp on 29 rows; Mrp is 0 or blank on 20 rows."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-stock-details-14",
+  "name": "Stock-details snapshot, 14 columns",
+  "kind": "stock",
+  "producer_guess": "Same POS family: stock-details report (Tqty, Mrp, Rate, Amount); stores Vaishnavi Deoghar, Jainsons Hazaribagh, Dumka",
+  "seen_in": [
+   "store-analysis/VAISHNAVI/VAISHNAVI DEOGHAR 12-06-2026 SOH.xlsx [Sheet1, Sheet2]",
+   "monthly-reports-april-may-2026/2026-04/DATA/DUMKA_STOCK DETAILS APRIL2026.xlsx [VH, PE, LP, AS]",
+   "monthly-reports-april-may-2026/2026-04/DATA/LP sales & soh HAZARIBAGH.xlsx [Sheet2]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Item Name",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": "Names and codes mix."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed.",
+    "type": "text_or_number",
+    "notes": "Blank on 373 rows of the Vaishnavi Sheet1."
+   },
+   {
+    "name": "Supplier",
+    "meaning": "Supplier legal name; the store's own legal name for own or transferred stock.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house code. One row per barcode.",
+    "type": "text_or_number",
+    "notes": "No duplicates."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Style or design code.",
+    "type": "text_or_number",
+    "notes": "Becomes a date in Excel on a few cells."
+   },
+   {
+    "name": "Category",
+    "meaning": "Category word or code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group.",
+    "type": "text",
+    "notes": "33 spellings in the Vaishnavi Sheet1."
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit, code or product word.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Season",
+    "meaning": "Season label.",
+    "type": "text_or_date",
+    "notes": "6,752 of 33,381 cells are real dates in the Vaishnavi Sheet1; Sheet2 holds a cleaned form (SS-yy, AW-yy)."
+   },
+   {
+    "name": "Tqty",
+    "meaning": "Quantity on hand at the export.",
+    "type": "integer",
+    "notes": "Zero rows are kept in Vaishnavi Sheet1 and HZB Sheet2, absent in the Dumka sheets and Vaishnavi Sheet2."
+   },
+   {
+    "name": "Mrp",
+    "meaning": "Current MRP per unit.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Rate",
+    "meaning": "Unit cost (inferred).",
+    "type": "money_rupees",
+    "notes": "24 SKUs have cost above Mrp in the Vaishnavi file (analysis file Vaishnavi-SOH-data-errors.xlsx)."
+   },
+   {
+    "name": "Amount",
+    "meaning": "Tqty x Rate, unrounded.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode with its quantity on hand on the export date. Whether zero-balance rows are present depends on the file.",
+  "total_rows": "Vaishnavi Sheet1 has a blank row and a total row at the end (Tqty 13,375 and Amount Rs 1,79,81,513.78 against line sums of 13,354 and Rs 1,79,81,382.52). Vaishnavi Sheet2, the Dumka sheets and HZB Sheet2 have none.",
+  "quirks": [
+   "Vaishnavi Sheet1: 33,381 rows, 24,576 at zero. Sheet2: the 8,805 rows with stock, season cleaned, brand/size/gender differ from Sheet1 on hundreds of rows, plus an unlabelled 15th column with HSN-like codes on 41 rows.",
+   "Dumka sheets: 319, 18, 240 and 556 rows, all with stock; no total row.",
+   "HZB Sheet2: 5,595 rows, 1,999 at zero, 1 negative; filter on Brand (LP family) hides 5,008 rows.",
+   "Rate is unit cost (inferred); Season shows dates and text dd-mm-yyyy (for example 29-04-2025)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-stock-details-offer-14",
+  "name": "Stock-details snapshot with OFFER, positive rows only, no Season",
+  "kind": "stock",
+  "producer_guess": "Same POS stock-details report with different columns chosen; Jainsons Hazaribagh",
+  "seen_in": [
+   "store-analysis/hazaribagh/SOH_Hazaribagh.xlsx [Sheet1]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Item Name",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Category",
+    "meaning": "Category word or code.",
+    "type": "text",
+    "notes": "Words and codes mix (about 60 values)."
+   },
+   {
+    "name": "Gender",
+    "meaning": "Gender or kids group.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Fit",
+    "meaning": "Fit, code or product word.",
+    "type": "text",
+    "notes": "Non-breaking space on 195 rows."
+   },
+   {
+    "name": "Design",
+    "meaning": "Style or design code (header is Design, not Design No).",
+    "type": "text_or_number",
+    "notes": "76 cells become dates."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode or in-house code.",
+    "type": "text_or_number",
+    "notes": "No duplicates."
+   },
+   {
+    "name": "Supplier",
+    "meaning": "Supplier legal name.",
+    "type": "text",
+    "notes": "71 untrimmed values."
+   },
+   {
+    "name": "Tqty",
+    "meaning": "Quantity on hand.",
+    "type": "integer",
+    "notes": "Every row above 0."
+   },
+   {
+    "name": "Mrp",
+    "meaning": "Current MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Rate",
+    "meaning": "Unit cost (inferred).",
+    "type": "money_rupees",
+    "notes": "Above Mrp on 13 rows."
+   },
+   {
+    "name": "Amount",
+    "meaning": "Tqty x Rate.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "OFFER",
+    "meaning": "IN OFFER or NOT IN OFFER.",
+    "type": "text",
+    "notes": "732 rows IN OFFER, 16,319 NOT IN OFFER."
+   }
+  ],
+  "row_meaning": "One barcode that has stock. A barcode that sold out is not listed.",
+  "total_rows": "One total row (Tqty 26,736 and Amount Rs 3,85,50,679.28); the Amount is Rs 4,81,673.22 above the sum of the lines; pieces agree.",
+  "quirks": [
+   "17,051 rows, 26,736 pieces, dated 24 Jul 2026 by the file's creation; no Season and no Color.",
+   "Sheet2 is a leftover pivot (Gender = FEMALE filter; Sum of Rate adds unit costs).",
+   "Cannot show stock-outs."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-minimal-bokaro-7",
+  "name": "Minimal stock list, 7 columns plus an empty one",
+  "kind": "stock",
+  "producer_guess": "Stock-details report cut down by staff (guess)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP Sale with Closing SOH report April 2026_BOKARO.xlsx [Stock]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Item Name",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Design",
+    "meaning": "Style or design code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Tqty",
+    "meaning": "Quantity on hand.",
+    "type": "integer",
+    "notes": "All rows above 0."
+   },
+   {
+    "name": "Mrp",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "(no header)",
+    "meaning": "Empty column.",
+    "type": "empty",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode with stock.",
+  "total_rows": "None.",
+  "quirks": [
+   "694 rows, 1,053 pieces. No cost, no supplier, no season.",
+   "The brand voucher SOH for Bokaro is not built from this sheet; it equals the Allen Solly Deogarh voucher SOH."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-minimal-vasdeo-8",
+  "name": "Minimal stock list with Store Name, 8 columns",
+  "kind": "stock",
+  "producer_guess": "Stock report cut down or reworked by staff (guess)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP SALE REPORT & STOCK REPORT APRIL'2026 VAS-DEO.xlsx ['STOCK REPORT']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Barcode no",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Product",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style code",
+    "meaning": "Style or design code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Store Name",
+    "meaning": "Store the stock belongs to.",
+    "type": "text",
+    "notes": "Vaishnavi Deoghar on every row."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Till Date Qty",
+    "meaning": "Quantity on hand.",
+    "type": "integer",
+    "notes": "All rows above 0."
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode with stock.",
+  "total_rows": "None, but a free-text note row sits in the Barcode no column: NOTE: 19 PCS JEANS SHORT.",
+  "quirks": [
+   "840 barcode rows, 1,178 pieces."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-ledger-14-store",
+  "name": "Stock ledger with opening, inward, sold and till-date quantities, with Store Name",
+  "kind": "stock",
+  "producer_guess": "Store's own Excel, probably a copy of the Stock In sheet of the store workbook (DSR); not a POS export (inferred)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/APR SALE & STOCK REPORT BANKA.xlsx ['STOCK REPORT']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Date of the inward document or opening line for the barcode.",
+    "type": "date",
+    "notes": "Real date, 24 Dec 2021 to 29 Apr 2026."
+   },
+   {
+    "name": "Bill no",
+    "meaning": "Inward or transfer document number, or a label.",
+    "type": "text",
+    "notes": "Patterns: YY-YY/CODE/S-n, CODE/n, CODE\\S-n. Labels instead of numbers: Scan Stock (105 rows), Audit Differance (78 rows)."
+   },
+   {
+    "name": "Barcode no",
+    "meaning": "Barcode or in-house code.",
+    "type": "text_or_number",
+    "notes": "One row per barcode in this sheet; 3 cells hold #N/A in other columns."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Product",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style code",
+    "meaning": "Style or design code.",
+    "type": "text_or_number",
+    "notes": "#N/A on 1 row."
+   },
+   {
+    "name": "Store Name",
+    "meaning": "Store the stock belongs to.",
+    "type": "text",
+    "notes": "One value for the whole sheet."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed.",
+    "type": "text_or_number",
+    "notes": "#N/A on 2 rows."
+   },
+   {
+    "name": "Stock Opening Qty",
+    "meaning": "Opening quantity.",
+    "type": "integer",
+    "notes": "Blank on 6,664 of 12,177 rows."
+   },
+   {
+    "name": "Stock Inward",
+    "meaning": "Quantity received.",
+    "type": "integer",
+    "notes": "Blank on 4,513 rows."
+   },
+   {
+    "name": "Qty Sold",
+    "meaning": "Quantity sold.",
+    "type": "integer",
+    "notes": "1 negative row."
+   },
+   {
+    "name": "Till Date Qty",
+    "meaning": "Opening + inward - sold.",
+    "type": "integer",
+    "notes": "Identity holds on every row. All rows above 0."
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP per unit.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "Till Date Qty x MRP.",
+    "type": "money_rupees",
+    "notes": "Identity holds on every row."
+   }
+  ],
+  "row_meaning": "One barcode. Date and Bill no show one inward document for it.",
+  "total_rows": "None.",
+  "quirks": [
+   "12,177 rows; Till Date Qty 21,771 pieces; every row above 0.",
+   "Autofilter on Brand hides 11,755 of 12,178 rows (Van Heusen family visible).",
+   "Opening + inward - sold = till date on every row."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-ledger-14-season",
+  "name": "Stock ledger with opening, inward, sold and till-date quantities, with Season",
+  "kind": "stock",
+  "producer_guess": "Store's own Excel (inferred)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/AS  & LP2  APR 26 SALE  AND SOH AS-DEO.xlsx ['AS SOH ', 'LP2 SOH ']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Date of the inward document, or of the opening line.",
+    "type": "date_or_serial",
+    "notes": "Excel serial numbers (integers) on 7,025 rows of AS SOH; blank on 3,346 rows (3,125 filler rows and 221 lines)."
+   },
+   {
+    "name": "Bill no",
+    "meaning": "Inward or transfer document number, or a label.",
+    "type": "text",
+    "notes": "Opening Stock (14 rows) and Audit Diff (23 rows) are labels."
+   },
+   {
+    "name": "Barcode no",
+    "meaning": "Barcode or in-house code.",
+    "type": "number",
+    "notes": "One row per barcode."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Product",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style code",
+    "meaning": "Style or design code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Season",
+    "meaning": "Season label.",
+    "type": "text",
+    "notes": "Empty on almost every row."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size as keyed.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Stock Opening Qty",
+    "meaning": "Opening quantity.",
+    "type": "integer",
+    "notes": "Mostly blank."
+   },
+   {
+    "name": "Stock Inward",
+    "meaning": "Quantity received.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Qty Sold",
+    "meaning": "Quantity sold.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Till Date Qty",
+    "meaning": "Opening + inward - sold.",
+    "type": "integer",
+    "notes": "Identity holds on every row. 1 negative row in AS SOH."
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP per unit.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "Till Date Qty x MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode.",
+  "total_rows": "None. AS SOH ends with 3,125 filler rows that hold 0 in Qty Sold, Till Date Qty and Total MRP only.",
+  "quirks": [
+   "AS SOH: 10,371 rows, 7,246 with a barcode, 5,124 of them at zero; 7,410 rows hidden.",
+   "LP2 SOH: 336 rows, 490 pieces; this sheet is the source of the Bokaro voucher SOH.",
+   "Barcode, sale and date quirks: see data-quality note."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "soh-ledger-14-headerless",
+  "name": "Stock ledger without a header row",
+  "kind": "stock",
+  "producer_guess": "Store's own Excel (inferred)",
+  "seen_in": [
+   "monthly-reports-april-may-2026/2026-04/DATA/LP_APRIL SALE REPOT_DUMKA.xlsx ['AS-SOH', 'LP-SOH', 'VH-SOH']"
+  ],
+  "header_row": null,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "A",
+    "meaning": "Date of the inward document.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "B",
+    "meaning": "Inward or transfer document number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "C",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "D",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "E",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "F",
+    "meaning": "Style code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "G",
+    "meaning": "Season position; empty.",
+    "type": "empty",
+    "notes": ""
+   },
+   {
+    "name": "H",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "I",
+    "meaning": "Opening quantity.",
+    "type": "integer",
+    "notes": "Blank on almost every row."
+   },
+   {
+    "name": "J",
+    "meaning": "Inward quantity.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "K",
+    "meaning": "Sold quantity.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "L",
+    "meaning": "Till date quantity.",
+    "type": "integer",
+    "notes": "Opening + inward - sold on every row."
+   },
+   {
+    "name": "M",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "N",
+    "meaning": "Total MRP.",
+    "type": "money_rupees",
+    "notes": "Till date x MRP."
+   }
+  ],
+  "row_meaning": "One barcode.",
+  "total_rows": "None.",
+  "quirks": [
+   "Same positions as soh-ledger-14-season; the first data row is where the header would be.",
+   "804, 360 and 322 rows; rows with zero till-date quantity (288, 128, 104) are hidden."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-sale-32",
+  "name": "Store daily sales report workbook, Sale sheet (32 columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store Google Sheets or Excel workbook typed by store staff; not a POS export",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Sale]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Sale date.",
+    "type": "date",
+    "notes": "Typed."
+   },
+   {
+    "name": "Manual Bill No.",
+    "meaning": "Paper bill number.",
+    "type": "text",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Online Bill No.",
+    "meaning": "POS bill number, 26-27/SGMR/n.",
+    "type": "text",
+    "notes": "Typed."
+   },
+   {
+    "name": "Sale Person",
+    "meaning": "Salesperson.",
+    "type": "text",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "Barcode No.",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": "Floats on 4,506 rows, text on 274."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand, looked up from Stock In by barcode.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Product",
+    "meaning": "Item type, looked up.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style Code",
+    "meaning": "Style code, looked up.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Store Name",
+    "meaning": "Store of the line.",
+    "type": "text",
+    "notes": "Also names transfer destinations."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size, looked up.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Quantity",
+    "meaning": "Quantity; negative on a return.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP, looked up.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "Quantity x MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Cash",
+    "meaning": "Cash paid on the line.",
+    "type": "money_rupees",
+    "notes": "Typed."
+   },
+   {
+    "name": "Online UPI",
+    "meaning": "UPI paid on the line.",
+    "type": "money_rupees",
+    "notes": "Typed."
+   },
+   {
+    "name": "Swip",
+    "meaning": "Card (swipe machine) paid on the line.",
+    "type": "money_rupees",
+    "notes": "Typed."
+   },
+   {
+    "name": "Dues Sale",
+    "meaning": "Amount left unpaid (credit sale).",
+    "type": "money_rupees",
+    "notes": "3 lines."
+   },
+   {
+    "name": "Cash",
+    "meaning": "Dues recovery received in cash.",
+    "type": "money_rupees",
+    "notes": "Second tender group."
+   },
+   {
+    "name": "UPI",
+    "meaning": "Dues recovery received by UPI.",
+    "type": "money_rupees",
+    "notes": "Empty."
+   },
+   {
+    "name": "Swip",
+    "meaning": "Dues recovery received by card.",
+    "type": "money_rupees",
+    "notes": "Empty."
+   },
+   {
+    "name": "Tid No",
+    "meaning": "Card terminal reference.",
+    "type": "text",
+    "notes": "Empty on every row."
+   },
+   {
+    "name": "NSV",
+    "meaning": "Cash + UPI + swipe + dues sale.",
+    "type": "money_rupees",
+    "notes": "Formula."
+   },
+   {
+    "name": "Discount",
+    "meaning": "Total MRP minus NSV.",
+    "type": "money_rupees",
+    "notes": "Derived, not entered."
+   },
+   {
+    "name": "GST%",
+    "meaning": "Rate picked by line value: 10.71 below Rs 2,500, otherwise 15.2542 (12/112 and 18/118).",
+    "type": "decimal",
+    "notes": "Formula; the CA must confirm the rule."
+   },
+   {
+    "name": "Taxable Amount",
+    "meaning": "NSV minus GST.",
+    "type": "money_rupees",
+    "notes": "Formula."
+   },
+   {
+    "name": "GST",
+    "meaning": "Tax inside NSV.",
+    "type": "money_rupees",
+    "notes": "Formula."
+   },
+   {
+    "name": "Check",
+    "meaning": "Check cell.",
+    "type": "integer",
+    "notes": "Returns 0 in both cases, so it cannot flag an error."
+   },
+   {
+    "name": "Reason for Discount or Dues",
+    "meaning": "Free-text reason.",
+    "type": "text",
+    "notes": "479 lines; includes Stock Transferr (typo) labels."
+   },
+   {
+    "name": "Dis %",
+    "meaning": "Discount percentage of the line.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "Margin",
+    "meaning": "Equals Taxable Amount.",
+    "type": "money_rupees",
+    "notes": "No cost is involved."
+   },
+   {
+    "name": "Year",
+    "meaning": "Year of the date.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Month",
+    "meaning": "Month name of the date.",
+    "type": "text",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One sale line typed by staff: date, POS bill number, barcode, quantity and tender amounts; the rest is looked up or computed.",
+  "total_rows": "Row 1 holds subtotals and row 2 a validation message (No Blank Or Error Cell); header on row 3. Formulas run to row 20,993 for dates to April 2027; 4,780 rows hold data (1 Apr to 5 Jun 2026).",
+  "quirks": [
+   "Carry bags are 7-rupee lines at 100% discount (586 lines).",
+   "479 lines carry a reason text, mostly stock-transfer labels; 2,238 lines have zero tender and 100% discount, 2,037 of them without a reason.",
+   "Sale Person, Manual Bill No. and Tid No are empty on every row."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-cash-14",
+  "name": "Store daily sales report workbook, Cash sheet (14 columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store workbook; formulas over the Sale sheet",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Cash]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Day.",
+    "type": "date",
+    "notes": "Dates run to 12 Apr 2027."
+   },
+   {
+    "name": "Opening Balance",
+    "meaning": "Cash at start of day.",
+    "type": "money_rupees",
+    "notes": "Only 1 April is typed."
+   },
+   {
+    "name": "Cash",
+    "meaning": "Cash sales of the day (SUMIF over Sale).",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "UPI",
+    "meaning": "UPI sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Swip",
+    "meaning": "Card sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Dues",
+    "meaning": "Credit sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Cash",
+    "meaning": "Dues recovered in cash.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "UPI",
+    "meaning": "Dues recovered by UPI.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Swip",
+    "meaning": "Dues recovered by card.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "NSV",
+    "meaning": "Net sales value of the day.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Bank Deposit",
+    "meaning": "Cash deposited at the bank.",
+    "type": "money_rupees",
+    "notes": "Typed: 33 deposits."
+   },
+   {
+    "name": "Cash Transfer to Ho",
+    "meaning": "Cash sent to head office.",
+    "type": "money_rupees",
+    "notes": "Typed: 3 transfers."
+   },
+   {
+    "name": "Ac No. / Person",
+    "meaning": "Account or person for the deposit or transfer.",
+    "type": "text",
+    "notes": "Filled on 3 rows. Personal or bank data."
+   },
+   {
+    "name": "Closing Balance",
+    "meaning": "Opening + cash sales - deposit - HO transfer + cash dues recovered.",
+    "type": "money_rupees",
+    "notes": "Book balance; no counted-cash column."
+   }
+  ],
+  "row_meaning": "One calendar day.",
+  "total_rows": "Rows 1 and 2 hold labels and totals; header on row 3.",
+  "quirks": [
+   "377 dated rows; UPI and card never enter the cash balance."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-stock-in-pivot",
+  "name": "Store daily sales report workbook, Stock In sheet (pivot with formula columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store workbook; pivot over Stock Inward Details",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Stock In]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "A to F",
+    "meaning": "Pivot label columns (barcode, brand, product, style, size) and the summed inward quantity.",
+    "type": "empty",
+    "notes": "Blank in the export."
+   },
+   {
+    "name": "Sold QTY",
+    "meaning": "Sold quantity from the Sale sheet.",
+    "type": "integer",
+    "notes": "Formula."
+   },
+   {
+    "name": "Till Date Qty",
+    "meaning": "Inward minus sold: stock on hand.",
+    "type": "integer",
+    "notes": "Formula; sales counted from 1 April 2026 only."
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "Till Date Qty x MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode.",
+  "total_rows": "Row 2 holds totals (23,623 inward, 5,967 sold, 17,656 on hand, Rs 2.74 crore at MRP).",
+  "quirks": [
+   "The label columns are blank in the export, so the rows cannot be read as stock without Stock Inward Details."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-stock-inward-10",
+  "name": "Store daily sales report workbook, Stock Inward Details sheet (10 columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store workbook; typed or pasted inward lines",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Stock Inward Details]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Inward date.",
+    "type": "date",
+    "notes": "1 Oct 2024 to 2 Jun 2026."
+   },
+   {
+    "name": "Invoice No",
+    "meaning": "Inward or transfer document number, or a label.",
+    "type": "text",
+    "notes": "Two styles: WH\\S-n and YY-YY/WH/S-n; Audit Diff on 77 lines."
+   },
+   {
+    "name": "Barcode no",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": "Floats."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Product",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style code",
+    "meaning": "Style code.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "QTY",
+    "meaning": "Quantity received.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "QTY x MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One inward line: a barcode on an inward document.",
+  "total_rows": "Row 1 holds the store name and totals; row 2 a validation helper; header on row 3.",
+  "quirks": [
+   "12,123 lines, 666 document labels (665 numbers plus Audit Diff), 11,964 barcodes, 23,623 pieces.",
+   "Lines labelled Audit Diff are stock found at audit and added as inward (136 pieces)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-bank-reconciliation-20",
+  "name": "Store daily sales report workbook, Bank Reconciliation sheet (20 columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store workbook copied from the Banka store; broken",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Bank Reconciliation]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Day.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "Store Name",
+    "meaning": "Store.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "MID No",
+    "meaning": "Card terminal merchant identifier. Bank data.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Opening Balance",
+    "meaning": "Cash at start.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total Revenue",
+    "meaning": "Sales of the day.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Cash sale",
+    "meaning": "Cash sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Swip Amt",
+    "meaning": "Card sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Swip Satt Amt",
+    "meaning": "Card settlement credited by the bank.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Bank Charge (%)",
+    "meaning": "(Swipe - settlement) / swipe.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "Online UPI",
+    "meaning": "UPI sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "UPI Satt Amt",
+    "meaning": "UPI settlement credited.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Dues Sale",
+    "meaning": "Credit sales.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Dues Recover",
+    "meaning": "Dues recovered.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Cash Dues Recover",
+    "meaning": "Dues recovered in cash.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "UPI Dues Recover",
+    "meaning": "Dues recovered by UPI.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Swip Dues Recover",
+    "meaning": "Dues recovered by card.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Bank Deposit",
+    "meaning": "Cash deposited.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Cash Transfer to (HO)",
+    "meaning": "Cash sent to head office.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Bank Deposit Verified",
+    "meaning": "Manual tick.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Outstanding Balance",
+    "meaning": "Opening + cash sale - deposit - HO transfer.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One calendar day for another store (Vaishnavi Banka), 1 Apr to 15 Sep 2025.",
+  "total_rows": "Rows 1 and 2 hold labels and checks.",
+  "quirks": [
+   "Formula errors in 11,732 cells (9,570 #ERROR!, 2,162 #VALUE!); only 91 hard-typed UPI settlement amounts remain.",
+   "A numeric identifier cell is formatted as a date with an impossible serial (value not copied)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dsr-petty-cash-18",
+  "name": "Store daily sales report workbook, Petty Cash sheet (18 columns)",
+  "kind": "store-excel",
+  "producer_guess": "Store workbook; not in use yet",
+  "seen_in": [
+   "bank-statement/3. Vaishnavi Singh More DSR(Fy-26-27).xlsx [Petty Cash]"
+  ],
+  "header_row": 2,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Day.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "Opening Balance",
+    "meaning": "Petty cash at start.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Petty Cash Received",
+    "meaning": "Cash received.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Staff Salary",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Tea Snacks",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Alteration",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Courier & Cargo Exp",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Wow Bill/ Incentive Expance",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Rent",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Electricity Bill",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Water Exp",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Charge",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Show Room Repaire  Maint. Exp",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Printing & Stationery Exp",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Other Exp.  (if any)",
+    "meaning": "Expense.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total Expance",
+    "meaning": "Sum of expenses.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Reason of Other Exp.",
+    "meaning": "Free text.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Closing Balance",
+    "meaning": "Opening + received - total expense.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One calendar day.",
+  "total_rows": "Row 1 holds totals; header on row 2.",
+  "quirks": [
+   "Pre-dated to 30 Apr 2027; every figure is 0.",
+   "Some header cells contain line breaks and double spaces."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-voucher-sales-14",
+  "name": "Brand report 'List of Sales Vouchers' (Tally-style), SALES sheet, 14 columns",
+  "kind": "brand-report",
+  "producer_guess": "Built by KDPS staff in Excel, following a Tally-style report layout; not a POS output",
+  "seen_in": [
+   "monthly-reports-april-may-2026/FORMAT_SALES_VOUCHERS.xlsx [SALES] (header only)",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_AS-DEO.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_BOKARO.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_DUMKA.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_HZB.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_SANSKAR.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_VAS-DEO.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-05/data/BLACKBERRY_SALES_STOCK_DETAILS_MAY2026.xlsx [SALES]",
+   "monthly-reports-april-may-2026/2026-05/data/MUFTI_SALES_STOCK_DETAILS_MAY2026.xlsx [SALES]",
+   "brand-analysis-report /blackberry/BLACKBERRY_SALES_STOCK_DETAILS_JUNE2026.xlsx [SALES]",
+   "brand-analysis-report /mufti/MUFTI_SALES_STOCK_DETAILS_JUNE2026.xlsx [SALES]"
+  ],
+  "header_row": 4,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Date of the sale line.",
+    "type": "date",
+    "notes": "Real date. Copied 1:1 from the POS Bill Date."
+   },
+   {
+    "name": "Vch/Bill No.",
+    "meaning": "Bill number.",
+    "type": "text",
+    "notes": "Header is Vch/Bill No without a dot in the Blackberry and Mufti files."
+   },
+   {
+    "name": "Particulars",
+    "meaning": "Party of the voucher; the fixed word CASH on every line.",
+    "type": "text",
+    "notes": "Hard-coded."
+   },
+   {
+    "name": "Item Details",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Style Code",
+    "meaning": "Style or design code (the POS Design No).",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Unit",
+    "meaning": "Unit; the fixed word PCS.",
+    "type": "text",
+    "notes": "Hard-coded."
+   },
+   {
+    "name": "Qty.",
+    "meaning": "Quantity; negative on a return line.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Price",
+    "meaning": "Gross amount of the line (the POS Gross Amt), not the rate.",
+    "type": "money_rupees",
+    "notes": "Header is MRP in the Blackberry files."
+   },
+   {
+    "name": "Dis %",
+    "meaning": "Discount percentage of the brand-offer calculation, not the POS Disc%.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "Dis ",
+    "meaning": "Discount amount (header ends with a space; Dis Amount or Dis Amt in other files).",
+    "type": "money_rupees",
+    "notes": "Positive in the April LP files, negative in the June Blackberry file."
+   },
+   {
+    "name": "Total",
+    "meaning": "Price minus discount.",
+    "type": "money_rupees",
+    "notes": "Totals differ from the POS net in 5 of the 6 April stores."
+   }
+  ],
+  "row_meaning": "One sale line copied from the POS bill line, in the same order.",
+  "total_rows": "A total row at the end (Qty., Price, Dis, Total).",
+  "quirks": [
+   "Three title rows (company; List of Sales Vouchers; Voucher Series : brand (From dd-mm-yyyy To dd-mm-yyyy)) in merged cells; Mufti files have two title rows and the header on row 3.",
+   "Unlabelled column O holds the AMM lookup result (Discount, No Discount); in the Deoghar file P to R hold the POS Disc %, Disc Amt and Net Amount; in May files P to R are source discount columns.",
+   "Dis %, Dis and Total hold the brand-offer calculation, not the POS discount.",
+   "Header text varies: Vch/Bill No. or Vch/Bill No; Price or MRP; Dis, Dis Amount or Dis Amt.",
+   "Period labels in titles do not always match the data (Blackberry May file holds 52 lines dated April; Mufti June file still says May)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-voucher-soh-10",
+  "name": "Brand report 'List of Stock Details' (Tally-style), SOH sheet, 10 columns",
+  "kind": "brand-report",
+  "producer_guess": "Built by KDPS staff in Excel; not a POS output",
+  "seen_in": [
+   "monthly-reports-april-may-2026/FORMAT_SALES_VOUCHERS.xlsx [SOH] (header only)",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_AS-DEO.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_BOKARO.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_DUMKA.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_HZB.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_SANSKAR.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-04/SALES_VOUCHERS_LP_APRIL2026_VAS-DEO.xlsx [SOH]",
+   "monthly-reports-april-may-2026/2026-05/data/BLACKBERRY_SALES_STOCK_DETAILS_MAY2026.xlsx [SOH] (plus a store column)",
+   "monthly-reports-april-may-2026/2026-05/data/MUFTI_SALES_STOCK_DETAILS_MAY2026.xlsx [SOH] (plus a store column)",
+   "brand-analysis-report /blackberry/BLACKBERRY_SALES_STOCK_DETAILS_JUNE2026.xlsx [SOH] (column order differs)",
+   "brand-analysis-report /mufti/MUFTI_SALES_STOCK_DETAILS_JUNE2026.xlsx [SOH] (plus a store column)"
+  ],
+  "header_row": 4,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Date of the stock position.",
+    "type": "date",
+    "notes": "2026-05-01 on most rows; 2026-04-01 on 335 AS-DEO rows; 2026-06-01 in the May Blackberry and Mufti files; text dd-mm-yyyy in KDPS-DIRECTION.xlsx."
+   },
+   {
+    "name": "Item Details",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Style Code",
+    "meaning": "Style or design code.",
+    "type": "text_or_number",
+    "notes": "KDPS-DEGR-MF placeholder on 56 Mufti rows."
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand name or code.",
+    "type": "text",
+    "notes": "Blackberry: BLACKBERRYS, BLACKBERRY and BLACK BERRY."
+   },
+   {
+    "name": "Qty.",
+    "meaning": "Quantity in stock.",
+    "type": "integer",
+    "notes": "Rows with quantity above 0 only."
+   },
+   {
+    "name": "Unit",
+    "meaning": "Unit; the fixed word PCS (Units in the May Blackberry file; after MRP in the June Blackberry file).",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP per unit.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total MRP",
+    "meaning": "Qty. x MRP.",
+    "type": "money_rupees",
+    "notes": "Blank in the June Blackberry file."
+   },
+   {
+    "name": "(no header)",
+    "meaning": "Store tag: GAYA, JSL, WH, VAS-DEO, LEE DEO. Present in the May Blackberry and Mufti files and the June Mufti file only.",
+    "type": "text",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode with stock, quantity above 0, valued at MRP.",
+  "total_rows": "A total row at the end (Qty., Total MRP).",
+  "quirks": [
+   "Mufti June SOH is identical to the May SOH (803 rows). Bokaro April SOH equals the Allen Solly Deogarh April SOH on all 341 rows (columns B to J).",
+   "Blackberry June SOH is dated 1 April 2026 on every row and has no store column.",
+   "Mufti header row 3 reads MUFTI (From 01-06-2026)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-fm-direction-sale-20",
+  "name": "Flying Machine template 'Sale Report May-26' (20 columns, formulas only)",
+  "kind": "brand-report",
+  "producer_guess": "Built by KDPS staff or the ERP team in Excel",
+  "seen_in": [
+   "monthly-reports-april-may-2026/KDPS-DIRECTION.xlsx [Sale Report May-26, SOH]"
+  ],
+  "header_row": 4,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Sale date.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "Vch/Bill No",
+    "meaning": "Bill number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Particulars",
+    "meaning": "Formula: Cash.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Item Details",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Style Code",
+    "meaning": "Style code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Formula from the sheet header.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Qty.",
+    "meaning": "Quantity.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Unit",
+    "meaning": "Formula: Pcs.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Price",
+    "meaning": "Qty x MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Dis Amount",
+    "meaning": "Lookup of MRP into an external workbook.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Total",
+    "meaning": "Price + Dis Amount.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "BILL QTY",
+    "meaning": "Quantity of the bill, first line.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "BILL VALUE",
+    "meaning": "Value of the bill, first line.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "OFFER",
+    "meaning": "Offer amount of the bill by slab.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "OFFER PROPORTION",
+    "meaning": "Share of the offer per line.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "DISCOUNT %",
+    "meaning": "Offer / bill value.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "EOSS FLAG",
+    "meaning": "Lookup into an external offer workbook.",
+    "type": "text",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "A prepared sheet of 399 formula rows; the input cells are empty.",
+  "total_rows": "Counters in O1:S2 (LAST BILL NO, T.QTY, REPORTED QTY, BALANCE TO DO, AVERAGE DIS %).",
+  "quirks": [
+   "OFFER PROPORTION anchors to $P$26*$Q$26 on 375 rows and $P$5*$Q$5 on 24 rows (likely a copy error).",
+   "Two external workbooks under C:\\Users\\user\\Downloads are not supplied.",
+   "SOH sheet: 1,067 rows, 1,567 pieces, dates as text 01-05-2026, unit text Pcs."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-blackberry-brand-report-13",
+  "name": "Blackberry 'BRAND REPORT' sheet (13 columns)",
+  "kind": "analysis-output",
+  "producer_guess": "Built by KDPS or the ERP team; not a POS output",
+  "seen_in": [
+   "brand-analysis-report /blackberry/BLACKBERRY_SALES_STOCK_DETAILS_JUNE2026.xlsx [BRAND REPORT]"
+  ],
+  "header_row": 4,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Sale date.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Style Code",
+    "meaning": "Style code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "Qty",
+    "meaning": "Quantity.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Offer Applied",
+    "meaning": "Name of the offer rule applied.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Final Dis %",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": ""
+   },
+   {
+    "name": "Final Dis Amt",
+    "meaning": "Discount amount.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Final Total",
+    "meaning": "Line total after the offer.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One sale line re-priced by offer rules (77 lines, 1 to 18 June 2026).",
+  "total_rows": "A TOTALS row (Rs 1,92,149 MRP, Rs 1,37,456.60 final).",
+  "quirks": [
+   "Two title rows; the second explains how discounts were reconstructed."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-blackberry-bill-summary-8",
+  "name": "Blackberry 'BILL SUMMARY' sheet (8 columns)",
+  "kind": "analysis-output",
+  "producer_guess": "Built by KDPS or the ERP team; not a POS output",
+  "seen_in": [
+   "brand-analysis-report /blackberry/BLACKBERRY_SALES_STOCK_DETAILS_JUNE2026.xlsx [BILL SUMMARY]"
+  ],
+  "header_row": 3,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Bill date.",
+    "type": "date",
+    "notes": ""
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Bill number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Lines",
+    "meaning": "Number of lines.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Gross MRP",
+    "meaning": "Sum of MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Offer Applied",
+    "meaning": "Offer rule.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Total Discount",
+    "meaning": "Discount.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Net Sale",
+    "meaning": "Net.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Flags",
+    "meaning": "exchange/return flag.",
+    "type": "text",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One bill (36 bills).",
+  "total_rows": "A TOTAL row.",
+  "quirks": [],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "brand-stock-tag-list-15",
+  "name": "Brand-side stock tag list 'KDPS LIFE' (15 columns)",
+  "kind": "brand-supplied",
+  "producer_guess": "Brand (Blackberrys) dealer list; not a POS output",
+  "seen_in": [
+   "brand-analysis-report /blackberry/KDPS LIFE.xlsx [Sheet1]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "EanNo",
+    "meaning": "EAN barcode.",
+    "type": "number",
+    "notes": ""
+   },
+   {
+    "name": "SOH F",
+    "meaning": "Quantity.",
+    "type": "integer",
+    "notes": ""
+   },
+   {
+    "name": "Item No",
+    "meaning": "Brand item number.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": ""
+   },
+   {
+    "name": "Description",
+    "meaning": "Style#colour.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Sub-Category",
+    "meaning": "Sub-category.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Category",
+    "meaning": "Category code.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "R/F",
+    "meaning": "Regular or fashion.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Category-Co",
+    "meaning": "Category.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "MRP",
+    "meaning": "MRP.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Season",
+    "meaning": "Season code, for example AW25.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Wizapp Code",
+    "meaning": "Dealer identifier.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Dealer Name",
+    "meaning": "KDPS LIFE.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "State",
+    "meaning": "Empty.",
+    "type": "empty",
+    "notes": ""
+   },
+   {
+    "name": "Offer",
+    "meaning": "Offer tag of the item.",
+    "type": "text",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One barcode of KDPS stock as the brand sees it (907 rows, 1,332 pieces).",
+  "total_rows": "None.",
+  "quirks": [
+   "Matches the May stock-on-hand file on all 888 barcodes and quantities."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dn-software-17",
+  "name": "Debit-note item lines, 'SOFTWARE' sheets (17 columns)",
+  "kind": "accounts",
+  "producer_guess": "Export from KDPS's billing or accounting software; product not stated",
+  "seen_in": [
+   "KDPS DEBIT & CREDIT NOTE DETAILS.xlsx ['2025-26_SOFTWARE' (hidden), '2026-27_SOFTWARE' (hidden)]"
+  ],
+  "header_row": 1,
+  "leading_blank_column": true,
+  "columns": [
+   {
+    "name": "Bill Date",
+    "meaning": "Date of the debit note (return).",
+    "type": "date",
+    "notes": "Real date. 4 Apr 2025 to 31 Mar 2026; 4 Apr to 25 May 2026."
+   },
+   {
+    "name": "Bill No",
+    "meaning": "Supplier's original purchase invoice number being returned.",
+    "type": "text_or_number",
+    "notes": "Mixed: text formats of many suppliers, floats on 317 lines, one date."
+   },
+   {
+    "name": "Party",
+    "meaning": "Supplier name.",
+    "type": "text",
+    "notes": "109 and 42 suppliers."
+   },
+   {
+    "name": "GSTIN",
+    "meaning": "Supplier tax registration number.",
+    "type": "text",
+    "notes": "Blank on 900 and 2 lines. Not copied here."
+   },
+   {
+    "name": "Item",
+    "meaning": "Item type.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Brand",
+    "meaning": "Brand.",
+    "type": "text",
+    "notes": "281 and 72 brands."
+   },
+   {
+    "name": "Size",
+    "meaning": "Size.",
+    "type": "text_or_number",
+    "notes": "Floats and text."
+   },
+   {
+    "name": "Design No",
+    "meaning": "Design number.",
+    "type": "text_or_number",
+    "notes": "Floats."
+   },
+   {
+    "name": "Barcode",
+    "meaning": "Barcode.",
+    "type": "number",
+    "notes": "Every 13-digit value ends in 000000 (rounded): 11,853 and 1,819 lines."
+   },
+   {
+    "name": "HSN",
+    "meaning": "HSN code.",
+    "type": "number",
+    "notes": "Float."
+   },
+   {
+    "name": "Qty",
+    "meaning": "Quantity returned.",
+    "type": "decimal",
+    "notes": "Greater than 1 on 3,083 and 283 lines."
+   },
+   {
+    "name": "Rate",
+    "meaning": "Taxable rate per unit.",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Gross Amt",
+    "meaning": "Taxable value of the line (Qty x Rate; 8 lines differ).",
+    "type": "money_rupees",
+    "notes": ""
+   },
+   {
+    "name": "Disc%",
+    "meaning": "Discount percentage.",
+    "type": "decimal",
+    "notes": "0 on every line."
+   },
+   {
+    "name": "Disc Amt",
+    "meaning": "Discount.",
+    "type": "money_rupees",
+    "notes": "0 on every line."
+   },
+   {
+    "name": "Net Amount",
+    "meaning": "Taxable value plus GST: the ratio to Gross Amt is exactly 1.05, 1.12 or 1.18.",
+    "type": "money_rupees",
+    "notes": "Higher than Gross Amt on every line; no tax-rate column."
+   },
+   {
+    "name": "Bill Amount",
+    "meaning": "Equals Gross Amt on every line.",
+    "type": "money_rupees",
+    "notes": ""
+   }
+  ],
+  "row_meaning": "One returned item line of a debit note. Where one debit note covers a party and a date, the rounded sum of Net Amount is its amount in the SUMMARY sheet.",
+  "total_rows": "One total row (Qty, Gross Amt, Net Amount, Bill Amount): 19,235 pieces and Rs 3.26 crore taxable in 2025-26; 2,705 pieces and Rs 38.0 lakh in 2026-27.",
+  "quirks": [
+   "14,135 and 2,291 lines; the sheets are hidden.",
+   "Net Amount here is tax-inclusive, unlike the sales report where Net Amount is Gross Amt + Disc Amt.",
+   "Rounded barcodes cannot identify an item; Design No and Size remain."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ },
+ {
+  "id": "dn-summary-4",
+  "name": "Debit-note summary sheets (4 columns)",
+  "kind": "accounts",
+  "producer_guess": "Typed by KDPS accounts",
+  "seen_in": [
+   "KDPS DEBIT & CREDIT NOTE DETAILS.xlsx ['2025-26-SUMMARY', '2026-27-SUMMARY']"
+  ],
+  "header_row": 1,
+  "leading_blank_column": false,
+  "columns": [
+   {
+    "name": "Date",
+    "meaning": "Date of the debit note.",
+    "type": "date_or_text",
+    "notes": "Real dates on 112 and 26 rows, text dd-mm-yyyy or dd-mm-yy on 257 and 78; day and month swapped on 75 of 100 real dates that can be matched to the DN sheet."
+   },
+   {
+    "name": "Invoice No",
+    "meaning": "Debit note number, YY-YY/WH/PR-n.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Party Name",
+    "meaning": "Supplier.",
+    "type": "text",
+    "notes": ""
+   },
+   {
+    "name": "Bill Amount",
+    "meaning": "Debit note amount, rounded rupees.",
+    "type": "money_rupees",
+    "notes": "Matches the rounded sum of Net Amount of the SOFTWARE lines for the same party on 58 of 104 rows of 2026-27. The SOFTWARE sheet stops on 25 May 2026; the summary runs to 15 Jun 2026."
+   }
+  ],
+  "row_meaning": "One debit note.",
+  "total_rows": "None.",
+  "quirks": [
+   "369 and 104 rows.",
+   "25 real dates fall after the newest text date (15 Jun 2026)."
+  ],
+  "bill_level_fields_on_first_line_only": false
+ }
+]
