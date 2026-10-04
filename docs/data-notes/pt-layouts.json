@@ -47,7 +47,7 @@
     "item": "KDPS ITEM (approved vocabulary); only in KDPS's own layout",
     "sub_category": "KDPS SUB CATEGORY; only in KDPS's own layout",
     "type": "KDPS TYPE; only in KDPS's own layout",
-    "colour": "Colour or shade (KDPS COLOR also holds price tiers)",
+    "colour": "Colour or shade (KDPS COLOR also holds the tags PREMIUM, MEDIUM, ECONOMY)",
     "gender": "Gender as written",
     "fit": "Fit as written",
     "size": "Size as written",

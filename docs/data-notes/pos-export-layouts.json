@@ -54,9 +54,9 @@
    },
    {
     "name": "Color",
-    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "meaning": "Holds PREMIUM, MEDIUM, ECONOMY or ASSO. instead of a colour on 99% of lines; a real colour name on a few.",
     "type": "text",
-    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold one of these tags. Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner."
    },
    {
     "name": "Size",
@@ -235,9 +235,9 @@
    },
    {
     "name": "Color",
-    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "meaning": "Holds PREMIUM, MEDIUM, ECONOMY or ASSO. instead of a colour on 99% of lines; a real colour name on a few.",
     "type": "text",
-    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold one of these tags."
    },
    {
     "name": "Size",
@@ -400,9 +400,9 @@
    },
    {
     "name": "Color",
-    "meaning": "Holds a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) on 99% of lines; a real colour name on a few.",
+    "meaning": "Holds PREMIUM, MEDIUM, ECONOMY or ASSO. instead of a colour on 99% of lines; a real colour name on a few.",
     "type": "text",
-    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold a price band."
+    "notes": "26,022 of 26,195 lines in Sales_Hazaribagh.xlsx hold one of these tags."
    },
    {
     "name": "Size",
@@ -856,7 +856,7 @@
    },
    {
     "name": "Color",
-    "meaning": "Colour name, or a price band (PREMIUM, MEDIUM, ECONOMY, ASSO.) or a code.",
+    "meaning": "Colour name, a PREMIUM, MEDIUM, ECONOMY or ASSO. tag, or a code.",
     "type": "text",
     "notes": "6,237 PREMIUM, 3,799 ASSO., 2,647 MEDIUM, 696 ECONOMY, 458 WORK among 22,387 rows."
    },

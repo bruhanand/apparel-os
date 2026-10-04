@@ -197,10 +197,10 @@ Counts by class (rows):
 
 ### Attribute columns reused or loose
 
-**E-1. `Color` holds a price band**
+**E-1. `Color` holds `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` instead of a colour**
 
-- Seen: `Color` is `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` on 26,022 of 26,195 lines of `Sales_Hazaribagh.xlsx`; in `SOH REPORT FORMAT.xlsx` the same bands plus `WORK`, `ASSD`, digits `1` to `5`, letters `A` to `C`, `NA`, `.` beside real colours; the PT `Master Sheet` `COLOR` list holds the three bands too (survey).
-- Rule: store the word as "source colour or price band". Write it to the colour attribute only through a confirmed mapping (`PRD-IMP-003`, `PRD-IMP-008`, `PRD-IMP-009`). OPEN: what the bands mean and who assigns them (KDPS Owner).
+- Seen: `Color` is `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` on 26,022 of 26,195 lines of `Sales_Hazaribagh.xlsx`; in `SOH REPORT FORMAT.xlsx` the same tags plus `WORK`, `ASSD`, digits `1` to `5`, letters `A` to `C`, `NA`, `.` beside real colours; the PT `Master Sheet` `COLOR` list holds `PREMIUM`, `MEDIUM` and `ECONOMY` too (survey). Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026).
+- Rule: keep the source word as given. Write it to the colour attribute only through a confirmed mapping (`PRD-IMP-003`, `PRD-IMP-008`, `PRD-IMP-009`). How the product handles these tags is OPEN for the product owner.
 
 **E-2. `Size` holds packs, measures and numbers**
 
@@ -214,7 +214,7 @@ Counts by class (rows):
 
 **E-4. `Category` and `Sub Category` mix words and codes**
 
-- Seen: category words (`CASUAL WEAR`, `FORMAL WEAR`, `SEASONAL WEAR`, `ACCESSORIES`, `INNERWEAR`) beside 3 to 5 letter codes (`USM`, `UTP`, `LJM`, `SETM`, `KURP`); typos (`FORMAL WAER`, `PARTY WAER`); 186 distinct values in `SOH REPORT FORMAT.xlsx`, 194 in Vaishnavi SOH, 59 in `SOH_Hazaribagh.xlsx`, 42 in the `Sales_Hazaribagh.xlsx` sub category. The last letter of many codes is M, P or E, like the price bands (guess).
+- Seen: category words (`CASUAL WEAR`, `FORMAL WEAR`, `SEASONAL WEAR`, `ACCESSORIES`, `INNERWEAR`) beside 3 to 5 letter codes (`USM`, `UTP`, `LJM`, `SETM`, `KURP`); typos (`FORMAL WAER`, `PARTY WAER`); 186 distinct values in `SOH REPORT FORMAT.xlsx`, 194 in Vaishnavi SOH, 59 in `SOH_Hazaribagh.xlsx`, 42 in the `Sales_Hazaribagh.xlsx` sub category. The last letter of many codes is M, P or E, like the first letters of the `Color` tags `MEDIUM`, `PREMIUM` and `ECONOMY` (guess).
 - Rule: as E-3. In the sales report the category is printed on a bill's first line only (H-1), so line categories come from the stock master by barcode.
 
 **E-5. `Gender` holds many spellings and non-gender values**
@@ -369,7 +369,7 @@ Counts by class (rows):
 
 ## 8. Master and accounts workbooks (from the surveys, spot-checked)
 
-- PT `Master Sheet` (`pt-master-sheet.xlsx`, `KDPS PT FILE SHEET.xlsx`, `pt-file-format.xlsx`): typos in lists (`GREE`, `STARD`, `PAJAMS`, `SKINNY TEPAR`, `SUPPER SKINNY`, `TOM BOY`/`TOMBOY`); `COLOR` holds the price bands; the last 7 brands are appended out of order; `SIZE` mixes numbers, letters, bra sizes, kids ages, months, ml and cm; item-to-category combos such as `CASUAL WEAR/INNERWEAR`. The `pt-file-format.xlsx` copy is older (591 rows against 593; brands `NOSTRUM` and `TOMBOY` missing; 71 rows differ). Rule: a vocabulary change goes through proposal and confirmation (`PRD-IMP-008`).
+- PT `Master Sheet` (`pt-master-sheet.xlsx`, `KDPS PT FILE SHEET.xlsx`, `pt-file-format.xlsx`): typos in lists (`GREE`, `STARD`, `PAJAMS`, `SKINNY TEPAR`, `SUPPER SKINNY`, `TOM BOY`/`TOMBOY`); `COLOR` holds the `PREMIUM`, `MEDIUM` and `ECONOMY` tags; the last 7 brands are appended out of order; `SIZE` mixes numbers, letters, bra sizes, kids ages, months, ml and cm; item-to-category combos such as `CASUAL WEAR/INNERWEAR`. The `pt-file-format.xlsx` copy is older (591 rows against 593; brands `NOSTRUM` and `TOMBOY` missing; 71 rows differ). Rule: a vocabulary change goes through proposal and confirmation (`PRD-IMP-008`).
 - PT work sheets: stray input prompts left on drop-downs; `SUGGESTED` columns return `WRONG ITEM` or `PLEASE RECTIFY` on a miss; one work sheet formatted to 16,342 rows; hidden sheets (A-7).
 - Invoice workbook: `INVOICE DETAILS.` has 538 rows with only a file name; `TEN Uploaded Date` filled on 25 rows; `Invoice Ageing` text; `SUPPLIER DATA BASE` has `-` placeholders (brand `-` on 192 of 239 rows), agent numbers as text and floats, cash discount as 0.03, 0.05 or `NET`, credit days as numbers or `NO`.
 - Offer sheets (`OFFER DETAILS.`, `BRAND OFFERS.xlsx`): 9 closing dates read `Not Disclosed Yet.`; `0FF` with a zero; `MRR` for MRP; overlapping offers with no stated winner; `OFFER DETAILS.` has 95 hidden rows. These are offer facts, covered in [offers-and-brand-reports.md](offers-and-brand-reports.md).
@@ -400,7 +400,7 @@ From `PRD-IMP-005`, `PRD-IMP-007` and `PRD-IMP-013`, and from the problems above
 | --- | --- | --- |
 | 1 | Which POS and version exports each file, and which date format and locale do the exporting PCs use? Can KDPS export CSV with ISO dates and barcodes as text? | KDPS Owner |
 | 2 | What does the `Season` tag mean (receipt month, launch, other)? What are the full dates in `Season`? May a "Mon-YY" decode be applied? | KDPS Owner |
-| 3 | What do the price bands in `Color`, the `Fit` codes and the category codes mean, and who assigns them? Do the brand division codes (LP, LY, LR, VH, VS, VD, VF, VX, AS, AL, AT) roll up into one brand? | KDPS Owner |
+| 3 | What do the `Fit` codes and the category codes mean, and who assigns them? Do the brand division codes (LP, LY, LR, VH, VS, VD, VF, VX, AS, AL, AT) roll up into one brand? | KDPS Owner |
 | 4 | Are the Madura, Aditya Birla Fashion and Aditya Birla Lifestyle names one party? | KDPS Owner, CA |
 | 5 | Is a barcode that fails the EAN-13 check an in-house code? Which suppliers print barcodes? | KDPS Owner |
 | 6 | Were filtered-out rows deliberately excluded? Can KDPS send the whole store export instead of a brand cut? | KDPS Owner |

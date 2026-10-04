@@ -89,7 +89,7 @@ The `jsl/` folder ([jsl/README.md](../jsl/README.md)) is the same Store as this 
 - **Salespeople:** 16 names. `SalesMan` is blank on 8,011 lines (30.6%): on 6,403 of the 6,447 carry-bag lines and on 1,607 of 19,747 other lines (8.1%).
 - **Customer and phone:** `Customer` is `CASH` on 1,518 bills. `Phone` is a 10-digit number on 5,789 bills (81.6%), blank on 1,116 and `0` on 189. 3,644 distinct 10-digit phones.
 - **Other quirks:**
-  - `Color` is mostly a price band (`PREMIUM` 11,300 lines, `ECONOMY` 9,814, `MEDIUM` 4,574, `ASSO.` 334), not a colour.
+  - `Color` is mostly `PREMIUM` (11,300 lines), `ECONOMY` (9,814), `MEDIUM` (4,574) or `ASSO.` (334), not a colour. Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner.
   - `Gender`: `MALE` 8,710, `FEMALE` 7,845, `UNISEX` 6,704 (carry bags are mostly `UNISEX`), `KIDS MALE` 1,766, `KIDS FEMALE` 1,104, `KIDSM` 36, `KIDS` 18, and a few junk values.
   - `season` is an Excel date on 597 lines and blank on 56. `Design No` is an Excel date in the year 2513 on 75 lines; the same line in the JSL export holds the same date with day and month swapped (`2513-01-05` against `2513-05-01`).
   - Bill `26-27/JSL/2014` (30 Jun 2026, 4 lines, ₹5,249) exists in the JSL export and is gone here: the only gap in the series. Whether a bill was deleted after export is not known.
@@ -233,7 +233,7 @@ The `jsl/` folder ([jsl/README.md](../jsl/README.md)) is the same Store as this 
 | 4 · What sells (#10, #11, #13, #14) | Sales by section: Men 48%, Women 43%, Kids Male 5%, Kids Female 4%. Top items (Saree ₹48.6 L at 5% discount; Shirt ₹39.3 L at 27%; Jeans ₹36.1 L at 30%; Kurti Set ₹32.0 L at 7%; and eight more). Fastest sizes by section. Accessories ₹9.1 L on ₹6.8 L of stock |
 | 5 · Stock health (#5 to #9) | Stock ₹3.81 Cr at cost (₹6.01 Cr at MRP), about 17 months of sales (a healthy shop "3 to 4 months"); only 20% of stock value in styles that have sold; stock turn 0.7× a year against a target of 3 to 4×; ageing 6+ months ₹0.40 Cr; out of stock on fast items 0; stock by age (₹ Cr): under 3 months 0.05, 3 to 6 months 0.27, 6 to 12 months 0.31, over a year 0.09, "no season tag" 3.10; slow money by item (Shirt ₹55.1 L, Jeans ₹45.6 L, T-Shirt ₹30.2 L, Trouser ₹25.1 L, Suit ₹23.8 L, Kurti Set ₹20.5 L) |
 | 6 · Customers and staff (#1 to #3) | Average bill ₹4,449; repeat customers 40% (66% of tracked sales); "bills with a phone 96%"; 3,643 known customers; top 5% bring 27% of sales; a table of eight salespeople with sales, bills, average bill and "price held" (93% down to 55% across the 16 staff) |
-| 7 · What we could not measure | No conversion rate (no footfall); profit is an estimate; only 11 months of sales; no colour analysis (the `Color` field is a price band) |
+| 7 · What we could not measure | No conversion rate (no footfall); profit is an estimate; only 11 months of sales; no colour analysis (the analysis read the `Color` field as a price band: analyst assumption) |
 | 8 · What to do | Six moves: cap the discount at 37% ("never sell below cost"); fix the brand and product mix; clear the ₹0.40 Cr aged stock; buy the right mix; capture every customer and use the list (WhatsApp reminders); manage by this dashboard every month |
 | How this was prepared; Honest caveats | Cost of goods and profit are estimates; running cost is 7% of sales plus rent ₹2.2 L, electricity ₹1.0 L and misc ₹0.4 L a month; dead stock means not sold in the 11 months |
 

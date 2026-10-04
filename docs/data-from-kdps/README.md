@@ -171,7 +171,7 @@ ERP-team analysis and scoping files:
 | --- | --- | --- | --- |
 | A | `SEASON` | 22 | `SPRING SUMMER(Jan-25)` to `SPRING SUMMER(Jun-25)`, then `AUTUMN WINTER(Jul-25)` to `AUTUMN WINTER(Dec-25)`, the same for 2026 up to `AUTUMN WINTER(Oct-26)`. One value per month |
 | B | `BRAND` | 592 | Alphabetical until `ZOLA`; the last 7 (`ADITYA`, `ALFALITE`, `CARLTON`, `MONTE CARLO`, `TOM BOY`, `NOSTRUM`, `TOMBOY`) are appended out of order. Starts with `24 STREET`, `7 STITCH`, `90 ML`, `A`. `TOM BOY` and `TOMBOY`, and two spellings of `SF`, are duplicates |
-| C | `COLOR` | 23 | `BLACK`, `BLUE`, `BROWN`, `CHIKU`, `CREAM`, `ECONOMY`, `GREE`, `GREEN`, `GREY`, `MAROON`, `MEDIUM`, `NAVY`, `OLIVE`, `ORANGE`, `PINK`, `PREMIUM`, `PURPLE`, `RUST`, `STARD`, `TEAL`, `WHITE`, `YELLOW`, `RED`. `ECONOMY`, `MEDIUM` and `PREMIUM` are price tiers, not colours; `GREE` and `STARD` look like typos |
+| C | `COLOR` | 23 | `BLACK`, `BLUE`, `BROWN`, `CHIKU`, `CREAM`, `ECONOMY`, `GREE`, `GREEN`, `GREY`, `MAROON`, `MEDIUM`, `NAVY`, `OLIVE`, `ORANGE`, `PINK`, `PREMIUM`, `PURPLE`, `RUST`, `STARD`, `TEAL`, `WHITE`, `YELLOW`, `RED`. `ECONOMY`, `MEDIUM` and `PREMIUM` are tags, not colours (staff tag goods with no clear colour or classification this way, mostly non-brand goods: product owner, 4 Oct 2026; how the product handles these tags is OPEN for the product owner); `GREE` and `STARD` look like typos |
 | D | `GENDER` | 5 | `MALE`, `FEMALE`, `KIDS MALE`, `KIDS FEMALE`, `UNISEX` |
 | E | `SUB CATEGORY` | 9 | `ACCESSORIES`, `CASUAL WEAR`, `FABRIC`, `FORMAL WEAR`, `INNERWEAR`, `NIGHTWEAR`, `PARTY WEAR`, `SEASONAL WEAR`, `SPORTS WEAR` |
 | F | `TYPE` | 7 | `ACCESSORIES`, `BOTTOM WEAR`, `FOOTWEAR`, `FULL SET`, `LUGGAGE`, `ONE-PIECE`, `TOP WEAR` |
@@ -184,7 +184,7 @@ ERP-team analysis and scoping files:
 
 - **How it is used.** In `KDPS PT FILE SHEET.xlsx` the work sheets take drop-downs from these lists, and the `SUGGESTED SUB CATEGORY` and `SUGGESTED TYPE` columns look up an `ITEM` in columns `G:L` (see that block).
 - **Quirks.**
-  - Colour holds price tiers; the work sheets use `COLOR` that way (`PREMIUM` on 285 of 320 lines, `ECONOMY` on 22, a real colour on the other 13).
+  - `COLOR` holds the tags `PREMIUM`, `MEDIUM` or `ECONOMY` instead of a colour; the work sheets use it that way (`PREMIUM` on 285 of 320 lines, `ECONOMY` on 22, a real colour on the other 13).
   - Combined values in `SUB CATEGORY` and `TYPE` break a one-value-per-field rule.
   - The `ITEM` list mixes garments, accessories, luggage, fabric, a perfume and electronics (`HEADPHONE`, `SPEAKER`).
 - **Sensitive.** None.

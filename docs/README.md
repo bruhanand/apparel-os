@@ -25,6 +25,8 @@ All project documents live in this folder. When two of them disagree, the one hi
 | [decisions.md](decisions.md) | Log of changes to the PRD and policies. |
 | [questions-for-kdps.md](questions-for-kdps.md) | Open questions for KDPS and the CA, by person. |
 | [reports/](reports/) | One-time reports. |
+| [data-from-kdps/](data-from-kdps/README.md) | Raw data KDPS sent (June–July 2026). Git-ignored; only its READMEs are tracked. Not ranked. |
+| [data-notes/](data-notes/README.md) | Notes on the KDPS data by ERP topic: layouts, codes, offers, data quality, fit with the PRD, open questions. Not ranked; they decide nothing. |
 | [reviews.json](reviews.json) | Review records kept by the doc checker. |
 
 ## When two documents disagree

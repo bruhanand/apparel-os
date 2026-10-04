@@ -18,7 +18,7 @@ Every value list KDPS uses for items, taken from the `Master Sheet` of the PT te
 | --- | --- | --- | --- |
 | A | `SEASON` | 22 | `SPRING SUMMER(Jan-25)` to `AUTUMN WINTER(Oct-26)` |
 | B | `BRAND` | 592 | The last 7 are appended out of order (`ADITYA`, `ALFALITE`, `CARLTON`, `MONTE CARLO`, `TOM BOY`, `NOSTRUM`, `TOMBOY`). A defined name `BRAND` covers B1:B999 |
-| C | `COLOR` | 23 | Holds 20 colours and the 3 price tiers `ECONOMY`, `MEDIUM`, `PREMIUM` |
+| C | `COLOR` | 23 | Holds 20 colours and the 3 tags `ECONOMY`, `MEDIUM`, `PREMIUM` |
 | D | `GENDER` | 5 | |
 | E | `SUB CATEGORY` | 9 | |
 | F | `TYPE` | 7 | |
@@ -209,28 +209,28 @@ Reading the table:
 </details>
 
 
-## 4. Colours and price tiers
+## 4. Colours, and the PREMIUM / MEDIUM / ECONOMY tags
 
 **The 23 master `COLOR` values:** `BLACK`, `BLUE`, `BROWN`, `CHIKU`, `CREAM`, `ECONOMY`, `GREE`, `GREEN`, `GREY`, `MAROON`, `MEDIUM`, `NAVY`, `OLIVE`, `ORANGE`, `PINK`, `PREMIUM`, `PURPLE`, `RUST`, `STARD`, `TEAL`, `WHITE`, `YELLOW`, `RED`.
 
 - Typos in the master: `GREE` (green) and `STARD` (unclear; mustard? guess). `CHIKU` is a colour name (a light brown).
-- Three of the 23 are price tiers, not colours: `ECONOMY`, `MEDIUM`, `PREMIUM`. The PT work tabs use them that way (`PREMIUM` in `NARESH`, `ANKIT`, `MAHENDRA`; `ECONOMY` in `GULSHAN`) and so does the vendor example (`PREMIUM`). The rule that assigns a tier is not in any file (OPEN).
+- Three of the 23 are tags, not colours: `ECONOMY`, `MEDIUM`, `PREMIUM`. The PT work tabs use them that way (`PREMIUM` in `NARESH`, `ANKIT`, `MAHENDRA`; `ECONOMY` in `GULSHAN`) and so does the vendor example (`PREMIUM`). Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner.
 
 **What the POS data holds** (`SOH REPORT FORMAT.xlsx` `Color`, 22,387 rows, 379 distinct values):
 
 | Kind | Rows | Share | Values |
 | --- | --- | --- | --- |
-| Price tier | 9,580 | 42.8% | `PREMIUM` 6,237, `MEDIUM` 2,647, `ECONOMY` 696 |
+| `PREMIUM`, `MEDIUM` or `ECONOMY` | 9,580 | 42.8% | `PREMIUM` 6,237, `MEDIUM` 2,647, `ECONOMY` 696 |
 | Assorted | 4,082 | 18.2% | `ASSO.` 3,799, `MIX` 116, `ASSD` 91, `ASSO` 26, `MULTI` 21, `ASSORTED` 10, `ASSD.` 8, `ASSTD` 5 |
 | Work | 463 | 2.1% | `WORK` 458, `D WORK` 5 |
 | None (`NA`, `.`, blank) | 2,472 | 11.0% | `NA` 1,482, `.` 990 |
 | Number, single letter or `CP n` | 789 | 3.5% | `1` 154, `2` 146, `3` 67, `A` 55, `B` 43, `5` 41, `4` 38, `C` 36 |
 | A colour word | 5,001 | 22.3% | 331 spellings; the commonest `BLACK` 417, `WHITE` 359, `NAVY` 299, `GREEN` 179, `BLUE` 171, `GREY` 135, `OLIVE` 134, `MAROON` 121, `DENIM` 116, `PINK` 111, `WINE` 107, `YELLOW` 100 |
 
-- The master's 23 values cover few of the 379 colour spellings: only 21 distinct spellings in the sample are in the master (tiers included), on 11,882 of 22,387 rows.
-- The sales exports use the field the same way: in the store sales files the `Color` column holds `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` on nearly every row (the earlier analysts called it a price band; an analyst reading).
+- The master's 23 values cover few of the 379 colour spellings: only 21 distinct spellings in the sample are in the master (the three tags included), on 11,882 of 22,387 rows.
+- The sales exports use the field the same way: in the store sales files the `Color` column holds `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` on nearly every row (the earlier analyses read these tags as a price band: analyst assumption).
 - Spelling variants of one colour are many (`NAVY`, `NAVY BLUE`, `NEVY`, `N.BLUE`; `MAROON`, `MAHROON`, `MEROON`; `MUSTARD`, `MUSTERD`, `MUSTRED`; `KHAKI`, `KHAKHI`; `GREY`, `GRAY`; `BLACK`, `BALCK`). Many are two colours joined (`BLACK BLACK`, `WHITE X TEAL`, `GREEN MIL. GREEN MIL`).
-- `PRD-MER-002` makes colour part of a SKU's identity; a price tier cannot be part of it. Where `COLOR` holds a tier the real colour is unknown and must stay Unknown (`PRD-MER-005`).
+- `PRD-MER-002` makes colour part of a SKU's identity. Where `COLOR` holds one of these tags the real colour is unknown and must stay Unknown (`PRD-MER-005`).
 
 <details><summary>All 379 colour values in the sample, with rows</summary>
 
@@ -483,7 +483,7 @@ Reading the table:
 | `WOMENS INNERWEAR` | 1 | not a fit |
 | `ACCESSORIES` | 1 | not a fit |
 
-- `LM`, `MM`, `HM`, `VLM`, `VHM` are five codes that fill 12,283 rows (12,507 with their `MM A`, `LM A`, `A LM` variants). What they mean is not stated; the earlier analysts called them price-tier codes (an analyst reading). They are not in the master. OPEN.
+- `LM`, `MM`, `HM`, `VLM`, `VHM` are five codes that fill 12,283 rows (12,507 with their `MM A`, `LM A`, `A LM` variants). What they mean is not stated. They are not in the master. OPEN.
 - `SILK SAREE` (361 rows), `FULL SHIRT`, `HALF SHIRT`, `ANKLE`, `COTTON KURTI`, `COTTON SAREE` are in the master list and are used as a fit of sarees, shirts and kurtis. `ROUND NECK`, `HALF SLEEVE` too.
 
 <details><summary>All 47 fit values in the sample, with rows</summary>
@@ -575,7 +575,7 @@ The files carry **several different GST rules**. They are listed side by side. *
 The POS stock export has a `Category` column (187 spellings in `SOH REPORT FORMAT.xlsx`) and the POS sales exports have a `Sub Category` column that holds the same codes. It is a mix of words and short codes. It is not the master's `SUB CATEGORY` list.
 
 - **Master sub-category words** (`CASUAL WEAR` 4,146, `SEASONAL WEAR` 1,881, `FORMAL WEAR` 1,430, `PARTY WEAR` 1,003, `ACCESSORIES` 398, `INNERWEAR` 260, `NIGHTWEAR` 83, `SPORTS WEAR` 60): 9,261 rows. Variants: `FORMAL WAER` 50, `PARTY WAER` 31, `WINTER WEAR` 104, `WINTER SET` 99, `TRADITIONAL WEAR` 41.
-- **Stem plus a last letter M, E or P.** 35 stems (one to six letters) occur with at least two of the three last letters, for 12,159 rows. The last letter does not follow gender or colour tier in the data. It may be the price tier initial, `M` for `MEDIUM`, `E` for `ECONOMY`, `P` for `PREMIUM` (guess); the tier words are a `Color` value on other rows. The stems and their commonest items:
+- **Stem plus a last letter M, E or P.** 35 stems (one to six letters) occur with at least two of the three last letters, for 12,159 rows. The last letter does not follow gender or the `Color` tag in the data. It may be the first letter of the tag, `M` for `MEDIUM`, `E` for `ECONOMY`, `P` for `PREMIUM` (guess); the tag words are a `Color` value on other rows. The stems and their commonest items:
 
 | Code stem | Last letters seen (rows) | Commonest item names (rows) |
 | --- | --- | --- |
@@ -652,7 +652,7 @@ The POS stock export has a `Category` column (187 spellings in `SOH REPORT FORMA
 | A new value or a source word | `PRD-MER-013`, `PRD-IMP-008`: proposal and independent confirmation; `PRD-IMP-009`: close matches offered, never filled from a guess |
 | Source word to vocabulary value (`7-8Y` to `7-8 Y`, `FEAMLE` to `FEMALE`, `REGULER` to `REGULAR`) | `PRD-IMP-003`: saved, versioned mappings by source; original words kept beside the normalised value |
 | Brand, supplier and agent kept apart | `PRD-MER-001`; structure-and-masters 5.1 |
-| Colour and size make a SKU | `PRD-MER-002`, `POL-04.02`; `COLOR` holding a tier is not a colour |
+| Colour and size make a SKU | `PRD-MER-002`, `POL-04.02`; `COLOR` holding `PREMIUM`, `MEDIUM` or `ECONOMY` is not a colour |
 | Missing size or season stays Unknown; `FREE SIZE` is a value | `PRD-MER-005`; `PRD-LIF-006` for an unknown historical season |
 | Barcodes, supplier codes, leading zeros, aliases | `PRD-MER-006`, `PRD-MER-007`, `PRD-MER-008`; structure-and-masters 4.3 |
 | Tax class by item word; GST % values | `PRD-PTW-012`, `POL-10.02`, `POL-10.05`, `POL-10.06`; `PRD-TAX-005` |
@@ -664,7 +664,7 @@ The POS stock export has a `Category` column (187 spellings in `SOH REPORT FORMA
 | # | Question | Owner | Blocks |
 | --- | --- | --- | --- |
 | 1 | What does the month in a season label mean (lot or receipt month, launch month, season month)? Why do `SPRING SUMMER(Jul-25)` and `AUTUMN WINTER(Jan-26)` exist? Is `Oct-26` the last label, and who adds new ones? | Booking, KDPS Owner | Stage 1 vocabulary; stage 2 PT |
-| 2 | Is `COLOR` meant to hold a colour or a price tier? What assigns a tier (`PREMIUM`, `MEDIUM`, `ECONOMY`), per brand, per item or per price? Where will the real colour live? | Booking, KDPS Owner | Stage 2 PT; SKU identity |
+| 2 | How does the product handle the `PREMIUM` / `MEDIUM` / `ECONOMY` / `ASSO.` tags that staff put in `COLOR` for goods with no clear colour or classification? Parked by the product owner (4 Oct 2026) for a separate discussion | Product owner | Stage 2 PT; SKU identity |
 | 3 | What do the fit codes `LM`, `MM`, `HM`, `VLM`, `VHM` mean, and the last letters `M`, `E`, `P` of the category codes (`USM`, `USE`, `USP`)? | Booking | Stage 1 vocabulary |
 | 4 | Which category code list does KDPS want (the master sub categories, the POS codes, or a new tree)? Is `SUB CATEGORY` a category or an attribute? | Booking, KDPS Owner | Stage 1 vocabulary |
 | 5 | What do the brand codes `AK`, `AL`, `AH`, `AT`, `LA`, `LX`, `PJ`, `N`, `RE`, `AY` and `PT` stand for, and are the `V ` and `FS-` prefixes variants of the brand before them? | Booking, with Madura | Stage 1 brand master |

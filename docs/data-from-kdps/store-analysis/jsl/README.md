@@ -18,7 +18,7 @@ Up: [store-analysis](../README.md)
 
 All three have the same layout as the HZB sales file except for an empty first column: 26 columns `A:Z`, column A empty on every row, then `Bill Date`, `Bill No`, `Customer`, `Phone`, `Item`, `Brand`, `Color`, `Size`, `Design No`, `Barcode`, `SalesMan`, `Sub Category`, `Gender`, `Fit`, `season`, `Qty`, `Rate`, `Gross Amt`, `Disc%`, `Disc Amt`, `Net Amount`, `Bill Amount`, `Cash`, `Card`, `Credit`.
 
-- **Row structure** (all three): one row is one bill line. `Bill Date`, `Bill No`, `Customer`, `Phone`, `Sub Category`, `Bill Amount`, `Cash`, `Card` and `Credit` are filled only on the first line of each bill (the HZB file repeats date and bill number on every line). `Rate` is the MRP at sale; `Gross Amt` = `Qty` × `Rate`; `Net Amount` = `Gross Amt` + `Disc Amt` (negative for a discount). Return lines have a negative `Qty` inside normal bills. `Color` is mostly a price band (`PREMIUM`, `ECONOMY`, `MEDIUM`).
+- **Row structure** (all three): one row is one bill line. `Bill Date`, `Bill No`, `Customer`, `Phone`, `Sub Category`, `Bill Amount`, `Cash`, `Card` and `Credit` are filled only on the first line of each bill (the HZB file repeats date and bill number on every line). `Rate` is the MRP at sale; `Gross Amt` = `Qty` × `Rate`; `Net Amount` = `Gross Amt` + `Disc Amt` (negative for a discount). Return lines have a negative `Qty` inside normal bills. `Color` is mostly `PREMIUM`, `ECONOMY` or `MEDIUM`, not a colour. Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner.
 - **End of each file:** after the last line there is a total row (holding only `Qty`, `Gross Amt`, `Disc Amt`, `Net Amount`, `Bill Amount`, `Cash` and `Card`), a row with the words `SALES RETURN` in the `Customer` column, a blank row, and the total row repeated. The total rows equal the sums of the line rows exactly.
 
 | | `fy 25-26 sales.xlsx` | `fy 26-27 sales.xlsx` | `june sales report.xlsx` |
@@ -216,7 +216,7 @@ My recount from the raw files.
 | Ageing bands | 1.04, 1.21, 1.34, 0.10 Cr; 0.30 Cr without a tag | Same, to ₹0.01 Cr | Reproduces |
 | Aged 6+ months | ₹1.44 Cr (dashboard, plan) and ₹1.28 Cr (analysis) | ₹1.34 Cr + ₹0.10 Cr = ₹1.44 Cr | ₹1.44 Cr reproduces; ₹1.28 Cr does not |
 | June item table in the winter plan | as above | Same pieces, rupees and discounts; section split 46 / 45 / 8 | Reproduces |
-| Premium share of June sales | "about 8 of every 10 rupees" | 78.8% of June net is in the `PREMIUM` band | Reproduces |
+| Share of June sales on `PREMIUM` lines | "about 8 of every 10 rupees" | 78.8% of June net is on lines with `Color` `PREMIUM`. The analysis read these tags as a price band (analyst assumption) | Reproduces |
 | Months of cover | about 15 (plan), about 17 (dashboards) | 16.5 by quantity and 20.1 by MRP from June alone | Does not reproduce; basis not stated |
 | Bills with a phone | 67% | 5,455 of 6,640 bills (82.2%) have a 10-digit phone | Does not reproduce |
 | Known customers | 2,561 | 3,461 distinct 10-digit phones | Does not reproduce (probably understated) |

@@ -7,4 +7,7 @@ coverage
 .env
 .env.*
 
-data-from-kdps/
+# Raw KDPS data stays out of git; only the READMEs that describe it are tracked.
+docs/data-from-kdps/**
+!docs/data-from-kdps/**/
+!docs/data-from-kdps/**/README.md

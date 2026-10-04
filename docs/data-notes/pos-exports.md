@@ -79,7 +79,7 @@ Header row 1, 25 columns. In most files the header starts in column B (column A 
 | 4 | `Phone` | Customer mobile number | Personal data. First line only. A number, so a leading zero cannot survive. 2,805 of 5,383 bills have one. Lengths 9, 11 and 1 (`0`) seen |
 | 5 | `Item` | Item type: SHIRT, JEANS, CARRY BAG | Blank on 5 and 7 lines in the two Vaishnavi Deoghar files; those lines carry `NA` in other columns |
 | 6 | `Brand` | Brand name or a brand or division code | LP, LY, LR (Louis Philippe), VH, VS, VF (Van Heusen), AS, AL (Allen Solly) beside the full names. Carry bags carry the store's own name |
-| 7 | `Color` | A price band: `PREMIUM`, `MEDIUM`, `ECONOMY`, `ASSO.` | 26,022 of 26,195 lines in `Sales_Hazaribagh.xlsx`. A real colour on a few |
+| 7 | `Color` | `PREMIUM`, `MEDIUM`, `ECONOMY` or `ASSO.` instead of a colour | 26,022 of 26,195 lines in `Sales_Hazaribagh.xlsx`. A real colour on a few. Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner |
 | 8 | `Size` | Size as keyed | Number, letters, `FREE SIZE`, `FS`, kids age, pack or measure. Numbers are stored as numbers |
 | 9 | `Design No` | Style or design code | Excel turns some into dates: 75 cells in `Sales_Hazaribagh.xlsx` |
 | 10 | `Barcode` | Barcode or in-house code | All-digit values are numbers. Alphanumeric values are text |
@@ -230,7 +230,7 @@ What a row means: one barcode, that is one style, colour and size. It is not one
 | --- | --- | --- | --- |
 | 1 | `Item Name` | Item type | |
 | 2 | `Brand` | Brand name or code | Names and codes mix |
-| 3 | `Color` | Colour, price band or code | Only in the 23-column file. 6,237 `PREMIUM`, 3,799 `ASSO.`, 2,647 `MEDIUM`, 696 `ECONOMY`, 458 `WORK` of 22,387 rows |
+| 3 | `Color` | Colour, a `PREMIUM` / `MEDIUM` / `ECONOMY` / `ASSO.` tag or a code | Only in the 23-column file. 6,237 `PREMIUM`, 3,799 `ASSO.`, 2,647 `MEDIUM`, 696 `ECONOMY`, 458 `WORK` of 22,387 rows |
 | 4 | `Size` | Size | Blank on 250 rows (23 columns) and 14 rows (22 columns) |
 | 5 | `Supplier` | Supplier legal name as held on the item | KDPS's own legal name appears for own or transferred stock. Blank on 21 and 33 rows |
 | 6 | `Barcode` | Barcode or in-house code | One row per barcode, no duplicates. Numbers when all digits |
@@ -494,7 +494,7 @@ These checks can become validation rules for the side-by-side test (`PRD-IMP-005
 | 2 | Can the POS give a one-day sales report and an end-of-day SOH in one fixed layout? The files seen cover one day to one financial year. Who sets the daily schedule (Debanjan is named as format provider)? | KDPS Owner |
 | 3 | Does `Card` include UPI? Is a sales value tax-inclusive? Is SOH `Rate` cost, and is GST inside it? | Accounts, CA |
 | 4 | Does the POS keep a link from a return to its original bill, anywhere? | KDPS Owner |
-| 5 | What do the price bands (`PREMIUM`, `MEDIUM`, `ECONOMY`, `ASSO.`), the `Fit` codes (`LM`, `MM`, `VLM`, `HM`) and category codes such as `USM` mean? Where do they belong in the masters? | KDPS Owner; product owner for placement (`PRD-IMP-008`) |
+| 5 | What do the `Fit` codes (`LM`, `MM`, `VLM`, `HM`) and category codes such as `USM` mean? Where do they belong in the masters? | KDPS Owner; product owner for placement (`PRD-IMP-008`) |
 | 6 | Why does `Sub Category` print on the first line only? Is it a POS setting? | KDPS Owner |
 | 7 | What does the customer value `MANUAL BILL UPDATE` mean? | KDPS Owner |
 | 8 | Are carry bags and promo gifts items in the POS item master? Which items count as gifts? | KDPS Owner |

@@ -39,7 +39,7 @@ Header on row 2, data from row 3, row 1 holds `SUBTOTAL(9, ...)` over `QTY`, `MR
 | --- | --- | --- | --- |
 | A | `SEASON` | Drop-down from `Master Sheet` A | Label such as `SPRING SUMMER(Jun-26)` |
 | B | `BRAND` | Drop-down from `Master Sheet` B | 592 brands |
-| C | `COLOR` | Drop-down from `Master Sheet` C | Also holds the price tiers `ECONOMY`, `MEDIUM`, `PREMIUM` |
+| C | `COLOR` | Drop-down from `Master Sheet` C | Also holds the tags `ECONOMY`, `MEDIUM`, `PREMIUM` instead of a colour. Staff tag goods with no clear colour or classification this way, mostly non-brand goods (product owner, 4 Oct 2026). How the product handles these tags is OPEN for the product owner |
 | D | `GENDER` | Drop-down from `Master Sheet` D | 5 values |
 | E | `SUB CATEGORY` | Drop-down from `Master Sheet` E | 9 values |
 | F | `TYPE` | Drop-down from `Master Sheet` F | 7 values |
@@ -1002,7 +1002,7 @@ Standard fields used in the mapping (also `standard_fields` in `pt-layouts.json`
 | `design` | Style, design or article code (KDPS column DESIGN) | 33 of 35 |
 | `item_description` | Free-text name of the item | 21 of 35 |
 | `category` | Vendor's own product or category word | 28 of 35 |
-| `colour` | Colour or shade (KDPS COLOR also holds price tiers) | 27 of 35 |
+| `colour` | Colour or shade (KDPS COLOR also holds the tags `PREMIUM`, `MEDIUM`, `ECONOMY`) | 27 of 35 |
 | `gender` | Gender as written | 6 of 35 |
 | `fit` | Fit as written | 5 of 35 |
 | `size` | Size as written | 30 of 35 |
