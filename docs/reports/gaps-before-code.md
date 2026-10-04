@@ -1,4 +1,4 @@
-# Gaps before writing code — 3 Oct 2026
+# Gaps before writing code — refreshed 4 Oct 2026
 
 > **Not ranked.** This report decides nothing and changes nothing. Any PRD or policy change it leads to needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
@@ -8,13 +8,27 @@
 
 ## 1. Short version
 
-1. Four designs exist: personas, test hosting, the stock ledger and the user interface. **Nine stage 1 designs are missing** (section 2).
-2. **There is no code workspace yet**, and no house rules for code (section 3).
+1. **Six of nine stage 1 designs are written** (GC-1 to GC-5 and GC-7; section 2). GC-6, GC-8 and GC-9 are still missing.
+2. The **pnpm and Turborepo workspace exists** (server, web, domain, schemas, UI). **`packages/calculations` is not created yet**; several **code house rules** are still partial (section 3).
 3. **Two small decisions** wait for the product owner (section 4). Other product-owner items do not block code (section 6).
 4. **UI sample values** are now labelled or removed (section 5).
 5. The open KDPS, Accounts and CA values **do not block coding**: code is built and tested with labelled synthetic data (section 6).
 
-## 2. Missing stage 1 designs
+## 2. Stage 1 designs (GC-1 … GC-9)
+
+| # | Design | Status | Document |
+| --- | --- | --- | --- |
+| GC-1 | Module map | Written | [module-map.md](../design/architecture/module-map.md) |
+| GC-2 | Business structure and masters | Written | [structure-and-masters.md](../design/masters/structure-and-masters.md) |
+| GC-3 | Access, approvals, inbox and exceptions | Written | [access-and-approvals.md](../design/access/access-and-approvals.md) |
+| GC-4 | Books and posting | Written | [books-and-posting.md](../design/finance/books-and-posting.md) |
+| GC-5 | Document numbering and audit history | Written | [numbering-and-audit.md](../design/platform/numbering-and-audit.md) |
+| GC-6 | Imports and opening data | **Missing** | — |
+| GC-7 | Shared price, discount, tax and rounding logic | Written | [shared-calculations.md](../design/calculations/shared-calculations.md) |
+| GC-8 | Offline counter | **Missing** | — |
+| GC-9 | Backup, restore and export | **Missing** | — |
+
+The table below is the original scope list (unchanged). Use it for sources and what each design must cover.
 
 | # | Design | What it covers | Source | Needed for |
 | --- | --- | --- | --- | --- |
@@ -28,12 +42,12 @@
 | GC-8 | Offline counter | Device registration, device bill series, the cached working set, the local commit, upload, pause and release | `PRD-OFF-001`–`PRD-OFF-019`; `AGENTS.md` "Delivery" | Designed in stage 1, switched on in stage 4 under policy 16 |
 | GC-9 | Backup, restore and export | What is backed up, how a restore is proved, and the complete export. [deployment.md](../design/platform/deployment.md) covers test hosting only | `PRD-SEC-012`, `PRD-LIF-022`; policy 18 | Stage 1 exit check: a backup restores with linked records and attachments |
 
-**Suggested order.** GC-1 first. Then GC-2, GC-3 and GC-5, which everything else uses. GC-4 and GC-7 before the golden scenarios. GC-6, GC-8 and GC-9 can follow.
+**Suggested order for what remains.** GC-6 next (imports and opening data; KDPS sample files can inform layouts). Then GC-8 and GC-9. Implement `packages/calculations` from GC-7 in parallel with module work.
 
-## 3. No code workspace
+## 3. Code workspace and house rules
 
-- **Workspace.** The pnpm and Turborepo workspace (server, web, shared domain, schemas and UI packages) does not exist. `AGENTS.md` says to add build, lint and test commands only once it does.
-- **House rules for code**, not written anywhere yet:
+- **Workspace.** The pnpm and Turborepo workspace exists: `apps/server`, `apps/web`, `packages/domain`, `packages/schemas`, `packages/ui`, and `tools/module-check`. Commands are in `AGENTS.md` ("Code workspace").
+- **House rules for code**, partly started (module check, `@Inject`, Turbo pipeline) but not complete:
   - coding style and folder layout per package;
   - API conventions: REST/JSON, shared Zod schemas, generated OpenAPI, error shape, the idempotency key on every write (`PRD-INT-002`);
   - database migrations: reviewed SQL, and the migration and runtime roles in [deployment.md](../design/platform/deployment.md) section 4;
