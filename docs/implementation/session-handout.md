@@ -5,6 +5,7 @@
 ## Where things stand
 
 - **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
+- **New default for code tasks, on branch `agents-task-completion`, waiting on your approval and merge.** `AGENTS.md` gains "Completing a code task": build; independent review against the task, requirements, designs, house rules and `AGENTS.md`; triage, with every rejection seen by the reviewer and disputes going to you; recheck until no blocking finding remains; final checks on the final revision, with follow-ups recorded in the readiness register. It applies only to tasks that change code; document-only tasks keep the document gate. The section itself passed the document gate with an independent AI reviewer ("AGENTS task completion"). `S0-T06` is the first task to follow it.
 - **S0-T05 done and merged** ([PR #2](https://github.com/bruhanand/apparel-os/pull/2), squash-merged into `main`). Migration runner, the two database roles, `pnpm migrate` (directory-only until `S1-F01-T02`), the Railway runbook and 33 integration tests; your three review issues were fixed before the merge (directory-only label with a command test, role and owner check, strict set reader). You approved the DR-1 S0-T05 review of `AGENTS.md` "Code workspace". Start-gate condition 4 is met ([stage-0-preparation.md](stage-0-preparation.md) section 2). `doc-check.yml` no longer caches pnpm in `setup-node`. No Railway service was changed.
 - **S0-T04 part A approved and merged on `main`** (`7567e90`, `7455d75`). [code-house-rules.md](../design/platform/code-house-rules.md) part A was reviewed in DR-1 round 1 by independent AI reviewers and approved by you ([stage-0-preparation.md](stage-0-preparation.md) section 2); `S0-T08` round 1 is done and start-gate conditions 3 and 6 are met. CH-1 to CH-7 and GC4-4 stay OPEN at their gates.
 - **S0-T03 done and merged.** The Doc check workflow installs the pinned pnpm (12.4.1) before `setup-node`. [PR #1](https://github.com/bruhanand/apparel-os/pull/1), merged as `b6395ec` on `main`. Doc check and Code check both pass on `main`.
@@ -18,12 +19,13 @@
 
 | Step | What | Needs from you |
 | --- | --- | --- |
-| 1 | `S0-T06`: synthetic fixtures and reset (template database cloned per test file, two synthetic Organisations, labelling, local seed) | Go-ahead |
-| 2 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
+| 1 | Approve the review of `AGENTS.md` "Completing a code task" and merge its PR once CI passes | Approval and go-ahead |
+| 2 | `S0-T06`: synthetic fixtures and reset (template database cloned per test file, two synthetic Organisations, labelling, local seed) | Go-ahead |
+| 3 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
 
-When step 1 is green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
+When step 2 is green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
 
-## Decisions waiting on you (none blocks steps 1 and 2)
+## Decisions waiting on you (none blocks steps 1 to 3)
 
 - **Stock harness H1 to H6** ([s1-f10-stock-harness.md](s1-f10-stock-harness.md)): needed before stock-and-posting is coded. Recommendation: test-only document driver, registered ledger callers, a test-only schema, synthetic approval types, tests only, a read-only role for checks.
 - **Setup recovery** for the first feature (finished setup refused, interrupted one completed, conflicting one refused): proposed in [s1-f01-first-access.md](s1-f01-first-access.md) section 9; confirmed in `S1-F01-T01`.

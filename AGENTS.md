@@ -168,6 +168,21 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
 - The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; its open questions CH-1 to CH-7 stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is not written yet.
 
+## Completing a code task
+
+A task that changes code, such as a stage 0 or feature task of `docs/implementation/`, is complete only after the steps below. Code here means anything under `apps/`, `packages/` or `tools/` (the doc checker included), `.githooks/`, `.github/workflows/`, and the root workspace files the pre-commit hook lists. The steps add an independent review of the change and replace nothing: a document the task changes still passes "Change gate" and "Honest reviews"; document reviewers and their approval follow `docs/implementation/index.md` section 9; the approvals in the task's own completion criteria still apply; and committing, pushing and merging still wait for the product owner's go-ahead. A task that changes only documents follows "Change gate", "Honest reviews" and its own completion criteria, without these steps.
+
+1. **Build.** Implement the task as agreed and run the tests it requires.
+2. **Review.** Start an independent reviewer: a fresh agent session or a person who did not write the change. It is given the task, the changes and their sources, not the implementer's account of why the change is right. It reads the changes against the task and its completion criteria; the requirements, policies and decisions the task and its designs name, including any the change enforces without citing; the designs it implements; the code house rules; and this file. It returns findings, each with the file, the rule or design it breaks, why, and whether it is blocking. It edits no file and writes no review record.
+3. **Triage.** The implementing session checks each finding against the code and its sources. It fixes every confirmed defect, with a test that proves the fix where one can, and states why each rejected finding is not a defect.
+4. **Recheck.** Rerun the tests the fixes affect. The reviewer rechecks the fixes and what they touch, and sees each rejection with its reason. Repeat steps 3 and 4 until no blocking finding remains; a blocking finding still disputed goes to the product owner. A finding is blocking when it shows that the change breaks the task's criteria, a requirement, policy or decision, a design, the code house rules or this file, or that a test does not prove what it claims.
+5. **Final checks.** On the final revision, run `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm format:check` and the doc checker, with the checker's own tests when `tools/doc-check/` changed (`PRD-SEC-015`, `PRD-SEC-016`); browser journeys join them once Playwright exists. Where the task's completion criteria require CI, it must pass after the push the product owner allows. Record each non-blocking follow-up in the readiness register with its owner and the gate it blocks, and name it in the session handout.
+
+- Keep a review to the task's change and what it touches. A finding outside that becomes a follow-up, not a fix in this task.
+- When a fix would change business behaviour or the task's scope, stop and ask the product owner; a business decision goes up as "Document order" says. A KDPS value is marked OPEN and goes to `docs/questions-for-kdps.md`, as "Never invent a value" says; a fix never fills an OPEN value.
+- The code reviewer's findings are not document review records. Only `review` and `record` write those, under "Honest reviews".
+- If no independent reviewer can run, report that as a blocker and the task as not reviewed. Never call it reviewed.
+
 ## Stack
 <!-- deps: prd.md#stack — restates the PRD stack table -->
 

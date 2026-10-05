@@ -522,6 +522,17 @@
         "PRD-UXP-003": {"hash":"d8b381fe980b","decs":[]}
       }
     },
+    "AGENTS.md#completing-a-code-task": {
+      "status": "reviewed",
+      "by": "Claude (AI review, independent reviewer, AGENTS task completion)",
+      "date": "2026-10-05",
+      "reason": "Read the revised section against the product owner's request, PRD-SEC-015 and PRD-SEC-016, the rest of AGENTS.md (Document order, Never invent a value, Change gate, Honest reviews, Code workspace), implementation index sections 9 and 10, the pre-commit hook's code paths, both CI workflows and the readiness register's Owner and Blocks at columns. The earlier blocking finding (review limited to cited IDs) is fixed: the reviewer now reads the task's requirements, policies, decisions, designs, house rules and AGENTS.md, including uncited ones. The code definition matches the hook plus .githooks and workflows, final checks match index section 10 with build and checker tests, CI is tied to an allowed push, disputes go to the product owner, KDPS values stay OPEN, and no existing rule is weakened or duplicated.",
+      "unitHash": "7e4aae36a206",
+      "deps": {
+        "PRD-SEC-015": {"hash":"8fc3917701d6","decs":[]},
+        "PRD-SEC-016": {"hash":"f5d2af135d98","decs":[]}
+      }
+    },
     "AGENTS.md#current-state": {
       "status": "reviewed",
       "by": "AI review",
