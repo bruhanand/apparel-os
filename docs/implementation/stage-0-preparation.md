@@ -44,6 +44,28 @@ Run on commit `460f81b` with no working-tree changes, on the product owner's mac
 | `node tools/doc-check/check.mts test` | Exit 0: 38 pass |
 | `git config --get core.hooksPath` | `.githooks` |
 
+### S0-T05 verification note, 5 Oct 2026
+
+Built on branch `s0-t05-migration-runner` ([PR #2](https://github.com/bruhanand/apparel-os/pull/2)), under house rules part A sections 3 to 7 and 10 and [deployment.md](../design/platform/deployment.md) section 4. This meets start-gate condition 4 (section 2) once CI is green, and covers the S0-T05 half of RR-006 and the S0-T05 part of RR-190; fixtures and reset stay with `S0-T06`.
+
+| Output | Where |
+| --- | --- |
+| Runner | `apps/server/src/kernel/db/`: the directory set, then the Organisation set on each Organisation database in code order, as `aos_migration`; one transaction per file with its record in `kernel.migration`; a session advisory lock per database; refuses a bad name, a duplicate or missing number, a changed or missing applied file and a file numbered before an applied one; then the database privilege step of house rules 4.3, read back |
+| Migrations | `apps/server/migrations/`: `0001__kernel__migration_record.sql` in both sets, `0002__kernel__refuse_change.sql` (the append-only guard, SQLSTATE `AO001`) in the Organisation set, and each set's `tables.json` |
+| Role SQL and runbook | `apps/server/db/roles.sql`; `apps/server/db/railway-roles-runbook.md`, for the product owner to apply later. No Railway service was changed |
+| Pre-deploy entry | `pnpm migrate` (`apps/server/src/migrate.ts`), reading `AOS_MIGRATION_DATABASE_URL`. It lists no Organisation until `S1-F01-T02` adds the directory table |
+| Test helper | `apps/server/test/support/`: one PostgreSQL 17 container per run with both roles; each test file creates its own databases, migrated as `aos_migration`, and connects as `aos_runtime` |
+
+| Check | Result |
+| --- | --- |
+| `pnpm test` | Exit 0; the server's migration-set tests added (13 server unit tests) |
+| `pnpm test:integration` | Exit 0: 25 tests. The runtime role is no superuser and has no `CREATEDB`, `CREATEROLE` or `BYPASSRLS`; owns no object; cannot create a table in either database, a schema or a temporary table, nor alter or drop a table; cannot read `kernel.migration`; an update, delete or truncate of a row `kernel.refuse_change()` guards is refused, for the owner too; with no actor set it sees and writes no row under a row-level security policy, and sees them only while a transaction-local actor is set; `PUBLIC` holds nothing on the database or schema `public`, and an ungranted role cannot connect; a failing migration leaves the earlier files and records and nothing of itself, and a rerun applies only what is left; a changed or missing applied file is refused; a run waits for another holding the database; two runs at once apply each file once; `migrateAll` stops at the first failing database and touches none after it |
+| `pnpm migrate` by hand, on a throwaway PostgreSQL 17 container | Applied the directory set, then reported nothing pending on a second run; exit 1 with no credential in the log when the variable is unset or the password is wrong |
+| `pnpm lint`, `pnpm typecheck`, `pnpm check:modules`, `pnpm format:check`, `node tools/doc-check/check.mts` | Exit 0 |
+| CI | Code check and Doc check on PR #2: Green on `fb012bc`: Code check runs 37327614754 (push) and 37327620143 (pull request), with the 25 integration tests on PostgreSQL 17 in Testcontainers; Doc check runs 37327614770 and 37327620504. The first Doc check on `266d01a` failed after the checker passed: `setup-node` tried to cache a pnpm store the job never creates once the lockfile changed, so `doc-check.yml` now turns that cache off |
+
+Not built here, by design: the directory table and Organisation routing (`S1-F01-T02`); creating an Organisation's database (CH-1, `S1-F01-T10`); the catalogue test of house rules 10.4, which no task names yet; proposed for the first `S1-F01` task that adds a business table, since it checks register classes no table has before then; time limits on the runtime role (CH-3). CH-2 is checked by step 1 of the runbook.
+
 ## 2. Start gate for S1-F01
 
 `S1-F01` may start when all of these hold. Nothing else is in the gate.

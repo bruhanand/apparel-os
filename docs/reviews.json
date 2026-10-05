@@ -31,10 +31,10 @@
     },
     "AGENTS.md#code-workspace": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T05)",
       "date": "2026-10-05",
-      "reason": "Re-read after the Status fix: the approved-part-A sentence now matches code-house-rules line 5 and its section 13 open questions, reviews.json holds round-1 records for every part A section, and paths, pnpm scripts, the pre-commit hook and code-check.yml steps still agree with the tables.",
-      "unitHash": "17d6d4773835",
+      "reason": "Read the whole section against code-house-rules 2, 3.1, 4.1, 4.3, 5.1, 10.5, 10.6 and 13 and deployment.md section 4: the new migrations row matches the two sets, the NNNN__<unit>__<what>.sql pattern the runner enforces and both tables.json registers; the db row matches roles.sql and the Railway runbook; pnpm migrate runs node dist/migrate.js through the root filter, so it needs pnpm build and AOS_MIGRATION_DATABASE_URL, and migrateAll does the directory then each Organisation in code order and stops at the first failure; the other paths, scripts, pre-commit hook and code-check.yml steps still agree. No clash, no invented value.",
+      "unitHash": "160dd1f93900",
       "deps": {
         "DEC-005": {"hash":"d9f11492dc0d","decs":[]},
         "DEC-013": {"hash":"57a896ce2827","decs":[]},
