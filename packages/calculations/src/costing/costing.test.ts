@@ -60,21 +60,26 @@ describe('cost a line (section 8)', () => {
     });
   });
 
-  it('PRD-MOD-014 refuses a P RATE that is not whole paise with no rounding step in the profile', () => {
+  it('POL-03.08 gives Unknown P RATE, listing the rounding step, when no step makes it whole paise (3.4)', () => {
     const result = costLine({
       basic: known(100001),
       amounts: {},
       profile: { version: 'syn-cost-4', steps: [{ kind: 'discount-rate', rate: '50' }] },
     });
     expect(result).toEqual({
-      ok: false,
-      refusals: [{ code: 'rounding-rule-missing', input: 'costing profile syn-cost-4' }],
+      ok: true,
+      value: {
+        profileVersion: 'syn-cost-4',
+        pRate: unknownValue(),
+        missing: ['rounding step'],
+        steps: [{ kind: 'discount-rate', value: '100001/2' }],
+      },
     });
   });
 });
 
 describe('matching check (POL-03.07)', () => {
-  it('returns the difference and whether it lies within the tolerance, deciding nothing', () => {
+  it('POL-03.07 returns the difference and whether it lies within the tolerance, deciding nothing', () => {
     expect(
       matchCost({ pRate: known(94500), supplierCost: known(94000), tolerance: { amount: 500, boundary: 'inclusive' } }),
     ).toEqual({
@@ -105,8 +110,17 @@ describe('ticket margin (PRD-PTW-011)', () => {
     expect(ticketMargin({ mrp: unknownValue(), pRate: known(1) })).toEqual({ ok: true, value: unknownValue() });
   });
 
-  it('gives a negative margin for a P RATE above the MRP, and refuses a zero MRP', () => {
-    expect(ticketMargin({ mrp: known(800), pRate: known(801) })).toEqual({ ok: true, value: known('-0.13') });
+  it('PRD-PTW-011 gives an exact negative margin, and refuses one that needs rounding (GC7-15)', () => {
+    // (8.00 − 8.08) ÷ 8.00 × 100 = −1, exact to two decimals.
+    expect(ticketMargin({ mrp: known(800), pRate: known(808) })).toEqual({ ok: true, value: known('-1.00') });
+    // (8.00 − 8.01) ÷ 8.00 × 100 = −0.125: what half up means below zero is open.
+    expect(ticketMargin({ mrp: known(800), pRate: known(801) })).toEqual({
+      ok: false,
+      refusals: [{ code: 'not-decided', input: 'margin', question: 'GC7-15' }],
+    });
+  });
+
+  it('PRD-PTW-011 refuses a zero MRP, which gives no margin (Proposed, section 8)', () => {
     expect(ticketMargin({ mrp: known(0), pRate: known(1) })).toEqual({
       ok: false,
       refusals: [{ code: 'invalid-amount', input: 'mrp' }],

@@ -6,9 +6,10 @@
   "function": "returnValue",
   "input": {
     "line": {
-      "id": "L1",
-      "soldQuantity": 1,
-      "paidValue": 88000
+      "$billLine": {
+        "bill": "CG-06",
+        "line": "L1"
+      }
     },
     "earlierReturns": [],
     "quantity": 1

@@ -42,7 +42,7 @@ export interface CostLine {
   /** Unknown, with the missing inputs listed, when an input is Unknown or missing (POL-03.08; 3.4). */
   readonly pRate: MaybeKnown<Paise>;
   readonly missing: readonly string[];
-  /** Each step's exact value in paise, as `n` or `n/d`; empty when P RATE is Unknown. */
+  /** Each step's exact value in paise, as `n` or `n/d`; empty when an input is Unknown or missing. */
   readonly steps: readonly { readonly kind: CostingStep['kind']; readonly value: string }[];
 }
 
@@ -95,9 +95,11 @@ export function costLine(input: CostLineInput): Result<CostLine> {
     if (value.n < 0n) throw new RangeError(`Profile ${input.profile.version}: a step took the cost below zero`);
     steps.push({ kind: step.kind, value: toExactString(value) });
   }
-  // A P RATE that is not whole paise needs a rounding step the profile does not have (3.2, POL-03.06).
-  if (!isInteger(value))
-    return refused(refusal('rounding-rule-missing', { input: `costing profile ${input.profile.version}` }));
+  // A P RATE that is not whole paise needs a rounding step the profile does not have. Costing returns Unknown with the
+  // missing input listed instead of refusing (3.4, POL-03.08; Proposed in section 8).
+  if (!isInteger(value)) {
+    return ok({ profileVersion: input.profile.version, pRate: unknownValue(), missing: ['rounding step'], steps });
+  }
   return ok({ profileVersion: input.profile.version, pRate: known(amountOut(exactPaise(value))), missing: [], steps });
 }
 
@@ -137,7 +139,9 @@ export function matchCost(input: {
 
 /**
  * Ticket MARGIN (PRD-PTW-011): (MRP − P RATE) ÷ MRP × 100, rounded half up to two decimal places. Unknown P RATE
- * gives Unknown MARGIN. A P RATE above the MRP gives a negative margin, rounded half away from zero.
+ * gives Unknown MARGIN. A P RATE above the MRP gives a negative margin: given as it is when it is exact to two
+ * decimals, and refused `not-decided` when it needs rounding, since what half up means below zero is open (GC7-15).
+ * A zero MRP gives no margin and is refused `invalid-amount` (Proposed, section 8).
  */
 export function ticketMargin(input: {
   readonly mrp: MaybeKnown<number>;
@@ -148,6 +152,9 @@ export function ticketMargin(input: {
   const pRate = amountIn(input.pRate.value, 'P RATE');
   if (mrp === 0n) return refused(refusal('invalid-amount', { input: 'mrp' }));
   const exact = mul(div(fraction(mrp - pRate), fraction(mrp)), HUNDRED);
-  const hundredths = roundToInteger(mul(exact, HUNDRED), 'half-up');
+  const scaled = mul(exact, HUNDRED);
+  if (scaled.n < 0n && !isInteger(scaled))
+    return refused(refusal('not-decided', { input: 'margin', question: 'GC7-15' }));
+  const hundredths = roundToInteger(scaled, 'half-up');
   return ok(known(formatFixed(fraction(hundredths, 100n), 2)));
 }

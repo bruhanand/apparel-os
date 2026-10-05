@@ -84,12 +84,17 @@ describe('the version in force (10.2; structure-and-masters 2.2)', () => {
     expect(versionInForce(versions, '2026-09-30')).toBeUndefined();
   });
 
-  it('treats two approved versions in force on one date as a defect', () => {
+  it('PRD-MOD-010 treats two approved versions in force on one date as a defect', () => {
     const overlapping = [...versions, { version: 'syn-v4', effectiveFrom: '2026-10-01', approved: true }];
     expect(() => versionInForce(overlapping, '2026-10-10')).toThrow(/Defect/);
   });
 
-  it('refuses a business date that is not an ISO date', () => {
+  it('PRD-MOD-009 refuses a business date that is not a calendar date', () => {
     expect(() => isInForce({ effectiveFrom: '2026-10-01' }, '10/10/2026')).toThrow(RangeError);
+    expect(() => isInForce({ effectiveFrom: '2026-10-01' }, '2026-02-31')).toThrow(RangeError);
+    expect(() => isInForce({ effectiveFrom: '2026-10-01' }, '2026-02-29')).toThrow(RangeError);
+    expect(() => isInForce({ effectiveFrom: '2026-10-01' }, '2026-13-01')).toThrow(RangeError);
+    expect(() => isInForce({ effectiveFrom: '2026-04-31' }, '2026-10-10')).toThrow(RangeError);
+    expect(isInForce({ effectiveFrom: '2028-02-29' }, '2028-03-01')).toBe(true);
   });
 });

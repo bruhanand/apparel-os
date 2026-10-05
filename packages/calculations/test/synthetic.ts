@@ -15,7 +15,7 @@ import type {
 
 export const SYN_DATE = '2026-10-10';
 
-export const SYN_TAX: TaxRulesInForce = {
+export const SYN_TAX = {
   priceBasis: { version: 'syn-basis-incl', pricesIncludeTax: true },
   registration: {
     version: 'syn-reg-1',
@@ -43,13 +43,13 @@ export const SYN_TAX: TaxRulesInForce = {
     },
     { kind: 'single-rate', version: 'syn-tax-1', classification: 'SYN-HSN-2', rate: '10' },
   ],
-};
+} satisfies TaxRulesInForce;
 
-export const SYN_ROUNDING: RoundingRulesInForce = {
+export const SYN_ROUNDING = {
   discount: { version: 'syn-round-1', unit: 1, mode: 'half-up' },
   tax: { version: 'syn-round-1', unit: 1, mode: 'half-up', level: 'line' },
   bill: { version: 'syn-round-1', unit: 1, mode: 'half-up' },
-};
+} satisfies RoundingRulesInForce;
 
 /** The synthetic rounding rules with one kind left out, as when no rule of that kind is in force. */
 export function synRoundingWithout(kind: keyof RoundingRulesInForce): RoundingRulesInForce {

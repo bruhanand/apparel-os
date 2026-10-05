@@ -7,8 +7,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import * as costing from '../src/costing/index.js';
-import * as selling from '../src/index.js';
+import * as costing from '@apparel-os/calculations/costing';
+import * as selling from '@apparel-os/calculations';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const src = join(root, 'src');
@@ -54,7 +54,7 @@ describe('entry points (shared-calculations 2.1, 2.3)', () => {
     expect(Object.keys(costing).sort()).toEqual(['costLine', 'matchCost', 'ticketMargin']);
   });
 
-  it('declares the two entry points in the package exports', () => {
+  it('PRD-OFF-004 declares the two entry points in the package exports', () => {
     const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
       name: string;
       exports: Record<string, { default: string }>;

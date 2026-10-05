@@ -30,10 +30,10 @@ export interface ExchangeDifference {
 export function exchangeDifference(input: ExchangeInput): Result<ExchangeDifference> {
   const returned = amountIn(input.returnedValue, 'The returned value');
   const replacement = input.replacement;
-  // GC7-6: whether a round-off counts in what was paid is open, so a replacement bill with a round-off is not compared
+  // GC7-13: how a replacement bill's round-off is compared with the returned value is open, so such a bill is not compared
   // with returned paid values until it is decided.
   if (replacement.roundOffUp !== 0 || replacement.roundOffDown !== 0) {
-    return refused(refusal('not-decided', { input: 'replacement round-off', question: 'GC7-6' }));
+    return refused(refusal('not-decided', { input: 'replacement round-off', question: 'GC7-13' }));
   }
   const replacementValue = BigInt(replacement.amountDue);
   if (replacementValue === returned)

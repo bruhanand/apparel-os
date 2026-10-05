@@ -89,9 +89,9 @@ export function priceBill(input: PriceBillInput): Result<PricedBill> {
   if (chargesTax && taxRule === undefined) billRefusals.push(refusal('rounding-rule-missing', { input: 'tax' }));
   if (taxRule !== undefined) {
     assertTaxRoundingRule(taxRule);
-    // GC7-3: tax rounded at the bill level needs a way to carry components back to lines, which 5.8 does not give.
+    // GC7-12: tax rounded at the bill level is refused until 5.8 says how bill-level tax is carried to the lines (3.3).
     if (chargesTax && taxRule.level === 'bill')
-      billRefusals.push(refusal('not-decided', { input: 'tax', question: 'GC7-3' }));
+      billRefusals.push(refusal('not-decided', { input: 'tax', question: 'GC7-12' }));
   }
   const billRule = input.rounding.bill;
   if (billRule === undefined) billRefusals.push(refusal('rounding-rule-missing', { input: 'bill' }));
@@ -166,7 +166,7 @@ export function priceBill(input: PriceBillInput): Result<PricedBill> {
       usedDiscountRounding = true;
       amount = roundByRule(mul(fraction(afterOffers), parsePercent(requested.rate)), discountRule);
     }
-    // No line's value goes below zero (5.5); a manual discount of nothing or above the value is not a discount.
+    // A manual discount of nothing, or above the line's value after step 2, is refused (Proposed, 5.7).
     if (amount === 0n || amount > afterOffers) {
       manualRefusals.push(refusal('invalid-amount', { ...named, input: 'manual-discount' }));
       return;
@@ -209,7 +209,7 @@ export function priceBill(input: PriceBillInput): Result<PricedBill> {
       amountPaid = at.amountPaid;
       components = at.components.map((c) => ({ component: c.component, rate: c.rate, amount: amountOut(c.amount) }));
       // PRD-OFR-005: when a discount moves the line into a different slab, mark the rate before and after. Every
-      // change is marked; no threshold is assumed. A rate before that no single slab gives is Unknown.
+      // change is marked; no threshold is assumed. A rate before that no single slab gives is Unknown (Proposed, 5.8).
       if (rule.kind === 'slabs' && !compareBefore && value !== startValue) {
         const before = findRate(rule, startValue, line.quantity, registration, pricesIncludeTax, taxRule);
         if (before.kind === 'undetermined') {

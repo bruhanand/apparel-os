@@ -16,29 +16,29 @@ describe('exact fractions (shared-calculations 3.2)', () => {
     expect(compare(fraction(1n, 3n), fraction(333n, 1000n))).toBe(1);
   });
 
-  it('floors toward minus infinity', () => {
+  it('PRD-MOD-014 floors toward minus infinity', () => {
     expect(floor(fraction(7n, 2n))).toBe(3n);
     expect(floor(fraction(-7n, 2n))).toBe(-4n);
   });
 
-  it('refuses a zero denominator', () => {
+  it('PRD-MOD-014 refuses a zero denominator', () => {
     expect(() => fraction(1n, 0n)).toThrow(RangeError);
     expect(() => div(fraction(1n), fraction(0n))).toThrow(RangeError);
   });
 });
 
 describe('decimal strings (shared-calculations 3.1)', () => {
-  it('reads rates exactly, never as JavaScript numbers', () => {
+  it('PRD-MOD-014 reads rates exactly, never as JavaScript numbers', () => {
     expect(parseDecimal('2.5')).toEqual(fraction(5n, 2n));
     expect(parseDecimal('0.1')).toEqual(fraction(1n, 10n));
     expect(parsePercent('10')).toEqual(fraction(1n, 10n));
   });
 
-  it.each(['', '1e3', '-1', '.5', '1.', ' 1', '1,5', 'NaN'])('refuses the malformed text "%s"', (text) => {
+  it.each(['', '1e3', '-1', '.5', '1.', ' 1', '1,5', 'NaN'])('PRD-MOD-014 refuses the malformed text "%s"', (text) => {
     expect(() => parseDecimal(text)).toThrow(RangeError);
   });
 
-  it('writes the shortest exact decimal, and refuses a value with no terminating expansion', () => {
+  it('PRD-MOD-014 writes the shortest exact decimal, and refuses a value with no terminating expansion', () => {
     expect(formatDecimal(fraction(5n))).toBe('5');
     expect(formatDecimal(fraction(1n, 2n))).toBe('0.5');
     expect(formatDecimal(fraction(-1n, 8n))).toBe('-0.125');
@@ -61,18 +61,18 @@ describe('rounding (shared-calculations 3.3)', () => {
     expect(roundToInteger(fraction(4n), 'up')).toBe(4n);
   });
 
-  it('acts on the magnitude of a negative value', () => {
+  it('PRD-MOD-015 acts on the magnitude of a negative value', () => {
     expect(roundToInteger(fraction(-5n, 2n), 'half-up')).toBe(-3n);
     expect(roundToInteger(fraction(-5n, 2n), 'down')).toBe(-2n);
   });
 
-  it('rounds to a rule unit larger than one paise', () => {
+  it('PRD-MOD-015 rounds to a rule unit larger than one paise', () => {
     const rule = { version: 'syn-round-test', unit: 100, mode: 'half-up' as const };
     expect(roundByRule(fraction(286050n), rule)).toBe(286100n);
     expect(roundByRule(fraction(286049n), rule)).toBe(286000n);
   });
 
-  it('refuses a malformed rule', () => {
+  it('PRD-MOD-015 refuses a malformed rule', () => {
     expect(() => roundByRule(fraction(1n), { version: 'syn-round-test', unit: 0, mode: 'up' })).toThrow(RangeError);
     expect(() => roundByRule(fraction(1n), { version: 'syn-round-test', unit: 1.5, mode: 'up' })).toThrow(RangeError);
   });

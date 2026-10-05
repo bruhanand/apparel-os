@@ -4,7 +4,7 @@
 
 import type { Paise } from '@apparel-os/domain';
 import { canonicalJson } from '../canonical.js';
-import { amountOut } from '../numbers/amounts.js';
+import { amountIn, amountOut } from '../numbers/amounts.js';
 import type { PricedBill } from '../pricing/types.js';
 import { type Result, ok, refusal, refused } from '../result.js';
 
@@ -63,22 +63,22 @@ export function checkTenders(input: CheckTendersInput): Result<CheckedTenders> {
   const total = allocation.lines.reduce((acc, line) => acc + BigInt(line.amount), 0n);
   if (total !== BigInt(bill.amountDue)) return refused(refusal('allocation-mismatch', { input: 'allocation' }));
 
+  // Section 6 speaks of "the cash line"; where an allocation holds more than one cash line, the cash line is their
+  // total (Proposed, shared-calculations section 6).
   const cashLines = allocation.lines.filter((line) => line.kind === CASH);
-  if (cashLines.length > 1) return refused(refusal('multiple-cash-lines', { input: 'allocation' }));
-  const cashLine = cashLines[0];
-  const received = allocation.cashReceived;
-  if (received !== undefined && (!Number.isSafeInteger(received) || received < 0)) {
-    return refused(refusal('invalid-amount', { input: 'cash-received' }));
-  }
+  const cash = cashLines.length === 0 ? null : cashLines.reduce((acc, line) => acc + BigInt(line.amount), 0n);
+  // 3.1: an amount is never negative; a negative cash-received entry is a caller defect.
+  const received =
+    allocation.cashReceived === undefined ? undefined : amountIn(allocation.cashReceived, 'Cash received');
   // PRD-POS-008: cash received given with no cash line is refused.
-  if (cashLine === undefined) {
+  if (cash === null) {
     if (received !== undefined) return refused(refusal('cash-received-without-cash', { input: 'cash-received' }));
-  } else if (received !== undefined && received < cashLine.amount) {
+  } else if (received !== undefined && received < cash) {
     // PRD-POS-007, PRD-POS-008: cash received below the cash line is refused; an entered zero is zero.
     return refused(refusal('insufficient-cash', { input: 'cash-received' }));
   }
   // PRD-MOD-016, PRD-POS-007: an omitted cash-received entry becomes the cash line's amount before anything is stored.
-  const cashReceived = cashLine === undefined ? null : BigInt(received ?? cashLine.amount);
+  const cashReceived = cash === null ? null : (received ?? cash);
   return ok({
     amountDue: bill.amountDue,
     lines: allocation.lines.map((line) => ({
@@ -88,6 +88,6 @@ export function checkTenders(input: CheckTendersInput): Result<CheckedTenders> {
     })),
     cashReceived: cashReceived === null ? null : amountOut(cashReceived),
     // PRD-POS-008: change is cash received less the cash line, on cash only.
-    change: amountOut(cashReceived === null || cashLine === undefined ? 0n : cashReceived - BigInt(cashLine.amount)),
+    change: amountOut(cashReceived === null || cash === null ? 0n : cashReceived - cash),
   });
 }

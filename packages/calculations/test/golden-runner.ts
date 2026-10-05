@@ -5,13 +5,15 @@
 // Case file format (12.1): `id`, `title`, `synthetic: true`, `covers` (the PRD and policy IDs it proves), `function`,
 // and either `input` with `expected` (the full result) or `refusal` (the refusals, each with its code and the line and
 // input it names). A case whose 12.4 row runs the function more than once ("then", "both times", (a) to (c)) holds
-// `runs`, each with its own `input` and `expected` or `refusal`. Two directives keep a case from copying another's
-// priced bill: `{"$pricedBill": "<case id>" | <bill input>}` is that bill priced, and `{"$billReference": …}` is its
-// reference (`pricedBillReference`). A case whose expected result depends on an open reading carries `pending`, the
-// reason, and the runner reports it as pending, never as passed.
+// `runs`, each with its own `input` and `expected` or `refusal`. Three pointers keep a case from copying another's
+// priced bill: `{"$pricedBill": "<case id>" | <bill input>}` is that bill priced, `{"$billReference": …}` is its
+// reference (`pricedBillReference`), and `{"$billLine": {"bill": …, "line": "<line id>"}}` is one of its lines as a
+// return reads it. A case named by a pointer holds every rule version it uses, so the pointing case does too. A case
+// whose expected result depends on an open reading carries `pending`, the reason, and the runner reports it as
+// pending, never as passed.
 
-import type * as Costing from '../src/costing/index.js';
-import type * as Selling from '../src/index.js';
+import type * as Selling from '@apparel-os/calculations';
+import type * as Costing from '@apparel-os/calculations/costing';
 
 export interface GoldenRun {
   readonly input: unknown;
@@ -85,25 +87,40 @@ export function caseShapeProblems(value: unknown, fileStem: string): string[] {
   return problems;
 }
 
-/** Replaces the `$pricedBill` and `$billReference` directives with what they stand for. */
+const POINTERS = ['$pricedBill', '$billReference', '$billLine'];
+
+/** Prices the bill a pointer names: another priceBill case by its ID, or a bill input given in place. */
+function pricedFrom(argument: unknown, cases: ReadonlyMap<string, GoldenCase>, api: GoldenApi): Selling.PricedBill {
+  let billInput: unknown = argument;
+  if (typeof argument === 'string') {
+    const source = cases.get(argument);
+    if (source?.function !== 'priceBill' || source.input === undefined) {
+      throw new Error(`${argument} is not a single-run priceBill case`);
+    }
+    billInput = source.input;
+  }
+  const priced = api.selling.priceBill(resolve(billInput, cases, api) as Selling.PriceBillInput);
+  if (!priced.ok) throw new Error('A pointer priced a bill that was refused');
+  return priced.value;
+}
+
+/** Replaces the `$pricedBill`, `$billReference` and `$billLine` pointers with what they stand for. */
 function resolve(value: unknown, cases: ReadonlyMap<string, GoldenCase>, api: GoldenApi): unknown {
   if (Array.isArray(value)) return value.map((item: unknown) => resolve(item, cases, api));
   if (!isRecord(value)) return value;
   const keys = Object.keys(value);
-  if (keys.length === 1 && (keys[0] === '$pricedBill' || keys[0] === '$billReference')) {
-    const argument = value[keys[0]];
-    let billInput: unknown = argument;
-    if (typeof argument === 'string') {
-      const source = cases.get(argument);
-      if (source?.function !== 'priceBill' || source.input === undefined) {
-        throw new Error(`${argument} is not a single-run priceBill case`);
-      }
-      billInput = source.input;
-    }
-    const priced = api.selling.priceBill(resolve(billInput, cases, api) as Selling.PriceBillInput);
-    if (!priced.ok) throw new Error(`A ${keys[0]} directive priced a bill that was refused`);
-    return keys[0] === '$pricedBill' ? priced.value : api.selling.pricedBillReference(priced.value);
+  const pointer = keys.length === 1 ? keys[0] : undefined;
+  if (pointer === '$pricedBill') return pricedFrom(value[pointer], cases, api);
+  if (pointer === '$billReference') return api.selling.pricedBillReference(pricedFrom(value[pointer], cases, api));
+  if (pointer === '$billLine') {
+    // A bill line as its snapshot records it, for a return (7.1): the sold quantity and the paid value.
+    const argument = value[pointer];
+    if (!isRecord(argument) || typeof argument.line !== 'string') throw new Error('$billLine needs a bill and a line');
+    const line = pricedFrom(argument.bill, cases, api).lines.find((l) => l.id === argument.line);
+    if (line === undefined) throw new Error(`$billLine: no line ${argument.line}`);
+    return { id: line.id, soldQuantity: line.quantity, paidValue: line.amountPaid };
   }
+  if (keys.some((key) => key.startsWith('$') && !POINTERS.includes(key))) throw new Error('Unknown pointer');
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolve(v, cases, api)]));
 }
 

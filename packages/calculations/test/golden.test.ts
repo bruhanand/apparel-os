@@ -1,5 +1,6 @@
 // The server run of the shared golden cases (shared-calculations 12.2; PRD-ACP-018, PRD-MOD-007, PRD-SEC-016):
-// Vitest in Node loads every case file of golden/ and runs it through the package's two entry points. A pending case
+// Vitest in Node loads every case file of golden/ and runs it through the package's two entry points, imported by
+// package name as the server imports them (built first: this package's turbo.json). A pending case
 // is reported as skipped with its reason, never as passed. The counter run of the same files waits for the counter
 // build host (RR-015) and Playwright (S1-F01-T19).
 
@@ -7,8 +8,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import * as costing from '../src/costing/index.js';
-import * as selling from '../src/index.js';
+import * as selling from '@apparel-os/calculations';
+import * as costing from '@apparel-os/calculations/costing';
 import { type GoldenCase, caseShapeProblems, runCase } from './golden-runner.js';
 
 const folder = fileURLToPath(new URL('../golden/', import.meta.url));
@@ -50,9 +51,12 @@ describe('golden case files (shared-calculations 12.1)', () => {
     expect([...cases.keys()].sort()).toEqual(wanted.sort());
   });
 
-  it.each(loaded.map(({ stem, value }) => [stem, value] as const))('%s follows the format of 12.1', (stem, value) => {
-    expect(caseShapeProblems(value, stem)).toEqual([]);
-  });
+  it.each(loaded.map(({ stem, value }) => [stem, value] as const))(
+    'PRD-ACP-018 %s follows the format of 12.1',
+    (stem, value) => {
+      expect(caseShapeProblems(value, stem)).toEqual([]);
+    },
+  );
 
   it('PRD-SEC-017 labels every case synthetic and every code in it SYN', () => {
     for (const { stem, value } of loaded) {
@@ -68,7 +72,7 @@ describe('golden case files (shared-calculations 12.1)', () => {
 
 describe('golden cases on the server (shared-calculations 12.2)', () => {
   for (const goldenCase of cases.values()) {
-    const title = `${goldenCase.id} ${goldenCase.title} [${goldenCase.covers.join(', ')}]`;
+    const title = `${goldenCase.covers.join(' ')} shared-calculations 12.4 ${goldenCase.id} ${goldenCase.title}`;
     if (goldenCase.pending !== undefined) {
       // Reported, never passed: the reason shows in the skipped test's name.
       it.skip(`${title} — pending: ${goldenCase.pending}`, () => undefined);

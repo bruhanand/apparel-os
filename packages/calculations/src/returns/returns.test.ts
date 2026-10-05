@@ -9,9 +9,7 @@ import { splitRefund } from './split-refund.js';
 // shared-calculations section 7, beyond the golden cases CG-16 to CG-19. Synthetic values (12.3).
 
 function bill(mrp: number, billRule = SYN_ROUNDING.bill): PricedBill {
-  const result = priceBill(
-    synBill([synLine('A1', mrp)], { rounding: { ...SYN_ROUNDING, ...(billRule ? { bill: billRule } : {}) } }),
-  );
+  const result = priceBill(synBill([synLine('A1', mrp)], { rounding: { ...SYN_ROUNDING, bill: billRule } }));
   if (!result.ok) throw new Error('synthetic bill refused');
   return result.value;
 }
@@ -35,7 +33,7 @@ describe('return value (7.1)', () => {
     });
   });
 
-  it('refuses a quantity that is not whole and above zero', () => {
+  it('PRD-RET-005 refuses a quantity that is not whole and above zero', () => {
     for (const quantity of [0, 1.5, -1]) {
       expect(
         returnValue({ line: { id: 'L1', soldQuantity: 3, paidValue: 100000 }, earlierReturns: [], quantity }),
@@ -75,12 +73,12 @@ describe('exchange difference (7.2)', () => {
     ).toEqual({ ok: false, refusals: [{ code: 'cheaper-replacement-refused', input: 'cheaper-replacement-rule' }] });
   });
 
-  it('GC7-6 does not compare a replacement bill that has a round-off', () => {
+  it('PRD-RET-008 GC7-13 does not compare a replacement bill that has a round-off', () => {
     const rounded = bill(110050, { version: 'syn-round-bill-100', unit: 100, mode: 'half-up' });
     expect(rounded.roundOffUp).toBe(50);
     expect(exchangeDifference({ returnedValue: 100000, replacement: rounded })).toEqual({
       ok: false,
-      refusals: [{ code: 'not-decided', input: 'replacement round-off', question: 'GC7-6' }],
+      refusals: [{ code: 'not-decided', input: 'replacement round-off', question: 'GC7-13' }],
     });
   });
 });
@@ -120,7 +118,7 @@ describe('split-tender refunds (7.3)', () => {
     expect(result).toMatchObject({ ok: true, value: { shares: [{ amount: 51 }, { amount: 50 }] } });
   });
 
-  it('refuses more remaining than allocated as a caller defect', () => {
+  it('PRD-RET-022 refuses more remaining than allocated as a caller defect', () => {
     expect(() => splitRefund({ tenders: [{ tender: 'card', allocation: 1, remaining: 2 }], refund: 1 })).toThrow(
       RangeError,
     );

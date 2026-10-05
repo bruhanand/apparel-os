@@ -228,37 +228,92 @@ describe('order (shared-calculations 12.5)', () => {
 
 describe('snapshot (shared-calculations 12.5)', () => {
   it('PRD-POS-014 PRD-OFF-009 prices a stored bill again with its recorded versions to the same result', () => {
-    // Rule data held by version, as an owner would answer for a version a bill recorded.
-    const basisPool = [SYN_TAX.priceBasis, { version: 'syn-basis-excl', pricesIncludeTax: false }];
-    const roundingPool = {
+    // Every rule held by version, as its owner would answer for a version a bill recorded (section 4). The first
+    // pricing takes one version of each at random; the replay reads only the versions the bill recorded.
+    const pools = {
+      priceBasis: [
+        { version: 'syn-basis-incl', pricesIncludeTax: true },
+        { version: 'syn-basis-excl', pricesIncludeTax: false },
+      ],
+      registration: [
+        SYN_TAX.registration,
+        {
+          version: 'syn-reg-2',
+          registration: 'SYN-REG-1',
+          chargesTax: true,
+          components: [
+            { component: 'SYN-X', share: '0.25' },
+            { component: 'SYN-Y', share: '0.75' },
+          ],
+        },
+      ],
+      classifications: [...SYN_TAX.classifications, { code: 'SYN-HSN-2', version: 'syn-tax-2' }],
+      rateRules: [
+        ...SYN_TAX.rateRules,
+        { kind: 'single-rate' as const, version: 'syn-tax-2', classification: 'SYN-HSN-2', rate: '12.5' },
+      ],
       discount: [SYN_ROUNDING.discount, { version: 'syn-round-2', unit: 100, mode: 'up' as const }],
+      tax: [
+        SYN_ROUNDING.tax,
+        { version: 'syn-round-3', unit: 1, mode: 'half-to-even' as const, level: 'line' as const },
+      ],
       bill: [SYN_ROUNDING.bill, { version: 'syn-round-bill-100', unit: 100, mode: 'half-up' as const }],
     };
+    const byVersion = <T extends { readonly version: string }>(
+      pool: readonly (T | undefined)[],
+      version: string | null,
+    ) => pool.find((rule) => rule?.version === version);
     const random = generator(79);
+    let replayed = 0;
     for (let run = 0; run < RUNS / 3; run += 1) {
-      const input = randomBill(random);
+      const pick = <T>(pool: readonly T[]): T => pool[random(pool.length)] as T;
+      const hsn2 = pick(['syn-tax-1', 'syn-tax-2']);
+      const generated = randomBill(random);
+      const input: PriceBillInput = {
+        ...generated,
+        tax: {
+          priceBasis: pick(pools.priceBasis),
+          registration: pick(pools.registration),
+          classifications: pools.classifications.filter((c) => c.code === 'SYN-HSN-1' || c.version === hsn2),
+          rateRules: pools.rateRules.filter((r) => r.classification === 'SYN-HSN-1' || r.version === hsn2),
+        },
+        rounding: { discount: pick(pools.discount), tax: pick(pools.tax), bill: pick(pools.bill) },
+      };
       const first = priceBill(input);
       if (!first.ok) continue;
-      const recorded = first.value.versions;
+      const bill = first.value;
+      const recorded = bill.versions;
+      const lineTax = bill.lines.map((l) => l.tax);
+      const discount = byVersion(pools.discount, recorded.rounding.discount);
+      const tax = byVersion(pools.tax, recorded.rounding.tax);
       const replay = priceBill({
         ...input,
         offers: input.offers.filter((o) =>
-          first.value.offers.considered.some((c) => c.offer === o.id && c.version === o.version),
+          bill.offers.considered.some((c) => c.offer === o.id && c.version === o.version),
         ),
         combinationRules: input.combinationRules.filter((r) =>
-          first.value.offers.combinationRules.some((c) => c.version === r.version),
+          bill.offers.combinationRules.some((c) => c.rule === r.id && c.version === r.version),
         ),
-        tax: { ...SYN_TAX, priceBasis: basisPool.find((b) => b?.version === recorded.priceBasis) },
+        tax: {
+          priceBasis: byVersion(pools.priceBasis, recorded.priceBasis),
+          registration: byVersion(pools.registration, recorded.registrationApplicability),
+          classifications: pools.classifications.filter((c) =>
+            lineTax.some((t) => t.classification === c.code && t.classificationVersion === c.version),
+          ),
+          rateRules: pools.rateRules.filter((r) =>
+            lineTax.some((t) => t.classification === r.classification && t.rateRuleVersion === r.version),
+          ),
+        },
         rounding: {
-          ...(recorded.rounding.discount === null
-            ? {}
-            : { discount: roundingPool.discount.find((r) => r?.version === recorded.rounding.discount) }),
-          tax: SYN_ROUNDING.tax,
-          bill: roundingPool.bill.find((r) => r?.version === recorded.rounding.bill),
+          ...(discount === undefined ? {} : { discount }),
+          ...(tax === undefined ? {} : { tax }),
+          bill: byVersion(pools.bill, recorded.rounding.bill),
         },
       } as PriceBillInput);
       expect(replay.ok).toBe(true);
-      if (replay.ok) expect(canonicalJson(replay.value)).toBe(canonicalJson(first.value));
+      if (replay.ok) expect(canonicalJson(replay.value)).toBe(canonicalJson(bill));
+      replayed += 1;
     }
+    expect(replayed).toBeGreaterThan(RUNS / 6);
   });
 });

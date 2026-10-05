@@ -52,7 +52,7 @@ export interface OfferChoice {
   readonly chosen: readonly Offer[];
   readonly outcome: SetOutcome;
   /**
-   * The combination rules in force that name two or more considered offers: they decided which sets were permitted,
+   * The combination rules in force that name two or more considered offers (Proposed, section 4): they decided which sets were permitted,
    * so the bill records them (section 4) and a replay with the recorded versions makes the same choice.
    */
   readonly combinationRules: readonly CombinationRule[];
@@ -70,6 +70,11 @@ function assertWhole(value: number, what: string, positive = false): void {
   }
 }
 
+/** A discount rate is a percentage from 0 to 100; anything else is a malformed offer. */
+function assertPercentage(rate: string, offer: string): void {
+  if (compare(parseDecimal(rate), fraction(100n)) > 0) throw new RangeError(`Offer ${offer}: a rate above 100%`);
+}
+
 /** The settings of 5.3 are present and well formed; a malformed offer is a defect in its owner, so it throws. */
 export function assertOffer(offer: Offer): void {
   if (!TIMESTAMP.test(offer.approvedAt)) {
@@ -78,7 +83,7 @@ export function assertOffer(offer: Offer): void {
   const terms = offer.terms;
   switch (terms.kind) {
     case 'percentage':
-      parseDecimal(terms.rate);
+      assertPercentage(terms.rate, offer.id);
       break;
     case 'flat':
       assertWhole(terms.amountPerUnit, `Offer ${offer.id}: amountPerUnit`);
@@ -86,12 +91,12 @@ export function assertOffer(offer: Offer): void {
     case 'basket':
       assertWhole(terms.threshold, `Offer ${offer.id}: threshold`);
       if (terms.discount.kind === 'amount') assertWhole(terms.discount.amount, `Offer ${offer.id}: amount`);
-      else parseDecimal(terms.discount.rate);
+      else assertPercentage(terms.discount.rate, offer.id);
       break;
     case 'buy-x-get-y':
       assertWhole(terms.buy, `Offer ${offer.id}: buy`, true);
       assertWhole(terms.get, `Offer ${offer.id}: get`, true);
-      if (terms.reward.kind === 'rate') parseDecimal(terms.reward.rate);
+      if (terms.reward.kind === 'rate') assertPercentage(terms.reward.rate, offer.id);
       break;
   }
 }
@@ -172,7 +177,7 @@ function govern(
       continue;
     }
     // POL-19.04: offers on one line combine only as a rule in force says. The rules that name all of them must agree
-    // on the order and the way of applying; otherwise the order is not given (GC7-9).
+    // on the order and the way of applying; otherwise the order is not given (Proposed, 5.4; GC7-9).
     const governing = rules.filter((rule) => ids.every((id) => rule.offers.includes(id)));
     const ordered = (rule: CombinationRule): string[] =>
       [...ids].sort((a, b) => rule.offers.indexOf(a) - rule.offers.indexOf(b));
@@ -188,7 +193,7 @@ function govern(
     lineMode.push(first.application);
     for (let i = 1; i < order.length; i += 1) after.get(order[i - 1] ?? '')?.add(order[i] ?? '');
   }
-  // One order over the whole bill that keeps every line's order; ties by approval time, then identity.
+  // One order over the whole bill that keeps every line's order; ties by approval time, then identity (Proposed, 5.4).
   const remaining = [...set].sort(byApproval);
   const order: Offer[] = [];
   while (remaining.length > 0) {
@@ -228,12 +233,17 @@ export function evaluateSet(
   // The value an offer works on at its turn: the value left, or the start value where the line's rule says so.
   const base = (index: number): bigint =>
     lineMode[index] === 'on-start-value' ? (lines[index]?.startValue ?? 0n) : (value[index] ?? 0n);
-  // No line's value goes below zero (5.5).
-  const take = (index: number, wanted: bigint): bigint => {
+  // No line's value goes below zero (5.5). A take above what is left is never capped: under a rule applying offers to
+  // the start value it is how combined offers apply to each other's values (GC7-9); otherwise it can only be the paise
+  // a spread leaves, given to the largest line (GC7-16). Either way the calculation refuses (Proposed, 5.5, 5.6).
+  const take = (index: number, wanted: bigint): bigint | Refusal => {
     const left = value[index] ?? 0n;
-    const taken = wanted < left ? wanted : left;
-    value[index] = left - taken;
-    return taken;
+    if (wanted > left) {
+      const question = lineMode[index] === 'on-start-value' ? 'GC7-9' : 'GC7-16';
+      return notDecided(question, `line ${lines[index]?.id ?? ''}`);
+    }
+    value[index] = left - wanted;
+    return wanted;
   };
 
   for (const offer of order) {
@@ -245,6 +255,7 @@ export function evaluateSet(
         const rounded = roundDiscount(mul(fraction(base(i)), parsePercent(terms.rate)));
         if (typeof rounded !== 'bigint') return { ok: false, refusal: rounded };
         const taken = take(i, rounded);
+        if (typeof taken !== 'bigint') return { ok: false, refusal: taken };
         if (taken > 0n) offerDiscounts[i]?.set(offer.id, taken);
         total += taken;
       }
@@ -255,6 +266,7 @@ export function evaluateSet(
         const wanted = BigInt(terms.amountPerUnit) * quantity;
         const at = base(i);
         const taken = take(i, wanted < at ? wanted : at);
+        if (typeof taken !== 'bigint') return { ok: false, refusal: taken };
         if (taken > 0n) offerDiscounts[i]?.set(offer.id, taken);
         total += taken;
       }
@@ -295,8 +307,8 @@ export function evaluateSet(
           rewardUnits -= taken;
         }
         if (terms.reward.kind === 'free') {
-          // A unit's value that is not whole paise would need a rounding step 5.5 does not name (GC7-5).
-          if (!isInteger(rewardValue)) return { ok: false, refusal: notDecided('GC7-5', offer.id) };
+          // GC7-14: a free unit worth a fraction of a paise needs a rounding step 5.5 does not name.
+          if (!isInteger(rewardValue)) return { ok: false, refusal: notDecided('GC7-14', offer.id) };
           discount = exactPaise(rewardValue);
         } else {
           const rounded = roundDiscount(mul(rewardValue, parsePercent(terms.reward.rate)));
@@ -310,11 +322,12 @@ export function evaluateSet(
           discount,
           indexes.map((i) => base(i)),
         );
-        indexes.forEach((i, k) => {
+        for (const [k, i] of indexes.entries()) {
           const taken = take(i, shares[k] ?? 0n);
+          if (typeof taken !== 'bigint') return { ok: false, refusal: taken };
           if (taken > 0n) spreadShares[i]?.set(offer.id, taken);
           total += taken;
-        });
+        }
       }
     }
     offerTotals.set(offer.id, total);

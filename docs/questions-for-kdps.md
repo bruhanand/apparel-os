@@ -119,6 +119,8 @@
 19. **Proof of cost for opening stock.** At each Store's switch, every counted item needs evidence of its cost before it becomes opening stock. What will you accept: purchase invoices, a stock valuation from Tally, a cost list? May the cost (`Rate`) in the earlier POS's stock report be used, alone or with other evidence? (With the CA.) · `PRD-LIF-005`, `POL-14.03` · imports design GC6-9 · stage 4, before the pilot switch
 20. **Opening dues from the last closed books.** In what form can you give the last closed books' balances and open items at a switch: each supplier's and customer's open bills, and advances and deposits given and received? For example a Tally export of party ledgers and the trial balance. What does "outstanding commercial stock" cover for KDPS? (With the CA.) · `PRD-LIF-009`, `POL-14.03` · imports design GC6-10 · stage 4, before the pilot switch
 21. **Journal numbers.** The app numbers the journals of each set of books in one series per financial year, as one transaction posts each entry. Is that acceptable? If our performance tests fail, because sales or other postings wait on it or large posting jobs and postings at the same moment run too slowly, we will come back to you before changing it. Baseline (`DEC-112`). · `PRD-PRF-003` · books design GC4-4 · stage 2
+22. **Round-off in an exchange.** When a customer exchanges goods and the new bill's amount is rounded, does the round-off count when the app compares the new goods with the value of the goods returned? Until you say, the till refuses an exchange whose new bill has a round-off. (With the CA.) · `PRD-RET-007`, `PRD-RET-008` · calculations design GC7-13 · stage 4
+23. **A free item worth part of a paisa.** In a "buy X get Y free" offer, a free item's value can come to part of a paisa when an earlier discount on its line does not divide evenly between the items. How should that discount be rounded? Until you say, the till refuses such a bill. · policy 9; no policy bullet yet · calculations design GC7-14 · stage 4
 
 ## CA
 
@@ -146,6 +148,7 @@
 22. **Value slabs.** Where a GST rate depends on value, which value is compared with the slab: per piece or per line, before or after discounts, with or without tax? When a price that includes GST fits neither slab, or both, which rate applies? · `POL-10.02` · V-18, calculations design GC7-2 · stage 4
 23. **Rounding GST.** Is GST rounded on each line or on the whole bill, for each component or on the total, and up, down or to the nearest? Is the tax rounded, or the taxable value? (With Accounts.) · `POL-10.05` · calculations design GC7-3 · stage 4
 24. **GST components on a counter sale.** For each GST registration: does a counter sale carry GST, and which components, in which shares? · `POL-10.05`, `POL-10.06` · V-18, calculations design GC7-8 · stage 4
+25. **GST rounded on the whole bill.** If GST is rounded once on the whole bill (question 23), how should each line's GST and taxable value be shown, so that the lines add up to the bill? Until this is settled, the app does not round GST on the whole bill. (With Accounts.) · `POL-10.05` · calculations design GC7-12 · stage 4
 
 ## Operations
 

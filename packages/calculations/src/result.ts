@@ -1,7 +1,7 @@
 // Results and refusals (shared-calculations 5.10). A business condition is a typed refusal, never a thrown exception.
 // A thrown exception means a defect: malformed input, or a fraction reaching a result without a named rounding step.
 
-/** The refusal codes. The names of 5.10 and the case table of 12.4, then the few this package adds (see below). */
+/** The refusal codes of shared-calculations 5.10 and the case table of 12.4. */
 export type RefusalCode =
   // Pricing (5.10)
   | 'price-unknown'
@@ -22,11 +22,9 @@ export type RefusalCode =
   | 'exceeds-entitlement'
   | 'exceeds-refundable'
   | 'cheaper-replacement-rule-missing'
-  // Added by this package where GC-7 names the outcome but no code: a cheaper-replacement rule that refuses the
-  // exchange (7.2), more than one cash tender line (section 6), and a step whose rule is an open question the design
-  // leaves undecided (`not-decided`, naming the question: GC7-3, GC7-5, GC7-6, GC7-9, GC7-11).
+  // 7.2: the cheaper-replacement rule refuses the exchange (PRD-RET-008, POL-06.09).
   | 'cheaper-replacement-refused'
-  | 'multiple-cash-lines'
+  // 5.10: a step whose rule an open question of section 13 leaves undecided; the refusal names the question.
   | 'not-decided';
 
 /** A refusal names the line (by the caller's line id) and the missing or failing input where there is one. */

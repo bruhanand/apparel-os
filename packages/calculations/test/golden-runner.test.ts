@@ -3,8 +3,8 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import * as costing from '../src/costing/index.js';
-import * as selling from '../src/index.js';
+import * as selling from '@apparel-os/calculations';
+import * as costing from '@apparel-os/calculations/costing';
 import { type GoldenCase, caseShapeProblems, runCase } from './golden-runner.js';
 
 function load(id: string): GoldenCase {
@@ -30,7 +30,7 @@ describe('golden-case runner', () => {
     expect(runCase(tampered, cases, { selling, costing }).status).toBe('failed');
   });
 
-  it('RR-042 reports a pending case as pending with its reason, never as passed', () => {
+  it('PRD-ACP-018 RR-042 reports a pending case as pending with its reason, never as passed', () => {
     const pending = { ...cg03, pending: 'RR-042 deferred' };
     expect(caseShapeProblems(pending, 'CG-03')).toEqual([]);
     expect(runCase(pending, cases, { selling, costing })).toEqual({ status: 'pending', reason: 'RR-042 deferred' });
@@ -40,7 +40,7 @@ describe('golden-case runner', () => {
     expect(runCase(load('CG-21'), cases, { selling })).toEqual({ status: 'server-only' });
   });
 
-  it('refuses a malformed case file', () => {
+  it('PRD-ACP-018 refuses a malformed case file', () => {
     expect(caseShapeProblems({ ...cg03, synthetic: false, covers: [] }, 'CG-03')).toEqual([
       'synthetic must be true',
       'covers must list the IDs it proves',

@@ -146,6 +146,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
+| `packages/calculations` | The shared calculations of `shared-calculations.md` (GC-7): selling at `@apparel-os/calculations`, costing at `@apparel-os/calculations/costing` (server only); the golden cases in `golden/`. It imports only `@apparel-os/domain` |
 | `packages/schemas` | Shared Zod schemas for the API, with the route table and the typed client (code-house-rules 12.2) |
 | `packages/ui` | Shared UI helpers for shadcn/ui |
 | `tools/module-check` | The module boundary check |

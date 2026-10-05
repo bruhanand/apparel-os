@@ -37,7 +37,7 @@ Stage 1 exit check 2 ([exit-checklists.md](exit-checklists.md) 1.1) needs both r
 | The package imports only `@apparel-os/domain`; the selling entry point never reaches the costing entry point | `PRD-MOD-002`, `PRD-OFF-004`; GC-7 2.1, 2.3 |
 | Authority is never checked here; `pos` checks it through `access` | `PRD-POS-003`; GC-7 2.2 |
 | Business conditions are typed refusals, never thrown exceptions | GC-7 5.10 |
-| Where an open reading (GC7-3, GC7-5, GC7-6, GC7-9, GC7-11) would change an amount, the calculation refuses with `not-decided` and the question, and picks no reading | `AGENTS.md` "Never invent a value"; RR-042 |
+| Where an open question (GC7-9, GC7-11 to GC7-16) would change an amount, the calculation refuses with `not-decided` naming it, and picks no reading of it. It does apply the **Proposed** readings GC-7 states (section 9) | `AGENTS.md` "Never invent a value"; GC-7 5.10; RR-042 |
 
 ## 5. Dependencies and gates
 
@@ -61,9 +61,9 @@ Each task leaves the full check set green and adds the tests named.
 | `S1-F11-T04` Tenders | Check tenders against the priced bill's reference: stale allocation, invalid lines, exact sum, cash received and change, the exact-cash shorthand (GC-7 section 6) | T02 | `src/tenders/` | CG-15a to CG-15g pass |
 | `S1-F11-T05` Returns | Return value from the snapshot, exchange difference with the cheaper-replacement rule, split-tender refunds (GC-7 section 7) | T02 | `src/returns/` | CG-16 to CG-19c pass |
 | `S1-F11-T06` Costing | The costing entry point: cost a line through a profile version, the matching check, ticket margin (GC-7 section 8) | T01 | `src/costing/` | CG-21, CG-21b, CG-22 pass |
-| `S1-F11-T07` Golden-case format and server run | One JSON file per case in `golden/` (12.1); a pure runner the counter page can share; the Vitest suite that loads every file and compares whole results, versions included, exactly (12.2); pending cases reported as skipped with their reason, never as passed | T02 to T06 | `golden/`, `test/golden-runner.ts`, `test/golden.test.ts` | Every case of 12.4 present, labelled synthetic, covering its IDs; all pass or are pending with a reason |
+| `S1-F11-T07` Golden-case format and server run | One JSON file per case in `golden/` in the format of 12.1, with its `runs`, refusal lists, `$pricedBill`, `$billReference` and `$billLine` pointers and `pending`; a pure runner the counter page can share; the Vitest suite that loads every file and runs it through `@apparel-os/calculations` and `@apparel-os/calculations/costing` imported by package name, as the server imports them, comparing whole results, versions included, exactly (12.2); pending cases reported as skipped with their reason, never as passed | T02 to T06 | `golden/`, `test/golden-runner.ts`, `test/golden.test.ts`; the package's `turbo.json` builds it before its tests | Every case of 12.4 present, labelled synthetic, covering its IDs; all pass or are pending with a reason |
 | `S1-F11-T08` Other tests of 12.5 | Property tests on random synthetic bills, the order test and the snapshot test, on a seeded integer generator | T02, T04, T05 | `test/properties.test.ts` | `S1-F11-AT07` to `S1-F11-AT09` pass |
-| `S1-F11-T09` Entry points at the source | The proof, short of a bundle, that the selling entry point never reaches costing and that the package reads no clock, randomness or environment (2.1, 2.3) | T01, T06 | `test/entry-points.test.ts`; module check rule 4 | `S1-F11-AT10` passes; the module check fails on a selling import of costing |
+| `S1-F11-T09` Entry points at the source | The proof, short of a bundle, that the selling entry point never reaches costing and that the package reads no clock, randomness or environment (2.1, 2.3); a test that runs the module check on a scratch workspace and shows rule 4 fails on a selling import of costing or of another package | T01, T06 | `test/entry-points.test.ts`, `test/module-check.test.ts`; module check rule 4 | `S1-F11-AT10` passes |
 | `S1-F11-T10` Counter test page and counter run | **Blocked** on RR-015 (recorded and reviewed) and on Playwright (`S1-F01-T19`). In the counter build host: a test page that bundles the selling entry point as the counter does and runs every case file through `test/golden-runner.ts`; a Playwright test in Chromium that compares each result with `expected` and fails on any difference; costing cases reported as server-only; the job in CI beside the server run (12.2) | RR-015; `S1-F01-T19`; T07 | Counter test page; Playwright test; CI job | `S1-F11-AT06` passes in the same CI run as `S1-F11-AT01` to `S1-F11-AT05` |
 | `S1-F11-T11` Bundle exclusion on the counter bundle | **Blocked** with T10: a build check that fails if the counter bundle holds the costing entry point (2.3) | T10 | Build check | `S1-F11-AT11` passes; a deliberate costing import fails it |
 | `S1-F11-T12` Review and acceptance | The independent review of `AGENTS.md` "Completing a code task"; the evidence of section 8; the readiness register (RR-005) and `AGENTS.md` "Current state" brought up to date through the doc gate | T07 to T11 | Review record; evidence | Section 8 complete; the product owner accepts |
@@ -83,9 +83,9 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 | `S1-F11-AT07` | Spread shares add up to the discount; tender lines add up to the amount due; refunds of all units add up to the paid value; split refunds add up and respect caps; no line below zero; every number in a result is whole paise | 12.5 property tests | `PRD-MOD-014`, `PRD-ACP-010`, `PRD-POS-023`, `PRD-RET-022`, `PRD-RET-024` |
 | `S1-F11-AT08` | The same lines in another order give the same amounts | 12.5 order | `PRD-POS-004` |
 | `S1-F11-AT09` | A bill priced again with its recorded versions gives the same result | 12.5 snapshot | `PRD-POS-014`, `PRD-OFF-009` |
-| `S1-F11-AT10` | Selling never reaches costing; the package imports only `@apparel-os/domain`; no clock, randomness, environment or floating-point helper | 2.1, 2.3 | `PRD-OFF-004`, `PRD-MOD-002`, `PRD-MOD-007` |
+| `S1-F11-AT10` | Selling never reaches costing; the package imports only `@apparel-os/domain`; no clock, randomness, environment or floating-point helper; module check rule 4 fails on a selling import of costing or another package and passes otherwise | 2.1, 2.3 | `PRD-OFF-004`, `PRD-MOD-002`, `PRD-MOD-007` |
 | `S1-F11-AT11` | The counter bundle holds no costing entry point (blocked, T11) | 2.3 | `PRD-OFF-004` |
-| `S1-F11-AT12` | Where an open reading would change an amount the calculation refuses with `not-decided` and the question; a pending case is reported as pending, never as passed; a changed paise or version fails a case | 5.5, 5.4, 5.6, 5.8, 7.2; 12.1 | `PRD-ACP-018`; RR-042 |
+| `S1-F11-AT12` | Where an open question would change an amount the calculation refuses with `not-decided` naming it: combined offers without one order, or taking a line below zero on the start value (GC7-9); units left over after complete sets (GC7-11); bill-level tax rounding (GC7-12); a rounded replacement bill (GC7-13); a free unit worth part of a paise (GC7-14); a negative MARGIN needing rounding (GC7-15); a spread remainder above a line's value (GC7-16). A pending case is reported as pending, never as passed; a changed paise or version fails a case | 5.4 to 5.8, 5.10, 7.2, 8; 12.1 | `PRD-ACP-018`, `POL-19.04`, `PRD-POS-023`, `PRD-TAX-005`, `PRD-RET-008`, `PRD-PTW-011`; RR-042 |
 | `S1-F11-AT13` | Refusals beyond the cases: several lines at once, no price basis or registration, manual discounts by amount and rate and on an offer line, combined offers on the start value, offers out of place or date, a registration that charges no tax, slabs compared before discounts or with tax | 5.2 to 5.10 | `PRD-POS-003`, `PRD-MOD-015`, `PRD-SEC-017`, `PRD-OFR-002`, `POL-10.02` |
 
 `PRD-ACP-010`'s repeated checkout, printer failure and concurrency belong to the `pos` tests on real PostgreSQL and the browser journeys (12.5), not here.
@@ -97,35 +97,26 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 - The synthetic rule data used, each value labelled synthetic (12.3).
 - The independent review of `AGENTS.md` "Completing a code task", its findings and their triage.
 
-## 9. Golden cases and RR-042
+## 9. Golden cases, RR-042 and the readings applied
 
-- Thirty-eight case files in `packages/calculations/golden/`, one per row of 12.4 (CG-01 to CG-22). Where a row runs the function more than once (CG-11, CG-13, CG-16, CG-20a, CG-20b) its file holds `runs`.
+- Thirty-eight case files in `packages/calculations/golden/`, one per row of 12.4 (CG-01 to CG-22). Where a row runs the function more than once (CG-11, CG-13, CG-16, CG-20a, CG-20b) its file holds `runs`. CG-15a to CG-15g and CG-19a to CG-19c point at their bills with `$pricedBill` and `$billReference`, and CG-17 reads its line from CG-06's priced bill with `$billLine`.
 - No case of 12.4 depends on GC7-11 (RR-042): CG-06 and CG-17 use three qualifying units, exactly one complete set of buy 2 get 1, so every covered unit is in a complete set; CG-05 and CG-20b use a basket offer, where both readings say every covered line. None is pending.
-- The calculation itself never picks a reading: a buy-X-get-Y offer with units left over after its complete sets is refused with `not-decided` naming GC7-11. A case added later whose result depends on the reading carries `"pending": "RR-042 deferred"` and is reported as skipped with that reason.
+- The calculation picks no reading of an open question: where one would change an amount it refuses `not-decided` naming it (GC-7 5.10). A case added later whose result depends on GC7-11 carries `"pending": "RR-042 deferred"` and is reported as skipped with that reason.
+- It does apply the readings GC-7 itself states as **Proposed**, each awaiting its owner's confirmation: what each offer kind means in amounts (5.5, GC7-9); the two ways a combination rule applies offers (5.4, GC7-9); one rule ordering all of a line's offers, the bill-wide order and the tie-break when one list starts the other (5.4); every covered line earning a group discount where both readings of GC7-11 agree (5.6); the taxable value with tax included as the price paid less the rounded components (5.8, GC7-3); no tax and no rate rule where a registration charges none (5.8); an Unknown rate before a discount when no slab fits (5.8); the bounds of a manual discount (5.7); a manual price not counting as a markdown, rates up to 100% and half-open offer dates (5.3); what a bill records as considered, applied and used (section 4); the cash line as the total of cash lines (section 6); the replacement's amount due in an exchange (7.2); Unknown P RATE when no rounding step makes it whole, the spread charge and the tolerance as inputs, and a zero MRP refused (section 8); the golden format and the "Round by a rule" operation (12.1, section 11).
 
 ## 10. Questions found while building
 
-Each is the least-committal reading the code takes until the owner decides. None sets a business value.
+All are now in GC-7, as **Proposed** text or as open questions of its section 13, and the code follows them. The new open questions:
 
-| # | Point | What the code does | Who decides |
-| --- | --- | --- | --- |
-| 1 | GC-7 12.1 names one `input` and one `expected` or `refusal` per case; several 12.4 rows run the function more than once, and a priced bill can refuse several lines at once | `runs` for multi-run rows; `refusal` holds the list of refusals; `$pricedBill` and `$billReference` directives point at another case's bill; `pending` marks an open reading | Design (GC-7 12.1) |
-| 2 | 5.10 lists no code for a cheaper-replacement rule that refuses, for two cash lines, or for a step an open question leaves undecided | Adds `cheaper-replacement-refused`, `multiple-cash-lines` and `not-decided` (naming the question) | Design (GC-7 5.10) |
-| 3 | 5.8: tax rounded at the bill level gives no per-line components | Refuses `not-decided` (GC7-3) | Accounts, CA (GC7-3) |
-| 4 | 5.5: a free buy-X-get-Y unit whose value is not whole paise has no named rounding step | Refuses `not-decided` (GC7-5) | Accounts (GC7-5) |
-| 5 | 5.4: several offers on one line permitted pair by pair, but no one rule in force orders all of them, or two rules order them differently | Refuses `not-decided` (GC7-9); otherwise one bill-wide order that keeps every line's rule order | KDPS Owner, Brand manager (GC7-9) |
-| 6 | 7.2: whether a replacement bill's round-off counts | Compares the replacement's amount due only when it has no round-off; otherwise refuses `not-decided` (GC7-6) | Accounts, CA (GC7-6) |
-| 7 | 5.4 tie-break when one tied set's list is the start of the other's | The shorter list comes first | Design |
-| 8 | Offer and combination-rule dates: is the end date the last day in force or the first day out | Half-open, as structure-and-masters 2.2 reads versions | Offers design (stage 4) |
-| 9 | Which offers count as "considered", which combination rules are "used" | Considered: in force at the Store or group on the date and covering a line after the markdown setting. Recorded rules: those in force naming two or more considered offers; the discount rounding rule is recorded if any candidate set used it, so a replay with the recorded versions makes the same choice | Design (GC-7 section 4) |
-| 10 | 5.8 slab-change mark when no single slab fits the value before discounts | Marks the line with the rate before as Unknown | CA (GC7-2) |
-| 11 | "No line's value goes below zero" against a spread remainder or start-value combinations that would take a line below zero | Caps each offer's take from a line at the value left; the offer records what it took | Design (GC-7 5.5, 5.6) |
-| 12 | 5.3 excludes markdown price-list lines from offers that say so; a manual price change is not named | Treats a manual price as not a markdown | KDPS Owner, Brand manager (GC7-9) |
-| 13 | A manual discount of nothing or above the line value | Refuses `invalid-amount` | Design |
-| 14 | A registration that charges no tax on a counter sale | The line still needs a known classification in force; no rate rule is read; rate and components are empty | CA (GC7-8) |
-| 15 | Section 8 names a charge spread over a document's lines by a basis, and a matching tolerance, without shapes | The line's share of a charge and the tolerance's amount and boundary (inclusive or exclusive) come in as inputs; a P RATE that is not whole paise without a rounding step is refused; a negative MARGIN rounds half away from zero; a zero MRP is refused | `merchandise` · PT design (stage 2); V-15 |
-| 16 | 12.2 runs the server suite "as the server imports it" | The suite imports the two entry points from source; `tsc` emits them one to one into `dist/` | Design (GC-7 12.2) |
-| 17 | The tender kind that is cash | The literal kind `cash`; every other kind is `pos`'s and is checked by amount only | `pos` design (stage 4) |
+| # | Question | Owner | Blocks | GC-7 |
+| --- | --- | --- | --- | --- |
+| GC7-12 | How tax rounded on the whole bill is carried to each line; until then a bill-level tax rounding rule is refused | Product owner, with Accounts and the CA (CA question 25) | 4 | 3.3, 5.8 |
+| GC7-13 | Whether a replacement bill's round-off counts in an exchange | Accounts, CA (Accounts question 22) | 4 | 7.2 |
+| GC7-14 | How a free buy-X-get-Y unit worth a fraction of a paise is rounded | Accounts (Accounts question 23) | 4 | 5.5 |
+| GC7-15 | Which way a negative MARGIN's half rounds under `PRD-PTW-011` | Product owner | 2 | 8 |
+| GC7-16 | Where the paise a spread leaves go when the largest line has less value left | Product owner | 4 | 5.5, 5.6 |
+
+Other points for the doc review: the server suite imports the package by name, so the package's `turbo.json` builds it before its typecheck, lint and tests (12.2); the synthetic labels of the package's tests come from its own labelled file, `packages/calculations/test/synthetic.ts`, not from `apps/server/test/fixtures/synthetic.ts` (code-house-rules 11.1; a clarification the coordinator logs as a follow-up).
 
 ## 11. Deferred from this feature
 

@@ -42,14 +42,14 @@ describe('spread of a group discount (5.6)', () => {
     expect(spreadGroupDiscount(10n, [3n, 3n, 3n])).toEqual([4n, 3n, 3n]);
   });
 
-  it('spreads nothing over lines worth nothing', () => {
+  it('PRD-POS-023 spreads nothing over lines worth nothing', () => {
     expect(spreadGroupDiscount(0n, [0n, 0n])).toEqual([0n, 0n]);
     expect(() => spreadGroupDiscount(1n, [0n])).toThrow(/Defect/);
   });
 });
 
 describe('offers: which lines earn a group discount (GC7-11, RR-042)', () => {
-  it('RR-042 refuses, naming GC7-11, when buy-X-get-Y units are left over after complete sets', () => {
+  it('PRD-POS-023 RR-042 refuses, naming GC7-11, when buy-X-get-Y units are left over after complete sets', () => {
     const result = priceBill(
       synBill(
         ['A1', 'A2', 'A3', 'A4'].map((id) => synLine(id, 100000)),
@@ -85,7 +85,7 @@ describe('offers: amounts (5.5)', () => {
     expect(bill.versions.rounding.discount).toBe('syn-round-1');
   });
 
-  it('GC7-5 refuses a free unit whose value is not whole paise, since no rounding step is named for it', () => {
+  it('PRD-MOD-014 GC7-14 refuses a free unit whose value is not whole paise, since no rounding step is named for it', () => {
     const P25 = synOffer('SYN-P25', { kind: 'percentage', rate: '25' });
     const B11 = synOffer('SYN-B11', {
       kind: 'buy-x-get-y',
@@ -101,7 +101,7 @@ describe('offers: amounts (5.5)', () => {
         combinationRules: [synRule('SYN-C9', ['SYN-P25', 'SYN-B11'])],
       }),
     );
-    expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-5', input: 'SYN-B11' }] });
+    expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-14', input: 'SYN-B11' }] });
   });
 
   it('POL-19.04 applies combined offers to the start value when the rule says so', () => {
@@ -170,8 +170,34 @@ describe('offers: amounts (5.5)', () => {
   });
 });
 
+describe('offers: no line below zero (5.5, 5.6)', () => {
+  it('POL-19.04 GC7-9 refuses, never caps, a combined offer on the start value that would take a line below zero', () => {
+    const P50 = synOffer('SYN-P50', { kind: 'percentage', rate: '50' });
+    const K = synOffer(
+      'SYN-K18',
+      { kind: 'basket', threshold: 100000, discount: { kind: 'amount', amount: 180000 } },
+      { approvedAt: '2026-09-02T00:00:00Z' },
+    );
+    // 50% leaves 500.00 on each 1,000.00 line; the basket on the start value would spread 900.00 to each.
+    const result = priceBill(
+      synBill([synLine('A1', 100000), synLine('A2', 100000)], {
+        offers: [P50, K],
+        combinationRules: [synRule('SYN-C8', ['SYN-P50', 'SYN-K18'], 'on-start-value')],
+      }),
+    );
+    expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-9', input: 'line A1' }] });
+  });
+
+  it('PRD-POS-023 GC7-16 refuses when the paise left by a spread would take the largest line below zero', () => {
+    const K = synOffer('SYN-K299', { kind: 'basket', threshold: 0, discount: { kind: 'amount', amount: 299 } });
+    // Three lines of 1.00: shares of 0.99 each leave 0.02 for the first line, which has only 0.01 left.
+    const result = priceBill(synBill([synLine('A1', 100), synLine('A2', 100), synLine('A3', 100)], { offers: [K] }));
+    expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-16', input: 'line A1' }] });
+  });
+});
+
 describe('offers: which apply (5.4)', () => {
-  it('GC7-9 refuses when the rules that permit a set give different orders', () => {
+  it('POL-19.04 GC7-9 refuses when the rules that permit a set give different orders', () => {
     const result = priceBill(
       synBill([synLine('A1', 100000)], {
         offers: [P10, P20],
@@ -181,7 +207,7 @@ describe('offers: which apply (5.4)', () => {
     expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-9', input: 'line A1' }] });
   });
 
-  it('GC7-9 refuses when every pair is permitted but no one rule orders all of a line offers', () => {
+  it('POL-19.04 GC7-9 refuses when every pair is permitted but no one rule orders all of a line offers', () => {
     const P30 = synOffer('SYN-P30', { kind: 'percentage', rate: '30' });
     const result = priceBill(
       synBill([synLine('A1', 100000)], {
@@ -251,7 +277,7 @@ describe('offers: which apply (5.4)', () => {
 });
 
 describe('manual discounts (5.7)', () => {
-  it('GC7-7 refuses a manual discount on a line that has an offer', () => {
+  it('PRD-POS-003 GC7-7 refuses a manual discount on a line that has an offer', () => {
     const result = priceBill(
       synBill([synLine('A1', 100000, { manualDiscount: { kind: 'amount', amount: 100 } })], { offers: [P10] }),
     );
@@ -273,7 +299,7 @@ describe('manual discounts (5.7)', () => {
     expect(byRate.versions.rounding.discount).toBe('syn-round-1');
   });
 
-  it('refuses a manual discount of nothing or above the line value', () => {
+  it('PRD-POS-003 refuses a manual discount of nothing or above the line value', () => {
     for (const amount of [0, 110001]) {
       expect(priceBill(synBill([synLine('A1', 110000, { manualDiscount: { kind: 'amount', amount } })]))).toEqual({
         ok: false,
@@ -319,18 +345,18 @@ describe('refusals (5.10)', () => {
     });
   });
 
-  it('GC7-3 refuses tax rounded at the bill level, which the design does not carry back to lines', () => {
+  it('PRD-TAX-005 GC7-12 refuses tax rounded at the bill level until 5.8 says how it is carried to lines', () => {
     const rounding = {
       ...SYN_ROUNDING,
       tax: { version: 'syn-round-bill-tax', unit: 1, mode: 'half-up' as const, level: 'bill' as const },
     };
     expect(priceBill(synBill([synLine('A1', 100000)], { rounding }))).toEqual({
       ok: false,
-      refusals: [{ code: 'not-decided', input: 'tax', question: 'GC7-3' }],
+      refusals: [{ code: 'not-decided', input: 'tax', question: 'GC7-12' }],
     });
   });
 
-  it('refuses two lines with one identity as a caller defect', () => {
+  it('PRD-POS-004 refuses two lines with one identity as a caller defect', () => {
     expect(() => priceBill(synBill([synLine('A1', 100000), synLine('A1', 100000)]))).toThrow(/unique/);
   });
 });

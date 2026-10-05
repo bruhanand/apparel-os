@@ -29,30 +29,36 @@ describe('check tenders (section 6)', () => {
     });
   });
 
-  it('refuses more than one cash line', () => {
+  it('PRD-POS-008 takes two cash lines as one cash line, their total (Proposed, section 6)', () => {
     const lines = [
       { kind: 'cash', amount: 10000 },
       { kind: 'cash', amount: 100000 },
     ];
-    expect(checkTenders({ bill, allocation: { billReference: reference, lines } })).toEqual({
+    expect(checkTenders({ bill, allocation: { billReference: reference, lines, cashReceived: 120000 } })).toMatchObject(
+      {
+        ok: true,
+        value: { cashReceived: 120000, change: 10000 },
+      },
+    );
+    expect(checkTenders({ bill, allocation: { billReference: reference, lines, cashReceived: 100000 } })).toEqual({
       ok: false,
-      refusals: [{ code: 'multiple-cash-lines', input: 'allocation' }],
+      refusals: [{ code: 'insufficient-cash', input: 'cash-received' }],
     });
   });
 
-  it('PRD-POS-008 refuses a negative tender line and a negative cash received', () => {
+  it('PRD-POS-008 refuses a negative tender line; a negative cash-received entry is a caller defect', () => {
     expect(
       checkTenders({ bill, allocation: { billReference: reference, lines: [{ kind: 'card', amount: -1 }] } }),
     ).toMatchObject({
       ok: false,
       refusals: [{ code: 'invalid-amount' }],
     });
-    expect(
+    expect(() =>
       checkTenders({
         bill,
         allocation: { billReference: reference, lines: [{ kind: 'cash', amount: 110000 }], cashReceived: -5 },
       }),
-    ).toMatchObject({ ok: false, refusals: [{ code: 'invalid-amount', input: 'cash-received' }] });
+    ).toThrow(RangeError);
   });
 
   it('PRD-POS-009 gives a different reference for any price change', () => {
