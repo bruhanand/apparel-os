@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The two ordered migration sets (code-house-rules 4.1; PRD-MOD-001, DEC-093). */
@@ -16,12 +16,22 @@ export interface MigrationFile {
 // NNNN__<unit>__<what>.sql. A unit is `kernel` or a module, with `.` before a part: `merchandise.catalogue`.
 const FILE_NAME = /^(\d{4})__([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)?)__([a-z0-9][a-z0-9_]*)\.sql$/;
 
-// src/kernel/db and dist/kernel/db sit at the same depth, so the folder resolves the same way from both.
-const MIGRATIONS_ROOT = fileURLToPath(new URL('../../../migrations/', import.meta.url));
-
 /** The folder of one of the repository's migration sets. */
 export function migrationSetFolder(set: MigrationSetName): string {
-  return join(MIGRATIONS_ROOT, set);
+  return join(serverPackageRoot(), 'migrations', set);
+}
+
+// The migrations sit in the server package's root: the nearest folder above this file that holds package.json.
+// Found by walking up, because the build (dist/kernel/db) and the seed build (dist-seed/src/kernel/db) put this file
+// at different depths.
+function serverPackageRoot(): string {
+  let folder = dirname(fileURLToPath(import.meta.url));
+  while (!existsSync(join(folder, 'package.json'))) {
+    const parent = dirname(folder);
+    if (parent === folder) throw new Error('The server package root, holding package.json, was not found');
+    folder = parent;
+  }
+  return folder;
 }
 
 /**
