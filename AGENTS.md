@@ -158,7 +158,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `pnpm test` | Unit tests (Vitest) |
 | `pnpm test:integration` | Tests against real PostgreSQL through Testcontainers. Needs Docker |
 | `pnpm check:modules` | The module boundary check. Runs without an install |
-| `pnpm migrate` | The pre-deploy step: migrates the directory database, then each Organisation database, as the migration role; stops at the first failure. Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
+| `pnpm migrate` | The pre-deploy step, directory-only for now: migrates the directory database as the migration role, refuses any other role or a database that role does not own, and exits 1 on failure. It migrates no Organisation database until Organisation routing (`S1-F01-T02`). Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm format`, `pnpm format:check` | Prettier |
 
 - Another module is imported only through its `index.ts`, and calls go to a lower tier, or to the same tier only where module-map sections 4 and 5 list the call (`PRD-MOD-002`, `PRD-SEC-015`; `module-map.md` sections 2 and 3). `pnpm check:modules` enforces both; its tier table is in `tools/module-check/check.mts` and changes with the module map.
