@@ -5,7 +5,7 @@
 ## 1. What this note is
 
 - Every data problem seen in the KDPS files, grouped, with where it was seen, how many times, and the import rule it implies.
-- The GC-6 imports design (file intake, saved mappings, staging, review, publishing, duplicate control) is not written yet ([gaps-before-code.md](../reports/gaps-before-code.md)). These notes are input to it. A "Rule" line is a proposal for that design. None is decided.
+- The GC-6 imports design (file intake, saved mappings, staging, review, publishing, duplicate control) is [imports-and-opening-data.md](../design/platform/imports-and-opening-data.md); its section 8.3 takes up each class below. These notes were input to it. A "Rule" line is a proposal; the design decides what is built.
 - A rule that needs a business choice is marked **OPEN** with its owner and does not invent a value. A rule that follows from an existing PRD rule cites it.
 - The layouts themselves are in [pos-exports.md](pos-exports.md) and [pos-export-layouts.json](pos-export-layouts.json). PT file layouts are in [pt-file-layouts.md](pt-file-layouts.md).
 - Counts come from re-opening the files, except where a line says "survey": "survey" marks a figure taken from the first-pass read of the files (October 2026) and not counted again for this note. "(guess)" and "(inferred)" mark what the files do not state.

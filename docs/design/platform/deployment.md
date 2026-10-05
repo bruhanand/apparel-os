@@ -32,7 +32,7 @@ One Railway project with two environments. Each has its own services, databases,
 | `app` | NestJS server: the API under `/api`, live updates (SSE), and the built web app and counter PWA as static files | The public internet over HTTPS (one public address) |
 | `worker` | The same build with a different start command: pg-boss jobs and the outbox processor | Private network only |
 | `postgres` | Railway PostgreSQL. pg-boss tables live here too (Stack: Jobs) | Private network only. No public proxy on `kdps-test` |
-| File storage | A Railway bucket: S3-compatible storage for documents and photos (Stack: Files; D-2, `DEC-105`) | Private network and signed links |
+| File storage | A Railway bucket: S3-compatible storage for documents and photos (Stack: Files; D-2, `DEC-105`) | Only `app` and `worker` hold its credentials. Files are encrypted by the app and served through `app`, never by a link straight to the bucket ([imports-and-opening-data.md](imports-and-opening-data.md) section 11) |
 | `forecast` | Python forecasting service. Added in stage 6, as one more service in the same hosting as the app (`DEC-105`; module-map section 10) | Private network only |
 
 Services talk to each other over Railway's private network (`*.railway.internal`), which is scoped to one environment. So `dev` can never reach `kdps-test`.

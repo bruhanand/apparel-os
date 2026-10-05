@@ -319,7 +319,7 @@ Owner: `files-imports`. `PRD-IMP-001`–`PRD-IMP-013`.
 | Mapping | A saved, versioned mapping from a layout to the records it fills | The version used is kept with each import | `PRD-IMP-003` |
 | Mapping rule | A rule that normalises a source word | Proposal and independent confirmation. An unapproved proposal changes no operational data | `PRD-IMP-008` |
 | Import batch | One upload being turned into records | One kind: create, update, opening balance, historical reference or transaction. Identified by its source identity | `PRD-IMP-010`, `PRD-IMP-011` |
-| Staged row | One row before publishing | Keeps the original row and field values beside the normalised ones. Each value is marked supplied, calculated, mapped or an AI suggestion | `PRD-IMP-002`, `PRD-IMP-003`, `PRD-IMP-006` |
+| Staged row | One row before publishing | Keeps the original row and field values beside the normalised ones. Each value is marked supplied, calculated, mapped or an AI suggestion, or entered by a person ([imports-and-opening-data.md](../platform/imports-and-opening-data.md) section 5) | `PRD-IMP-002`, `PRD-IMP-003`, `PRD-IMP-006` |
 | Row issue | A row or field error, or a conflict of identity, quantity, price, tax or date | Says what correction is needed | `PRD-IMP-007` |
 | Import outcome | What happened | Accepted, rejected, pending and duplicate quantities and values, reconciled. Kept for failures as well as successes | `PRD-IMP-012`, `PRD-IMP-013` |
 

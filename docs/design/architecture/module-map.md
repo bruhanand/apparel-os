@@ -12,7 +12,7 @@ Implements these PRD sections: Module and data boundaries; Transaction and integ
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), [shared-calculations.md](../calculations/shared-calculations.md) (GC-7), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-6, GC-8 and GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), [shared-calculations.md](../calculations/shared-calculations.md) (GC-7), [imports-and-opening-data.md](../platform/imports-and-opening-data.md) (GC-6), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-8 and GC-9. This document is GC-1.
 
 ---
 
@@ -293,7 +293,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Store a file | Any module | Keeps the original file with its source system, uploader, time and document reference (`PRD-IMP-002`) | The type, size or parsing result is not allowed; the content holds macros, active scripts or unapproved links (`PRD-SEC-011`) |
 | Attach, read a file | Any module | Links a stored file to a record; serves it only to an authorised reader (`PRD-SEC-005`) | — |
 | Start an import | A person or an adapter | Opens a batch of one kind: create, update, opening balance, historical reference or transaction (`PRD-IMP-010`) | The source identity was already used with the same content (duplicate) or with different content (conflict, or a governed revision) (`PRD-IMP-011`) |
-| Map and stage | The preparer | Applies a saved, versioned mapping chosen by the layout's structure (`PRD-IMP-003`, `PRD-IMP-004`); keeps the original words beside the normalised values; marks each value as supplied, calculated, mapped or an AI suggestion (`PRD-IMP-006`) | A brand name alone would select an incompatible mapping (`PRD-IMP-004`) |
+| Map and stage | The preparer | Applies a saved, versioned mapping chosen by the layout's structure (`PRD-IMP-003`, `PRD-IMP-004`); keeps the original words beside the normalised values; marks each value as supplied, calculated, mapped or an AI suggestion (`PRD-IMP-006`), or as entered by a person (GC-6 section 5) | A brand name alone would select an incompatible mapping (`PRD-IMP-004`) |
 | Validate and preview | The preparer | Checks references and totals; reports row and field errors and conflicts (`PRD-IMP-005`, `PRD-IMP-007`) | — |
 | Propose or confirm a mapping rule | Preparer; a different person confirms | Proposal and independent confirmation. An unapproved proposal changes no operational data (`PRD-IMP-008`, `POL-02.07`) | The confirmer is the proposer |
 | Publish | The reviewer | Hands the reviewed rows to the target module's import handler, one transaction per document. A required document posts whole or not at all (`PRD-IMP-012`) | The required review is missing; the handler refuses |
@@ -306,7 +306,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - Opening-data layouts for stock, dues, advances and deposits are built and tested here in stage 1 with labelled sample data. Real opening data loads only at each Store's approved switch (`POL-14.07`, DEC-013, `PRD-LIF-009`).
 - **Events:** `files-imports.import-published`, `files-imports.import-failed`, `files-imports.mapping-confirmed`.
 - **Read model:** import outcomes (a stage 1 report).
-- On the test setup, files are held in a Railway bucket, S3-compatible (D-2, GC-10, DEC-105). The detailed design is GC-6.
+- On the test setup, files are held in a Railway bucket, S3-compatible (D-2, GC-10, DEC-105). The detailed design is GC-6, [imports-and-opening-data.md](../platform/imports-and-opening-data.md). Its section 13.1 adds three operations to those above: submit a batch for review, withdraw a batch, and run a comparison of two sets by a key, the reconciliation tool for opening data and side-by-side checks (`POL-14.07`). It adds two read models: layouts and mapping rules in force, and comparison runs.
 
 ### 4.8 `inbox`
 
@@ -794,7 +794,7 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | GC-3 Access, approvals, inbox and exceptions | `access`, `inbox`, `exceptions`, the policy gate (4.3, 4.4, 4.8, 4.13) | Sign-in, sessions, row-level security, encryption; SL-22: written in [access-and-approvals.md](../access/access-and-approvals.md) |
 | GC-4 Books and posting | `finance` · books and the Post boundary (4.14, 6, 7) | Posting maps, the journal model, period rules; applying the SL-23 and MM-6 baselines (DEC-105): written in [books-and-posting.md](../finance/books-and-posting.md) |
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
-| GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail |
+| GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail: written in [imports-and-opening-data.md](../platform/imports-and-opening-data.md) |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions, tax rule records and golden cases: written in [shared-calculations.md](../calculations/shared-calculations.md) |
 | GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else |
 | GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else |

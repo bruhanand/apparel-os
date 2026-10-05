@@ -88,6 +88,8 @@
 37. **Your data on the test setup.** The side-by-side test holds your real product, stock and sales data with Railway, a hosting company whose servers are outside India. It is a test, not your official system. Do you agree? Should customer names and phone numbers from the earlier POS reports be left out of the import? Until you answer, imports keep no customer name or phone number (`PRD-SEC-009`, `PRD-SEC-010`). · `PRD-LIF-026` · alignment report 4.15 · before the side-by-side test
 38. **How long the side-by-side test runs.** Set the run length before the test starts. (The switch threshold is question 29.) · `phases.md`, `POL-14.08` · V-45 · before the side-by-side test
 40. **Earlier POS PT file.** Does the earlier POS accept the approved PT export from Apparel OS in the KDPS layout during the test? · `DEC-053`, `PRD-PTW-008` · before the side-by-side test
+57. **A fixed daily export from the earlier POS.** During the side-by-side test the app reads each Store's end-of-day sales report and stock-on-hand from the earlier POS. Can every Store give both in one fixed layout: the whole Store rather than one brand, no filters or hidden rows, barcodes and bill numbers as text, and dates in one stated format? Who at KDPS sets this up? · `PRD-LIF-013`, `PRD-IMP-004` · imports design GC6-1 · before the side-by-side test
+58. **Other personal and cost data on the test setup.** Besides customer names and phone numbers (question 37), the earlier POS and Excel files hold salesperson names, supplier bank details, GST numbers and item cost. Which of these should be left out of imports on the test setup, and who may see cost? (With the product owner.) · `PRD-ACS-008`, `PRD-SEC-010` · imports design GC6-7 · before the side-by-side test
 
 ### Needed before first live use on production
 
@@ -113,6 +115,8 @@
 16. **Rounding the bill.** Should the amount a customer pays be rounded, for example to a whole rupee? If so, to what, and up, down or to the nearest? Which ledger takes the difference is part of question 3. (With the CA.) · policy 9; no policy bullet yet · calculations design GC7-4 · stage 4
 17. **Rounding a percentage discount.** When a percentage discount on an item comes to part of a paisa, how is it rounded? · policy 9; no policy bullet yet · calculations design GC7-5 · stage 4
 18. **Round-off and refunds.** When a rounded bill is returned in full, does the refund include the round-off? (With the CA.) · `PRD-RET-005` · calculations design GC7-6 · stage 4
+19. **Proof of cost for opening stock.** At each Store's switch, every counted item needs evidence of its cost before it becomes opening stock. What will you accept: purchase invoices, a stock valuation from Tally, a cost list? May the cost (`Rate`) in the earlier POS's stock report be used, alone or with other evidence? (With the CA.) · `PRD-LIF-005`, `POL-14.03` · imports design GC6-9 · stage 4, before the pilot switch
+20. **Opening dues from the last closed books.** In what form can you give the last closed books' balances and open items at a switch: each supplier's and customer's open bills, and advances and deposits given and received? For example a Tally export of party ledgers and the trial balance. What does "outstanding commercial stock" cover for KDPS? (With the CA.) · `PRD-LIF-009`, `POL-14.03` · imports design GC6-10 · stage 4, before the pilot switch
 
 ## CA
 
@@ -149,6 +153,7 @@
 4. **Transfer routes.** Provide the actual Store/warehouse route matrix, including each Store's default warehouse and any allowed alternatives. · `PRD-ORG-013` · V-62 · stage 3
 5. **Altered or held goods.** How long may a Store keep paid goods waiting for collection, and when are reminders sent? · `POL-08.04` · V-33 · stage 4
 6. **Piece labels at the switch.** How many pieces are in each Store today? Who labels them, and on which days before that Store's switch? Every apparel and footwear piece needs its own label by the switch count. · `PRD-LIF-025` · V-57 · stage 4, before each switch
+7. **Transfers typed as sales.** In the Singh More daily report, stock sent out of the Store appears as sale lines with a reason such as `Stock Transferr`, or on `S-` bills with no payment. At each Store, which reasons and bill series mean "stock sent out, not sold"? The import must never count them as sales. (With Accounts.) · `PRD-LIF-014`, `PRD-TRF-003` · imports design GC6-14 · before the side-by-side test
 
 ## KDPS (answerer not yet named)
 

@@ -1,4 +1,4 @@
-# Gaps before writing code — refreshed 4 Oct 2026
+# Gaps before writing code — refreshed 5 Oct 2026
 
 > **Not ranked.** This report decides nothing and changes nothing. Any PRD or policy change it leads to needs an entry in [decisions.md](../decisions.md) first. See [README.md](../README.md).
 
@@ -8,7 +8,7 @@
 
 ## 1. Short version
 
-1. **Six of nine stage 1 designs are written** (GC-1 to GC-5 and GC-7; section 2). GC-6, GC-8 and GC-9 are still missing.
+1. **Seven of nine stage 1 designs are written** (GC-1 to GC-7; section 2). GC-8 and GC-9 are still missing.
 2. The **pnpm and Turborepo workspace exists** (server, web, domain, schemas, UI). **`packages/calculations` is not created yet**; several **code house rules** are still partial (section 3).
 3. **Two small decisions** wait for the product owner (section 4). Other product-owner items do not block code (section 6).
 4. **UI sample values** are now labelled or removed (section 5).
@@ -23,7 +23,7 @@
 | GC-3 | Access, approvals, inbox and exceptions | Written | [access-and-approvals.md](../design/access/access-and-approvals.md) |
 | GC-4 | Books and posting | Written | [books-and-posting.md](../design/finance/books-and-posting.md) |
 | GC-5 | Document numbering and audit history | Written | [numbering-and-audit.md](../design/platform/numbering-and-audit.md) |
-| GC-6 | Imports and opening data | **Missing** | — |
+| GC-6 | Imports and opening data | Written | [imports-and-opening-data.md](../design/platform/imports-and-opening-data.md) |
 | GC-7 | Shared price, discount, tax and rounding logic | Written | [shared-calculations.md](../design/calculations/shared-calculations.md) |
 | GC-8 | Offline counter | **Missing** | — |
 | GC-9 | Backup, restore and export | **Missing** | — |
@@ -42,7 +42,7 @@ The table below is the original scope list (unchanged). Use it for sources and w
 | GC-8 | Offline counter | Device registration, device bill series, the cached working set, the local commit, upload, pause and release | `PRD-OFF-001`–`PRD-OFF-019`; `AGENTS.md` "Delivery" | Designed in stage 1, switched on in stage 4 under policy 16 |
 | GC-9 | Backup, restore and export | What is backed up, how a restore is proved, and the complete export. [deployment.md](../design/platform/deployment.md) covers test hosting only | `PRD-SEC-012`, `PRD-LIF-022`; policy 18 | Stage 1 exit check: a backup restores with linked records and attachments |
 
-**Suggested order for what remains.** GC-6 next (imports and opening data; KDPS sample files can inform layouts). Then GC-8 and GC-9. Implement `packages/calculations` from GC-7 in parallel with module work.
+**Suggested order for what remains.** GC-8 and GC-9. GC-6 is written (5 Oct 2026); its open questions GC6-1 to GC6-16 are listed in its section 18. Implement `packages/calculations` from GC-7 in parallel with module work.
 
 ## 3. Code workspace and house rules
 
