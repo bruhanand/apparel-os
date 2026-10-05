@@ -5,12 +5,12 @@
 ## Where things stand
 
 - **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
-- **S0-T05 built; your three review issues fixed on the same branch; green in CI on `ceffc9f`; waiting on your merge.** Migration runner, the two database roles, the pre-deploy entry `pnpm migrate`, a Railway runbook and the integration tests, on branch `s0-t05-migration-runner` ([PR #2](https://github.com/bruhanand/apparel-os/pull/2)). Fixes: `pnpm migrate` is labelled directory-only and tested as a process (`S1-F01-T02` completes it for Organisation databases); the runner refuses a superuser, any role but `aos_migration` and a database that role does not own, before any change; the set reader refuses a `.SQL` file, any other unexpected entry and an empty set. Every check passes locally (21 server unit tests, 33 integration tests). Verification note in [stage-0-preparation.md](stage-0-preparation.md) section 1. `AGENTS.md` "Code workspace" lists `apps/server/migrations`, `apps/server/db` and `pnpm migrate`; its review by an independent AI reviewer ("DR-1 S0-T05") is redone for the directory-only wording and waits for your approval. `doc-check.yml` no longer caches pnpm in `setup-node`, which failed the job's post step when the lockfile changed. No Railway service was changed.
+- **S0-T05 done and merged** ([PR #2](https://github.com/bruhanand/apparel-os/pull/2), squash-merged into `main`). Migration runner, the two database roles, `pnpm migrate` (directory-only until `S1-F01-T02`), the Railway runbook and 33 integration tests; your three review issues were fixed before the merge (directory-only label with a command test, role and owner check, strict set reader). You approved the DR-1 S0-T05 review of `AGENTS.md` "Code workspace". Start-gate condition 4 is met ([stage-0-preparation.md](stage-0-preparation.md) section 2). `doc-check.yml` no longer caches pnpm in `setup-node`. No Railway service was changed.
 - **S0-T04 part A approved and merged on `main`** (`7567e90`, `7455d75`). [code-house-rules.md](../design/platform/code-house-rules.md) part A was reviewed in DR-1 round 1 by independent AI reviewers and approved by you ([stage-0-preparation.md](stage-0-preparation.md) section 2); `S0-T08` round 1 is done and start-gate conditions 3 and 6 are met. CH-1 to CH-7 and GC4-4 stay OPEN at their gates.
 - **S0-T03 done and merged.** The Doc check workflow installs the pinned pnpm (12.4.1) before `setup-node`. [PR #1](https://github.com/bruhanand/apparel-os/pull/1), merged as `b6395ec` on `main`. Doc check and Code check both pass on `main`.
 - **S0-T02 done.** pnpm 12.4.1 is active through corepack and Docker Desktop runs; every command in `AGENTS.md` exits 0 on this machine, including the integration test against a real PostgreSQL container. The verification note is in [stage-0-preparation.md](stage-0-preparation.md) section 1. Start-gate conditions 1 and 2 are met.
 - **S0-T01 done.** Anand Kumar is a named reviewer for DR-1 and later batches (`--by "Anand Kumar"`); independent AI reviewers recorded under their own name are also accepted, with the product owner's approval of each batch ([index.md](index.md) section 9).
-- **Local checkout:** on branch `s0-t05-migration-runner`, pushed, PR #2 open. The local branch `s0-t04-house-rules-part-a` is merged in content and can be deleted when you say so.
+- **Local checkout:** on `main` after the merge. The local branches `s0-t04-house-rules-part-a` and `s0-t05-migration-runner` are merged in content and can be deleted when you say so.
 - **Kept as it is:** the extra worktree `.claude/worktrees/document-checker-improvements-c67c98`. Nothing reads into, changes or removes it.
 - **Standing rule:** no Claude attribution in commits or PRs. Commit `8239c69` on `main` still carries one; it stays unless you ask for history to be rewritten.
 
@@ -18,13 +18,12 @@
 
 | Step | What | Needs from you |
 | --- | --- | --- |
-| 1 | Approve the DR-1 follow-up review of `AGENTS.md` "Code workspace" and merge PR #2 once Code check and Doc check pass | Approval and go-ahead |
-| 2 | `S0-T06`: synthetic fixtures and reset (template database cloned per test file, two synthetic Organisations, labelling, local seed) | Go-ahead |
-| 3 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
+| 1 | `S0-T06`: synthetic fixtures and reset (template database cloned per test file, two synthetic Organisations, labelling, local seed) | Go-ahead |
+| 2 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
 
-When steps 1 and 2 are green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
+When step 1 is green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
 
-## Decisions waiting on you (none blocks steps 1 to 3)
+## Decisions waiting on you (none blocks steps 1 and 2)
 
 - **Stock harness H1 to H6** ([s1-f10-stock-harness.md](s1-f10-stock-harness.md)): needed before stock-and-posting is coded. Recommendation: test-only document driver, registered ledger callers, a test-only schema, synthetic approval types, tests only, a read-only role for checks.
 - **Setup recovery** for the first feature (finished setup refused, interrupted one completed, conflicting one refused): proposed in [s1-f01-first-access.md](s1-f01-first-access.md) section 9; confirmed in `S1-F01-T01`.

@@ -83,6 +83,8 @@ Not built here, by design: the directory table and Organisation routing (`S1-F01
 
 **Approval record, condition 3 (5 Oct 2026).** The product owner approved house rules part A ([code-house-rules.md](../design/platform/code-house-rules.md) sections 1 to 11 and 13), with CH-1 to CH-7 and books-and-posting GC4-4 left OPEN at their stated gates. This approval is not a review record. The technical reviews of round 1 were done by independent AI reviewers and are recorded in `docs/reviews.json` as "Claude (AI review, independent reviewer, DR-1 round 1)". The product owner accepted independent AI reviews for DR-1 the same day ([index.md](index.md) section 9) and approved this batch, so conditions 3 and 6 are met.
 
+**Approval record, condition 4 (5 Oct 2026).** The product owner approved the DR-1 S0-T05 follow-up review of `AGENTS.md` "Code workspace", recorded in `docs/reviews.json` as "Claude (AI review, independent reviewer, DR-1 S0-T05)", and the merge of [PR #2](https://github.com/bruhanand/apparel-os/pull/2) after its three review issues were fixed and Code check and Doc check were green. Condition 4 is met; `pnpm migrate` stays directory-only until `S1-F01-T02`.
+
 Gates inside `S1-F01`, not before it:
 
 - House rules part B (API, errors, idempotency key, version token, events, jobs, logging, screen text, KDPS-valued settings), reviewed with [deployment.md](../design/platform/deployment.md) sections 5 and 9 in `S0-T08` round 2, before `S1-F01-T04`. Tasks `T01` to `T03` need only part A.
