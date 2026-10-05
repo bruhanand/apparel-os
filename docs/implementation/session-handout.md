@@ -7,6 +7,7 @@
 - **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
 - **S0-T03 done and merged.** The Doc check workflow installs the pinned pnpm (12.4.1) before `setup-node`. [PR #1](https://github.com/bruhanand/apparel-os/pull/1), merged as `b6395ec` on `main`. Doc check and Code check both pass on `main`.
 - **S0-T02 done.** pnpm 12.4.1 is active through corepack and Docker Desktop runs; every command in `AGENTS.md` exits 0 on this machine, including the integration test against a real PostgreSQL container. The verification note is in [stage-0-preparation.md](stage-0-preparation.md) section 1. Start-gate conditions 1 and 2 are met.
+- **S0-T01 done.** Anand Kumar is the named reviewer for DR-1 and later batches (`--by "Anand Kumar"`), written in [index.md](index.md) section 9.
 - **Local checkout:** on `main`, in step with `origin/main`, nothing uncommitted.
 - **Kept as it is:** the extra worktree `.claude/worktrees/document-checker-improvements-c67c98`. Nothing reads into, changes or removes it.
 - **Standing rule:** no Claude attribution in commits or PRs. Commit `8239c69` on `main` still carries one; it stays unless you ask for history to be rewritten.
@@ -15,15 +16,14 @@
 
 | Step | What | Needs from you |
 | --- | --- | --- |
-| 1 | `S0-T01`: name who records doc reviews (`--by`) | A name |
-| 2 | `S0-T04` part A: write the database half of the code house rules (migrations, roles, row-level security, transactions, tests, fixtures) | Go-ahead; approve the document |
-| 3 | `S0-T08` round 1: review part A and the four never-reviewed `AGENTS.md` sections | The reviewer from step 1 |
-| 4 | `S0-T05`: migration runner and the two database roles, proved in CI | Go-ahead |
-| 5 | `S0-T06`: synthetic fixtures and reset | Go-ahead |
+| 1 | `S0-T04` part A: write the database half of the code house rules (migrations, roles, row-level security, transactions, tests, fixtures) | Go-ahead; approve the document |
+| 2 | `S0-T08` round 1: review part A and the four never-reviewed `AGENTS.md` sections | Anand Kumar's reviews |
+| 3 | `S0-T05`: migration runner and the two database roles, proved in CI | Go-ahead |
+| 4 | `S0-T06`: synthetic fixtures and reset | Go-ahead |
 
-When steps 1 to 5 are green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
+When steps 1 to 4 are green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
 
-## Decisions waiting on you (none blocks steps 1 to 5)
+## Decisions waiting on you (none blocks steps 1 to 4)
 
 - **Stock harness H1 to H6** ([s1-f10-stock-harness.md](s1-f10-stock-harness.md)): needed before stock-and-posting is coded. Recommendation: test-only document driver, registered ledger callers, a test-only schema, synthetic approval types, tests only, a read-only role for checks.
 - **Setup recovery** for the first feature (finished setup refused, interrupted one completed, conflicting one refused): proposed in [s1-f01-first-access.md](s1-f01-first-access.md) section 9; confirmed in `S1-F01-T01`.

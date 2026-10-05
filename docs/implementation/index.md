@@ -193,6 +193,7 @@ Reviews use the existing gate in `AGENTS.md` ("Change gate", "Honest reviews") a
 | DR-4 onwards | Before each later stage's coding | That stage's area designs, the never-reviewed sections of [phases.md](../phases.md) for it, and any decision round |
 
 - Only a person the product owner names may run `review`, `record` or `drop`, with `--by` naming who reviewed.
+- **Named reviewer** (`S0-T01`, 5 Oct 2026): Anand Kumar, for DR-1 and later batches. Records give `--by "Anand Kumar"`.
 - One reason per section, from reading that section against its current sources. Never one reason for many sections, and never a reason written to make the check pass.
 - A finding is fixed in the lower document. A business question goes up as a decision entry or a KDPS question.
 
