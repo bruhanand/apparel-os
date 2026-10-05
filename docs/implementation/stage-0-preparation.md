@@ -57,6 +57,8 @@ Run on commit `460f81b` with no working-tree changes, on the product owner's mac
 | 5 | Synthetic fixtures and reset exist and are proved in CI | `S0-T06` | Green integration tests |
 | 6 | The four never-reviewed `AGENTS.md` sections are reviewed | `S0-T08` round 1 | Review records |
 
+**Approval record, condition 3 (5 Oct 2026).** The product owner approved house rules part A ([code-house-rules.md](../design/platform/code-house-rules.md) sections 1 to 11 and 13), with CH-1 to CH-7 and books-and-posting GC4-4 left OPEN at their stated gates. This approval is not a review record. The technical reviews of round 1 were done by independent AI reviewers and are recorded in `docs/reviews.json` as "Claude (AI review, independent reviewer, DR-1 round 1)". The named reviewer's own section-by-section review ([index.md](index.md) section 9) is still to come, recorded with `--by "Anand Kumar"`; until then conditions 3 and 6 are not fully met.
+
 Gates inside `S1-F01`, not before it:
 
 - House rules part B (API, errors, idempotency key, version token, events, jobs, logging, screen text, KDPS-valued settings), reviewed with [deployment.md](../design/platform/deployment.md) sections 5 and 9 in `S0-T08` round 2, before `S1-F01-T04`. Tasks `T01` to `T03` need only part A.

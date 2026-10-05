@@ -37,7 +37,7 @@ It fixes no screen beyond pointers (section 8), no approval limit and no KDPS va
 ### 2.2 Effective-dated versions
 
 - A master is one identity row plus version rows. A version holds the fields that may change and the business dates it is in force: from a start date, up to an end date or open-ended (`PRD-MOD-010`). Business dates are under the Organisation's timezone (`PRD-MOD-009`).
-- Versions in force for one master never overlap. PostgreSQL enforces it with an exclusion constraint on the master and its date range, applied only to versions in force (`PRD-MOD-010`). **Design choice.**
+- Approved versions of one master never overlap, so versions in force never do. PostgreSQL enforces it with an exclusion constraint on the master and its date range, applied to every approved version: Scheduled, In force and Ended. Versions Awaiting approval and Rejected versions are left out (`PRD-MOD-010`). **Design choice.**
 - Where a master must always have a version in force, such as a business unit's mapping (section 3.4), a new version ends the one before it on its start date, so no gap opens.
 - A version in force is never edited, so the version a transaction used stays as it was (`PRD-MOD-010`). A change is a new version with its own start date. **Design choice.**
 - A version may start today or later, never on a past date, because a transaction keeps the version it used and a back-dated version would disagree with it. A draft whose start date passes before approval is re-dated before it takes effect. A change found late is recorded from today, with its real date noted on it. **Design choice.** There is no exception: no master version ever starts on a past date (GC2-7, DEC-105). A relocation is recorded before its date in the stage 5 relocation flow (`PRD-LIF-029`).
@@ -149,7 +149,7 @@ The operations of module-map 4.11, made concrete:
 | Expand a place for access | The Stores and business units a Site or Store covers on a date (3.9), for `access` through the scope contract (module-map 4.11) | — |
 | Check scope membership | Whether a legal entity, Site, Store or business unit exists and sits where an assignment says, for the scope contract of module-map section 3 | — |
 | List allowed destinations | Names and codes only (`PRD-TRF-004`); the default warehouse and other routes (`PRD-ORG-013`) | — |
-| Maintain the structure | New records and versions under 2.2 and 2.3, and a mapping's verification record (3.4) | A version would overlap another in force; a version would start on a past date (2.2); a unit would be left with no mapping; a registration or book belongs to another legal entity (`PRD-ORG-020`); a registration is in another State than the unit's Site (3.4, GC2-1); a location's unit is at another Site; a Store's unit would be at a Site the Store is not linked to; a kind rule in 3.3 is broken; a location to retire still has stock recorded (3.5); a change is approved by its preparer, or a mapping is verified by the person who made it or by someone without the verify permission (2.3, 3.4, GC2-2) |
+| Maintain the structure | New records and versions under 2.2 and 2.3, and a mapping's verification record (3.4) | A version would overlap another approved version (2.2); a version would start on a past date (2.2); a unit would be left with no mapping; a registration or book belongs to another legal entity (`PRD-ORG-020`); a registration is in another State than the unit's Site (3.4, GC2-1); a location's unit is at another Site; a Store's unit would be at a Site the Store is not linked to; a kind rule in 3.3 is broken; a location to retire still has stock recorded (3.5); a change is approved by its preparer, or a mapping is verified by the person who made it or by someone without the verify permission (2.3, 3.4, GC2-2) |
 
 Events: `organisation.structure-changed`, `organisation.mapping-changed` (module-map section 8).
 
@@ -291,14 +291,14 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | --- | --- | --- |
 | Read a party | The party, its roles in force and, only for a permitted reader, its bank details (`PRD-ACS-008`) | — |
 | Read the terms in force | The agreement version in force for a brand or supplier on a date, with its identifier (`PRD-ORG-016`) | No version is in force |
-| Maintain a party or agreement | New records and versions under 2.2 and 2.3 | A version would overlap another in force (`PRD-MOD-010`); an agreement version is approved by its preparer (2.3, GC2-2) |
+| Maintain a party or agreement | New records and versions under 2.2 and 2.3 | A version would overlap another approved version (`PRD-MOD-010`; 2.2); an agreement version is approved by its preparer (2.3, GC2-2) |
 | Change bank details | A new version; it waits for approval by a different authorised person: a supplier's under `POL-02.07`, every other party's under the baseline (GC2-6, DEC-105) | A change is approved by its preparer |
 
 Event: `merchandise.agreement-changed` (module-map section 8).
 
 ## 6. Tables
 
-Names, keys and constraints. Every table has a UUIDv7 primary key. A table marked "+ versions" has a companion table of versions under 2.2, with a date range and an exclusion constraint on versions in force. **Design choice** throughout; columns beyond these are left to reviewed migrations.
+Names, keys and constraints. Every table has a UUIDv7 primary key. A table marked "+ versions" has a companion table of versions under 2.2, with a date range and an exclusion constraint on approved versions. **Design choice** throughout; columns beyond these are left to reviewed migrations.
 
 ### 6.1 Schema `organisation`
 <!-- deps: PRD-ORG-001, PRD-ORG-004, PRD-ORG-005, PRD-ORG-007, PRD-ORG-012, PRD-ORG-013, PRD-ORG-020, PRD-ORG-021, PRD-MOD-010 — table list for the structure records of section 3 -->
@@ -364,7 +364,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | --- | --- | --- |
 | 1 | **Stage 1 exit check.** One Site with two business units mapped to different books and tax registrations. A synthetic transaction on each stores its own unit's mapping version; a later mapping change leaves the stored versions unchanged | `PRD-ACP-013`, `PRD-ORG-005` |
 | 2 | A mapping whose registration or book belongs to another legal entity is refused | `PRD-ORG-020` |
-| 3 | Overlapping versions in force are refused; a unit can never be left without a mapping | `PRD-MOD-010`, `PRD-ORG-005` |
+| 3 | Overlapping approved versions are refused, a Scheduled one included; a unit can never be left without a mapping | `PRD-MOD-010`, `PRD-ORG-005` |
 | 4 | Two Stores at one Site; one relocates on a date; reads before and after the date; a Site-scoped and a Store-scoped place expand as section 3.9 says | `PRD-ORG-021`, `PRD-LIF-029`, `PRD-ACS-021` |
 | 5 | Brand coverage by unit kind | `PRD-ORG-006` |
 | 6 | A location whose unit is at another Site is refused (3.5, DM-9) | `PRD-ORG-012` |

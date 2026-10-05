@@ -163,7 +163,7 @@ Every request and every job step goes through steps 1 to 3, which are steps 1 an
 1. **Authenticate.** The session is in force, not locked and not Revoked, and the user is Active (2.1); for a service identity, the identity is enabled and its credential is not revoked (`PRD-INT-001`, `PRD-ACS-017`, `PRD-SEC-008`, `PRD-SEC-018`).
 2. **Available.** `configuration` answers whether the operation is available here and now: the capability is on, the policy is Signed, the owning module's configured records are valid, and the activity is granted where one applies (`PRD-SEC-017`, `PRD-LIF-001`; module-map 4.4). Otherwise the request is refused with the blocking reason. This is the stage 1 exit check "an operation whose policy is not configured stays unavailable".
 3. **Authorise.** Find one role assignment, or for an approval decision one stand-in grant (section 10), that, on the date of the action, grants the action on the record type, covers the record's scope facts (5.3), and grants every restricted field class the action reads or writes (`PRD-ACS-001`, `PRD-ACS-004`, `PRD-INT-001`). Authorise returns the assignment it used; the audit record and any approval decision store it.
-4. **Under the locks.** Repeat step 3 for the same assignment, and the approval checks of 9.7 (`PRD-INT-003`; stock-ledger 10.4).
+4. **Under the locks.** Check again that the user is Active, or the service identity enabled; repeat step 3 for the same assignment; and make the approval checks of 9.7 (`PRD-INT-003`; stock-ledger 10.4).
 
 - The date of the action is today under the Organisation's timezone, not the record's business date: authority is about who may act now. **Design choice.**
 - A refusal names what is missing: the action, the place, the brand or the field class, and where one assignment nearly covers it, which one ([personas.md](personas.md) section 3; `PRD-UXP-003`).
@@ -236,7 +236,7 @@ A higher authority is a different person whose limit covers the action on its va
 
 ### 9.7 Recheck under the locks
 
-The posting module locks the document and its approval rows first (stock-ledger 10.3, step 1) and asks `access` to verify (stock-ledger 10.4):
+After the authority rows of step 0, the posting module locks the document and its approval rows (stock-ledger 10.3, step 1) and asks `access` to verify (stock-ledger 10.4):
 
 - the decision is Approved and not yet used (9.8);
 - the version being posted is the version decided; or, when a later step of the document posts it, such as a transfer's dispatch, a version the decision carried to (9.6). A queued posting takes only the version its request to post names (9.8, DEC-097);
@@ -331,7 +331,7 @@ A large document is approved by a click and posted later by a job, one at a time
 
 ## 13. Tables
 
-Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on versions in force ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). Each module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
+Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on approved versions ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). Each module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 13.1 Schema `access`
 <!-- deps: PRD-ACS-001, PRD-ACS-005, PRD-ACS-007, PRD-ACS-010, PRD-ACS-015, PRD-ACS-016, PRD-ACS-018, PRD-ACS-020, PRD-ACS-022, PRD-SEC-001, PRD-SEC-006, PRD-SEC-008, PRD-SEC-018, PRD-INT-004, POL-02.07, POL-02.09, POL-02.15, POL-02.19, POL-02.20, POL-02.22, POL-02.23 — table list for the records of sections 2 to 10 -->

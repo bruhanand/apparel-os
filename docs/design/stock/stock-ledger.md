@@ -368,6 +368,7 @@ The valued movement, its balance and pool rows, and the balanced journals per bo
 
 Every transaction takes row locks in this order, and in ascending ID order inside each step (`PRD-INT-003`):
 
+0. The rows the actor's authority rests on: the user or service identity, the role assignment, and the approval limits and stand-in grant relied on. In shared mode; a command that changes one of them takes it in exclusive mode, so it waits for the commands relying on it ([code-house-rules.md](../platform/code-house-rules.md) 8.2; `PRD-INT-003`).
 1. The business document rows (and their approval rows).
 2. Receipt origin rows. A late cost change works out which pools and dispatches it touches here, under this lock.
 3. Stock balance rows for each affected Site, business unit and SKU. Missing rows are first created, idempotently, in the same key order.
@@ -377,13 +378,13 @@ Every transaction takes row locks in this order, and in ascending ID order insid
 7. The financial period row, in shared mode (`PRD-LED-009`; DEC-105, module-map MM-6).
 8. Number series rows, last, so a shared series is held for the shortest time (10.2).
 
-All locks are taken before the first write. Two transactions therefore always queue in the same order and cannot deadlock each other.
+All locks are taken before the first write, with one exception: step 3 creates a missing balance row empty, and creating it locks it. Nothing that records the command's effects is written until every lock is held. Exclusive locks leave foreign-key checks free ([code-house-rules.md](../platform/code-house-rules.md) 8.2). Two transactions therefore always queue in the same order and cannot deadlock each other.
 
 ### 10.4 Rechecks under the locks
 
 After locking, before writing, recheck (`PRD-INT-003`):
 
-- the actor's role assignment, scope and limit;
+- the actor is still Active, or the service identity still enabled, and its role assignment, scope and limit;
 - the approval decision is Approved and not yet used by another posting (`DEC-097`);
 - the document version equals the approved version, or, when a later step of the document posts it, a version the approval carried to through a change that is not material ([access-and-approvals.md](../access/access-and-approvals.md) 9.6); a queued posting takes only the version its request to post names (`PRD-ACS-007`, `POL-02.12`, `DEC-097`);
 - the document state;

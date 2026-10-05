@@ -273,7 +273,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
 | Define a series | The owning module, after it has validated the scope | Creates a series for a document kind and scope key, with its format version | A live series already exists for that kind, scope and year |
-| Allocate | The owning module, inside its transaction | Returns the next number. The series row is locked last (stock-ledger 10.3, step 8), and the number commits with the document or not at all (`PRD-INT-004`) | The series is closed or paused |
+| Allocate | The owning module, inside its transaction | Returns the next number, from a series the command locked last, at stock-ledger 10.3 step 8, and the number commits with the document or not at all (`PRD-INT-004`) | The series is closed or paused |
 | Read series state | `pos` | Supports the offline pause and release checks, which use financial year plus next sequence (`PRD-OFF-012`) | — |
 | Pause, release, close | The owning module | Changes the series state; close is final (`PRD-LIF-015`, `PRD-OFF-010`) | The series is closed |
 | Record used numbers | `pos`, on an offline upload | Keeps numbers the device already used as allocations (`PRD-OFF-009`) | A number is already recorded with another document |
@@ -496,8 +496,8 @@ Every command that changes stock or money follows this shape. Steps 5 to 7 are [
 2. **Once.** The idempotency helper checks the scoped key (`PRD-INT-002`).
 3. **Allowed here, now.** `configuration` checks availability; `access` authorises the action, scope and fields (`PRD-SEC-017`, `PRD-INT-001`).
 4. **Slow work first.** Validation, matching and inflow values are worked out before any lock (stock-ledger 10.6). `finance` · books checks postable (a design choice, 4.14).
-5. **Lock.** Row locks in the stock-ledger 10.3 order, all before the first write (`PRD-INT-003`).
-6. **Recheck under the locks.** Role assignment, scope and limit; document version and state; independent approval; quantity; value on its basis (stock-ledger 10.4).
+5. **Lock.** Row locks in the stock-ledger 10.3 order, all before the first write; the one exception is the empty balance rows that stock-ledger 10.3 step 3 creates and locks (`PRD-INT-003`).
+6. **Recheck under the locks.** The actor still Active or enabled; role assignment, scope and limit; document version and state; independent approval; quantity; value on its basis (stock-ledger 10.4).
 7. **Write, together.** Number allocation, the document's new state, stock movements with their balance and pool rows, journals, other monetary records, approval evidence, audit and outbox rows. All commit, or none do (`PRD-INT-004`).
 8. **After commit.** The worker delivers outbox rows: work items, messages, live-update identifiers, read-model refresh, and exchanges with outside systems (`PRD-MOD-006`, `PRD-INT-006`).
 

@@ -91,7 +91,7 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 
 ### 4.5 Locking against posting
 
-- Every transaction that posts takes the row of each period it posts into in shared mode, after the cost pool rows and before the number series (stock-ledger 10.3, step 7; MM-6, DEC-105). Postings into one period never wait for each other.
+- Every transaction that posts takes the row of each period it posts into in shared mode, after the cost pool rows and before the number series (stock-ledger 10.3, step 7; MM-6, DEC-105). Postings into one period never wait for each other on the period row. They do wait on the book's journal series (5.4), which each holds from step 8 until commit; that is GC4-4.
 - Locking a period, and the approval that reopens one, take the period row in exclusive mode. They wait for postings already holding it, and a posting that comes after them sees the new state under its lock (`PRD-INT-003`).
 - The use of a named correction (4.3, step 4) is a row with a unique key on that correction. It needs no lock of its own, so stock-ledger 10.3 gains no step. **Design choice.**
 
@@ -124,7 +124,7 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 
 ### 5.4 Numbers
 
-- Each journal takes a number from a series of the kind journal, one per book and financial year, allocated in the posting transaction ([numbering-and-audit.md](../platform/numbering-and-audit.md) 3.2, 3.3). **Design choice** of the scope.
+- Each journal takes a number from a series of the kind journal, one per book and financial year, allocated in the posting transaction from a series the caller locked at stock-ledger 10.3 step 8 ([numbering-and-audit.md](../platform/numbering-and-audit.md) 3.2, 3.3). **Design choice** of the scope, until GC4-4 is settled: OPEN (GC4-4: product owner and Accounts; blocks S1-F10 posting and the stage 4 counter performance test).
 - The format is the Organisation's choice, with no default ([numbering-and-audit.md](../platform/numbering-and-audit.md) 3.5). Tests use a labelled synthetic format.
 
 ## 6. Posting maps
@@ -235,7 +235,7 @@ The operations of module-map 4.14, made concrete. "Hold periods" is added as a *
 
 | Operation | Called by | Returns or does | Refuses when |
 | --- | --- | --- | --- |
-| Check postable | The caller, before any lock | For each item: the book, the period and its state, the map version, or the reasons it would be refused. Writes nothing and locks nothing (module-map 6.1, step 4) | — |
+| Check postable | The caller, before any lock | For each item: the book, the period and its state, the map version and the journal number series, or the reasons it would be refused. Writes nothing and locks nothing (module-map 6.1, step 4) | — |
 | Hold periods | The caller's transaction, at stock-ledger 10.3 step 7 | Takes each period row the items post into in shared mode (4.5) | A period does not exist; it is Locked and no reopening names the item's source |
 | Post | `stock` · ledger for valued movements; any module for its own money effect, in its transaction | Rechecks under the locks, then writes the journals (8.2), their lines and posting-source rows, and the use of a named correction (4.3); takes journal numbers; emits `finance.journal-posted`. Returns the result of 9.2 (`PRD-LED-003`, `PRD-LED-004`, `PRD-MOD-013`, `POL-09.11`, `POL-09.12`) | No valid map (6.2); the period is Locked, or Reopened for other corrections (`PRD-LED-009`, `PRD-LED-020`); an amount is Unknown; a required dimension is missing; the journal would not balance (`POL-09.13`); an item was already posted with different content (9.3) |
 | Reverse | The module that owns the source record | A new journal with the same lines on opposite sides, linked to the one it reverses, dated on the reversal's own business date (`PRD-LED-004`, `PRD-MOD-011`) | The journal is already reversed; the reversal's period is Locked, or Reopened for other corrections |
@@ -291,7 +291,7 @@ For a missing or invalid map the baseline is Outcome A (SL-23, DEC-105; the CA c
 
 ## 13. Tables
 
-Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on versions in force ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). The module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
+Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on approved versions ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). The module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 13.1 Schema `finance`
 <!-- deps: PRD-LED-001, PRD-LED-003, PRD-LED-004, PRD-LED-009, PRD-LED-014, PRD-LED-015, PRD-LED-019, PRD-LED-020, PRD-MOD-010, PRD-MOD-011, PRD-MOD-013, PRD-INT-002, POL-09.12 — table list for the records of sections 2 to 9 -->
@@ -307,7 +307,7 @@ The books part's tables. The tax rules and operations parts add theirs in their 
 | `period_reopening` | — | request, reason, requester, approval decision, withdrawal; takes effect only with a decision by a different person, checked by `access` (`PRD-LED-019`) |
 | `period_reopening_source` | reopening and source record | the named corrections (`PRD-LED-020`) |
 | `period_reopening_use` | named correction | one use, written in the posting transaction (4.5) |
-| `posting_map` + versions | book and event kind | versions in force never overlap; no past start; in force only when approved (6.3) |
+| `posting_map` + versions | book and event kind | approved versions never overlap; no past start; in force only when approved (6.3) |
 | `posting_map_line` | — | component, side and account of the map's book; required dimensions |
 | `journal` | number | book, accounting date, event kind, map version and source fixed; insert only; a reversal names the journal it reverses, unique, in the same book; refused into a Locked period, or a Reopened one without a named correction, by a trigger as the last guard |
 | `journal_line` | — | account of the journal's book; side debit or credit; amount in paise above zero; insert only; debits equal credits per journal, checked by a deferred constraint trigger at commit |
@@ -338,7 +338,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 7 | **Stage 1 exit check.** One Site with two business units in two books: each posting goes to its own unit's book and keeps the mapping version it used | `PRD-ACP-013`, `PRD-LED-002`, `PRD-ORG-005` |
 | 8 | No valid map at commit: nothing commits (no number, movement, pool row, journal or approval use); the exception survives the rollback; a replay makes no second exception; after the map is approved the document posts once | `PRD-INT-004`, `PRD-EXC-001`, `POL-09.12`, DEC-105 |
 | 9 | A lock waits for a posting in flight in the same period; a posting after the lock is refused | `PRD-LED-009`, `PRD-INT-003` |
-| 10 | Postings into one period do not wait for each other | `PRD-PRF-003` |
+| 10 | Postings into one period do not wait for each other on the period row; the wait on the journal series is measured, not assumed away (GC4-4) | `PRD-PRF-003` |
 | 11 | A reopening approved by its requester is refused; approved by another authorised person, the period shows Reopened | `PRD-LED-019` |
 | 12 | In a Reopened period a named correction posts once; any other posting is refused; when the last named correction posts, or the reopening is withdrawn, the period shows Locked | `PRD-LED-020` |
 | 13 | A period cannot be locked while an earlier one is open; periods of a book cannot overlap or leave a gap | `PRD-LED-009` |
@@ -455,6 +455,7 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | --- | --- | --- | --- | --- | --- |
 | GC4-1 | The periods of each book: which date ranges inside the financial year (4.1) | Business | Accounts, CA | 2 (first live posting) | Where journals fall; when locks apply |
 | GC4-2 | **Proposed:** a change to an account, map, cost setting or voucher-model setting is decided by a different authorised person from its preparers. Also: does the CA decide in the app, or does the decider attach the CA's signed approval (6.3, `POL-09.01`)? | Business | Accounts, CA | 2 (first live posting) | Who can make a map take effect |
+| GC4-4 | One journal series per book and financial year (5.4) means every posting in a book, counter sales included, holds the same series row from stock-ledger 10.3 step 8 until commit. Counters in one book then wait for each other, and behind a large posting job (stock-ledger 10.6), which `PRD-PRF-003` forbids. Options: a journal series per posting source, such as per billing device and per job; or keep one series and measure the wait in the stock-ledger 10.6 performance test | Technical, with Accounts consulted on journal numbering | Product owner; Accounts | S1-F10 posting; the stage 4 counter performance test | Whether counters wait on journal numbers |
 | GC4-3 | When a journal posted under a map later found wrong is corrected, does the correction fall on its own date, as 9.4 builds it, or in the original period | Business | Accounts, CA | 5 | Which period shows a map correction |
 
 **Settled here:** MM-12's design (2.3, DEC-105). **Settled since:** reopening a locked period (DEC-106, DEC-107; 4.3).

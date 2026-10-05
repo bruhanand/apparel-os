@@ -22,12 +22,13 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 3. `docs/design/`: how the system implements both. Never contradicts the two above.
 4. Code: implements the design.
 
-`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/reports/` holds one-time reports and `docs/questions-for-kdps.md` holds open questions; neither decides anything.
+`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/reports/` holds one-time reports and `docs/questions-for-kdps.md` holds open questions; neither decides anything. `docs/implementation/` (the implementation plan) and `docs/data-notes/` are not ranked either: they decide nothing, and the plan follows `docs/phases.md`.
 
 - Fix the lower document to match the higher one. Never edit a higher document just to fit a lower one.
 - A business decision is never settled in design or code. Raise it against the PRD or the policies.
 - Use words exactly as the PRD's "Words used" tables define them, in docs and code. Add a new term there first.
 - When documents clash, report the clash instead of guessing.
+- Code that differs from its design is a defect: fix the code, or change the design first. Where no design exists yet, code follows the PRD and the policies directly, and the missing design is noted.
 
 
 
@@ -162,7 +163,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
 - The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
-- Not written yet: the full house rules for code (API error shape, the idempotency key on writes, migration roles, test plan). See `docs/reports/gaps-before-code.md` section 3.
+- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is a draft waiting for review and approval. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is not written yet.
 
 ## Stack
 <!-- deps: prd.md#stack — restates the PRD stack table -->
@@ -201,16 +202,16 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 ## Planned architecture
 <!-- deps: prd.md#stack, PRD-MOD-001, PRD-MOD-002, PRD-MOD-003, PRD-MOD-006, PRD-MOD-007, PRD-MOD-011, PRD-MOD-012, PRD-MOD-014, PRD-MOD-015, PRD-INT-002, PRD-INT-003, PRD-INT-006, PRD-INT-007 — shape, tenancy, transactions, append-only, money, integrity -->
 
-These come from the PRD's "Technical platform" section and apply to all future code.
+These come from the PRD's "Technical platform" section and apply to all code.
 
-- **Shape.** A NestJS modular monolith, a React web app, a counter PWA with IndexedDB, and a separate Python forecasting service. Python is the only language besides TypeScript.
+- **Shape.** A NestJS modular monolith, a React web app, a counter PWA with IndexedDB, and a separate Python forecasting service. Python is the only application language besides TypeScript.
 - **Tenancy.** One PostgreSQL database per customer Organisation.
-- **Modules.** Each module owns its tables and exposes a public interface. Other modules never read its tables directly. Reports read declared read models.
+- **Modules.** Each module owns its tables and exposes a public interface. Other modules never read or write its tables. Reports read declared read models, with an as-of time, through module interfaces under the reader's own authorisation.
 - **Transactions.** Synchronous economic effects run through module interfaces in one transaction. Durable follow-up goes through a PostgreSQL outbox processed by pg-boss.
 - **Shared calculations.** Pricing, tax, discount allocation, rounding and incentive logic is written once in shared TypeScript and used by both server and counter.
-- **Records are append-only.** Approved documents and posted stock and accounting entries are never updated or deleted. Corrections are linked reversals. Stock balances are derived from movements.
-- **Money.** INR is stored as integer paise. No binary floating point for money. Unknown values stay distinct from zero.
-- **Integrity.** Every write carries a scoped idempotency key. Locks are taken in a deterministic order, and authority, version, state and quantity are rechecked under the lock.
+- **Records are append-only.** Official document payloads and posted stock and accounting entries are never updated or deleted. Corrections and lifecycle changes are their own linked, attributable records; status projections are separate and rebuildable. Stock balances are derived from movements.
+- **Money.** INR is stored as integer paise; another enabled currency in its configured integer minor unit. Intermediate steps are exact, and an amount becomes whole paise only under an explicit, named rounding rule. No binary floating point for money. Unknown values stay distinct from zero.
+- **Integrity.** Every write carries a scoped idempotency key. Locks are taken in a deterministic order, and authority, document version, state, independent approval and quantity are rechecked under the locks.
 - **External systems.** Tally, GST, bank and messaging outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction. Retry only after reconciliation.
 
 

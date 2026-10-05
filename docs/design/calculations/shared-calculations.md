@@ -71,7 +71,7 @@ It fixes no tax rate, value slab, rounding rule, stacking order, offer, price, c
 
 ### 3.1 Money and quantities
 
-- Every amount in and out is an integer number of paise, the `Paise` type of `@apparel-os/domain`; another enabled currency uses its configured integer minor unit (`PRD-MOD-014`). Amounts are never negative: a discount, a refund or a round-off says its direction by its name.
+- Every INR amount in and out is an integer number of paise, the `Paise` type of `@apparel-os/domain` (`PRD-MOD-014`). An amount in another enabled currency is an integer in that currency's configured minor unit, never a `Paise` value, and carries its currency (`PRD-MOD-014`, `PRD-MOD-015`); its type is added to `@apparel-os/domain` before such a currency is enabled. Amounts are never negative: a discount, a refund or a round-off says its direction by its name.
 - Quantities are whole numbers in the SKU's stock unit (pieces, pairs or packs). A fractional quantity is refused. **Design choice.**
 - Rates and percentages come in as decimal strings, such as `"10"` or `"2.5"`, and are read exactly. They are never JavaScript numbers. **Design choice.**
 
@@ -288,7 +288,7 @@ Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for th
 | Record | What it is | Identity | Rules |
 | --- | --- | --- | --- |
 | Goods classification | One HSN entry the Organisation uses | HSN code, unique in the Organisation | Effective-dated versions; a style's HSN must name one in force |
-| Rate and value rule | For one classification: its rate, or its value slabs, each with a rate | Per classification, versioned | Each slab has a lower bound; each bound says which side its own value falls on. The rule names the value compared with the slabs (GC7-2). Versions in force never overlap |
+| Rate and value rule | For one classification: its rate, or its value slabs, each with a rate | Per classification, versioned | Each slab has a lower bound; each bound says which side its own value falls on. The rule names the value compared with the slabs (GC7-2). Approved versions never overlap |
 | Registration applicability | For one tax registration: whether it charges output tax on a counter sale, and the components and their shares of the rate | Per registration, versioned | Shares add up to the whole rate (GC7-8) |
 | Price basis | Whether selling prices include tax | Per Organisation, versioned | One value in force (GC7-1) |
 | Rounding rule | Unit, mode and, for tax, level (3.3) | Per Organisation and kind, versioned | One version in force per kind |
@@ -305,12 +305,12 @@ Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for th
 ### 10.3 Tables
 <!-- deps: PRD-TAX-005, PRD-MOD-010, POL-10.02, POL-10.05 — table list for the records of 10.1 -->
 
-Schema `finance`, beside the books tables of [books-and-posting.md](../finance/books-and-posting.md) 13.1. "+ versions" has the meaning given there. **Design choice** throughout; other columns are left to reviewed migrations.
+Schema `finance`, beside the books tables of [books-and-posting.md](../finance/books-and-posting.md) 13.1. "+ versions" has the meaning given in books-and-posting section 13. **Design choice** throughout; other columns are left to reviewed migrations.
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
 | `goods_classification` + versions | HSN code | retired, never deleted |
-| `tax_rate_rule` + versions | classification | in force only when approved; versions in force never overlap |
+| `tax_rate_rule` + versions | classification | in force only when approved; approved versions never overlap |
 | `tax_rate_slab` | rule version and lower bound | rate as an exact decimal; bound side stated; the lowest slab starts at zero |
 | `registration_tax_applicability` + versions | tax registration | when it charges tax, its component shares add up to one |
 | `registration_tax_component` | applicability version and component | share as an exact decimal |

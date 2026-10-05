@@ -43,12 +43,12 @@ It fixes no number format, no financial-year date and no retention period. Label
 
 ### 3.2 Giving a number
 
-- Allocate runs inside the owning module's transaction. It locks the series row last (stock-ledger 10.3, step 8), takes the next sequence number, records the allocation and returns the formatted number. The number commits with its document, or neither does (`PRD-INT-004`; stock-ledger 10.2).
+- Allocate runs inside the owning module's transaction. The command has already locked every series it draws from, last, in its lock phase (stock-ledger 10.3, step 8; [code-house-rules.md](code-house-rules.md) 8.2): `numbering` offers the series rows as lock targets. Allocate takes the next sequence number from a series the transaction holds, records the allocation and returns the formatted number. It refuses a series the transaction has not locked. The number commits with its document, or neither does (`PRD-INT-004`; stock-ledger 10.2).
 - So an online series has no gaps: a transaction that rolls back never gave its number away. **Design choice**, following from `PRD-INT-004`.
 - Allocate refuses when no open series exists for the kind, scope and year, or the series is paused or closed.
 - Each allocation records the series, the sequence number, the formatted text, the document kind and reference, and the time. A replayed command returns its first result, with the same number (`PRD-INT-002`).
 - A reprint keeps the same number and identity (`PRD-POS-016`).
-- The series row is held only until the commit, and each billing device has its own series, so counters never wait for each other's numbers (`PRD-POS-020`; stock-ledger 10.3).
+- The series row is held only until the commit, and each billing device has its own series, so counters never wait for each other's bill numbers (`PRD-POS-020`; stock-ledger 10.3). A sale's journals draw on its book's journal series, which every posting in the book shares; that wait is books-and-posting GC4-4.
 
 ### 3.3 Financial year
 
