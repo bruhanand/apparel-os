@@ -17,6 +17,7 @@
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "check:modules": "node tools/module-check/check.mts",
+    "migrate": "pnpm --filter @apparel-os/server migrate",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

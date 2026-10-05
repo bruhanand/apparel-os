@@ -1,0 +1,12 @@
+{
+  "tables": [
+    {
+      "table": "kernel.migration",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": [],
+      "design": "code-house-rules 4.3",
+      "why": "The runner's own record of applied files. Only the migration role reads or writes it"
+    }
+  ]
+}

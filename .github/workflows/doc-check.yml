@@ -13,9 +13,11 @@ jobs:
           fetch-depth: 0
       # setup-node looks for the package manager package.json names; install that pinned pnpm first.
       - uses: pnpm/action-setup@v4
+      # No pnpm install runs here, so no store exists to cache; caching it fails the job when the lockfile changes.
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - name: Test the doc checker
         run: node tools/doc-check/check.mts test
       - name: Run the doc checker

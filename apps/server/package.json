@@ -7,12 +7,14 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "migrate": "node dist/migrate.js",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@apparel-os/domain": "workspace:*",
     "@apparel-os/schemas": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",

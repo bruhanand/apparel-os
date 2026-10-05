@@ -141,6 +141,8 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | Path | What it holds |
 | --- | --- |
 | `apps/server` | The NestJS modular monolith. `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
+| `apps/server/migrations` | The two migration sets, `directory/` and `organisation/`: reviewed SQL files `NNNN__<unit>__<what>.sql` with each set's table register, `tables.json` (code-house-rules 4.1) |
+| `apps/server/db` | `roles.sql`, which creates the migration and runtime roles, and the runbook for creating them on Railway |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
 | `packages/schemas` | Shared Zod schemas for the API |
@@ -156,6 +158,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `pnpm test` | Unit tests (Vitest) |
 | `pnpm test:integration` | Tests against real PostgreSQL through Testcontainers. Needs Docker |
 | `pnpm check:modules` | The module boundary check. Runs without an install |
+| `pnpm migrate` | The pre-deploy step, directory-only for now: migrates the directory database as the migration role, refuses any other role or a database that role does not own, and exits 1 on failure. It migrates no Organisation database until Organisation routing (`S1-F01-T02`). Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm format`, `pnpm format:check` | Prettier |
 
 - Another module is imported only through its `index.ts`, and calls go to a lower tier, or to the same tier only where module-map sections 4 and 5 list the call (`PRD-MOD-002`, `PRD-SEC-015`; `module-map.md` sections 2 and 3). `pnpm check:modules` enforces both; its tier table is in `tools/module-check/check.mts` and changes with the module map.

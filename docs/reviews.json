@@ -31,10 +31,10 @@
     },
     "AGENTS.md#code-workspace": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T05)",
       "date": "2026-10-05",
-      "reason": "Re-read after the Status fix: the approved-part-A sentence now matches code-house-rules line 5 and its section 13 open questions, reviews.json holds round-1 records for every part A section, and paths, pnpm scripts, the pre-commit hook and code-check.yml steps still agree with the tables.",
-      "unitHash": "17d6d4773835",
+      "reason": "Re-read the whole section after the directory-only rewording, against code-house-rules 2, 3.1, 4.1, 4.3, 5.1, 10.5, 10.6, 13, deployment.md section 4 and the code. migrate.ts calls migrateDatabase on the directory set only, connected through AOS_MIGRATION_DATABASE_URL to the built dist/migrate.js; checkConnectedAsOwner refuses any session or current role other than aos_migration, a superuser and a database aos_migration does not own before any change; process.exitCode is 1 when the variable is unset or the run throws; migrate-command.int.test.ts proves each as a process. Directory-only does not contradict 4.3 or deployment 4: the directory set holds only kernel.migration, so no Organisation is listed yet, migrateAll implementing 4.3 exists and is tested, no Organisation database is deployed, and s1-f01 T02 owns the switch with a command test. Paths, scripts, hook and code-check.yml still agree; no invented value; Organisation and directory database used as the PRD and DEC-093 use them.",
+      "unitHash": "e7830fb0c464",
       "deps": {
         "DEC-005": {"hash":"d9f11492dc0d","decs":[]},
         "DEC-013": {"hash":"57a896ce2827","decs":[]},

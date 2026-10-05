@@ -205,6 +205,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@apparel-os/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@apparel-os/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
