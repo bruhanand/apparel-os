@@ -25,6 +25,25 @@ Run on commit `8239c69` with no working-tree changes. Nothing was installed.
 | Pre-commit hook | `git config --get core.hooksPath` | `.githooks`: enabled in this clone |
 | Railway environments | Not inspected | RR-187 |
 
+### S0-T02 verification note, 5 Oct 2026
+
+Run on commit `460f81b` with no working-tree changes, on the product owner's machine (macOS 26.7.1, arm64). This meets start-gate condition 2 (section 2) and answers RR-185 for this machine.
+
+| Item | Version or result |
+| --- | --- |
+| Node.js | v22.23.3 |
+| pnpm | 12.4.1, activated with `corepack enable` and `corepack prepare pnpm@12.4.1 --activate` |
+| Container runtime | Docker Desktop 4.94.0, Docker Engine 29.8.2 (linux/arm64). Testcontainers reaches it through the `desktop-linux` Docker context; there is no `/var/run/docker.sock` |
+| `pnpm install --frozen-lockfile` | Exit 0; the lockfile passed pnpm's supply-chain check (540 entries) |
+| `pnpm build`, `pnpm lint`, `pnpm typecheck` | Exit 0, run again with `--force` so no Turborepo cache was replayed |
+| `pnpm test` | Exit 0 with `--force`: domain 13, schemas 1, ui 2, server 1 |
+| `pnpm test:integration` | Exit 0: `createDb` connected to a `postgres:17-alpine` container started by Testcontainers and answered `select 1` |
+| `pnpm check:modules` | Exit 0 |
+| `pnpm format:check` | Exit 0 |
+| `node tools/doc-check/check.mts` | Exit 0: 0 errors, 0 warnings; 451 tracked sections |
+| `node tools/doc-check/check.mts test` | Exit 0: 38 pass |
+| `git config --get core.hooksPath` | `.githooks` |
+
 ## 2. Start gate for S1-F01
 
 `S1-F01` may start when all of these hold. Nothing else is in the gate.
