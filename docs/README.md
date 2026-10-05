@@ -27,6 +27,7 @@ All project documents live in this folder. When two of them disagree, the one hi
 | [reports/](reports/) | One-time reports. |
 | [data-from-kdps/](data-from-kdps/README.md) | Raw data KDPS sent (June–July 2026). Git-ignored; only its READMEs are tracked. Not ranked. |
 | [data-notes/](data-notes/README.md) | Notes on the KDPS data by ERP topic: layouts, codes, offers, data quality, fit with the PRD, open questions. Not ranked; they decide nothing. |
+| [implementation/](implementation/index.md) | The implementation plan: preparation, the six stages split into features and tasks, the readiness register of open items, requirement coverage and exit checklists. Not ranked; it decides nothing and follows [phases.md](phases.md). |
 | [reviews.json](reviews.json) | Review records kept by the doc checker. |
 
 ## When two documents disagree
