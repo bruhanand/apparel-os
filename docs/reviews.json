@@ -33,8 +33,8 @@
       "status": "reviewed",
       "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
       "date": "2026-10-05",
-      "reason": "Paths, package names and every pnpm script match package.json, apps, packages, tools and code-check.yml; the new line on code-house-rules.md matches its Draft status, part A sections 2 to 11 and the part B placeholder.",
-      "unitHash": "dba26b8eb0f9",
+      "reason": "Re-read after the Status fix: the approved-part-A sentence now matches code-house-rules line 5 and its section 13 open questions, reviews.json holds round-1 records for every part A section, and paths, pnpm scripts, the pre-commit hook and code-check.yml steps still agree with the tables.",
+      "unitHash": "17d6d4773835",
       "deps": {
         "DEC-005": {"hash":"d9f11492dc0d","decs":[]},
         "DEC-013": {"hash":"57a896ce2827","decs":[]},
@@ -12252,8 +12252,8 @@
       "status": "reviewed",
       "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
       "date": "2026-10-05",
-      "reason": "Header checked against the document body: the PRD headings named exist in prd.md Technical platform, the ID, policy and decision lists cover what sections 1 to 13 cite, gaps-before-code section 3 is the house-rules item, and each Depends-on document supplies the topic named beside it.",
-      "unitHash": "4135f8897422",
+      "reason": "The new Current-for-part-A Status agrees with the stage-0-preparation section 2 approval record (product owner, CH-1 to CH-7 left open) and with index.md section 9 accepting AI-reviewed batches; every PRD, policy and DEC ID cited outside comments in sections 1 to 13 falls inside the header lists, the four Stack rows and three PRD headings exist, and every Depends-on file is real.",
+      "unitHash": "3a05c51222dc",
       "deps": {
         "DEC-093": {"hash":"3b57b9b3c652","decs":[]},
         "DEC-101": {"hash":"f2fd1165214e","decs":[]},

@@ -163,7 +163,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
 - The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
-- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is a draft waiting for review and approval. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is not written yet.
+- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; its open questions CH-1 to CH-7 stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is not written yet.
 
 ## Stack
 <!-- deps: prd.md#stack — restates the PRD stack table -->

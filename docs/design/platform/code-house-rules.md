@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 5 Oct 2026. Part A, database and tests (sections 2 to 11), is written for review. Part B, API and runtime (section 12), is not written yet. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current** for part A, 5 Oct 2026: part A, database and tests (sections 2 to 11), is reviewed and approved by the product owner, and its open questions (section 13) stay open at their gates. Part B, API and runtime (section 12), is not written yet. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: "Technical platform" (Stack: Repository, Database, Database access, Verification); Module and data boundaries; Transaction and integration integrity; from AI, security and operational reliability, the PostgreSQL scope controls, dependency pinning and the checks every change must pass. It is the code house rules of [gaps-before-code.md](../../reports/gaps-before-code.md) section 3.
 

@@ -192,8 +192,8 @@ Reviews use the existing gate in `AGENTS.md` ("Change gate", "Honest reviews") a
 | DR-3 | Before coding `S1-F12` and `S1-F14` | GC-8 and GC-9, and the edits they cause elsewhere |
 | DR-4 onwards | Before each later stage's coding | That stage's area designs, the never-reviewed sections of [phases.md](../phases.md) for it, and any decision round |
 
-- Only a person the product owner names may run `review`, `record` or `drop`, with `--by` naming who reviewed.
-- **Named reviewer** (`S0-T01`, 5 Oct 2026): Anand Kumar, for DR-1 and later batches. Records give `--by "Anand Kumar"`.
+- Only a reviewer the product owner names may have records written with `review`, `record` or `drop`, and `--by` names who actually reviewed.
+- **Named reviewers** (`S0-T01`, 5 Oct 2026): Anand Kumar, for DR-1 and later batches, recorded as `--by "Anand Kumar"`. **Also accepted** (product owner, 5 Oct 2026): independent AI reviewers working under [tools/doc-check/ai-review.md](../../tools/doc-check/ai-review.md), recorded under their own name, never under Anand Kumar's. A batch reviewed this way counts as reviewed once its findings are fixed and re-reviewed and the product owner approves the batch. This waives no review requirement and permits no record of a review that did not happen.
 - One reason per section, from reading that section against its current sources. Never one reason for many sections, and never a reason written to make the check pass.
 - A finding is fixed in the lower document. A business question goes up as a decision entry or a KDPS question.
 

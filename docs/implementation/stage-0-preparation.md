@@ -57,7 +57,7 @@ Run on commit `460f81b` with no working-tree changes, on the product owner's mac
 | 5 | Synthetic fixtures and reset exist and are proved in CI | `S0-T06` | Green integration tests |
 | 6 | The four never-reviewed `AGENTS.md` sections are reviewed | `S0-T08` round 1 | Review records |
 
-**Approval record, condition 3 (5 Oct 2026).** The product owner approved house rules part A ([code-house-rules.md](../design/platform/code-house-rules.md) sections 1 to 11 and 13), with CH-1 to CH-7 and books-and-posting GC4-4 left OPEN at their stated gates. This approval is not a review record. The technical reviews of round 1 were done by independent AI reviewers and are recorded in `docs/reviews.json` as "Claude (AI review, independent reviewer, DR-1 round 1)". The named reviewer's own section-by-section review ([index.md](index.md) section 9) is still to come, recorded with `--by "Anand Kumar"`; until then conditions 3 and 6 are not fully met.
+**Approval record, condition 3 (5 Oct 2026).** The product owner approved house rules part A ([code-house-rules.md](../design/platform/code-house-rules.md) sections 1 to 11 and 13), with CH-1 to CH-7 and books-and-posting GC4-4 left OPEN at their stated gates. This approval is not a review record. The technical reviews of round 1 were done by independent AI reviewers and are recorded in `docs/reviews.json` as "Claude (AI review, independent reviewer, DR-1 round 1)". The product owner accepted independent AI reviews for DR-1 the same day ([index.md](index.md) section 9) and approved this batch, so conditions 3 and 6 are met.
 
 Gates inside `S1-F01`, not before it:
 
@@ -166,7 +166,7 @@ Each task ends with the full check set passing.
 | Steps | **Round 1, in the start gate:** house rules part A, and the four never-reviewed `AGENTS.md` sections (top, "Document order", "Alignment rules", "Planned architecture"). **Round 2, before `S1-F01-T04`:** house rules part B, and [deployment.md](../design/platform/deployment.md) sections 5 and 9. In each round: run `node tools/doc-check/check.mts impact` for the IDs the new text cites; write the packet for the stale sections and review it under [tools/doc-check/ai-review.md](../../tools/doc-check/ai-review.md), recording verdicts with `record`; read each never-reviewed section against its current sources and record it with `review`, one call and one reason per section; fix each finding in the lower document, or raise it |
 | Expected output | Review records written by the checker; fixes where needed |
 | Completion criteria | The doc checker passes; each listed section shows "reviewed"; no reason is reused |
-| Owner | The reviewer named in `S0-T01` |
+| Owner | A reviewer named in [index.md](index.md) section 9: the one named in `S0-T01`, or independent AI reviewers recorded under their own name, with the product owner's approval of the batch |
 
 ## 5. Corrected first assignment
 
