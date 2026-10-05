@@ -1,0 +1,45 @@
+{
+  "id": "CG-21",
+  "title": "Synthetic costing profile",
+  "synthetic": true,
+  "covers": ["POL-03.06", "PRD-PTW-010"],
+  "function": "costLine",
+  "input": {
+    "basic": {
+      "kind": "known",
+      "value": 100000
+    },
+    "amounts": {},
+    "profile": {
+      "version": "syn-cost-1",
+      "steps": [
+        {
+          "kind": "discount-rate",
+          "rate": "10"
+        },
+        {
+          "kind": "addition-rate",
+          "rate": "5"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "profileVersion": "syn-cost-1",
+    "pRate": {
+      "kind": "known",
+      "value": 94500
+    },
+    "missing": [],
+    "steps": [
+      {
+        "kind": "discount-rate",
+        "value": "90000"
+      },
+      {
+        "kind": "addition-rate",
+        "value": "94500"
+      }
+    ]
+  }
+}

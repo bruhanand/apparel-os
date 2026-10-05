@@ -1,0 +1,34 @@
+{
+  "id": "CG-21b",
+  "title": "Missing input",
+  "synthetic": true,
+  "covers": ["POL-03.08"],
+  "function": "costLine",
+  "input": {
+    "basic": {
+      "kind": "unknown"
+    },
+    "amounts": {},
+    "profile": {
+      "version": "syn-cost-1",
+      "steps": [
+        {
+          "kind": "discount-rate",
+          "rate": "10"
+        },
+        {
+          "kind": "addition-rate",
+          "rate": "5"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "profileVersion": "syn-cost-1",
+    "pRate": {
+      "kind": "unknown"
+    },
+    "missing": ["basic"],
+    "steps": []
+  }
+}

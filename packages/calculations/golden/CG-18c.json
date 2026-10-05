@@ -1,0 +1,35 @@
+{
+  "id": "CG-18c",
+  "title": "The DEC-007 example",
+  "synthetic": true,
+  "covers": ["PRD-RET-022"],
+  "function": "splitRefund",
+  "input": {
+    "tenders": [
+      {
+        "tender": "card",
+        "allocation": 150000,
+        "remaining": 150000
+      },
+      {
+        "tender": "cash",
+        "allocation": 50000,
+        "remaining": 50000
+      }
+    ],
+    "refund": 80000
+  },
+  "expected": {
+    "refund": 80000,
+    "shares": [
+      {
+        "tender": "card",
+        "amount": 60000
+      },
+      {
+        "tender": "cash",
+        "amount": 20000
+      }
+    ]
+  }
+}

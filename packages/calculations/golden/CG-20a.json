@@ -1,0 +1,53 @@
+{
+  "id": "CG-20a",
+  "title": "Modes",
+  "synthetic": true,
+  "covers": ["PRD-MOD-014", "PRD-MOD-015"],
+  "function": "round",
+  "runs": [
+    {
+      "input": {
+        "value": "2.5",
+        "rule": {
+          "version": "syn-round-mode-half-up",
+          "unit": 1,
+          "mode": "half-up"
+        }
+      },
+      "expected": 3
+    },
+    {
+      "input": {
+        "value": "2.5",
+        "rule": {
+          "version": "syn-round-mode-half-to-even",
+          "unit": 1,
+          "mode": "half-to-even"
+        }
+      },
+      "expected": 2
+    },
+    {
+      "input": {
+        "value": "2.5",
+        "rule": {
+          "version": "syn-round-mode-up",
+          "unit": 1,
+          "mode": "up"
+        }
+      },
+      "expected": 3
+    },
+    {
+      "input": {
+        "value": "2.5",
+        "rule": {
+          "version": "syn-round-mode-down",
+          "unit": 1,
+          "mode": "down"
+        }
+      },
+      "expected": 2
+    }
+  ]
+}

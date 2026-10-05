@@ -1,0 +1,34 @@
+{
+  "id": "CG-15c",
+  "title": "Entered zero",
+  "synthetic": true,
+  "covers": ["PRD-POS-007"],
+  "function": "checkTenders",
+  "input": {
+    "bill": {
+      "$pricedBill": "CG-03"
+    },
+    "allocation": {
+      "billReference": {
+        "$billReference": "CG-03"
+      },
+      "lines": [
+        {
+          "kind": "card",
+          "amount": 196000
+        },
+        {
+          "kind": "cash",
+          "amount": 200000
+        }
+      ],
+      "cashReceived": 0
+    }
+  },
+  "refusal": [
+    {
+      "code": "insufficient-cash",
+      "input": "cash-received"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "id": "CG-18b",
+  "title": "A cap binds",
+  "synthetic": true,
+  "covers": ["PRD-RET-022"],
+  "function": "splitRefund",
+  "input": {
+    "tenders": [
+      {
+        "tender": "cash",
+        "allocation": 60000,
+        "remaining": 30000
+      },
+      {
+        "tender": "card",
+        "allocation": 30000,
+        "remaining": 30000
+      },
+      {
+        "tender": "upi",
+        "allocation": 10000,
+        "remaining": 10000
+      }
+    ],
+    "refund": 60000
+  },
+  "expected": {
+    "refund": 60000,
+    "shares": [
+      {
+        "tender": "cash",
+        "amount": 30000
+      },
+      {
+        "tender": "card",
+        "amount": 22500
+      },
+      {
+        "tender": "upi",
+        "amount": 7500
+      }
+    ]
+  }
+}

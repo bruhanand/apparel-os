@@ -1,0 +1,253 @@
+{
+  "id": "CG-11",
+  "title": "Price above MRP",
+  "synthetic": true,
+  "covers": ["PRD-POS-024"],
+  "function": "priceBill",
+  "runs": [
+    {
+      "input": {
+        "store": "SYN-S1",
+        "storeGroups": ["SYN-G1"],
+        "businessDate": "2026-10-10",
+        "lines": [
+          {
+            "id": "L1",
+            "item": "SYN-SKU-A1",
+            "brand": "SYN-BR-A",
+            "classification": {
+              "kind": "known",
+              "value": "SYN-HSN-2"
+            },
+            "quantity": 1,
+            "mrp": {
+              "kind": "known",
+              "value": 110000
+            },
+            "startPrice": {
+              "source": "manual",
+              "pricePerUnit": 120000
+            }
+          }
+        ],
+        "priceLists": [],
+        "offers": [],
+        "combinationRules": [],
+        "tax": {
+          "priceBasis": {
+            "version": "syn-basis-incl",
+            "pricesIncludeTax": true
+          },
+          "registration": {
+            "version": "syn-reg-1",
+            "registration": "SYN-REG-1",
+            "chargesTax": true,
+            "components": [
+              {
+                "component": "SYN-X",
+                "share": "0.5"
+              },
+              {
+                "component": "SYN-Y",
+                "share": "0.5"
+              }
+            ]
+          },
+          "classifications": [
+            {
+              "code": "SYN-HSN-1",
+              "version": "syn-tax-1"
+            },
+            {
+              "code": "SYN-HSN-2",
+              "version": "syn-tax-1"
+            }
+          ],
+          "rateRules": [
+            {
+              "kind": "slabs",
+              "version": "syn-tax-1",
+              "classification": "SYN-HSN-1",
+              "comparedValue": {
+                "per": "unit",
+                "discounts": "after",
+                "tax": "excluded"
+              },
+              "slabs": [
+                {
+                  "lowerBound": 0,
+                  "boundIn": "this-slab",
+                  "rate": "10"
+                },
+                {
+                  "lowerBound": 150000,
+                  "boundIn": "this-slab",
+                  "rate": "20"
+                }
+              ]
+            },
+            {
+              "kind": "single-rate",
+              "version": "syn-tax-1",
+              "classification": "SYN-HSN-2",
+              "rate": "10"
+            }
+          ]
+        },
+        "rounding": {
+          "discount": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up"
+          },
+          "tax": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up",
+            "level": "line"
+          },
+          "bill": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up"
+          }
+        }
+      },
+      "refusal": [
+        {
+          "code": "price-above-mrp",
+          "line": "L1",
+          "input": "manual-price"
+        }
+      ]
+    },
+    {
+      "input": {
+        "store": "SYN-S1",
+        "storeGroups": ["SYN-G1"],
+        "businessDate": "2026-10-10",
+        "lines": [
+          {
+            "id": "L1",
+            "item": "SYN-SKU-A1",
+            "brand": "SYN-BR-A",
+            "classification": {
+              "kind": "known",
+              "value": "SYN-HSN-2"
+            },
+            "quantity": 1,
+            "mrp": {
+              "kind": "known",
+              "value": 110000
+            },
+            "startPrice": {
+              "source": "price-list",
+              "priceList": "SYN-PL1"
+            }
+          }
+        ],
+        "priceLists": [
+          {
+            "id": "SYN-PL1",
+            "version": "syn-pl1-1",
+            "markdown": false,
+            "prices": [
+              {
+                "item": "SYN-SKU-A1",
+                "pricePerUnit": 120000
+              }
+            ]
+          }
+        ],
+        "offers": [],
+        "combinationRules": [],
+        "tax": {
+          "priceBasis": {
+            "version": "syn-basis-incl",
+            "pricesIncludeTax": true
+          },
+          "registration": {
+            "version": "syn-reg-1",
+            "registration": "SYN-REG-1",
+            "chargesTax": true,
+            "components": [
+              {
+                "component": "SYN-X",
+                "share": "0.5"
+              },
+              {
+                "component": "SYN-Y",
+                "share": "0.5"
+              }
+            ]
+          },
+          "classifications": [
+            {
+              "code": "SYN-HSN-1",
+              "version": "syn-tax-1"
+            },
+            {
+              "code": "SYN-HSN-2",
+              "version": "syn-tax-1"
+            }
+          ],
+          "rateRules": [
+            {
+              "kind": "slabs",
+              "version": "syn-tax-1",
+              "classification": "SYN-HSN-1",
+              "comparedValue": {
+                "per": "unit",
+                "discounts": "after",
+                "tax": "excluded"
+              },
+              "slabs": [
+                {
+                  "lowerBound": 0,
+                  "boundIn": "this-slab",
+                  "rate": "10"
+                },
+                {
+                  "lowerBound": 150000,
+                  "boundIn": "this-slab",
+                  "rate": "20"
+                }
+              ]
+            },
+            {
+              "kind": "single-rate",
+              "version": "syn-tax-1",
+              "classification": "SYN-HSN-2",
+              "rate": "10"
+            }
+          ]
+        },
+        "rounding": {
+          "discount": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up"
+          },
+          "tax": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up",
+            "level": "line"
+          },
+          "bill": {
+            "version": "syn-round-1",
+            "unit": 1,
+            "mode": "half-up"
+          }
+        }
+      },
+      "refusal": [
+        {
+          "code": "price-above-mrp",
+          "line": "L1",
+          "input": "price-list"
+        }
+      ]
+    }
+  ]
+}

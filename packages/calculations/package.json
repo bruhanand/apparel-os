@@ -1,0 +1,35 @@
+{
+  "name": "@apparel-os/calculations",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared calculations (shared-calculations.md, GC-7): selling at the root entry point, costing at ./costing (server only)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./costing": {
+      "types": "./dist/costing/index.d.ts",
+      "default": "./dist/costing/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@apparel-os/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  }
+}

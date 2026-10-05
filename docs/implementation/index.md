@@ -11,7 +11,7 @@ The plan runs from preparation to live use in five layers:
 1. **Gates** say what must be true before a piece of work may start or finish. Every open item in the [readiness register](readiness-register.md) names the gate it blocks (section 4).
 2. **Stages** are the six stages of [phases.md](../phases.md), unchanged, plus a preparation stage before stage 1 ([stage-0-preparation.md](stage-0-preparation.md)).
 3. **Features** split each stage into vertical, end-to-end workflows a person can see: screen, API and stored records together ([stages-and-features.md](stages-and-features.md)).
-4. **Tasks** split a feature into pieces one agent can build and verify alone, each with its inputs, outputs and completion criteria. Only the first feature is broken into tasks now ([s1-f01-first-access.md](s1-f01-first-access.md)); later features get their tasks when their turn comes, so the detail does not go stale.
+4. **Tasks** split a feature into pieces one agent can build and verify alone, each with its inputs, outputs and completion criteria. Only the first feature and the shared calculations are broken into tasks now ([s1-f01-first-access.md](s1-f01-first-access.md), [s1-f11-shared-calculations.md](s1-f11-shared-calculations.md)); later features get their tasks when their turn comes, so the detail does not go stale.
 5. **Acceptance tests and evidence** close each feature and each stage ([exit-checklists.md](exit-checklists.md)). [requirement-coverage.md](requirement-coverage.md) traces every PRD bullet to the feature that delivers it.
 
 | File | What it holds |
@@ -22,6 +22,7 @@ The plan runs from preparation to live use in five layers:
 | [stages-and-features.md](stages-and-features.md) | The six stages: outcomes, scope, gates, features, parallel work, exit and live activation; the dependency map |
 | [s1-f01-first-access.md](s1-f01-first-access.md) | The first feature in full: workflow, invariants, records, transactions, failures, tasks and tests |
 | [s1-f10-stock-harness.md](s1-f10-stock-harness.md) | The synthetic harness that drives the stock golden scenarios through the real services, and its decisions H1 to H6, taken by `DEC-112` |
+| [s1-f11-shared-calculations.md](s1-f11-shared-calculations.md) | The shared calculations package: tasks, tests, the golden cases and RR-042, and the counter run blocked on RR-015 |
 | [requirement-coverage.md](requirement-coverage.md) | All 520 PRD bullets with their owner feature and the feature that completes them; all 19 policies; deferred items named |
 | [exit-checklists.md](exit-checklists.md) | Stage exit checklists and live-activation checklists, with the evidence each item needs |
 

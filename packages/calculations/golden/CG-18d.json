@@ -1,0 +1,33 @@
+{
+  "id": "CG-18d",
+  "title": "Above what is left",
+  "synthetic": true,
+  "covers": ["PRD-RET-022"],
+  "function": "splitRefund",
+  "input": {
+    "tenders": [
+      {
+        "tender": "cash",
+        "allocation": 60000,
+        "remaining": 60000
+      },
+      {
+        "tender": "card",
+        "allocation": 30000,
+        "remaining": 30000
+      },
+      {
+        "tender": "upi",
+        "allocation": 10000,
+        "remaining": 10000
+      }
+    ],
+    "refund": 100001
+  },
+  "refusal": [
+    {
+      "code": "exceeds-refundable",
+      "input": "refund"
+    }
+  ]
+}
