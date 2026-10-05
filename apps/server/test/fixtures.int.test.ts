@@ -57,6 +57,23 @@ describe('the two synthetic Organisations (code-house-rules 11.2)', () => {
     }
   });
 
+  it('PRD-ACS-020 DEC-093 are listed in the directory, each at its own database (S1-F01-T02)', async () => {
+    const owner = await connect(world.directory, 'migration');
+    try {
+      const result = await owner.query<{ organisation_code: string; database_name: string }>(
+        'select organisation_code, database_name from kernel.directory_entry order by organisation_code',
+      );
+      expect(result.rows).toEqual(
+        world.organisations.map((organisation) => ({
+          organisation_code: organisation.code,
+          database_name: organisation.database,
+        })),
+      );
+    } finally {
+      await owner.end();
+    }
+  });
+
   it('PRD-SEC-005 the runtime role connects to each database', async () => {
     for (const database of [world.directory, ...world.organisations.map((organisation) => organisation.database)]) {
       const runtime = await connect(database, 'runtime');

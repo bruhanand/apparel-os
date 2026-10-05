@@ -1,6 +1,6 @@
 # Runbook: database roles and the directory database on Railway
 
-Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Nothing here has been run yet, and no Railway service was changed by `S0-T05`.
+Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Nothing here has been run yet, and no Railway service was changed by `S0-T05` or `S1-F01-T02`.
 
 ## What it sets up
 
@@ -8,8 +8,9 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 | --- | --- | --- |
 | Migration role | `aos_migration` | Owns the directory and every Organisation database. Used only by the pre-deploy step, the setup step (CH-1) and test setup |
 | Runtime role | `aos_runtime` | Used by `app` and `worker`. Owns nothing, does not bypass row-level security |
-| Directory database | `aos_directory` | Holds only each Organisation's code and where its database is (DEC-093). Its table arrives with `S1-F01-T02` |
+| Directory database | `aos_directory` | Holds only each Organisation's code and the name of its database on the same server (DEC-093), in `kernel.directory_entry` |
 | Pre-deploy variable | `AOS_MIGRATION_DATABASE_URL` | The directory database as `aos_migration`. Never logged |
+| Runtime variables | `AOS_RUNTIME_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` | The directory database as `aos_runtime`, and the most connections each database pool opens. `app` refuses to start without either. The URL is never logged |
 
 ## Steps
 
@@ -19,9 +20,10 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 4. **Create the directory database**, owned by the migration role: `create database aos_directory owner aos_migration;`.
 5. **Set the variables** in the environment's Railway variables:
    - On the service that runs the pre-deploy step: `AOS_MIGRATION_DATABASE_URL=postgresql://aos_migration:<password>@<private host>:<port>/aos_directory`, using the private network address of the `postgres` service.
-   - The runtime connection for `app` and `worker` is set when `S1-F01-T02` adds Organisation routing, which names that variable.
-6. **Wire the pre-deploy command** when `S1-F01` is first deployed to `dev` (RR-187): `pnpm migrate`. **For now it is directory-only:** it migrates the directory database and no Organisation database, and says so in its last log line. `S1-F01-T02` switches it to every Organisation database the directory lists; do not rely on it for an Organisation database before then. It exits non-zero on failure, so the deploy stops and the old version keeps running. It also refuses, before changing anything, a connection that is not `aos_migration` (a superuser included) or a database `aos_migration` does not own.
-7. **Check.** Run `pnpm migrate` once by hand, or read the first deploy's log: it prints one line per applied file, then `Directory database migrated. No Organisation database was migrated: …`. A second run prints only that last line.
+   - On `app` (and `worker`, when it exists): `AOS_RUNTIME_DATABASE_URL=postgresql://aos_runtime:<password>@<private host>:<port>/aos_directory`: the directory database at the same private address, connecting as the runtime role. Each Organisation's database is reached on the same server, as the same role, by the name the directory keeps.
+   - On `app` (and `worker`): `AOS_DATABASE_POOL_MAX`, a whole number of at least 1: the most connections each pool opens, one pool for the directory and one per Organisation database. Its value is OPEN ([deployment.md](../../../docs/design/platform/deployment.md) D-7, RR-216) and it has no default; the product owner picks one for the environment and tunes it after measurement. It is a technical setting, not a KDPS value.
+6. **Wire the pre-deploy command** when `S1-F01` is first deployed to `dev` (RR-187): `pnpm migrate`. It migrates the directory database, then every Organisation database the directory lists, in code order, each on the same server as the directory and by the name the directory keeps. It stops at the first database that fails and exits non-zero, so the deploy stops and the old version keeps running. It also refuses, before changing anything, a connection string that is not a `postgresql://` URL with a host, a connection that is not `aos_migration` (a superuser included), or a database `aos_migration` does not own.
+7. **Check.** Run `pnpm migrate` once by hand, or read the first deploy's log: it prints one line per applied file, naming the directory or the Organisation, then `Migrated the directory database and <n> Organisation database(s): <codes>`. Before the setup step (`S1-F01-T10`) has registered an Organisation, `n` is 0 and the line ends `none listed`. A second run prints only that last line.
 
 ## Left open
 

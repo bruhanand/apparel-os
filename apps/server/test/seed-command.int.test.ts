@@ -2,8 +2,9 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { migrationSetFolder, readMigrationSet } from '../src/kernel/index.js';
-import { SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from './fixtures/synthetic.js';
+import { uuidv7 } from '@apparel-os/domain';
+import { migrateDatabase, migrationSetFolder, readMigrationSet } from '../src/kernel/index.js';
+import { SYNTHETIC_ORGANISATIONS, syntheticCode, syntheticDatabaseName } from './fixtures/synthetic.js';
 import {
   connect,
   createEmptyDatabase,
@@ -13,7 +14,7 @@ import {
   RUNNER_GRANTS,
 } from './support/postgres.js';
 
-// S0-T06: the local seed, `pnpm seed` (node dist-seed/test/seed/seed.js), run as its own process
+// S0-T06, S1-F01-T02: the local seed, `pnpm seed` (node dist-seed/test/seed/seed.js), run as its own process
 // (code-house-rules 11.2). Turborepo builds the seed before the server's integration tests, so this is the code under
 // test. It creates databases with fixed synthetic names; no other test file uses them.
 
@@ -76,8 +77,38 @@ async function hasKernel(database: string): Promise<boolean> {
   }
 }
 
+async function directoryRows(database: string): Promise<{ organisation_code: string; database_name: string }[]> {
+  const client = await connect(database, 'migration');
+  try {
+    const result = await client.query<{ organisation_code: string; database_name: string }>(
+      'select organisation_code, database_name from kernel.directory_entry order by organisation_code',
+    );
+    return result.rows;
+  } finally {
+    await client.end();
+  }
+}
+
+/** A directory migrated and listing one Organisation, written as the migration role. */
+async function directoryListing(label: string, code: string, database: string): Promise<string> {
+  const name = await createEmptyDatabase(label);
+  extra.push(name);
+  await migrateDatabase({ connectionString: databaseUrl(name, 'migration'), folder: migrationSetFolder('directory') });
+  const client = await connect(name, 'migration');
+  try {
+    await client.query(
+      'insert into kernel.directory_entry (id, organisation_code, database_name) values ($1, $2, $3)',
+      [uuidv7(), code, database],
+    );
+  } finally {
+    await client.end();
+  }
+  return name;
+}
+
 let directory: string;
 let untouched: string;
+const extra: string[] = [];
 
 beforeAll(async () => {
   if (!existsSync(COMMAND)) throw new Error(`${COMMAND} is missing: run pnpm build:seed first`);
@@ -86,7 +117,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const name of [directory, untouched, ...SEEDED]) await dropDatabase(name);
+  for (const name of [directory, untouched, ...extra, ...SEEDED]) await dropDatabase(name);
 });
 
 describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
@@ -130,6 +161,37 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await seededDatabases()).toEqual([]);
   });
 
+  it('RR-195 PRD-SEC-017 refuses a directory that lists an Organisation that is not synthetic, before changing anything', async () => {
+    // A code without the SYN marker stands for a real Organisation; no real code is used.
+    const listing = await directoryListing('seed_real', 'ORG-NOT-MARKED', 'org_not_marked');
+    const outcome = await runSeed({
+      AOS_ENVIRONMENT: 'local',
+      AOS_MIGRATION_DATABASE_URL: databaseUrl(listing, 'migration'),
+    });
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.output).toContain(
+      'Seed refused, nothing changed: the directory lists an Organisation that is not synthetic',
+    );
+    expect(await directoryRows(listing)).toEqual([
+      { organisation_code: 'ORG-NOT-MARKED', database_name: 'org_not_marked' },
+    ]);
+    expect(await seededDatabases()).toEqual([]);
+  });
+
+  it('refuses a directory that lists a seed code at another database, before changing anything', async () => {
+    const [first] = SYNTHETIC_ORGANISATIONS;
+    const elsewhere = syntheticDatabaseName(syntheticCode('ORG-ELSEWHERE'));
+    const listing = await directoryListing('seed_elsewhere', first.code, elsewhere);
+    const outcome = await runSeed({
+      AOS_ENVIRONMENT: 'local',
+      AOS_MIGRATION_DATABASE_URL: databaseUrl(listing, 'migration'),
+    });
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.output).toContain(`Seed refused, nothing changed: the directory lists ${first.code}`);
+    expect(await directoryRows(listing)).toEqual([{ organisation_code: first.code, database_name: elsewhere }]);
+    expect(await seededDatabases()).toEqual([]);
+  });
+
   it('PRD-ACS-020 creates the two synthetic Organisations, each with its own migrated database, and reruns cleanly', async () => {
     const variables = { AOS_ENVIRONMENT: 'local', AOS_MIGRATION_DATABASE_URL: databaseUrl(directory, 'migration') };
     const first = await runSeed(variables);
@@ -141,6 +203,16 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     }
     expect(first.output).not.toMatch(/postgres(ql)?:\/\//);
     expect(await hasKernel(directory)).toBe(true);
+    // Each is listed in the directory at its own database (DEC-093), as the setup step will list it (RR-194).
+    expect(await directoryRows(directory)).toEqual(
+      SYNTHETIC_ORGANISATIONS.map((organisation) => ({
+        organisation_code: organisation.code,
+        database_name: syntheticDatabaseName(organisation.code),
+      })),
+    );
+    for (const organisation of SYNTHETIC_ORGANISATIONS) {
+      expect(first.output).toContain(`${organisation.code}: listed in the directory`);
+    }
     expect(await databaseGrants(directory)).toEqual(RUNNER_GRANTS);
     expect(await seededDatabases()).toEqual(SEEDED.map((datname) => ({ datname, owner: 'aos_migration' })));
 
@@ -169,5 +241,9 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     for (const database of SEEDED) {
       expect(second.output).toContain(`database ${database} already there, 0 migration(s) applied`);
     }
+    for (const organisation of SYNTHETIC_ORGANISATIONS) {
+      expect(second.output).toContain(`${organisation.code}: already listed in the directory`);
+    }
+    expect(await directoryRows(directory)).toHaveLength(SYNTHETIC_ORGANISATIONS.length);
   });
 });

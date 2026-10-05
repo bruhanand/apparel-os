@@ -40,6 +40,13 @@ export const signInOutcomeSchema = z.discriminatedUnion('outcome', [
 export type SignInOutcome = z.infer<typeof signInOutcomeSchema>;
 
 /**
+ * The one refusal for a wrong Organisation code, login, password or code (access-and-approvals 3.1). It carries
+ * nothing else, so a failed attempt never says which part was wrong.
+ */
+export type SignInRefusal = Extract<SignInOutcome, { outcome: 'refused' }>;
+export const signInRefusal: SignInRefusal = Object.freeze({ outcome: 'refused' });
+
+/**
  * The authenticator secret, shown once at enrolment and never again (access-and-approvals 3.2). The server
  * reveals it explicitly into the response; a parsed copy stays wrapped until the screen shows it.
  */

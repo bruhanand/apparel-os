@@ -32,10 +32,11 @@ export {
   enrolmentStartResponseSchema,
   passwordChangeRequestSchema,
   signInOutcomeSchema,
+  signInRefusal,
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
-export type { SignInOutcome, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
+export type { SignInOutcome, SignInRefusal, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
 
 export {
   assignmentScopeSchema,

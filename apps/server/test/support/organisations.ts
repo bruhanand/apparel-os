@@ -1,5 +1,6 @@
+import { uuidv7 } from '@apparel-os/domain';
 import { SYNTHETIC_ORGANISATIONS, type SyntheticOrganisation } from '../fixtures/synthetic.js';
-import { createTestDatabase, dropDatabase } from './postgres.js';
+import { connect, createTestDatabase, dropDatabase } from './postgres.js';
 
 export interface SyntheticOrganisationDatabase extends SyntheticOrganisation {
   /** The Organisation's own database, a copy of the Organisation template. */
@@ -19,10 +20,10 @@ export interface SyntheticWorld {
  * so that every database test can show one Organisation not seeing the other (code-house-rules 11.2; deployment.md
  * section 4; PRD-MOD-001, PRD-ACS-020). Every database is a copy of the run's migrated template (11.3).
  *
- * The fewest rows they need are written directly until the real interfaces exist (11.2). Today that is none: no
- * migration has a business table yet. Organisation routing (S1-F01-T02) adds the directory table; this helper then
- * writes each Organisation's directory row. The setup step (S1-F01-T10) then replaces those direct writes, so the
- * Organisations obey the same rules as a real one (PRD-ACS-023).
+ * The fewest rows they need are written directly until the real interfaces exist (11.2): each Organisation's
+ * directory row, its code and its database's name (DEC-093), written as the migration role, which owns the
+ * directory. The setup step (S1-F01-T10) then replaces those direct writes, so the Organisations obey the same rules
+ * as a real one (PRD-ACS-023).
  */
 export async function createSyntheticOrganisations(label: string): Promise<SyntheticWorld> {
   const created: string[] = [];
@@ -42,9 +43,27 @@ export async function createSyntheticOrganisations(label: string): Promise<Synth
       { ...first, database: await make('organisation', 'org_a') },
       { ...second, database: await make('organisation', 'org_b') },
     ] as const;
+    await listInDirectory(directory, organisations);
     return { directory, organisations, reset };
   } catch (error) {
     await reset();
     throw error;
+  }
+}
+
+async function listInDirectory(
+  directory: string,
+  organisations: readonly SyntheticOrganisationDatabase[],
+): Promise<void> {
+  const owner = await connect(directory, 'migration');
+  try {
+    for (const organisation of organisations) {
+      await owner.query(
+        'insert into kernel.directory_entry (id, organisation_code, database_name) values ($1, $2, $3)',
+        [uuidv7(), organisation.code, organisation.database],
+      );
+    }
+  } finally {
+    await owner.end();
   }
 }

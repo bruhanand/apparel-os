@@ -1,8 +1,10 @@
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { uuidv7 } from '@apparel-os/domain';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { migrateAll, migrateDatabase, migrationSetFolder } from '../src/kernel/index.js';
+import { syntheticCode } from './fixtures/synthetic.js';
 import {
   connect,
   createEmptyDatabase,
@@ -12,7 +14,7 @@ import {
   RUNNER_GRANTS,
 } from './support/postgres.js';
 
-// S0-T05: the migration runner (code-house-rules 4.3; deployment.md section 4). The sets here are synthetic,
+// S0-T05, S1-F01-T02: the migration runner (code-house-rules 4.3; deployment.md section 4). The sets here are synthetic,
 // written to a temporary folder; each starts with the repository's own runner record.
 
 const RECORD = '0001__kernel__migration_record.sql';
@@ -238,6 +240,8 @@ describe('migrateDatabase refuses before it changes anything', () => {
 });
 
 describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
+  const DIRECTORY_FILES = [RECORD, '0002__kernel__directory_entry.sql'];
+
   // A database that already holds schema kernel makes the runner record's file fail there.
   async function blockedDatabase(label: string): Promise<string> {
     const name = await emptyDatabase(label);
@@ -245,27 +249,81 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
     return name;
   }
 
-  it('PRD-MOD-001 migrates the directory, then each Organisation in code order, and stops at the first failure', async () => {
+  /** A migrated directory listing the given Organisations, as the fixtures write it until the setup step (11.2). */
+  async function directoryListing(entries: readonly (readonly [string, string])[]): Promise<string> {
     const directory = await emptyDatabase('dir');
+    await migrateDatabase({
+      connectionString: databaseUrl(directory, 'migration'),
+      folder: migrationSetFolder('directory'),
+    });
+    const client = await connect(directory, 'migration');
+    try {
+      for (const [code, database] of entries) {
+        await client.query(
+          'insert into kernel.directory_entry (id, organisation_code, database_name) values ($1, $2, $3)',
+          [uuidv7(), code, database],
+        );
+      }
+    } finally {
+      await client.end();
+    }
+    return directory;
+  }
+
+  const organisationConnectionString = (database: string): string => databaseUrl(database, 'migration');
+
+  it('PRD-MOD-001 DEC-093 migrates the directory, then each Organisation it lists in code order, and stops at the first failure', async () => {
     const first = await emptyDatabase('org_a');
     const failing = await blockedDatabase('org_b');
     const last = await emptyDatabase('org_c');
+    const directory = await directoryListing([
+      [syntheticCode('ORG-C'), last],
+      [syntheticCode('ORG-B'), failing],
+      [syntheticCode('ORG-A'), first],
+    ]);
+    const applied: string[] = [];
 
     await expect(
       migrateAll({
         directoryConnectionString: databaseUrl(directory, 'migration'),
-        organisations: [
-          { code: 'SYN-C', connectionString: databaseUrl(last, 'migration') },
-          { code: 'SYN-B', connectionString: databaseUrl(failing, 'migration') },
-          { code: 'SYN-A', connectionString: databaseUrl(first, 'migration') },
-        ],
+        organisationConnectionString,
+        onApplied: (database, fileName) => applied.push(`${database} ${fileName}`),
       }),
-    ).rejects.toThrow(/0001__kernel__migration_record\.sql failed/);
+    ).rejects.toThrow(
+      new RegExp(`Organisation ${syntheticCode('ORG-B')}: Migration 0001__kernel__migration_record\\.sql failed`),
+    );
 
-    expect(await recordedFiles(directory)).toEqual([RECORD]);
+    expect(await recordedFiles(directory)).toEqual(DIRECTORY_FILES);
     expect(await recordedFiles(first)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
     expect(await exists(failing, 'kernel.migration')).toBe(false);
     expect(await exists(last, 'kernel.migration')).toBe(false);
+    expect(applied).toEqual([
+      `Organisation ${syntheticCode('ORG-A')} ${RECORD}`,
+      `Organisation ${syntheticCode('ORG-A')} 0002__kernel__refuse_change.sql`,
+    ]);
+  });
+
+  it('PRD-MOD-001 reads the directory after migrating it, so a first run migrates the directory and finds nobody', async () => {
+    const directory = await emptyDatabase('dir_first');
+    const migrated = await migrateAll({
+      directoryConnectionString: databaseUrl(directory, 'migration'),
+      organisationConnectionString,
+    });
+    expect(migrated).toEqual([]);
+    expect(await recordedFiles(directory)).toEqual(DIRECTORY_FILES);
+  });
+
+  it('migrates nothing the directory does not list, and returns what it migrated', async () => {
+    const listed = await emptyDatabase('org_listed');
+    const unlisted = await emptyDatabase('org_unlisted');
+    const directory = await directoryListing([[syntheticCode('ORG-A'), listed]]);
+    const migrated = await migrateAll({
+      directoryConnectionString: databaseUrl(directory, 'migration'),
+      organisationConnectionString,
+    });
+    expect(migrated).toEqual([{ organisationCode: syntheticCode('ORG-A'), databaseName: listed }]);
+    expect(await recordedFiles(listed)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(await exists(unlisted, 'kernel.migration')).toBe(false);
   });
 
   it('touches no Organisation database when the directory fails', async () => {
@@ -274,7 +332,7 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
     await expect(
       migrateAll({
         directoryConnectionString: databaseUrl(directory, 'migration'),
-        organisations: [{ code: 'SYN-A', connectionString: databaseUrl(organisation, 'migration') }],
+        organisationConnectionString: () => databaseUrl(organisation, 'migration'),
       }),
     ).rejects.toThrow(/failed/);
     expect(await exists(organisation, 'kernel.migration')).toBe(false);

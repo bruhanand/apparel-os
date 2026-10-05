@@ -2,7 +2,7 @@
 
 > **Not ranked.** This register gathers the open gaps and questions of every document into one list. It decides nothing and supplies no value. Each item keeps its original ID and links to where it is kept; the source wins over this list. See [index.md](index.md).
 
-Checked on 5 Oct 2026 against the PRD, the policies, `DEC-001` to `DEC-111`, and updated the same day for `DEC-112` (the stage 1 baseline) and on 6 Oct 2026 for `S1-F01-T01` (RR-017, RR-205 to RR-215), the design documents, [phases.md](../phases.md), [questions-for-kdps.md](../questions-for-kdps.md), the reports and the data notes.
+Checked on 5 Oct 2026 against the PRD, the policies, `DEC-001` to `DEC-111`, and updated the same day for `DEC-112` (the stage 1 baseline) and on 6 Oct 2026 for `S1-F01-T01` (RR-017, RR-205 to RR-215) and `S1-F01-T02` (RR-195 done, RR-216), the design documents, [phases.md](../phases.md), [questions-for-kdps.md](../questions-for-kdps.md), the reports and the data notes.
 
 ## 1. How to read it
 
@@ -27,13 +27,13 @@ Each item is counted once, at the earliest gate it blocks.
 
 | Category | Active | Design | Code | Accept | Exit | Live | None |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Missing implementation | 12 | — | 12: each is the work of its feature | — | — | — | — |
+| Missing implementation | 11 | — | 11: each is the work of its feature | — | — | — | — |
 | Missing or unreviewed design | 33 | 8 | 23 | — | 1 | 1 | — |
 | Unresolved product behaviour | 19 | 5 | 2 | 1 | — | 4 | 7 |
 | Customer configuration | 104 | 1 | 1 | 1 | — | 100 | 1 |
 | External approval | 30 | — | — | 1 | — | 29 | — |
-| Runtime verification | 11 | — | 2 | 6 | 1 | 1 | 1 |
-| **Total** | **209** | **14** | **40** | **9** | **2** | **135** | **9** |
+| Runtime verification | 12 | — | 2 | 7 | 1 | 1 | 1 |
+| **Total** | **209** | **14** | **39** | **10** | **2** | **135** | **9** |
 
 Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V-numbers, and the settled or baseline questions listed in section 10. Stale report entries are in section 9.
 
@@ -54,7 +54,7 @@ Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V
 | RR-009 | PRD Stack (API) | No generated OpenAPI or typed client | Builders | S0-T04, S1-F01-T05 | Code: S1-F01 screens | Yes |
 | RR-193 | `S0-T06` code review, 5 Oct 2026; code-house-rules 11.2; [deployment.md](../design/platform/deployment.md) section 1 | The local seed reads the environment from `AOS_ENVIRONMENT`; the app's environment banner needs one too. Settle one variable that names the environment for both | Builders | S1-F01-T14 | Code: S1-F01-T14 | Yes |
 | RR-194 | `S0-T06` code review, 5 Oct 2026; code-house-rules 11.2; CH-1 | The setup step must deal with the `syn_org_a` and `syn_org_b` databases the seed has already made on a machine or on `dev`, or the seed must move onto the setup step | Builders | S1-F01-T10 | Code: S1-F01-T10 | Yes |
-| RR-195 | `S0-T06` code review, 5 Oct 2026; [deployment.md](../design/platform/deployment.md) section 1 | The seed trusts what `AOS_ENVIRONMENT` declares. Once the directory table exists, the seed should also refuse a directory that lists a non-synthetic Organisation | Builders | S1-F01-T02 | Code: S1-F01-T02 | Yes |
+| RR-195 | `S0-T06` code review, 5 Oct 2026; [deployment.md](../design/platform/deployment.md) section 1 | **Done** by `S1-F01-T02`, 6 Oct 2026: the seed refuses, before changing anything, a directory that lists a non-synthetic Organisation, or one of its own codes at another database (`apps/server/test/seed-command.int.test.ts`, "RR-195 PRD-SEC-017 refuses a directory that lists an Organisation that is not synthetic, before changing anything"). Was: the seed trusts what `AOS_ENVIRONMENT` declares | Builders | S1-F01-T02 | None: done | Yes |
 
 ## 4. Missing or unreviewed design
 
@@ -115,7 +115,7 @@ Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V
 | RR-051 | PRD Stack (Phone); `DEC-105` | A native phone client needs a later decision; responsive web serves phones through stage 6 | Product owner | `PRD-PRO-009` (part) | None: deferred | Yes |
 | RR-052 | This plan | Whether `docs/implementation/` becomes a gated document so the checker flags it when its sources change | Product owner | This plan | None | Yes |
 | RR-201 | GC6-17; `DEC-112` (GC6-3); data notes G-33 | Whether an ordinary external hyperlink in a sheet, such as a Google Drive link in KDPS's files, is an unapproved link that refuses the file, or is kept as text and never followed. `DEC-112` says the dependency rule alone refuses no ordinary hyperlink and approves no external link; GC-6 9.3 keeps refusing unapproved links until this is answered | Product owner | S1-F06, S2-F12 | None: refused until decided | Yes |
-| RR-205 | Found 6 Oct 2026 (`S1-F01-T01`): [stages-and-features.md](stages-and-features.md) `S1-F06` and `S1-F07`; RR-033; GC6-2; GC-6 9.2 | Two scheduling mismatches, not resolved here. (1) CSV: `S1-F06`'s acceptance cites imports-and-opening-data 17 test 1 "XLSX and CSV", while the CSV reader is still OPEN (GC6-2) and RR-033 gates it to `S1-F07`; decide whether `S1-F06` drops CSV from its acceptance or the CSV reader is chosen before `S1-F06`. (2) PDF: `S1-F07` builds "readers for XLSX, XLS, XLSB, CSV and PDF text" in stage 1, while GC-6 9.2 stores a PDF as evidence in stage 1, has its text extraction arrive in stage 2 (**Proposed**), and keeps stage 1 imports to the manual route (DEC-105); decide whether the PDF text reader is built in `S1-F07` or in stage 2. PDF.js is the reader `DEC-112` chose; its pin at 4.2.67 or later is RR-033's | Product owner | S1-F06, S1-F07 | Code: S1-F06/S1-F07 | Yes, the XLSX part |
+| RR-205 | Found 6 Oct 2026 (`S1-F01-T01`): [stages-and-features.md](stages-and-features.md) `S1-F06` and `S1-F07`; RR-033; GC6-2; GC-6 9.2 | **Decided by the product owner, 6 Oct 2026.** (1) CSV: `S1-F06` accepts on XLSX only; the CSV reader is chosen and built in `S1-F07`, still gated by RR-033. (2) PDF: stage 1 keeps a PDF as stored evidence only (GC-6 9.2); its text extraction comes in stage 2 with `S2-F05`, which completes `PRD-IMP-001`. [stages-and-features.md](stages-and-features.md) rows `S1-F06` and `S1-F07` are updated. PDF.js stays the reader `DEC-112` chose; its pin is RR-033's | Product owner | S1-F06, S1-F07 | None: decided | Yes |
 | RR-206 | GC3-13 (access-and-approvals 9.11, 16), found 6 Oct 2026 in `S1-F01-T01` | How the first Admin's or the first approver's lost password or authenticator is restored before anyone in the Organisation holds a credential reset. The setup step's roles hold no reset (9.11), so until a later approved role assignment grants one, nobody in the Organisation can reset either of them | Product owner | S1-F01 | Live S1 | Yes |
 
 ## 6. Customer configuration
@@ -302,6 +302,7 @@ The build follows the `DEC-105` and `DEC-112` baseline picks now. Each confirmer
 | RR-192 | `PRD-SEC-016` | Persona browser journeys for every affected change; none exists until Playwright arrives with S1-F01 | Builders | Every feature with screens | Accept: each such feature | Yes |
 | RR-196 | `S0-T06` code review, 5 Oct 2026; code-house-rules 10.1, 11.3 | The two isolation test files wait up to 240 s for each other, and the runner does not promise to schedule them together. Fine while the integration run takes seconds; recheck when it grows past about two minutes, for example by running the pair first | Builders | Every integration run | None | Yes |
 | RR-200 | House rules CH-3; `DEC-112` | The runtime role's time limits: the starting values for synthetic work (lock wait 1 s, statement 5 s) set on the role locally, in tests and on `dev`, then measured and tuned; a command that reaches one rolls back and reports the failure. `apps/server/db/roles.sql` and the Railway runbook, which still says no limit is set, are updated for `dev` only. With the 1 s lock limit, counter postings in a book can time out behind a large posting job holding the journal series (GC4-4); the `S1-F10` measurement checks it. The limits of `kdps-test` and production are set only after measurement | Builders | S1-F01 onwards | Accept: the first demo on `dev` | Yes |
+| RR-216 | `S1-F01-T02` code review, 6 Oct 2026; [deployment.md](../design/platform/deployment.md) section 4 | The database pool size, `AOS_DATABASE_POOL_MAX`: the most connections each pool opens, one pool for the directory and one per Organisation database. **OPEN**, with no default: the application refuses to start without it. A starting value is set for `dev` before its first deploy, then measured and tuned; `kdps-test` and production get theirs only after measurement. A technical setting, not a KDPS value | Product owner | S1-F01 onwards | Accept: the first deploy to `dev` | Yes |
 
 ## 9. Report entries checked for staleness
 
@@ -328,6 +329,7 @@ Reports are snapshots and decide nothing. These entries were checked against the
 | Baseline picks of `DEC-105` with no confirmer, or whose confirmation is counted in RR-176 to RR-179 | SL-18, SL-23, MM-1, MM-3, MM-6, MM-7, MM-8, MM-10, MM-12, MM-13, MM-14, MM-15, DM-4 to DM-8, GC2-1 to GC2-7, GC2-9, GC3-1, GC3-4, GC3-6 (pick), GC3-7, GC3-8 (pick), GC3-9, GC3-12, D-2, D-3, D-6 |
 | Settled or baseline by `DEC-112` (5 Oct 2026), with no confirmer or with their confirmation counted in RR-197 and RR-198 | RR-032 (GC6-1), RR-034 (GC6-3), RR-035 (GC6-4), RR-037 (GC6-6), RR-039 (GC6-8), RR-053 (GC4-2); GC4-4; house rules CH-1, CH-4, CH-5, CH-7 and the development baselines of CH-2 and CH-3 (their open parts are RR-187 and RR-200); harness decisions H1 to H6 (their write-up stays in RR-013). RR-036 moved to section 8 |
 | Settled module-map, domain-model and access questions | MM-2 (`DEC-093`), MM-4, MM-5 (`DEC-097`), MM-9 (`DEC-099`), DM-1 (`DEC-094`), DM-2 (`DEC-095`), DM-3 (`DEC-096`), DM-9, GC2-8 (`DEC-098`), GC3-2 (`DEC-101`), GC3-3 (`DEC-102`), GC3-10 (`DEC-104`), GC3-11 (`DEC-103`) |
+| Done, built and tested | RR-195 (`S1-F01-T02`) |
 | Settled report conflicts | Alignment report A-1 to A-7, A-9; B-1 to B-19 have their policy homes, and their values are V-numbers above |
 | Dropped data-note questions | The 21 questions of Part C of [open-questions.md](../data-notes/open-questions.md): they ask only how an old sheet works |
 | Data-note questions not yet moved to the official list | The 132 questions in Parts A and B of [open-questions.md](../data-notes/open-questions.md). They are source observations: a question there changes nothing until it is moved into [questions-for-kdps.md](../questions-for-kdps.md) through the doc gate. Those that gate a feature are lifted above (RR-041, RR-049; RR-032 is settled by `DEC-112`) |

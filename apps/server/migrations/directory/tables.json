@@ -7,6 +7,14 @@
       "runtime": [],
       "design": "code-house-rules 4.3",
       "why": "The runner's own record of applied files. Only the migration role reads or writes it"
+    },
+    {
+      "table": "kernel.directory_entry",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["SELECT"],
+      "design": "code-house-rules 6.3; deployment.md section 4; access-and-approvals 3.3",
+      "why": "The directory: each Organisation's code and the name of its database, nothing else (DEC-093). It lies outside every Organisation, so no actor's scope applies to it; only kernel routing reads it, before an actor exists"
     }
   ]
 }

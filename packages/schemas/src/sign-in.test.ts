@@ -4,6 +4,7 @@ import {
   enrolmentStartResponseSchema,
   passwordChangeRequestSchema,
   signInOutcomeSchema,
+  signInRefusal,
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
@@ -41,6 +42,11 @@ describe('sign-in (PRD-SEC-001, DEC-093; access-and-approvals 3.1)', () => {
   it('has one refusal that names no part', () => {
     expect(signInOutcomeSchema.safeParse({ outcome: 'refused' }).success).toBe(true);
     expect(signInOutcomeSchema.safeParse({ outcome: 'refused', part: 'password' }).success).toBe(false);
+  });
+
+  it('gives that one refusal as a frozen value every caller shares', () => {
+    expect(signInOutcomeSchema.parse(signInRefusal)).toEqual({ outcome: 'refused' });
+    expect(Object.isFrozen(signInRefusal)).toBe(true);
   });
 });
 
