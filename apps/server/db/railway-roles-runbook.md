@@ -20,8 +20,8 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 5. **Set the variables** in the environment's Railway variables:
    - On the service that runs the pre-deploy step: `AOS_MIGRATION_DATABASE_URL=postgresql://aos_migration:<password>@<private host>:<port>/aos_directory`, using the private network address of the `postgres` service.
    - The runtime connection for `app` and `worker` is set when `S1-F01-T02` adds Organisation routing, which names that variable.
-6. **Wire the pre-deploy command** when `S1-F01` is first deployed to `dev` (RR-187): `pnpm migrate`. It migrates the directory database, then each Organisation database the directory lists, and exits non-zero on the first failure, so the deploy stops and the old version keeps running.
-7. **Check.** Run `pnpm migrate` once by hand, or read the first deploy's log: it prints one line per applied file and `Migrations complete`. A second run prints only `Migrations complete`.
+6. **Wire the pre-deploy command** when `S1-F01` is first deployed to `dev` (RR-187): `pnpm migrate`. **For now it is directory-only:** it migrates the directory database and no Organisation database, and says so in its last log line. `S1-F01-T02` switches it to every Organisation database the directory lists; do not rely on it for an Organisation database before then. It exits non-zero on failure, so the deploy stops and the old version keeps running. It also refuses, before changing anything, a connection that is not `aos_migration` (a superuser included) or a database `aos_migration` does not own.
+7. **Check.** Run `pnpm migrate` once by hand, or read the first deploy's log: it prints one line per applied file, then `Directory database migrated. No Organisation database was migrated: …`. A second run prints only that last line.
 
 ## Left open
 

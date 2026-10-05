@@ -49,9 +49,33 @@ export function orderMigrationFileNames(fileNames: readonly string[]): { number:
   return files;
 }
 
-/** Reads a set's SQL files from a folder, in order, with the SHA-256 checksum of each. Other files are ignored. */
+/** The one file a set holds beside its migrations: its table register (code-house-rules 3.2, 4.1). */
+export const TABLE_REGISTER = 'tables.json';
+
+/**
+ * Reads a set's migrations from a folder, in order, with the SHA-256 checksum of each. Nothing in the folder is
+ * passed over: an entry that is neither the table register nor a well-named migration file, such as `0002__x.SQL`, a
+ * backup or a subfolder, is refused, so no migration can be skipped by a slip in its name. A set without its
+ * register or without any migration is refused too.
+ */
 export function readMigrationSet(folder: string): MigrationFile[] {
-  const names = readdirSync(folder).filter((name) => name.endsWith('.sql'));
+  const entries = readdirSync(folder, { withFileTypes: true });
+  const unexpected = entries.filter(
+    (entry) => !entry.isFile() || (entry.name !== TABLE_REGISTER && !FILE_NAME.test(entry.name)),
+  );
+  if (unexpected.length > 0) {
+    const names = unexpected.map((entry) => entry.name).sort();
+    throw new Error(
+      `Migration set ${folder} holds ${names.join(', ')}: only ${TABLE_REGISTER} and files named NNNN__<unit>__<what>.sql belong there`,
+    );
+  }
+  if (!entries.some((entry) => entry.name === TABLE_REGISTER)) {
+    throw new Error(`Migration set ${folder} has no ${TABLE_REGISTER}`);
+  }
+  const names = entries.map((entry) => entry.name).filter((name) => name !== TABLE_REGISTER);
+  if (names.length === 0) {
+    throw new Error(`Migration set ${folder} holds no migration`);
+  }
   return orderMigrationFileNames(names).map(({ number, fileName }) => {
     const bytes = readFileSync(join(folder, fileName));
     return {

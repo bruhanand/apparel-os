@@ -52,11 +52,19 @@ async function asSuperuser<T>(work: (client: Client) => Promise<T>): Promise<T> 
 
 /**
  * Creates an empty database owned by the migration role, as an Organisation's or the directory's is
- * (code-house-rules 5.1). Its name is unique and says it is synthetic.
+ * (code-house-rules 5.1), or by the superuser, to show the runner refusing it. Its name is unique and says it is
+ * synthetic.
  */
-export async function createEmptyDatabase(label: string): Promise<string> {
+export async function createEmptyDatabase(
+  label: string,
+  owner: 'migration' | 'superuser' = 'migration',
+): Promise<string> {
   const name = `syn_${label}_${randomBytes(4).toString('hex')}`;
-  await asSuperuser((client) => client.query(`create database ${client.escapeIdentifier(name)} owner aos_migration`));
+  await asSuperuser((client) =>
+    client.query(
+      `create database ${client.escapeIdentifier(name)}${owner === 'migration' ? ' owner aos_migration' : ''}`,
+    ),
+  );
   return name;
 }
 

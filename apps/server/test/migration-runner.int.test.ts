@@ -25,12 +25,13 @@ function writeSet(name: string, files: Record<string, string>): string {
   const folder = join(scratch, name);
   mkdirSync(folder);
   copyFileSync(join(migrationSetFolder('organisation'), RECORD), join(folder, RECORD));
+  writeFileSync(join(folder, 'tables.json'), '{ "tables": [] }\n');
   for (const [fileName, text] of Object.entries(files)) writeFileSync(join(folder, fileName), text);
   return folder;
 }
 
-async function emptyDatabase(label: string): Promise<string> {
-  const name = await createEmptyDatabase(label);
+async function emptyDatabase(label: string, owner: 'migration' | 'superuser' = 'migration'): Promise<string> {
+  const name = await createEmptyDatabase(label, owner);
   databases.push(name);
   return name;
 }
@@ -50,6 +51,20 @@ async function exists(database: string, relation: string): Promise<boolean> {
     `select pg_catalog.to_regclass('${relation}') is not null as present`,
   );
   return rows[0]?.present === true;
+}
+
+// Read as the superuser, which can connect to any of these databases, whoever owns it.
+async function schemaExists(database: string, schema: string): Promise<boolean> {
+  const client = await connect(database, 'superuser');
+  try {
+    const result = await client.query<{ present: boolean }>(
+      'select exists (select 1 from pg_catalog.pg_namespace where nspname = $1) as present',
+      [schema],
+    );
+    return result.rows[0]?.present === true;
+  } finally {
+    await client.end();
+  }
 }
 
 async function recordedFiles(database: string): Promise<string[]> {
@@ -154,6 +169,54 @@ describe('migrateDatabase (code-house-rules 4.3)', () => {
     ]);
     expect(runs.flat().sort()).toEqual([RECORD, '0002__kernel__syn_first.sql']);
     expect(await recordedFiles(database)).toEqual([RECORD, '0002__kernel__syn_first.sql']);
+  });
+});
+
+describe('migrateDatabase refuses before it changes anything', () => {
+  const organisationSet = migrationSetFolder('organisation');
+
+  it('PRD-SEC-005 refuses a superuser connection', async () => {
+    const database = await emptyDatabase('as_superuser');
+    await expect(
+      migrateDatabase({ connectionString: databaseUrl(database, 'superuser'), folder: organisationSet }),
+    ).rejects.toThrow(/Migration refused, nothing changed: .*is a superuser/);
+    expect(await schemaExists(database, 'kernel')).toBe(false);
+  });
+
+  it('PRD-SEC-005 refuses the runtime role', async () => {
+    const database = await emptyDatabase('as_runtime');
+    await expect(
+      migrateDatabase({ connectionString: databaseUrl(database, 'runtime'), folder: organisationSet }),
+    ).rejects.toThrow(/connected as aos_runtime acting as aos_runtime, not as aos_migration/);
+    expect(await schemaExists(database, 'kernel')).toBe(false);
+  });
+
+  it('PRD-SEC-005 refuses a database the migration role does not own', async () => {
+    const database = await emptyDatabase('foreign_owner', 'superuser');
+    await expect(
+      migrateDatabase({ connectionString: databaseUrl(database, 'migration'), folder: organisationSet }),
+    ).rejects.toThrow(/database syn_foreign_owner_\w+ is owned by \w+, not aos_migration/);
+    expect(await schemaExists(database, 'kernel')).toBe(false);
+  });
+
+  it('refuses a set holding a file whose name does not follow the pattern, such as .SQL', async () => {
+    const set = writeSet('upper_case', { '0002__kernel__syn_first.SQL': 'create table kernel.syn_first (id int);' });
+    const database = await emptyDatabase('upper_case');
+    await expect(
+      migrateDatabase({ connectionString: databaseUrl(database, 'migration'), folder: set }),
+    ).rejects.toThrow(/holds 0002__kernel__syn_first\.SQL/);
+    expect(await schemaExists(database, 'kernel')).toBe(false);
+  });
+
+  it('refuses a set with no migration', async () => {
+    const set = join(scratch, 'empty');
+    mkdirSync(set);
+    writeFileSync(join(set, 'tables.json'), '{ "tables": [] }\n');
+    const database = await emptyDatabase('empty_set');
+    await expect(
+      migrateDatabase({ connectionString: databaseUrl(database, 'migration'), folder: set }),
+    ).rejects.toThrow(/holds no migration/);
+    expect(await schemaExists(database, 'kernel')).toBe(false);
   });
 });
 

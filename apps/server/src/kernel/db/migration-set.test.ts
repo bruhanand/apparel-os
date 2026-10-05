@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrationSetFolder, orderMigrationFileNames, readMigrationSet } from './migration-set.js';
 
 describe('orderMigrationFileNames (code-house-rules 4.1)', () => {
@@ -46,5 +49,52 @@ describe("the repository's migration sets", () => {
     const files = readMigrationSet(migrationSetFolder(set));
     expect(files[0]?.fileName).toBe('0001__kernel__migration_record.sql');
     for (const file of files) expect(file.checksumSha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('readMigrationSet refuses what it would otherwise pass over (code-house-rules 4.1)', () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'aos-set-'));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function set(files: Record<string, string>, folders: string[] = []): string {
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(root, name), text);
+    for (const name of folders) mkdirSync(join(root, name));
+    return root;
+  }
+
+  const register = { 'tables.json': '{ "tables": [] }\n' };
+  const first = { '0001__kernel__migration_record.sql': 'select 1;' };
+
+  it('reads a well-formed set', () => {
+    const files = readMigrationSet(set({ ...register, ...first, '0002__kernel__b.sql': 'select 2;' }));
+    expect(files.map((file) => file.fileName)).toEqual(['0001__kernel__migration_record.sql', '0002__kernel__b.sql']);
+  });
+
+  it.each(['0002__kernel__b.SQL', '0002__kernel__b.sql.bak', 'README.md', '.DS_Store'])(
+    'refuses a set holding %s',
+    (name) => {
+      expect(() => readMigrationSet(set({ ...register, ...first, [name]: 'select 2;' }))).toThrow(
+        new RegExp(`holds ${name.replaceAll('.', '\\.')}:`),
+      );
+    },
+  );
+
+  it('refuses a set holding a subfolder', () => {
+    expect(() => readMigrationSet(set({ ...register, ...first }, ['0002__kernel__b.sql']))).toThrow(
+      /holds 0002__kernel__b\.sql:/,
+    );
+  });
+
+  it('refuses a set with no table register', () => {
+    expect(() => readMigrationSet(set(first))).toThrow(/has no tables\.json/);
+  });
+
+  it('refuses a set with no migration', () => {
+    expect(() => readMigrationSet(set(register))).toThrow(/holds no migration/);
   });
 });

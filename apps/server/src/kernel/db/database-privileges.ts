@@ -1,6 +1,5 @@
 import type { ClientBase } from 'pg';
-
-const RUNTIME_ROLE = 'aos_runtime';
+import { RUNTIME_ROLE } from './roles.js';
 
 interface Grant {
   grantee: string;

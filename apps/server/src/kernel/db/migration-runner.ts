@@ -2,6 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import { Client } from 'pg';
 import { applyDatabasePrivileges } from './database-privileges.js';
 import { readMigrationSet, type MigrationFile } from './migration-set.js';
+import { MIGRATION_ROLE } from './roles.js';
 
 export interface MigrateDatabaseOptions {
   /** A connection to one database as the migration role, aos_migration (code-house-rules 5.1). */
@@ -25,12 +26,16 @@ const LOCK_KEY = "pg_catalog.hashtextextended('aos.kernel.migration', 0)";
  * file to the last, so two runs never migrate one database at once. Each pending file runs in its own transaction
  * with its record in kernel.migration, so a failing file leaves the database as it was before that file, and the
  * run stops there. Then applies the database step of 4.3. Returns the files it applied.
+ *
+ * Reads the whole set before it connects, and checks who it is connected as before it changes anything, so a wrong
+ * set or a wrong connection changes nothing.
  */
 export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<string[]> {
   const files = readMigrationSet(options.folder);
   const client = new Client({ connectionString: options.connectionString });
   await client.connect();
   try {
+    await checkConnectedAsOwner(client);
     await client.query(`select pg_catalog.pg_advisory_lock(${LOCK_KEY})`);
     const pending = pendingFiles(files, await readApplied(client));
     const applied: string[] = [];
@@ -45,6 +50,41 @@ export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<
   } finally {
     // Closing the session also releases the advisory lock if the run failed.
     await client.end();
+  }
+}
+
+/**
+ * Refuses to run unless the session is the migration role itself, as a non-superuser, on a database that role owns
+ * (code-house-rules 5.1). A superuser or any other role would leave objects under the wrong owner, and the runtime
+ * role's grants and the owner's guards rest on aos_migration owning every object.
+ */
+async function checkConnectedAsOwner(client: Client): Promise<void> {
+  const result = await client.query<{
+    session_user: string;
+    current_user: string;
+    superuser: boolean;
+    bypasses_rls: boolean;
+    database: string;
+    database_owner: string;
+  }>(`
+    select session_user::text as session_user, current_user::text as current_user,
+           r.rolsuper as superuser, r.rolbypassrls as bypasses_rls,
+           d.datname::text as database, pg_catalog.pg_get_userbyid(d.datdba)::text as database_owner
+    from pg_catalog.pg_roles r, pg_catalog.pg_database d
+    where r.rolname = current_user and d.datname = current_database()`);
+  const session = result.rows[0];
+  if (session === undefined) throw new Error('Could not read the role and database of the migration connection');
+  const problems: string[] = [];
+  if (session.superuser) problems.push(`${session.current_user} is a superuser`);
+  if (session.bypasses_rls) problems.push(`${session.current_user} bypasses row-level security`);
+  if (session.session_user !== MIGRATION_ROLE || session.current_user !== MIGRATION_ROLE) {
+    problems.push(`connected as ${session.session_user} acting as ${session.current_user}, not as ${MIGRATION_ROLE}`);
+  }
+  if (session.database_owner !== MIGRATION_ROLE) {
+    problems.push(`database ${session.database} is owned by ${session.database_owner}, not ${MIGRATION_ROLE}`);
+  }
+  if (problems.length > 0) {
+    throw new Error(`Migration refused, nothing changed: ${problems.join('; ')}`);
   }
 }
 
