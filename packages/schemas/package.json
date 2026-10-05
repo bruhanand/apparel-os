@@ -21,6 +21,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@apparel-os/domain": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {
