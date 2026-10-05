@@ -1,45 +1,40 @@
-# Session handout — 5 Oct 2026
+# Session handout — 6 Oct 2026
 
 > **Not ranked.** A note to carry into the next session. It decides nothing; the [implementation plan](index.md) and the documents above it win.
 
 ## Where things stand
 
-- **S0-T06 done and merged; the start gate is met** ([PR #4](https://github.com/bruhanand/apparel-os/pull/4), squash-merged into `main`). Synthetic labels and the two synthetic Organisations (`apps/server/test/fixtures/`); one migrated template per kind per run, closed to connections, copied per test file and dropped at its end; `createSyntheticOrganisations`; the local seed `pnpm seed` (refuses unless `AOS_ENVIRONMENT` is `local` or `dev`, built apart from the application, not run on Railway); lint rules and a scan keeping fixtures out of application code. It was the first task completed under "Completing a code task": the independent code review's three blocking findings were fixed and rechecked; follow-ups RR-193 to RR-196. You approved the DR-1 S0-T06 review batch and the merge; Code check and Doc check were green. All six start-gate conditions of [stage-0-preparation.md](stage-0-preparation.md) section 2 are met.
-- **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
-- **New default for code tasks, merged** ([PR #3](https://github.com/bruhanand/apparel-os/pull/3), squash-merged into `main`; you approved its review on 5 Oct 2026). `AGENTS.md` gains "Completing a code task": build; independent review against the task, requirements, designs, house rules and `AGENTS.md`; triage, with every rejection seen by the reviewer and disputes going to you; recheck until no blocking finding remains; final checks on the final revision, with follow-ups recorded in the readiness register. It applies only to tasks that change code; document-only tasks keep the document gate. The section itself passed the document gate with an independent AI reviewer ("AGENTS task completion"). `S0-T06` is the first task to follow it.
-- **S0-T05 done and merged** ([PR #2](https://github.com/bruhanand/apparel-os/pull/2), squash-merged into `main`). Migration runner, the two database roles, `pnpm migrate` (directory-only until `S1-F01-T02`), the Railway runbook and 33 integration tests; your three review issues were fixed before the merge (directory-only label with a command test, role and owner check, strict set reader). You approved the DR-1 S0-T05 review of `AGENTS.md` "Code workspace". Start-gate condition 4 is met ([stage-0-preparation.md](stage-0-preparation.md) section 2). `doc-check.yml` no longer caches pnpm in `setup-node`. No Railway service was changed.
-- **S0-T04 part A approved and merged on `main`** (`7567e90`, `7455d75`). [code-house-rules.md](../design/platform/code-house-rules.md) part A was reviewed in DR-1 round 1 by independent AI reviewers and approved by you ([stage-0-preparation.md](stage-0-preparation.md) section 2); `S0-T08` round 1 is done and start-gate conditions 3 and 6 are met. CH-1 to CH-7 and GC4-4 stay OPEN at their gates.
-- **S0-T03 done and merged.** The Doc check workflow installs the pinned pnpm (12.4.1) before `setup-node`. [PR #1](https://github.com/bruhanand/apparel-os/pull/1), merged as `b6395ec` on `main`. Doc check and Code check both pass on `main`.
-- **S0-T02 done.** pnpm 12.4.1 is active through corepack and Docker Desktop runs; every command in `AGENTS.md` exits 0 on this machine, including the integration test against a real PostgreSQL container. The verification note is in [stage-0-preparation.md](stage-0-preparation.md) section 1. Start-gate conditions 1 and 2 are met.
-- **S0-T01 done.** Anand Kumar is a named reviewer for DR-1 and later batches (`--by "Anand Kumar"`); independent AI reviewers recorded under their own name are also accepted, with the product owner's approval of each batch ([index.md](index.md) section 9).
-- **Local checkout:** on `main` after the merge. The local branches `s0-t04-house-rules-part-a`, `s0-t05-migration-runner`, `agents-task-completion` and `claude/s0-t06-task-baa912` (with its worktree) are merged in content and can be deleted when you say so.
-- **Kept as it is:** the extra worktree `.claude/worktrees/document-checker-improvements-c67c98`. Nothing reads into, changes or removes it.
-- **Standing rule:** no Claude attribution in commits or PRs. Commit `8239c69` on `main` still carries one; it stays unless you ask for history to be rewritten.
+- **Stage 1 baseline reconciled, committed on branch `claude/apparel-os-s1-reconcile-07f799`; not pushed or merged.** `DEC-112` in [decisions.md](../decisions.md) logs your baseline of 5 Oct 2026 ([apparel-os-s1-baseline-decisions.md](../reports/apparel-os-s1-baseline-decisions.md)): the setup step (CH-1, RR-017 setup states and the two first users' duties), role-assignment overlap (CH-7), PostgreSQL 17 and the development time limits (CH-2, CH-3), the read-only test role and audit partitions (CH-4, CH-5), harness decisions H1 to H6, the import picks (GC6-1 to GC6-6, GC6-8), the posting-map workflow (GC4-2), one journal series per book and year (GC4-4), and the five master proposals of RR-047. No PRD or policy bullet changed.
+- **Documents updated to match:** access-and-approvals, code-house-rules, imports-and-opening-data, books-and-posting, numbering-and-audit, questions-for-kdps (KDPS Owner 4, 37, new 59; new Accounts 21; CA 18), `AGENTS.md` "Code workspace", the reports index, and this plan (readiness register, `S1-F01`, the harness, stages and features, exit checklists, index).
+- **Reviewed:** six rounds by independent AI reviewers, every finding fixed and re-reviewed, recorded as "Claude (AI review, independent reviewer, DEC-112 round n)". Doc check: 0 errors, 0 warnings. The batch counts as reviewed once you approve it ([index.md](index.md) section 9).
+- **Kept as they were:** RR-042 (which lines earn a group discount) stays deferred, with its `S1-F11` case and `S4-F02` gate. [apparel-os-discount-patterns-research.md](../reports/apparel-os-discount-patterns-research.md) is reference only. Every policy signature, KDPS value, Accounts and CA approval, real-data permission and live gate stays open.
+- **`S1-F01-T01` not started.** Work begun on it on 6 Oct was reverted at your request; nothing of it remains.
+- **Stage 0 is complete.** `S0-T01` to `S0-T06` are done and merged; all six start-gate conditions of [stage-0-preparation.md](stage-0-preparation.md) section 2 are met.
+- **Local checkout:** the main checkout still holds untracked copies of the two report files in `docs/reports/`. Delete them before pulling this branch into it, or git refuses to overwrite them; the committed copies differ only in their link paths. The worktrees `.claude/worktrees/document-checker-improvements-c67c98` (RR-050) and `.claude/worktrees/s0-t06-task-baa912` are untouched.
+- **Standing rule:** no Claude attribution in commits or PRs.
 
 ## Next steps, in order (each needs your go-ahead)
 
 | Step | What | Needs from you |
 | --- | --- | --- |
-| 1 | `S1-F01-T01`: design check and contract sketch ([s1-f01-first-access.md](s1-f01-first-access.md)): Zod schemas and types only, and RR-017 (the setup step's two roles and its setup states) settled in access-and-approvals 9.11; confirm the setup recovery proposal on the way | Go-ahead; then agree the design edit |
-| 2 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
+| 1 | Approve the `DEC-112` review batch; push and merge the branch | Your approval and go-ahead |
+| 2 | Answer the questions the reviews raised: ordinary hyperlinks in KDPS sheets (GC6-17, RR-201; refused until you decide); whether the synthetic opening-count handler may run on `dev` (GC6-18; tests only until you decide); withdrawing an approved assignment before it starts (RR-202, before `S1-F01-T11`) | Decisions |
+| 3 | `S1-F01-T01`: design check and contract sketch ([s1-f01-first-access.md](s1-f01-first-access.md)). `DEC-112` already settles the setup states and the two first users' duties; T01 derives their exact permission matrix, has it independently reviewed, and settles how a session finds its Organisation's database. Found in the reverted attempt: how a new user's first temporary password is issued is not designed, so check it in T01 | Go-ahead; then agree the design edit |
+| 4 | Apply the roles runbook on Railway `dev`: verify PostgreSQL 17 (CH-2, RR-187) and set the development time limits (CH-3, RR-200) | You run it |
+| 5 | PRD bullets for the five RR-047 picks, each through a decision entry citing `DEC-112`, before the `S1-F03` code | Approve the wording |
 
-`S1-F01-T01` changes only schemas and a design; `S1-F01-T02` (directory and Organisation routing) follows it, and also adds the directory rows to the synthetic fixtures and the seed.
+## Decisions and confirmations waiting (none blocks steps 1 to 4)
 
-## Decisions waiting on you (none blocks steps 1 and 2)
-
-- **Stock harness H1 to H6** ([s1-f10-stock-harness.md](s1-f10-stock-harness.md)): needed before stock-and-posting is coded. Recommendation: test-only document driver, registered ledger callers, a test-only schema, synthetic approval types, tests only, a read-only role for checks.
-- **Setup recovery** for the first feature (finished setup refused, interrupted one completed, conflicting one refused): proposed in [s1-f01-first-access.md](s1-f01-first-access.md) section 9; confirmed in `S1-F01-T01`.
-- **Catalogue test (house rules 10.4):** no task names it yet; proposed for the first `S1-F01` task that adds a business table.
-- **S0-T06 follow-ups** in the [readiness register](readiness-register.md): one environment variable shared by the seed and the environment banner (RR-193, `S1-F01-T14`); the setup step and the databases the seed already made (RR-194, `S1-F01-T10`); the seed refusing a directory that lists a non-synthetic Organisation (RR-195, `S1-F01-T02`); the isolation pair's scheduling as the suite grows (RR-196, no gate).
-- **Later, not urgent:** team size (RR-031); layouts and reader libraries (GC6-1, GC6-2) before `S1-F07`; layout confirmation by a second person (GC6-4); the group-discount question (GC7-11); whether `docs/implementation/` becomes a gated document (RR-052); before production: earlier POS selling before a switch (`DEC-067`), rollout order (SL-9), production hosting (D-1).
-- **Ask Accounts and the CA early:** who approves posting-map changes (GC4-2), which holds one task of `S1-F09`.
+- **Confirmations of `DEC-112` picks:** KDPS Owner for the two first users' roles (V-01, question 4), the layout confirmers, the customer-contact refusal and the opening rehearsal on `kdps-test` (RR-197; questions 37, 59); Accounts and the CA for the posting-map workflow and the journal series (RR-198; Accounts 21, CA 18); KDPS Owner and Booking for the season order and the "old" cutoff (RR-199).
+- **Design follow-ups from the reviews:** how intake finds customer-contact columns before storing (RR-203) and the `import_batch` code source (RR-204), both in `S1-F06`.
+- **Still open from before:** the S0-T06 follow-ups RR-193 to RR-196 at their tasks; team size (RR-031); whether `docs/implementation/` becomes gated (RR-052); before production: earlier POS selling before a switch (`DEC-067`), rollout order (SL-9), production hosting (D-1).
 
 ## Facts to remember
 
-- Nothing a KDPS person must answer blocks coding: 132 of the 196 register items block only live use.
-- The stock ledger has no interface or tables design yet (RR-012), and 25 of its sections were never reviewed (RR-018).
-- This machine now runs every check locally, integration tests included; start Docker Desktop before `pnpm test:integration`.
-- Stale report entries (GC-10, SL-22 and SL-23 in the gaps report, the alignment report's product-owner list, the data-notes line on GC-6) are listed in the [readiness register](readiness-register.md) section 9; the reports were left unchanged.
+- 134 of the 198 register items block only live use; nothing a KDPS person must answer blocks coding.
+- The stock ledger still has no interface or tables design (RR-012), and 25 of its sections were never reviewed (RR-018); both come before `S1-F10` in DR-2.
+- The register still lists stage 0 items (RR-006, RR-020, RR-185, RR-186) as active although the start gate is met; tidy them in a later register update.
+- This machine runs every check locally; start Docker Desktop before `pnpm test:integration`.
 
 ## To start the next session
 

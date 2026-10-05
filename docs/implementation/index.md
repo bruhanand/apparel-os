@@ -21,7 +21,7 @@ The plan runs from preparation to live use in five layers:
 | [stage-0-preparation.md](stage-0-preparation.md) | The preparation stage: what was verified on 5 Oct 2026 and the tasks before the first feature |
 | [stages-and-features.md](stages-and-features.md) | The six stages: outcomes, scope, gates, features, parallel work, exit and live activation; the dependency map |
 | [s1-f01-first-access.md](s1-f01-first-access.md) | The first feature in full: workflow, invariants, records, transactions, failures, tasks and tests |
-| [s1-f10-stock-harness.md](s1-f10-stock-harness.md) | Proposed: the synthetic harness that drives the stock golden scenarios through the real services, and the decisions it needs before it is built |
+| [s1-f10-stock-harness.md](s1-f10-stock-harness.md) | The synthetic harness that drives the stock golden scenarios through the real services, and its decisions H1 to H6, taken by `DEC-112` |
 | [requirement-coverage.md](requirement-coverage.md) | All 520 PRD bullets with their owner feature and the feature that completes them; all 19 policies; deferred items named |
 | [exit-checklists.md](exit-checklists.md) | Stage exit checklists and live-activation checklists, with the evidence each item needs |
 

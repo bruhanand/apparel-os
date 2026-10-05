@@ -8,7 +8,7 @@ Implements these PRD sections: Module and data boundaries (numbering, audit, bus
 
 - PRD IDs: `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-011`; `PRD-ACS-008`, `PRD-ACS-013`, `PRD-ACS-014`; `PRD-SEC-005`–`PRD-SEC-007`, `PRD-SEC-012`, `PRD-SEC-014`, `PRD-SEC-018`; `PRD-INT-002`–`PRD-INT-004`; `PRD-POS-016`, `PRD-POS-020`; `PRD-OFF-002`, `PRD-OFF-007`, `PRD-OFF-009`, `PRD-OFF-010`, `PRD-OFF-012`; `PRD-LIF-015`, `PRD-LIF-020`; `PRD-TRF-023`; `PRD-ACP-019`.
 - Policies: 10 (`POL-10.07`, `POL-10.11`), 18 (`POL-18.01`, `POL-18.04`, `POL-18.05`).
-- Decisions: DEC-005, DEC-093, DEC-097, DEC-105.
+- Decisions: DEC-005, DEC-093, DEC-097, DEC-105, DEC-112.
 
 Depends on: [module-map.md](../architecture/module-map.md) (4.5 and 4.6: owners and operations), [domain-model.md](../architecture/domain-model.md) (3.4 and 3.5: the records), [stock-ledger.md](../stock/stock-ledger.md) (10.2 and 10.3: one transaction, the series row locked last), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3: actors, scope, restricted fields, sign-in), [structure-and-masters.md](../masters/structure-and-masters.md) (2.1: master codes).
 
@@ -122,7 +122,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 
 - Append-only. The runtime role may insert and read audit rows, never update or delete them. A trigger refuses every update, and allows a delete only through the retention function (4.6) (`PRD-SEC-007`, `PRD-MOD-011`). **Design choice.**
 - Sealing. A job seals each closed block of audit and access records: it hashes the block's rows together with the previous seal and stores the result. A check recomputes the chain and reports any difference. Seals go into backups and exports. **Design choice:** sealing after the fact keeps business transactions free of a shared lock.
-- The tables are partitioned by recording month. **Design choice.**
+- The tables are partitioned by recording month. **Design choice.** Partitions are created ahead by restricted maintenance, at an Organisation's setup and on a schedule; a failure to cover the coming months raises an alert, and no audit record is ever silently dropped (DEC-112; [code-house-rules.md](code-house-rules.md) 3.2, CH-5).
 
 ### 4.5 Reading history
 

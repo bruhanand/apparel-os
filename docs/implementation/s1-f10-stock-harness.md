@@ -1,6 +1,6 @@
-# S1-F10 — Synthetic stock harness (proposed)
+# S1-F10 — Synthetic stock harness
 
-> **Not ranked. Proposal.** Part of the [implementation plan](index.md). It changes no rule. Decisions H1 to H6 (section 5) are needed before anything here is built. Once they are taken, the agreed parts move into the stock ledger interface design (RR-012, RR-013) and are reviewed in DR-2 with the 25 never-reviewed ledger sections (RR-018).
+> **Not ranked.** Part of the [implementation plan](index.md). It changes no rule. The product owner took decisions H1 to H6 on 5 Oct 2026 (`DEC-112`; section 5). The agreed parts move into the stock ledger interface design (RR-012, RR-013) and are reviewed in DR-2 with the 25 never-reviewed ledger sections (RR-018) before anything here is built.
 
 ## 1. The problem
 
@@ -43,7 +43,7 @@ Each harness command is one kernel command and follows module-map 6.1: idempoten
 | --- | --- | --- | --- |
 | Receipt count | GRN count | Receipt count | None |
 | Cost established | PT approval | Cost established | Independent, on the cost of the covered quantity |
-| Opening count | A verified opening count (also the GC-6 `dev` test handler, H5) | Opening count | Independent |
+| Opening count | A verified opening count (also the GC-6 test handler; on `dev` only if the product owner allows it, RR-013) | Opening count | Independent |
 | Transfer approve, dispatch, arrive, accept | A transfer | Reservation (status); Dispatch; Arrival count; acceptance (status) | Independent, on cost |
 | Sale | A bill | Sale issue | None |
 | Customer return | A return | Customer return | None |
@@ -95,9 +95,13 @@ Built through the real interfaces of `S1-F01` to `S1-F09`, never by direct inser
 | B. Minimal real documents now | Build thin receiving, transfer, sale and return modules in stage 1 | Not recommended. Their designs do not exist (RR-024 to RR-026); thin versions would be settled in code and rebuilt later |
 | C. Ledger tests only | Call ledger functions directly, without the command runner, approvals or Post | Not recommended. Misses lock order, approval use, the journals and the one-transaction rule the exit check is about |
 
-## 5. Decisions needed before implementation
+## 5. Decisions
 
 None of these changes the PRD or the policies; each is an architectural or test-design choice the product owner approves, then recorded in the ledger interface design and reviewed in DR-2.
+
+**Taken on 5 Oct 2026 (`DEC-112`).** H1: option A, a test-only synthetic document driver that exercises the real stock and posting logic. H2: registered ledger callers; synthetic callers exist only in tests. H3: a test-only schema (house rules 11.4). H4: synthetic approval action types through the real approval machinery. H5: test runs only, in isolated test databases, never live. H6: both, with raw queries only under the read-only test role (house rules CH-4). Every golden scenario stays: receipt, transfer, sale, customer return, cost established at PT approval, late cost change, opening count, the supplier-return legs, damage, count and reversals; tests of the real documents follow when they arrive. The H5 recommendation's `dev` handler is not part of the decision: GC-6 section 12 plans a `dev` handler that posts synthetic opening counts, and whether it may run there as a registered caller, given H2 and H5, is a question for the product owner, not for design review (RR-013). Until it is answered, it runs in tests only.
+
+The table keeps the options as they were put.
 
 | # | Decision | Options | Recommendation | Who |
 | --- | --- | --- | --- | --- |
@@ -110,6 +114,6 @@ None of these changes the PRD or the policies; each is an architectural or test-
 
 ## 6. After the decisions
 
-1. Write the stock ledger interface and tables (RR-012), including H2, and record H1 to H6 there and in house rules part A (H3).
+1. Write the stock ledger interface and tables (RR-012), including H2, and record H1 to H6 there. House rules part A already records H3 (11.4) and H6 (CH-4).
 2. Review them with the 25 never-reviewed ledger sections in DR-2.
 3. Break `S1-F10` into tasks, in this order: ledger tables and constraints; the operations of the story; the hand-off to Post; the harness driver, fixtures and scenario files; the four-combination matrix; scenarios G2 to G13 with G10a; failure and concurrency suites; the large-posting job; acceptance evidence.

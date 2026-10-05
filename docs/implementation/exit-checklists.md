@@ -19,7 +19,7 @@ A stage exits only when every item of its exit list is ticked with its evidence 
 
 - [ ] Concurrency on real PostgreSQL: stock-ledger 11.9, `S1-F01-AT14`, imports-and-opening-data 17 test 15, numbering-and-audit 7 test 2.
 - [ ] Organisation isolation in every module that holds data: access-and-approvals 15 test 2, structure-and-masters 9 test 14.
-- [ ] Self-approval refused for every independently approved action built in stage 1: access changes, structure, mapping verification, agreements, bank details, vocabulary, product proposals, mapping rules, stand-ins, period reopening.
+- [ ] Self-approval refused for every independently approved action built in stage 1: access changes, structure, mapping verification, agreements, bank details, vocabulary, product proposals, mapping rules, layout and mapping versions (`DEC-112`), posting-map and account versions (`DEC-112`), stand-ins, period reopening.
 - [ ] Stale-version refusal, duplicate requests answered once, and partial-failure rollback (one failing line fails its document; an exception survives the rollback that found it).
 - [ ] Persona browser journeys for every stage 1 screen, including recovery: a locked session keeps unfinished work, and a reload in the middle of an approval decides nothing twice.
 - [ ] The 10,000-line PT parse within one minute (RR-189) and the large posting while counters sell (stock-ledger 11.9), on synthetic data.
@@ -71,7 +71,7 @@ On `kdps-test`, for KDPS's real masters before the side-by-side test:
 - [ ] Brand terms, costing profiles, booking rules, budgets, registrations, rates, wrong-goods approvers, framework, cost confirmation, maps, tolerances and the inbound-ownership treatment entered and validated (RR-070, RR-072 to RR-074, RR-077 to RR-081, RR-083, RR-118).
 - [ ] Each Site's receiving activity approved after its readiness checks (`PRD-LIF-001`).
 - [ ] Before moving-average postings go live: the stock cost rounding rule set and validated (RR-124), and golden scenario G10b accepted with the values under that rule.
-- [ ] For the side-by-side test: KDPS's agreement (RR-180), the run length (RR-106), the test-setup field choices (RR-037, RR-038), the earlier POS's export and PT acceptance (RR-156, RR-184).
+- [ ] For the side-by-side test: KDPS's agreement (RR-180), the run length (RR-106), the test-setup field choices (RR-038) and the confirmed import picks (RR-197), the earlier POS's export and PT acceptance (RR-156, RR-184).
 
 ## 3. Stage 3 — Stock movement
 
