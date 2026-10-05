@@ -6,7 +6,7 @@
 
 - **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
 - **S0-T03 done and merged.** The Doc check workflow installs the pinned pnpm (12.4.1) before `setup-node`. [PR #1](https://github.com/bruhanand/apparel-os/pull/1), merged as `b6395ec` on `main`. Doc check and Code check both pass on `main`.
-- **Local checkout:** on `main`, in step with `origin/main`, nothing uncommitted except as noted below.
+- **Local checkout:** on `main`, in step with `origin/main`, nothing uncommitted.
 - **Kept as it is:** the extra worktree `.claude/worktrees/document-checker-improvements-c67c98`. Nothing reads into, changes or removes it.
 - **Standing rule:** no Claude attribution in commits or PRs. Commit `8239c69` on `main` still carries one; it stays unless you ask for history to be rewritten.
 
