@@ -200,6 +200,7 @@ Reviews use the existing gate in `AGENTS.md` ("Change gate", "Honest reviews") a
 ## 10. Rules for whoever builds a task
 
 - Follow `AGENTS.md`. Cite the PRD, policy or decision ID in code and tests where a rule is enforced.
+- Complete each task that changes code as `AGENTS.md` "Completing a code task" says: independent review, fixes rechecked, final checks on the final revision.
 - Leave `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm format:check` and the doc checker passing.
 - Every setting whose value belongs to KDPS ships with no default. Tests set labelled synthetic values.
 - Nothing policy-dependent is switched on by default. A capability ships off (`PRD-SEC-017`).
