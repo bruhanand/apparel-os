@@ -18,6 +18,7 @@
     "test:integration": "turbo run test:integration",
     "check:modules": "node tools/module-check/check.mts",
     "migrate": "pnpm --filter @apparel-os/server migrate",
+    "seed": "turbo run build:seed && pnpm --filter @apparel-os/server seed",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

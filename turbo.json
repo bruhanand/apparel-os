@@ -17,8 +17,12 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "build:seed": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist-seed/**"]
+    },
     "test:integration": {
-      "dependsOn": ["^build", "build"],
+      "dependsOn": ["^build", "build", "build:seed"],
       "cache": false
     },
     "dev": {

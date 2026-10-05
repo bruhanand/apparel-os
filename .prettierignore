@@ -3,6 +3,7 @@ docs/**
 tools/doc-check/**
 pnpm-lock.yaml
 dist
+dist-seed
 .turbo
 .*/
 !.github/

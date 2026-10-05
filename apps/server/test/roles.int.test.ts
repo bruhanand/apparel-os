@@ -2,12 +2,13 @@ import { sql } from 'drizzle-orm';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, migrateDatabase, migrationSetFolder } from '../src/kernel/index.js';
+import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import {
   connect,
-  createMigratedDatabase,
   createOutsiderRole,
+  databaseGrants,
   databaseUrl,
-  dropDatabase,
+  RUNNER_GRANTS,
   sqlState,
 } from './support/postgres.js';
 
@@ -17,14 +18,18 @@ import {
 
 const ACTOR = '01900000-0000-7000-8000-000000000001'; // SYNTHETIC actor identifier
 
+let world: SyntheticWorld;
 let directory: string;
 let organisation: string;
 let owner: Client;
 let runtime: Client;
 
 beforeAll(async () => {
-  directory = await createMigratedDatabase('directory', 'directory');
-  organisation = await createMigratedDatabase('organisation', 'organisation');
+  // The rules act on the first synthetic Organisation's database; the second is there as in every database test
+  // (code-house-rules 11.2).
+  world = await createSyntheticOrganisations('roles');
+  directory = world.directory;
+  organisation = world.organisations[0].database;
   owner = await connect(organisation, 'migration');
   await owner.query(`
     create schema syn_guard;
@@ -64,10 +69,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await runtime.end();
-  await owner.end();
-  await dropDatabase(organisation);
-  await dropDatabase(directory);
+  // beforeAll may have stopped part-way: close what it opened, then drop what it made.
+  const opened = [runtime, owner] as (Client | undefined)[];
+  try {
+    for (const client of opened) await client?.end();
+  } finally {
+    await (world as SyntheticWorld | undefined)?.reset();
+  }
 });
 
 describe('the two roles (code-house-rules 5.1)', () => {
@@ -216,10 +224,18 @@ describe('database privileges (code-house-rules 4.3, 5.2)', () => {
   });
 
   it('applies the step again on a run with nothing to migrate', async () => {
+    const superuser = await connect(organisation, 'superuser');
+    try {
+      await superuser.query(`grant temporary on database ${superuser.escapeIdentifier(organisation)} to public`);
+    } finally {
+      await superuser.end();
+    }
+    expect((await databaseGrants(organisation)).database).toContain('PUBLIC TEMPORARY');
     const applied = await migrateDatabase({
       connectionString: databaseUrl(organisation, 'migration'),
       folder: migrationSetFolder('organisation'),
     });
     expect(applied).toEqual([]);
+    expect(await databaseGrants(organisation)).toEqual(RUNNER_GRANTS);
   });
 });

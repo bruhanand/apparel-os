@@ -31,10 +31,10 @@
     },
     "AGENTS.md#code-workspace": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 S0-T05)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "Re-read the whole section after the directory-only rewording, against code-house-rules 2, 3.1, 4.1, 4.3, 5.1, 10.5, 10.6, 13, deployment.md section 4 and the code. migrate.ts calls migrateDatabase on the directory set only, connected through AOS_MIGRATION_DATABASE_URL to the built dist/migrate.js; checkConnectedAsOwner refuses any session or current role other than aos_migration, a superuser and a database aos_migration does not own before any change; process.exitCode is 1 when the variable is unset or the run throws; migrate-command.int.test.ts proves each as a process. Directory-only does not contradict 4.3 or deployment 4: the directory set holds only kernel.migration, so no Organisation is listed yet, migrateAll implementing 4.3 exists and is tested, no Organisation database is deployed, and s1-f01 T02 owns the switch with a command test. Paths, scripts, hook and code-check.yml still agree; no invented value; Organisation and directory database used as the PRD and DEC-093 use them.",
-      "unitHash": "e7830fb0c464",
+      "reason": "Round two: the workspace table now agrees with code, since test:integration names template copies or empty databases for runner and seed tests, the seed row states the Railway dev condition from environment.ts, and the test folder row says tests spanning units; consistent with PRD-SEC-016 checks in CI.",
+      "unitHash": "9f36d1d4e068",
       "deps": {
         "DEC-005": {"hash":"d9f11492dc0d","decs":[]},
         "DEC-013": {"hash":"57a896ce2827","decs":[]},
@@ -472,6 +472,7 @@
         "PRD-SEC-013": {"hash":"30d8b6d2c65f","decs":[]},
         "PRD-SEC-014": {"hash":"712825f93fbc","decs":[]},
         "PRD-SEC-015": {"hash":"8fc3917701d6","decs":[]},
+        "PRD-SEC-016": {"hash":"f5d2af135d98","decs":[]},
         "PRD-SEC-017": {"hash":"a99517867360","decs":["DEC-105"]},
         "PRD-STG-001": {"hash":"2dda81f400d9","decs":[]},
         "PRD-STK-008": {"hash":"9fc6eaf70dd9","decs":["DEC-019","DEC-089"]},
@@ -10958,10 +10959,10 @@
     },
     "docs/design/platform/code-house-rules.md#101-kinds-of-test": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "Test kinds checked against PRD-SEC-016, PRD-ACP-018, shared-calculations 12.1 and 12.2 (Vitest server run, Playwright counter run), personas.md P-OWN to P-AUD and the repo's db.int.test.ts naming; consistent.",
-      "unitHash": "24ccd3299f2c",
+      "reason": "Round two: compared the test kinds and the new isolation-pair exception with PRD-SEC-016, PRD-ACP-018 and the fixtures-isolation-a and -b files using isolation-probe.ts; only that pair depends on running together, the integration config forces two or more workers, and no retry is configured.",
+      "unitHash": "20061e5b893f",
       "deps": {
         "PRD-ACP-018": {"hash":"96c1cb1eac32","decs":[]},
         "PRD-INT-003": {"hash":"838ae06d895d","decs":[]},
@@ -11043,10 +11044,10 @@
     },
     "docs/design/platform/code-house-rules.md#111-labelling": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "SYN codes and SYNTHETIC names match shared-calculations 12.3 and books-and-posting usage; the file labelling and the never-committed KDPS files follow imports-and-opening-data 17, and PRD-SEC-017 plus DEC-105 point 3 support synthetic-only settings.",
-      "unitHash": "cf6149b726aa",
+      "reason": "Round two: the narrowed label rule now matches the tree, since seed.ts and organisations.ts take codes, names and syn_org_a from synthetic.ts, helpers name copies, templates, syn_test_barrier and syn_outsider roles with syn_, and the scan reads src TypeScript plus migrations SQL and passes.",
+      "unitHash": "2607eccf2680",
       "deps": {
         "DEC-052": {"hash":"e852227f52c9","decs":[]},
         "DEC-097": {"hash":"bd65734bfafa","decs":[]},
@@ -11082,6 +11083,7 @@
         "PRD-LIF-014": {"hash":"60aad7a44e7f","decs":["DEC-024","DEC-067"]},
         "PRD-LIF-016": {"hash":"af06e35b2e9d","decs":["DEC-067"]},
         "PRD-MER-007": {"hash":"3a8cce185dfe","decs":[]},
+        "PRD-MOD-001": {"hash":"8a57dfeea43c","decs":[]},
         "PRD-MOD-010": {"hash":"3caf1edf43d1","decs":[]},
         "PRD-MOD-014": {"hash":"d9fe922b30b9","decs":[]},
         "PRD-MOD-015": {"hash":"ef9e5f42a86d","decs":[]},
@@ -11099,10 +11101,10 @@
     },
     "docs/design/platform/code-house-rules.md#112-fixtures": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "Two synthetic Organisations per database test and the seed limited to local or dev agree with deployment.md sections 1 and 4, PRD-ACS-020, PRD-ACS-023 and S0-T06 of the implementation plan; no invented value found.",
-      "unitHash": "6b0055b0c7bd",
+      "reason": "Round two: re-checked fixture placement and seed behaviour against PRD-ACS-020, PRD-ACS-023 and current code; an in-memory ESLint run showed both the static pattern and the ImportExpression selector firing, and seed.ts refuses a non-URL connection string with a message that omits it, before any database change.",
+      "unitHash": "c60010c30317",
       "deps": {
         "DEC-053": {"hash":"9c073416ce29","decs":[]},
         "DEC-093": {"hash":"3b57b9b3c652","decs":[]},
@@ -11118,10 +11120,10 @@
     },
     "docs/design/platform/code-house-rules.md#113-speed-and-isolation": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "Checked PostgreSQL behaviour: CREATE DATABASE TEMPLATE needs no other session on the template and copies neither datacl nor per-database settings, matching 4.3's runner privilege step and PRD-MOD-001's database per Organisation.",
-      "unitHash": "8633157dd150",
+      "reason": "Round two: the reworded partner-failure clause now matches isolation-probe.ts, where only a failure caught inside runIsolationProbe writes the failed barrier row the partner polls; template closing, syn_ copy names and the privilege step on copies are unchanged against PRD-MOD-001 and 4.3.",
+      "unitHash": "6b80d107e3e2",
       "deps": {
         "DEC-101": {"hash":"f2fd1165214e","decs":[]},
         "PRD-ACS-023": {"hash":"ee95c568ceb3","decs":["DEC-101","DEC-103","DEC-104"]},
@@ -11871,10 +11873,10 @@
     },
     "docs/design/platform/code-house-rules.md#51-two-roles": {
       "status": "reviewed",
-      "by": "Claude (AI review, independent reviewer, DR-1 round 1)",
+      "by": "Claude (AI review, independent reviewer, DR-1 S0-T06)",
       "date": "2026-10-05",
-      "reason": "Both roles read against deployment.md sections 4 and 9, PRD-SEC-005 and PRD-SEC-007, CH-1 and CH-5: ownership, CREATEDB tied to CH-1's proposal, no BYPASSRLS, role-level settings and the unforced row security describe PostgreSQL correctly and match test setup in 10.1.",
-      "unitHash": "f03b697b27dd",
+      "reason": "Round two: read the role table against PRD-SEC-005, PRD-SEC-007, deployment.md section 4 and the seed code; adding the local seed to the migration role users matches seed.ts connecting through AOS_MIGRATION_DATABASE_URL and the runner role check, and no runtime role claim changed.",
+      "unitHash": "4af7ff105cdb",
       "deps": {
         "DEC-053": {"hash":"9c073416ce29","decs":[]},
         "DEC-093": {"hash":"3b57b9b3c652","decs":[]},
@@ -11883,6 +11885,7 @@
         "POL-18.03": {"hash":"b2c550ef6cdd","decs":["DEC-075"]},
         "PRD-ACP-018": {"hash":"96c1cb1eac32","decs":[]},
         "PRD-ACS-020": {"hash":"2f9d7996bda3","decs":["DEC-093"]},
+        "PRD-ACS-023": {"hash":"ee95c568ceb3","decs":["DEC-101","DEC-103","DEC-104"]},
         "PRD-MOD-001": {"hash":"8a57dfeea43c","decs":[]},
         "PRD-MOD-002": {"hash":"ba4b8715a569","decs":[]},
         "PRD-MOD-008": {"hash":"93adbeedc48e","decs":[]},

@@ -27,17 +27,17 @@ Each item is counted once, at the earliest gate it blocks.
 
 | Category | Active | Design | Code | Accept | Exit | Live | None |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Missing implementation | 9 | — | 9: each is the work of its feature | — | — | — | — |
+| Missing implementation | 12 | — | 12: each is the work of its feature | — | — | — | — |
 | Missing or unreviewed design | 21 | 8 | 11 | — | 1 | 1 | — |
 | Unresolved product behaviour | 22 | 4 | 3 | 1 | — | 5 | 9 |
 | Customer configuration | 104 | 1 | 2 | 1 | — | 99 | 1 |
 | External approval | 28 | — | — | 1 | — | 27 | — |
-| Runtime verification | 8 | — | 2 | 5 | 1 | — | — |
-| **Total** | **192** | **13** | **27** | **8** | **2** | **132** | **10** |
+| Runtime verification | 9 | — | 2 | 5 | 1 | — | 1 |
+| **Total** | **196** | **13** | **30** | **8** | **2** | **132** | **11** |
 
 Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V-numbers, and the settled or baseline questions listed in section 10. Stale report entries are in section 9.
 
-**The short answer.** Nothing a KDPS person must answer blocks the start of coding: 132 of the 192 items block only live activation. The first feature waits only on the stage 0 start gate ([stage-0-preparation.md](stage-0-preparation.md) section 2): Doc check running in CI (RR-186), a verified toolchain (RR-185), house rules part A (RR-011), the migration roles and fixtures (RR-006) and the `AGENTS.md` reviews (RR-020). Inside the feature: house rules part B and the deployment reviews before `S1-F01-T04` (RR-011, RR-021); the setup-step detail before `S1-F01-T10` (RR-017); the screen-design reviews before `S1-F01-T14` (RR-019, RR-023). Team size, the extra worktree and whether this plan is gated block nothing (RR-031, RR-050, RR-052). The stock-and-posting feature also waits on design that does not exist yet (RR-012, and RR-013 with its decisions H1 to H6) and on 25 never-reviewed ledger sections (RR-018).
+**The short answer.** Nothing a KDPS person must answer blocks the start of coding: 132 of the 196 items block only live activation. The first feature waits only on the stage 0 start gate ([stage-0-preparation.md](stage-0-preparation.md) section 2): Doc check running in CI (RR-186), a verified toolchain (RR-185), house rules part A (RR-011), the migration roles and fixtures (RR-006) and the `AGENTS.md` reviews (RR-020). Inside the feature: house rules part B and the deployment reviews before `S1-F01-T04` (RR-011, RR-021); the setup-step detail before `S1-F01-T10` (RR-017); the screen-design reviews before `S1-F01-T14` (RR-019, RR-023). Team size, the extra worktree and whether this plan is gated block nothing (RR-031, RR-050, RR-052). The stock-and-posting feature also waits on design that does not exist yet (RR-012, and RR-013 with its decisions H1 to H6) and on 25 never-reviewed ledger sections (RR-018).
 
 ## 3. Missing implementation
 
@@ -52,6 +52,9 @@ Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V
 | RR-007 | PRD Stack (Web, Verification); `AGENTS.md` "Current state" | Web app has no router, data layer, forms or components; Playwright is not installed | Builders | S1-F01 (first screen), S1-F11 (counter run) | Code: S1-F01 screens | Yes |
 | RR-008 | PRD Stack (Authentication, Files, Jobs) | Argon2, TOTP, pg-boss and S3 client libraries are not installed; no MinIO for local development | Builders | S1-F01, S1-F06 | Code: those features | Yes |
 | RR-009 | PRD Stack (API) | No generated OpenAPI or typed client | Builders | S0-T04, S1-F01-T05 | Code: S1-F01 screens | Yes |
+| RR-193 | `S0-T06` code review, 5 Oct 2026; code-house-rules 11.2; [deployment.md](../design/platform/deployment.md) section 1 | The local seed reads the environment from `AOS_ENVIRONMENT`; the app's environment banner needs one too. Settle one variable that names the environment for both | Builders | S1-F01-T14 | Code: S1-F01-T14 | Yes |
+| RR-194 | `S0-T06` code review, 5 Oct 2026; code-house-rules 11.2; CH-1 | The setup step must deal with the `syn_org_a` and `syn_org_b` databases the seed has already made on a machine or on `dev`, or the seed must move onto the setup step | Builders | S1-F01-T10 | Code: S1-F01-T10 | Yes |
+| RR-195 | `S0-T06` code review, 5 Oct 2026; [deployment.md](../design/platform/deployment.md) section 1 | The seed trusts what `AOS_ENVIRONMENT` declares. Once the directory table exists, the seed should also refuse a directory that lists a non-synthetic Organisation | Builders | S1-F01-T02 | Code: S1-F01-T02 | Yes |
 
 ## 4. Missing or unreviewed design
 
@@ -285,6 +288,7 @@ The build follows the `DEC-105` baseline picks now. Each confirmer may confirm o
 | RR-190 | [deployment.md](../design/platform/deployment.md) 4; access-and-approvals 7.2 | The runtime role owns no table and cannot bypass row-level security; with no actor set no scoped row shows | Builders | S0-T05, S1-F01 | Accept S1-F01 | Yes |
 | RR-191 | stock-ledger 11.9; `PRD-SEC-016`; `PRD-ACP-018` | Concurrency suites on real PostgreSQL for every posting feature | Builders | S1-F01, S1-F10 onwards | Accept: each posting feature | Yes |
 | RR-192 | `PRD-SEC-016` | Persona browser journeys for every affected change; none exists until Playwright arrives with S1-F01 | Builders | Every feature with screens | Accept: each such feature | Yes |
+| RR-196 | `S0-T06` code review, 5 Oct 2026; code-house-rules 10.1, 11.3 | The two isolation test files wait up to 240 s for each other, and the runner does not promise to schedule them together. Fine while the integration run takes seconds; recheck when it grows past about two minutes, for example by running the pair first | Builders | Every integration run | None | Yes |
 
 ## 9. Report entries checked for staleness
 

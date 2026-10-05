@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { migrateAll, migrateDatabase, migrationSetFolder } from '../src/kernel/index.js';
-import { connect, createEmptyDatabase, databaseUrl, dropDatabase } from './support/postgres.js';
+import {
+  connect,
+  createEmptyDatabase,
+  databaseGrants,
+  databaseUrl,
+  dropDatabase,
+  RUNNER_GRANTS,
+} from './support/postgres.js';
 
 // S0-T05: the migration runner (code-house-rules 4.3; deployment.md section 4). The sets here are synthetic,
 // written to a temporary folder; each starts with the repository's own runner record.
@@ -92,6 +99,16 @@ describe('migrateDatabase (code-house-rules 4.3)', () => {
     writeFileSync(join(folder, '0003__kernel__syn_second.sql'), 'create table kernel.syn_second (id int primary key);');
     expect(await migrateDatabase({ connectionString, folder })).toEqual(['0003__kernel__syn_second.sql']);
     expect(await exists(database, 'kernel.syn_second')).toBe(true);
+  });
+
+  it('PRD-SEC-005 applies the database privilege step: PUBLIC keeps nothing, the runtime role gets CONNECT and USAGE', async () => {
+    const database = await emptyDatabase('privileges');
+    expect((await databaseGrants(database)).database).toContain('PUBLIC CONNECT');
+    await migrateDatabase({
+      connectionString: databaseUrl(database, 'migration'),
+      folder: migrationSetFolder('directory'),
+    });
+    expect(await databaseGrants(database)).toEqual(RUNNER_GRANTS);
   });
 
   it('records each file with its checksum and the role that applied it', async () => {

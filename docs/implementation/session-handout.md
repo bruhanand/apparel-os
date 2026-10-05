@@ -4,6 +4,7 @@
 
 ## Where things stand
 
+- **S0-T06 built and reviewed, not yet committed** (worktree branch `claude/s0-t06-task-baa912`, on top of `be18181`). Synthetic labels and the two synthetic Organisations (`apps/server/test/fixtures/`); one migrated template per kind per run, closed to connections, copied per test file and dropped at its end; `createSyntheticOrganisations`; the local seed `pnpm seed` (refuses unless `AOS_ENVIRONMENT` is `local` or `dev`, built apart from the application); lint rules and a scan keeping fixtures out of application code. Two test files running at once prove they never see each other's rows. It is the first task completed under "Completing a code task": the independent code review found three blocking issues (the runner's privilege step no longer proved, a possible password leak in the seed's log, house rules 10.1 contradicting the paired isolation files), all fixed and rechecked; follow-ups RR-193 to RR-196. House rules 5.1, 10.1, 11.1 to 11.3 and `AGENTS.md` "Code workspace" changed and were reviewed by an independent AI reviewer, recorded as "Claude (AI review, independent reviewer, DR-1 S0-T06)" and awaiting your approval. All checks pass locally: 46 server unit tests, 48 integration tests, doc check 0 errors. Details: [stage-0-preparation.md](stage-0-preparation.md), "S0-T06 verification note".
 - **Planning package committed on `main`** as `d56cbd7`: `docs/implementation/` (index, readiness register, stage 0, stages and features, `S1-F01` in full, the proposed stock harness, requirement coverage, exit checklists, this handout) and one new row in `docs/README.md`. Doc check passed on it in CI.
 - **New default for code tasks, merged** ([PR #3](https://github.com/bruhanand/apparel-os/pull/3), squash-merged into `main`; you approved its review on 5 Oct 2026). `AGENTS.md` gains "Completing a code task": build; independent review against the task, requirements, designs, house rules and `AGENTS.md`; triage, with every rejection seen by the reviewer and disputes going to you; recheck until no blocking finding remains; final checks on the final revision, with follow-ups recorded in the readiness register. It applies only to tasks that change code; document-only tasks keep the document gate. The section itself passed the document gate with an independent AI reviewer ("AGENTS task completion"). `S0-T06` is the first task to follow it.
 - **S0-T05 done and merged** ([PR #2](https://github.com/bruhanand/apparel-os/pull/2), squash-merged into `main`). Migration runner, the two database roles, `pnpm migrate` (directory-only until `S1-F01-T02`), the Railway runbook and 33 integration tests; your three review issues were fixed before the merge (directory-only label with a command test, role and owner check, strict set reader). You approved the DR-1 S0-T05 review of `AGENTS.md` "Code workspace". Start-gate condition 4 is met ([stage-0-preparation.md](stage-0-preparation.md) section 2). `doc-check.yml` no longer caches pnpm in `setup-node`. No Railway service was changed.
@@ -19,22 +20,23 @@
 
 | Step | What | Needs from you |
 | --- | --- | --- |
-| 1 | `S0-T06`: synthetic fixtures and reset (template database cloned per test file, two synthetic Organisations, labelling, local seed) | Go-ahead |
+| 1 | `S0-T06`: commit on its branch, push, open the pull request and get Code check and Doc check green in CI | Go-ahead to commit and push; then approve the DR-1 S0-T06 review batch and the merge |
 | 2 | Apply the roles runbook `apps/server/db/railway-roles-runbook.md` on Railway `dev`, checking CH-2 on the way; needed before the first deploy that migrates, not before `S1-F01-T01` | You run it |
 
-When step 1 is green, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
+When step 1 is green in CI and merged, the start gate of [stage-0-preparation.md](stage-0-preparation.md) section 2 is met and `S1-F01-T01` begins.
 
 ## Decisions waiting on you (none blocks steps 1 and 2)
 
 - **Stock harness H1 to H6** ([s1-f10-stock-harness.md](s1-f10-stock-harness.md)): needed before stock-and-posting is coded. Recommendation: test-only document driver, registered ledger callers, a test-only schema, synthetic approval types, tests only, a read-only role for checks.
 - **Setup recovery** for the first feature (finished setup refused, interrupted one completed, conflicting one refused): proposed in [s1-f01-first-access.md](s1-f01-first-access.md) section 9; confirmed in `S1-F01-T01`.
 - **Catalogue test (house rules 10.4):** no task names it yet; proposed for the first `S1-F01` task that adds a business table.
+- **S0-T06 follow-ups** in the [readiness register](readiness-register.md): one environment variable shared by the seed and the environment banner (RR-193, `S1-F01-T14`); the setup step and the databases the seed already made (RR-194, `S1-F01-T10`); the seed refusing a directory that lists a non-synthetic Organisation (RR-195, `S1-F01-T02`); the isolation pair's scheduling as the suite grows (RR-196, no gate).
 - **Later, not urgent:** team size (RR-031); layouts and reader libraries (GC6-1, GC6-2) before `S1-F07`; layout confirmation by a second person (GC6-4); the group-discount question (GC7-11); whether `docs/implementation/` becomes a gated document (RR-052); before production: earlier POS selling before a switch (`DEC-067`), rollout order (SL-9), production hosting (D-1).
 - **Ask Accounts and the CA early:** who approves posting-map changes (GC4-2), which holds one task of `S1-F09`.
 
 ## Facts to remember
 
-- Nothing a KDPS person must answer blocks coding: 132 of the 192 register items block only live use.
+- Nothing a KDPS person must answer blocks coding: 132 of the 196 register items block only live use.
 - The stock ledger has no interface or tables design yet (RR-012), and 25 of its sections were never reviewed (RR-018).
 - This machine now runs every check locally, integration tests included; start Docker Desktop before `pnpm test:integration`.
 - Stale report entries (GC-10, SL-22 and SL-23 in the gaps report, the alignment report's product-owner list, the data-notes line on GC-6) are listed in the [readiness register](readiness-register.md) section 9; the reports were left unchanged.

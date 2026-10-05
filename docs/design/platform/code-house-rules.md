@@ -131,7 +131,7 @@ Every rule here is a **Design choice** unless an ID sets it. It settles no busin
 
 | Role | Name | What it is |
 | --- | --- | --- |
-| Migration role | `aos_migration` | Owns every directory and Organisation database, made with `CREATE DATABASE … OWNER aos_migration`, and every schema, table, function and trigger in them. Has `CREATEDB`, so that, under CH-1's proposal, it creates an Organisation's database. Used only by the migration runner, the setup step (CH-1) and test setup (10.1); CH-5 may add a partition job. Not a superuser |
+| Migration role | `aos_migration` | Owns every directory and Organisation database, made with `CREATE DATABASE … OWNER aos_migration`, and every schema, table, function and trigger in them. Has `CREATEDB`, so that, under CH-1's proposal, it creates an Organisation's database. Used only by the migration runner, the setup step (CH-1), test setup (10.1) and the local seed (11.2); CH-5 may add a partition job. Not a superuser |
 | Runtime role | `aos_runtime` | Used by `app` and `worker`. Owns nothing, cannot create or change any object, does not bypass row-level security (`PRD-SEC-005`; [deployment.md](deployment.md) section 4). Not a superuser; no `CREATEDB`, `CREATEROLE` or `BYPASSRLS` |
 
 - Each role has its own password, held in the environment's variables and never in the repository ([deployment.md](deployment.md) section 9).
@@ -286,7 +286,7 @@ create policy row_scope on stock.balance for all to aos_runtime
 
 - **Integration tests use the runtime role.** A test connects as `aos_runtime` and sets an actor exactly as the application does. Only test setup uses the migration role or the container's superuser.
 - **Journeys per persona.** A feature that adds or changes a screen adds one journey per persona that uses it (P-OWN … P-AUD, [personas.md](../access/personas.md)). The journey signs in as a synthetic user holding a synthetic role assignment for that persona, and checks both what it may do and what it is refused, with the refusal's reason.
-- Tests are independent of each other and of their order, and test files run in parallel (11.3). A test that passes only sometimes is a defect; the test runner never retries a failed test.
+- Tests are independent of each other and of their order, and test files run in parallel (11.3). The one exception is the pair of test files that proves two files at once never see each other's rows: each needs the other running at the same time (11.3). A test that passes only sometimes is a defect; the test runner never retries a failed test.
 
 ### 10.2 Naming and citing
 <!-- deps: PRD-SEC-016 — every test names the rule it proves -->
@@ -335,22 +335,27 @@ After migrating an Organisation database and a directory database, one test read
 <!-- deps: PRD-SEC-017 — synthetic labels and why no fixture value is a default -->
 
 - Every synthetic code carries `SYN` and every synthetic name says SYNTHETIC. A generated file says SYNTHETIC in its name and in a document property (imports-and-opening-data 17).
+- The labels of synthetic records come from one place, `apps/server/test/fixtures/synthetic.ts`: a code `SYN-ORG-A`, a name `SYNTHETIC Organisation A`, a generated file name `SYNTHETIC-<stem>.<extension>`, and an Organisation's database name, `syn_org_a`, made from its code. Fixtures and the local seed take every such label from there. The document property is set by the first file generator, when one exists.
+- Test plumbing that is no record, such as a test file's database copies (11.3), a scratch table or a scratch role, is named `syn_…` by the helper that makes it.
+- A unit test fails when application code, every TypeScript source file under `apps/*/src` and `packages/*/src` other than its tests and every migration, holds a fixture value, a synthetic code or a synthetic database name.
 - Synthetic policy status, synthetic settings and synthetic approval limits are recorded as such, so that nothing synthetic can pass for a KDPS value (`AGENTS.md`, "Never invent a value"; `PRD-SEC-017`).
 - KDPS's own files are never committed or loaded into a test (imports-and-opening-data 17).
 
 ### 11.2 Fixtures
 <!-- deps: PRD-ACS-020, PRD-ACS-023 — how fixtures are built -->
 
-- Fixtures live only in test folders and in the local seed command. Code under `src/` never imports them, and a lint rule refuses such an import.
-- Every database test has two synthetic Organisations, each with its own database, so every test can show that one cannot see the other (`PRD-ACS-020`; [deployment.md](deployment.md) section 4).
-- A fixture is built through the real interfaces once they exist, so it obeys the same rules as a user: the setup step for an Organisation (`PRD-ACS-023`), the real commands for its records. Until an interface exists, a fixture writes the fewest rows it needs directly, and is moved onto the interface when it arrives.
-- The local seed command creates the same two synthetic Organisations. It refuses to run unless the environment says it is local or `dev`.
+- Fixtures live only in test folders and in the local seed command: `apps/server/test/fixtures/` (values and labels), `apps/server/test/support/` (helpers) and `apps/server/test/seed/` (the seed). Code under `src/` never imports them: lint rules refuse an import, static or dynamic, of a `test`, `e2e`, `fixtures` or `seed` folder from `apps/*/src` or `packages/*/src`.
+- Every database test has two synthetic Organisations, each with its own database, so every test can show that one cannot see the other (`PRD-ACS-020`; [deployment.md](deployment.md) section 4). One helper makes them for a test file, beside a directory database, and drops all three at its end. The tests of the runner and of the seed start from empty databases instead, because migrating one is what they test.
+- A fixture is built through the real interfaces once they exist, so it obeys the same rules as a user: the setup step for an Organisation (`PRD-ACS-023`), the real commands for its records. Until an interface exists, a fixture writes the fewest rows it needs directly, and is moved onto the interface when it arrives. For the two Organisations that is no row until Organisation routing adds the directory table, then their directory rows, until the setup step replaces them.
+- The local seed command, `pnpm seed`, creates the same two synthetic Organisations. It refuses to run unless `AOS_ENVIRONMENT` is `local` or `dev`; where Railway names the environment, both must be `dev`. It connects as the migration role, refuses a connection string it cannot point at each Organisation's database without logging it, migrates the directory database first, which refuses any other role before anything changes, then creates each Organisation's database if it is missing and migrates it. A second run changes nothing. It is built apart from the application, so no fixture is in the application's build.
 
 ### 11.3 Speed and isolation
 <!-- deps: PRD-MOD-001 — template database and clones -->
 
 - A test run starts one PostgreSQL container and migrates a template database of each kind once. Each test file gets its own copies, made with `CREATE DATABASE … TEMPLATE` while no session is connected to the template, and drops them at its end. So two test files running at once never see each other's rows.
+- Once migrated, each template is closed to connections, so no test can change it and no session can block a copy. Each copy has a unique name starting `syn_`.
 - A copy does not inherit its template's database-level privileges or settings. Before any test connects to a copy as the runtime role, the helper applies the runner's database privilege step to it (4.3).
+- Two test files prove the isolation: each writes rows in its own copies, waits until the other has written too, then reads back only its own rows, and neither drops its copies before the other has read. So integration tests run at least two files at once; a file whose partner's probe failed stops at once.
 
 ### 11.4 Test-only schemas
 <!-- deps: PRD-SEC-016 — test-only migration set for synthetic harnesses, waiting on harness decision H3 -->
