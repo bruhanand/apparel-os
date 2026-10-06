@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: Module and data boundaries (numbering, audit, business codes); from People, access and approvals, the audit record; from AI, security and operational reliability, the access record; from Counter sales and payments and Offline counter, the device bill series. It is GC-5 in [gaps-before-code.md](../../reports/gaps-before-code.md). The two shared modules it details, `numbering` and `audit`, sit at tier 1 of [module-map.md](../architecture/module-map.md) section 2.
+Implements these PRD sections: Module and data boundaries (numbering, audit, business codes); from People, access and approvals, the audit record; from AI, security and operational reliability, the access record; from Counter sales and payments and Offline counter, the device bill series. It is GC-5 in [gaps-before-code.md](../../history/gaps-before-code.md). The two shared modules it details, `numbering` and `audit`, sit at tier 1 of [module-map.md](../architecture/module-map.md) section 2.
 
 - PRD IDs: `PRD-MOD-004`, `PRD-MOD-008`–`PRD-MOD-011`; `PRD-ACS-008`, `PRD-ACS-013`, `PRD-ACS-014`; `PRD-SEC-005`–`PRD-SEC-007`, `PRD-SEC-012`, `PRD-SEC-014`, `PRD-SEC-018`; `PRD-INT-002`–`PRD-INT-004`; `PRD-POS-016`, `PRD-POS-020`; `PRD-OFF-002`, `PRD-OFF-007`, `PRD-OFF-009`, `PRD-OFF-010`, `PRD-OFF-012`; `PRD-LIF-015`, `PRD-LIF-020`; `PRD-TRF-023`; `PRD-ACP-019`.
 - Policies: 10 (`POL-10.07`, `POL-10.11`), 18 (`POL-18.01`, `POL-18.04`, `POL-18.05`).
@@ -160,7 +160,6 @@ The access record logs sign-ins, permission changes and sensitive access (`PRD-S
 Every table has a UUIDv7 primary key. Each module owns one PostgreSQL schema ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 6.1 Schema `numbering`
-<!-- deps: PRD-POS-020, PRD-OFF-002, PRD-OFF-010, PRD-LIF-015, PRD-INT-004, PRD-MOD-008, PRD-ACP-019 — table list for the series records of section 3 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -170,7 +169,6 @@ Every table has a UUIDv7 primary key. Each module owns one PostgreSQL schema ([s
 | `series_event` | — | append-only: defined, paused, released, closed, reconciled after a restore |
 
 ### 6.2 Schema `audit`
-<!-- deps: PRD-ACS-013, PRD-SEC-007, PRD-MOD-011, POL-18.05 — table list for the audit and access records of sections 4 and 5 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |

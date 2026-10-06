@@ -69,7 +69,7 @@ export type DecisionRequest = z.infer<typeof decisionRequestSchema>;
 
 /**
  * Why deciding is unavailable or refused, so the panel names what is missing (PRD-UXP-003;
- * docs/implementation/s1-f01-first-access.md section 6).
+ * docs/plan/stage-1/s1-f01-first-access/spec.md section 6).
  */
 export const decisionRefusalSchema = z.enum([
   'no-reason-list-in-force',

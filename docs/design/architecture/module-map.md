@@ -12,7 +12,7 @@ Implements these PRD sections: Module and data boundaries; Transaction and integ
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
-Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), [shared-calculations.md](../calculations/shared-calculations.md) (GC-7), [imports-and-opening-data.md](../platform/imports-and-opening-data.md) (GC-6), and the other stage 1 designs listed in [gaps-before-code.md](../../reports/gaps-before-code.md) as GC-8 and GC-9. This document is GC-1.
+Used by: [domain-model.md](domain-model.md), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [books-and-posting.md](../finance/books-and-posting.md) (GC-4), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), [shared-calculations.md](../calculations/shared-calculations.md) (GC-7), [imports-and-opening-data.md](../platform/imports-and-opening-data.md) (GC-6), and the other stage 1 designs listed in [gaps-before-code.md](../../history/gaps-before-code.md) as GC-8 and GC-9. This document is GC-1.
 
 ---
 
@@ -41,7 +41,6 @@ How to read the labels:
 ## 2. The modules
 
 ### 2.1 Tiers
-<!-- deps: PRD-MOD-002, PRD-MOD-004, PRD-MOD-005 — orders the modules those rules name into call tiers -->
 
 A call goes to the same tier or a lower one, never upward (section 3).
 
@@ -168,10 +167,9 @@ All are **design choices** that implement the cited rules.
 
 7. **External systems.** One module owns each adapter. Outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction (`PRD-INT-006`, `PRD-INT-007`; section 9).
 8. **No bypass.** Jobs, imports, live updates, search and AI answers go through the same interfaces and the same access checks as a person's request (`PRD-SEC-005`). A service identity is an actor with its own audit identity (`PRD-SEC-018`).
-9. **Checked.** Module boundaries are validated on every change (`PRD-SEC-015`). The check itself belongs to the code house rules ([gaps-before-code.md](../../reports/gaps-before-code.md) section 3).
+9. **Checked.** Module boundaries are validated on every change (`PRD-SEC-015`). The check itself belongs to the code house rules ([gaps-before-code.md](../../history/gaps-before-code.md) section 3).
 
 ## 4. Stage 1 modules in full
-<!-- deps: none — introduction to 4.1 to 4.17; each subsection cites its rules -->
 
 Where a module has an interface, it lists the operations in words. Names, inputs and outputs become exact in the area designs and in the shared Zod schemas (PRD Stack: API). "Refuses when" lists the business refusals, not every validation error.
 
@@ -440,7 +438,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - **Uses:** `access`, `configuration`, `audit`, `numbering`, `organisation`, `merchandise` · catalogue, `exceptions`, `finance` · books, `kernel`.
 - **Called by:** every tier 4 and tier 5 module that moves or values stock. They post through it in their own transaction (stock-ledger section 1).
-- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. The operations, their inputs and refusals, and its tables are in stock-ledger 13 and 14 (**Proposed**, for DR-2); the area designs name the documents that call them.
+- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. The operations, their inputs and refusals, and its tables are in stock-ledger 13 and 14 (**Proposed**, awaiting the product owner's approval); the area designs name the documents that call them.
 - It writes no journal. For a valued movement it calls Post in `finance` · books inside the same transaction (stock-ledger 7.11, DEC-087).
 - **Events:** `stock.movements-posted`, `stock.hold-changed`, `stock.reservation-changed`, `stock.count-freeze-changed`.
 
@@ -460,7 +458,7 @@ Only its stage 1 part. **Uses:** all lower tiers.
 ### 4.17 `pos` · billing device (design only in stage 1)
 
 - A billing device is registered online. `access` holds the device identity; `pos` holds its Store, its tax registrations and its offline authority; `numbering` holds its bill series (`PRD-OFF-002`, `PRD-POS-020`).
-- One exclusively authorised offline counter per Store (`PRD-OFF-001`). Offline is designed in stage 1 and enabled only under the signed Offline operation policy (policy 16, DEC-051). The detailed design is GC-8.
+- One exclusively authorised offline counter per Store (`PRD-OFF-001`). Offline is designed in stage 1 and enabled only under the signed Offline operation policy (policy 16, DEC-051). The detailed design is GC-8, [offline-counter.md](../pos/offline-counter.md) (Draft): there `pos` records the business units a device bills for, and its tax registrations follow from their mappings (offline-counter 3.1).
 
 ## 5. Later-stage modules in outline
 
@@ -689,7 +687,6 @@ From [deployment.md](../platform/deployment.md) section 2, with two **design cho
 
 ### 11.1 PRD requirement IDs
 
-<!-- header: not listed — this table places every PRD ID with its owning module; the header lists only the IDs this document implements -->
 
 Every requirement ID in [prd.md](../../prd.md) is listed once, with the module that owns the rule. A rule that several modules enforce is listed under the one that owns the record; "with" names the others.
 
@@ -759,7 +756,6 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-ACP-001`–`PRD-ACP-020` | Acceptance conditions; each is an exit check in [phases.md](../../phases.md), tested across modules |
 
 ### 11.2 Policies
-<!-- deps: POL-01, POL-02, POL-03, POL-04, POL-05, POL-06, POL-07, POL-08, POL-09, POL-10, POL-11, POL-12, POL-13, POL-14, POL-15, POL-16, POL-17, POL-18, POL-19 — maps each policy to the module holding its values -->
 
 Where each policy's configured values live. The policy's status and the gate are always in `configuration`.
 
@@ -787,7 +783,7 @@ Where each policy's configured values live. The policy's status and the gate are
 
 ### 11.3 The missing stage 1 designs
 
-What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-before-code.md), and what it leaves.
+What this map fixes for each design in [gaps-before-code.md](../../history/gaps-before-code.md), and what it leaves.
 
 | Design | Fixed here | Left to it |
 | --- | --- | --- |
@@ -798,8 +794,8 @@ What this map fixes for each design in [gaps-before-code.md](../../reports/gaps-
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail: written in [imports-and-opening-data.md](../platform/imports-and-opening-data.md) |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions, tax rule records and golden cases: written in [shared-calculations.md](../calculations/shared-calculations.md) |
-| GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else |
-| GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else |
+| GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else: drafted in [offline-counter.md](../pos/offline-counter.md), not yet approved |
+| GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else: drafted in [backup-and-restore.md](../platform/backup-and-restore.md), not yet approved |
 
 ## 12. Open questions
 

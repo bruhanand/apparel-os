@@ -7,7 +7,7 @@
 - Notes on the data KDPS Lifestyle Pvt. Ltd. sent to the ERP team in June and July 2026, written in October 2026 for future design and code.
 - The raw files are in `docs/data-from-kdps/`. They are git-ignored; only their READMEs are committed. Start at [data-from-kdps/README.md](../data-from-kdps/README.md) for a folder-by-folder description of every file.
 - These notes cut the same data by ERP topic instead of by folder: what each layout looks like, what each column means, what the data shows about how KDPS works today, where it fits the PRD, and what is still unknown.
-- Like [reports/](../reports/README.md), these notes are not ranked. When a note and the PRD, the KDPS policies or a design disagree, the higher document wins and the note reports the clash.
+- These notes are not ranked. When a note and the PRD, the KDPS policies or a design disagree, the higher document wins and the note reports the clash.
 
 ## Rules these notes follow
 
@@ -49,6 +49,6 @@
 
 ## Keeping these notes honest
 
-- These notes are not tracked sections of the doc checker's review gate. The checker still checks their IDs, links and tables.
-- A note that cites a PRD or policy ID must keep citing a live ID. If the PRD changes, the checker fails on a retired ID; fix the note.
-- Moving a question into [questions-for-kdps.md](../questions-for-kdps.md), or turning a finding into a PRD or policy change, follows the change gate in `AGENTS.md` ("Checking the documents").
+- The link check ([tools/link-check](../../tools/link-check/check.mts)) checks their links and IDs.
+- A note that cites a PRD or policy ID must keep citing a live ID. If the PRD retires an ID, cite what replaced it.
+- Moving a question into [questions-for-kdps.md](../questions-for-kdps.md), or turning a finding into a PRD or policy change, follows `AGENTS.md` "Alignment rules": a PRD or policy change is logged in `decisions.md` first.

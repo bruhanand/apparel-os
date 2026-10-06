@@ -1,21 +1,18 @@
-// Flat ESLint config for the code workspace. Docs and the doc checker are not linted.
+// Flat ESLint config for the code workspace. Docs are not linted.
 import eslint from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores([
-    '**/dist/**',
-    '**/dist-seed/**',
-    '**/node_modules/**',
-    '**/.turbo/**',
-    '**/coverage/**',
-    'docs/**',
-    'tools/doc-check/**',
-  ]),
+  globalIgnores(['**/dist/**', '**/dist-seed/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', 'docs/**']),
   {
-    files: ['apps/**/*.{ts,tsx,mts}', 'packages/**/*.{ts,tsx,mts}', 'tools/module-check/**/*.mts'],
+    files: [
+      'apps/**/*.{ts,tsx,mts}',
+      'packages/**/*.{ts,tsx,mts}',
+      'tools/module-check/**/*.mts',
+      'tools/link-check/**/*.mts',
+    ],
     extends: [
       eslint.configs.recommended,
       tseslint.configs.strictTypeChecked,

@@ -331,7 +331,7 @@ One table per PRD area, in the PRD's order. Columns:
 
 ## 3. Inputs for designs not yet written
 
-[gaps-before-code.md](../reports/gaps-before-code.md) lists three stage 1 designs that are still missing (GC-6, GC-8, GC-9). Later stages also need designs of their own. Each part below names the notes that feed one design and the facts it should carry. A design may use the data as a sample for layouts and tests; it may not copy a value into a setting.
+[gaps-before-code.md](../history/gaps-before-code.md) listed three stage 1 designs as missing on 5 Oct 2026 (GC-6, GC-8, GC-9); GC-6 is now written and GC-8 and GC-9 are drafted. Later stages also need designs of their own. Each part below names the notes that feed one design and the facts it should carry. A design may use the data as a sample for layouts and tests; it may not copy a value into a setting.
 
 ### 3.1 GC-6 Imports and opening data (stage 1; first real use in stage 2; real opening data only at a Store's switch)
 

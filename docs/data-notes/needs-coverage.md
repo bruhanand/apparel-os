@@ -59,7 +59,7 @@ Counts add each word of a two-word outcome, so a row with "Retire habit + Covere
 
 The 58 Gap marks reduce to 23 gaps and one parked topic (the `Color` tags, below the table). Several parts found the same gap from different files; the table merges them. The full draft of each (need, question, options, who decides, IDs it would touch, stage) is under "Gaps in this part" in the section named.
 
-Each gap needs a product-owner decision. A change to the PRD or the policies is logged first as a `decisions.md` entry and approved before the edit (`AGENTS.md`, "Change gate"). These drafts are proposals only.
+Each gap needs a product-owner decision. A change to the PRD or the policies is logged first as a `decisions.md` entry and approved before the edit (`AGENTS.md`, "Alignment rules"). These drafts are proposals only.
 
 | Gap | Need | Drafts (section) | Who decides | Stage |
 | --- | --- | --- | --- | --- |

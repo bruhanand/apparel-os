@@ -25,7 +25,6 @@ One Railway project with two environments. Each has its own services, databases,
 - On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed (`DEC-102`). So that they can do them, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`), as settings of the test setup and not the signed role map of `POL-02.11` (`DEC-103`). None of these enables a gated action. Approving those assignments needs a reason list in force: the first list, with the reasons KDPS gives, is a setting of the test setup, approved first with a free-text reason (`DEC-105`, `DEC-104`; [access-and-approvals.md](../access/access-and-approvals.md) GC3-12). The app shows an environment banner.
 
 ## 2. Services in each environment
-<!-- deps: prd.md#stack, DEC-028, prd.md#delivery-stages — Railway services, files and forecast service restate PRD hosting -->
 
 | Service | What runs | Reachable from |
 | --- | --- | --- |
@@ -68,7 +67,6 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`). On production
 - **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). Files are held in a Railway bucket (D-2, `DEC-105`); its backup steps are in the backup and restore design (GC-9). Name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The earlier POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
 
 ## 5. Live updates (SSE)
-<!-- deps: prd.md#stack — SSE carries identifiers, then refetch -->
 
 Railway keeps an HTTP stream open for at most 15 minutes, and closes it after 5 minutes with no data. So:
 

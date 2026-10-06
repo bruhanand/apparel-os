@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current**, 3 Oct 2026, for sections 1 to 12. Sections 13 to 15 (interface, tables, synthetic harness) are **Proposed**, 6 Oct 2026, for review in DR-2 (RR-012, RR-013). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current**, 3 Oct 2026, for sections 1 to 12. Sections 13 to 15 (interface, tables, synthetic harness) are **Proposed**, 6 Oct 2026, reviewed the same day and awaiting the product owner's approval (RR-012, RR-013). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: Stock and warehouse control; Ledger and official books (cost formulas and pools); Merchandise and identifiers (piece and quantity tracking); Receiving and price tickets, Transfers and physical movement, Damage, quarantine and disposal (their stock effects); Opening, closure, migration and export (the switch); Module and data boundaries; Transaction and integration integrity.
 
@@ -418,7 +418,6 @@ Stage 1 exit check: receipt, transfer, sale, return and late cost adjustment pas
 > **All data in this section is SYNTHETIC.** It is test data only and never becomes a default, a KDPS value or a policy value.
 
 ### 11.1 The story
-<!-- deps: PRD-ACP-018, PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, PRD-PTW-010, DEC-031 — synthetic story exercising cost formulas and pools -->
 
 - One book, BK-SYN. Two Sites: warehouse W1 and Store S1, both in BK-SYN and both live on the app (S1 has already switched).
 - One SKU, X, piece-tracked. All goods owned from receipt. Costs come from approved PTs.
@@ -436,7 +435,6 @@ Stage 1 exit check: receipt, transfer, sale, return and late cost adjustment pas
 Pieces at the end: W1 has 6 (all R1); S1 has 5 (2 R1, 3 R2). Total cost in: 1,000.00 + 780.00 + 150.00 = **1,930.00**.
 
 ### 11.2 Moving average, book pool
-<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.06, DEC-031 — moving average, whole-book pool worked example -->
 
 One pool: BK-SYN · X. Values in ₹.
 
@@ -451,7 +449,6 @@ One pool: BK-SYN · X. Values in ₹.
 | 7 | 11 | 1,333.75 | 121.25 | 475.00 | Out at 121.25; variance to credit 8.75 |
 
 ### 11.3 Moving average, Site pools
-<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, DEC-031 — moving average, Site pools, transfer carries source cost -->
 
 | Step | W1: quantity / value (average) | S1: quantity / value (average) | In transit | Cost of goods sold | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -465,7 +462,6 @@ One pool: BK-SYN · X. Values in ₹.
 | 7 | 6 / 690.00 | 5 / 615.00 (123.00) | — | 502.00 | Out at 123.00; variance to credit 7.00 |
 
 ### 11.4 FIFO, book pool
-<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.07, DEC-031 — FIFO whole-book pool worked example -->
 
 Layers are written as quantity @ unit cost.
 
@@ -480,7 +476,6 @@ Layers are written as quantity @ unit cost.
 | 7 | L1 4 @ 115.00 · L2 6 @ 130.00 · L3 1 @ 115.00 | 11 / 1,355.00 | 460.00 | Out from L1 at 115.00; variance to credit 15.00 |
 
 ### 11.5 FIFO, Site pools
-<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, POL-09.07, DEC-031 — FIFO Site pools, layer per source layer on arrival -->
 
 | Step | W1 layers | S1 layers | Cost of goods sold | Notes |
 | --- | --- | --- | --- | --- |
@@ -493,7 +488,6 @@ Layers are written as quantity @ unit cost.
 | 7 | L1 6 @ 115.00 (690.00) | L3 4 @ 115.00 · L4 1 @ 130.00 (590.00) | 520.00 | Out from L2 at 130.00; variance to credit 0.00 |
 
 ### 11.6 Expected end state
-<!-- deps: PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, PRD-MOD-014, DEC-031 — end values per formula and pool, whole paise -->
 
 | Formula and pool | Stock value | Cost of goods sold | Value out by supplier return | Variance to the ₹130.00 credit |
 | --- | --- | --- | --- | --- |
@@ -505,7 +499,6 @@ Layers are written as quantity @ unit cost.
 In every row, stock value + cost of goods sold + value out by supplier return = 1,930.00. Every amount is whole paise.
 
 ### 11.7 Checks run after every step
-<!-- deps: PRD-MOD-011, PRD-MOD-012, PRD-MOD-015, PRD-LED-016, PRD-MER-003, PRD-ACP-018 — ledger invariants checked after each step -->
 
 - Each balance equals the sum of its movements; rebuilding the balance tables from movements gives the same rows.
 - Each FIFO pool's quantity and value equal the sum of its layers.
@@ -569,7 +562,7 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | SL-21 | Settled: journals for valued movements are written in the same transaction as the movement so books balance at commit (`DEC-087`, `PRD-MOD-013`) | — | — |
 | SL-22 | Settled: the click records the approval decision; the job's transaction records its use, which is the approval evidence; a failed job leaves the decision unused (10.6; `DEC-097`; [access-and-approvals.md](../access/access-and-approvals.md) 9.8) | — | — |
 | SL-23 | Baseline (DEC-105): Outcome A. A valued movement with no valid posting map does not commit; the document stays as it was, and an exception is raised in its own transaction (`PRD-MOD-013`, `POL-09.12`, DEC-087; 7.11; module-map 6.3) | CA (confirms) | — |
-| SL-24 | Lock-order refinements for the ledger's tables, **Proposed** in 14.3: receipt origins only read are locked in shared mode at step 2; a unit anchor at step 3, shared for every item and exclusive to start or end a count freeze; a missing cost pool row, or a missing transit value row, is created empty at step 6, as balance rows are at step 3. Each changes 10.3 and code-house-rules 8.2, which are amended only once it is approved | Product owner, in DR-2 | Code S1-F10 (the first stock migration) |
+| SL-24 | Lock-order refinements for the ledger's tables, **Proposed** in 14.3: receipt origins only read are locked in shared mode at step 2; a unit anchor at step 3, shared for every item and exclusive to start or end a count freeze; a missing cost pool row, or a missing transit value row, is created empty at step 6, as balance rows are at step 3. Each changes 10.3 and code-house-rules 8.2, which are amended only once it is approved | Product owner, at approval of sections 13 to 15 | Code S1-F10 (the first stock migration) |
 | SL-25 | Row-level security for stock rows (14.1, 14.3). (a) A command that writes legs in two scopes, such as a dispatch, an arrival or a failed delivery between Sites, or a location move between two units at one Site, by an actor whose scope covers only one: a write rule of its own (code-house-rules 6.2) or the answer to CH-6. (b) A row at a business unit that belongs to no Store, such as a warehouse unit: **Proposed**, it carries no Store and is matched by its Site and unit, not read as an Unknown place. (c) A whole-book pool, which has no Site: **Proposed**, it carries none, so only all-members place scope reads its value; how Store value is shown stays SL-14. (b) and (c) depart from code-house-rules 6.2, where a null in a declared fact is Unknown, and amend it only once approved. They fit structure-and-masters 2.4 as structural rules, not as a null meaning none: the unit belongs to no Store, as `organisation` records, and the pool's mode is book, as its `pool_mode` column states, with a `CHECK` that the Site is null exactly then. (d) A header row that can cover goods of several brands (`movement`, `hold`, `hold_scope`, `reservation`, `unit_anchor`) declares no brand (14.1), so a brand-limited reader sees the header though access-and-approvals 5.3 wants several brands covered only when every brand is; the brand-bearing rows below it carry the quantities and values. (e) Pool rows (`cost_pool`, `cost_layer`, and the pool rows of `valuation` and `valuation_layer`) declare no Store or unit, so only a reader whose place scope covers the pool's whole Site, by a selected Site or wider, sees a Site pool's rows, and only all-members place scope sees a book pool's; a reader scoped to one unit or Store does not (access-and-approvals 5.2). **Proposed** | Product owner, in the access design (CH-6) | (b) to (e): Code S1-F10. (a): stage 3 transfers live; until then the harness acts with synthetic actors whose scope covers both places |
 | SL-26 | Value entering a pool through an ownership change after its cost is established (7.2; `POL-01.05` lets an agreement's ownership event fall between receipt and sale): which posting event kind it posts and what that recognises (`POL-09.03`). Until set, such an item is refused (13.4) | Accounts, CA (recognition); the event kind is declared in books-and-posting 7.2 first | 2, for an agreement whose ownership event falls between receipt and sale |
 | SL-27 | A reversal of an inflow made in error under FIFO, once the inflow's own layer and the layers that came from it no longer hold the value to come off: from which of the pool's other layers the rest comes off, at pool level as `PRD-LED-018` sets (7.5). Until set, such a reversal is refused (`rule-not-set`) | CA, with Accounts | Before FIFO reversals of inflows go live (2) |
@@ -579,10 +572,9 @@ SL-12, SL-13 and SL-16 were settled by DEC-034 and DEC-035; their numbers are no
 
 ## 13. Interface
 
-**Proposed**, 6 Oct 2026, for review in DR-2 (RR-012). Sections 13 to 15 add the ledger's interface, its tables and the synthetic harness to the rules of sections 1 to 11; they change none of those rules, except the changes to 10.3 that SL-24 proposes, which apply only once approved. Every engineering choice in them is **Proposed**, labelled as module-map section 1 says, and waits for DR-2 and the product owner. The rules they apply keep their IDs beside them. Refusal names are Proposed; their envelope is part B of the house rules (code-house-rules 12).
+**Proposed**, 6 Oct 2026, awaiting the product owner's approval (RR-012). Sections 13 to 15 add the ledger's interface, its tables and the synthetic harness to the rules of sections 1 to 11; they change none of those rules, except the changes to 10.3 that SL-24 proposes, which apply only once approved. Every engineering choice in them is **Proposed**, labelled as module-map section 1 says, and waits for the product owner. The rules they apply keep their IDs beside them. Refusal names are Proposed; their envelope is part B of the house rules (code-house-rules 12).
 
 ### 13.1 How a caller posts
-<!-- deps: PRD-MOD-002, PRD-MOD-006, PRD-INT-002, PRD-INT-003, PRD-INT-004, PRD-MOD-013, DEC-087, DEC-097 — the four phases of a ledger request inside the caller's command -->
 
 - Every change to the ledger's records is one **ledger request**: the stock effects of one business document, or of one step of it, from one registered caller (13.2), inside that caller's command (`PRD-MOD-002`, `PRD-MOD-006`). The ledger joins the command's transaction and never opens or commits one; each operation takes the command's transaction context as its first argument (code-house-rules 8.1; module-map section 3, rule 3). **Proposed.**
 - A request holds items: movements (13.4) and status changes (13.5). One request is all or nothing; one failing item fails the request and the command rolls back (`PRD-INT-004`, `PRD-IMP-012`).
@@ -608,7 +600,6 @@ The caller's command, in order (module-map 6.1; `PRD-INT-003`):
 - The ledger allocates no number of its own in stage 1. Piece codes come from the caller (13.4); journal numbers are drawn by Post. **Proposed.**
 
 ### 13.2 Registered callers
-<!-- deps: PRD-MOD-002, PRD-SEC-005, PRD-SEC-017, PRD-LIF-014, PRD-IMP-010, DEC-112 — harness decision H2: the ledger accepts registered callers only -->
 
 Harness decision H2 (DEC-112): the ledger accepts registered callers only, and synthetic callers exist only in tests.
 
@@ -620,7 +611,6 @@ Harness decision H2 (DEC-112): the ledger accepts registered callers only, and s
 - In tests: the synthetic document driver (section 15) and the GC-6 opening-count test handler (imports-and-opening-data 12). Whether that handler may also run on `dev` is OPEN (GC6-18); until it is answered it is registered in tests only (15.5).
 
 ### 13.3 The request
-<!-- deps: PRD-MOD-008, PRD-MOD-009, PRD-MOD-010, PRD-ACS-013, PRD-MER-010, PRD-MER-011, PRD-ORG-005, PRD-ORG-012, POL-04.03 — the inputs every item carries -->
 
 Every request carries the source of 13.2, the business date and event time (`PRD-MOD-009`), and the actor: the user or service identity, the person a job acts for, and the role assignment Authorise returned (`PRD-ACS-013`, `PRD-SEC-018`). Where the action needed approval it also carries the approval decision and the identifier of its use, a UUIDv7 the caller made before Record use wrote it in the same transaction, so each movement keeps its approval evidence (2.2; `PRD-ACS-013`, `PRD-INT-004`, DEC-097). Every item adds:
 
@@ -637,7 +627,6 @@ Every request carries the source of 13.2, the business date and event time (`PRD
 | Links | The movement reversed; the hold or reservation released; the reservation a hold sits inside, as the kind needs | `PRD-ACS-014` |
 
 ### 13.4 Movement items
-<!-- deps: PRD-REC-008, PRD-LIF-003, PRD-LIF-004, PRD-LIF-008, PRD-STK-005, PRD-DMG-010, PRD-TRF-011, PRD-TRF-016, PRD-TRF-019, PRD-POS-018, PRD-RET-013, PRD-OFR-012, PRD-STK-012, PRD-DMG-012, PRD-PTW-010, PRD-LED-016, PRD-LED-017, PRD-LED-018 — one item per movement kind of 2.3 -->
 
 One item kind per movement kind of 2.3. "Under the locks" adds to the common rechecks of 13.1. Event kinds are those of books-and-posting 7.2; a kind marked "none" calls no Post.
 
@@ -671,7 +660,6 @@ One item kind per movement kind of 2.3. "Under the locks" adds to the common rec
 - Value never posts for Unknown cost; the item has no valuation and calls no Post (`PRD-MOD-015`, `PRD-ACP-004`).
 
 ### 13.5 Status items
-<!-- deps: PRD-REC-015, PRD-REC-019, PRD-REC-021, PRD-REC-022, PRD-STK-001, PRD-STK-008, PRD-STK-009, PRD-TRF-006, PRD-TRF-007, PRD-TRF-022, PRD-OFF-006, PRD-OFF-011, PRD-DMG-003, PRD-INT-005, POL-17.01 — coverage, acceptance, holds, reservations and freezes as items -->
 
 Status records are not movements (2.3). Each item locks the balance and piece rows it claims (10.3 steps 3 and 4), so it queues with any movement of the same goods.
 
@@ -693,7 +681,6 @@ Status records are not movements (2.3). Each item locks the balance and piece ro
 - The count freeze's expected quantities are the balances under the freeze's locks; Start count freeze returns them (8.1).
 
 ### 13.6 Reads and read models
-<!-- deps: PRD-MOD-003, PRD-MOD-012, PRD-PRF-004, PRD-SEC-005, PRD-ACS-008, PRD-OFF-004, PRD-STK-001, PRD-STK-003, PRD-STK-006, PRD-LED-008, PRD-ORG-014 — what the ledger answers, with an as-of time, under the reader's authorisation -->
 
 Reads take no lock and run in a read-only transaction under the reader's actor (code-house-rules 8.1). Every answer carries its as-of time and says when it is partial (`PRD-MOD-003`, `PRD-PRF-004`). Reports reach them through the kernel's read-model gateway (module-map section 3, rule 5).
 
@@ -714,7 +701,6 @@ Reads take no lock and run in a read-only transaction under the reader's actor (
 - Rows are filtered by row-level security as a backstop to Authorise (`PRD-SEC-005`; 14.3).
 
 ### 13.7 Contracts, events and limits
-<!-- deps: PRD-MOD-006, PRD-INT-008, PRD-SEC-017, PRD-MER-018, POL-04.04, DEC-087 — contracts the ledger implements, its events, and what it never does -->
 
 - **Contracts it implements** (module-map section 3, rule 6): location in use, for `organisation` before a location is retired (structure-and-masters 3.5); stock presence, for `merchandise` before a tracking profile becomes piece-tracked or a SKU's stock unit changes (structure-and-masters 4.4 and 4.6; `PRD-MER-018`, `POL-04.04`, GC2-5); the resolution check, for exceptions the ledger raises, such as a rebuild difference (`PRD-EXC-002`).
 - **Events** (module-map section 8; identifiers only, saved in the request's transaction): `stock.movements-posted` once per request with movements; `stock.hold-changed`, `stock.reservation-changed` and `stock.count-freeze-changed` when those change. Coverage and acceptance publish no event in stage 1; the stage 2 PT and receiving designs add one if a consumer needs it, in module-map section 8 first (`PRD-MOD-006`, `PRD-INT-008`).
@@ -722,7 +708,6 @@ Reads take no lock and run in a read-only transaction under the reader's actor (
 - **Never:** a journal of its own (7.11, DEC-087); a call to an outside system (code-house-rules 8.3); a movement from an import of historical reference (13.2); a business value of its own, such as a tolerance or a rounding rule (section 12).
 
 ### 13.8 Refusals
-<!-- deps: PRD-UXP-003, PRD-INT-002, PRD-INT-005, PRD-SEC-017 — the names the ledger refuses with -->
 
 Each refusal names the item and what failed, so the caller can show the reason (`PRD-UXP-003`). Names **Proposed**.
 
@@ -754,10 +739,9 @@ Each refusal names the item and what failed, so the caller can show the reason (
 
 ## 14. Tables
 
-**Proposed**, 6 Oct 2026, for review in DR-2 (RR-012), with the migration that creates them. The house rules set how each table is written (code-house-rules 3.2, 3.3 and 7.1); this section says which tables, columns and keys.
+**Proposed**, 6 Oct 2026, awaiting the product owner's approval (RR-012), with the migration that creates them. The house rules set how each table is written (code-house-rules 3.2, 3.3 and 7.1); this section says which tables, columns and keys.
 
 ### 14.1 Conventions
-<!-- deps: PRD-MOD-002, PRD-MOD-008, PRD-MOD-011, PRD-MOD-012, PRD-MOD-014, PRD-MOD-015 — how the stock tables follow the house rules -->
 
 - One schema, `stock`. The ledger part writes the tables below; `stock` · documents adds its own tables in its own design, in the same schema (code-house-rules 3.2; `PRD-MOD-002`).
 - Every table has `id uuid`, a UUIDv7 made by the application (`PRD-MOD-008`). A reference to another module's record keeps its identifier with no foreign key; every reference inside `stock` has one (structure-and-masters 2.5).
@@ -775,7 +759,6 @@ Each refusal names the item and what failed, so the caller can show the reason (
   The questions this leaves are SL-25.
 
 ### 14.2 Schema `stock`
-<!-- deps: PRD-STK-001, PRD-STK-002, PRD-STK-004, PRD-MER-003, PRD-REC-015, PRD-ORG-014, PRD-LED-014, PRD-LED-015, PRD-MOD-010, PRD-MOD-011, PRD-MOD-012, PRD-INT-005, PRD-IMP-010, PRD-LIF-014 — the stock ledger's tables, columns and constraints -->
 
 "Scope" is the scope facts of 14.1; "source" is the source of 13.2 (`source_module`, `source_record_type`, `source_record_id`, `source_version_id`, `source_line_id`, `source_import_kind`); "actor" is `actor_user_id` or `actor_service_identity_id`, `on_behalf_of_user_id` and `role_assignment_id`. Register marks are those of code-house-rules 3.2.
 
@@ -812,7 +795,6 @@ Each refusal names the item and what failed, so the caller can show the reason (
 - **Rules across tables** are held by a column copied from the row they depend on, kept true by a composite foreign key or a trigger, as each row above says; a rule over a running quantity, such as a release within its claim, is rechecked by the command under the lock that guards it (13.1). **Proposed.**
 
 ### 14.3 Locks, indexes and row-level security
-<!-- deps: PRD-INT-003, PRD-SEC-005, PRD-MOD-003, PRD-PRF-003, DEC-105 — which stock rows each lock step takes, the indexes they need, and the scope policy -->
 
 | 10.3 step | Rows | Mode | Rows changed only under them |
 | --- | --- | --- | --- |
@@ -831,10 +813,9 @@ Each refusal names the item and what failed, so the caller can show the reason (
 
 ## 15. Synthetic harness
 
-**Proposed**, 6 Oct 2026, for review in DR-2 (RR-013). It writes the harness decisions H1 to H6 that the product owner took on 5 Oct 2026 (DEC-112) into this design. The plan and its options are [s1-f10-stock-harness.md](../../implementation/s1-f10-stock-harness.md), which is not ranked; this section is the design.
+**Proposed**, 6 Oct 2026, awaiting the product owner's approval (RR-013). It writes the harness decisions H1 to H6 that the product owner took on 5 Oct 2026 (DEC-112) into this design. The plan and its options are [S1-F10 spec](../../plan/stage-1/s1-f10-stock-ledger/spec.md), which is not ranked; this section is the design.
 
 ### 15.1 Where H1 to H6 sit
-<!-- deps: PRD-ACP-018, PRD-LED-014, PRD-LED-015, PRD-SEC-016, PRD-INT-004, DEC-112 — the six harness decisions placed in the ledger design -->
 
 | Decision (DEC-112) | Where it sits |
 | --- | --- |
@@ -851,10 +832,9 @@ Each refusal names the item and what failed, so the caller can show the reason (
 - Tests of the real source documents are still needed when those documents arrive; the same scenario files are then run with the real document in place of the driver's command (DEC-112).
 
 ### 15.2 The test-only schema
-<!-- deps: PRD-SEC-016, PRD-MOD-002, PRD-ACS-007, DEC-112 — harness decision H3: where the driver's documents live -->
 
 - Schema `test_stock_harness`, created by the test-only migration set `apps/server/test/migrations/` and applied by test setup only, after the Organisation set (code-house-rules 11.4). The catalogue test fails if it exists in a database the pre-deploy runner migrated (code-house-rules 10.4).
-- Four tables, **Proposed**, in place of the one table of the implementation plan, so the driver follows code-house-rules 3.3 and 7.2:
+- Four tables, **Proposed**, in place of the one table first planned in the S1-F10 spec, so the driver follows code-house-rules 3.3 and 7.2:
   - `document`: `id`; `kind` (the driver's command kinds); `version_id`, a new UUIDv7 for each change, and `version_no`; `state`; the Site, Store, business unit, legal entity and book of the document, and for a transfer its destination's; `occurred_at`, `recorded_at`;
   - `document_line`: one row per line of a version, with typed columns: `document_id`, `version_id`, `line_id`, SKU, quantity, places, the receipt origin or movement it names, piece codes in `document_line_piece`, and amounts as `bigint` paise with `value_known`. No amount or constraint column is held in `jsonb`;
   - `document_change`: who recorded a change in which version and when, so a version can have several preparers and independence is tested as access-and-approvals 9.1 requires.
@@ -862,14 +842,12 @@ Each refusal names the item and what failed, so the caller can show the reason (
 - Their register entries, in the test set's own `tables.json`: `unscoped`, because a driver document can span two places and every row is synthetic. `document` is `locked` and changes its state and current version; `document_line`, `document_line_piece` and `document_change` are append-only. **Proposed.** The ledger's own rows the driver causes keep their scope and their policies (14.3), so the isolation tests read real scoped rows.
 
 ### 15.3 Synthetic approvals
-<!-- deps: PRD-ACS-006, PRD-ACS-007, PRD-ACS-015, PRD-ACS-016, POL-02.09, DEC-097, DEC-112 — harness decision H4: synthetic action types through the real approval machinery -->
 
 - The driver declares its approval action types in test code, as each owning module declares its own (access-and-approvals 8). Each requires independent approval and has cost as its value basis, like the stock actions of domain-model 5 (`PRD-ACS-006`, `PRD-ACS-015`). Their names begin `test-stock-harness.`, and `access` accepts them only in a test composition, as 13.2 does for callers. **Proposed.**
 - Request approval, Decide, Verify under lock and Record use are the real operations of `access`, and so is the queued posting job of 10.6 (DEC-097; access-and-approvals 9.8). Synthetic limits are set through the real limit interface and labelled synthetic (`POL-02.09`; code-house-rules 11.1).
 - The real action types arrive with their modules, and their tests follow then.
 
 ### 15.4 The read-only role
-<!-- deps: PRD-SEC-005, PRD-SEC-016, DEC-112 — harness decision H6 and house rules CH-4: name, grants and row-level security of the read-only test role -->
 
 Code-house-rules 5.1 leaves the role's name, grants and reading under row-level security to the stock harness. **Proposed:**
 
@@ -879,8 +857,7 @@ Code-house-rules 5.1 leaves the role's name, grants and reading under row-level 
 - It only reads isolated test databases holding synthetic data. Scope tests never use it: they read as the runtime role with an actor set (code-house-rules 10.1; `PRD-SEC-005`).
 
 ### 15.5 Where the harness runs
-<!-- deps: PRD-SEC-016, PRD-SEC-017, PRD-LIF-004, DEC-071, DEC-112 — harness decision H5 and the open dev handler question -->
 
 - In test runs only, in each test file's own database copies (code-house-rules 11.3). Never on `dev`, `kdps-test` or production, never in a production composition, and it never sets a KDPS value (DEC-112; `PRD-SEC-017`).
 - The GC-6 opening-count test handler is a synthetic caller in the same way (13.2). Whether it may also run on `dev` is OPEN for the product owner (GC6-18; imports-and-opening-data 12). Until it is answered, it runs in tests only.
-- What it proves and how it is accepted is the implementation plan's: s1-f10-stock-harness 3.4 to 3.7 and the stage 1 exit checklist.
+- What it proves and how it is accepted is the S1-F10 spec's ([spec](../../plan/stage-1/s1-f10-stock-ledger/spec.md) 3.4 to 3.7) and the stage 1 exit checklist ([stage 1](../../plan/stage-1/README.md) section 7).

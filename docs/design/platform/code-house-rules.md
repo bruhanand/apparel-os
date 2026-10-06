@@ -2,9 +2,9 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current** for part A, 5 Oct 2026: part A, database and tests (sections 2 to 11), is reviewed and approved by the product owner. DEC-112 (5 Oct 2026) settles or sets baselines for CH-1 to CH-5 and CH-7, and the sections that record them are reviewed again under the doc gate; the rest of section 13 stays open at its gates. Part B, API and runtime (section 12), was drafted, reviewed and approved by the product owner on 6 Oct 2026 (RR-011), with CH-8 answered and CH-12 answered by DEC-113. Section 7.3 of part A was amended the same day: the product owner allowed a version to be withdrawn before its start (RR-202) and approved the mechanism with part B; the state name Withdrawn stays OPEN (CH-11). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current** for part A, 5 Oct 2026: part A, database and tests (sections 2 to 11), is reviewed and approved by the product owner. DEC-112 (5 Oct 2026) settles or sets baselines for CH-1 to CH-5 and CH-7, and the sections that record them were reviewed again; the rest of section 13 stays open at its gates. Part B, API and runtime (section 12), was drafted, reviewed and approved by the product owner on 6 Oct 2026 (RR-011), with CH-8 answered and CH-12 answered by DEC-113. Section 7.3 of part A was amended the same day: the product owner allowed a version to be withdrawn before its start (RR-202) and approved the mechanism with part B; the state name Withdrawn stays OPEN (CH-11). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: "Technical platform" (Stack: Repository, Database, Database access, Verification; in part B also API, Jobs, Live updates, Diagnostics); Module and data boundaries; Transaction and integration integrity; from AI, security and operational reliability, the PostgreSQL scope controls, dependency pinning and the checks every change must pass, and in part B secrets kept out of logs, correlated logs and failed jobs shown to operators. It is the code house rules of [gaps-before-code.md](../../reports/gaps-before-code.md) section 3.
+Implements these PRD sections: "Technical platform" (Stack: Repository, Database, Database access, Verification; in part B also API, Jobs, Live updates, Diagnostics); Module and data boundaries; Transaction and integration integrity; from AI, security and operational reliability, the PostgreSQL scope controls, dependency pinning and the checks every change must pass, and in part B secrets kept out of logs, correlated logs and failed jobs shown to operators. It is the code house rules of [gaps-before-code.md](../../history/gaps-before-code.md) section 3.
 
 - PRD IDs: `PRD-MOD-001`–`PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-014`, `PRD-MOD-015`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-006`–`PRD-INT-010`, `PRD-INT-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-013`–`PRD-SEC-018`; `PRD-ACS-004`, `PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-020`, `PRD-ACS-022`, `PRD-ACS-023`; `PRD-UXP-003`; `PRD-EXC-001`, `PRD-EXC-013`; `PRD-PRO-009`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-018`.
 - Policies: 2 (`POL-02.12`).
@@ -17,7 +17,6 @@ Used by: all code and tests in the repository; the migration runner and roles, a
 ---
 
 ## 1. What this document fixes
-<!-- deps: PRD-MOD-002, PRD-SEC-015, PRD-SEC-016 — scope of the house rules and how they relate to the designs -->
 
 - The conventions every module's code follows, so that work done in parallel gives one schema style, one transaction style and one test style.
 - **Part A, database and tests:** folder layout (section 2), database layout (3), migrations (4), database roles (5), row-level security (6), append-only rows and versions (7), commands, transactions and locks (8), time (9), tests (10), synthetic data and fixtures (11).
@@ -26,7 +25,6 @@ Used by: all code and tests in the repository; the migration runner and roles, a
 Every rule of part A is a **Design choice** unless an ID sets it; part B and the 7.3 mechanism for withdrawing a version before its start (RR-202) were approved by the product owner on 6 Oct 2026, so a choice they mark **Proposed** is agreed, while what section 13 still marks OPEN stays open. It settles no business question and sets no KDPS value. Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says. The area designs say which tables, columns and constraints a module has; this document says how they are written. Code that differs from these rules is a defect, as it is for any design ([docs README](../../README.md)).
 
 ## 2. Folder layout
-<!-- deps: PRD-MOD-002, PRD-SEC-015 — where code lives inside a module behind its index.ts -->
 
 - A unit is `kernel` or a module, or a part of one, under `apps/server/src/modules/` (module-map 2.1 and 2.2). Its `index.ts` is its public interface. Another unit imports only that file, and only downward or along a same-tier call module-map sections 4 and 5 list (`PRD-MOD-002`). `pnpm check:modules` enforces both (`PRD-SEC-015`).
 - Inside a unit:
@@ -48,13 +46,11 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 ## 3. Database layout
 
 ### 3.1 Two kinds of database
-<!-- deps: PRD-MOD-001, PRD-ACS-020, DEC-093 — directory and Organisation databases as code sees them -->
 
 - One PostgreSQL database per Organisation, holding all its records (`PRD-MOD-001`). A directory database beside them holds only each Organisation's code and where its database is (DEC-093, `PRD-ACS-020`; [deployment.md](deployment.md) section 4).
 - Each kind has its own migration set (4.1). No business table exists in both kinds, and no query joins the two. The one table both hold is the runner's own record, `kernel.migration` (4.3).
 
 ### 3.2 Schemas and tables
-<!-- deps: PRD-MOD-002, PRD-MOD-008 — one schema per module and the naming of tables and keys -->
 
 - Each module owns one schema, named after the module with `_` for `-`: `organisation`, `merchandise`, `files_imports`. A module's parts share its schema; each table belongs to one part, and only that part's code writes it. `kernel` owns the schema `kernel` (`PRD-MOD-002`; structure-and-masters 2.5).
 - No foreign key crosses schemas. A reference to another module's record keeps its identifier, and the owner of the reference checks it through the other module's interface when it writes (structure-and-masters 2.5). Inside a schema, every reference has a foreign key.
@@ -66,7 +62,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 - **pg-boss** (PRD Stack: Jobs) keeps its own schema, `pgboss`, as a third-party schema. Its tables follow pg-boss, not 3.2 and 3.3: they keep their own keys, defaults and types. A migration installs and upgrades the schema at the version pinned in the lockfile; the runtime never installs or migrates it, and its queues are created by migration, because the runtime role creates no object. The register lists the schema as third-party, with the privileges the runtime role needs on it. This is checked against the pinned pg-boss version when part B adds jobs.
 
 ### 3.3 Column types
-<!-- deps: PRD-MOD-009, PRD-MOD-014, PRD-MOD-015 — storage of money, Unknown, times, states and payloads -->
 
 | Value | Column | Rule |
 | --- | --- | --- |
@@ -86,7 +81,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 - Every foreign key and every scope column has an index.
 
 ### 3.4 Database access in code
-<!-- deps: PRD-MOD-002 — Drizzle and raw SQL use -->
 
 - Ordinary reads and writes use Drizzle's query builder over the unit's own table definitions (PRD Stack: Database access).
 - Locking and reporting use raw SQL through Drizzle's `sql` template, always with bound parameters. SQL is never built by joining strings around a value.
@@ -95,7 +89,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 ## 4. Migrations
 
 ### 4.1 Two ordered sets
-<!-- deps: PRD-MOD-001, DEC-093 — the directory and Organisation migration sets -->
 
 - `apps/server/migrations/directory/` is applied to the directory database; `apps/server/migrations/organisation/` to each Organisation database ([deployment.md](deployment.md) section 4).
 - A file is named `NNNN__<unit>__<what>.sql`: a four-digit number unique and in order within its set, the unit that owns the change (`merchandise.catalogue` for a part), and a short description. One file changes one unit's schema only.
@@ -103,7 +96,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 - Each set keeps its table register (3.2) beside its files, as `tables.json`.
 
 ### 4.2 Writing a migration
-<!-- deps: PRD-SEC-015, PRD-MOD-011 — reviewed SQL, forward only, compatible with the running version -->
 
 - Migrations are SQL written by hand and reviewed in the pull request (PRD Stack: Database access; `PRD-SEC-015`). A migration that creates a table, in the same file:
   - adds the table's register entry (3.2);
@@ -116,7 +108,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 - PostgreSQL extensions are created by a migration and only from this list: `btree_gist` (7.3), `pg_trgm` (PRD Stack: Search). Another extension needs a change to this list first.
 
 ### 4.3 The runner
-<!-- deps: PRD-MOD-001, PRD-ACS-023, DEC-101 — how migrations are applied and recorded -->
 
 - The runner lives in `kernel` and connects as the migration role (5.1). It applies the directory set to the directory database, then the Organisation set to each Organisation database the directory lists, in code order, and stops at the first failure.
 - Each file runs in its own transaction, with its record, so a failing file leaves the database as it was before that file. A statement PostgreSQL refuses inside a transaction is not used.
@@ -127,7 +118,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 ## 5. Database roles
 
 ### 5.1 Two roles
-<!-- deps: PRD-SEC-005, PRD-SEC-007 — the migration role and the runtime role -->
 
 | Role | Name | What it is |
 | --- | --- | --- |
@@ -142,7 +132,6 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 - A third role, read-only, exists only in isolated test databases with synthetic data (DEC-112, CH-4, harness decision H6). Tests use it for raw invariant queries after reading the read models first. It reads only, is created by test setup, and is never created by the runner, the local seed or the Railway runbook. Its name, its grants, and how it reads rows under row-level security (6.2) and in each database copy (4.3) are written with the stock harness (`S1-F10`).
 
 ### 5.2 What the runtime role may do
-<!-- deps: PRD-SEC-005, PRD-SEC-007, PRD-MOD-011 — explicit grants per table -->
 
 - `CONNECT` on its databases, `USAGE` on each application schema and on `public`. Nothing on `kernel.migration`. `PUBLIC` holds no privilege on an application database, schema, table or function; the privileges PostgreSQL itself gives `PUBLIC` on `pg_catalog` and `information_schema` stay (10.4). A new database gives `PUBLIC` `CONNECT` and `TEMPORARY`, and `USAGE` on schema `public`, until the runner's database step revokes them (4.3).
 - On each table, only the privileges its migration grants by name. No default privileges are set, so a new table grants nothing until its migration says so:
@@ -161,14 +150,12 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 ## 6. Row-level security
 
 ### 6.1 Which tables
-<!-- deps: PRD-SEC-005, PRD-ACS-022 — scoped and self-service tables -->
 
 - A `scoped` table holds rows that belong to a place, a legal entity or a brand. It carries those scope facts as columns: the identifiers of the Site, the Store and the business unit as they apply, the legal entity, the brand (access-and-approvals 7.2). A line that can be read on its own carries its document's scope facts too.
 - A `self` table holds rows of one person, read through the self-service role (`PRD-ACS-022`). It carries the subject's user identifier.
 - An `unscoped` table has no row-level security; Authorise alone guards it (access-and-approvals 7.1). Each area design says which of its tables are scoped; 6.3 classifies the tables that authentication reads.
 
 ### 6.2 The policy
-<!-- deps: PRD-SEC-005 — the one policy shape and the actor setting -->
 
 - After Authenticate, `kernel` sets the actor at the start of every transaction, reads included, except on the paths of 6.3, with `set_config('aos.actor_id', <id>, true)`: local to the transaction, so a pooled connection never carries an actor into the next one (access-and-approvals 7.2). Nothing ever sets it for the session.
 - `access` provides one SQL function for every policy: `access.row_visible(record_type, site_id, store_id, business_unit_id, legal_entity_id, brand_id, subject_id)`. It is `STABLE`, written in SQL, and answers whether one effective grant of the actor for that record type covers the row's facts, or, for a self-service grant, whether the subject is the actor (access-and-approvals 7.2). A policy reaches `access` only through this function; it never reads `access` tables itself.
@@ -190,7 +177,6 @@ create policy row_scope on stock.balance for all to aos_runtime
 - Read models carry the same scope columns and the same policy (access-and-approvals 7.2).
 
 ### 6.3 Before an actor exists
-<!-- deps: PRD-SEC-007, PRD-MOD-002, PRD-ACS-023, DEC-101 — the sign-in and setup paths and the tables they reach -->
 
 - Three paths run with no actor set:
   - authenticating a request or a job step, which reads the session or the service credential and the actor's state to learn who the actor is (access-and-approvals 7.1 step 1);
@@ -205,7 +191,6 @@ create policy row_scope on stock.balance for all to aos_runtime
 ## 7. Append-only rows and versions
 
 ### 7.1 Append-only
-<!-- deps: PRD-MOD-011, PRD-SEC-007 — the two guards on append-only tables -->
 
 - Entries, status records, audit and access records, approval decisions, and the frozen payloads of documents are append-only (domain-model section 1; `PRD-MOD-011`, `PRD-SEC-007`). Each table is marked `append-only` and has two guards:
   1. the runtime role has no `DELETE` on it, and no `UPDATE` except `UPDATE (id)` on a `locked` table, which it needs to lock rows (5.2);
@@ -214,13 +199,11 @@ create policy row_scope on stock.balance for all to aos_runtime
 - A correction is its own linked record (`PRD-MOD-011`; domain-model section 1). A status that changes is a projection, kept apart from the rows it is built from.
 
 ### 7.2 Documents
-<!-- deps: PRD-MOD-011, PRD-MOD-010, PRD-ACS-006, PRD-ACS-007, POL-02.12 — frozen document payloads, their preparers and their state -->
 
 - A document is a header row with its state, and version rows that hold its payload. A draft version takes changes until it is submitted; each change is also written to an append-only change row naming who made it and when. So the preparers of a version are everyone with a change row on it, including the one who submitted it (access-and-approvals 9.1; GC3-1, DEC-105). From submission the version row is frozen; a later change opens a new version, which needs a new approval unless the change is not material and the decision carries to it (access-and-approvals 9.6; `PRD-ACS-007`, `POL-02.12`). An approval names the version it decided (domain-model section 1).
 - After approval the payload is frozen: no new version is accepted except as its design allows. The state is a projection on the header, rebuildable from the document's events.
 
 ### 7.3 Effective-dated versions
-<!-- deps: PRD-MOD-010, PRD-MOD-011, PRD-ACS-006, PRD-ACS-007, DEC-105 — exclusion constraints, withdrawal before the start, and the version a transaction used -->
 
 - A master or setting with versions has a companion table `<table>_version` with `valid_during daterange`, half-open, under business dates (structure-and-masters 2.2; `PRD-MOD-010`). A dated table, such as `role_assignment`, `approval_limit` or `business_unit_mapping` (access-and-approvals 13.1; structure-and-masters 6.1), holds its own `valid_during` on each row and follows the rules of this section as if each row were a version; its register entry is marked `versions` and names the overlap key. `role_assignment` may hold several assignments of one user at once; its overlap key is the actor, the role and the canonical form of the exact scope (access-and-approvals 4.3; DEC-112, CH-7), and that form and its constraint are settled before the first `access` migration that creates the table. A dated table whose design names no key gets no exclusion constraint until its design names one.
 - A version row records its decision: Awaiting approval until it is decided, then approved or Rejected (structure-and-masters 2.3).
@@ -237,7 +220,6 @@ create policy row_scope on stock.balance for all to aos_runtime
 ## 8. Commands, transactions and locks
 
 ### 8.1 The command runner
-<!-- deps: PRD-MOD-006, PRD-INT-002, PRD-INT-004 — one transaction per command -->
 
 - Every state change is a command run by `kernel`'s command runner. One command is one database transaction; every module the command calls joins it and never opens or commits its own (`PRD-MOD-006`, `PRD-INT-004`; module-map section 3, rule 3).
 - The runner follows module-map 6.1: Organisation and actor, the idempotency key, availability and authorisation, slow work before any lock, locks, rechecks under the locks, writes, commit, then the outbox. The idempotency key's form is part B; its row is kept in the command's transaction (`PRD-INT-002`; stock-ledger 10.1).
@@ -247,7 +229,6 @@ create policy row_scope on stock.balance for all to aos_runtime
 - An exception that must survive a rollback is raised in its own transaction after the rollback (module-map 6.3; SL-23, DEC-105).
 
 ### 8.2 Lock order
-<!-- deps: PRD-INT-003, DEC-105 — the kernel lock helper and stock-ledger 10.3 -->
 
 - Locks are taken only through `kernel`'s lock helper, once per step of stock-ledger 10.3, with every row of that step from every table the step covers. The helper takes them in ascending identifier order across the whole step: each run of consecutive rows from one table in one `SELECT … ORDER BY id FOR NO KEY UPDATE`, or `FOR SHARE` where the step says so, as for the financial period row (step 7; MM-6, DEC-105). PostgreSQL locks such rows after sorting them.
 - **Foreign keys.** Inserting a row that references another takes `FOR KEY SHARE` on the row it references, outside the helper. That lock waits for `FOR UPDATE` but not for `FOR NO KEY UPDATE` or `FOR SHARE`, so the helper never takes `FOR UPDATE`. This is safe because no command changes a column of a unique index, such as an identifier or a code (structure-and-masters 2.1), or deletes a row another row references; either would take `FOR UPDATE` itself.
@@ -260,13 +241,11 @@ create policy row_scope on stock.balance for all to aos_runtime
 - A later module's rows take the step its design names; stock-ledger 10.3 is updated then (module-map 6.1).
 
 ### 8.3 No outside call inside a transaction
-<!-- deps: PRD-INT-006 — outside systems stay out of the transaction -->
 
 - Nothing inside a transaction calls an outside system: file storage, messaging, GST, bank, Tally, AI or any other network service (`PRD-INT-006`). Such work runs before the transaction, as a stored file referenced by its identifier is, or after the commit through the outbox.
 - The runner marks the work it runs as inside a transaction, and every adapter for an outside system refuses to run while that mark is set. A test proves the refusal.
 
 ## 9. Time
-<!-- deps: PRD-MOD-009 — event time, recording time and business date -->
 
 | Time | Column | Set by |
 | --- | --- | --- |
@@ -282,7 +261,6 @@ create policy row_scope on stock.balance for all to aos_runtime
 ## 10. Tests
 
 ### 10.1 Kinds of test
-<!-- deps: PRD-SEC-016, PRD-ACP-018 — the test kinds and where each runs -->
 
 | Kind | Tool | Where | What it proves |
 | --- | --- | --- | --- |
@@ -297,19 +275,16 @@ create policy row_scope on stock.balance for all to aos_runtime
 - Tests are independent of each other and of their order, and test files run in parallel (11.3). The one exception is the pair of test files that proves two files at once never see each other's rows: each needs the other running at the same time (11.3). A test that passes only sometimes is a defect; the test runner never retries a failed test.
 
 ### 10.2 Naming and citing
-<!-- deps: PRD-SEC-016 — every test names the rule it proves -->
 
 - A test that proves a rule names its ID at the start of its title: `it('PRD-SEC-005 shows no scoped row when no actor is set', …)`. A test from a design's test table names that test too: `access-and-approvals 15 test 11`. So a search for an ID finds its tests.
 - `describe` names the operation or the rule; `it` says the expected behaviour in plain words.
 
 ### 10.3 Concurrency tests
-<!-- deps: PRD-INT-003, PRD-ACP-018 — how concurrent transactions are tested -->
 
 - Each transaction has its own connection. The test drives the order step by step: the first transaction takes its lock; the second starts and the test waits until PostgreSQL shows it waiting for that lock; then the first commits or rolls back. A test never relies on a sleep to order transactions.
 - The cases are those of the area designs, such as stock-ledger 11.9.
 
 ### 10.4 Database checks run as tests
-<!-- deps: PRD-SEC-005, PRD-SEC-007, PRD-SEC-015, PRD-MOD-011 — tests over the whole migrated schema -->
 
 After migrating an Organisation database and a directory database, one test reads the catalogue and the table registers and fails when:
 
@@ -324,13 +299,11 @@ After migrating an Organisation database and a directory database, one test read
 - a schema named in a test-only migration set (11.4) exists outside a test database.
 
 ### 10.5 What runs on every change
-<!-- deps: PRD-SEC-015, PRD-SEC-016 — the checks every change passes -->
 
-- Every push and pull request runs, through CI: lint, typecheck, the module check, unit tests, integration tests and the doc checker; then the golden cases and browser journeys once they exist (`PRD-SEC-016`). Nothing is skipped because of which paths a change touched.
+- Every push and pull request runs, through CI: lint, typecheck, the module check, unit tests, integration tests, the link check and the format check; then the golden cases and browser journeys once they exist (`PRD-SEC-016`). Nothing is skipped because of which paths a change touched.
 - The pre-commit hook runs what `AGENTS.md` says it runs. A change is merged only with every check green.
 
 ### 10.6 Dependencies
-<!-- deps: PRD-SEC-015 — dependency pinning and the lockfile -->
 
 - A dependency is added only when it implements a row of the PRD Stack, and its pull request names that row (`AGENTS.md`, "Stack"). Anything else needs a PRD change first.
 - `pnpm-lock.yaml` is committed, and every install in CI uses `pnpm install --frozen-lockfile`, so a build installs exactly what the lockfile pins (`PRD-SEC-015`). The pnpm version is the one `package.json` names, activated through corepack.
@@ -340,7 +313,6 @@ After migrating an Organisation database and a directory database, one test read
 ## 11. Synthetic data and fixtures
 
 ### 11.1 Labelling
-<!-- deps: PRD-SEC-017 — synthetic labels and why no fixture value is a default -->
 
 - Every synthetic code carries `SYN` and every synthetic name says SYNTHETIC. A generated file says SYNTHETIC in its name and in a document property (imports-and-opening-data 17).
 - The labels of synthetic records come from one place, `apps/server/test/fixtures/synthetic.ts`: a code `SYN-ORG-A`, a name `SYNTHETIC Organisation A`, a generated file name `SYNTHETIC-<stem>.<extension>`, and an Organisation's database name, `syn_org_a`, made from its code. Fixtures and the local seed take every such label from there. The document property is set by the first file generator, when one exists.
@@ -350,7 +322,6 @@ After migrating an Organisation database and a directory database, one test read
 - KDPS's own files are never committed or loaded into a test (imports-and-opening-data 17).
 
 ### 11.2 Fixtures
-<!-- deps: PRD-ACS-020, PRD-ACS-023 — how fixtures are built -->
 
 - Fixtures live only in test folders and in the local seed command: `apps/server/test/fixtures/` (values and labels), `apps/server/test/support/` (helpers) and `apps/server/test/seed/` (the seed). Code under `src/` never imports them: lint rules refuse an import, static or dynamic, of a `test`, `e2e`, `fixtures` or `seed` folder from `apps/*/src` or `packages/*/src`.
 - Every database test has two synthetic Organisations, each with its own database, so every test can show that one cannot see the other (`PRD-ACS-020`; [deployment.md](deployment.md) section 4). One helper makes them for a test file, beside a directory database, and drops all three at its end. The tests of the runner and of the seed start from empty databases instead, because migrating one is what they test.
@@ -358,7 +329,6 @@ After migrating an Organisation database and a directory database, one test read
 - The local seed command, `pnpm seed`, creates the same two synthetic Organisations. It refuses to run unless `AOS_ENVIRONMENT` is `local` or `dev`; where Railway names the environment, both must be `dev`. It connects as the migration role, refuses a connection string it cannot point at each Organisation's database without logging it, migrates the directory database first, which refuses any other role before anything changes, then creates each Organisation's database if it is missing and migrates it. A second run changes nothing. It is built apart from the application, so no fixture is in the application's build.
 
 ### 11.3 Speed and isolation
-<!-- deps: PRD-MOD-001 — template database and clones -->
 
 - A test run starts one PostgreSQL container and migrates a template database of each kind once. Each test file gets its own copies, made with `CREATE DATABASE … TEMPLATE` while no session is connected to the template, and drops them at its end. So two test files running at once never see each other's rows.
 - Once migrated, each template is closed to connections, so no test can change it and no session can block a copy. Each copy has a unique name starting `syn_`.
@@ -366,16 +336,14 @@ After migrating an Organisation database and a directory database, one test read
 - Two test files prove the isolation: each writes rows in its own copies, waits until the other has written too, then reads back only its own rows, and neither drops its copies before the other has read. So integration tests run at least two files at once; a file whose partner's probe failed stops at once.
 
 ### 11.4 Test-only schemas
-<!-- deps: PRD-SEC-016 — test-only migration set for synthetic harnesses, harness decision H3 -->
 
-Decided by the product owner: harness decision H3 ([s1-f10-stock-harness.md](../../implementation/s1-f10-stock-harness.md) section 5; DEC-112).
+Decided by the product owner: harness decision H3 ([S1-F10 spec](../../plan/stage-1/s1-f10-stock-ledger/spec.md) section 5; DEC-112).
 
 - A synthetic harness that needs rows of its own, such as the documents of the stock harness, keeps them in a schema named `test_<harness>`, created by a third migration set, `apps/server/test/migrations/`.
 - Only test setup applies that set, after the Organisation set, to test databases. The pre-deploy runner never reads it, and the catalogue test fails if such a schema exists in a database the runner migrated (10.4).
 - Harness code lives in `apps/server/test/` and is composed only into a test application.
 
 ## 12. Part B: API and runtime
-<!-- deps: none — introduction to 12.1 to 12.14; each subsection cites its rules -->
 
 Drafted 6 Oct 2026 for RR-011, reviewed with [deployment.md](deployment.md) sections 5 and 9 as its sources (RR-021), and approved by the product owner on 6 Oct 2026.
 
@@ -384,7 +352,6 @@ Drafted 6 Oct 2026 for RR-011, reviewed with [deployment.md](deployment.md) sect
 - Where it changes the `S1-F01-T01` contract sketch in `packages/schemas`, it says so (12.2, 12.3, 12.6).
 
 ### 12.1 Routes and commands
-<!-- deps: PRD-MOD-002, PRD-MOD-003, PRD-MOD-006, PRD-MOD-011, PRD-MOD-014, PRD-MOD-015, PRD-INT-001, PRD-SEC-005, PRD-SEC-006, PRD-PRF-004, DEC-093 — the shape of the REST API on the one origin -->
 
 - **One API.** REST/JSON under `/api`, served by `app` from the one origin of [deployment.md](deployment.md) section 3, with the session cookie: no second origin and no CORS (PRD Stack: API; DEC-093). After `/api`, a route's path names the unit that owns it, such as `/api/access/…` or `/api/merchandise/catalogue/…`; a `kernel` route, such as `/api/health`, names none. **Proposed.**
 - **Controllers.** A controller lives in its unit's `http/` folder (section 2) and calls only its own unit's commands and queries, which reach other modules through their interfaces (`PRD-MOD-002`). A controller holds no rule of its own.
@@ -399,7 +366,6 @@ Drafted 6 Oct 2026 for RR-011, reviewed with [deployment.md](deployment.md) sect
 - **Compatible changes.** Paths carry no API version while the web app, the counter and the server deploy together ([deployment.md](deployment.md) section 3). A change stays compatible with the clients running, as a migration does (4.2): add first; remove or rename in a later deploy. The counter's offline sync gets its own versioned contract in the offline counter design (GC-8). **Proposed.**
 
 ### 12.2 Schemas, OpenAPI and the typed client
-<!-- deps: PRD-SEC-006, PRD-SEC-014, PRD-SEC-015, PRD-SEC-016 — one contract for the server, the web app and the OpenAPI document -->
 
 - **One route table.** `packages/schemas` holds a route table. For each route it gives the method and path; the Zod schemas of its path parameters, query, body and success answer; its access (12.1); whether it is a command; and the refusal codes it can answer (12.3). The server, the web app and the OpenAPI document are all made from it, so they cannot drift apart (PRD Stack: API). **Proposed.**
 - **Every input parsed.** The server parses the path parameters, query and body of every request with the route's schemas before the command runs; nothing unparsed reaches a command. Objects are strict, so an unknown field is refused as `invalid` (12.3). **Proposed.**
@@ -412,7 +378,6 @@ Drafted 6 Oct 2026 for RR-011, reviewed with [deployment.md](deployment.md) sect
 - **The `S1-F01-T01` sketch** fits these rules: strict objects, `secretString()` and no defaults. It gains the route table and the envelope; the values of `decisionRefusalSchema` become reasons of `access` codes (12.3); `enrolmentStartResponseSchema` changes as 12.6 says.
 
 ### 12.3 The error envelope
-<!-- deps: PRD-UXP-003, PRD-INT-001, PRD-SEC-005, PRD-SEC-006, PRD-SEC-014, PRD-SEC-017 — the one shape of every refusal and failure, and how what is missing travels -->
 
 Every answer that is not a success has one shape, `errorEnvelopeSchema` in `packages/schemas`. **Proposed.**
 
@@ -449,7 +414,6 @@ Every answer that is not a success has one shape, `errorEnvelopeSchema` in `pack
 - **The `S1-F01-T01` sketch.** The values of `decisionRefusalSchema` become the reasons of `access` codes, each declared with its kind; for example, `access.no-reason-list-in-force` is `unavailable`.
 
 ### 12.4 The idempotency key
-<!-- deps: PRD-INT-001, PRD-INT-002, PRD-INT-003, PRD-INT-004, PRD-INT-008, PRD-MOD-002, PRD-SEC-005, PRD-SEC-006, PRD-SEC-007, PRD-SEC-014, DEC-113, DEC-114 — header, scope, hash, storage, replay, changed content, concurrency and an uncertain commit -->
 
 - **The header.** Every command carries `Idempotency-Key`: a UUIDv7 the client makes for one submission (`PRD-INT-002`; stock-ledger 10.1). The client sends the same key again after a lost answer, `timed-out`, `kernel.outcome-unknown` or `kernel.request-in-progress`. Once it has a definitive answer, a success or a kept refusal, a new submission gets a new key. A command without the header, or with a value that is not a UUID, is `invalid` with `kernel.idempotency-key-required` (`S1-F01-T05`). **Proposed.**
 - **Sign-in is the one write without a key**, an exception to the rule that every write carries one (stock-ledger 10.1). Each attempt must be recorded as its own attempt, with its own access record (access-and-approvals 3.1; `PRD-SEC-007`), so an earlier answer must never stand in for it; and a replayed answer could not carry the session, since the database keeps only the identifier's hash (access-and-approvals 3.3). A repeated sign-in makes one more session and one more access record, both true records of what happened. Reads carry no key. **Proposed.**
@@ -481,7 +445,6 @@ Every answer that is not a success has one shape, `errorEnvelopeSchema` in `pack
 | An outcome not known (above) | Nothing, or the committed rows, whichever happened | A replay if it committed; otherwise the request runs once | Send the same key again; never a new key |
 
 ### 12.5 Requests that carry a secret
-<!-- deps: PRD-INT-002, PRD-SEC-001, PRD-SEC-006, PRD-SEC-014, DEC-112 — RR-207: telling an identical replay from changed content when no secret is hashed -->
 
 This settles RR-207 for every request but the setup step, which keeps its own rule (access-and-approvals 9.11). Such requests are: creating a user, resetting another user's credential, changing one's own password, and every request carrying an authenticator code (access-and-approvals 3.2, 3.3). **Proposed**, with the two product choices of CH-8 answered by the product owner on 6 Oct 2026.
 
@@ -494,7 +457,6 @@ This settles RR-207 for every request but the setup step, which keeps its own ru
 - **Nothing leaks through the comparison.** A refusal says only that the content changed, never which field. Each verification is one Argon2 check against a credential the first run wrote; no new secret material is made (`PRD-SEC-006`).
 
 ### 12.6 A secret shown once
-<!-- deps: PRD-INT-002, PRD-SEC-006, PRD-SEC-014, PRD-SEC-018, DEC-113, DEC-114 — RR-208: how an authenticator secret or a service credential is sent once and described, and why its replay, and that of an unmasked restricted value, is refused -->
 
 This settles RR-208. It applies to the authenticator secret at enrolment (access-and-approvals 3.2) and to a service identity's secret (access-and-approvals 2.3); its rule that the answer is never repeated applies also to an answer that showed a restricted value unmasked (12.1, 12.4; DEC-114). **Proposed.**
 
@@ -504,7 +466,6 @@ This settles RR-208. It applies to the authenticator secret at enrolment (access
 - Neither secret appears in a log, an audit record, an error or a live update (`PRD-SEC-014`; numbering-and-audit 4.3).
 
 ### 12.7 The version token
-<!-- deps: PRD-INT-003, PRD-ACS-007, PRD-UXP-003, PRD-MOD-011 — refusing a change made on a stale version -->
 
 - **What it is.** Every read of a record that a command can change returns `versionToken`: the identifier of the newest append-only row the record's current state was built from. For a draft version that is its latest change row, for a frozen version its version row, and for a header's state its latest status record (7.2). It is compared for equality only. **Proposed.**
 - **Where it travels.** In the body, so a list carries one per row and a bulk request one per item. A command that changes an existing record sends back the token it read; a command that creates a record sends none. **Proposed.**
@@ -513,7 +474,6 @@ This settles RR-208. It applies to the authenticator secret at enrolment (access
 - The token is part of the idempotency hash (12.4).
 
 ### 12.8 Events and the outbox
-<!-- deps: PRD-MOD-006, PRD-INT-004, PRD-INT-008, PRD-SEC-005, PRD-SEC-018 — the event envelope, consumer registration, dispatch, receipts, at least once and one effect -->
 
 Module-map section 8 sets the rules: an event is an outbox row saved in the transaction that caused it, named `module.fact`, carrying identifiers and versions only, delivered at least once, and consumers are idempotent on the event's identity (`PRD-MOD-006`, `PRD-INT-008`). This section says how. **Proposed.**
 
@@ -534,7 +494,6 @@ Module-map section 8 sets the rules: an event is an outbox row saved in the tran
 - **Failure.** A consumer's job follows the retry rule of 12.9.
 
 ### 12.9 Jobs and their retry rule
-<!-- deps: PRD-INT-006, PRD-INT-007, PRD-INT-008, PRD-SEC-013, PRD-SEC-018, PRD-PRF-003, PRD-EXC-001, DEC-097 — pg-boss jobs on the worker and when a job runs again -->
 
 - **Where.** Jobs run on `worker`, the same build as `app` with another start command ([deployment.md](deployment.md) section 2), using pg-boss in each Organisation database the directory lists, one pg-boss instance per database. Queues are created by migration (3.2). A request never does a job's work; it enqueues only through the outbox, so a job exists only if its request committed, and no counter request waits on background work (`PRD-PRF-003`). **Proposed.**
 - **A job kind** is registered in its unit's `jobs/` folder with its name; its payload schema, identifiers only, never a secret or a restricted value; the service identity it runs as (`PRD-SEC-018`; module-map section 10); its retry setting (below); and, for a posting job, the accounting book that keeps it one at a time (stock-ledger 10.6), through pg-boss's singleton key, which must hold a second queued posting job of the same book until the first ends, never drop it; this is checked against the pinned pg-boss version in `S1-F01-T06`. **Proposed.**
@@ -554,9 +513,8 @@ Module-map section 8 sets the rules: an event is an outbox row saved in the tran
 - **Maintenance under the migration role,** such as the audit partitions of CH-5, is never a job of the runtime; it runs as restricted maintenance (3.2, 5.1).
 
 ### 12.10 Outside systems and simulators
-<!-- deps: PRD-INT-006, PRD-INT-007, PRD-INT-008, PRD-INT-009, PRD-INT-010, PRD-INT-013, DEC-099, DEC-105 — adapters, outcomes, reconciliation before retry, simulators first -->
 
-Module-map section 9 names the owner of each adapter, [deployment.md](deployment.md) section 7 what each does on `kdps-test`, and the [implementation plan](../../implementation/index.md) section 5 the order in which each is built. This section says how the code does it. **Proposed.**
+Module-map section 9 names the owner of each adapter, [deployment.md](deployment.md) section 7 what each does on `kdps-test`, and [how-we-build.md](../../plan/how-we-build.md) section 4 the order in which each is built. This section says how the code does it. **Proposed.**
 
 - **One contract, several implementations.** An adapter is an interface its owning module defines, with a simulator and a real implementation, chosen for each environment by a setting read at start. Replacing an implementation never changes what a completed record means (`PRD-INT-013`).
 - **The request identity comes first.** An attempt record, with its request identity, is committed as pending before the call, and the call runs after that commit (8.3; `PRD-INT-006`). Where the outside system takes an idempotency key, the request identity is sent as that key, so a repeat is recognised there too.
@@ -567,7 +525,6 @@ Module-map section 9 names the owner of each adapter, [deployment.md](deployment
 - **Stage 1.** File storage is the only outside system, and it is not simulated: MinIO locally and in tests, and the Railway bucket on `dev` and `kdps-test` (D-2, DEC-105). Nothing is sent by email, WhatsApp or SMS before stage 5, and `notifications` has no channel adapter until then (DEC-099).
 
 ### 12.11 Logs and the correlation identifier
-<!-- deps: PRD-SEC-006, PRD-SEC-013, PRD-SEC-014, DEC-093 — pino logs, one correlation identifier per request, what never appears -->
 
 - **pino JSON to standard output,** one object per line, read in Railway's log view ([deployment.md](deployment.md) section 9; PRD Stack: Diagnostics). Each line carries the time, the level, the service (`app` or `worker`), the environment and the correlation identifier; and, once known, the Organisation code (DEC-093), the actor's identifier, the route template or the job kind, and the unit. **Proposed.**
 - **One correlation identifier per request.** The server makes it, a UUIDv7, when the request arrives, and never takes one from the client. It is sent back in the `X-Correlation-Id` header and in every error envelope (12.3), and kept in the command context, in each audit record (numbering-and-audit 4.1) and in each outbox event (12.8). A job logs the identifier of the event or request that caused it beside its own. When traces are added, their identifiers are logged beside it (PRD Stack: Diagnostics). **Proposed.**
@@ -585,7 +542,6 @@ Module-map section 9 names the owner of each adapter, [deployment.md](deployment
 - Failed jobs, stale data and integration failures reach authorised operators in the operations view, not only the logs (`PRD-SEC-013`; module-map 4.1).
 
 ### 12.12 Live updates
-<!-- deps: PRD-SEC-005, PRD-SEC-006, PRD-SEC-008 — SSE carrying identifiers, then an authorised refetch -->
 
 [deployment.md](deployment.md) section 5 sets the frame: Railway's limits on a stream, a heartbeat, reconnection with `Last-Event-ID`, and identifiers only (PRD Stack: Live updates). The rest is **Proposed**.
 
@@ -599,7 +555,6 @@ Module-map section 9 names the owner of each adapter, [deployment.md](deployment
 - **Several `app` instances.** Each follows the outbox of each Organisation database, woken by the notification of 12.8, so any instance serves any session.
 
 ### 12.13 Screen text
-<!-- deps: PRD-PRO-009, PRD-UXP-003, PRD-EXC-013, DEC-099 — the message catalogue, English first, Hindi later -->
 
 - **One catalogue.** Every string a screen shows comes from the message catalogue in `apps/web`: labels, state names, refusals, empty and error states, and alerts in My work (`S1-F01-T14`; design-language section 11). Code holds message identifiers, never text. **Proposed.**
 - **English (India) first.** Hindi for the screens of stages 1 to 5 arrives in stage 5, and for stage 6 screens in stage 6 (`PRD-PRO-009`; `AGENTS.md`, "Delivery"). The catalogue has one file per language with the same identifiers; a test fails when an identifier used in code has no English entry, and Hindi entries are checked the same way from stage 5. **Proposed.**
@@ -610,7 +565,6 @@ Module-map section 9 names the owner of each adapter, [deployment.md](deployment
 - Text the server writes into a file it makes, such as an export's headings, comes from a catalogue in the owning unit in the same way. **Proposed.**
 
 ### 12.14 KDPS-valued settings
-<!-- deps: PRD-SEC-017, PRD-MOD-010, PRD-MOD-015, DEC-071, DEC-102, DEC-103, DEC-105 — no default, unavailable until signed and valid, synthetic labelled -->
 
 - **A setting, never a constant.** A value KDPS owns, such as a limit, tolerance, name, date, reason, recipient, number format or retention period (DEC-105), is an effective-dated setting of its owning module (domain-model 3.6; 7.3; `PRD-MOD-010`). It has no default anywhere: no column default (3.3), no schema default (12.2), no fallback in code, and no environment variable that sets a business value (`AGENTS.md`, "Never invent a value").
 - **Not set is a stated answer.** Reading a setting returns its version in force on the date, with the version's identifier, which the command stores (7.3), or "not set" as a kind of its own; never a null read as zero, and never a guess (`PRD-MOD-015`). **Proposed** shape: `{ kind: 'set', value, versionId }` or `{ kind: 'not-set' }`.

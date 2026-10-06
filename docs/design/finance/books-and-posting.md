@@ -4,7 +4,7 @@
 
 Status: **Current**, 4 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: Ledger and official books (the books, their periods, journals and posting rules); from Module and data boundaries and Transaction and integration integrity, balanced journals at commit, immutable entries, idempotency and locking for posting. It details the `finance` · books part of [module-map.md](../architecture/module-map.md) 4.14 and is GC-4 in [gaps-before-code.md](../../reports/gaps-before-code.md).
+Implements these PRD sections: Ledger and official books (the books, their periods, journals and posting rules); from Module and data boundaries and Transaction and integration integrity, balanced journals at commit, immutable entries, idempotency and locking for posting. It details the `finance` · books part of [module-map.md](../architecture/module-map.md) 4.14 and is GC-4 in [gaps-before-code.md](../../history/gaps-before-code.md).
 
 - PRD IDs: `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACS-007`, `PRD-ACS-013`, `PRD-EXC-001`, `PRD-EXC-004`, `PRD-INT-002`–`PRD-INT-004`, `PRD-INT-008`, `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-008`–`PRD-LED-012`, `PRD-LED-014`–`PRD-LED-020`, `PRD-LIF-008`, `PRD-MOD-003`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-015`, `PRD-NAV-001`–`PRD-NAV-014`, `PRD-OFF-009`, `PRD-OFF-014`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-006`, `PRD-ORG-020`, `PRD-PRF-003`, `PRD-PRF-004`, `PRD-SEC-005`, `PRD-SEC-017`, `PRD-SEC-018`, `PRD-STG-002`, `PRD-UXP-003`.
 - Policies: 2 (`POL-02.16`), 9 (`POL-09.01`–`POL-09.05`, `POL-09.10`–`POL-09.13`, `POL-09.16`, `POL-09.19`, `POL-09.21`, `POL-09.23`, `POL-09.24`), 11 (`POL-11.01`).
@@ -17,7 +17,6 @@ Used by: every module that posts a money effect: the stock ledger from stage 1, 
 ---
 
 ## 1. What this document fixes
-<!-- deps: PRD-LED-001, PRD-LED-003, PRD-MOD-013 — scope of this design: the books part of the finance module -->
 
 - The records of `finance` · books: books and their settings, the chart of accounts, financial periods, journals, posting maps and posting event kinds (`PRD-LED-001`, `PRD-LED-003`).
 - The operations of module-map 4.14 made concrete: Post, Check postable, Reverse, period locks and reopenings, and the maintenance of accounts, maps and settings.
@@ -294,7 +293,6 @@ For a missing or invalid map the baseline is Outcome A (SL-23, DEC-105; the CA c
 Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on approved versions ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). The module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 13.1 Schema `finance`
-<!-- deps: PRD-LED-001, PRD-LED-003, PRD-LED-004, PRD-LED-009, PRD-LED-014, PRD-LED-015, PRD-LED-019, PRD-LED-020, PRD-MOD-010, PRD-MOD-011, PRD-MOD-013, PRD-INT-002, POL-09.12 — table list for the records of sections 2 to 9 -->
 
 The books part's tables. The tax rules and operations parts add theirs in their own designs.
 
@@ -314,7 +312,6 @@ The books part's tables. The tax rules and operations parts add theirs in their 
 | `posting_source` | source module, item key and component | signed amount; the journal line it went into; replaces, for a correction (9.4); insert only |
 
 ## 14. Screens
-<!-- deps: PRD-UXP-003, PRD-LED-009, PRD-LED-019, PRD-LED-020 — where the books screens sit and what GC-4 adds -->
 
 - [ui-blueprint.html](../ui/ui-blueprint.html) holds these screens: Setup › Posting maps; Money › Internal ledger and trial balance, and Period close (checklist and locks).
 - GC-4 adds four things to them:
@@ -356,7 +353,6 @@ The journals posted from the story of stock-ledger 11.1, under the four combinat
 > **All data in this section is SYNTHETIC.** The accounts, maps, periods and numbers are test data only. They never become a default, a KDPS value or a policy value, and they settle no recognition rule (`POL-09.02`, `POL-09.05`).
 
 ### 16.1 Synthetic chart and maps
-<!-- deps: PRD-ACP-018, PRD-LED-003, POL-09.11 — synthetic accounts and maps for the golden journals -->
 
 One book, BK-SYN, with one open synthetic period covering the story. Every line also carries the business unit of its movement (W1 or S1) and the synthetic brand of SKU X.
 
@@ -392,7 +388,6 @@ One book, BK-SYN, with one open synthetic period covering the story. Every line 
 | `stock.cost-established` reversal | `variance` | SYN-PUR | SYN-VAR |
 
 ### 16.2 Journals per step
-<!-- deps: PRD-ACP-018, PRD-LED-014, PRD-LED-015, PRD-LED-016, PRD-LED-017, PRD-MOD-013, DEC-031 — the journals of each golden step under each formula and pool -->
 
 Values in ₹. "—" means no valued movement, so no journal. Each row is one balanced journal, or one component of one.
 
@@ -414,7 +409,6 @@ Values in ₹. "—" means no valued movement, so no journal. Each row is one ba
 - Step 7's variance against the supplier's ₹130.00 credit (stock-ledger 11.6) is posted later, when the credit note is matched (7.2). It is not in these journals.
 
 ### 16.3 End trial balance
-<!-- deps: PRD-ACP-018, PRD-LED-008, PRD-MOD-013, PRD-MOD-014, DEC-031 — end balances per formula and pool, tied to stock-ledger 11.6 -->
 
 | Account | Moving average, book | Moving average, Site | FIFO, book | FIFO, Site |
 | --- | --- | --- | --- | --- |
@@ -428,7 +422,6 @@ Values in ₹. "—" means no valued movement, so no journal. Each row is one ba
 - SYN-INV equals the stock value, SYN-COGS the cost of goods sold and SYN-CLM the value out by supplier return in stock-ledger 11.6.
 
 ### 16.4 Further posting scenarios
-<!-- deps: PRD-LED-016, PRD-LED-018, PRD-ACP-004, PRD-LIF-008, POL-09.12, DEC-105 — synthetic posting cases beyond the main story -->
 
 | # | Scenario | Must show |
 | --- | --- | --- |
@@ -440,7 +433,6 @@ Values in ₹. "—" means no valued movement, so no journal. Each row is one ba
 | P6 | Opening stock at a Site | No automatic journal (`PRD-LIF-008`) |
 
 ### 16.5 Checks after every step
-<!-- deps: PRD-LED-008, PRD-MOD-013, PRD-MOD-015, PRD-INT-008 — ledger invariants checked after each golden step -->
 
 - Every journal balances, and every amount is whole paise above zero.
 - SYN-INV equals the stock ledger's pool value per book; SYN-TRN equals the value held on open dispatches; SYN-RSH equals the value held on open supplier-return shipments (`PRD-LED-008`; stock-ledger 11.7).

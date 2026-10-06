@@ -2,7 +2,7 @@
 
 > **Not ranked.** These notes describe the data KDPS sent. They decide nothing. A PRD or policy change they lead to needs an entry in [decisions.md](../decisions.md) first. See [README.md](README.md).
 
-These are the questions the KDPS data raises. They are **not yet in the official list**. Moving one into [questions-for-kdps.md](../questions-for-kdps.md) is a separate step: it goes through the doc checker's review gate (AGENTS.md, "Checking the documents"). Until then a question here changes nothing, and building and synthetic-data testing do not wait for it.
+These are the questions the KDPS data raises. They are **not yet in the official list**. Moving one into [questions-for-kdps.md](../questions-for-kdps.md) is a separate step, rewritten in plain language for the person who answers. Until then a question here changes nothing, and building and synthetic-data testing do not wait for it.
 
 The questions come from the "Open questions" lists of the 26 READMEs in `docs/data-from-kdps/` and of the notes in this folder. Questions asked in several files are merged into one, with every source listed. Q-1 to Q-151 are the merged questions; Q-152 and Q-153 were added when the questions were sorted (below). There are 153 questions.
 

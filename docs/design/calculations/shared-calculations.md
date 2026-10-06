@@ -4,7 +4,7 @@
 
 Status: **Current**, 4 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: from Module and data boundaries, the shared pricing, tax, discount allocation, rounding and incentive logic, money and Unknown; from Counter sales and payments, price, offers, discounts, tax, rounding and tender allocation; from Customer returns, exchanges and credit, refund entitlement, exchange differences and split-tender refunds; from Offers, prices and supplier returns, offer evaluation and price lists; from Tax and assets, the tax-rule records the calculations read; from Offline counter, what the counter holds for pricing. It details the `calculations` module of [module-map.md](../architecture/module-map.md) 4.2 and the tax rules part of 4.14, and is GC-7 in [gaps-before-code.md](../../reports/gaps-before-code.md).
+Implements these PRD sections: from Module and data boundaries, the shared pricing, tax, discount allocation, rounding and incentive logic, money and Unknown; from Counter sales and payments, price, offers, discounts, tax, rounding and tender allocation; from Customer returns, exchanges and credit, refund entitlement, exchange differences and split-tender refunds; from Offers, prices and supplier returns, offer evaluation and price lists; from Tax and assets, the tax-rule records the calculations read; from Offline counter, what the counter holds for pricing. It details the `calculations` module of [module-map.md](../architecture/module-map.md) 4.2 and the tax rules part of 4.14, and is GC-7 in [gaps-before-code.md](../../history/gaps-before-code.md).
 
 - PRD IDs: `PRD-MOD-002`, `PRD-MOD-007`, `PRD-MOD-010`, `PRD-MOD-014`–`PRD-MOD-016`; `PRD-POS-002`–`PRD-POS-009`, `PRD-POS-013`, `PRD-POS-014`, `PRD-POS-023`, `PRD-POS-024`; `PRD-RET-001`, `PRD-RET-005`–`PRD-RET-008`, `PRD-RET-010`, `PRD-RET-022`, `PRD-RET-024`; `PRD-OFR-001`–`PRD-OFR-006`, `PRD-OFR-021`; `PRD-TAX-005`; `PRD-OFF-004`, `PRD-OFF-005`, `PRD-OFF-009`, `PRD-OFF-016`; `PRD-MER-009`, `PRD-MER-015`; `PRD-STK-013`; `PRD-PTW-010`, `PRD-PTW-011`; `PRD-ACS-015`; `PRD-HRM-010`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-PRF-003`; `PRD-ACP-008`, `PRD-ACP-010`, `PRD-ACP-017`, `PRD-ACP-018`.
 - Policies: 3 (`POL-03.06`–`POL-03.08`), 6 (`POL-06.04`, `POL-06.09`), 7 (`POL-07.01`, `POL-07.02`), 9 (`POL-09.13`, `POL-09.24`), 10 (`POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.10`, `POL-10.11`), 13 (`POL-13.06`, `POL-13.08`), 16 (`POL-16.04`), 19 (`POL-19.01`, `POL-19.02`, `POL-19.04`).
@@ -17,7 +17,6 @@ Used by: `pos` and `offers` (stage 4), `merchandise` · PT (stage 2, costing), `
 ---
 
 ## 1. What this document fixes
-<!-- deps: PRD-MOD-007, PRD-ACP-018 — scope of this design: the shared calculations and their golden cases -->
 
 - Where the shared calculation logic sits in the workspace, who calls it, and what the counter receives and never receives (section 2).
 - How numbers are held and rounded: integer paise, exact intermediates, named rounding rules, and Unknown (section 3).
@@ -225,7 +224,6 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
 - The amount due is the bill total after round-off.
 
 ### 5.10 Results and refusals
-<!-- deps: PRD-POS-014, PRD-MOD-015 — the result shape a bill keeps and the refusals that replace Unknown inputs -->
 
 - A priced bill returns, per line: the start price and its source, each offer's discount, the spread shares, the manual discount, the taxable value, each tax component with its rate, the slab-change mark, and the amount paid; for the bill: the totals, the round-off, the amount due, and the versions of section 4.
 - A business condition is a typed refusal, never an exception thrown: `price-unknown`, `price-above-mrp`, `classification-unknown`, `no-tax-rule`, `slab-undetermined`, `rounding-rule-missing`, `manual-discount-not-permitted`, `invalid-quantity`. A refusal names the line and the missing or failing input. **Design choice** of the names.
@@ -325,7 +323,6 @@ Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for th
 - The counter receives the same answer in its working set (2.3).
 
 ### 10.3 Tables
-<!-- deps: PRD-TAX-005, PRD-MOD-010, POL-10.02, POL-10.05 — table list for the records of 10.1 -->
 
 Schema `finance`, beside the books tables of [books-and-posting.md](../finance/books-and-posting.md) 13.1. "+ versions" has the meaning given in books-and-posting section 13. **Design choice** throughout; other columns are left to reviewed migrations.
 
@@ -359,7 +356,6 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 ## 12. Golden cases
 
 ### 12.1 Format
-<!-- deps: PRD-ACP-018 — file format of the shared golden cases -->
 
 - One JSON file per case in `packages/calculations/golden/`, named by its case ID. **Design choice.**
 - A case holds: `id`; `title`; `synthetic: true`; `covers`, the PRD and policy IDs it proves; `function`; `input`, with every rule version it uses; and either `expected`, the full result with the versions echoed, or `refusal`, the refusal code and the line it names.
@@ -381,7 +377,6 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 - Playwright, already in the PRD Stack, is added in stage 1 for this test page, ahead of the first real screen; the counter run needs only that page. **Design choice.**
 
 ### 12.3 Synthetic rule data
-<!-- deps: PRD-ACP-018, POL-10.02, POL-19.04 — labelled synthetic rules the golden cases run on -->
 
 Every value below is synthetic, chosen to be unlike a real one, and never becomes a default.
 

@@ -40,7 +40,7 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
 
 <section id="rules" style="display:flex;flex-direction:column;gap:16px">
   <h2 style="margin:0;font-size:22px;font-weight:600">0 · Rules the screens follow</h2>
-  <p style="margin:-8px 0 0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">These PRD and policy rules shape most screens. Each row names its source. The main open values and questions are in <a href="#gaps">5 · Open items</a>; that list is a subset, and the full list of values is in the <a href="../../reports/alignment-report.md">alignment report</a>.</p>
+  <p style="margin:-8px 0 0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">These PRD and policy rules shape most screens. Each row names its source. The main open values and questions are in <a href="#gaps">5 · Open items</a>; that list is a subset, and the full list of values is in the <a href="../../plan/kdps-values.md">KDPS values list</a>.</p>
   <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;overflow:hidden">
     <sc-for list="{{ rules }}" as="d" hint-placeholder-count="14">
       <div style="display:grid;grid-template-columns:180px minmax(0,1fr) minmax(0,1fr);gap:16px;padding:12px 16px;border-top:1px solid #f0f0ec;font-size:13px;line-height:1.5">
@@ -273,7 +273,7 @@ a{color:#2f55c4;text-decoration:none}a:hover{text-decoration:underline}
 <section id="gaps" style="display:flex;flex-direction:column;gap:20px">
   <div style="display:flex;flex-direction:column;gap:6px">
     <h2 style="margin:0;font-size:22px;font-weight:600">5 · Open items</h2>
-    <p style="margin:0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">{{ gapCount }} items. <span style="color:#7a4a00;font-weight:600">KDPS value</span> = a policy value KDPS must set before live use. <span style="color:#7a4a00;font-weight:600">PRD question</span> = needs your decision in the PRD. <span style="color:#1f3f8f;font-weight:600">Design work</span> = still to draw. <span style="color:#1d5e36;font-weight:600">Settled</span> = already decided; kept for the record. The right column says who decides and what it blocks. This list is a subset: the full list of values is in the <a href="../../reports/alignment-report.md">alignment report</a>.</p>
+    <p style="margin:0;font-size:14px;color:#45464b;max-width:820px;line-height:1.5">{{ gapCount }} items. <span style="color:#7a4a00;font-weight:600">KDPS value</span> = a policy value KDPS must set before live use. <span style="color:#7a4a00;font-weight:600">PRD question</span> = needs your decision in the PRD. <span style="color:#1f3f8f;font-weight:600">Design work</span> = still to draw. <span style="color:#1d5e36;font-weight:600">Settled</span> = already decided; kept for the record. The right column says who decides and what it blocks. This list is a subset: the full list of values is in the <a href="../../plan/kdps-values.md">KDPS values list</a>.</p>
   </div>
   <div style="background:#fff;border:1px solid #e1e1dc;border-radius:6px;overflow:hidden">
     <sc-for list="{{ gaps }}" as="it" hint-placeholder-count="24">
@@ -302,7 +302,6 @@ class Component extends DCLogic {
     const L = (n, t, g) => P('List', n, t, g), R = (n, t, g) => P('Record', n, t, g), W = (n, t, g) => P('Work', n, t, g), S = (n, t, g) => P('Settings', n, t, g);
 
     const changes = [
-      /* deps: PRD-OFF-001, PRD-OFF-015, PRD-POS-005, PRD-LIF-014, POL-02.01, POL-02.17, prd.md#people-access-and-approvals — changelog lines restating till, persona and POS-import rules */
       { id: 'Name', t: 'The product is Apparel OS throughout.' },
       { id: 'Sources', t: 'Every rule cites a PRD section or a KDPS policy. Decision and question codes from the earlier repo are gone.' },
       { id: 'Rules', t: 'Section 0 lists the rules the screens follow. Earlier decisions that are in neither the PRD nor the policies were dropped; add them to the policies to bring them back.' },
@@ -371,7 +370,6 @@ class Component extends DCLogic {
     const moduleCount = modules.length;
 
     const menus = [
-      /* deps: PRD-ACS-002, PRD-ACS-003, PRD-UXP-001, PRD-UXP-004, PRD-UXP-005, PRD-UXP-009, POL-02.01, POL-02.21, POL-17.10, DEC-105, prd.md#people-access-and-approvals — menus by persona and template; Owner approves losses and larger count differences */
       { id: 'P-STM', title: 'Store manager', who: 'Store · template: Store POS', land: 'Home for the own Store: today’s deliveries, day close and My work', items: [{ s: 'Home', t: 'Store numbers · My work' }, { s: 'Sell', t: 'Till · Bills · Customers · Billed-retained · approvals within limit' }, { s: 'Receive Goods', t: 'Inbox for the own Store' }, { s: 'Transfer', t: 'Request · Receive' }, { s: 'Stock Count', t: 'Own Store · differences within limit' }, { s: 'Damage & supplier returns', t: 'Report damage' }, { s: 'Stock', t: 'Own Store · other Stores for sizes' }, { s: 'External sales', t: 'Earlier-POS import during the side-by-side test' }, { s: 'Money', t: 'Store day · Petty cash' }, { s: 'Offers & price', t: 'Running offers' }, { s: 'Reports', t: 'Own Store' }, { s: 'People', t: 'Team attendance (view)' }] },
       { id: 'P-CSH', title: 'Cashier', who: 'Store · template: Store POS', land: 'Till sign-in', items: [{ s: 'Sell', t: 'Till · Bills · authorised returns' }, { s: 'Stock', t: 'Lookup' }, { s: 'Offers & price', t: 'Running offers' }] },
       { id: 'P-SLS', title: 'Salesperson', who: 'Store · template: Store POS', land: 'Self-service › My targets', items: [{ s: 'Sell', t: 'Own attributed lines (read-only)' }, { s: 'Stock', t: 'Lookup · other Stores' }, { s: 'Offers & price', t: 'Running offers' }, { s: 'Reports', t: 'Own targets' }, { s: 'Self-service', t: 'Targets and own incentives' }] },
@@ -388,11 +386,10 @@ class Component extends DCLogic {
       { id: 'P-AUD', title: 'Auditor', who: 'Outside · template: Auditor', land: 'Setup › Audit log', items: [{ s: 'All sections', t: 'Read-only records in scope' }, { s: 'Setup', t: 'Audit log' }] }
     ];
 
-    const PID = { 'Owner': 'P-OWN', 'Admin': 'P-ADM', 'Accounts': 'P-ACC', 'Chartered Accountant (CA)': 'P-CHA', 'Booking': 'P-BKG', 'Operations': 'P-OPS', 'Warehouse': 'P-WHS', 'Brand manager': 'P-BRM', 'Store manager': 'P-STM', 'Cashier': 'P-CSH', 'Salesperson': 'P-SLS', 'EBO staff': 'P-EBO', 'HR': 'P-HRS', 'Auditor': 'P-AUD' }; /* deps: prd.md#people-access-and-approvals, PRD-ACS-002 — persona name to persona ID map */
-    const secCols = ['Home', 'Sell', 'Booking', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & supplier returns', 'Stock', 'External sales', 'Offers & price', 'Money', 'Reports', 'People', 'Partners', 'Setup']; /* deps: none — working menu section labels (DEC-056) */
+    const PID = { 'Owner': 'P-OWN', 'Admin': 'P-ADM', 'Accounts': 'P-ACC', 'Chartered Accountant (CA)': 'P-CHA', 'Booking': 'P-BKG', 'Operations': 'P-OPS', 'Warehouse': 'P-WHS', 'Brand manager': 'P-BRM', 'Store manager': 'P-STM', 'Cashier': 'P-CSH', 'Salesperson': 'P-SLS', 'EBO staff': 'P-EBO', 'HR': 'P-HRS', 'Auditor': 'P-AUD' };
+    const secCols = ['Home', 'Sell', 'Booking', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & supplier returns', 'Stock', 'External sales', 'Offers & price', 'Money', 'Reports', 'People', 'Partners', 'Setup'];
     const rung = s => { const [r, l] = s.split('|'); return { m: r === 'M', a: r === 'A', o: r === 'O', v: r === 'V', n: r === '-', l: l || '' }; };
     const RB = (name, tpl, cells) => ({ name, id: PID[name], code: 'Template: ' + tpl, cells: cells.map(rung) });
-    /* deps: DEC-105, POL-02.21, POL-17.10 — Owner approve cells for count differences, write-offs and disposals */
     const rbac = [
       RB('Owner', 'Owner', ['V|All', 'V|View', 'A|Approve', 'V|View', 'V|View', 'A|Differences above the Store manager’s tolerance, within KDPS limits', 'A|Write-offs and disposals, within KDPS limits', 'V|All', 'V|View', 'A|Approve', 'A|Approve payments', 'V|All', 'V|View', 'A|Approve', 'A|Approve changes']),
       RB('Admin', 'Admin', ['V|Own', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', 'V|Exports', '-', '-', 'O|Configure; prepare role and rule changes']),
@@ -411,7 +408,6 @@ class Component extends DCLogic {
     ];
 
     const mapping = [
-      /* deps: POL-02.01, POL-02.11, PRD-ACS-002, prd.md#people-access-and-approvals — KDPS templates mapped to personas */
       { to: 'Owner', prd: 'P-OWN Owner', how: 'Direct.' },
       { to: 'Store POS', prd: 'P-STM Store manager, P-CSH Cashier, P-SLS Salesperson', how: 'A person gets only the parts assigned; manager approvals only for the Store manager.' },
       { to: 'Warehouse', prd: 'P-WHS Warehouse', how: 'Direct.' },
@@ -426,7 +422,6 @@ class Component extends DCLogic {
     ];
 
     const oldCodes = [
-      /* deps: PRD-ACS-002, PRD-ACS-006, PRD-FRN-007, PRD-SEC-018, POL-02.07, DEC-042, prd.md#people-access-and-approvals — earlier codes mapped to personas */
       { code: 'C-OWN', name: 'Company owner', now: 'P-OWN Owner' },
       { code: 'C-FIN', name: 'Finance', now: 'P-ACC Accounts' },
       { code: 'M-STR', name: 'Store manager', now: 'P-STM Store manager' },
@@ -447,7 +442,7 @@ class Component extends DCLogic {
       { code: 'X-SVC', name: 'Support / service identity', now: 'A service identity with its own audit trail, not a persona.' }
     ];
 
-    const storeSide = ['Home', 'Sell', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & supplier returns', 'Stock', 'External sales', 'Money', 'Offers & price', 'Reports', 'People']; /* deps: PRD-UXP-004, DEC-056 — operational areas a Store user needs */
+    const storeSide = ['Home', 'Sell', 'Receive Goods', 'Transfer', 'Stock Count', 'Damage & supplier returns', 'Stock', 'External sales', 'Money', 'Offers & price', 'Reports', 'People'];
 
     const G = (id, k, t, d, by, ref) => ({ id, r: k === 'kdps', p: k === 'design', o: k === 'prd', s: k === 'settled', t, d, by, ref });
     const gaps = [

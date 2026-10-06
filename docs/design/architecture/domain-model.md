@@ -12,7 +12,7 @@ Implements these PRD sections: Organisation, sites and ownership; People, access
 
 Depends on: [module-map.md](module-map.md) (which module owns each record), [stock-ledger.md](../stock/stock-ledger.md) (the stock records; not repeated here), [personas.md](../access/personas.md) (user, persona, role, role assignment), [design-language.md](../ui/design-language.md) section 7 (the settled state names).
 
-Used by: [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), the other stage 1 designs in [gaps-before-code.md](../../reports/gaps-before-code.md), and all code.
+Used by: [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5), the other stage 1 designs in [gaps-before-code.md](../../history/gaps-before-code.md), and all code.
 
 ---
 
@@ -48,7 +48,6 @@ Labels (**design choice**, **Proposed**, **OPEN**) mean what [module-map.md](mod
 **State names.** A record shows one lifecycle state, and the names are the settled list in [design-language.md](../ui/design-language.md) section 7, including those the baseline added (DM-4, DEC-105). A new name needs a design review there.
 
 ## 2. The whole system in outline
-<!-- deps: PRD-MOD-002, PRD-MOD-004, PRD-MOD-005, prd.md#delivery-stages — which module owns each record and the stage that first builds it -->
 
 Each module's core records, one line each. Stage 1 records are detailed in section 3. Later records are detailed in their own designs.
 
@@ -350,7 +349,6 @@ Owner: `finance` · books. `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-009`; policy 
 - **OPEN:** the real accounts and maps (V-10); the framework, AS or Ind AS (V-07, `POL-09.10`); KDPS's formula and pool (V-08, V-09, `POL-09.19`, `POL-09.21`); tolerances (V-11).
 
 ### 3.11 Stock
-<!-- deps: PRD-STK-001, PRD-STK-002, PRD-MOD-012 — pointer table to stock-ledger.md; five separate stock facts -->
 
 Owner: `stock` · ledger. [stock-ledger.md](../stock/stock-ledger.md) defines these records; this document does not restate them.
 
@@ -491,7 +489,7 @@ Every in-scope line and exit check of stage 1 in [phases.md](../../phases.md), a
 
 ## 8. Open questions
 
-Nothing below has a default. "Kind" says whether the answer is a business choice or a technical one. DM-4 to DM-8 carry their baseline pick (DEC-105); the "Who decides" column of such a row names who confirms the pick or asks for a change. Open values that KDPS, Accounts or the CA must supply are cited where they apply and listed in [alignment-report.md](../../reports/alignment-report.md) section 5; they are not repeated here.
+Nothing below has a default. "Kind" says whether the answer is a business choice or a technical one. DM-4 to DM-8 carry their baseline pick (DEC-105); the "Who decides" column of such a row names who confirms the pick or asks for a change. Open values that KDPS, Accounts or the CA must supply are cited where they apply and listed in [alignment-report.md](../../history/alignment-report.md) section 5; they are not repeated here.
 
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |

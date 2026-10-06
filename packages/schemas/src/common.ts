@@ -1,7 +1,7 @@
 import { paise } from '@apparel-os/domain';
 import { z } from 'zod';
 
-// Shared building blocks for the S1-F01 contract sketch (docs/implementation/s1-f01-first-access.md, S1-F01-T01).
+// Shared building blocks for the S1-F01 contract sketch (docs/plan/stage-1/s1-f01-first-access/spec.md, S1-F01-T01).
 // No schema here carries a default value: every KDPS or OPEN value comes from a setting (AGENTS.md "Never invent
 // a value").
 

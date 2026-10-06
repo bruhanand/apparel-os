@@ -1,19 +1,16 @@
 # AGENTS.md
-<!-- deps: none — contributor guide intro -->
 
 This file guides AI coding agents working in this repository. `CLAUDE.md` is a link to this file; edit this one.
 
 ## Current state
-<!-- deps: prd.md#stack — planned toolchain sentence restates PRD stack rows -->
 
 Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. The first customer is KDPS Lifestyle Pvt. Ltd. (KDPS).
 
-The repository holds the documents, the doc checker (see "Checking the documents") and the code workspace (see "Code workspace"). Stage 1 code has begun in the kernel and `packages/calculations`. Use only the commands listed in "Checking the documents" and "Code workspace"; do not invent others.
+The repository holds the documents (`docs/`, start at `docs/README.md` and `docs/STATUS.md`) and the code workspace (see "Code workspace"). Stage 1 is in progress: see `docs/plan/stage-1/README.md`. Use only the commands listed in "Code workspace"; do not invent others.
 
-The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with the first real screen, or earlier with the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
+The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with `S1-F01-T19`, the first browser journeys, which also unblocks the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
 
 ## Document order
-<!-- deps: none — contributor process; restates docs/README.md order -->
 
 `docs/README.md` is binding. When two documents disagree, the higher one wins:
 
@@ -22,7 +19,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 3. `docs/design/`: how the system implements both. Never contradicts the two above.
 4. Code: implements the design.
 
-`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/reports/` holds one-time reports and `docs/questions-for-kdps.md` holds open questions; neither decides anything. `docs/implementation/` (the implementation plan) and `docs/data-notes/` are not ranked either: they decide nothing, and the plan follows `docs/phases.md`.
+`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/questions-for-kdps.md` holds open questions for KDPS. `docs/plan/` (roadmap, stage folders with specs and tickets, open items, KDPS values, build rules), `docs/data-notes/`, `docs/research/` and `docs/history/` (old reports, kept as they were) are not ranked: they decide nothing, and the plan follows `docs/phases.md`.
 
 - Fix the lower document to match the higher one. Never edit a higher document just to fit a lower one.
 - A business decision is never settled in design or code. Raise it against the PRD or the policies.
@@ -31,15 +28,12 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 - Code that differs from its design is a defect: fix the code, or change the design first. Where no design exists yet, code follows the PRD and the policies directly, and the missing design is noted.
 
 
-
 ## Never invent a value
-<!-- deps: prd.md#required-policy-configuration, PRD-SEC-017, DEC-071 — no invented values, no active defaults -->
 
 - Never invent a policy value, threshold, tolerance, account, rate, limit, formula, date or approver. Not in documents, not in code, not in configuration.
 - Mark every unknown as **OPEN** and name its owner: the product owner, the KDPS Owner, the CA or Accounts (or another PRD persona the PRD names as decider). Say which delivery stage it blocks.
 - Synthetic test data is allowed only when it is labelled as synthetic. It never becomes a default.
 - An example in the PRD or policies (such as "30-, 15- and 7-day reminders") is not a setting until a signed policy makes it one.
-
 
 
 ## Alignment rules
@@ -50,65 +44,11 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 - Design documents cite the requirement and policy IDs they implement: in their header and next to each rule they apply. Code and tests cite the ID where a rule is enforced.
 - Any change to `prd.md` or `kdps-policies.md` is logged first in `docs/decisions.md`: one short entry (`DEC-001` …) with date, who decided, question, options, choice and why, and the IDs changed. Then edit the document to match the entry.
 - The PRD and policy text belong to the user. Propose a decision entry and wait for approval unless the user decides the change directly.
-- Questions only KDPS or the CA can answer go in `docs/questions-for-kdps.md`, grouped by person, in plain language.
-
-
-
-## Checking the documents
-<!-- deps: none — how the doc checker works -->
-
-`tools/doc-check/check.mts` checks IDs, decision entries, links and tables, and keeps the review gate. It needs Node.js 22.18 or later, which runs TypeScript directly, and git; `--staged` also uses `tar`.
-
-| Command | What it does |
-| --- | --- |
-| `node tools/doc-check/check.mts` | Runs every check. Exit code 1 means errors. |
-| `node tools/doc-check/check.mts impact <ID> [<ID> ...]` | Lists the sections a change to these rules, decisions or source headings (`prd.md#…`) would flag, before you make it. |
-| `node tools/doc-check/check.mts packet --out <file> [--split <n>]` | Writes the review packet for the stale sections, in `n` parts. Refuses while any error other than "Review required" is open, except a record left by a removed section (`--force` writes it anyway). Leaves out sections already sent unchanged (`--all` sends them again). |
-| `node tools/doc-check/check.mts record <file> [<file> ...] --by "<name>"` | Records the verdicts in the files: one line per section with its key, the State from the packet and its own reason, separated by tabs. |
-| `node tools/doc-check/check.mts review "<section>" --by "<name>" --reason "<text>"` | Records the review of one section. |
-| `node tools/doc-check/check.mts drop "<section>"` | Forgets the record of a section that no longer exists. |
-| `node tools/doc-check/check.mts list [<filter>]` | Lists the sections and what each depends on. |
-| `node tools/doc-check/check.mts coverage` | Lists the PRD and policy IDs no tracked section cites. Never fails. |
-| `node tools/doc-check/check.mts --staged` | Checks exactly what the next commit holds: the staged documents and the staged checker, read from a copy of the index. The index and the working tree are not changed. The pre-commit hook uses it. |
-| `node tools/doc-check/check.mts test` | The checker's own tests, on synthetic repositories. |
-
-- **Sections.** Every section of `docs/design/`, `docs/phases.md`, `docs/questions-for-kdps.md` and this file is tracked, as is each data block of `ui-blueprint.html` and the page of each other HTML file in `docs/design/`.
-- **Dependencies.** A section depends on the IDs it cites and on any `prd.md#…` or `kdps-policies.md#…` heading it names. One hop further, it depends on what the sections it points at cite: "(10.6)" in the same document, or a numbered section of another document named in words, such as `stock-ledger 10.4` or `deployment.md section 7`. A whole-section number covers its subsections. A pointer inside backticks is an example and does not count. A new decision entry whose Choice or Changed line cites a rule counts as a change to that rule.
-- **Declaring.** A section that applies no rule carries `<!-- deps: none — reason -->` (in the blueprint script, `/* deps: none — reason */`). A section that rests on rules its text does not cite names them the same way: `<!-- deps: <IDs> — reason -->`.
-- **Stale.** A section is stale when, since its record in `docs/reviews.json`, its own text changed, a source's text or decisions changed, it cites a source its record did not have, or it no longer cites one its record had. The check fails until each stale section is fixed or confirmed.
-- **Decision log.** A PRD or policy bullet changed since the last commit needs a decision entry, added or edited since the PRD or policies were last committed, that cites it. A removed bullet needs such an entry too, and its ID must be listed as retired. A retired ID stays retired, and a decision entry is never removed. A new or changed bullet that no section cites gets a warning, and `packet` lists it: run the broad sweep. A stock, money or access bullet that changed, or that the Choice or Changed line of a new or edited decision cites, asks for the broad sweep whether or not a section cites it.
-- **References.** The check fails on a pointer to a section number that a tracked document does not have, on a document name two files share (README), and on two sections with the same number.
-- **Records.** `docs/reviews.json` must be exactly as the checker writes it, so a record duplicated by a merge or edited by hand fails the check, and no record can be written until it is fixed. A record whose section is gone names the section it may have become. A stale section whose record is only a baseline says so: read all of it, not only the change.
-- **Headers.** A design document whose header lists its IDs ("- PRD IDs:", "- Policies:", "- Decisions:") lists every ID its sections cite, outside `<!-- -->` comments. A section that only places IDs, such as an ownership table, carries `<!-- header: not listed — reason -->`.
-- **Reports** get the ID, link and table checks only. `alignment-sweep.md` and `decision-pack.md` are frozen proposals and may name IDs that were never added.
-
-### Change gate
-<!-- deps: none — how the doc checker works -->
-
-1. Log the decision entry.
-2. Edit the PRD or the policies. The entry and the edit may be separate commits, entry first.
-3. Run the checker. Fix every error that is not "Review required" first. It warns when a stock, money or access rule changed.
-4. Write the packet and run the AI review in `tools/doc-check/ai-review.md`. Run its broad sweep when warned.
-5. Record the verdicts with `record`. Fix each finding, or record a finding judged not to be a clash with `review` and a reason. Then write the packet again: it holds only what changed since.
-6. Run the checker until it passes, then commit.
-
-Gather the decisions of a round before step 3, so each section is reviewed once; `impact` shows what a round will flag.
-
-The pre-commit hook in `.githooks/` runs the checker on the staged snapshot, and the checker's tests when the checker changes. Enable it once per clone with `git config core.hooksPath .githooks`. GitHub runs both on every push and pull request (`.github/workflows/doc-check.yml`); a first push of a new branch is compared with where it left `main`. A base given with `--base` that does not exist is an error.
-
-### Honest reviews
-<!-- deps: none — how the doc checker works -->
-
-- The checker never writes records. Only `review`, `record`, `drop` and the one-time `baseline` do.
-- Record a review only after reading the section against its current sources. The reason says what was compared and what was found.
-- One section per `review` call or `record` line, with that section's own reason from an actual review. Never record sections with one blanket reason to make the check pass. `record` refuses a verdict whose section changed after the reviewer read it, a reason of fewer than 8 words, a reason given for another section in the same files or already recorded for another section, and a reason that repeats the section's last record.
-- Records marked `baseline` were taken on 3 Oct 2026 after the alignment sweep. They are a starting point, not reviews.
-- A passing check is not proof that the documents are right. The checker follows IDs, pointers and fingerprints; it cannot read meaning.
-
+- Questions only KDPS or the CA can answer go in `docs/questions-for-kdps.md`, grouped by person, in plain language, and are tracked in `docs/plan/kdps-values.md`. Questions for the product owner go in `docs/plan/open-items.md`.
+- `node tools/link-check/check.mts` (`pnpm check:links`) checks that every relative link in `docs/` and this file resolves and every cited `PRD-`, `POL-` and `DEC-` ID exists. It skips `docs/history/` and files git ignores. It reads no meaning: a passing check is not proof that the documents agree.
 
 
 ## Working on the documents
-<!-- deps: PRD-ACS-002, PRD-ACS-003, prd.md#people-access-and-approvals — 14 personas; a persona grants no access -->
 
 - Do not delete or reword existing PRD rules as a side effect of another edit.
 - PRD style: short imperative bullets, British spelling (Organisation, colour), capitalised defined nouns (Site, Store, Organisation).
@@ -124,9 +64,9 @@ The pre-commit hook in `.githooks/` runs the checker on the staged snapshot, and
 - Books and posting (books and their cost and Tally voucher settings, the chart of accounts, financial periods with their locks and reopenings, balanced journals, posting maps, posting event kinds, the hand-off from valued stock movements, the SL-23 baseline, the ledger and trial balance, their tables, and the posting half of the golden scenarios) are in `docs/design/finance/books-and-posting.md` (GC-4). Its open questions are GC4-n.
 - Shared calculations (the pure package `packages/calculations`, its tier and what the counter never gets; integer paise, exact intermediates and named rounding rules; the rule versions every bill keeps; start price and the MRP cap, offer eligibility and the best permitted set, the spread of group discounts, manual discounts, tax by classification, rate and value slab, the bill round-off; tenders; return values, exchanges and split-tender refunds; costing and ticket margin; incentives in outline; the tax-rule records and their tables; the golden-case format, how one set runs on server and counter, and the cases) are in `docs/design/calculations/shared-calculations.md` (GC-7). Its open questions are GC7-n.
 - Document numbering and audit history (business codes, number series, the bill series per billing device, tax registration and financial year, formats, the audit record and the access record; their tables) are in `docs/design/platform/numbering-and-audit.md` (GC-5). Its open questions are GC5-n.
+- The offline counter (billing devices, the device bill series, the counter app `apps/counter`, offline authority, the working set, local commit, upload, pause and release, the devices readiness check) is drafted in `docs/design/pos/offline-counter.md` (GC-8), and backup, restore and export in `docs/design/platform/backup-and-restore.md` (GC-9). Both are **Draft**: not yet approved by the product owner; their open questions are GC8-n and GC9-n.
 - Imports and opening data (file intake and format readers, the stored original, versioned layouts, mappings and mapping rules, staging and the origin of each value, the five batch kinds, duplicate control and corrections, the validation report, the import handler contract, the opening-data layouts for stock, dues, advances and deposits and their reconciliation; their tables) are in `docs/design/platform/imports-and-opening-data.md` (GC-6). The data notes' layouts are samples, never settings. Its open questions are GC6-n.
 - The UI was first drawn for RetailsOps, an earlier version of this product in another repo. Its codes (G-, OQ-, R-, BP-) and decisions are not requirements; anything still wanted belongs in the PRD or the policies.
-
 
 
 ## Delivery
@@ -142,7 +82,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | --- | --- |
 | `apps/server` | The NestJS modular monolith; it starts only with `AOS_RUNTIME_DATABASE_URL` and `AOS_DATABASE_POOL_MAX` set (`deployment.md` section 4). `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
 | `apps/server/migrations` | The two migration sets, `directory/` and `organisation/`: reviewed SQL files `NNNN__<unit>__<what>.sql` with each set's table register, `tables.json` (code-house-rules 4.1) |
-| `apps/server/db` | `roles.sql`, which creates the migration and runtime roles, and the runbook for creating them on Railway |
+| `apps/server/db` | `roles.sql`, which creates the migration and runtime roles; `runtime-limits-synthetic.sql`, the runtime role's starting time limits for synthetic work; and the runbook for creating them on Railway |
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
@@ -150,6 +90,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `packages/schemas` | Shared Zod schemas for the API, with the route table and the typed client (code-house-rules 12.2) |
 | `packages/ui` | Shared UI helpers for shadcn/ui |
 | `tools/module-check` | The module boundary check |
+| `tools/link-check` | The link and ID check of the documents |
 
 | Command | What it does |
 | --- | --- |
@@ -160,6 +101,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `pnpm test` | Unit tests (Vitest) |
 | `pnpm test:integration` | Tests against real PostgreSQL through Testcontainers, each file in its own databases (copies of the migrated templates, or empty ones for the runner and seed tests), at least two files at once. Needs Docker |
 | `pnpm check:modules` | The module boundary check. Runs without an install |
+| `pnpm check:links` | The link and ID check of `docs/` and this file. Runs without an install |
 | `pnpm migrate` | The pre-deploy step: migrates the directory database, then every Organisation database the directory lists, in code order, as the migration role, reaching each on the same server by the name the directory keeps. Refuses a connection string without a host, any other role, or a database that role does not own, and stops and exits 1 at the first failure. Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm seed` | The local seed: builds it apart from the application, then creates the two synthetic Organisations' databases, migrates them and the directory database, and lists both in the directory, as the migration role. Refuses unless `AOS_ENVIRONMENT` is `local` or `dev`, and on Railway unless both it and the Railway environment are `dev`; refuses, before changing anything, a directory that lists an Organisation that is not synthetic or a seed code at another database. Writes no other row until the setup step (`S1-F01-T10`). Needs `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm format`, `pnpm format:check` | Prettier |
@@ -168,26 +110,43 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - Every constructor injection names its token with `@Inject(...)`; nothing relies on decorator metadata.
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
-- The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
+- The pre-commit hook (`.githooks/`; enable it once per clone with `git config core.hooksPath .githooks`) runs the link check when documents are staged, and the module check, lint and typecheck when code is staged and dependencies are installed. `.github/workflows/code-check.yml` runs all of them, the format check and both test suites on every push and pull request.
 - The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) was approved by the product owner on 6 Oct 2026, with CH-8 answered and CH-12 answered by `DEC-113`.
 
-## Completing a code task
+## How we work
 
-A task that changes code, such as a stage 0 or feature task of `docs/implementation/`, is complete only after the steps below. Code here means anything under `apps/`, `packages/` or `tools/` (the doc checker included), `.githooks/`, `.github/workflows/`, and the root workspace files the pre-commit hook lists. The steps add an independent review of the change and replace nothing: a document the task changes still passes "Change gate" and "Honest reviews"; document reviewers and their approval follow `docs/implementation/index.md` section 9; the approvals in the task's own completion criteria still apply; and committing, pushing and merging still wait for the product owner's go-ahead. A task that changes only documents follows "Change gate", "Honest reviews" and its own completion criteria, without these steps.
+The plan lives in `docs/plan/`. Each stage has a folder (`docs/plan/stage-1/`); each feature in it has a folder with `spec.md` (what it does) and `tickets/` (one file per piece of work, named with its task label, such as `T04-idempotency-helper.md` for `S1-F01-T04`). `docs/STATUS.md` says, in plain words, where the work stands and what waits on the product owner.
 
-1. **Build.** Implement the task as agreed and run the tests it requires.
-2. **Review.** Start an independent reviewer: a fresh agent session or a person who did not write the change. It is given the task, the changes and their sources, not the implementer's account of why the change is right. It reads the changes against the task and its completion criteria; the requirements, policies and decisions the task and its designs name, including any the change enforces without citing; the designs it implements; the code house rules; and this file. It returns findings, each with the file, the rule or design it breaks, why, and whether it is blocking. It edits no file and writes no review record.
-3. **Triage.** The implementing session checks each finding against the code and its sources. It fixes every confirmed defect, with a test that proves the fix where one can, and states why each rejected finding is not a defect.
-4. **Recheck.** Rerun the tests the fixes affect. The reviewer rechecks the fixes and what they touch, and sees each rejection with its reason. Repeat steps 3 and 4 until no blocking finding remains; a blocking finding still disputed goes to the product owner. A finding is blocking when it shows that the change breaks the task's criteria, a requirement, policy or decision, a design, the code house rules or this file, or that a test does not prove what it claims.
-5. **Final checks.** On the final revision, run `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm format:check` and the doc checker, with the checker's own tests when `tools/doc-check/` changed (`PRD-SEC-015`, `PRD-SEC-016`); browser journeys join them once Playwright exists. Where the task's completion criteria require CI, it must pass after the push the product owner allows. Record each non-blocking follow-up in the readiness register with its owner and the gate it blocks, and name it in the session handout.
+1. **Grill.** Before a feature's tickets are written, settle with the product owner only what the PRD, the policies and the designs leave open. Business answers go up as "Document order" says; KDPS values go to `docs/questions-for-kdps.md`.
+2. **Spec and tickets.** Write the feature's `spec.md` and its tickets. Each ticket has `Status:` (see "Agent skills"), `Blocked by:`, what to build, the design sections and IDs it follows, and when it is done.
+3. **Build.** One ticket at a time, with the tests it names. Cite the PRD, policy or decision ID where a rule is enforced. A design detail found while coding is edited in the design in the same change.
+4. **Review.** An independent reviewer (a fresh agent session or a person who did not write the change) reads the change against the ticket, the designs and IDs it follows, the code house rules and this file. It is given the ticket, the change and its sources, not the implementer's account. It returns findings, each with the file, the rule or design it breaks, why, and whether it is blocking. It edits nothing.
+5. **Fix and recheck.** Fix every confirmed defect, with a test that proves the fix where one can; say why each rejected finding is not a defect. The reviewer then rechecks the fixes and what they touch, once. One review and one focused recheck is the normal process, but **a blocking defect that remains means the ticket stays unfinished**: its status is not `done` and it is not committed as complete; fix and recheck again, or take a disputed finding to the product owner. A finding is blocking when it shows the change breaks the ticket, a requirement, policy or decision, a design, the code house rules or this file, or that a test does not prove what it claims.
+6. **Final checks.** On the final revision run `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm check:links` and `pnpm format:check` (`PRD-SEC-015`, `PRD-SEC-016`); browser journeys join them once Playwright exists.
+7. **Close.** Set the ticket's status, note any non-blocking follow-up in `docs/plan/open-items.md` with its owner and the gate it blocks, and update `docs/STATUS.md`. Commit with the ticket label at the start of the subject (`S1-F01-T04: idempotency helper`).
 
-- Keep a review to the task's change and what it touches. A finding outside that becomes a follow-up, not a fix in this task.
-- When a fix would change business behaviour or the task's scope, stop and ask the product owner; a business decision goes up as "Document order" says. A KDPS value is marked OPEN and goes to `docs/questions-for-kdps.md`, as "Never invent a value" says; a fix never fills an OPEN value.
-- The code reviewer's findings are not document review records. Only `review` and `record` write those, under "Honest reviews".
-- If no independent reviewer can run, report that as a blocker and the task as not reviewed. Never call it reviewed.
+- Keep a review to the ticket's change. A finding outside it becomes a follow-up, not a fix in this ticket.
+- If no independent reviewer can run, report that as a blocker and the ticket as not reviewed. Never call it reviewed.
+- When a fix would change business behaviour or the ticket's scope, stop and ask the product owner. A fix never fills an OPEN value.
+- Committing, pushing and merging wait for the product owner's go-ahead. Commits and pull requests carry no AI attribution lines.
+- Never throw away uncommitted work, even if it looks obsolete: save it to a `saved/<name>` branch first.
+- A change that touches only documents needs no code review: keep the document order, log PRD and policy changes in `docs/decisions.md` first, and run the link check.
+
+## Agent skills
+
+### Issue tracker
+
+Tickets are local markdown files under `docs/plan/stage-N/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, written as the ticket's `Status:` value, plus `done`, `in-progress` and `blocked`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. The glossary is the PRD's "Words used" tables and decisions are `DEC-nnn` entries in `docs/decisions.md`; there is no `GLOSSARY.md` or `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Stack
-<!-- deps: prd.md#stack — restates the PRD stack table -->
 
 From the PRD's "Technical platform" section. Use these; do not add others without a PRD change.
 
@@ -218,10 +177,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Hosting         | Test, including KDPS's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. Files on test: a Railway bucket, S3-compatible (`deployment.md` D-2, DEC-105). Production chosen before the first Store switch |
 
 
-
-
 ## Planned architecture
-<!-- deps: prd.md#stack, PRD-MOD-001, PRD-MOD-002, PRD-MOD-003, PRD-MOD-006, PRD-MOD-007, PRD-MOD-011, PRD-MOD-012, PRD-MOD-014, PRD-MOD-015, PRD-INT-002, PRD-INT-003, PRD-INT-006, PRD-INT-007 — shape, tenancy, transactions, append-only, money, integrity -->
 
 These come from the PRD's "Technical platform" section and apply to all code.
 
@@ -236,9 +192,7 @@ These come from the PRD's "Technical platform" section and apply to all code.
 - **External systems.** Tally, GST, bank and messaging outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction. Retry only after reconciliation.
 
 
-
 ## Domain rules that cut across modules
-<!-- deps: PRD-REC-008, PRD-STK-003, PRD-STK-001, PRD-REC-009, PRD-LED-005, PRD-ACS-006, PRD-ACS-007, PRD-SEC-017, PRD-SEC-003, PRD-SEC-004, PRD-ACP-001, PRD-REC-021, PRD-ORG-014, POL-02.07 — count creates stock, sellable test, separate facts, approvals, default off, AI drafts -->
 
 - Only a physical count creates stock. Invoice, booking or price ticket (PT) quantities never do.
 - A piece is sellable only with official PT coverage, barcode verification and physical acceptance at its selling Site, and no conflicting hold or reservation.

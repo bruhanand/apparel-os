@@ -1,5 +1,4 @@
 # Questions for KDPS and the CA
-<!-- deps: prd.md#required-policy-configuration — sample-data work never waits for policy answers -->
 
 > **Not ranked.** These are questions, not answers. Each answer goes into [kdps-policies.md](kdps-policies.md) (logged in [decisions.md](decisions.md) first if it changes a rule). See [README.md](README.md).
 
@@ -7,7 +6,7 @@
 
 - Questions are grouped by the person who should answer. Some need two people; they appear under the first and say who else.
 - Each question names the policy bullet it fills (`POL-…`) and the stage that waits for it. Building and testing with sample data never waits; only real, live use does.
-- `V-` numbers point to section 5 of the [alignment report](reports/alignment-report.md).
+- `V-` numbers point to section 5 of the [alignment report](history/alignment-report.md).
 - Please give real numbers, names and dates. "Same as now" is fine if you also tell us what "now" is.
 - Where the app already has a baseline (`DEC-105`, `DEC-112`), the question says so; answer only if you want something different.
 
@@ -30,6 +29,7 @@
 52. **Approvals and tasks left waiting.** When an approval or a task is not done in time, when is it overdue, and who is told or takes it over? Question 3 covers problems (exceptions) only. (With the Admin.) Baseline (`DEC-105`): approvals and tasks have a due time and an escalation recipient for each action type and Site, set the same way as for problems; an escalation brings in the recipient and the owner stays on it. · `PRD-ACS-010`; no policy bullet yet · access design GC3-8 · stage 1 live approvals
 54. **How long a login code stays fresh.** Some actions, such as approving or changing bank details, ask for a fresh code from the authenticator app. For how many minutes after one code should the app trust it before asking again? (With the Admin.) · `PRD-SEC-001`; no policy bullet yet · access design GC3-6 · stage 1 live use
 59. **Who confirms import layouts.** Before the app imports data with a new or changed layout for a file, and how its columns map, a second authorised person must confirm it; the file can be checked and previewed before that. Who at KDPS may confirm them? Baseline (`DEC-112`): a different person from the one who prepared it confirms each new or changed version; an unchanged one needs no new confirmation for each file. · `PRD-IMP-008`, `POL-02.07` · imports design GC6-4 · stage 1 live use
+60. **Second-person approval of the structure.** Changes to the business structure (legal entities, Sites, Stores, business units and their mappings) and to agreement versions need approval by a different authorised person, and checking a business unit's mapping is a separate permission held by someone other than the person who made it. Is that how KDPS wants it? Baseline (`DEC-105`). (With the Admin; Accounts and the CA confirm the mapping check.) · `POL-02.07`, `POL-10.08` · structure design GC2-2 · stage 1 live use
 
 ### Needed for stage 2 (goods in)
 
@@ -68,6 +68,7 @@
 47. **Exception alerts.** Which alerts under `PRD-EXC-013` are on, and what are their thresholds and recipients? · `POL-02.25` · V-70 · stage 4
 55. **A manual discount on an offer item.** When an item already has an offer, may the cashier also give a manual discount on it, and is it taken before or after the offer? Until you say, the till refuses it. (With the Brand manager.) · `PRD-POS-003`, `POL-19.04`; no policy bullet yet · calculations design GC7-7 · stage 4
 56. **Settings on each offer.** For each offer, say whether it also applies to goods already marked down on a price list, and for a "buy X get Y" offer, whether the free items are the cheapest or the dearest ones. The till never guesses. Also check how the app reads each kind of offer: a flat amount comes off each item; a basket offer applies once the basket reaches its threshold, and never takes off more than the basket is worth; a "buy X get Y" offer repeats for every complete set; and when a rule lets two offers combine, it says whether the second applies to the price left after the first or to the full price. (The Brand manager proposes; the approver approves.) · `PRD-OFR-002`; no policy bullet yet · calculations design GC7-9 · stage 4
+61. **Which seasons count as old.** To flag older stock at a Store's switch, the app needs the order of your seasons (for example SS24, AW24, SS25) and the point after which stock counts as "old". Please list your seasons in order and say where "old" starts. A season is never used as a receipt date or an age. (With Booking.) · no policy bullet yet · `DEC-112` (data notes gap 18) · stage 4, opening stock at the switch
 
 ### Needed for stage 5 (money)
 
@@ -121,6 +122,8 @@
 21. **Journal numbers.** The app numbers the journals of each set of books in one series per financial year, as one transaction posts each entry. Is that acceptable? If our performance tests fail, because sales or other postings wait on it or large posting jobs and postings at the same moment run too slowly, we will come back to you before changing it. Baseline (`DEC-112`). · `PRD-PRF-003` · books design GC4-4 · stage 2
 22. **Round-off in an exchange.** When a customer exchanges goods and the new bill's amount is rounded, does the round-off count when the app compares the new goods with the value of the goods returned? Until you say, the till refuses an exchange whose new bill has a round-off. (With the CA.) · `PRD-RET-007`, `PRD-RET-008` · calculations design GC7-13 · stage 4
 23. **A free item worth part of a paisa.** In a "buy X get Y free" offer, a free item's value can come to part of a paisa when an earlier discount on its line does not divide evenly between the items. How should that discount be rounded? Until you say, the till refuses such a bill. · policy 9; no policy bullet yet · calculations design GC7-14 · stage 4
+24. **Amounts with more decimals than paise.** Some files you send carry money with three or more decimals (for example 12.345). For each such column, how should the app round it to paise when importing: up, down or to the nearest, and how is an exact half rounded? Until you say, such a value is flagged and kept as unknown. · no policy bullet yet · imports design GC6-13 · first real import of that column
+25. **Supplier cash discount and interest terms.** For each supplier who offers them: the cash discount for paying early (rate and days) and the interest charged for paying late (rate and from when). The app will record them on the supplier's agreement; how they are calculated and posted comes later, with payments. (With the CA.) · no policy bullet yet · `DEC-112` (data notes gap 4) · stage 1 masters; used in stage 5
 
 ## CA
 
@@ -149,6 +152,10 @@
 23. **Rounding GST.** Is GST rounded on each line or on the whole bill, for each component or on the total, and up, down or to the nearest? Is the tax rounded, or the taxable value? (With Accounts.) · `POL-10.05` · calculations design GC7-3 · stage 4
 24. **GST components on a counter sale.** For each GST registration: does a counter sale carry GST, and which components, in which shares? · `POL-10.05`, `POL-10.06` · V-18, calculations design GC7-8 · stage 4
 25. **GST rounded on the whole bill.** If GST is rounded once on the whole bill (question 23), how should each line's GST and taxable value be shown, so that the lines add up to the bill? Until this is settled, the app does not round GST on the whole bill. (With Accounts.) · `POL-10.05` · calculations design GC7-12 · stage 4
+26. **Changing the cost method or pool later.** If KDPS ever changes from one cost method to another, or between one value pool for the whole book and one per Site, how should the stock value on hand be divided at the change? · `POL-09.06`, `POL-09.21` · stock ledger SL-6 · before any such change
+27. **Ownership that changes after cost is known.** Under some agreements goods become KDPS's at an agreed event after they are received and costed, but before they are sold. When the ownership changes then, what accounting entry should the app make, and what does it recognise? Until you say, such an item is refused. (With Accounts.) · `POL-01.05`, `POL-09.03` · stock ledger SL-26 · stage 2, for such agreements
+28. **Undoing a wrong receipt under FIFO.** Under FIFO, if a receipt entered by mistake is reversed after some of its stock has already moved on, from which other cost layers should the rest of its value come off? Until you say, such a reversal is refused. (With Accounts.) · `PRD-LED-018` · stock ledger SL-27 · stage 2, FIFO reversals
+29. **A found piece swapped for a missing piece of another owner.** If the product owner allows a count to swap a found piece for a missing piece of the same item that belongs to a different owner or legal entity, how is what each owner is owed settled? · `PRD-STK-015` · stock ledger SL-28 · stage 3 counts
 
 ## Operations
 
@@ -170,16 +177,15 @@ These come from the UI blueprint's open items. The blueprint names KDPS, not a p
 - **Logo.** Artwork for the empty logo slot. · no POL bullet; design input · UI blueprint open item 23 · answerer: unassigned · before the pilot switch
 
 ## Booking
-<!-- deps: none — cross-reference to other question numbers -->
 
 - See KDPS Owner 9, 10 and 36, Accounts 6 and Operations 1 and 2. These are shared with Booking.
+- **Product records.** Two rules for product records: a product's stock unit (piece, pair, pack) cannot change while any stock of it is recorded; and every list-type attribute (such as colour or fit) uses an approved list of values. Is that how KDPS wants it? Baseline (`DEC-105`). (With Operations for the first.) · no policy bullet yet · structure design GC2-5, GC2-9 · stage 1 live use
 
 ## HR
-<!-- deps: none — cross-reference to other question numbers -->
 
 - See KDPS Owner 35 and CA 10.
 
 ## Admin
 
 - See KDPS Owner 4 and 5, and Owner 6 (recovery). Name the restore operator, set the pre-launch restore-test date and confirm how often restore drills run under `POL-18.03` (V-63, stage 1).
-- **Password rules and wrong tries.** How long and how varied must a password be? After how many wrong sign-in tries does sign-in slow down or stop, and for how long? (With the product owner.) · policy 2; no policy bullet yet · access design GC3-5 · stage 1 live use
+- **Password rules and wrong tries.** How long and how varied must a password be? After how many wrong sign-in tries does sign-in slow down or stop, and for how long? Does a temporary password expire if it is not used, and after how long? Until you say, it does not expire. (With the product owner.) · policy 2; no policy bullet yet · access design GC3-5 · stage 1 live use

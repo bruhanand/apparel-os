@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: People, access and approvals; from Exceptions, reports and planning, the exception record and alerts; from AI, security and operational reliability, sign-in, scope controls, restricted data, revocation and service identities; from Franchise and partner accounts, partner users. It is GC-3 in [gaps-before-code.md](../../reports/gaps-before-code.md).
+Implements these PRD sections: People, access and approvals; from Exceptions, reports and planning, the exception record and alerts; from AI, security and operational reliability, sign-in, scope controls, restricted data, revocation and service identities; from Franchise and partner accounts, partner users. It is GC-3 in [gaps-before-code.md](../../history/gaps-before-code.md).
 
 - PRD IDs: `PRD-ACS-001`–`PRD-ACS-023`; `PRD-EXC-001`–`PRD-EXC-004`, `PRD-EXC-013`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-010`, `PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-FRN-001`, `PRD-FRN-007`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-007`, `PRD-INT-008`; `PRD-MOD-010`, `PRD-MOD-015`; `PRD-UXP-003`; `PRD-OFF-002`–`PRD-OFF-004`, `PRD-OFF-010`; `PRD-HRM-004`, `PRD-HRM-012`, `PRD-HRM-015`; `PRD-TRF-004`, `PRD-TRF-005`, `PRD-TRF-010`; `PRD-LIF-001`.
 - Policies: 2 (`POL-02.01`–`POL-02.12`, `POL-02.15`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.04`, `POL-03.05`), 10 (`POL-10.01`), 12 (`POL-12.04`), 18 (`POL-18.02`).
@@ -382,7 +382,6 @@ A large document is approved by a click and posted later by a job, one at a time
 Every table has a UUIDv7 primary key. "+ versions" means a companion table of effective-dated versions with an exclusion constraint on approved versions ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2). Each module owns one PostgreSQL schema, and a reference to another module's record keeps its identifier without a foreign key ([structure-and-masters.md](../masters/structure-and-masters.md) 2.5). **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 13.1 Schema `access`
-<!-- deps: PRD-ACS-001, PRD-ACS-005, PRD-ACS-007, PRD-ACS-010, PRD-ACS-015, PRD-ACS-016, PRD-ACS-018, PRD-ACS-020, PRD-ACS-022, PRD-SEC-001, PRD-SEC-006, PRD-SEC-008, PRD-SEC-018, PRD-INT-004, POL-02.07, POL-02.09, POL-02.15, POL-02.19, POL-02.20, POL-02.22, POL-02.23 — table list for the records of sections 2 to 10 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -411,7 +410,6 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `bulk_decision_batch` | — | links its decisions |
 
 ### 13.2 Schema `inbox`
-<!-- deps: PRD-ACS-009, PRD-ACS-010, PRD-INT-008, PRD-MOD-015 — table list for work items (11) -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -421,7 +419,6 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `work_item_routing` + versions | action type and Site | due-time rule and escalation recipient for tasks and approvals; no default (9.4, 11.3) |
 
 ### 13.3 Schema `exceptions`
-<!-- deps: PRD-EXC-001, PRD-EXC-002, PRD-EXC-003, PRD-EXC-004, PRD-INT-008, POL-02.16, POL-03.04, POL-03.05 — table list for the exception record (12) -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -432,7 +429,6 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `exception_routing` + versions | type and Site | owner, due-time rule, escalation |
 
 ## 14. Screens
-<!-- deps: PRD-UXP-003, PRD-ACS-009, PRD-ACS-015, PRD-ACS-019, PRD-ACS-021 — where the access screens sit and what GC-3 adds -->
 
 - [ui-blueprint.html](../ui/ui-blueprint.html) holds these screens: Setup › Personas and roles (templates and role assignments), Approval limits, Exception rules, Devices, tills and bill series, Audit log and Policy readiness; Home › My work (tasks, approvals, exceptions).
 - GC-3 adds four things to them:

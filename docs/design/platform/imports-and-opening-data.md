@@ -4,13 +4,13 @@
 
 Status: **Current**, 5 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: Source conversion and imports; from Opening, closure, migration and export, the opening-data layouts, the import kinds and the earlier-POS imports of the side-by-side test; from AI, security and operational reliability, file validation and restricted data in imports. It details the `files-imports` module of [module-map.md](../architecture/module-map.md) 4.7 and is GC-6 in [gaps-before-code.md](../../reports/gaps-before-code.md).
+Implements these PRD sections: Source conversion and imports; from Opening, closure, migration and export, the opening-data layouts, the import kinds and the earlier-POS imports of the side-by-side test; from AI, security and operational reliability, file validation and restricted data in imports. It details the `files-imports` module of [module-map.md](../architecture/module-map.md) 4.7 and is GC-6 in [gaps-before-code.md](../../history/gaps-before-code.md).
 
 - PRD IDs: `PRD-IMP-001`–`PRD-IMP-013`; `PRD-LIF-003`–`PRD-LIF-011`, `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-025`–`PRD-LIF-028`; `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-009`–`PRD-MER-011`, `PRD-MER-013`, `PRD-MER-017`; `PRD-ORG-005`, `PRD-ORG-012`, `PRD-ORG-014`; `PRD-REC-008`, `PRD-REC-017`; `PRD-PTW-002`, `PRD-PTW-003`, `PRD-PTW-013`; `PRD-STK-014`; `PRD-TRF-003`; `PRD-EBO-001`, `PRD-EBO-004`, `PRD-EBO-005`, `PRD-EBO-010`; `PRD-CSH-007`; `PRD-PAY-008`; `PRD-ACS-006`–`PRD-ACS-008`; `PRD-EXC-010`, `PRD-EXC-011`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-009`–`PRD-MOD-011`, `PRD-MOD-014`, `PRD-MOD-015`; `PRD-INT-002`, `PRD-INT-004`, `PRD-INT-005`, `PRD-INT-008`, `PRD-INT-011`, `PRD-INT-012`; `PRD-SEC-002`–`PRD-SEC-006`, `PRD-SEC-009`–`PRD-SEC-014`, `PRD-SEC-017`; `PRD-PRF-001`–`PRD-PRF-003`; `PRD-UXP-003`; `PRD-ACP-012`, `PRD-ACP-014`, `PRD-ACP-019`.
 - Policies: 2 (`POL-02.07`, `POL-02.08`), 3 (`POL-03.02`, `POL-03.07`), 9 (`POL-09.09`), 10 (`POL-10.02`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 18 (`POL-18.02`, `POL-18.05`).
 - Decisions: DEC-013, DEC-052, DEC-071, DEC-090, DEC-097, DEC-105, DEC-112.
 
-Depends on: [module-map.md](../architecture/module-map.md) (4.7: owner, operations and events of `files-imports`; 6.2 flow B: publishing an import), [domain-model.md](../architecture/domain-model.md) (3.9: the records of files and imports), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2: vocabulary, external codes and master imports), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3: approvals, restricted fields, service identities, 9.8 for a document a job posts), [stock-ledger.md](../stock/stock-ledger.md) (section 9: the switch; 10.1 and 10.6: idempotency and large documents), [numbering-and-audit.md](../platform/numbering-and-audit.md) (GC-5: business codes and the audit record), [books-and-posting.md](../finance/books-and-posting.md) (GC-4: 7.3, financial opening balances), [deployment.md](deployment.md) (D-2: the file bucket; D-4 and section 9: real data and personal data on the test setup).
+Depends on: [module-map.md](../architecture/module-map.md) (4.7: owner, operations and events of `files-imports`; 6.2 flow B: publishing an import), [domain-model.md](../architecture/domain-model.md) (3.9: the records of files and imports), [structure-and-masters.md](../masters/structure-and-masters.md) (GC-2: vocabulary, external codes and master imports), [access-and-approvals.md](../access/access-and-approvals.md) (GC-3: approvals, restricted fields, service identities, 9.8 for a document a job posts), [stock-ledger.md](../stock/stock-ledger.md) (section 9: the switch; 10.1 and 10.6: idempotency and large documents), [numbering-and-audit.md](numbering-and-audit.md) (GC-5: business codes and the audit record), [books-and-posting.md](../finance/books-and-posting.md) (GC-4: 7.3, financial opening balances), [deployment.md](deployment.md) (D-2: the file bucket; D-4 and section 9: real data and personal data on the test setup).
 
 Inputs, not ranked: the data notes [prd-fit.md](../../data-notes/prd-fit.md) (3.1), [data-quality-and-import-rules.md](../../data-notes/data-quality-and-import-rules.md), [pt-file-layouts.md](../../data-notes/pt-file-layouts.md) with [pt-layouts.json](../../data-notes/pt-layouts.json), [pos-exports.md](../../data-notes/pos-exports.md) with [pos-export-layouts.json](../../data-notes/pos-export-layouts.json), [item-master-vocabulary.md](../../data-notes/item-master-vocabulary.md), [stores-and-codes.md](../../data-notes/stores-and-codes.md), [transfers.md](../../data-notes/transfers.md), [store-close-cash-and-bank.md](../../data-notes/store-close-cash-and-bank.md) and [purchases-and-supplier-notes.md](../../data-notes/purchases-and-supplier-notes.md). They describe KDPS's files. Their layouts are samples; no value in them is a setting.
 
@@ -19,7 +19,6 @@ Used by: the stage 1 code of `files-imports`; the master import handlers of `org
 ---
 
 ## 1. What this document fixes
-<!-- deps: PRD-IMP-001, PRD-IMP-005, PRD-MOD-002, POL-14.07 — scope of this design: the files-imports module and the opening-data layouts -->
 
 - The import pipeline of `files-imports`: intake, the stored original, layout detection, versioned layouts and mappings, staging, validation, preview, review and publishing through the target module's import handler (`PRD-IMP-001`–`PRD-IMP-013`; module-map 4.7). Owners, operations and events are in module-map 4.7 and are made concrete here, not repeated.
 - The five batch kinds and what each may and may not post (section 4); where each staged value came from (section 5); duplicate control, corrections and reconciliation (section 7); the validation report and the 60 problem classes found in KDPS's files (section 8); the format readers (section 9).
@@ -30,7 +29,6 @@ Used by: the stage 1 code of `files-imports`; the master import handlers of `org
 It fixes no KDPS value: no tolerance, rounding rule, file-size limit, Store code, vocabulary value or layout is decided here. It does not design the PT workbench, costing profiles, receiving, the switch flow, EBO application or bank matching; section 12 says which later design takes each. Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says.
 
 ## 2. Records and words
-<!-- deps: PRD-IMP-002, PRD-IMP-003, PRD-IMP-010, PRD-IMP-011 — the records of domain-model 3.9 as this design uses them -->
 
 The records are those of [domain-model.md](../architecture/domain-model.md) 3.9, with two added: the document inside a batch, and the comparison run.
 
@@ -54,7 +52,6 @@ The records are those of [domain-model.md](../architecture/domain-model.md) 3.9,
 ## 3. The pipeline
 
 ### 3.1 Steps
-<!-- deps: PRD-IMP-002, PRD-IMP-003, PRD-IMP-004, PRD-IMP-005, PRD-IMP-012, PRD-SEC-011 — the order of the import steps -->
 
 ```mermaid
 flowchart LR
@@ -81,7 +78,6 @@ flowchart LR
 10. **Outcome.** The batch and each document keep what was accepted, rejected, pending and duplicate, with quantities and values, whether publishing succeeded or failed (7.4; `PRD-IMP-012`, `PRD-IMP-013`).
 
 ### 3.2 Batch states
-<!-- deps: PRD-IMP-005, PRD-IMP-012, PRD-ACS-007, DEC-105 — the four batch states of DM-4 and their transitions -->
 
 The states are the DM-4 baseline: Staged, Validated, Published and Failed (DEC-105; [design-language.md](../ui/design-language.md) section 7). No other state is added. **Proposed** (GC6-15): a queued or failed publish keeps the batch Validated, as below.
 
@@ -98,7 +94,6 @@ The states are the DM-4 baseline: Staged, Validated, Published and Failed (DEC-1
 - A Published or Failed batch is never edited. A correction is a new batch (7.3).
 
 ### 3.3 Where the work runs
-<!-- deps: PRD-PRF-001, PRD-PRF-003, PRD-MOD-006, PRD-SEC-013 — what runs outside the business transaction, and what runs as a job -->
 
 - Steps 1 to 8 run outside any business transaction. Reading, staging and validating a large file run as a pg-boss job on the `worker`, never inside a counter request (`PRD-PRF-003`; module-map section 10). The preparer sees progress through live updates that carry identifiers only.
 - Step 9 is one transaction per document, in the shape of module-map 6.1, under the handler's own module interface (`PRD-MOD-006`).
@@ -108,7 +103,6 @@ The states are the DM-4 baseline: Staged, Validated, Published and Failed (DEC-1
 ## 4. Batch kinds
 
 ### 4.1 The five kinds
-<!-- deps: PRD-IMP-010, PRD-LIF-008, PRD-LIF-010, PRD-LIF-011, PRD-LIF-014, PRD-LIF-016 — what each batch kind may and may not post -->
 
 A batch has exactly one kind, chosen when it starts and fixed for life (`PRD-IMP-010`; domain-model 3.9).
 
@@ -124,7 +118,6 @@ A batch has exactly one kind, chosen when it starts and fixed for life (`PRD-IMP
 - "Analytical-history import" in `PRD-IMP-010` means the historical-reference kind here. **Design choice.**
 
 ### 4.2 How the kind is enforced
-<!-- deps: PRD-IMP-010, PRD-LIF-014, PRD-SEC-017, PRD-MOD-002 — guards that keep a batch inside its kind -->
 
 - A handler registers the kinds it accepts and the effects it may have: none, master records, stock, money (13.2). Start an import refuses a kind the target's handler does not accept. **Design choice.**
 - The source reference a handler passes to the stock ledger or to Post in `finance` · books carries the batch kind. **Proposed** for the stock-ledger and books designs: both refuse a source whose kind is historical reference, as a last guard behind the handler's own rule (`PRD-LIF-014`, `PRD-IMP-010`).
@@ -132,7 +125,6 @@ A batch has exactly one kind, chosen when it starts and fixed for life (`PRD-IMP
 - Test 18 of section 17 proves that a historical-reference load leaves every stock quantity and value unchanged, the stage 2 exit check of [phases.md](../../phases.md), rehearsed in stage 1 on synthetic data.
 
 ## 5. Where each value came from
-<!-- deps: PRD-IMP-006, PRD-IMP-008, PRD-IMP-009, PRD-SEC-003, PRD-SEC-004, DEC-105 — origin of every staged value -->
 
 Every staged value carries one origin (`PRD-IMP-006`):
 
@@ -154,7 +146,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 ## 6. Layouts, mappings and mapping rules
 
 ### 6.1 Layouts
-<!-- deps: PRD-IMP-003, PRD-IMP-004, PRD-MOD-010 — what a layout version records -->
 
 - A layout has a code unique in the Organisation, a source (a supplier, a brand, an earlier-POS Store report, a bank, or the Organisation's own template), a document type and the kinds it serves. Its content lives in versions (`PRD-IMP-003`).
 - A layout version records the structure, never data:
@@ -169,7 +160,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 - A version is never edited. A change is a new version; each batch keeps the version it used (`PRD-IMP-003`, `PRD-MOD-010`).
 
 ### 6.2 Mappings
-<!-- deps: PRD-IMP-003, PRD-IMP-006, PRD-MOD-014, PRD-MOD-015 — what a mapping version records -->
 
 - A mapping fills one target's fields from one layout version. Its versions record, for each target field: the source column or fixed cell, or a set of them; the transform; and the mapping rules that apply to it (`PRD-IMP-003`).
 - A set of columns becomes one value only through a named calculation, such as an invoice prefix joined to its number, or CGST plus SGST percentages summed into one rate; the value's origin is Calculated (section 5).
@@ -177,7 +167,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 - A target field the mapping does not fill stays Unknown. Nothing gets a default (`PRD-MOD-015`).
 
 ### 6.3 Mapping rules
-<!-- deps: PRD-IMP-003, PRD-IMP-008, PRD-MER-007, POL-02.07 — source words to approved values -->
 
 - A mapping rule turns one source word into one approved value for one attribute, in one scope: a layout, a supplier, a brand or the whole Organisation. The target is an identifier: a vocabulary value, brand, size, category or party of `merchandise`, a Site, Store or business unit of `organisation`, or a line class (6.8). The module that owns the target checks it through its handler (13.2). Rules are versioned with validity dates (`PRD-IMP-003`).
 - Matching compares the word after trimming and collapsing spaces; whether case matters is part of the rule. The original word is always kept beside the value (`PRD-IMP-003`).
@@ -187,7 +176,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 - The `Color` tags `PREMIUM`, `MEDIUM`, `ECONOMY` and `ASSO.` stay source words. No rule writes them to colour until the product owner decides how the product treats them (OPEN, parked by the product owner; class E-1).
 
 ### 6.4 Proposal and confirmation
-<!-- deps: PRD-IMP-008, POL-02.07, POL-02.08, PRD-LIF-013, PRD-EBO-001 — who confirms a layout, mapping or mapping rule -->
 
 - A mapping rule is proposed, then confirmed by a different person from its proposer. An unconfirmed proposal changes no operational data (`PRD-IMP-008`, `POL-02.07`, `POL-02.08`).
 - Baseline (DEC-112, GC6-4): each new or changed layout and mapping version is confirmed by a separate authorised person before it is published, reading "mapping rules" in `PRD-IMP-008` as covering them. Drafting and validation may come first. An unchanged confirmed version needs no confirmation for each file. The PRD already asks for "saved approved layouts" for earlier-POS and EBO imports (`PRD-LIF-013`, `PRD-EBO-001`). Who may confirm is KDPS's to name (KDPS Owner).
@@ -195,7 +183,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 - A staged batch may use a Proposed layout and mapping to show its preview. Publishing needs Confirmed versions. **Design choice.**
 
 ### 6.5 Detecting a layout
-<!-- deps: PRD-IMP-004 — layout detection from structure -->
 
 - Detection compares the grid with each layout version's structure: the sheet, the header names at their row, the required columns, the column count and the distinctive names. A version is compatible only when every required column is found (`PRD-IMP-004`).
 - A source hint (the supplier or brand the uploader names, or a word in the file name) narrows the candidates and orders them. It never selects a version that is not compatible (`PRD-IMP-004`).
@@ -203,7 +190,6 @@ Every staged value carries one origin (`PRD-IMP-006`):
 - From the sample files, families F2 to F6 and the Peter England CSV can be told apart by their header names; F1, F9 and the headerless CSV need a layout per source ([pt-file-layouts.md](../../data-notes/pt-file-layouts.md) 3). Earlier-POS layouts differ by Store and report, so a layout is per Store and per report ([pos-exports.md](../../data-notes/pos-exports.md) 5.4). KDPS Owner question 57 asks whether the earlier POS can give one fixed daily export per Store instead.
 
 ### 6.6 Structure rules a layout can state
-<!-- deps: PRD-IMP-002, PRD-IMP-005, PRD-IMP-007, PRD-IMP-009, PRD-IMP-013 — rules for headers, rows, bills and totals -->
 
 Each rule below is a field of the layout version, so the same file always reads the same way. The class codes are those of [data-quality-and-import-rules.md](../../data-notes/data-quality-and-import-rules.md); section 8 lists them all.
 
@@ -219,7 +205,6 @@ Each rule below is a field of the layout version, so the same file always reads 
 - **Documents in one file.** Rows are grouped into documents by the document-reference columns. A file that holds several invoices or bills becomes several documents ([pt-file-layouts.md](../../data-notes/pt-file-layouts.md) 5). Rows for other customers, as in the Madura extract, stay in the stored original; whether they are staged at all is OPEN (GC6-12).
 
 ### 6.7 From the sample layout files to layout records
-<!-- deps: PRD-IMP-003, PRD-IMP-008, PRD-LIF-013 — how pt-layouts.json and pos-export-layouts.json become layout versions -->
 
 [pt-layouts.json](../../data-notes/pt-layouts.json) holds 37 entries: 35 vendor layouts in nine families and two variants of KDPS's own template. [pos-export-layouts.json](../../data-notes/pos-export-layouts.json) holds 29 sales, stock, store-workbook, brand-report and debit-note layouts. Both are an analyst's reading of KDPS's files, not KDPS decisions.
 
@@ -244,7 +229,6 @@ Each rule below is a field of the layout version, so the same file always reads 
 - What stage 1 proves first (DEC-112, GC6-1), in this order of priority: product and supplier masters; opening quantities and values; purchase and receiving PT; then the earlier-POS sales and returns comparison. The order overrides no dependency and drops no required format. Which layouts represent each step, among the master layouts (structure-and-masters section 7), the opening layouts (section 10) and the PT and earlier-POS candidates above, is engineering coverage; KDPS's habits do not set the product baseline.
 
 ### 6.8 Earlier-POS sales lines: sales, returns and transfers
-<!-- deps: PRD-LIF-013, PRD-LIF-014, PRD-LIF-016, PRD-TRF-003, PRD-IMP-009 — classifying earlier-POS lines in side-by-side imports -->
 
 The earlier POS's daily sales report is a historical-reference import (4.1). Nothing in it moves stock (`PRD-LIF-014`) or makes a sale or a tax invoice (`PRD-LIF-016`). Its lines still need a class so that comparison reports do not count a transfer as a sale.
 
@@ -259,7 +243,6 @@ The earlier POS's daily sales report is a historical-reference import (4.1). Not
 ## 7. Duplicates, conflicts and corrections
 
 ### 7.1 Source identity
-<!-- deps: PRD-IMP-011, PRD-INT-002 — the identity of an imported document -->
 
 - Each document has a source identity: the target, a scope key and the document reference. The layout names the reference columns or cells; the handler names the scope (13.2). **Design choice.**
 
@@ -275,7 +258,6 @@ The earlier POS's daily sales report is a historical-reference import (4.1). Not
 - The source identity is the idempotency key of publishing (module-map 6.2 flow B; stock-ledger 10.1; `PRD-INT-002`).
 
 ### 7.2 Same file, same document, changed document
-<!-- deps: PRD-IMP-011, PRD-IMP-013, PRD-INT-002, PRD-INT-005, POL-03.02 — duplicate and conflict control -->
 
 - **Same file.** A file whose content hash is already stored is linked to the stored copy, and the earlier batches that read it are shown. It starts a new batch for the same target and layout only if every earlier such batch Failed; one workbook may still feed two batches, such as its sales sheet and its stock sheet. **Design choice.**
 - **Same document, same content.** A document whose source identity and content were already published is a duplicate. It has no effect; the outcome counts its quantities and values as duplicate (`PRD-IMP-011`, `PRD-IMP-013`).
@@ -287,7 +269,6 @@ The earlier POS's daily sales report is a historical-reference import (4.1). Not
 - **Retries.** An adapter that sends the same request again gets the first result (`PRD-INT-002`).
 
 ### 7.3 Corrections and governed revisions
-<!-- deps: PRD-IMP-011, PRD-IMP-013, PRD-ACP-012, PRD-MOD-011 — correcting an imported document -->
 
 - A published document is never edited (`PRD-MOD-011`). A correction is a new batch whose document names the one it revises.
 - A governed revision publishes once: the handler reverses the earlier document's effects and posts the new ones in one transaction, as stock-ledger 10.1 says (`PRD-IMP-011`, `PRD-ACP-012`). Each handler declares whether it supports revisions and what reversing means for its records.
@@ -295,7 +276,6 @@ The earlier POS's daily sales report is a historical-reference import (4.1). Not
 - For a master, a correction is simply a new version (structure-and-masters 2.2). For a historical-reference document, the revision replaces the reference set as its current version and keeps the earlier one. **Design choice.**
 
 ### 7.4 Reconciling an import
-<!-- deps: PRD-IMP-012, PRD-IMP-013, PRD-EBO-004 — the counts and values an outcome keeps -->
 
 - Every outcome holds, per document and for the batch: rows read; rows ignored as header, total, filler or note; quantities and values accepted, rejected, pending and duplicate; control totals reported by the file, summed from the lines, and accepted (`PRD-IMP-013`).
 - The counts close: rows read equal rows ignored plus rows accepted, rejected, pending and duplicate. A batch whose counts do not close cannot be published. **Design choice.**
@@ -305,7 +285,6 @@ The earlier POS's daily sales report is a historical-reference import (4.1). Not
 ## 8. The validation report
 
 ### 8.1 What it holds
-<!-- deps: PRD-IMP-005, PRD-IMP-007, PRD-IMP-013 — contents of the validation report -->
 
 One report per batch, split by document and by Store where the documents name Stores ([data-quality-and-import-rules.md](../../data-notes/data-quality-and-import-rules.md) 9):
 
@@ -322,7 +301,6 @@ One report per batch, split by document and by Store where the documents name St
 - the fields masked or left out (section 11).
 
 ### 8.2 Row issues and severities
-<!-- deps: PRD-IMP-007, PRD-MOD-015 — the shape of a row issue -->
 
 - A row issue holds: its class (8.3), its severity, its place (file, sheet, document, row, column), the original value, what is wrong, the correction needed, and the rule it applies (`PRD-IMP-007`).
 - **Blocking**: the row, or the document it belongs to, cannot be published until corrected. **Warning**: publishable once the person who submits or approves the batch marks it seen; marking is recorded and may cover all issues of one class in one action. **Note**: information. **Design choice**, including the severity each class gets below.
@@ -330,7 +308,6 @@ One report per batch, split by document and by Store where the documents name St
 - A correction is made in the source file and the file uploaded again, or entered in the staged row by a person (section 5). The original cell stays.
 
 ### 8.3 The 60 problem classes
-<!-- deps: PRD-IMP-001, PRD-IMP-002, PRD-IMP-007, PRD-IMP-009, PRD-IMP-011, PRD-MER-005, PRD-MER-007, PRD-MOD-014, PRD-MOD-015, PRD-SEC-011, PRD-LIF-006, PRD-LIF-008, PRD-LIF-014, POL-03.02 — the data-quality classes as validation checks -->
 
 The 60 classes of [data-quality-and-import-rules.md](../../data-notes/data-quality-and-import-rules.md) sections 2 to 7, each with its check. An OPEN answer belongs to the owner named there and in its open questions.
 
@@ -400,7 +377,6 @@ The 60 classes of [data-quality-and-import-rules.md](../../data-notes/data-quali
 ## 9. Format readers
 
 ### 9.1 The neutral grid
-<!-- deps: PRD-IMP-002, PRD-SEC-011 — the reader output every format shares -->
 
 Every reader produces the same grid, so detection, mapping and validation never depend on the format. **Design choice.**
 
@@ -410,7 +386,6 @@ Every reader produces the same grid, so detection, mapping and validation never 
 - Notes for anything the reader skipped or could not read, cell by cell (A-11). One bad cell never stops the file.
 
 ### 9.2 Formats and readers
-<!-- deps: PRD-IMP-001, PRD-SEC-003, DEC-105 — which reader handles which format and layout family -->
 
 The format is found from the content (container signature and structure), never from the file extension (A-1). PRD Stack: Documents names ExcelJS for supported Excel operations, format-specific import adapters and PDF extraction.
 
@@ -428,7 +403,6 @@ The format is found from the content (container signature and structure), never 
 - `PRD-IMP-001` asks for brand PT files in XLSX, XLS, XLSB and CSV. All four readers are built in stage 1, so the sample layouts can be proved before stage 2. **Proposed.**
 
 ### 9.3 Safety at intake
-<!-- deps: PRD-SEC-011, PRD-SEC-014 — what intake refuses -->
 
 - Intake refuses, before anything is stored: a type not allowed; a file over a cap; a container that expands past its cap; content that holds macros, active scripts, embedded objects or unapproved links; and a workbook that depends on data in another workbook (module-map 4.7; `PRD-SEC-011`; DEC-112, GC6-3). That refusal explains the problem and asks for a self-contained copy: no dependency is stripped silently and no stale linked value is trusted (A-9).
 - The dependency rule alone refuses no ordinary hyperlink and no reference inside the workbook, and it approves no external link (DEC-112). No external link is approved in stage 1, so a file holding one is refused as holding an unapproved link (module-map 4.7). Whether an ordinary hyperlink, never followed, should instead be kept as text is **OPEN** for the product owner (GC6-17); until it is answered, such a file is refused. A reference inside the workbook is read. No link in an imported file is ever followed or fetched (`PRD-SEC-011`).
@@ -436,7 +410,6 @@ The format is found from the content (container signature and structure), never 
 - A refusal names its reason. Logs carry the file's hash and size, never its content (`PRD-SEC-014`).
 
 ### 9.4 Size and speed
-<!-- deps: PRD-PRF-001, PRD-PRF-003 — reading large files -->
 
 - Readers stream rows where the format allows, and staging writes rows in sets.
 - The Madura extract holds 113,983 rows for 176 customers, about eleven times the PRD's 10,000-line reference import ([prd-fit.md](../../data-notes/prd-fit.md) 2.19). It is measured as a stress case (`PRD-PRF-001`). Whether rows for other customers are staged is GC6-12.
@@ -445,7 +418,6 @@ The format is found from the content (container signature and structure), never 
 ## 10. Opening data
 
 ### 10.1 When opening data loads
-<!-- deps: POL-14.07, PRD-LIF-003, PRD-LIF-011, PRD-LIF-026, DEC-013, DEC-071 — the stage of each opening step -->
 
 - **Stage 1.** The opening layouts, their staging and validation, and the reconciliation tools are built and tested with labelled sample data (`POL-14.07`, DEC-013). No real opening data is loaded.
 - **At each Store's switch** (stage 4, production hosting only): real opening stock and balances are loaded at the Store's approved day-close switch (`POL-14.07`, `PRD-LIF-026`). The switch flow itself is the stage 4 `site-lifecycle` design; [phases.md](../../phases.md), "Testing and switch-over", lists its steps.
@@ -454,7 +426,6 @@ The format is found from the content (container signature and structure), never 
 - Each opening batch that may publish names the switch record and day-close cutover it belongs to. A rehearsal batch on `kdps-test` (GC6-8) names none, since no Store switches there, and can never publish. A new opening batch for a unit whose cutover is complete is refused; later corrections are live corrections in the owning module (`PRD-LIF-011`). **Design choice.**
 
 ### 10.2 Opening stock
-<!-- deps: PRD-LIF-004, PRD-LIF-005, PRD-LIF-006, PRD-LIF-007, PRD-LIF-025, PRD-LIF-027, PRD-LIF-028, POL-14.02, POL-14.03, POL-14.04 — the opening manifest layout -->
 
 `PRD-LIF-004` asks, for existing stock, for a reviewed manifest, physical verification, authorised variances, an opening PT and Site acceptance. The manifest is the import. The physical verification is the switch count, which is the stock module's count document, scanned in the app (stock-ledger 8.1 and section 9); it is never imported.
 
@@ -479,7 +450,6 @@ One manifest row is one SKU, or one source identity not yet resolved to a SKU, a
 - When a season is established later, the opening rows and every snapshot taken from them stay as they were; the change is a new style version (`PRD-LIF-007`; structure-and-masters 2.2).
 
 ### 10.3 Reconciling opening stock
-<!-- deps: PRD-LIF-004, PRD-LIF-027, PRD-STK-014, POL-14.07 — the opening reconciliation tools -->
 
 The reconciliation tools `POL-14.07` asks for are comparison runs (section 2), built in stage 1:
 
@@ -494,7 +464,6 @@ The reconciliation tools `POL-14.07` asks for are comparison runs (section 2), b
 - A comparison run keeps both sides' batch versions and its result, and never changes either side. **Design choice.**
 
 ### 10.4 Opening dues, advances and deposits
-<!-- deps: PRD-LIF-009, PRD-LIF-011, PRD-PAY-008, POL-14.03, POL-11.01 — layouts for financial opening balances -->
 
 Each is its own layout and its own opening kind, imported separately (`PRD-LIF-009`). The fields below are **Proposed**, for Accounts and the CA to confirm (GC6-10):
 
@@ -514,7 +483,6 @@ Each is its own layout and its own opening kind, imported separately (`PRD-LIF-0
 - Customer names on customer dues are personal data (section 11).
 
 ### 10.5 What opening data never does
-<!-- deps: PRD-LIF-008, PRD-LIF-011, PRD-REC-008, PRD-ACP-014 — limits on opening batches -->
 
 - Opening stock creates no supplier delivery, booking, invoice, purchase liability or automatic journal (`PRD-LIF-008`; books-and-posting 7.2).
 - Only the switch count creates stock. A manifest, an SOH or an `Audit Diff` line never does (`PRD-REC-008`; I-5).
@@ -522,7 +490,6 @@ Each is its own layout and its own opening kind, imported separately (`PRD-LIF-0
 - A later correction cannot rewrite past bills or labels (`PRD-ACP-014`).
 
 ### 10.6 Large openings
-<!-- deps: PRD-PRF-001, PRD-PRF-003, PRD-INT-004, PRD-IMP-012, DEC-097 — staged commit for a Store's opening -->
 
 A Store's opening holds tens of thousands of pieces: 13,354 at Deoghar, 27,695 at Hazaribagh and 21,771 at Banka in KDPS's data ([prd-fit.md](../../data-notes/prd-fit.md) 2.17). Its posting is a large document under stock-ledger 10.6.
 
@@ -532,7 +499,6 @@ A Store's opening holds tens of thousands of pieces: 13,354 at Deoghar, 27,695 a
 - **Measured** with stock-ledger 10.6: a full Site opening while counters sell at the reference workload (`PRD-PRF-001`, `PRD-PRF-003`).
 
 ## 11. Restricted and personal data
-<!-- deps: PRD-ACS-008, PRD-SEC-005, PRD-SEC-006, PRD-SEC-009, PRD-SEC-010, PRD-SEC-014, DEC-052 — restricted fields in files, staging and reports -->
 
 - Each layout column carries a restricted field class where it holds one: salary, identity documents, bank details, customer contact, cost and margin (`PRD-ACS-008`), and employee photos, location evidence and payroll data (`PRD-SEC-010`), the classes of access-and-approvals section 6. In previews, validation reports, read models and exports, a value of a class the reader's assignment does not grant is masked or left out (access-and-approvals section 6). Logs, errors and live-update events never carry it (`PRD-SEC-006`, `PRD-SEC-014`).
 - A column of an encrypted class (bank details, identity documents, salary and payroll data) is left out of staging unless the mapping fills a target that holds that class, such as a party's bank details, which then wait for independent approval (structure-and-masters 5.1). A staged value of that class is encrypted like the master's (access-and-approvals section 6). **Design choice.**
@@ -542,7 +508,6 @@ A Store's opening holds tens of thousands of pieces: 13,354 at Deoghar, 27,695 a
 - Purpose, consent and retention follow `PRD-SEC-009` and `PRD-SEC-010`. Retention periods are set with backup, restore and export (module-map MM-15); until they are set, nothing is deleted (`POL-18.05`).
 
 ## 12. Stage 1 and later stages
-<!-- deps: PRD-IMP-001, PRD-PTW-002, PRD-LIF-013, POL-14.07, DEC-105 — what GC-6 builds now and what later designs take -->
 
 | Part | Stage 1 builds and tests | Defined here for later | Later design |
 | --- | --- | --- | --- |
@@ -562,7 +527,6 @@ The stage 2 PT design settles, among others: one PT row per piece or per barcode
 ## 13. Interface
 
 ### 13.1 Operations
-<!-- deps: PRD-IMP-002, PRD-IMP-005, PRD-IMP-008, PRD-IMP-011, PRD-IMP-012 — the operations of module-map 4.7 made concrete -->
 
 The operations of module-map 4.7, made concrete. Every call goes through the checks of access-and-approvals 7.1: available, authorised, scoped.
 
@@ -580,7 +544,6 @@ The operations of module-map 4.7, made concrete. Every call goes through the che
 | Run a comparison | Two sets and a key | — |
 
 ### 13.2 The import handler contract
-<!-- deps: PRD-MOD-002, PRD-IMP-005, PRD-IMP-012, PRD-INT-002, PRD-ACS-006 — what a target module registers -->
 
 `files-imports` never writes another module's records (`PRD-MOD-002`; module-map section 3, rule 6). A target module registers a handler that declares:
 
@@ -596,12 +559,10 @@ The operations of module-map 4.7, made concrete. Every call goes through the che
 - publish: writes its records in the transaction it is given, idempotent on the source identity (`PRD-INT-002`), whole or not at all (`PRD-IMP-012`).
 
 ### 13.3 Events
-<!-- deps: PRD-MOD-006, PRD-INT-008 — files-imports events -->
 
 The events of module-map section 8, unchanged: `files-imports.import-published` (a document or batch published), `files-imports.import-failed` (a batch Failed or a publish attempt failed), `files-imports.mapping-confirmed` (a mapping rule, layout or mapping version confirmed). They carry identifiers only, and consumers are idempotent on the event (`PRD-INT-008`).
 
 ## 14. Read models and reports
-<!-- deps: PRD-MOD-003, PRD-EXC-010, PRD-EXC-011, PRD-SEC-005, PRD-STG-001 — import read models and the stage 1 report -->
 
 - **Import outcomes**, the stage 1 report ([phases.md](../../phases.md) stage 1): each batch and document with kind, target, layout and mapping versions, uploader, times, state, and the counts and values of 7.4; filters by Store, kind, state and date; drill to rows, issues and the stored file (`PRD-EXC-011`). It shows its as-of time (`PRD-MOD-003`, `PRD-EXC-010`).
 - **Layouts and mapping rules in force**, with their versions, proposers and confirmers.
@@ -610,12 +571,10 @@ The events of module-map section 8, unchanged: `files-imports.import-published` 
 - Every read model carries scope columns and is read under the reader's own authorisation; restricted values follow section 11 (`PRD-SEC-005`).
 
 ## 15. Tables
-<!-- deps: PRD-MOD-002, PRD-MOD-008 — conventions for the tables of 15.1 -->
 
 Names, keys and constraints. Every table has a UUIDv7 primary key. A table marked "+ versions" has a companion table of versions. **Design choice** throughout; other columns are left to reviewed migrations.
 
 ### 15.1 Schema `files_imports`
-<!-- deps: PRD-IMP-002, PRD-IMP-003, PRD-IMP-008, PRD-IMP-010, PRD-IMP-011, PRD-IMP-012, PRD-IMP-013, PRD-MOD-010, PRD-MOD-011, PRD-SEC-005 — table list for the records of sections 2 to 7 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -638,13 +597,11 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 - Scoped tables carry Site, Store, business unit and legal-entity columns, with row-level security (access-and-approvals 7.2).
 
 ## 16. Screens
-<!-- deps: PRD-UXP-003, PRD-LIF-014, PRD-ACS-008 — where the import screens sit and what GC-6 adds -->
 
 - Setup › File intake and saved layouts in [ui-blueprint.html](../ui/ui-blueprint.html) holds uploads, saved layouts, staging and review, duplicate control and outcomes. External sales › Earlier-POS daily import (stage 2) and the opening stock pages of Receive Goods (stage 4) use the same components.
 - GC-6 adds to them: the staging grid shows each original cell beside its normalised value, with its origin ([design-language.md](../ui/design-language.md) 10.10); hidden rows and sheets are marked; the validation report of section 8; a historical-reference batch carries the line "Checking and reports only; never moves stock" (`PRD-LIF-014`); restricted fields are masked (`PRD-ACS-008`); an unavailable action names what is missing (`PRD-UXP-003`).
 
 ## 17. Tests on synthetic data
-<!-- deps: PRD-SEC-016, PRD-ACP-018, PRD-IMP-011, PRD-LIF-014, PRD-SEC-017, PRD-PRF-001 — tests and the stage 1 exit checks they serve -->
 
 All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never invent a value"). Tests run in Vitest; database tests against real PostgreSQL through Testcontainers.
 

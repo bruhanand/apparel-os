@@ -4,7 +4,7 @@
 
 Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
-Implements these PRD sections: Organisation, sites and ownership; Merchandise and identifiers; and, from People, access and approvals, the place scope of a role assignment, restricted fields, audit and the approvals these masters need. It is GC-2 in [gaps-before-code.md](../../reports/gaps-before-code.md).
+Implements these PRD sections: Organisation, sites and ownership; Merchandise and identifiers; and, from People, access and approvals, the place scope of a role assignment, restricted fields, audit and the approvals these masters need. It is GC-2 in [gaps-before-code.md](../../history/gaps-before-code.md).
 
 - PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-006`, `PRD-ACS-008`, `PRD-ACS-020`–`PRD-ACS-022`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.02`, `POL-02.07`, `POL-02.08`), 4 (`POL-04.01`–`POL-04.09`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.08`, `POL-10.09`).
@@ -17,7 +17,6 @@ Used by: the access design, [access-and-approvals.md](../access/access-and-appro
 ---
 
 ## 1. What this document fixes
-<!-- deps: PRD-MOD-002, PRD-MOD-008, PRD-MOD-010 — scope of this design: fields, codes, versions, checks and tables of two modules -->
 
 - The fields, codes, versions and checks of the `organisation` module and of the catalogue and parties parts of `merchandise`. Their owners, interfaces and events are in module-map 4.11 and 4.12 and are not repeated.
 - The tables each module owns, by name, key and constraint (section 6). Other columns are left to reviewed migrations.
@@ -301,7 +300,6 @@ Event: `merchandise.agreement-changed` (module-map section 8).
 Names, keys and constraints. Every table has a UUIDv7 primary key. A table marked "+ versions" has a companion table of versions under 2.2, with a date range and an exclusion constraint on approved versions. **Design choice** throughout; columns beyond these are left to reviewed migrations.
 
 ### 6.1 Schema `organisation`
-<!-- deps: PRD-ORG-001, PRD-ORG-004, PRD-ORG-005, PRD-ORG-007, PRD-ORG-012, PRD-ORG-013, PRD-ORG-020, PRD-ORG-021, PRD-MOD-010 — table list for the structure records of section 3 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -321,7 +319,6 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 | `store_default_warehouse` (dated) | — | the target is a warehouse unit; one in force per Store. Other routes wait for V-62 |
 
 ### 6.2 Schema `merchandise`
-<!-- deps: PRD-MER-001, PRD-MER-002, PRD-MER-005, PRD-MER-006, PRD-MER-007, PRD-MER-010, PRD-MER-013, PRD-MER-014, PRD-ORG-006, PRD-ORG-016, PRD-IMP-008, PRD-ACS-008, PRD-SEC-006, POL-04.01, POL-04.03, POL-04.04, POL-02.07 — table list for the catalogue and parties records of sections 4 and 5 -->
 
 | Table | Unique | Other constraints |
 | --- | --- | --- |
@@ -348,7 +345,6 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 - Brand PT files are stage 2 (`merchandise` · PT). Opening-data layouts are GC-6.
 
 ## 8. Screens
-<!-- deps: PRD-UXP-003, PRD-ACS-008, PRD-ORG-020 — where the Setup screens sit and what GC-2 adds to them -->
 
 - The Setup section of [ui-blueprint.html](../ui/ui-blueprint.html) holds these screens: Organisation structure; Geography and groupings; Products; Suppliers and agreements; Agreement; Merchandise tracking profiles; Vocabularies.
 - GC-2 adds three things to them:
