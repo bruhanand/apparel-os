@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
 import type { SignInStep } from '@apparel-os/schemas';
 import { and, eq, inArray } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { LOCK_STEP, lockTable, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session } from '../db/schema.js';
 import { sessionLimitReached } from '../domain/sign-in-rules.js';
-import { readSetting } from './settings.js';
-import { credentialState, pendingSteps, userInForce } from './users.js';
+import { readSetting } from '../queries/settings.js';
+import { credentialState, pendingSteps, userInForce } from '../queries/users.js';
+
+const SESSION = lockTable('access', 'session');
+const OPEN_STATES = ['In force', 'Locked'];
 
 /** A request's session, found and in force or locked (access-and-approvals 3.3, 7.1 step 1). */
 export interface AuthenticatedSession {
@@ -47,7 +50,8 @@ const NOT_SIGNED_IN: AuthenticateResult = { kind: 'not-signed-in' };
  *
  * The limits are the settings of the session's kind in force today (POL-02.18). With none set, no session is kept
  * (fail-safe; code-house-rules 12.14). Only the office kind has a setting yet; a shared POS session needs a registered
- * device (S1-F12, RR-303). The session row is locked for the change, so two requests at once agree.
+ * device (S1-F12, RR-303). The session row is locked through the lock helper as the command's own record, step 1
+ * (code-house-rules 8.2), and read again under the lock, so two requests at once agree.
  */
 export async function authenticateSession(
   context: TransactionContext,
@@ -58,6 +62,13 @@ export async function authenticateSession(
   const today = await context.businessDate();
   // With no timezone, no user has a state in force today, so no session reaches anything (fail-safe).
   if (today.kind === 'not-set') return NOT_SIGNED_IN;
+  const [candidate] = await context.tx
+    .select({ id: session.id })
+    .from(session)
+    .where(and(eq(session.identifierHash, sessionIdentifierHash(identifier)), inArray(session.state, OPEN_STATES)));
+  if (candidate === undefined) return NOT_SIGNED_IN;
+  await context.lock(LOCK_STEP.document, [{ table: SESSION, id: candidate.id, mode: 'exclusive' }]);
+  // Read again under the lock: another request may have ended or locked it meanwhile (code-house-rules 8.1).
   const [found] = await context.tx
     .select({
       id: session.id,
@@ -68,13 +79,7 @@ export async function authenticateSession(
       lastActivityAt: session.lastActivityAt,
     })
     .from(session)
-    .where(
-      and(
-        eq(session.identifierHash, sessionIdentifierHash(identifier)),
-        inArray(session.state, ['In force', 'Locked']),
-      ),
-    )
-    .for('update');
+    .where(and(eq(session.id, candidate.id), inArray(session.state, OPEN_STATES)));
   if (found === undefined) return NOT_SIGNED_IN;
   if (found.kind !== 'office') return NOT_SIGNED_IN;
   const limits = await readSetting(context, 'access.office-session-limits', today.date);
