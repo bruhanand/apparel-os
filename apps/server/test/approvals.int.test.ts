@@ -211,6 +211,55 @@ describe('the reason list (access-and-approvals 9.5; test 19b; POL-02.23, DEC-10
     expect(view?.decidable).toMatchObject({ kind: 'unavailable', code: 'access.no-reason-list-in-force' });
   });
 
+  it('PRD-UXP-003 with only approve reasons in force, the panel offers approve and names the missing reject list', async () => {
+    const approveOnly = await as(admin.id, (c) =>
+      access.prepareApprovalReason(c, adminPreparer, {
+        code: `SYN-APPROVE-ONLY-${String(randomInt(1_000_000))}`,
+        kind: 'approve',
+        text: 'SYNTHETIC approve-only reason',
+        validFrom: today(),
+      }),
+    );
+    if (approveOnly.kind !== 'success') throw new Error('not prepared');
+    expect(
+      await decide(approver, {
+        requestId: approveOnly.answer.requestId,
+        versionId: approveOnly.answer.versionId,
+        outcome: 'approve',
+        reason: { kind: 'free-text', text: 'SYNTHETIC first approve reason' },
+      }),
+    ).toMatchObject({ kind: 'success' });
+    const role = await prepareRole();
+    const view = await as(approver.id, (c) =>
+      access.readApprovalRequest(c, { kind: 'user', id: approver.id }, role.requestId),
+    );
+    expect(view?.decidable).toEqual({
+      kind: 'available',
+      reason: 'listed',
+      outcomes: ['approve'],
+      missing: [{ kind: 'reason-list', reasonKind: 'reject' }],
+    });
+    // A reason-list change takes free text, so both outcomes are open whatever list is in force (DEC-104).
+    const another = await as(admin.id, (c) =>
+      access.prepareApprovalReason(c, adminPreparer, {
+        code: `SYN-REJECT-PENDING-${String(randomInt(1_000_000))}`,
+        kind: 'reject',
+        text: 'SYNTHETIC reject reason',
+        validFrom: today(),
+      }),
+    );
+    if (another.kind !== 'success') throw new Error('not prepared');
+    const listChange = await as(approver.id, (c) =>
+      access.readApprovalRequest(c, { kind: 'user', id: approver.id }, another.answer.requestId),
+    );
+    expect(listChange?.decidable).toEqual({
+      kind: 'available',
+      reason: 'free-text',
+      outcomes: ['approve', 'reject'],
+      missing: [],
+    });
+  });
+
   it('POL-02.23 DEC-104 decides the first list with free text; a listed reason is refused there', async () => {
     const prepared = await as(admin.id, (c) =>
       access.prepareApprovalReason(c, adminPreparer, {
@@ -654,5 +703,57 @@ describe('users (access-and-approvals 2.1, 3.2, 4.3; tests 19f, 19g; DEC-112, DE
       ),
     );
     expect(state.rows).toEqual([{ state: 'Disabled' }]);
+  });
+
+  // Last in the file: it disables the approver every test above relies on.
+  it('DEC-112 S1-F01-AT10 changing or disabling the first approver takes effect only when a different person approves it', async () => {
+    const list = await reasonList();
+    // The Admin also holds approve on users, so the refusal below is for preparing it, not for lacking the permission.
+    await grantSynthetic(database, { kind: 'user', id: admin.id }, [{ recordType: 'access.user', action: 'approve' }]);
+    const prepared = await as(admin.id, (c) =>
+      access.prepareUserVersion(c, adminPreparer, approver.id, {
+        displayName: `${approver.displayName} (changed)`,
+        personas: [],
+        state: 'Disabled',
+      }),
+    );
+    if (prepared.kind !== 'success') throw new Error(`not prepared: ${prepared.refusal.code}`);
+    const input = {
+      requestId: prepared.answer.requestId,
+      versionId: prepared.answer.versionId,
+      outcome: 'approve' as const,
+      reason: { kind: 'listed' as const, reasonId: list.approve },
+    };
+    expect(await decide(admin, input)).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.self-preparation', missing: [{ kind: 'preparer', userId: admin.id }] },
+    });
+    const unchanged = await asOwner((c) =>
+      c.query<{ state: string; name: string }>(
+        `select state, display_name as name from access.app_user_version
+         where app_user_id = $1 and decision = 'Approved' and valid_during @> current_date`,
+        [approver.id],
+      ),
+    );
+    expect(unchanged.rows).toEqual([{ state: 'Active', name: approver.displayName }]);
+    expect(await decide(secondApprover, input)).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
+    const changed = await asOwner((c) =>
+      c.query<{ state: string; name: string }>(
+        `select state, display_name as name from access.app_user_version
+         where app_user_id = $1 and decision = 'Approved' and valid_during @> current_date`,
+        [approver.id],
+      ),
+    );
+    expect(changed.rows).toEqual([{ state: 'Disabled', name: `${approver.displayName} (changed)` }]);
+    // Disabled, the first approver decides nothing more (access-and-approvals 2.1, 9.3).
+    const role = await prepareRole();
+    expect(
+      await decide(approver, {
+        requestId: role.requestId,
+        versionId: role.versionId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId: list.approve },
+      }),
+    ).toMatchObject({ kind: 'refusal', refusal: { code: 'access.not-eligible', missing: [{ kind: 'user-state' }] } });
   });
 });

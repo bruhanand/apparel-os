@@ -75,9 +75,9 @@
     {
       "table": "access.app_user",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "access-and-approvals 2.1, 13.1; code-house-rules 6.3",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "access-and-approvals 2.1, 13.1; code-house-rules 6.3, 7.1, 8.2",
       "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
     },
     {
@@ -107,17 +107,17 @@
     {
       "table": "access.session",
       "class": "unscoped",
-      "marks": [],
+      "marks": ["locked"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
-      "design": "access-and-approvals 3.3, 13.1; code-house-rules 6.3",
+      "design": "access-and-approvals 3.3, 13.1; code-house-rules 6.3, 8.2",
       "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
     },
     {
       "table": "access.service_identity",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "access-and-approvals 2.3, 13.1; code-house-rules 6.3",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "access-and-approvals 2.3, 13.1; code-house-rules 6.3, 7.1, 8.2",
       "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
     },
     {

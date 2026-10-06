@@ -16,7 +16,7 @@ import {
 } from '../../../kernel/index.js';
 import { AUDIT, type AuditInterface } from '../../audit/index.js';
 import type { AccessInterface } from '../access.js';
-import { authenticateSession } from '../queries/authenticate.js';
+import { authenticateSession } from '../commands/authenticate-session.js';
 import { ACCESS } from '../tokens.js';
 import { sessionCookieOf } from './session-cookie.js';
 

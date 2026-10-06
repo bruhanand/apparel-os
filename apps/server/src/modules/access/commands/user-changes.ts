@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { PersonaId, Secret, UserVersionDraft } from '@apparel-os/schemas';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { LOCK_STEP, lockTable, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
+import { lockTable, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { appUser, appUserVersion, appUserVersionChange, passwordCredential, personaHeld } from '../db/schema.js';
 import { hashPassword } from '../domain/password-hash.js';
@@ -9,6 +9,7 @@ import { meetsPasswordRules } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { findUser, findUserByLogin } from '../queries/users.js';
 import {
+  lockUnlessHeld,
   rangeOf,
   refusal,
   today,
@@ -17,6 +18,7 @@ import {
   type Prepared,
   type Preparer,
 } from './access-changes.js';
+import { identityTarget } from './authority.js';
 import { requestApproval } from './request-approval.js';
 import { revokeSessions } from './sessions.js';
 
@@ -188,6 +190,19 @@ export class UserChanges {
     return [{ table: USER_VERSION, id: versionId, mode: 'exclusive' }];
   }
 
+  /**
+   * The locks of a user version's effect run on its own: the user's identity row exclusively at step 0, since its
+   * versions change only under it (code-house-rules 8.1, 8.2 "Authority first"; RR-325), and the version at step 1.
+   */
+  private async lockUserVersion(context: TransactionContext, options: EffectOptions, versionId: string) {
+    if (options.locksHeld === true) return;
+    const userId = await this.userOfVersion(context, versionId);
+    await lockUnlessHeld(context, options, {
+      authority: userId === undefined ? [] : [identityTarget({ kind: 'user', id: userId }, 'exclusive')],
+      document: this.userVersionTargets(versionId),
+    });
+  }
+
   /** The user a version is of. */
   async userOfVersion(context: TransactionContext, versionId: string): Promise<string | undefined> {
     const [row] = await context.tx
@@ -222,7 +237,7 @@ export class UserChanges {
   ): Promise<Prepared<{ userId: string; revokedSessionIds: string[] }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    if (options.locksHeld !== true) await context.lock(LOCK_STEP.document, this.userVersionTargets(versionId));
+    await this.lockUserVersion(context, options, versionId);
     const [version] = await context.tx.select().from(appUserVersion).where(eq(appUserVersion.id, versionId));
     if (version === undefined) return refusal('not-found', 'access.user-not-found');
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -303,7 +318,7 @@ export class UserChanges {
     versionId: string,
     options: EffectOptions = {},
   ): Promise<Prepared<{ userId: string; firstVersionRejected: boolean }>> {
-    if (options.locksHeld !== true) await context.lock(LOCK_STEP.document, this.userVersionTargets(versionId));
+    await this.lockUserVersion(context, options, versionId);
     const [version] = await context.tx.select().from(appUserVersion).where(eq(appUserVersion.id, versionId));
     if (version === undefined) return refusal('not-found', 'access.user-not-found');
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');

@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
+import { databaseFailureOf, sqlStateOf } from '../command-runner/command-errors.js';
 import { listDirectory, type DirectoryEntry } from './directory.js';
 import { migrateDatabase } from './migration-runner.js';
 import { migrationSetFolder } from './migration-set.js';
@@ -40,7 +41,17 @@ export async function migrateAll(options: MigrateAllOptions): Promise<DirectoryE
         onApplied: (fileName) => options.onApplied?.(`Organisation ${organisation.organisationCode}`, fileName),
       });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      // A database's own words never go into the message, only its SQLSTATE (code-house-rules 12.11); the
+      // runner's own wrapper, naming the file that failed, is kept.
+      const direct =
+        error instanceof Error &&
+        databaseFailureOf(error) !== undefined &&
+        (error.cause === undefined || 'query' in error);
+      const reason = !(error instanceof Error)
+        ? String(error)
+        : direct
+          ? `a database error, SQLSTATE ${String(sqlStateOf(error))}`
+          : error.message;
       throw new Error(
         `Organisation ${organisation.organisationCode}: ${reason}. No Organisation after it in code order was migrated`,
         { cause: error },

@@ -14,6 +14,7 @@ import {
   lockTable,
   sqlStateOf,
   type CommandRefusal,
+  type EventSubject,
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
@@ -34,6 +35,7 @@ import {
 } from '../db/schema.js';
 import { scopeKeyOf } from '../domain/scope.js';
 import { assignmentChanged } from '../events.js';
+import { assignmentTarget } from './authority.js';
 import { rebuildGrants } from './rebuild-grants.js';
 import { requestApproval } from './request-approval.js';
 
@@ -67,14 +69,14 @@ export interface Decider {
 }
 
 /**
- * How an effect runs. `locksHeld`: Decide has locked the effect's rows already, with its own request row, in one call
- * of the lock helper (code-house-rules 8.2), so the effect takes no lock of its own. Otherwise it locks them itself.
+ * How an effect runs. `locksHeld`: Decide has locked the effect's rows already, with its own rows, one call of the
+ * lock helper per step (code-house-rules 8.2), so the effect takes no lock of its own. Otherwise it locks them itself:
+ * the authority rows it changes at step 0, its own record rows at step 1.
  */
 export interface EffectOptions {
   readonly locksHeld?: boolean;
 }
 
-const ROLE_ASSIGNMENT = lockTable('access', 'role_assignment');
 const ROLE_VERSION = lockTable('access', 'role_version');
 const WITHDRAWAL_VERSION = lockTable('access', 'role_assignment_withdrawal_version');
 const EXCLUSION_VIOLATION = '23P01';
@@ -103,12 +105,15 @@ export function rangeOf(validFrom: string, validTo: string | undefined): string 
   return `[${validFrom},${validTo ?? ''})`;
 }
 
-async function lockUnlessHeld(
+/** The locks of an effect run on its own: authority rows at step 0, record rows at step 1 (code-house-rules 8.2). */
+export async function lockUnlessHeld(
   context: TransactionContext,
   options: EffectOptions,
-  targets: readonly LockTarget[],
+  targets: { readonly authority?: readonly LockTarget[]; readonly document?: readonly LockTarget[] },
 ): Promise<void> {
-  if (options.locksHeld !== true) await context.lock(LOCK_STEP.document, targets);
+  if (options.locksHeld === true) return;
+  if ((targets.authority ?? []).length > 0) await context.lock(LOCK_STEP.authority, targets.authority ?? []);
+  if ((targets.document ?? []).length > 0) await context.lock(LOCK_STEP.document, targets.document ?? []);
 }
 
 export class AccessChanges {
@@ -323,7 +328,7 @@ export class AccessChanges {
     await this.audit.record(context, {
       actor: { kind: 'user', id: preparer.userId },
       roleAssignmentId: preparer.roleAssignmentId,
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'prepare-role-assignment',
       changes: [
         { kind: 'value', field: 'actor', before: null, after: draft.actor },
@@ -439,18 +444,23 @@ export class AccessChanges {
     return [{ table: ROLE_VERSION, id: versionId, mode: 'exclusive' }];
   }
 
-  /** The rows a decision on an assignment locks at step 1. */
+  /**
+   * The rows a decision on an assignment locks: the assignment, an authority row, exclusively at step 0
+   * (code-house-rules 8.2 "Authority first"; RR-325).
+   */
   assignmentTargets(assignmentId: string): LockTarget[] {
-    return [{ table: ROLE_ASSIGNMENT, id: assignmentId, mode: 'exclusive' }];
+    return [assignmentTarget(assignmentId, 'exclusive')];
   }
 
-  /** The rows a decision on a withdrawal version locks at step 1: the assignment as its own record, and the version. */
-  async withdrawalTargets(context: TransactionContext, withdrawalVersionId: string): Promise<LockTarget[]> {
+  /** The authority rows a decision on a withdrawal version locks at step 0: the assignment it withdraws. */
+  async withdrawalAuthorityTargets(context: TransactionContext, withdrawalVersionId: string): Promise<LockTarget[]> {
     const target = await this.withdrawalTarget(context, withdrawalVersionId);
-    return [
-      ...(target === undefined ? [] : this.assignmentTargets(target.assignmentId)),
-      { table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' },
-    ];
+    return target === undefined ? [] : this.assignmentTargets(target.assignmentId);
+  }
+
+  /** The rows a decision on a withdrawal version locks at step 1: the version. */
+  withdrawalTargets(withdrawalVersionId: string): LockTarget[] {
+    return [{ table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' }];
   }
 
   /**
@@ -467,7 +477,7 @@ export class AccessChanges {
   ): Promise<Prepared<{ roleId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    await lockUnlessHeld(context, options, this.roleVersionTargets(versionId));
+    await lockUnlessHeld(context, options, { document: this.roleVersionTargets(versionId) });
     const [version] = await context.tx
       .select({
         roleId: roleVersion.roleId,
@@ -510,7 +520,11 @@ export class AccessChanges {
       .where(and(eq(roleAssignment.roleId, version.roleId), eq(roleAssignment.decision, 'Approved')));
     const actorIds = holders.map((holder) => holder.actorId);
     await this.rebuildGrants(context, actorIds);
-    await this.publishGrantsChanged(context, version.roleId, actorIds);
+    await this.publishGrantsChanged(
+      context,
+      { module: 'access', recordType: 'access.role', recordId: version.roleId, versionId },
+      actorIds,
+    );
     await this.recordEffect(context, decider, {
       record: { module: 'access', type: 'role', id: version.roleId, versionId },
       operation: 'approve-role-version',
@@ -525,7 +539,7 @@ export class AccessChanges {
     versionId: string,
     options: EffectOptions = {},
   ): Promise<Prepared<{ roleId: string }>> {
-    await lockUnlessHeld(context, options, this.roleVersionTargets(versionId));
+    await lockUnlessHeld(context, options, { document: this.roleVersionTargets(versionId) });
     const [version] = await context.tx.select().from(roleVersion).where(eq(roleVersion.id, versionId));
     if (version === undefined) return refusal('not-found', 'access.role-not-found');
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -555,7 +569,7 @@ export class AccessChanges {
   ): Promise<Prepared<{ assignmentId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    await lockUnlessHeld(context, options, this.assignmentTargets(assignmentId));
+    await lockUnlessHeld(context, options, { authority: this.assignmentTargets(assignmentId) });
     const found = await this.assignmentRow(context, assignmentId);
     if (found === undefined) return refusal('not-found', 'access.assignment-not-found');
     if (found.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -577,7 +591,10 @@ export class AccessChanges {
     await this.recordEffect(
       context,
       decider,
-      { record: { module: 'access', type: 'role_assignment', id: assignmentId }, operation: 'approve-role-assignment' },
+      {
+        record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
+        operation: 'approve-role-assignment',
+      },
       found.userId,
     );
     return { kind: 'success', answer: { assignmentId } };
@@ -590,14 +607,14 @@ export class AccessChanges {
     assignmentId: string,
     options: EffectOptions = {},
   ): Promise<Prepared<{ assignmentId: string }>> {
-    await lockUnlessHeld(context, options, this.assignmentTargets(assignmentId));
+    await lockUnlessHeld(context, options, { authority: this.assignmentTargets(assignmentId) });
     const found = await this.assignmentRow(context, assignmentId);
     if (found === undefined) return refusal('not-found', 'access.assignment-not-found');
     if (found.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
     await context.tx.update(roleAssignment).set({ decision: 'Rejected' }).where(eq(roleAssignment.id, assignmentId));
     await this.audit.record(context, {
       ...this.auditActor(decider),
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'reject-role-assignment',
       changes: [{ kind: 'value', field: 'decision', before: 'Awaiting approval', after: 'Rejected' }],
       source: { kind: 'screen' },
@@ -622,7 +639,10 @@ export class AccessChanges {
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     const target = await this.withdrawalTarget(context, withdrawalVersionId);
     if (target === undefined) return refusal('not-found', 'access.assignment-not-found');
-    await lockUnlessHeld(context, options, await this.withdrawalTargets(context, withdrawalVersionId));
+    await lockUnlessHeld(context, options, {
+      authority: this.assignmentTargets(target.assignmentId),
+      document: this.withdrawalTargets(withdrawalVersionId),
+    });
     const [version] = await context.tx
       .select({ decision: roleAssignmentWithdrawalVersion.decision })
       .from(roleAssignmentWithdrawalVersion)
@@ -665,7 +685,7 @@ export class AccessChanges {
   ): Promise<Prepared<{ assignmentId: string }>> {
     const target = await this.withdrawalTarget(context, withdrawalVersionId);
     if (target === undefined) return refusal('not-found', 'access.assignment-not-found');
-    await lockUnlessHeld(context, options, [{ table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, { document: this.withdrawalTargets(withdrawalVersionId) });
     const [version] = await context.tx
       .select({ decision: roleAssignmentWithdrawalVersion.decision })
       .from(roleAssignmentWithdrawalVersion)
@@ -728,7 +748,7 @@ export class AccessChanges {
       .where(eq(roleAssignment.id, assignmentId));
     await this.audit.record(context, {
       ...this.auditActor(decider),
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'withdraw-role-assignment-before-approval',
       changes: [
         { kind: 'value', field: 'decision', before: 'Awaiting approval', after: 'Withdrawn' },
@@ -745,10 +765,20 @@ export class AccessChanges {
     return rebuildGrants(context, this.registry, actorIds);
   }
 
-  /** `access.assignment-changed`: the actors whose grants were rebuilt (module-map section 8). */
-  private async publishGrantsChanged(context: TransactionContext, recordId: string, actorIds: readonly string[]) {
+  /**
+   * `access.assignment-changed`: the actors whose grants were rebuilt (module-map section 8). The subject is the
+   * record that changed them: the role assignment, or the role and its version taking effect.
+   */
+  private async publishGrantsChanged(
+    context: TransactionContext,
+    subject: string | EventSubject,
+    actorIds: readonly string[],
+  ) {
     await context.publish(assignmentChanged, {
-      subject: { module: 'access', recordType: 'access.role_assignment', recordId },
+      subject:
+        typeof subject === 'string'
+          ? { module: 'access', recordType: 'access.role_assignment', recordId: subject }
+          : subject,
       payload: { actorIds: [...actorIds].sort() },
     });
   }

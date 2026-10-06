@@ -29,6 +29,8 @@ interface RegisterEntry {
 }
 
 const CHECKED_CLASSES = ['unscoped', 'scoped'];
+/** UPDATE on the identifier column only: what a locked append-only table grants for row locks (code-house-rules 7.1). */
+const LOCK_ONLY = 'UPDATE (id)';
 const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned', 'versions', 'projection', 'locked'];
 
 /** The functions a design names for the runtime role to execute, by set (code-house-rules 5.2). */
@@ -141,20 +143,34 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        order by 1, 2, 3`,
     );
     const expected = register(set).flatMap((entry) =>
-      [...entry.runtime].sort().map((privilege) => ({ name: entry.table, grantee: 'aos_runtime', privilege })),
+      [...entry.runtime]
+        .filter((privilege) => privilege !== LOCK_ONLY)
+        .sort()
+        .map((privilege) => ({ name: entry.table, grantee: 'aos_runtime', privilege })),
     );
     const byKey = (a: { name: string; privilege: string }, b: { name: string; privilege: string }): number =>
       `${a.name} ${a.privilege}`.localeCompare(`${b.name} ${b.privilege}`);
     expect(grants.sort(byKey)).toEqual(expected.sort(byKey));
 
-    const columnGrants = await read<{ name: string }>(
+    // The one column grant: UPDATE on the identifier of an append-only table that is locked, so a row lock is
+    // possible while every UPDATE is still refused by the trigger (code-house-rules 7.1; RR-325).
+    const columnGrants = await read<{ name: string; grantee: string; privilege: string }>(
       databases[set],
-      `select n.nspname || '.' || c.relname || '.' || a.attname as name
+      `select n.nspname || '.' || c.relname || '.' || a.attname as name, coalesce(r.rolname, 'PUBLIC') as grantee,
+              x.privilege_type as privilege
        from pg_catalog.pg_attribute a join pg_catalog.pg_class c on c.oid = a.attrelid
        join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-       where a.attacl is not null and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'`,
+       cross join lateral pg_catalog.aclexplode(a.attacl) x
+       left join pg_catalog.pg_roles r on r.oid = x.grantee
+       where a.attacl is not null and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
+       order by 1, 2, 3`,
     );
-    expect(columnGrants).toEqual([]);
+    expect(columnGrants).toEqual(
+      register(set)
+        .filter((entry) => entry.runtime.includes(LOCK_ONLY))
+        .map((entry) => ({ name: `${entry.table}.id`, grantee: 'aos_runtime', privilege: 'UPDATE' }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
   });
 
   it('PRD-MOD-011 guards every append-only table with the refuse_change triggers and gives the runtime role no DELETE or UPDATE', async () => {
@@ -396,7 +412,11 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
 
   it('code-house-rules 5.2, 8.2 a locked table grants the runtime role the UPDATE every row lock needs', () => {
     for (const entry of register(set).filter((each) => each.marks.includes('locked'))) {
-      expect(entry.runtime, entry.table).toContain('UPDATE');
+      // An append-only table gets UPDATE on its identifier only, which 7.1 allows a locked table; any other the whole.
+      expect(entry.runtime, entry.table).toContain(entry.marks.includes('append-only') ? LOCK_ONLY : 'UPDATE');
+    }
+    for (const entry of register(set).filter((each) => each.runtime.includes(LOCK_ONLY))) {
+      expect(entry.marks, entry.table).toEqual(expect.arrayContaining(['append-only', 'locked']));
     }
   });
 

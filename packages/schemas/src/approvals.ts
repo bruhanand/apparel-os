@@ -69,12 +69,18 @@ const shownReasonSchema = z.discriminatedUnion('kind', [
 
 /**
  * Whether the reader may decide the request now, or what is missing (PRD-UXP-003; spec section 6 "Approval panel"):
- * `available` with the kind of reason the decision takes; `unavailable` with the refusal code and what is missing,
- * such as no reason list in force, not eligible or self-preparation. A fresh authenticator code is asked at the
- * decision itself (access-and-approvals 3.3).
+ * `available` with the kind of reason the decision takes and the outcomes open now, each needing a reason of its own
+ * kind in force (POL-02.23, DEC-104), with what is missing for an outcome that is not; `unavailable` with the refusal
+ * code and what is missing, such as no reason list in force, not eligible or self-preparation. A fresh authenticator
+ * code is asked at the decision itself (access-and-approvals 3.3).
  */
 export const decidableSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('available'), reason: z.enum(['listed', 'free-text']) }),
+  z.strictObject({
+    kind: z.literal('available'),
+    reason: z.enum(['listed', 'free-text']),
+    outcomes: z.array(z.enum(['approve', 'reject'])).min(1),
+    missing: z.array(missingItemSchema),
+  }),
   z.strictObject({ kind: z.literal('unavailable'), code: errorCodeSchema, missing: z.array(missingItemSchema) }),
 ]);
 

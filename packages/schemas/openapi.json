@@ -5984,11 +5984,42 @@
                                 "listed",
                                 "free-text"
                               ]
+                            },
+                            "outcomes": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "approve",
+                                  "reject"
+                                ]
+                              }
+                            },
+                            "missing": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
                             }
                           },
                           "required": [
                             "kind",
-                            "reason"
+                            "reason",
+                            "outcomes",
+                            "missing"
                           ],
                           "additionalProperties": false
                         },

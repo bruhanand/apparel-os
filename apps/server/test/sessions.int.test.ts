@@ -181,6 +181,24 @@ describe('session limits (access-and-approvals 3.3; test 4)', () => {
   });
 });
 
+describe('requests at once on one session (access-and-approvals 3.3; code-house-rules 8.2)', () => {
+  it('PRD-INT-003 PRD-ACS-017 requests arriving together past the idle limit lock the session once, with one record', async () => {
+    const user = await enrolledUser('TOGETHER');
+    const cookie = await signedIn(user);
+    clock.advance(SYNTHETIC_LIMITS.idleLockSeconds + 60);
+    // Authenticate locks the session row through the lock helper before it rechecks and writes, so they agree.
+    const calls = await Promise.all(Array.from({ length: 5 }, () => get('/api/access/session', cookie)));
+    expect(calls.map((call) => errorOf(call).code)).toEqual(Array(5).fill('access.session-locked'));
+    expect(await sessionsOf(user.id)).toEqual([{ state: 'Locked' }]);
+    const records = await rows<{ kind: string }>(
+      orgA.database,
+      `select kind from audit.access_record where user_id = $1 and kind = 'session-locked'`,
+      [user.id],
+    );
+    expect(records).toHaveLength(1);
+  });
+});
+
 describe('the absolute limit (access-and-approvals 3.3; test 4)', () => {
   it('PRD-ACS-017 POL-02.18 ends a session at its absolute limit, however active, and records the end', async () => {
     const user = await enrolledUser('ABSOLUTE');

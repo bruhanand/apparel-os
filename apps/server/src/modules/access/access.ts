@@ -17,7 +17,7 @@ import {
   type Secret,
   type UserVersionDraft,
 } from '@apparel-os/schemas';
-import { CommandDefect, type TransactionContext } from '../../kernel/index.js';
+import { CommandDefect, type CommandRefusal, type LockTarget, type TransactionContext } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import {
   AccessChanges,
@@ -27,6 +27,7 @@ import {
   type Preparer,
 } from './commands/access-changes.js';
 import { ApprovalSettingsChanges } from './commands/approval-settings.js';
+import { holdAuthority, type AuthorityActor } from './commands/authority.js';
 import {
   Approvals,
   type Decidable,
@@ -71,6 +72,19 @@ export interface AccessInterface {
   ): Promise<AuthenticatedServiceIdentity | undefined>;
   /** Authorise: the one assignment that grants the action, or what is missing (7.1 step 3). */
   authorise(context: TransactionContext, request: AuthoriseRequest): Promise<Authorisation>;
+  /**
+   * Holds the authority a command relies on (code-house-rules 8.2 "Authority first"; 7.1 step 4; RR-325): locks the
+   * actor and the assignment Authorise returned in shared mode at step 0, with any authority rows the command changes,
+   * then rechecks under the locks that the actor is Active and the same assignment still grants the action. Answers
+   * the refusal, or undefined while the authority holds. Called first in the command's transaction.
+   */
+  holdAuthority(
+    context: TransactionContext,
+    actor: AuthorityActor,
+    roleAssignmentId: string,
+    need: Omit<AuthoriseRequest, 'actorId'>,
+    changed?: readonly LockTarget[],
+  ): Promise<CommandRefusal | undefined>;
   /** Which of a record's field classes the assignment Authorise used grants for a use; the rest are masked (6). */
   restrictFields(
     context: TransactionContext,
@@ -277,6 +291,16 @@ export class Access implements AccessInterface {
 
   authorise(context: TransactionContext, request: AuthoriseRequest) {
     return authorise(context, this.registry, request);
+  }
+
+  holdAuthority(
+    context: TransactionContext,
+    actor: AuthorityActor,
+    roleAssignmentId: string,
+    need: Omit<AuthoriseRequest, 'actorId'>,
+    changed: readonly LockTarget[] = [],
+  ) {
+    return holdAuthority(context, this.registry, actor, roleAssignmentId, need, changed);
   }
 
   restrictFields(

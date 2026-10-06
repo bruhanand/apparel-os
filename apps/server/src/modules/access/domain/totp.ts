@@ -8,7 +8,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /** Six digits, a 30-second step, HMAC-SHA-1 (RFC 6238 section 4; RFC 4226 section 5.3). */
 export const TOTP_DIGITS = 6;
 export const TOTP_PERIOD_SECONDS = 30;
-/** The steps either side of now whose code is accepted (RFC 6238 section 5.2). */
+/**
+ * The steps either side of now whose code is accepted: RFC 6238 section 5.2 recommends at most one. A technical value of
+ * the standard, not a KDPS value (access-and-approvals 3.1, "The authenticator code as built").
+ */
 const DRIFT_STEPS = 1;
 /** The size of a new authenticator secret: 160 bits, the length of an HMAC-SHA-1 key (RFC 4226 section 4). */
 export const TOTP_SECRET_BYTES = 20;

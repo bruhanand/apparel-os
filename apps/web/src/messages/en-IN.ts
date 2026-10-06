@@ -451,6 +451,10 @@ export const englishIndia = {
   'approval.outcome': 'Decision',
   'approval.outcome.approve': 'Approve',
   'approval.outcome.reject': 'Reject',
+  'approval.outcome-unavailable.approve':
+    'Approve isn’t available: no approve reason is in force yet. Approve the reason list first.',
+  'approval.outcome-unavailable.reject':
+    'Reject isn’t available: no reject reason is in force yet. Approve the reason list first.',
   'approval.reason': 'Reason',
   'approval.reason.choose': 'Choose a reason',
   'approval.reason.option': '{code} · {text}',

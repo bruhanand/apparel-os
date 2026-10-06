@@ -8,7 +8,7 @@ import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
 import { matchingStep } from '../domain/totp.js';
-import { sessionIdentifierHash } from '../queries/authenticate.js';
+import { sessionIdentifierHash } from './authenticate-session.js';
 import { readSetting } from '../queries/settings.js';
 import { attemptSlowed } from '../queries/throttling.js';
 import { takeStep } from './take-step.js';

@@ -254,16 +254,19 @@ describe('a database failure during Decide (spec section 10; S1-F01-AT15)', () =
       [grantee.id],
     );
     expect(permissionChanges.length).toBeGreaterThan(0);
-    // The history of the assignment and of the request keeps the reason the approver gave (PRD-ACS-013;
-    // numbering-and-audit 4.2 "Reason"; spec section 5 step 7).
-    const reasons = await rows<{ operation: string; reason: string | null }>(
-      `select operation, reason from audit.audit_record
-       where record_id = any($1::uuid[]) and operation in ('approve-role-assignment', 'decide-approval-request') order by 1`,
+    // The history of the assignment and of the request keeps the reason the approver gave and the version decided:
+    // an assignment is its own version (PRD-ACS-013; numbering-and-audit 4.2 "Reason"; code-house-rules 7.3; spec
+    // section 5 step 7).
+    const reasons = await rows<{ operation: string; reason: string | null; version: string | null }>(
+      `select operation, reason, record_version_id as version from audit.audit_record
+       where record_id = any($1::uuid[])
+         and operation in ('prepare-role-assignment', 'approve-role-assignment', 'decide-approval-request') order by 1`,
       [[requestId, assignmentId]],
     );
     expect(reasons).toEqual([
-      { operation: 'approve-role-assignment', reason: 'SYNTHETIC approve reason' },
-      { operation: 'decide-approval-request', reason: 'SYNTHETIC approve reason' },
+      { operation: 'approve-role-assignment', reason: 'SYNTHETIC approve reason', version: assignmentId },
+      { operation: 'decide-approval-request', reason: 'SYNTHETIC approve reason', version: assignmentId },
+      { operation: 'prepare-role-assignment', reason: null, version: assignmentId },
     ]);
   });
 });

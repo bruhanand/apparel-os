@@ -169,7 +169,7 @@ async function cookieOf(user: Enrolled): Promise<string> {
     },
     { key: null },
   );
-  expect(call.status).toBe(200);
+  expect(call.status, JSON.stringify(call.body)).toBe(200);
   const cookie = (call.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
   cookies.set(user.id, cookie);
   return cookie;
@@ -177,7 +177,7 @@ async function cookieOf(user: Enrolled): Promise<string> {
 
 async function myWork(user: Enrolled) {
   const call = await get('/api/inbox/my-work', await cookieOf(user));
-  expect(call.status).toBe(200);
+  expect(call.status, JSON.stringify(call.body)).toBe(200);
   return myWorkSchema.parse(call.body).items;
 }
 
@@ -309,5 +309,60 @@ describe('the approval journey (access-and-approvals 9, 11; test 20; S1-F01-AT13
     const late = await post(path, { ...body, totpCode: freshCode(approver) }, { cookie: await cookieOf(approver) });
     expect(late.status).toBe(422);
     expect(errorEnvelopeSchema.parse(late.body).error.code).toBe('access.approval-not-open');
+  });
+});
+
+describe('the order of My work (access-and-approvals 11.2; test 20; S1-F01-AT13)', () => {
+  it('PRD-ACS-009 PRD-MOD-015 orders by due time, then exposure largest first, Unknown above known, through the API', async () => {
+    const reader = (await writeSyntheticUser(database, world.organisations[0].code, keys, {
+      label: 'ORDER',
+      enrolled: true,
+    })) as Enrolled;
+    // SYNTHETIC tasks named to the reader, written as the owner, since no routing or valued document exists yet (RR-058).
+    const soon = new Date(Date.now() + 3_600_000);
+    const later = new Date(Date.now() + 7_200_000);
+    const items: { label: string; dueAt: Date | null; exposure: 'none' | 'unknown' | number }[] = [
+      { label: 'no-due-none', dueAt: null, exposure: 'none' },
+      { label: 'later-known-500', dueAt: later, exposure: 50_000 },
+      { label: 'no-due-known-100', dueAt: null, exposure: 10_000 },
+      { label: 'later-unknown', dueAt: later, exposure: 'unknown' },
+      { label: 'soon-none', dueAt: soon, exposure: 'none' },
+      { label: 'no-due-unknown', dueAt: null, exposure: 'unknown' },
+      { label: 'later-known-900', dueAt: later, exposure: 90_000 },
+    ];
+    const labels = new Map<string, string>();
+    for (const item of items) {
+      const id = uuidv7();
+      labels.set(id, item.label);
+      await owner(
+        `insert into inbox.work_item (id, kind, owner_module, owner_record_type, owner_record_id, owner_version_id,
+           state, open, due_at, exposure_kind, exposure_amount)
+         values ($1, 'task', 'syn', 'syn.task', $2, $3, 'Open', true, $4, $5, $6)`,
+        [
+          id,
+          uuidv7(),
+          uuidv7(),
+          item.dueAt,
+          typeof item.exposure === 'number' ? 'known' : item.exposure,
+          typeof item.exposure === 'number' ? item.exposure : null,
+        ],
+      );
+      await owner('insert into inbox.work_item_actor (id, work_item_id, user_id) values ($1, $2, $3)', [
+        uuidv7(),
+        id,
+        reader.id,
+      ]);
+    }
+    const listed = await myWork(reader);
+    expect(listed.map((item) => labels.get(item.id))).toEqual([
+      'soon-none',
+      'later-unknown',
+      'later-known-900',
+      'later-known-500',
+      'no-due-unknown',
+      'no-due-known-100',
+      'no-due-none',
+    ]);
+    expect(listed[1]?.exposure).toEqual({ kind: 'unknown' });
   });
 });

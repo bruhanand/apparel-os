@@ -83,16 +83,22 @@ const decisionFormSchema = (reason: 'listed' | 'free-text') =>
   });
 type DecisionForm = z.input<ReturnType<typeof decisionFormSchema>>;
 
-/** The decision form: outcome, a reason of that outcome's kind or free text, a comment, a fresh code. */
+/**
+ * The decision form: outcome, a reason of that outcome's kind or free text, a comment, a fresh code. Only the
+ * outcomes the server says are open can be chosen; one with no reason of its kind in force is shown disabled, with
+ * what it lacks (POL-02.23; PRD-UXP-003).
+ */
 function DecisionFields({
   view,
   reasonKind,
+  outcomes,
   reasons,
   submission,
   onDecide,
 }: {
   view: ApprovalRequestView;
   reasonKind: 'listed' | 'free-text';
+  outcomes: readonly ('approve' | 'reject')[];
   reasons: readonly Reason[];
   submission: SubmissionState;
   onDecide: (body: DecisionRequest) => void;
@@ -100,7 +106,7 @@ function DecisionFields({
   const form = useForm<DecisionForm>({
     resolver: zodResolver(decisionFormSchema(reasonKind)),
     mode: 'onBlur',
-    defaultValues: { outcome: 'approve', reasonId: '', text: '', comment: '', totpCode: '' },
+    defaultValues: { outcome: outcomes[0] ?? 'approve', reasonId: '', text: '', comment: '', totpCode: '' },
   });
   const { session } = useSession();
   // A code is used once; it is cleared after every attempt and when the session locks (PRD-SEC-006; 3.3).
@@ -135,13 +141,20 @@ function DecisionFields({
       <fieldset className="flex flex-wrap gap-4">
         <legend className="text-body-sm font-semibold">{t('approval.outcome')}</legend>
         <label className="flex items-center gap-2">
-          <input type="radio" value="approve" {...form.register('outcome')} />
+          <input type="radio" value="approve" disabled={!outcomes.includes('approve')} {...form.register('outcome')} />
           {t('approval.outcome.approve')}
         </label>
         <label className="flex items-center gap-2">
-          <input type="radio" value="reject" {...form.register('outcome')} />
+          <input type="radio" value="reject" disabled={!outcomes.includes('reject')} {...form.register('outcome')} />
           {t('approval.outcome.reject')}
         </label>
+        {(['approve', 'reject'] as const)
+          .filter((each) => !outcomes.includes(each))
+          .map((each) => (
+            <p key={each} className="w-full text-body-sm text-text-2">
+              {t(`approval.outcome-unavailable.${each}`)}
+            </p>
+          ))}
       </fieldset>
       {reasonKind === 'listed' ? (
         <FormField id="decision-reason" label="approval.reason" required error={errors.reasonId}>
@@ -303,6 +316,7 @@ export function ApprovalPanelView({
         <DecisionFields
           view={view}
           reasonKind={view.decidable.reason}
+          outcomes={view.decidable.outcomes}
           reasons={reasons}
           submission={submission}
           onDecide={onDecide}
