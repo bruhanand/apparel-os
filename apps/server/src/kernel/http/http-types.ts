@@ -7,6 +7,8 @@ export interface HttpRequest extends IncomingMessage {
   readonly params: Readonly<Record<string, string>>;
   readonly query: Readonly<Record<string, unknown>>;
   readonly body: unknown;
+  /** The source address, through the proxies trusted (AOS_TRUSTED_PROXY_HOPS). Never logged (12.11). */
+  readonly ip?: string;
   /** The matched route, once Express has routed the request; its path is the route template. */
   readonly route?: { readonly path: string };
 }

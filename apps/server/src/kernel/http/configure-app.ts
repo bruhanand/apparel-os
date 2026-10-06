@@ -5,7 +5,9 @@ import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import type { Clock } from '../time/clock.js';
 import { systemClock } from '../time/clock.js';
 import { ERROR_CODE_LOCAL } from './error-envelope.filter.js';
+import type { HttpSettings } from './http-settings.js';
 import type { HttpRequest, HttpResponse } from './http-types.js';
+import { HTTP_SETTINGS } from './origin-check.guard.js';
 
 /**
  * Settings every HTTP entry point shares: the real server and the tests that start it. The route conventions
@@ -13,6 +15,12 @@ import type { HttpRequest, HttpResponse } from './http-types.js';
  */
 export function configureApp(app: INestApplication, clock: Clock = systemClock): void {
   app.setGlobalPrefix('api');
+  // The source address of a request is the one the nearest untrusted hop gave (AOS_TRUSTED_PROXY_HOPS).
+  const settings = app.get<HttpSettings>(HTTP_SETTINGS);
+  (app.getHttpAdapter().getInstance() as { set(name: string, value: number | boolean): void }).set(
+    'trust proxy',
+    settings.trustedProxyHops === 0 ? false : settings.trustedProxyHops,
+  );
   // One correlation identifier per request, made by the server, before any route runs (code-house-rules 12.11).
   app.use(correlationIdMiddleware);
   // No browser or proxy cache keeps API data (code-house-rules 12.1 "No caching"; PRD-SEC-006).

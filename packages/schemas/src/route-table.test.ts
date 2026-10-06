@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { codesOfRoute, defineRoute, routes } from './route-table.js';
+import { codesOfRoute, defineRoute, needsIdempotencyKey, routes } from './route-table.js';
 import { secretString } from './secret.js';
 
 // S1-F01-T04: the route table (code-house-rules 12.1, 12.2).
@@ -120,5 +120,57 @@ describe('defineRoute (code-house-rules 12.1, 12.2)', () => {
       'kernel.timed-out',
     ]);
     expect(codesOfRoute(routes.health)).toEqual(['kernel.failed', 'kernel.invalid-request', 'kernel.timed-out']);
+  });
+});
+
+// S1-F01-T08: sign-in, enrolment and the own password change (access-and-approvals 3.1, 3.2, 7.1).
+describe('the sign-in routes (access-and-approvals 3.1, 3.2; code-house-rules 12.1, 12.4)', () => {
+  it('PRD-SEC-001 serves sign-in as the one public command, with no idempotency key (12.4)', () => {
+    expect(routes.signIn).toMatchObject({ method: 'POST', path: '/api/access/sign-in', access: { kind: 'public' } });
+    expect(needsIdempotencyKey(routes.signIn)).toBe(false);
+    expect(routes.signIn.secretFields).toEqual([
+      { path: ['password'], kind: 'presented-secret' },
+      { path: ['totpCode'], kind: 'authenticator-code' },
+    ]);
+    expect(codesOfRoute(routes.signIn)).toEqual(
+      expect.arrayContaining(['access.sign-in-refused', 'access.sign-in-slowed', 'kernel.cross-site-request']),
+    );
+  });
+
+  it('lets a first sign-in reach only enrolment, then the password change (7.1 step 1)', () => {
+    expect(routes.startEnrolment.access).toEqual({ kind: 'own', signInStep: 'enrolment' });
+    expect(routes.confirmEnrolment.access).toEqual({ kind: 'own', signInStep: 'enrolment' });
+    expect(routes.changePassword.access).toEqual({ kind: 'own', signInStep: 'password-change' });
+    expect(routes.session.access).toEqual({ kind: 'own' });
+  });
+
+  it('DEC-113 shows the authenticator secret once, so a replay of enrolment is never answered again (12.6)', () => {
+    expect(routes.startEnrolment.shows).toBe('secret');
+    expect(codesOfRoute(routes.startEnrolment)).toContain('kernel.answer-not-repeatable');
+  });
+
+  it('PRD-SEC-014 keeps the new password out of the hash and compares a replay on it (12.5)', () => {
+    expect(routes.changePassword.secretFields).toEqual([
+      { path: ['newPassword'], kind: 'new-secret' },
+      { path: ['totpCode'], kind: 'authenticator-code' },
+    ]);
+    expect(codesOfRoute(routes.changePassword)).toContain('kernel.secret-not-comparable');
+  });
+
+  it('refuses a presented secret on a route that is not public, since only sign-in presents a password', () => {
+    expect(() =>
+      defineRoute({
+        method: 'POST',
+        path: '/api/synthetic',
+        access: { kind: 'own' },
+        command: true,
+        body: z.strictObject({ password: secretString() }),
+        secretFields: [{ path: ['password'], kind: 'presented-secret' }],
+        restrictedFields: [],
+        shows: 'nothing',
+        response: z.strictObject({}),
+        codes: [],
+      }),
+    ).toThrow();
   });
 });

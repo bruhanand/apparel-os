@@ -15,6 +15,7 @@ import {
   IDEMPOTENCY_HELPER,
   IdempotencyModule,
   KernelModule,
+  HTTP_ENVIRONMENT,
   ORGANISATION_ROUTER,
   OrganisationRoutingModule,
   requestContentOf,
@@ -30,13 +31,15 @@ import { connect, databaseUrl } from './support/postgres.js';
 
 // S1-F01-T04: a command sent through the API under one idempotency key (code-house-rules 12.2 to 12.4; PRD-INT-002).
 // The route below is a test-only harness route, composed only into this test application (code-house-rules 11.4):
-// until sign-in exists (S1-F01-T08) it takes its Organisation and actor from SYNTHETIC test headers, which no real
+// it takes its Organisation and actor from SYNTHETIC test headers, which no real
 // route reads. syn_api.effect is a scratch table made by test setup only to count effects (code-house-rules 11.1).
 
 const ACTOR = '01900000-0000-7000-8000-0000000ba001';
 const RECORD = '01900000-0000-7000-8000-0000000bd001';
 /** A synthetic pool size for these tests; the real one is each environment's AOS_DATABASE_POOL_MAX. */
 const SYNTHETIC_POOL_MAX = '4';
+/** The SYNTHETIC own origin of this test application (AOS_PUBLIC_ORIGIN; code-house-rules 12.1). */
+const SYNTHETIC_ORIGIN = 'http://synthetic.localhost';
 
 const harnessRoutes = {
   record: defineRoute({
@@ -121,6 +124,8 @@ beforeAll(async () => {
       AOS_RUNTIME_DATABASE_URL: databaseUrl(world.directory, 'runtime'),
       AOS_DATABASE_POOL_MAX: SYNTHETIC_POOL_MAX,
     })
+    .overrideProvider(HTTP_ENVIRONMENT)
+    .useValue({ AOS_PUBLIC_ORIGIN: SYNTHETIC_ORIGIN, AOS_TRUSTED_PROXY_HOPS: '0' })
     .compile();
   app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
@@ -150,7 +155,11 @@ function client() {
     fetch: (url, init) =>
       fetch(url, {
         ...init,
-        headers: { ...(init.headers as Record<string, string>), 'x-syn-organisation': world.organisations[0].code },
+        headers: {
+          ...(init.headers as Record<string, string>),
+          origin: SYNTHETIC_ORIGIN,
+          'x-syn-organisation': world.organisations[0].code,
+        },
       }),
   });
 }
@@ -173,7 +182,11 @@ describe('a command through the API (code-house-rules 12.4)', () => {
     const note = `SYNTHETIC ${crypto.randomUUID()}`;
     const response = await fetch(`${baseUrl}/api/synthetic/records/${RECORD}/notes`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-syn-organisation': world.organisations[0].code },
+      headers: {
+        'content-type': 'application/json',
+        origin: SYNTHETIC_ORIGIN,
+        'x-syn-organisation': world.organisations[0].code,
+      },
       body: JSON.stringify({ note }),
     });
     expect(response.status).toBe(400);

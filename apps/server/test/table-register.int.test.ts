@@ -6,14 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationSetFolder, type MigrationSetName } from '../src/kernel/index.js';
 // The kernel's own table definitions, read only to compare them with the database (code-house-rules 3.4, 10.4).
 import * as kernelTables from '../src/kernel/db/schema.js';
-// The audit module's table definitions, read only for the same comparison.
+// The audit and access modules' table definitions, read only for the same comparison.
+import * as accessTables from '../src/modules/access/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
-// S1-F01-T02, S1-F01-T04, S1-F01-T07: the migrated databases against their table registers (code-house-rules 3.2,
-// 4.1, 5.2, 10.4). This covers the classes and marks the registers hold today: `unscoped` and `scoped`, marked
-// `append-only` or `partitioned`. An entry of any other class or with another mark fails here until this test checks
+// S1-F01-T02, S1-F01-T04, S1-F01-T07, S1-F01-T08: the migrated databases against their table registers
+// (code-house-rules 3.2, 4.1, 5.2, 10.4). This covers the classes and marks the registers hold today: `unscoped` and
+// `scoped`, marked `append-only`, `partitioned` or `versions`. An entry of any other class or with another mark fails here until this test checks
 // what 10.4 asks of it (the lock grant, the exclusion constraint), so no table can pass unchecked.
 
 interface RegisterEntry {
@@ -26,7 +27,7 @@ interface RegisterEntry {
 }
 
 const CHECKED_CLASSES = ['unscoped', 'scoped'];
-const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned'];
+const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned', 'versions'];
 
 /** The functions a design names for the runtime role to execute, by set (code-house-rules 5.2). */
 const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
@@ -173,7 +174,10 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
       `select n.nspname || '.' || p.proname as name
        from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
        cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
-       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'`,
+       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'
+         -- An extension of code-house-rules 4.2, such as btree_gist, keeps PostgreSQL's own grants on its functions.
+         and not exists (select 1 from pg_catalog.pg_depend d
+                         where d.classid = 'pg_catalog.pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')`,
     );
     expect([...onSchemas, ...onFunctions]).toEqual([]);
   });
@@ -289,6 +293,24 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
     }
   });
 
+  it('PRD-MOD-010 a versions table keeps Approved versions from overlapping and guards decided ones (code-house-rules 7.3)', async () => {
+    const versioned = register(set).filter((entry) => entry.marks.includes('versions'));
+    for (const entry of versioned) {
+      const rows = await read<{ exclusion: string; guard: string }>(
+        databases[set],
+        `select (select count(*) from pg_catalog.pg_constraint c
+                 where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
+                   and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
+                   and pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%')::text
+                  as exclusion,
+                (select count(*) from pg_catalog.pg_trigger t
+                 where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'
+                   and t.tgfoid = 'access.guard_version_change'::regproc)::text as guard`,
+      );
+      expect(rows, entry.table).toEqual([{ exclusion: '1', guard: '1' }]);
+    }
+  });
+
   it('PRD-SEC-005 gives the runtime role CONNECT on the database and nothing else', async () => {
     const onDatabase = await read<{ privilege: string }>(
       databases[set],
@@ -340,6 +362,12 @@ describe('the Drizzle definitions of kernel (code-house-rules 3.4, 10.4)', () =>
       }))
       .sort((a, b) => a.column_name.localeCompare(b.column_name));
     expect(columns).toEqual(defined);
+  });
+});
+
+describe('the Drizzle definitions of access (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(accessTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
   });
 });
 

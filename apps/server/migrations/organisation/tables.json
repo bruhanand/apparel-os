@@ -61,6 +61,94 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "code-house-rules 12.4",
       "why": "Written by the helper before Authorise; a kept refused request is protected by encrypting every restricted value and by the read rule of the operations view, not by row-level security (code-house-rules 12.4 \"Storage\", \"Changed content\")"
+    },
+    {
+      "table": "access.app_user",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 2.1, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.app_user_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 2.1, 9.11, 13.1; code-house-rules 6.3, 7.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.password_credential",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 3.2, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.second_factor",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 3.2, 6, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.session",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 3.3, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.service_identity",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 2.3, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.service_identity_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 2.3, 13.1; code-house-rules 6.3, 7.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.service_credential",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 2.3, 13.1; code-house-rules 6.3",
+      "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.setting",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 3.1, 3.2, 3.3, 13.1; code-house-rules 12.14",
+      "why": "Settings sign-in reads before any actor exists, such as the throttling and the password rules (code-house-rules 6.3); a setting belongs to the Organisation, not to a place"
+    },
+    {
+      "table": "access.setting_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 3.1, 3.2, 3.3, 13.1; code-house-rules 7.3, 12.14",
+      "why": "Read with its setting by sign-in before any actor exists (code-house-rules 6.3); a setting belongs to the Organisation, not to a place"
+    },
+    {
+      "table": "access.sign_in_failure",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 3.1, 13.1; DEC-116",
+      "why": "Counted by sign-in before any actor exists (code-house-rules 6.3); it holds a keyed digest of the typed login and the source address, never the login, and only access code reads it"
     }
   ]
 }

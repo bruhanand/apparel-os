@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
+import {
+  enrolmentConfirmRequestSchema,
+  enrolmentConfirmResponseSchema,
+  enrolmentStartRequestSchema,
+  enrolmentStartResponseSchema,
+  passwordChangeRequestSchema,
+  passwordChangeResponseSchema,
+  sessionViewSchema,
+  signInOutcomeSchema,
+  signInRequestSchema,
+} from './sign-in.js';
 import type { FieldClass, PermissionAction } from './roles.js';
 import { secretRegistry } from './secret.js';
 
@@ -14,8 +25,14 @@ import { secretRegistry } from './secret.js';
  */
 export type RouteAccess =
   | { readonly kind: 'public' }
-  | { readonly kind: 'own' }
+  | { readonly kind: 'own'; readonly signInStep?: SignInStep }
   | { readonly kind: 'action'; readonly action: PermissionAction; readonly recordType: string };
+
+/**
+ * A step of first sign-in, or of sign-in after a reset (access-and-approvals 3.2, 7.1 step 1). Until each is done, a
+ * session reaches only the `own` routes of the first step still to do: enrolment, then the password change.
+ */
+export type SignInStep = 'enrolment' | 'password-change';
 
 /**
  * A secret field of a command's body (code-house-rules 12.4, 12.5; access-and-approvals 3.2). It never enters the
@@ -24,10 +41,12 @@ export type RouteAccess =
  *
  * - `authenticator-code`: proves presence and is not content, so a replay is never compared on it (CH-8).
  * - `new-secret`: a password or temporary password the request sets, parsed by secretString() into a `Secret`.
+ * - `presented-secret`: the password a person presents at sign-in, parsed by secretString(). Only a `public` route,
+ *   which carries no key, presents one, so it never meets the idempotency hash (12.4).
  */
 export interface SecretFieldDeclaration {
   readonly path: readonly string[];
-  readonly kind: 'authenticator-code' | 'new-secret';
+  readonly kind: 'authenticator-code' | 'new-secret' | 'presented-secret';
 }
 
 /**
@@ -128,8 +147,11 @@ function checkSecretFields(route: CommandRoute): void {
     if (!declared.has(path)) throw new Error(`Route ${route.path} does not declare its secret field ${path}`);
   }
   for (const [path, kind] of declared) {
-    if (kind === 'new-secret' && !registered.has(path)) {
-      throw new Error(`Route ${route.path}: new secret ${path} must be a secretString()`);
+    if ((kind === 'new-secret' || kind === 'presented-secret') && !registered.has(path)) {
+      throw new Error(`Route ${route.path}: secret ${path} must be a secretString()`);
+    }
+    if (kind === 'presented-secret' && route.access.kind !== 'public') {
+      throw new Error(`Route ${route.path}: only a public route presents a secret, since it carries no key`);
     }
   }
 }
@@ -157,6 +179,96 @@ export const routes = {
     command: false,
     response: healthResponseSchema,
     codes: [],
+  }),
+  // Sign-in (access-and-approvals 3.1; PRD-SEC-001, POL-02.17). The one public command: it carries no key, so each
+  // attempt is its own attempt with its own access record (code-house-rules 12.4). The answer sets the cookie.
+  signIn: defineRoute({
+    method: 'POST',
+    path: '/api/access/sign-in',
+    access: { kind: 'public' },
+    command: true,
+    body: signInRequestSchema,
+    secretFields: [
+      { path: ['password'], kind: 'presented-secret' },
+      { path: ['totpCode'], kind: 'authenticator-code' },
+    ],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: signInOutcomeSchema,
+    codes: [
+      'access.sign-in-refused',
+      'access.sign-in-slowed',
+      'access.sign-in-unavailable',
+      'kernel.cross-site-request',
+    ],
+  }),
+  // The signed-in user (access-and-approvals 3.3). Refused, naming the steps left, until first sign-in is done.
+  session: defineRoute({
+    method: 'GET',
+    path: '/api/access/session',
+    access: { kind: 'own' },
+    command: false,
+    response: sessionViewSchema,
+    codes: ['access.not-signed-in', 'access.sign-in-incomplete'],
+  }),
+  // Enrolment of an authenticator app (access-and-approvals 3.2): the secret is shown once (code-house-rules 12.6).
+  startEnrolment: defineRoute({
+    method: 'POST',
+    path: '/api/access/enrolment/start',
+    access: { kind: 'own', signInStep: 'enrolment' },
+    command: true,
+    body: enrolmentStartRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'secret',
+    response: enrolmentStartResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.sign-in-incomplete',
+      'access.already-enrolled',
+      'kernel.cross-site-request',
+    ],
+  }),
+  confirmEnrolment: defineRoute({
+    method: 'POST',
+    path: '/api/access/enrolment/confirm',
+    access: { kind: 'own', signInStep: 'enrolment' },
+    command: true,
+    body: enrolmentConfirmRequestSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: enrolmentConfirmResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.sign-in-incomplete',
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
+      'kernel.cross-site-request',
+    ],
+  }),
+  // The user's own password change, after a fresh authenticator code (access-and-approvals 3.2, 3.3).
+  changePassword: defineRoute({
+    method: 'POST',
+    path: '/api/access/password/change',
+    access: { kind: 'own', signInStep: 'password-change' },
+    command: true,
+    body: passwordChangeRequestSchema,
+    secretFields: [
+      { path: ['newPassword'], kind: 'new-secret' },
+      { path: ['totpCode'], kind: 'authenticator-code' },
+    ],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: passwordChangeResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.sign-in-incomplete',
+      'access.authenticator-code-refused',
+      'access.password-refused',
+      'access.password-rules-not-set',
+      'kernel.cross-site-request',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

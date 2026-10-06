@@ -125,6 +125,19 @@ export const englishIndia = {
   'error.kernel.failed': 'Something went wrong on the server. Give the reference to the people who run the system.',
   'error.kernel.outcome-unknown':
     'It is not known whether this was saved. Send it again: the same request is never applied twice.',
+  'error.kernel.cross-site-request': 'This came from another site, so nothing was done. Open the app again and retry.',
+  // Sign-in, enrolment and the password change (access-and-approvals 3.1 to 3.3; S1-F01-T08).
+  'error.access.sign-in-refused': 'The Organisation code, login, password or authenticator code is not right.',
+  'error.access.sign-in-slowed': 'Too many attempts failed. Wait a while, then try again.',
+  'error.access.sign-in-unavailable': 'Sign-in is not available yet for this Organisation: a setting is missing.',
+  'error.access.not-signed-in': 'You are not signed in. Sign in to continue.',
+  'error.access.sign-in-incomplete': 'Finish setting up your sign-in first.',
+  'error.access.authenticator-code-refused':
+    'The authenticator code is not right, or was already used. Enter the new one.',
+  'error.access.already-enrolled': 'An authenticator app is already set up for you.',
+  'error.access.enrolment-not-started': 'Start setting up your authenticator app first.',
+  'error.access.password-refused': 'This password does not meet the password rules. Choose another.',
+  'error.access.password-rules-not-set': 'No password can be set yet: the password rules are not set.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',
