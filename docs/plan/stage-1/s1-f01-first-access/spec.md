@@ -163,7 +163,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T01 Design check and contract sketch](tickets/T01-design-check-and-contract-sketch.md) | done | — |
 | [S1-F01-T02 Directory and Organisation routing](tickets/T02-directory-and-organisation-routing.md) | done | — |
 | [S1-F01-T03 Command context](tickets/T03-command-context.md) | done | — |
-| [S1-F01-T04 Idempotency and API conventions](tickets/T04-idempotency-helper.md) | in-progress | T03 (done) |
+| [S1-F01-T04 Idempotency and API conventions](tickets/T04-idempotency-helper.md) | done | T03 (done) |
 | [S1-F01-T05 API conventions in code](tickets/T05-api-conventions-in-code.md) | merged | → T04 |
 | [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | blocked | T04, T08 (its internal service identity) |
 | [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | done | T03 (done) |
