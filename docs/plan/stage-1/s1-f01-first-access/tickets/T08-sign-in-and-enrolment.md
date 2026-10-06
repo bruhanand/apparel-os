@@ -27,3 +27,4 @@ Users and versions, service identities and their credentials (access-and-approva
 - Design details written in the same change: access-and-approvals 3.1 (how throttling works), 3.2 (RR-213, password-rule shape), 3.3 (cookie name), 6 (keys), 13.1; code-house-rules 12.1, 12.3; deployment.md 3, 9.
 - Sign-in, Authenticate and the settings need the Organisation's timezone, so outside tests nobody signs in until `configuration` supplies it (RR-250, with RR-231). Settings not set make sign-in or the password change unavailable, naming the setting (code-house-rules 12.14), so `dev` needs synthetic throttling and password rules (RR-054).
 - Follow-ups: RR-250 to RR-254 in open-items.
+- S1-F01 review fixes (branch `s1/f01-review-fixes`): the one-step TOTP drift is written into access-and-approvals 3.1 as a technical value of RFC 6238; the logger keeps only a database error's SQLSTATE, constraint and table (code-house-rules 12.11).

@@ -25,3 +25,4 @@ Feature: [S1-F01 First access](../spec.md)
 - Left for a person: the manual check of the lock screen against design-language (RR-304); the journeys of T20 drive it.
 - Disabling a user: the session side is built (`AccessInterface.revokeSessions`, called by the decision's transaction; Authenticate refuses a user not Active). Preparing and deciding user changes is in no ticket yet (RR-300, product owner).
 - Follow-ups: RR-300 to RR-304. RR-264 closed.
+- S1-F01 review fixes (branch `s1/f01-review-fixes`): Authenticate locks the session row through the lock helper at step 1 (`access.session` marked `locked`) and moved to `commands/authenticate-session.ts`.
