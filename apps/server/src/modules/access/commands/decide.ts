@@ -364,7 +364,7 @@ export class Approvals {
   ): Promise<
     | {
         readonly kind: 'reason';
-        readonly reason: { kind: 'listed'; versionId: string } | { kind: 'free-text'; text: string };
+        readonly reason: { kind: 'listed'; versionId: string; text: string } | { kind: 'free-text'; text: string };
       }
     | { readonly kind: 'refusal'; readonly refusal: CommandRefusal }
   > {
@@ -383,7 +383,7 @@ export class Approvals {
     const reasonId = input.reason.reasonId;
     const picked = inForce.find((each) => each.id === reasonId);
     if (picked === undefined) return refuse('refused', 'access.reason-not-in-force');
-    return { kind: 'reason', reason: { kind: 'listed', versionId: picked.versionId } };
+    return { kind: 'reason', reason: { kind: 'listed', versionId: picked.versionId, text: picked.text } };
   }
 
   /** Whether the reader may decide the request now, for the approval panel (spec section 6; PRD-UXP-003). */
@@ -498,6 +498,9 @@ export class Approvals {
       actor: { kind: 'user' as const, id: actor.id },
       roleAssignmentId: eligible.roleAssignmentId,
       approvalDecisionId: decisionId,
+      // The words of the reason given, kept on every audit record the decision writes (numbering-and-audit 4.2
+      // "Reason"; PRD-ACS-013), so a record's history says why it was approved or rejected.
+      reason: reason.text,
     };
     const writeDecision = async () => {
       await context.tx.insert(approvalDecision).values({
@@ -536,6 +539,7 @@ export class Approvals {
       approval: { decisionId },
       record: { module: 'access', type: 'approval_request', id: request.id, versionId: request.documentVersionId },
       operation: 'decide-approval-request',
+      reason: reason.text,
       changes: [
         { kind: 'value', field: 'state', before: 'Awaiting approval', after: outcome },
         {

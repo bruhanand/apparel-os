@@ -51,7 +51,9 @@ function PersonaChoices({ register, idPrefix }: { register: () => object; idPref
 
 /** A new user: login, display name, personas and a temporary password handed over in person (3.2; DEC-099). */
 function NewUserForm() {
-  const form = useRouteForm(routes.prepareUser);
+  // No persona ticked is an empty list, not a missing field: a user may hold none, and a persona grants nothing
+  // (PRD-ACS-002). Without it the form could not be sent until a persona was ticked (found by S1-F01-T20).
+  const form = useRouteForm(routes.prepareUser, { personas: [] });
   const kept = useKeptDraft(routes.prepareUser, form, 'setup.new-user');
   const submission = useSubmission('prepareUser', LIST_READS);
   const errors = form.formState.errors;

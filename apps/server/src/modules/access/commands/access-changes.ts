@@ -62,6 +62,8 @@ export interface Decider {
   readonly actor: AuditActor;
   readonly roleAssignmentId?: string;
   readonly approvalDecisionId?: string;
+  /** The reason the decision gave, for the audit records of its effects (numbering-and-audit 4.2). */
+  readonly reason?: string;
 }
 
 /**
@@ -756,6 +758,7 @@ export class AccessChanges {
       actor: decider.actor,
       ...(decider.roleAssignmentId === undefined ? {} : { roleAssignmentId: decider.roleAssignmentId }),
       ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),
+      ...(decider.reason === undefined ? {} : { reason: decider.reason }),
     };
   }
 

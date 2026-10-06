@@ -1,6 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
-import { useForm, type DefaultValues, type FieldValues, type Resolver, type UseFormReturn } from 'react-hook-form';
+import {
+  useForm,
+  type DefaultValues,
+  type FieldValues,
+  type Path,
+  type PathValue,
+  type Resolver,
+  type UseFormReturn,
+} from 'react-hook-form';
 import type { z } from 'zod';
 import { keptInput, type DeclaredFields } from '../lock/kept-input';
 import { useSession } from '../shell/session';
@@ -38,6 +46,14 @@ export function useRouteForm<Body extends z.ZodType<unknown, FieldValues>>(
   const { session } = useSession();
   useEffect(() => {
     if (session.state === 'locked') {
+      // Each declared field is emptied on the page first: a reset leaves a field the kept input lacks as the page shows
+      // it, and the form then reads it back from the page. A list path (`*`) is on no form yet (S1-F03). Found by the
+      // lock journey of S1-F01-T20.
+      for (const field of [...route.secretFields, ...route.restrictedFields]) {
+        if (field.path.includes('*')) continue;
+        const name = field.path.join('.') as Path<Values>;
+        form.setValue(name, undefined as PathValue<Values, Path<Values>>);
+      }
       form.reset(keptInput(route, form.getValues()) as Values, { keepDirty: true, keepErrors: true });
     }
   }, [session.state, form, route]);

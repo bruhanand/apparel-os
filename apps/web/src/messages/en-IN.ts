@@ -120,6 +120,7 @@ export const englishIndia = {
   'missing.count': { one: '{count} thing is missing', other: '{count} things are missing' },
   'missing.action': 'Your role assignments do not grant this action.',
   'missing.permission': 'None of your role assignments grants this action on this kind of record.',
+  'missing.permission.named': 'Needs {action} on {recordType}.',
   'missing.record-type': 'Your role assignments grant nothing on this kind of record.',
   'missing.scope': 'None of your role assignments covers the record’s scope.',
   'missing.assignment': 'One of your role assignments nearly covers this, but its scope stops short.',

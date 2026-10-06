@@ -344,5 +344,6 @@ function auditActor(decider: Decider) {
     actor: decider.actor,
     ...(decider.roleAssignmentId === undefined ? {} : { roleAssignmentId: decider.roleAssignmentId }),
     ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),
+    ...(decider.reason === undefined ? {} : { reason: decider.reason }),
   };
 }
