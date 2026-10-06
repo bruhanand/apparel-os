@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { migrationSetFolder, orderMigrationFileNames, readMigrationSet } from './migration-set.js';
+import { migrationSetFolder, orderMigrationFileNames, readMaintenance, readMigrationSet } from './migration-set.js';
 
 describe('orderMigrationFileNames (code-house-rules 4.1)', () => {
   it('orders files by their number', () => {
@@ -96,5 +96,15 @@ describe('readMigrationSet refuses what it would otherwise pass over (code-house
 
   it('refuses a set with no migration', () => {
     expect(() => readMigrationSet(set(register))).toThrow(/holds no migration/);
+  });
+
+  it('reads a set holding its maintenance file, which is no migration', () => {
+    const folder = set({ ...register, ...first, 'maintenance.sql': 'select 3;' });
+    expect(readMigrationSet(folder).map((file) => file.fileName)).toEqual(['0001__kernel__migration_record.sql']);
+    expect(readMaintenance(folder)).toBe('select 3;');
+  });
+
+  it('has no maintenance for a set without the file', () => {
+    expect(readMaintenance(set({ ...register, ...first }))).toBeUndefined();
   });
 });

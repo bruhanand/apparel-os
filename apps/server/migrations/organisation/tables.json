@@ -7,6 +7,36 @@
       "runtime": [],
       "design": "code-house-rules 4.3",
       "why": "The runner's own record of applied files. Only the migration role reads or writes it"
+    },
+    {
+      "table": "audit.audit_record",
+      "class": "scoped",
+      "marks": ["append-only", "partitioned"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 4.1, 4.4, 4.5, 6.2; code-house-rules 6.3"
+    },
+    {
+      "table": "audit.access_record",
+      "class": "scoped",
+      "marks": ["append-only", "partitioned"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 5, 4.4, 4.5, 6.2; code-house-rules 6.3"
+    },
+    {
+      "table": "audit.audit_seal",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": [],
+      "design": "numbering-and-audit 4.4, 6.2",
+      "why": "Seals of whole blocks of every scope. Written and checked only through audit.seal_block and audit.check_seals, which report block numbers, never a row's content"
+    },
+    {
+      "table": "audit.retention_deletion",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": [],
+      "design": "numbering-and-audit 4.6, 6.2",
+      "why": "Which sealed block the retention function deleted. Written only by audit.delete_after_retention, and empty while no retention period is set (V-13)"
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { Client } from 'pg';
 import { applyDatabasePrivileges } from './database-privileges.js';
-import { readMigrationSet, type MigrationFile } from './migration-set.js';
+import { MAINTENANCE, readMaintenance, readMigrationSet, type MigrationFile } from './migration-set.js';
 import { MIGRATION_ROLE } from './roles.js';
 
 export interface MigrateDatabaseOptions {
@@ -25,13 +25,16 @@ const LOCK_KEY = "pg_catalog.hashtextextended('aos.kernel.migration', 0)";
  * Applies a migration set to one database (code-house-rules 4.3). Holds a session advisory lock from the first
  * file to the last, so two runs never migrate one database at once. Each pending file runs in its own transaction
  * with its record in kernel.migration, so a failing file leaves the database as it was before that file, and the
- * run stops there. Then applies the database step of 4.3. Returns the files it applied.
+ * run stops there. Then runs the set's maintenance file, if it has one, in its own transaction, on every run, such as
+ * the audit partitions of the coming months (numbering-and-audit 4.4; DEC-112, CH-5). Then applies the database step
+ * of 4.3. Returns the files it applied.
  *
  * Reads the whole set before it connects, and checks who it is connected as before it changes anything, so a wrong
  * set or a wrong connection changes nothing.
  */
 export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<string[]> {
   const files = readMigrationSet(options.folder);
+  const maintenance = readMaintenance(options.folder);
   const client = new Client({ connectionString: options.connectionString });
   await client.connect();
   try {
@@ -44,6 +47,7 @@ export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<
       applied.push(file.fileName);
       options.onApplied?.(file.fileName);
     }
+    if (maintenance !== undefined) await runMaintenance(client, maintenance);
     await applyDatabasePrivileges(client);
     await client.query(`select pg_catalog.pg_advisory_unlock(${LOCK_KEY})`);
     return applied;
@@ -138,5 +142,17 @@ async function applyFile(client: Client, file: MigrationFile): Promise<void> {
   } catch (error) {
     await client.query('rollback');
     throw new Error(`Migration ${file.fileName} failed; the database is as it was before it`, { cause: error });
+  }
+}
+
+/** Runs the set's maintenance in one transaction. It is not recorded: it runs again on every run (code-house-rules 4.3). */
+async function runMaintenance(client: Client, sql: string): Promise<void> {
+  await client.query('begin');
+  try {
+    await client.query(sql);
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw new Error(`${MAINTENANCE} failed; nothing it did was kept`, { cause: error });
   }
 }

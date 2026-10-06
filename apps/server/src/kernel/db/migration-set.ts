@@ -59,30 +59,44 @@ export function orderMigrationFileNames(fileNames: readonly string[]): { number:
   return files;
 }
 
-/** The one file a set holds beside its migrations: its table register (code-house-rules 3.2, 4.1). */
+/** The file every set holds beside its migrations: its table register (code-house-rules 3.2, 4.1). */
 export const TABLE_REGISTER = 'tables.json';
 
 /**
+ * The file a set may hold beside its migrations: restricted maintenance the runner runs after the files on every run,
+ * such as creating the audit partitions of the coming months (code-house-rules 4.3; numbering-and-audit 4.4; DEC-112,
+ * CH-5). It is no migration: it is not recorded, and it must be safe to run any number of times.
+ */
+export const MAINTENANCE = 'maintenance.sql';
+
+/** The set's maintenance SQL, or undefined when the set has none. */
+export function readMaintenance(folder: string): string | undefined {
+  const path = join(folder, MAINTENANCE);
+  return existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+}
+
+/**
  * Reads a set's migrations from a folder, in order, with the SHA-256 checksum of each. Nothing in the folder is
- * passed over: an entry that is neither the table register nor a well-named migration file, such as `0002__x.SQL`, a
+ * passed over: an entry that is neither the table register, the maintenance file nor a well-named migration file, such as `0002__x.SQL`, a
  * backup or a subfolder, is refused, so no migration can be skipped by a slip in its name. A set without its
  * register or without any migration is refused too.
  */
 export function readMigrationSet(folder: string): MigrationFile[] {
   const entries = readdirSync(folder, { withFileTypes: true });
   const unexpected = entries.filter(
-    (entry) => !entry.isFile() || (entry.name !== TABLE_REGISTER && !FILE_NAME.test(entry.name)),
+    (entry) =>
+      !entry.isFile() || (entry.name !== TABLE_REGISTER && entry.name !== MAINTENANCE && !FILE_NAME.test(entry.name)),
   );
   if (unexpected.length > 0) {
     const names = unexpected.map((entry) => entry.name).sort();
     throw new Error(
-      `Migration set ${folder} holds ${names.join(', ')}: only ${TABLE_REGISTER} and files named NNNN__<unit>__<what>.sql belong there`,
+      `Migration set ${folder} holds ${names.join(', ')}: only ${TABLE_REGISTER}, ${MAINTENANCE} and files named NNNN__<unit>__<what>.sql belong there`,
     );
   }
   if (!entries.some((entry) => entry.name === TABLE_REGISTER)) {
     throw new Error(`Migration set ${folder} has no ${TABLE_REGISTER}`);
   }
-  const names = entries.map((entry) => entry.name).filter((name) => name !== TABLE_REGISTER);
+  const names = entries.map((entry) => entry.name).filter((name) => name !== TABLE_REGISTER && name !== MAINTENANCE);
   if (names.length === 0) {
     throw new Error(`Migration set ${folder} holds no migration`);
   }
