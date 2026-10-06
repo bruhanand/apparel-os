@@ -10,6 +10,9 @@ export {
 export { Access } from './access.js';
 export type { AccessDependencies, AccessInterface, ActionNeed } from './access.js';
 export type { Decider, Prepared, Preparer } from './commands/access-changes.js';
+export type { FreshCode } from './commands/fresh-code.js';
+export type { Revoker, RevocationTarget } from './commands/sessions.js';
+export { sessionRevoked } from './events.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
 export type { RecordFacts } from './domain/scope.js';
 export { ACCESS_JOBS_IDENTITY, accessJobKinds } from './jobs/job-kinds.js';

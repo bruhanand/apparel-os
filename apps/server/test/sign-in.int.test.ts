@@ -24,6 +24,8 @@ import { connect } from './support/postgres.js';
 const SYNTHETIC_THROTTLING = { failureLimit: 3, windowSeconds: 600 };
 /** SYNTHETIC password rules. */
 const SYNTHETIC_PASSWORD_RULES = { minimumLength: 12 };
+/** SYNTHETIC office session limits, long enough that no test here reaches them (S1-F01-T09). */
+const SYNTHETIC_SESSION_LIMITS = { idleLockSeconds: 1800, absoluteSeconds: 28800 };
 
 let world: SyntheticWorld;
 let keys: Record<string, string>;
@@ -37,6 +39,7 @@ beforeAll(async () => {
   keys = syntheticKeysEnvironment(world);
   await writeSyntheticSetting(orgA.database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
   await writeSyntheticSetting(orgA.database, 'access.password-rules', SYNTHETIC_PASSWORD_RULES);
+  await writeSyntheticSetting(orgA.database, 'access.office-session-limits', SYNTHETIC_SESSION_LIMITS);
   api = await startAccessApp(world, keys);
 });
 
@@ -480,6 +483,7 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
     try {
       const [org] = second.organisations;
       await writeSyntheticSetting(org.database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
+      await writeSyntheticSetting(org.database, 'access.office-session-limits', SYNTHETIC_SESSION_LIMITS);
       const user = await writeSyntheticUser(org.database, org.code, secondKeys, {
         label: 'NO-RULES',
         enrolled: true,

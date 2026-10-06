@@ -5,6 +5,7 @@ import {
   isSlowed,
   meetsPasswordRules,
   passwordRulesSchema,
+  sessionLimitReached,
   SETTING_FORMATS,
   signInThrottlingSchema,
 } from './sign-in-rules.js';
@@ -46,5 +47,24 @@ describe('password hashes (PRD Stack: Authentication; access-and-approvals 3.2)'
     expect(hash).not.toContain('synthetic-password');
     expect(await verifyPassword(hash, new Secret('synthetic-password'))).toBe(true);
     expect(await verifyPassword(hash, new Secret('synthetic-passwore'))).toBe(false);
+  });
+});
+
+describe('session limits (access-and-approvals 3.3; PRD-ACS-017; S1-F01-T09)', () => {
+  // SYNTHETIC: lock after 10 minutes idle, end after 2 hours.
+  const limits = { idleLockSeconds: 600, absoluteSeconds: 7200 };
+  const startedAt = new Date('2026-10-07T08:00:00Z');
+
+  it('locks once the idle limit passes since the last activity, and not a moment before', () => {
+    const lastActivityAt = new Date('2026-10-07T09:00:00Z');
+    expect(sessionLimitReached(limits, { startedAt, lastActivityAt }, new Date('2026-10-07T09:09:59Z'))).toBe('none');
+    expect(sessionLimitReached(limits, { startedAt, lastActivityAt }, new Date('2026-10-07T09:10:00Z'))).toBe('idle');
+  });
+
+  it('ends at the absolute limit from the start, whatever the activity', () => {
+    const lastActivityAt = new Date('2026-10-07T09:59:00Z');
+    expect(sessionLimitReached(limits, { startedAt, lastActivityAt }, new Date('2026-10-07T10:00:00Z'))).toBe(
+      'absolute',
+    );
   });
 });

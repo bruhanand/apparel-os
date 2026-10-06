@@ -15,6 +15,8 @@ import { landingScreen } from './shell/landing';
 import { screenIds, screenOpen, screens, type ScreenId } from './shell/screens';
 import { useSession } from './shell/session';
 import { SignInScreens } from './sign-in/SignInScreens';
+import { SignOutButton } from './lock/SignOutButton';
+import { UnlockForm } from './lock/UnlockForm';
 
 // The router (PRD Stack: Web, TanStack Router): one route per screen of the registry, and `/`, which sends the person
 // to their landing screen (DEC-116).
@@ -39,6 +41,8 @@ function Root() {
       current={screenAt(pathname)}
       renderLink={renderLink}
       signIn={<SignInScreens />}
+      unlock={<UnlockForm />}
+      signOut={<SignOutButton />}
     >
       <Outlet />
     </AppShell>

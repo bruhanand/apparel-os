@@ -26,6 +26,8 @@ import { startPostgresServer } from '../support/postgres-server.js';
 const SYNTHETIC_THROTTLING = { failureLimit: 5, windowSeconds: 600 };
 /** SYNTHETIC password rules (GC3-5 is OPEN). */
 const SYNTHETIC_PASSWORD_RULES = { minimumLength: 12 };
+/** SYNTHETIC office session limits (access-and-approvals 3.3; POL-02.18's values apply only once it is Signed). */
+const SYNTHETIC_SESSION_LIMITS = { idleLockSeconds: 1800, absoluteSeconds: 28800 };
 
 function required(name: string): string {
   const value = process.env[name];
@@ -44,6 +46,7 @@ const [orgA] = world.organisations;
 const keys = syntheticKeysEnvironment(world);
 await writeSyntheticSetting(orgA.database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
 await writeSyntheticSetting(orgA.database, 'access.password-rules', SYNTHETIC_PASSWORD_RULES);
+await writeSyntheticSetting(orgA.database, 'access.office-session-limits', SYNTHETIC_SESSION_LIMITS);
 // A first sign-in: a temporary password and no authenticator app yet (access-and-approvals 3.2).
 const user = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
 const app = await startAccessApp(world, keys, { origin, port });

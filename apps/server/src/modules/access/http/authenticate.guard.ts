@@ -14,6 +14,7 @@ import {
   type OrganisationRouter,
   type RoutedOrganisation,
 } from '../../../kernel/index.js';
+import { AUDIT, type AuditInterface } from '../../audit/index.js';
 import type { AccessInterface } from '../access.js';
 import { authenticateSession } from '../queries/authenticate.js';
 import { ACCESS } from '../tokens.js';
@@ -54,6 +55,10 @@ export function networkAddressOf(request: HttpRequest): string {
  * cookie, then the session there by its identifier's hash, in force, of an Active user; otherwise
  * `access.not-signed-in`, the same answer whatever was wrong, with nothing of the cookie logged (3.3; PRD-SEC-014).
  *
+ * Authenticate also keeps the session's limits (3.3; PRD-ACS-017, POL-02.18): past its absolute limit the session
+ * ends, and the request is not signed in; past its idle limit it locks, and every route but the unlock and the
+ * sign-out (`whileLocked`) answers `access.session-locked`, so the screen keeps its work under the lock (S1-F01-T09).
+ *
  * Until enrolment and the password change are done, the session reaches only the `own` routes of the first step
  * still to do; anything else is `access.sign-in-incomplete`, naming the steps left (3.2).
  *
@@ -71,6 +76,7 @@ export class AuthenticateGuard implements CanActivate {
     @Inject(ORGANISATION_ROUTER) private readonly router: OrganisationRouter,
     @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
     @Inject(ACCESS) private readonly access: AccessInterface,
+    @Inject(AUDIT) private readonly audit: AuditInterface,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -80,18 +86,24 @@ export class AuthenticateGuard implements CanActivate {
     const correlationId = correlationIdOf(request) ?? newCorrelationId();
     const routed = await this.router.resolveFromSessionCookie(sessionCookieOf(request.headers.cookie));
     if (!routed.routed) throw notSignedIn();
-    const found = await this.runner.read(
+    const networkAddress = networkAddressOf(request);
+    // Authenticate writes: it ends, locks or marks the activity of the session (3.3), in a transaction of its own.
+    const result = await this.runner.run(
       {
         commandName: 'access.authenticate',
         organisation: routed.organisation,
         correlationId,
         actor: { kind: 'no-actor', path: 'authenticate' },
       },
-      (transaction) => authenticateSession(transaction, routed.sessionIdentifier),
+      (transaction) => authenticateSession(transaction, this.audit, routed.sessionIdentifier, networkAddress),
     );
-    if (found === undefined) throw notSignedIn();
+    if (result.kind === 'not-signed-in') throw notSignedIn();
+    const whileLocked = route.access.kind === 'own' && route.access.whileLocked === true;
+    // A locked session reaches only the unlock and the sign-out; the web app tells it from an ended one (RR-264).
+    if (result.kind === 'locked' && !whileLocked) throw sessionLocked();
+    const found = result.session;
     const [next] = found.pendingSteps;
-    if (next !== undefined && !(route.access.kind === 'own' && route.access.signInStep === next)) {
+    if (next !== undefined && !whileLocked && !(route.access.kind === 'own' && route.access.signInStep === next)) {
       throw incomplete(found.pendingSteps);
     }
     let roleAssignmentId: string | undefined;
@@ -132,7 +144,7 @@ export class AuthenticateGuard implements CanActivate {
       userId: found.userId,
       displayName: found.displayName,
       correlationId,
-      networkAddress: networkAddressOf(request),
+      networkAddress,
       ...(roleAssignmentId === undefined ? {} : { roleAssignmentId }),
     });
     return true;
@@ -141,6 +153,10 @@ export class AuthenticateGuard implements CanActivate {
 
 function notSignedIn(): ApiRefusal {
   return new ApiRefusal({ kind: 'not-signed-in', code: 'access.not-signed-in' });
+}
+
+function sessionLocked(): ApiRefusal {
+  return new ApiRefusal({ kind: 'not-signed-in', code: 'access.session-locked', next: 'access.unlock-session' });
 }
 
 function incomplete(steps: readonly SignInStep[]): ApiRefusal {

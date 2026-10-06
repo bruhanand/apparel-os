@@ -61,7 +61,12 @@ export function SignInScreens({ initial = { stage: 'read-session' } }: { initial
       // and opens only what a role assignment grants (DEC-116; RR-261, RR-281).
       setSession({
         state: 'active',
-        user: { displayName: stage.view.displayName, personasHeld: stage.view.personasHeld },
+        user: {
+          organisationCode: stage.view.organisationCode,
+          userId: stage.view.userId,
+          displayName: stage.view.displayName,
+          personasHeld: stage.view.personasHeld,
+        },
         grants: stage.view.grants,
       });
     }

@@ -36,14 +36,25 @@ export function readQuery<K extends ReadName>(client: ApiClient<Table>, name: K,
 }
 
 /**
- * The web app's query client. A read is not retried on its own: the error state offers Retry (design-language 10.13).
- * A `not-signed-in` answer tells the shell the session is no longer in force (access-and-approvals 3.3).
+ * What a refusal says of the session (access-and-approvals 3.3; RR-264): `locked`, when the idle limit passed and the
+ * same user's password unlocks it, so the page stays under the lock overlay; `ended`, for any other `not-signed-in`
+ * answer (ended, revoked, signed out, or a user no longer Active), so the person signs in again; null otherwise.
  */
-export function createQueryClient(onNotSignedIn: () => void): QueryClient {
+export function sessionRefusal(body: Pick<ErrorBody, 'kind' | 'code'> | null): 'locked' | 'ended' | null {
+  if (body?.kind !== 'not-signed-in') return null;
+  return body.code === 'access.session-locked' ? 'locked' : 'ended';
+}
+
+/**
+ * The web app's query client. A read is not retried on its own: the error state offers Retry (design-language 10.13).
+ * A `not-signed-in` answer tells the shell the session is locked or no longer in force (access-and-approvals 3.3).
+ */
+export function createQueryClient(onSessionRefused: (refused: 'locked' | 'ended') => void): QueryClient {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error) => {
-        if (error instanceof ApiFailure && error.body.kind === 'not-signed-in') onNotSignedIn();
+        const refused = sessionRefusal(failureBody(error));
+        if (refused !== null) onSessionRefused(refused);
       },
     }),
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } },

@@ -157,12 +157,13 @@ describe('the sign-in routes (access-and-approvals 3.1, 3.2; code-house-rules 12
     expect(codesOfRoute(routes.changePassword)).toContain('kernel.secret-not-comparable');
   });
 
-  it('refuses a presented secret on a route that is not public, since only sign-in presents a password', () => {
+  it('refuses a presented secret on an action route, since only sign-in and the unlock present a password', () => {
+    expect(routes.unlockSession.secretFields).toEqual([{ path: ['password'], kind: 'presented-secret' }]);
     expect(() =>
       defineRoute({
         method: 'POST',
         path: '/api/synthetic',
-        access: { kind: 'own' },
+        access: { kind: 'action', action: 'edit', recordType: 'access.user' },
         command: true,
         body: z.strictObject({ password: secretString() }),
         secretFields: [{ path: ['password'], kind: 'presented-secret' }],

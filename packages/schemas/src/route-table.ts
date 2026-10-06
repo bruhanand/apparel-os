@@ -14,6 +14,16 @@ import {
 } from './sign-in.js';
 import { idSchema } from './common.js';
 import {
+  credentialResetRequestSchema,
+  credentialResetResponseSchema,
+  sessionRevocationRequestSchema,
+  sessionRevocationResponseSchema,
+  signOutRequestSchema,
+  signOutResponseSchema,
+  unlockRequestSchema,
+  unlockResponseSchema,
+} from './sessions.js';
+import {
   assignmentPreparedSchema,
   assignmentWithdrawalDraftSchema,
   roleAssignmentDraftSchema,
@@ -36,7 +46,15 @@ import { secretRegistry } from './secret.js';
  */
 export type RouteAccess =
   | { readonly kind: 'public' }
-  | { readonly kind: 'own'; readonly signInStep?: SignInStep }
+  | {
+      readonly kind: 'own';
+      readonly signInStep?: SignInStep;
+      /**
+       * Reached by a locked session too, and before first sign-in is done: only the unlock and the sign-out
+       * (access-and-approvals 3.3; S1-F01-T09). Every other route answers a locked session `access.session-locked`.
+       */
+      readonly whileLocked?: true;
+    }
   | { readonly kind: 'action'; readonly action: PermissionAction; readonly recordType: string };
 
 /**
@@ -52,8 +70,9 @@ export type SignInStep = 'enrolment' | 'password-change';
  *
  * - `authenticator-code`: proves presence and is not content, so a replay is never compared on it (CH-8).
  * - `new-secret`: a password or temporary password the request sets, parsed by secretString() into a `Secret`.
- * - `presented-secret`: the password a person presents at sign-in, parsed by secretString(). Only a `public` route,
- *   which carries no key, presents one, so it never meets the idempotency hash (12.4).
+ * - `presented-secret`: the password a person presents to sign in or to unlock a locked session, parsed by
+ *   secretString(). Sign-in, a `public` route, carries no key (12.4); the unlock, an `own` route, carries one, and the
+ *   password proves presence there as a code does, so a replay is never compared on it (12.5; S1-F01-T09).
  */
 export interface SecretFieldDeclaration {
   readonly path: readonly string[];
@@ -161,8 +180,8 @@ function checkSecretFields(route: CommandRoute): void {
     if ((kind === 'new-secret' || kind === 'presented-secret') && !registered.has(path)) {
       throw new Error(`Route ${route.path}: secret ${path} must be a secretString()`);
     }
-    if (kind === 'presented-secret' && route.access.kind !== 'public') {
-      throw new Error(`Route ${route.path}: only a public route presents a secret, since it carries no key`);
+    if (kind === 'presented-secret' && route.access.kind === 'action') {
+      throw new Error(`Route ${route.path}: only sign-in and the unlock present a secret`);
     }
   }
 }
@@ -184,6 +203,7 @@ function registeredSecretPaths(schema: z.ZodType, at: readonly string[]): string
 /** The codes every route that prepares an access change can answer (access-and-approvals 7.1, 9.11). */
 const PREPARE_CODES = [
   'access.not-signed-in',
+  'access.session-locked',
   'access.sign-in-incomplete',
   'access.not-authorised',
   'access.business-date-not-set',
@@ -230,7 +250,7 @@ export const routes = {
     access: { kind: 'own' },
     command: false,
     response: sessionViewSchema,
-    codes: ['access.not-signed-in', 'access.sign-in-incomplete'],
+    codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
   }),
   // Enrolment of an authenticator app (access-and-approvals 3.2): the secret is shown once (code-house-rules 12.6).
   startEnrolment: defineRoute({
@@ -245,6 +265,7 @@ export const routes = {
     response: enrolmentStartResponseSchema,
     codes: [
       'access.not-signed-in',
+      'access.session-locked',
       'access.sign-in-incomplete',
       'access.already-enrolled',
       'kernel.cross-site-request',
@@ -262,6 +283,7 @@ export const routes = {
     response: enrolmentConfirmResponseSchema,
     codes: [
       'access.not-signed-in',
+      'access.session-locked',
       'access.sign-in-incomplete',
       'access.authenticator-code-refused',
       'access.enrolment-not-started',
@@ -284,6 +306,7 @@ export const routes = {
     response: passwordChangeResponseSchema,
     codes: [
       'access.not-signed-in',
+      'access.session-locked',
       'access.sign-in-incomplete',
       'access.authenticator-code-refused',
       'access.password-refused',
@@ -350,6 +373,109 @@ export const routes = {
     shows: 'nothing',
     response: withdrawalPreparedSchema,
     codes: [...PREPARE_CODES, 'access.assignment-not-found', 'access.not-withdrawable'],
+  }),
+  // Sessions (access-and-approvals 3.3; S1-F01-T09). The unlock and the sign-out are the only routes a locked session
+  // reaches. A user's own sessions need no permission (3.2); another user's need edit on `access.session`.
+  unlockSession: defineRoute({
+    method: 'POST',
+    path: '/api/access/unlock',
+    access: { kind: 'own', whileLocked: true },
+    command: true,
+    body: unlockRequestSchema,
+    secretFields: [{ path: ['password'], kind: 'presented-secret' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: unlockResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.sign-in-refused',
+      'access.sign-in-slowed',
+      'access.sign-in-unavailable',
+      'access.session-not-found',
+      'kernel.cross-site-request',
+    ],
+  }),
+  signOut: defineRoute({
+    method: 'POST',
+    path: '/api/access/sign-out',
+    access: { kind: 'own', whileLocked: true },
+    command: true,
+    body: signOutRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: signOutResponseSchema,
+    codes: ['access.not-signed-in', 'kernel.cross-site-request'],
+  }),
+  revokeOwnSessions: defineRoute({
+    method: 'POST',
+    path: '/api/access/own-sessions/revoke',
+    access: { kind: 'own' },
+    command: true,
+    body: sessionRevocationRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: sessionRevocationResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.session-not-found',
+      'kernel.cross-site-request',
+    ],
+  }),
+  revokeUserSessions: defineRoute({
+    method: 'POST',
+    path: '/api/access/users/{userId}/sessions/revoke',
+    params: z.strictObject({ userId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.session' },
+    command: true,
+    body: sessionRevocationRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: sessionRevocationResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.not-authorised',
+      'access.user-not-found',
+      'access.session-not-found',
+      'kernel.cross-site-request',
+    ],
+  }),
+  // Resetting another user's credential (access-and-approvals 3.2; GC3-4): a protected action asking a fresh code
+  // (3.3, GC3-6); no second approver; nobody resets their own; every session of the user is revoked (PRD-SEC-008).
+  resetCredential: defineRoute({
+    method: 'POST',
+    path: '/api/access/users/{userId}/credential-reset',
+    params: z.strictObject({ userId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.user_credential' },
+    command: true,
+    body: credentialResetRequestSchema,
+    secretFields: [
+      { path: ['temporaryPassword'], kind: 'new-secret' },
+      { path: ['totpCode'], kind: 'authenticator-code' },
+    ],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: credentialResetResponseSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.not-authorised',
+      'access.business-date-not-set',
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
+      'access.own-credential-reset',
+      'access.user-not-found',
+      'access.password-refused',
+      'access.password-rules-not-set',
+      'kernel.cross-site-request',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

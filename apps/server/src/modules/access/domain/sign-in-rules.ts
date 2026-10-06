@@ -23,16 +23,30 @@ export const passwordRulesSchema = z.strictObject({
 });
 export type PasswordRules = z.infer<typeof passwordRulesSchema>;
 
-/** The settings of access sign-in reads, each with the versioned format of its value (code-house-rules 3.3). */
+/**
+ * The limits of one kind of session (access-and-approvals 3.3; PRD-ACS-017, POL-02.18): it locks once no request has
+ * come for `idleLockSeconds`, and ends `absoluteSeconds` after it started, locked or not. Their values are OPEN until
+ * policy 2 is Signed and the Admin has validated them (V-04); `dev` and tests hold synthetic ones (DEC-102 for
+ * `kdps-test`). The office kind is the only one so far: shared POS sessions need registered devices (S1-F12, RR-303).
+ */
+export const sessionLimitsSchema = z.strictObject({
+  idleLockSeconds: z.int().positive(),
+  absoluteSeconds: z.int().positive(),
+});
+export type SessionLimits = z.infer<typeof sessionLimitsSchema>;
+
+/** The settings of access sign-in and sessions read, each with the versioned format of its value (code-house-rules 3.3). */
 export const SETTING_FORMATS = {
   'access.sign-in-throttling': 'access.sign-in-throttling/1',
   'access.password-rules': 'access.password-rules/1',
+  'access.office-session-limits': 'access.office-session-limits/1',
 } as const;
 export type AccessSettingKey = keyof typeof SETTING_FORMATS;
 
 export const SETTING_SCHEMAS = {
   'access.sign-in-throttling': signInThrottlingSchema,
   'access.password-rules': passwordRulesSchema,
+  'access.office-session-limits': sessionLimitsSchema,
 } as const satisfies Record<AccessSettingKey, z.ZodType>;
 
 /** The failed sign-ins counted in the window. */
@@ -44,6 +58,17 @@ export interface FailureCounts {
 /** Whether an attempt is slowed (access-and-approvals 3.1; DEC-116). */
 export function isSlowed(throttling: SignInThrottling, failures: FailureCounts): boolean {
   return failures.byLogin >= throttling.failureLimit || failures.byAddress >= throttling.failureLimit;
+}
+
+/** What a session's limits make of it at an instant (access-and-approvals 3.3): the absolute limit wins. */
+export function sessionLimitReached(
+  limits: SessionLimits,
+  session: { readonly startedAt: Date; readonly lastActivityAt: Date },
+  now: Date,
+): 'none' | 'idle' | 'absolute' {
+  if (now.getTime() - session.startedAt.getTime() >= limits.absoluteSeconds * 1000) return 'absolute';
+  if (now.getTime() - session.lastActivityAt.getTime() >= limits.idleLockSeconds * 1000) return 'idle';
+  return 'none';
 }
 
 /** Whether a new password meets the password rules, its length counted in characters (code points), not code units. */

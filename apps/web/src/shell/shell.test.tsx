@@ -15,7 +15,12 @@ const grants: Grant[] = (['access.user', 'access.role', 'access.role_assignment'
   recordType,
   action: 'view',
 }));
-const user = { displayName: 'SYNTHETIC Admin', personasHeld: ['P-ADM'] } as const;
+const user = {
+  organisationCode: 'SYN-ORG-A',
+  userId: '01900000-0000-7000-8000-0000000000a1',
+  displayName: 'SYNTHETIC Admin',
+  personasHeld: ['P-ADM'],
+} as const;
 const banner = { environment: 'dev', message: 'environment.dev', tone: 'info' } as const;
 
 function render(session: ShellSession) {

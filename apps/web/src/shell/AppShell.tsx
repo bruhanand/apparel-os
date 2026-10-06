@@ -43,6 +43,7 @@ export function AppShell({
   renderLink = anchor,
   unlock,
   signIn,
+  signOut,
 }: {
   session: ShellSession;
   banner: EnvironmentBanner;
@@ -53,6 +54,8 @@ export function AppShell({
   unlock?: ReactNode;
   /** The sign-in screens, shown while signed out (S1-F01-T15). */
   signIn?: ReactNode;
+  /** The sign-out action of the profile menu (S1-F01-T09). */
+  signOut?: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -93,6 +96,7 @@ export function AppShell({
                   {session.user.personasHeld.map((persona) => (
                     <PersonaChip key={persona} persona={persona} />
                   ))}
+                  {signOut}
                 </div>
               </details>
             </header>

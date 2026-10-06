@@ -27,3 +27,8 @@ export function sessionCookieOf(cookieHeader: string | undefined): string | unde
   }
   return undefined;
 }
+
+/** The `Set-Cookie` value that removes the session cookie from the browser, at sign-out (access-and-approvals 3.3). */
+export function clearedSessionCookieHeader(): string {
+  return `${SESSION_COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`;
+}

@@ -1,17 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import type { MissingItem, Secret, SignInOutcome } from '@apparel-os/schemas';
-import { and, count, eq, gte, sql } from 'drizzle-orm';
 import type { CommandRequest, CommandRunner, RoutedOrganisation, TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session, signInFailure } from '../db/schema.js';
 import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
-import { isSlowed } from '../domain/sign-in-rules.js';
 import { matchingStep } from '../domain/totp.js';
 import { sessionIdentifierHash } from '../queries/authenticate.js';
 import { readSetting } from '../queries/settings.js';
+import { attemptSlowed } from '../queries/throttling.js';
 import { takeStep } from './take-step.js';
 import { credentialState, findUserByLogin, pendingSteps, userInForce, type CredentialState } from '../queries/users.js';
 
@@ -155,23 +154,20 @@ export class SignIn {
     if (throttling.kind === 'not-set') {
       return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.sign-in-throttling' }] };
     }
+    // A session needs its limits: with none set, no session can be kept, so none starts (3.3; code-house-rules 12.14).
+    const limits = await readSetting(context, 'access.office-session-limits', today.date);
+    if (limits.kind === 'not-set') {
+      return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.office-session-limits' }] };
+    }
     const loginDigest = this.dependencies.keys.digest(
       attempt.organisation.organisationCode,
       'sign-in-throttling',
       attempt.login.toLowerCase(),
     );
-    const since = new Date(context.startedAt.getTime() - throttling.value.windowSeconds * 1000);
-    const [byLogin] = await context.tx
-      .select({ failures: count() })
-      .from(signInFailure)
-      .where(and(eq(signInFailure.loginDigest, loginDigest), gte(signInFailure.failedAt, since)));
-    const [byAddress] = await context.tx
-      .select({ failures: count() })
-      .from(signInFailure)
-      .where(
-        and(sql`${signInFailure.networkAddress} = ${attempt.networkAddress}::inet`, gte(signInFailure.failedAt, since)),
-      );
-    const slowed = isSlowed(throttling.value, { byLogin: byLogin?.failures ?? 0, byAddress: byAddress?.failures ?? 0 });
+    const slowed = await attemptSlowed(context, throttling.value, {
+      loginDigest,
+      networkAddress: attempt.networkAddress,
+    });
 
     const user = await findUserByLogin(context, attempt.login);
     if (user === undefined) return { kind: 'looked', slowed, loginDigest, userId: undefined, signable: undefined };

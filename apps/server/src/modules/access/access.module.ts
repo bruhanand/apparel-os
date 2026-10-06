@@ -14,7 +14,9 @@ import {
 } from '../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { Access } from './access.js';
+import { CredentialResets } from './commands/credential-reset.js';
 import { OwnCredentials } from './commands/own-credentials.js';
+import { Sessions } from './commands/sessions.js';
 import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
@@ -23,6 +25,7 @@ import { jobIdentities } from './queries/job-identities.js';
 import { ACCESS } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
+import { CREDENTIAL_RESETS, SESSIONS, SessionsController } from './http/sessions.controller.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
 
 export { ACCESS } from './tokens.js';
@@ -75,15 +78,19 @@ export class AccessJobIdentitiesModule {}
 
 /**
  * The access module (module-map 4.3): tier 1, uses `audit` and `kernel`. Sign-in, enrolment and the own password
- * change (access-and-approvals 3), Authenticate on every route that needs it and Authorise on every `action` route
+ * change (access-and-approvals 3), sessions, their limits, the unlock, revocation and credential resets (3.2, 3.3), Authenticate on every route that needs it and Authorise on every `action` route
  * (7.1 steps 1 and 3), service identities (2.3), and preparing roles, role assignments and withdrawals (4, 5, 9.11). Needs the global idempotency module built with AccessContractsModule (idempotencyModuleWith).
  */
 @Module({
   imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule],
-  controllers: [SignInController, AccessChangesController],
+  controllers: [SignInController, AccessChangesController, SessionsController],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
-    { provide: ACCESS, useFactory: (audit: AuditInterface) => new Access({ audit }), inject: [AUDIT] },
+    {
+      provide: ACCESS,
+      useFactory: (audit: AuditInterface, keys: OrganisationKeys) => new Access({ audit, keys }),
+      inject: [AUDIT, ORGANISATION_KEYS],
+    },
     {
       // One hash no one knows, made once per process and verified wherever no credential can be (DEC-116).
       provide: UNKNOWABLE_HASH,
@@ -103,6 +110,18 @@ export class AccessJobIdentitiesModule {}
       useFactory: (runner: CommandRunner, helper: IdempotencyHelper, audit: AuditInterface, keys: OrganisationKeys) =>
         new OwnCredentials({ runner, helper, audit, keys }),
       inject: [COMMAND_RUNNER, IDEMPOTENCY_HELPER, AUDIT, ORGANISATION_KEYS],
+    },
+    {
+      provide: SESSIONS,
+      useFactory: (runner: CommandRunner, helper: IdempotencyHelper, audit: AuditInterface, keys: OrganisationKeys) =>
+        new Sessions({ runner, helper, audit, keys }),
+      inject: [COMMAND_RUNNER, IDEMPOTENCY_HELPER, AUDIT, ORGANISATION_KEYS],
+    },
+    {
+      provide: CREDENTIAL_RESETS,
+      useFactory: (helper: IdempotencyHelper, audit: AuditInterface, keys: OrganisationKeys) =>
+        new CredentialResets({ helper, audit, keys }),
+      inject: [IDEMPOTENCY_HELPER, AUDIT, ORGANISATION_KEYS],
     },
   ],
   exports: [ACCESS],

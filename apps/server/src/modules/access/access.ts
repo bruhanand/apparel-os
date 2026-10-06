@@ -12,9 +12,12 @@ import {
   type RoleVersionDraft,
   type Secret,
 } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import { AccessChanges, type Decider, type Prepared, type Preparer } from './commands/access-changes.js';
+import { checkFreshCode, type FreshCode } from './commands/fresh-code.js';
+import { revokeSessions, type Revoker, type RevocationTarget } from './commands/sessions.js';
+import type { OrganisationKeys } from './domain/organisation-keys.js';
 import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
 import { ownAccess } from './queries/own-access.js';
 import {
@@ -113,12 +116,31 @@ export interface AccessInterface {
   ): Promise<Prepared<{ assignmentId: string }>>;
   /** Rebuilds the effective grants of the actors named, or of every actor (7.2). Returns the rows written. */
   rebuildGrants(context: TransactionContext, actorIds?: readonly string[]): Promise<number>;
+  /**
+   * Checks the fresh authenticator code a protected action asks for (3.3; GC3-6), such as a decision (S1-F01-T13);
+   * `take` records its step, so it is never accepted again. Every protected action asks anew while no freshness
+   * setting exists.
+   */
+  checkFreshCode(context: TransactionContext, userId: string, totpCode: string): Promise<FreshCode>;
+  /**
+   * Revokes one or every session of a user in the caller's transaction (3.3; PRD-SEC-008): for the decision that
+   * disables the user (2.1, 4.3; S1-F01-T13) and the operator's recovery command (3.2; S1-F01-T10). Answers the
+   * sessions revoked, or undefined when the one named is not the user's or is over.
+   */
+  revokeSessions(
+    context: TransactionContext,
+    by: Revoker,
+    target: RevocationTarget,
+    operation: string,
+  ): Promise<string[] | undefined>;
 }
 
 export interface AccessDependencies {
   readonly audit: AuditInterface;
   /** The permission registry; the declared one unless a test gives another (access-and-approvals 4.1). */
   readonly registry?: readonly RecordTypeDeclaration[];
+  /** The Organisation keys, which open authenticator secrets for the fresh-code check (access-and-approvals 6). */
+  readonly keys?: OrganisationKeys;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -131,9 +153,19 @@ export class Access implements AccessInterface {
   private readonly registry: ReadonlyMap<string, RecordTypeDeclaration>;
   private readonly changes: AccessChanges;
 
-  constructor(dependencies: AccessDependencies) {
+  constructor(private readonly dependencies: AccessDependencies) {
     this.registry = registryByCode(dependencies.registry ?? permissionRegistry);
     this.changes = new AccessChanges(dependencies.audit, this.registry);
+  }
+
+  checkFreshCode(context: TransactionContext, userId: string, totpCode: string) {
+    const keys = this.dependencies.keys;
+    if (keys === undefined) throw new CommandDefect('The fresh-code check needs the Organisation keys');
+    return checkFreshCode(context, keys, userId, totpCode);
+  }
+
+  revokeSessions(context: TransactionContext, by: Revoker, target: RevocationTarget, operation: string) {
+    return revokeSessions(context, this.dependencies.audit, by, target, operation);
   }
 
   authenticateInternalIdentity(context: TransactionContext, code: string) {

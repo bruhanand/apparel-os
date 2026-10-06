@@ -17,6 +17,7 @@ export const englishIndia = {
   'shell.profile': 'Profile',
   'shell.personas-held': 'Personas held',
   'shell.breadcrumb': 'Breadcrumb',
+  'shell.sign-out': 'Sign out',
   'section.home': 'Home',
   'section.setup': 'Setup',
   'screen.my-work': 'My work',
@@ -101,6 +102,12 @@ export const englishIndia = {
   'lock.title': 'Session locked',
   'lock.body':
     'Your unsaved work is kept. Restricted fields and secrets were cleared, so enter them again after you unlock.',
+  'lock.password': 'Password',
+  'lock.unlock': 'Unlock',
+  'lock.sign-out': 'Sign out instead',
+  'kept-draft.body': 'Unsaved input from your last session was kept on this device. Restricted fields were not kept.',
+  'kept-draft.restore': 'Restore it',
+  'kept-draft.discard': 'Discard it',
 
   // Standard states (design-language 10.13, 10.17).
   'loading.label': 'Loading',
@@ -185,6 +192,10 @@ export const englishIndia = {
   'error.access.assignment-not-found': 'This role assignment was not found.',
   'error.access.not-withdrawable':
     'Only an approved role assignment that has not started yet can be withdrawn. End a started one early instead.',
+  'error.access.session-locked': 'Your session is locked. Enter your password to unlock it.',
+  'error.access.own-credential-reset': 'You cannot reset your own password or authenticator. Ask another person.',
+  'error.access.user-not-found': 'This user was not found.',
+  'error.access.session-not-found': 'This session was not found, or it has already ended.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',

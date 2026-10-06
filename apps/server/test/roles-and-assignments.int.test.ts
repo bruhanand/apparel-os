@@ -646,6 +646,10 @@ describe('the routes (access-and-approvals 7.1; code-house-rules 12.1; RR-261, R
     // SYNTHETIC sign-in settings: sign-in is unavailable without them (code-house-rules 12.14).
     await writeSyntheticSetting(database, 'access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 });
     await writeSyntheticSetting(database, 'access.password-rules', { minimumLength: 12 });
+    await writeSyntheticSetting(database, 'access.office-session-limits', {
+      idleLockSeconds: 1800,
+      absoluteSeconds: 28800,
+    });
     api = await startAccessApp(world, keys);
   });
 
