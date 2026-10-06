@@ -257,7 +257,7 @@ create policy row_scope on stock.balance for all to aos_runtime
 | Business date | `business_date date` | The command, under the Organisation's timezone (`PRD-MOD-009`) |
 
 - The server and the database run in UTC. A business date is never taken from the server's or the database's time zone.
-- The Organisation's timezone is an Organisation setting in `configuration` (domain-model 3.6), with no default. An operation that needs a business date is unavailable until it is set (`PRD-SEC-017`).
+- The Organisation's timezone is an Organisation setting in `configuration` (domain-model 3.6), with no default. An operation that needs a business date is unavailable until it is set (`PRD-SEC-017`). **As built** (`S1-F01-T10`; RR-231): its versions are kept in `configuration.organisation_timezone_version`, dated by instants (`tstzrange`) instead of business dates, since a business date is worked out under the timezone and so cannot date it; otherwise they follow 7.3. The setup step writes the first version, in force from the step's start (access-and-approvals 9.11). `configuration` provides the kernel's timezone contract from a global module the app and the worker import; without it the kernel's source answers not set. **Design choice.**
 - Code reads the time only through `kernel`'s clock, never `new Date()` or `Date.now()` in a command or in `domain/`. Tests set the clock.
 - Dates under a timezone are worked out with the built-in `Intl` API. No date library is added.
 

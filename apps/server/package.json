@@ -11,6 +11,8 @@
     "build:seed": "tsc -p tsconfig.seed.json",
     "build:browser": "tsc -p tsconfig.browser.json",
     "migrate": "node dist/migrate.js",
+    "setup-organisation": "node dist/setup-organisation.js",
+    "recover-first-user": "node dist/recover-first-user.js",
     "seed": "node dist-seed/test/seed/seed.js",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",

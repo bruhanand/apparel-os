@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { displayNameSchema, loginSchema, organisationCodeSchema, personasHeldSchema } from './common.js';
 import { secretString } from './secret.js';
+import { passwordRulesSchema, sessionLimitsSchema, settingOriginSchema, signInThrottlingSchema } from './settings.js';
 
-// The setup step of a new Organisation (PRD-ACS-023, DEC-101, DEC-112; access-and-approvals 9.11).
-// An operator command, never an API endpoint (code-house-rules 4.3, CH-1). The operator types the temporary
-// passwords at the command's prompt, never in its arguments (access-and-approvals 3.2).
+// The setup step of a new Organisation (PRD-ACS-023, DEC-101, DEC-112; access-and-approvals 9.11; S1-F01-T10).
+// An operator command, never an API endpoint (code-house-rules 4.3, CH-1). The operator gives the non-secret fields
+// in a request file and types the temporary passwords at the command's prompt, never in its arguments
+// (access-and-approvals 3.2).
 
 const setupUserShape = {
   login: loginSchema,
@@ -18,28 +20,6 @@ export const setupUserSchema = z.strictObject({
   temporaryPassword: secretString(),
 });
 
-/** The limits of one session kind, in whole minutes. Each is optional; none has a default. */
-const sessionKindLimitsSchema = z.strictObject({
-  idleLockMinutes: z.int().positive().optional(),
-  absoluteMinutes: z.int().positive().optional(),
-});
-
-/**
- * The Organisation's settings the step writes (synthetic on dev, labelled so). Every field is optional and has
- * no default: an absent setting is not set, and what needs it stays unavailable (PRD-SEC-017; code-house-rules 9).
- * Session limits are effective-dated access settings, an idle-lock and an absolute limit for each session kind,
- * office and shared POS (access-and-approvals 3.3, PRD-ACS-017, POL-02.18).
- */
-export const setupSettingsSchema = z.strictObject({
-  timezone: z.string().min(1).refine(isTimeZone, { message: 'Not a time zone this runtime knows' }).optional(),
-  sessionLimits: z
-    .strictObject({
-      office: sessionKindLimitsSchema.optional(),
-      sharedPos: sessionKindLimitsSchema.optional(),
-    })
-    .optional(),
-});
-
 function isTimeZone(name: string): boolean {
   try {
     new Intl.DateTimeFormat('en', { timeZone: name });
@@ -49,28 +29,72 @@ function isTimeZone(name: string): boolean {
   }
 }
 
+/**
+ * The Organisation's settings the step writes, every value supplied by the operator (synthetic on `dev`, labelled so
+ * by `origin`); none has a default (AGENTS.md "Never invent a value"; code-house-rules 12.14).
+ *
+ * - `timezone` (configuration's setting, code-house-rules 9) and `passwordRules` (access-and-approvals 3.2) are
+ *   required: the step dates every version it writes under the timezone, and checks both temporary passwords against
+ *   the rules, without which no password can be set.
+ * - `signInThrottling` (3.1) and `officeSessionLimits` (3.3) may be left out: an absent one stays not set, and sign-in
+ *   is unavailable, naming it, until a later change sets it.
+ */
+export const setupSettingsSchema = z.strictObject({
+  origin: settingOriginSchema,
+  timezone: z.string().min(1).refine(isTimeZone, { message: 'Not a time zone this runtime knows' }),
+  passwordRules: passwordRulesSchema,
+  signInThrottling: signInThrottlingSchema.optional(),
+  officeSessionLimits: sessionLimitsSchema.optional(),
+});
+export type SetupSettings = z.output<typeof setupSettingsSchema>;
+
+/**
+ * The name of the Organisation's database on the directory's server (deployment.md section 4): letters, digits and
+ * `_`, at most 63 characters, as the directory keeps it.
+ */
+export const databaseNameSchema = z.string().regex(/^[A-Za-z0-9_]{1,63}$/);
+
 /** Logins are compared without regard to letter case (access-and-approvals 2.1). */
-function sameLogin(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
+function differentLogins(request: {
+  readonly firstAdmin: { readonly login: string };
+  readonly firstApprover: { readonly login: string };
+}): boolean {
+  return request.firstAdmin.login.toLowerCase() !== request.firstApprover.login.toLowerCase();
 }
+
+const TWO_USERS = {
+  message: 'The first Admin and the first approver are two different users',
+  path: ['firstApprover', 'login'],
+};
+
+const setupFields = {
+  organisationCode: organisationCodeSchema,
+  databaseName: databaseNameSchema,
+  settings: setupSettingsSchema,
+};
 
 /**
  * The setup request. The first Admin and the first approver are two different users, since an approver must
  * differ from the preparer (PRD-ACS-006; access-and-approvals 9.11).
  */
 export const setupRequestSchema = z
-  .strictObject({
-    organisationCode: organisationCodeSchema,
-    firstAdmin: setupUserSchema,
-    firstApprover: setupUserSchema,
-    settings: setupSettingsSchema,
-  })
-  .refine((request) => !sameLogin(request.firstAdmin.login, request.firstApprover.login), {
-    message: 'The first Admin and the first approver are two different users',
-    path: ['firstApprover', 'login'],
-  });
+  .strictObject({ ...setupFields, firstAdmin: setupUserSchema, firstApprover: setupUserSchema })
+  .refine(differentLogins, TWO_USERS);
 export type SetupRequestInput = z.input<typeof setupRequestSchema>;
 export type SetupRequest = z.output<typeof setupRequestSchema>;
+
+/**
+ * The request file the operator gives: every field but the temporary passwords, which the command asks for at its
+ * prompt (access-and-approvals 3.2, 9.11).
+ */
+export const setupRequestFileSchema = z
+  .strictObject({
+    ...setupFields,
+    firstAdmin: z.strictObject(setupUserShape),
+    firstApprover: z.strictObject(setupUserShape),
+  })
+  .refine(differentLogins, TWO_USERS);
+export type SetupRequestFile = z.output<typeof setupRequestFileSchema>;
 
 /**
  * The fields the setup record's fingerprint covers: the request without its temporary passwords
@@ -78,10 +102,9 @@ export type SetupRequest = z.output<typeof setupRequestSchema>;
  * reaches the fingerprint. A rerun's passwords are verified against the Argon2 credentials the first run wrote.
  */
 export const setupFingerprintFieldsSchema = z.object({
-  organisationCode: organisationCodeSchema,
+  ...setupFields,
   firstAdmin: z.object(setupUserShape),
   firstApprover: z.object(setupUserShape),
-  settings: setupSettingsSchema,
 });
 export type SetupFingerprintFields = z.output<typeof setupFingerprintFieldsSchema>;
 

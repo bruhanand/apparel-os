@@ -1,3 +1,4 @@
+import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { LOGGER, LoggingModule } from '../logging/logging.module.js';
@@ -10,7 +11,13 @@ import {
 import { systemClock } from '../time/clock.js';
 import { timezoneNotConfigured } from '../time/organisation-timezone.js';
 import { CommandRunner } from './command-runner.js';
-import { CLOCK, COMMAND_RUNNER, CommandRunnerModule, ORGANISATION_TIMEZONE_SOURCE } from './command-runner.module.js';
+import {
+  CLOCK,
+  COMMAND_RUNNER,
+  CommandRunnerModule,
+  CONFIGURED_TIMEZONE_SOURCE,
+  ORGANISATION_TIMEZONE_SOURCE,
+} from './command-runner.module.js';
 
 // S1-F01-T03: the command runner is wired for the application by token (AGENTS.md "Code workspace"). Until
 // `configuration` implements the timezone contract, no Organisation has a timezone (code-house-rules 9).
@@ -21,6 +28,19 @@ describe('CommandRunnerModule', () => {
     expect(moduleRef.get(COMMAND_RUNNER)).toBeInstanceOf(CommandRunner);
     expect(moduleRef.get(CLOCK)).toBe(systemClock);
     expect(moduleRef.get(ORGANISATION_TIMEZONE_SOURCE)).toBe(timezoneNotConfigured);
+    await moduleRef.close();
+  });
+
+  it('RR-231 reads the timezone from the source configuration provides, where the composition gives one', async () => {
+    const configured = { read: () => Promise.resolve({ kind: 'not-set' as const }) };
+    @Global()
+    @Module({
+      providers: [{ provide: CONFIGURED_TIMEZONE_SOURCE, useValue: configured }],
+      exports: [CONFIGURED_TIMEZONE_SOURCE],
+    })
+    class ConfiguredModule {}
+    const moduleRef = await Test.createTestingModule({ imports: [ConfiguredModule, CommandRunnerModule] }).compile();
+    expect(moduleRef.get(ORGANISATION_TIMEZONE_SOURCE)).toBe(configured);
     await moduleRef.close();
   });
 

@@ -7,6 +7,7 @@ import type {
   IdempotencyHelper,
   IdempotentAnswer,
   ReplayAuthorisation,
+  TransactionContext,
 } from '../../../kernel/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { passwordCredential, secondFactor } from '../db/schema.js';
@@ -101,38 +102,10 @@ export class CredentialResets {
         }
         if (!(await code.take())) return refusal('not-authorised', 'access.authenticator-code-refused', true);
 
-        const changes: AuditChange[] = [];
-        const credentialIds: string[] = [];
-        if (password !== undefined) {
-          const hash = await hashPassword(password);
-          await context.tx
-            .update(passwordCredential)
-            .set({ replacedAt: context.startedAt, passwordHash: null })
-            .where(and(eq(passwordCredential.appUserId, reset.userId), isNull(passwordCredential.replacedAt)));
-          const id = uuidv7();
-          const version = await userInForce(context, reset.userId, today.date);
-          await context.tx.insert(passwordCredential).values({
-            id,
-            appUserId: reset.userId,
-            passwordHash: hash,
-            temporary: true,
-            enteredWithVersionId: version?.versionId ?? null,
-            replacedAt: null,
-          });
-          credentialIds.push(id);
-          changes.push({ kind: 'secret', field: 'password' });
-        }
-        if (reset.reset !== 'password') {
-          await context.tx
-            .update(secondFactor)
-            .set({ state: 'Reset' })
-            .where(and(eq(secondFactor.appUserId, reset.userId), eq(secondFactor.state, 'Confirmed')));
-          await context.tx
-            .update(secondFactor)
-            .set({ state: 'Replaced' })
-            .where(and(eq(secondFactor.appUserId, reset.userId), eq(secondFactor.state, 'Setting up')));
-          changes.push({ kind: 'value', field: 'secondFactorState', before: 'Confirmed', after: 'Reset' });
-        }
+        const { changes, credentialIds } = await replaceCredentials(context, reset.userId, today.date, {
+          passwordHash: password === undefined ? undefined : await hashPassword(password),
+          authenticator: reset.reset !== 'password',
+        });
         await this.dependencies.audit.record(context, {
           actor: { kind: 'user', id: request.userId },
           roleAssignmentId: authorisation.roleAssignmentId,
@@ -173,4 +146,51 @@ export class CredentialResets {
       },
     });
   }
+}
+
+/**
+ * Replaces a user's credentials as a reset does (access-and-approvals 3.2): the current password, which then keeps no
+ * hash, by a temporary one, and the confirmed authenticator by none (Reset), so the user replaces the password or
+ * enrols again at the next sign-in. Joins the caller's transaction; the reset of another user's credential and the
+ * operator's recovery command (DEC-116) both use it. Returns the audit changes, which name no secret, and the new
+ * credential's identifier.
+ */
+export async function replaceCredentials(
+  context: TransactionContext,
+  userId: string,
+  businessDate: string,
+  replace: { readonly passwordHash: string | undefined; readonly authenticator: boolean },
+): Promise<{ changes: AuditChange[]; credentialIds: string[] }> {
+  const changes: AuditChange[] = [];
+  const credentialIds: string[] = [];
+  if (replace.passwordHash !== undefined) {
+    await context.tx
+      .update(passwordCredential)
+      .set({ replacedAt: context.startedAt, passwordHash: null })
+      .where(and(eq(passwordCredential.appUserId, userId), isNull(passwordCredential.replacedAt)));
+    const id = uuidv7();
+    const version = await userInForce(context, userId, businessDate);
+    await context.tx.insert(passwordCredential).values({
+      id,
+      appUserId: userId,
+      passwordHash: replace.passwordHash,
+      temporary: true,
+      enteredWithVersionId: version?.versionId ?? null,
+      replacedAt: null,
+    });
+    credentialIds.push(id);
+    changes.push({ kind: 'secret', field: 'password' });
+  }
+  if (replace.authenticator) {
+    await context.tx
+      .update(secondFactor)
+      .set({ state: 'Reset' })
+      .where(and(eq(secondFactor.appUserId, userId), eq(secondFactor.state, 'Confirmed')));
+    await context.tx
+      .update(secondFactor)
+      .set({ state: 'Replaced' })
+      .where(and(eq(secondFactor.appUserId, userId), eq(secondFactor.state, 'Setting up')));
+    changes.push({ kind: 'value', field: 'secondFactorState', before: 'Confirmed', after: 'Reset' });
+  }
+  return { changes, credentialIds };
 }
