@@ -58,7 +58,12 @@ export type DecisionOutcome =
 
 /** Whether a reader may decide a request now, or what is missing (PRD-UXP-003). */
 export type Decidable =
-  | { readonly kind: 'available'; readonly reason: 'listed' | 'free-text' }
+  | {
+      readonly kind: 'available';
+      readonly reason: 'listed' | 'free-text';
+      readonly outcomes: ('approve' | 'reject')[];
+      readonly missing: MissingItem[];
+    }
   | { readonly kind: 'unavailable'; readonly code: string; readonly missing: MissingItem[] };
 
 type RequestRow = typeof approvalRequest.$inferSelect;
@@ -415,18 +420,17 @@ export class Approvals {
     const own = await handler.precheck?.(context, request.documentVersionId);
     if (own !== undefined) return { kind: 'unavailable', code: own.code, missing: [...own.missing] };
     const rule = this.ruleOf(request.actionType);
-    if (rule.freeTextReason) return { kind: 'available', reason: 'free-text' };
-    if ((await this.reasonsInForce(context)).length === 0) {
-      return {
-        kind: 'unavailable',
-        code: 'access.no-reason-list-in-force',
-        missing: [
-          { kind: 'reason-list', reasonKind: 'approve' },
-          { kind: 'reason-list', reasonKind: 'reject' },
-        ],
-      };
-    }
-    return { kind: 'available', reason: 'listed' };
+    if (rule.freeTextReason)
+      return { kind: 'available', reason: 'free-text', outcomes: ['approve', 'reject'], missing: [] };
+    // Each outcome needs a reason of its own kind in force (9.5; POL-02.23), so each is open or not on its own.
+    const inForce = new Set((await this.reasonsInForce(context)).map((reason) => reason.kind));
+    const kinds = ['approve', 'reject'] as const;
+    const outcomes = kinds.filter((kind) => inForce.has(kind));
+    const missing: MissingItem[] = kinds
+      .filter((kind) => !inForce.has(kind))
+      .map((reasonKind) => ({ kind: 'reason-list', reasonKind }));
+    if (outcomes.length === 0) return { kind: 'unavailable', code: 'access.no-reason-list-in-force', missing };
+    return { kind: 'available', reason: 'listed', outcomes, missing };
   }
 
   /** The open requests among those named that the user may decide now: My work's eligibility check (11.2). */

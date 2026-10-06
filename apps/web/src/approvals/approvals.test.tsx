@@ -37,7 +37,7 @@ function view(overrides: Partial<ApprovalRequestView> = {}): ApprovalRequestView
     preparers: [ADMIN],
     state: 'Awaiting approval',
     requestedAt: '2026-10-07T09:00:00.000Z',
-    decidable: { kind: 'available', reason: 'listed' },
+    decidable: { kind: 'available', reason: 'listed', outcomes: ['approve', 'reject'], missing: [] },
     asOf: '2026-10-07T10:00:00.000Z',
     ...overrides,
   };
@@ -53,6 +53,10 @@ const reasons = [
     text: 'SYNTHETIC not needed',
   },
 ];
+
+/** The radio input of one outcome, as rendered. */
+const radio = (html: string, outcome: string) =>
+  new RegExp(`<input[^>]*type="radio"[^>]*value="${outcome}"[^>]*>`).exec(html)?.[0] ?? '';
 
 function render(shown: ApprovalRequestView) {
   return renderToStaticMarkup(
@@ -111,9 +115,43 @@ describe('the approval panel', () => {
   });
 
   it('DEC-104 a reason-list change takes a reason in your own words', () => {
-    const html = render(view({ decidable: { kind: 'available', reason: 'free-text' } }));
+    const html = render(
+      view({ decidable: { kind: 'available', reason: 'free-text', outcomes: ['approve', 'reject'], missing: [] } }),
+    );
     expect(html).toContain('<textarea');
     expect(text(html)).not.toContain('SYNTHETIC checked');
+  });
+
+  it('POL-02.23 PRD-UXP-003 offers only the outcomes with reasons in force, and names what the other lacks', () => {
+    const approveOnly = render(
+      view({
+        decidable: {
+          kind: 'available',
+          reason: 'listed',
+          outcomes: ['approve'],
+          missing: [{ kind: 'reason-list', reasonKind: 'reject' }],
+        },
+      }),
+    );
+    expect(radio(approveOnly, 'reject')).toContain('disabled');
+    expect(radio(approveOnly, 'approve')).not.toContain('disabled');
+    expect(text(approveOnly)).toContain('Reject isn’t available: no reject reason is in force yet');
+    const rejectOnly = render(
+      view({
+        decidable: {
+          kind: 'available',
+          reason: 'listed',
+          outcomes: ['reject'],
+          missing: [{ kind: 'reason-list', reasonKind: 'approve' }],
+        },
+      }),
+    );
+    expect(radio(rejectOnly, 'approve')).toContain('disabled');
+    expect(radio(rejectOnly, 'reject')).not.toContain('disabled');
+    expect(text(rejectOnly)).toContain('Approve isn’t available: no approve reason is in force yet');
+    // The form starts on the open outcome, so it offers the reject reasons.
+    expect(text(rejectOnly)).toContain('SYNTHETIC not needed');
+    expect(text(rejectOnly)).not.toContain('SYNTHETIC checked');
   });
 
   it('PRD-ACS-006 PRD-UXP-003 an unavailable decision names what is missing and offers no decision', () => {

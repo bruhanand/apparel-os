@@ -211,6 +211,55 @@ describe('the reason list (access-and-approvals 9.5; test 19b; POL-02.23, DEC-10
     expect(view?.decidable).toMatchObject({ kind: 'unavailable', code: 'access.no-reason-list-in-force' });
   });
 
+  it('PRD-UXP-003 with only approve reasons in force, the panel offers approve and names the missing reject list', async () => {
+    const approveOnly = await as(admin.id, (c) =>
+      access.prepareApprovalReason(c, adminPreparer, {
+        code: `SYN-APPROVE-ONLY-${String(randomInt(1_000_000))}`,
+        kind: 'approve',
+        text: 'SYNTHETIC approve-only reason',
+        validFrom: today(),
+      }),
+    );
+    if (approveOnly.kind !== 'success') throw new Error('not prepared');
+    expect(
+      await decide(approver, {
+        requestId: approveOnly.answer.requestId,
+        versionId: approveOnly.answer.versionId,
+        outcome: 'approve',
+        reason: { kind: 'free-text', text: 'SYNTHETIC first approve reason' },
+      }),
+    ).toMatchObject({ kind: 'success' });
+    const role = await prepareRole();
+    const view = await as(approver.id, (c) =>
+      access.readApprovalRequest(c, { kind: 'user', id: approver.id }, role.requestId),
+    );
+    expect(view?.decidable).toEqual({
+      kind: 'available',
+      reason: 'listed',
+      outcomes: ['approve'],
+      missing: [{ kind: 'reason-list', reasonKind: 'reject' }],
+    });
+    // A reason-list change takes free text, so both outcomes are open whatever list is in force (DEC-104).
+    const another = await as(admin.id, (c) =>
+      access.prepareApprovalReason(c, adminPreparer, {
+        code: `SYN-REJECT-PENDING-${String(randomInt(1_000_000))}`,
+        kind: 'reject',
+        text: 'SYNTHETIC reject reason',
+        validFrom: today(),
+      }),
+    );
+    if (another.kind !== 'success') throw new Error('not prepared');
+    const listChange = await as(approver.id, (c) =>
+      access.readApprovalRequest(c, { kind: 'user', id: approver.id }, another.answer.requestId),
+    );
+    expect(listChange?.decidable).toEqual({
+      kind: 'available',
+      reason: 'free-text',
+      outcomes: ['approve', 'reject'],
+      missing: [],
+    });
+  });
+
   it('POL-02.23 DEC-104 decides the first list with free text; a listed reason is refused there', async () => {
     const prepared = await as(admin.id, (c) =>
       access.prepareApprovalReason(c, adminPreparer, {
