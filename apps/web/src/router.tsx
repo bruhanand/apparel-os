@@ -10,6 +10,7 @@ import {
 import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
+import { AuditLogScreen } from './history/AuditLogScreen';
 import { AppShell, type RenderLink } from './shell/AppShell';
 import { landingScreen } from './shell/landing';
 import { screenIds, screenOpen, screens, type ScreenId } from './shell/screens';
@@ -54,7 +55,7 @@ function Landing() {
 
 /**
  * A screen of the registry. One the person's role assignments do not grant is unavailable and says what is missing
- * (PRD-UXP-003); the screens themselves arrive with S1-F01-T16 and T18.
+ * (PRD-UXP-003). Setup › Audit log is S1-F01-T18's; the access setup screens arrive with S1-F01-T16.
  */
 function ScreenPage({ id }: { id: ScreenId }) {
   const { session } = useSession();
@@ -65,6 +66,7 @@ function ScreenPage({ id }: { id: ScreenId }) {
       <UnavailableState missing={[{ kind: 'action', action: need.grant.action, recordType: need.grant.recordType }]} />
     );
   }
+  if (id === 'setup.audit-log') return <AuditLogScreen grants={session.grants} />;
   return <EmptyState title="screen.not-built.title" body="screen.not-built.body" />;
 }
 
