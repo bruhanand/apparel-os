@@ -86,18 +86,27 @@ const auditRecordTypes = [
 /** `kernel`: the outbox, which the outbox processor dispatches (code-house-rules 12.8; RR-273). */
 const kernelRecordTypes = [declare('kernel.outbox_event', ['view', 'edit'], NONE)] as const;
 
+/**
+ * `inbox` (access-and-approvals 11; module-map 4.8). My work needs no permission (11.2, 9.11); `inbox.work_item`
+ * edit is what the inbox's consumers hold, under their service identity, to publish, update and close work items
+ * from the owners' events (RR-273; S1-F01-T13).
+ */
+const inboxRecordTypes = [declare('inbox.work_item', ['edit'], NONE)] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
   ...auditRecordTypes,
   ...kernelRecordTypes,
+  ...inboxRecordTypes,
 ];
 
 /** The code of a declared record type. */
 export type RecordTypeCode =
   | (typeof accessRecordTypes)[number]['code']
   | (typeof auditRecordTypes)[number]['code']
-  | (typeof kernelRecordTypes)[number]['code'];
+  | (typeof kernelRecordTypes)[number]['code']
+  | (typeof inboxRecordTypes)[number]['code'];
 
 /** A registry, as `access` reads it: the declarations by code. */
 export function registryByCode(

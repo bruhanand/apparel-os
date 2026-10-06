@@ -15,7 +15,7 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { AccessInterface } from '../access.js';
+import type { AccessInterface, PreparedWithCredential } from '../access.js';
 import type { Prepared, Preparer } from '../commands/access-changes.js';
 import { ACCESS } from '../tokens.js';
 import { SignedIn, type SignedInUser } from './authenticate.guard.js';
@@ -89,13 +89,104 @@ export class AccessChangesController {
     );
   }
 
+  @ApiRoute(routes.prepareUser)
+  async prepareUser(@RouteInput() input: RouteInputOf<typeof routes.prepareUser>, @SignedIn() user: SignedInUser) {
+    const content = requestContentOf(routes.prepareUser, input);
+    return this.run(routes.prepareUser, 'access.prepare-user', user, input.idempotencyKey, content, (c, p) =>
+      this.access.prepareUser(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareUserVersion)
+  async prepareUserVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareUserVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareUserVersion, input);
+    return this.run(
+      routes.prepareUserVersion,
+      'access.prepare-user-version',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareUserVersion(c, p, input.params.userId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareApprovalReason)
+  async prepareApprovalReason(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareApprovalReason>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareApprovalReason, input);
+    return this.run(
+      routes.prepareApprovalReason,
+      'access.prepare-approval-reason',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareApprovalReason(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareApprovalReasonVersion)
+  async prepareApprovalReasonVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareApprovalReasonVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareApprovalReasonVersion, input);
+    return this.run(
+      routes.prepareApprovalReasonVersion,
+      'access.prepare-approval-reason-version',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareApprovalReasonVersion(c, p, input.params.reasonId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareApprovalRuleSetting)
+  async prepareApprovalRuleSetting(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareApprovalRuleSetting>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareApprovalRuleSetting, input);
+    return this.run(
+      routes.prepareApprovalRuleSetting,
+      'access.prepare-approval-rule-setting',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareApprovalRuleSetting(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareApprovalRuleSettingVersion)
+  async prepareApprovalRuleSettingVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareApprovalRuleSettingVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareApprovalRuleSettingVersion, input);
+    return this.run(
+      routes.prepareApprovalRuleSettingVersion,
+      'access.prepare-approval-rule-setting-version',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareApprovalRuleSettingVersion(c, p, input.params.settingId, input.body),
+    );
+  }
+
   private async run<Answer extends Record<string, string>>(
     route: Route,
     commandName: string,
     user: SignedInUser,
     key: string,
     content: RequestContent,
-    work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<Answer>>,
+    work: (
+      context: TransactionContext,
+      preparer: Preparer,
+    ) => Promise<Prepared<Answer> | PreparedWithCredential<Answer>>,
   ) {
     if (route.access.kind !== 'action' || user.roleAssignmentId === undefined) {
       throw new CommandDefect(`Route ${route.path} prepares an access change without Authorise`);
@@ -123,9 +214,18 @@ export class AccessChangesController {
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
           const outcome = await work(context, preparer);
-          return outcome.kind === 'success'
-            ? { kind: 'success', answer: outcome.answer, shows: 'nothing' }
-            : { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
+          if (outcome.kind === 'success') {
+            // A new user's temporary password: its credential, for the replay check (code-house-rules 12.5).
+            const credentialIds = 'credentialIds' in outcome ? [...outcome.credentialIds] : [];
+            return {
+              kind: 'success',
+              answer: outcome.answer,
+              shows: 'nothing',
+              ...(credentialIds.length === 0 ? {} : { credentialIds }),
+            };
+          }
+          const causedBySecret = 'causedBySecret' in outcome && outcome.causedBySecret;
+          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret };
         },
       },
     );

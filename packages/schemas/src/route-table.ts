@@ -11,6 +11,7 @@ import {
   sessionViewSchema,
   signInOutcomeSchema,
   signInRequestSchema,
+  userCreateRequestSchema,
 } from './sign-in.js';
 import { idSchema } from './common.js';
 import {
@@ -36,6 +37,21 @@ import {
 } from './roles.js';
 import { secretRegistry } from './secret.js';
 import {
+  approvalReasonDraftSchema,
+  approvalReasonPreparedSchema,
+  approvalReasonsInForceSchema,
+  approvalReasonVersionDraftSchema,
+  approvalRequestViewSchema,
+  approvalRuleSettingDraftSchema,
+  approvalRuleSettingPreparedSchema,
+  approvalRuleSettingVersionDraftSchema,
+  decisionAnswerSchema,
+  decisionRequestSchema,
+  userPreparedSchema,
+  userVersionDraftSchema,
+} from './approvals.js';
+import { myWorkSchema } from './work-item.js';
+import {
   accessHistoryPageSchema,
   accessHistoryQuerySchema,
   actorHistoryQuerySchema,
@@ -50,6 +66,8 @@ import {
  * Who may call a route (code-house-rules 12.1 "Access on every route"; access-and-approvals 7.1). `public`: sign-in
  * and the health check only, no session. `own`: a signed-in user's own credentials and sessions, Authenticate only.
  * `action`: Authenticate, Available and Authorise for that action on that record type (PRD-INT-001, PRD-SEC-005).
+ * `decision`: Authenticate, then Authorise in the command on the decided request's record type (9.3). My work is an
+ * `own` read: every signed-in user has it, with no permission (access-and-approvals 9.11, 11.2).
  */
 export type RouteAccess =
   | { readonly kind: 'public' }
@@ -72,7 +90,13 @@ export type RouteAccess =
        * type is a defect.
        */
       readonly authorisedIn?: 'command';
-    };
+    }
+  /**
+   * Deciding an approval request (access-and-approvals 7.1 step 3, 9.3): the guard Authenticates only, and the
+   * command authorises approve on the record type of the request it decides, with its facts, once it has read the
+   * request (S1-F01-T13). A stand-in grant arrives with S1-F05.
+   */
+  | { readonly kind: 'decision' };
 
 /**
  * A step of first sign-in, or of sign-in after a reset (access-and-approvals 3.2, 7.1 step 1). Until each is done, a
@@ -197,7 +221,7 @@ function checkSecretFields(route: CommandRoute): void {
     if ((kind === 'new-secret' || kind === 'presented-secret') && !registered.has(path)) {
       throw new Error(`Route ${route.path}: secret ${path} must be a secretString()`);
     }
-    if (kind === 'presented-secret' && route.access.kind === 'action') {
+    if (kind === 'presented-secret' && (route.access.kind === 'action' || route.access.kind === 'decision')) {
       throw new Error(`Route ${route.path}: only sign-in and the unlock present a secret`);
     }
   }
@@ -544,6 +568,153 @@ export const routes = {
     command: false,
     response: accessHistoryPageSchema,
     codes: HISTORY_CODES,
+  }),
+  // Users (access-and-approvals 2.1, 3.2, 9.11; DEC-112; S1-F01-T13). A new user and every change to a user is a
+  // version, Awaiting approval until a different authorised person decides it; a new user cannot sign in until then.
+  // The temporary password is a new secret: kept only as an Argon2 hash, never in the key's hash (12.5).
+  prepareUser: defineRoute({
+    method: 'POST',
+    path: '/api/access/users',
+    access: { kind: 'action', action: 'create', recordType: 'access.user' },
+    command: true,
+    body: userCreateRequestSchema,
+    secretFields: [{ path: ['temporaryPassword'], kind: 'new-secret' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: userPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.login-taken', 'access.password-refused', 'access.password-rules-not-set'],
+  }),
+  prepareUserVersion: defineRoute({
+    method: 'POST',
+    path: '/api/access/users/{userId}/versions',
+    params: z.strictObject({ userId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.user' },
+    command: true,
+    body: userVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: userPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.user-not-found'],
+  }),
+  // The approve and reject reasons (access-and-approvals 9.5; POL-02.23, DEC-104) and the approval rule settings (8).
+  prepareApprovalReason: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-reasons',
+    access: { kind: 'action', action: 'create', recordType: 'access.approval_reason' },
+    command: true,
+    body: approvalReasonDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: approvalReasonPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.reason-code-taken'],
+  }),
+  prepareApprovalReasonVersion: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-reasons/{reasonId}/versions',
+    params: z.strictObject({ reasonId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.approval_reason' },
+    command: true,
+    body: approvalReasonVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: approvalReasonPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.reason-not-found'],
+  }),
+  listApprovalReasons: defineRoute({
+    method: 'GET',
+    path: '/api/access/approval-reasons',
+    access: { kind: 'action', action: 'view', recordType: 'access.approval_reason' },
+    command: false,
+    response: approvalReasonsInForceSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareApprovalRuleSetting: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-rule-settings',
+    access: { kind: 'action', action: 'create', recordType: 'access.approval_rule_setting' },
+    command: true,
+    body: approvalRuleSettingDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: approvalRuleSettingPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.rule-setting-exists', 'access.action-type-not-declared'],
+  }),
+  prepareApprovalRuleSettingVersion: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-rule-settings/{settingId}/versions',
+    params: z.strictObject({ settingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.approval_rule_setting' },
+    command: true,
+    body: approvalRuleSettingVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: approvalRuleSettingPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.rule-setting-not-found'],
+  }),
+  // The approval panel (access-and-approvals 9.3, 9.5; PRD-UXP-003): the request, its preparers, its decision, and
+  // whether the reader may decide it now, naming what is missing.
+  readApprovalRequest: defineRoute({
+    method: 'GET',
+    path: '/api/access/approval-requests/{requestId}',
+    params: z.strictObject({ requestId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'access.approval_request' },
+    command: false,
+    response: approvalRequestViewSchema,
+    codes: [...HISTORY_CODES, 'access.approval-request-not-found'],
+  }),
+  // Deciding (access-and-approvals 9.3, 9.5, 9.6; PRD-ACS-006, PRD-ACS-007, PRD-ACS-010; POL-02.23, DEC-104): a
+  // protected action, asking a fresh authenticator code (3.3). In one transaction: the rechecks under the locks, the
+  // decision, the version taking effect or rejected, effective grants, audit and outbox (module-map 6.2 flow A).
+  decideApproval: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-requests/{requestId}/decision',
+    params: z.strictObject({ requestId: idSchema }),
+    access: { kind: 'decision' },
+    command: true,
+    body: decisionRequestSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: decisionAnswerSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.business-date-not-set',
+      'access.approval-request-not-found',
+      'access.no-reason-list-in-force',
+      'access.free-text-not-allowed',
+      'access.free-text-required',
+      'access.reason-not-in-force',
+      'access.not-eligible',
+      'access.self-preparation',
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
+      'access.approval-not-open',
+      'access.approval-superseded',
+      'access.user-not-approved',
+      'access.starts-in-past',
+      'access.assignment-overlaps',
+      'access.version-overlaps',
+      'access.not-withdrawable',
+      'kernel.stale-version',
+      'kernel.cross-site-request',
+    ],
+  }),
+  // My work (access-and-approvals 11.2; module-map 4.8; PRD-ACS-009): every signed-in user's own list, needing no
+  // permission; each item shows only while its reader may act on it.
+  listMyWork: defineRoute({
+    method: 'GET',
+    path: '/api/inbox/my-work',
+    access: { kind: 'own' },
+    command: false,
+    response: myWorkSchema,
+    codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

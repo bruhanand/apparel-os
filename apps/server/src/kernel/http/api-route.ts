@@ -31,7 +31,9 @@ export interface RouteInputOf<R extends Route> {
   readonly query: Parsed<R['query']>;
   readonly body: R extends { command: true; body: infer B } ? Parsed<B> : undefined;
   /** The `Idempotency-Key`, for a command that needs one (code-house-rules 12.4). */
-  readonly idempotencyKey: R extends { command: true; access: { kind: 'own' | 'action' } } ? string : undefined;
+  readonly idempotencyKey: R extends { command: true; access: { kind: 'own' | 'action' | 'decision' } }
+    ? string
+    : undefined;
   /** The path parameters as sent, which the idempotency hash covers. */
   readonly rawParams: Readonly<Record<string, string>>;
 }

@@ -55,7 +55,7 @@ Scope: one synthetic Organisation with a second synthetic Organisation for isola
 | --- | --- |
 | Sign-in | Ready; submitting; refused with one generic message; slowed after repeated failures (setting); locked session asking for the password again |
 | Authenticator enrolment and password change | Secret shown once; code confirmed; refused code; new password refused by the password rules (setting) |
-| Users, roles, assignments | Draft; Awaiting approval; Scheduled; In force; Ended; Rejected; Superseded request (DM-4, `DEC-105`); Withdrawn, for a Scheduled assignment withdrawn before its start (RR-202; the name is OPEN pending the design-language review). The assignment editor shows each dimension's scope and warns that an empty dimension grants nothing |
+| Users, roles, assignments | Draft; Awaiting approval; Scheduled; In force; Ended; Rejected; Superseded request (DM-4, `DEC-105`); Withdrawn, for a Scheduled assignment withdrawn before its start (RR-202; the name is OPEN pending the design-language review). The assignment editor shows each dimension's scope and warns that an empty dimension grants nothing. A user also shows the state of its version in force: Active, Disabled or Ended (RR-214) |
 | Approval reasons | Draft; Awaiting approval; In force |
 | My work | Loading; empty; list ordered by due time then exposure, Unknown above known; error; stale data shown with its as-of time (`PRD-PRF-004`) |
 | Approval panel | Available; unavailable, naming what is missing (no reason list in force, not eligible, self-preparation); fresh code required; decided; superseded |

@@ -238,6 +238,9 @@ export const roleAssignmentWithdrawalVersion = access.table('role_assignment_wit
   reason: text('reason').notNull(),
   decision: text('decision').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** Before its start (7.3), or before approval, when the user's first version is rejected (DEC-117; 0013). */
+  kind: text('kind').notNull(),
+  causedByDecisionId: uuid('caused_by_decision_id'),
 });
 
 /** Who changed a withdrawal version: its preparers (access-and-approvals 9.1). */
@@ -268,6 +271,107 @@ export const effectiveGrant = access.table('effective_grant', {
   brandAll: boolean('brand_all').notNull(),
   brandIds: uuid('brand_ids').array().notNull(),
   asOf: date('as_of', { mode: 'string' }).notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a user version: its preparers (access-and-approvals 9.1; migration 0013). */
+export const appUserVersionChange = access.table('app_user_version_change', {
+  id: uuid('id').primaryKey(),
+  appUserVersionId: uuid('app_user_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An approve or reject reason (access-and-approvals 9.5; POL-02.23). Never changed or deleted. */
+export const approvalReason = access.table('approval_reason', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  kind: text('kind').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A reason's effective-dated versions (code-house-rules 7.3). */
+export const approvalReasonVersion = access.table('approval_reason_version', {
+  id: uuid('id').primaryKey(),
+  approvalReasonId: uuid('approval_reason_id').notNull(),
+  text: text('text').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a reason version: its preparers (access-and-approvals 9.1). */
+export const approvalReasonVersionChange = access.table('approval_reason_version_change', {
+  id: uuid('id').primaryKey(),
+  approvalReasonVersionId: uuid('approval_reason_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The configured parts of one action type's approval rule (access-and-approvals 8). Never changed or deleted. */
+export const approvalRuleSetting = access.table('approval_rule_setting', {
+  id: uuid('id').primaryKey(),
+  actionType: text('action_type').notNull().unique(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A rule setting's effective-dated versions (code-house-rules 7.3). */
+export const approvalRuleSettingVersion = access.table('approval_rule_setting_version', {
+  id: uuid('id').primaryKey(),
+  approvalRuleSettingId: uuid('approval_rule_setting_id').notNull(),
+  bulkAllowed: boolean('bulk_allowed').notNull(),
+  phoneAllowed: boolean('phone_allowed').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a rule setting version: its preparers (access-and-approvals 9.1). */
+export const approvalRuleSettingVersionChange = access.table('approval_rule_setting_version_change', {
+  id: uuid('id').primaryKey(),
+  approvalRuleSettingVersionId: uuid('approval_rule_setting_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An approval request: one document version and action type (access-and-approvals 9.1, 9.6). */
+export const approvalRequest = access.table('approval_request', {
+  id: uuid('id').primaryKey(),
+  actionType: text('action_type').notNull(),
+  documentModule: text('document_module').notNull(),
+  documentRecordType: text('document_record_type').notNull(),
+  documentRecordId: uuid('document_record_id').notNull(),
+  documentVersionId: uuid('document_version_id').notNull(),
+  valueKind: text('value_kind').notNull(),
+  valueBasis: text('value_basis'),
+  valueAmount: bigint('value_amount', { mode: 'number' }),
+  state: text('state').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The preparers a request binds to, frozen when requested (access-and-approvals 9.1). */
+export const approvalRequestPreparer = access.table('approval_request_preparer', {
+  id: uuid('id').primaryKey(),
+  approvalRequestId: uuid('approval_request_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An approval decision: an entry, never edited (access-and-approvals 9.5; domain-model 3.2). */
+export const approvalDecision = access.table('approval_decision', {
+  id: uuid('id').primaryKey(),
+  approvalRequestId: uuid('approval_request_id').notNull().unique(),
+  approverUserId: uuid('approver_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  outcome: text('outcome').notNull(),
+  documentVersionId: uuid('document_version_id').notNull(),
+  approvalReasonVersionId: uuid('approval_reason_version_id'),
+  reasonText: text('reason_text'),
+  comment: text('comment'),
+  valueKind: text('value_kind').notNull(),
+  valueBasis: text('value_basis'),
+  valueAmount: bigint('value_amount', { mode: 'number' }),
+  decidedAt: at('decided_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

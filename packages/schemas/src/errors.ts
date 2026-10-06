@@ -188,8 +188,56 @@ export const accessSessionCodes = declareCodes({
   'access.session-not-found': 'not-found',
 });
 
+/**
+ * The codes of `access` for users, reasons, approval rule settings, approval requests and decisions
+ * (access-and-approvals 2.1, 8, 9.1, 9.3, 9.5, 9.6, 9.11; code-house-rules 12.3; S1-F01-T13). The reasons a decision
+ * is unavailable or refused are among them, each with its kind (RR-246); a wrong or used authenticator code on a
+ * decision is `access.authenticator-code-refused`, as on every protected action (3.3).
+ *
+ * - `access.no-reason-list-in-force`: no approve or reject reason of the outcome's kind is in force, so deciding is
+ *   unavailable, except a reason-list change, which takes free text (POL-02.23, DEC-104); `missing` names the list.
+ * - `access.free-text-not-allowed`: free text on a decision that is not a reason-list change (DEC-104).
+ * - `access.free-text-required`: a listed reason on a reason-list change, which gives free text (DEC-104).
+ * - `access.reason-not-in-force`: the reason picked is not one of the outcome's kind in force today.
+ * - `access.not-eligible`: the decider holds no assignment granting approve on the request's record type, or is not a
+ *   person (9.3; PRD-ACS-006, PRD-SEC-018); `missing` names what is missing.
+ * - `access.self-preparation`: the decider recorded a change in the version, so is one of its preparers (9.3;
+ *   PRD-ACS-006, POL-02.08).
+ * - `access.approval-not-open`: the request is decided or withdrawn already (9.5).
+ * - `access.approval-superseded`: a later version of the document superseded the request (9.6; PRD-ACS-007).
+ * - `access.user-not-approved`: an assignment of a user whose first version is not yet approved (4.3; DEC-116).
+ * - `access.login-taken`: another user has that login, compared without regard to letter case (2.1).
+ * - `access.reason-code-taken`, `access.rule-setting-exists`: the code or action type has its record already.
+ * - `access.action-type-not-declared`: a rule setting for an action type with no approval rule in code (8).
+ * - `access.approval-request-not-found`, `access.reason-not-found`, `access.rule-setting-not-found`.
+ */
+export const accessApprovalCodes = declareCodes({
+  'access.no-reason-list-in-force': 'unavailable',
+  'access.free-text-not-allowed': 'refused',
+  'access.free-text-required': 'refused',
+  'access.reason-not-in-force': 'refused',
+  'access.not-eligible': 'not-authorised',
+  'access.self-preparation': 'refused',
+  'access.approval-not-open': 'refused',
+  'access.approval-superseded': 'refused',
+  'access.user-not-approved': 'refused',
+  'access.login-taken': 'refused',
+  'access.reason-code-taken': 'refused',
+  'access.rule-setting-exists': 'refused',
+  'access.action-type-not-declared': 'refused',
+  'access.approval-request-not-found': 'not-found',
+  'access.reason-not-found': 'not-found',
+  'access.rule-setting-not-found': 'not-found',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
-export const errorCodes = { ...kernelCodes, ...accessCodes, ...accessRoleCodes, ...accessSessionCodes } as const;
+export const errorCodes = {
+  ...kernelCodes,
+  ...accessCodes,
+  ...accessRoleCodes,
+  ...accessSessionCodes,
+  ...accessApprovalCodes,
+} as const;
 export type ErrorCode = keyof typeof errorCodes;
 
 /** The kind of a declared code. */

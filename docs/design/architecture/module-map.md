@@ -647,7 +647,7 @@ Stage 1 events:
 | Event | Emitted when | Typical consumers |
 | --- | --- | --- |
 | `access.assignment-changed` | A role, assignment, limit or stand-in changes | Live updates; `audit` report |
-| `access.approval-requested`, `access.approval-decided` | A request opens or is decided | `inbox`, `notifications` |
+| `access.approval-requested`, `access.approval-decided` | A request opens, or leaves Awaiting approval: decided, superseded by a new version or withdrawn (`S1-F01-T13`) | `inbox`, `notifications` |
 | `access.session-revoked`, `access.device-revoked` | A device or session is revoked | `pos` (offline authority) |
 | `configuration.policy-status-changed`, `configuration.capability-changed`, `configuration.activity-changed` | The gate's inputs change | Live updates; `site-lifecycle` |
 | `organisation.structure-changed`, `organisation.mapping-changed` | Structure or a unit's mapping changes | `reports`, `site-lifecycle` |

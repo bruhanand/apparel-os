@@ -8,7 +8,7 @@ import { secretString } from './secret.js';
 describe('the route table (code-house-rules 12.2)', () => {
   it('PRD-SEC-005 declares the access of every route', () => {
     for (const route of Object.values(routes)) {
-      expect(['public', 'own', 'action']).toContain(route.access.kind);
+      expect(['public', 'own', 'action', 'decision']).toContain(route.access.kind);
     }
   });
 
