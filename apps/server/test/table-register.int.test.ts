@@ -6,13 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationSetFolder, type MigrationSetName } from '../src/kernel/index.js';
 // The kernel's own table definitions, read only to compare them with the database (code-house-rules 3.4, 10.4).
 import { directoryEntry } from '../src/kernel/db/schema.js';
+// The audit module's table definitions, read only for the same comparison.
+import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
-// S1-F01-T02: the migrated databases against their table registers (code-house-rules 3.2, 4.1, 5.2, 10.4).
-// This covers the classes and marks the registers hold today: `unscoped` with no mark. An entry of any other class or
-// with a mark fails here until this test checks what 10.4 asks of it (row-level security, the append-only triggers,
-// the lock grant, the exclusion constraint), so no table can pass unchecked.
+// S1-F01-T02, S1-F01-T07: the migrated databases against their table registers (code-house-rules 3.2, 4.1, 5.2,
+// 10.4). This covers the classes and marks the registers hold today: `unscoped` and `scoped`, marked `append-only` or
+// `partitioned`. An entry of any other class or with another mark fails here until this test checks what 10.4 asks of
+// it (the lock grant, the exclusion constraint), so no table can pass unchecked.
 
 interface RegisterEntry {
   readonly table: string;
@@ -23,8 +25,15 @@ interface RegisterEntry {
   readonly why?: string;
 }
 
-const CHECKED_CLASSES = ['unscoped'];
-const CHECKED_MARKS: readonly string[] = [];
+const CHECKED_CLASSES = ['unscoped', 'scoped'];
+const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned'];
+
+/** The functions a design names for the runtime role to execute, by set (code-house-rules 5.2). */
+const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
+  directory: [],
+  // numbering-and-audit 4.4 and 4.6: sealing, the seal check and the retention function, each SECURITY DEFINER.
+  organisation: ['audit.check_seals', 'audit.delete_after_retention', 'audit.seal_block'],
+};
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
 
 function register(set: MigrationSetName): RegisterEntry[] {
@@ -61,9 +70,11 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
       databases[set],
       `select n.nspname || '.' || c.relname as name
        from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-       where c.relkind in ('r', 'p') and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
+       where c.relkind in ('r', 'p') and not c.relispartition
+         and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
        order by 1`,
     );
+    // A partitioned table is listed once, not each partition (code-house-rules 3.2).
     expect(tables.map((table) => table.name)).toEqual(
       register(set)
         .map((entry) => entry.table)
@@ -145,8 +156,8 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
   });
 
   it('PRD-SEC-005 gives the runtime role USAGE, and nothing else, on each application schema and on public', async () => {
-    // code-house-rules 5.2: USAGE on each application schema and on public; never CREATE. No function is granted to
-    // it yet: a function a design names for it adds its EXECUTE here.
+    // code-house-rules 5.2: USAGE on each application schema and on public; never CREATE. EXECUTE only on the
+    // functions a design names for it.
     const onSchemas = await read<{ name: string; privilege: string }>(
       databases[set],
       `select n.nspname as name, a.privilege_type as privilege
@@ -165,9 +176,80 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
        cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
        join pg_catalog.pg_roles r on r.oid = a.grantee
-       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'`,
+       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'
+       order by 1`,
     );
-    expect(onFunctions).toEqual([]);
+    expect(onFunctions.map((row) => row.name)).toEqual(RUNTIME_FUNCTIONS[set]);
+  });
+
+  it('PRD-SEC-005 a scoped table has row-level security on and a policy for the runtime role (code-house-rules 6.2, 6.3)', async () => {
+    const scoped = register(set).filter((entry) => entry.class === 'scoped');
+    for (const entry of scoped) {
+      const rows = await read<{ rls: boolean; policies: string }>(
+        databases[set],
+        `select c.relrowsecurity as rls,
+                (select count(*) from pg_catalog.pg_policy p
+                 where p.polrelid = c.oid
+                   and (select oid from pg_catalog.pg_roles where rolname = 'aos_runtime') = any (p.polroles))::text
+                  as policies
+         from pg_catalog.pg_class c where c.oid = '${entry.table}'::regclass`,
+      );
+      expect(rows, entry.table).toEqual([{ rls: true, policies: expect.not.stringMatching(/^0$/) as unknown }]);
+    }
+  });
+
+  it('PRD-MOD-011 PRD-SEC-007 an append-only table has its guards, on every partition too (code-house-rules 7.1)', async () => {
+    const appendOnly = register(set).filter((entry) => entry.marks.includes('append-only'));
+    for (const entry of appendOnly) {
+      // The table and each of its partitions: every one carries the TRUNCATE guard; the row guard is the table's.
+      const relations = await read<{ name: string; partition: boolean }>(
+        databases[set],
+        `select '${entry.table}' as name, false as partition
+         union all
+         select i.inhrelid::regclass::text, true from pg_catalog.pg_inherits i where i.inhparent = '${entry.table}'::regclass`,
+      );
+      for (const relation of relations) {
+        const triggers = await read<{ timing: string }>(
+          databases[set],
+          `select case when t.tgtype & 2 = 2 then 'before' else 'after' end
+                  || case when t.tgtype & 1 = 1 then ' row' else ' statement' end
+                  || case when t.tgtype & 16 = 16 then ' update' else '' end
+                  || case when t.tgtype & 8 = 8 then ' delete' else '' end
+                  || case when t.tgtype & 32 = 32 then ' truncate' else '' end as timing
+           from pg_catalog.pg_trigger t
+           where t.tgrelid = '${relation.name}'::regclass and t.tgenabled <> 'D'
+             and t.tgfoid = 'kernel.refuse_change'::regproc
+           order by 1`,
+        );
+        expect(
+          triggers.map((trigger) => trigger.timing),
+          relation.name,
+        ).toEqual(['before row update delete', 'before statement truncate']);
+      }
+    }
+  });
+
+  it('numbering-and-audit 4.4 a partitioned table is partitioned by recording time and covers this month and the next', async () => {
+    const partitioned = register(set).filter((entry) => entry.marks.includes('partitioned'));
+    for (const entry of partitioned) {
+      const rows = await read<{ kind: string; key: string; covered: boolean }>(
+        databases[set],
+        `select c.relkind::text as kind, pg_catalog.pg_get_partkeydef(c.oid) as key,
+                (select count(*) from pg_catalog.pg_inherits i
+                 join pg_catalog.pg_class p on p.oid = i.inhrelid
+                 where i.inhparent = c.oid
+                   and pg_catalog.pg_get_expr(p.relpartbound, p.oid) in (
+                     pg_catalog.format('FOR VALUES FROM (%L) TO (%L)', m.this_month, m.next_month),
+                     pg_catalog.format('FOR VALUES FROM (%L) TO (%L)', m.next_month, m.month_after))) = 2 as covered
+         from pg_catalog.pg_class c,
+              lateral (select pg_catalog.date_trunc('month', pg_catalog.now() at time zone 'UTC') as month) b,
+              lateral (select (b.month at time zone 'UTC')::timestamptz as this_month,
+                              ((b.month + interval '1 month') at time zone 'UTC')::timestamptz as next_month,
+                              ((b.month + interval '2 months') at time zone 'UTC')::timestamptz as month_after) m
+         where c.oid = '${entry.table}'::regclass`,
+      );
+      expect(rows, entry.table).toEqual([{ kind: 'p', key: 'RANGE (recorded_at)', covered: true }]);
+    }
   });
 
   it('PRD-SEC-005 gives the runtime role CONNECT on the database and nothing else', async () => {
@@ -200,19 +282,34 @@ describe('the directory holds only codes and locations (DEC-093; deployment.md s
   });
 
   it('code-house-rules 3.4 the Drizzle definition matches the migrated table', async () => {
-    const config = getTableConfig(directoryEntry);
-    const columns = await read<{ column_name: string; data_type: string; is_nullable: string }>(
-      world.directory,
-      `select column_name, data_type, is_nullable from information_schema.columns
-       where table_schema = '${config.schema ?? ''}' and table_name = '${config.name}' order by column_name`,
-    );
-    const defined = config.columns
-      .map((column) => ({
-        column_name: column.name,
-        data_type: column.getSQLType(),
-        is_nullable: column.notNull ? 'NO' : 'YES',
-      }))
-      .sort((a, b) => a.column_name.localeCompare(b.column_name));
-    expect(columns).toEqual(defined);
+    await expectDefinitionMatches(world.directory, directoryEntry);
   });
 });
+
+describe('the Drizzle definitions of the Organisation set (code-house-rules 3.4, 10.4)', () => {
+  it.each([
+    ['audit.audit_record', auditRecord],
+    ['audit.access_record', accessRecord],
+    ['audit.audit_seal', auditSeal],
+    ['audit.retention_deletion', retentionDeletion],
+  ] as const)('%s matches the migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
+  });
+});
+
+async function expectDefinitionMatches(database: string, table: Parameters<typeof getTableConfig>[0]): Promise<void> {
+  const config = getTableConfig(table);
+  const columns = await read<{ column_name: string; data_type: string; is_nullable: string }>(
+    database,
+    `select column_name, data_type, is_nullable from information_schema.columns
+     where table_schema = '${config.schema ?? ''}' and table_name = '${config.name}' order by column_name`,
+  );
+  const defined = config.columns
+    .map((column) => ({
+      column_name: column.name,
+      data_type: column.getSQLType(),
+      is_nullable: column.notNull ? 'NO' : 'YES',
+    }))
+    .sort((a, b) => a.column_name.localeCompare(b.column_name));
+  expect(columns, config.name).toEqual(defined);
+}

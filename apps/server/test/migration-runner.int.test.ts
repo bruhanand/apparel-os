@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { uuidv7 } from '@apparel-os/domain';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import { migrateAll, migrateDatabase, migrationSetFolder } from '../src/kernel/index.js';
+import { migrateAll, migrateDatabase, migrationSetFolder, readMigrationSet } from '../src/kernel/index.js';
 import { syntheticCode } from './fixtures/synthetic.js';
 import {
   connect,
@@ -18,6 +18,8 @@ import {
 // written to a temporary folder; each starts with the repository's own runner record.
 
 const RECORD = '0001__kernel__migration_record.sql';
+/** Every file of the repository's Organisation set, in order. */
+const ORGANISATION_FILES = readMigrationSet(migrationSetFolder('organisation')).map((file) => file.fileName);
 const scratch = mkdtempSync(join(tmpdir(), 'aos-migrations-'));
 const databases: string[] = [];
 
@@ -123,7 +125,7 @@ describe('migrateDatabase (code-house-rules 4.3)', () => {
       database,
       'select file_name, checksum_sha256, applied_by from kernel.migration order by file_name',
     );
-    expect(rows.map((row) => row.file_name)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(rows.map((row) => row.file_name)).toEqual(ORGANISATION_FILES);
     for (const row of rows) {
       expect(row.checksum_sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(row.applied_by).toBe('aos_migration');
@@ -176,6 +178,33 @@ describe('migrateDatabase (code-house-rules 4.3)', () => {
     ]);
     expect([first, second]).toEqual([[], []]);
     expect(await recordedFiles(database)).toEqual([RECORD, '0002__kernel__syn_first.sql']);
+  });
+
+  it('runs the maintenance file after the files on every run, unrecorded (numbering-and-audit 4.4; CH-5)', async () => {
+    const folder = writeSet('maintenance', {
+      '0002__kernel__syn_first.sql': 'create table kernel.syn_first (id serial primary key);',
+      'maintenance.sql': 'insert into kernel.syn_first default values;',
+    });
+    const database = await emptyDatabase('maintenance');
+    const connectionString = databaseUrl(database, 'migration');
+    expect(await migrateDatabase({ connectionString, folder })).toEqual([RECORD, '0002__kernel__syn_first.sql']);
+    expect(await migrateDatabase({ connectionString, folder })).toEqual([]);
+    expect(await query<{ id: number }>(database, 'select id from kernel.syn_first order by id')).toEqual([
+      { id: 1 },
+      { id: 2 },
+    ]);
+    expect(await recordedFiles(database)).toEqual([RECORD, '0002__kernel__syn_first.sql']);
+  });
+
+  it('fails the run when its maintenance fails, and keeps none of it', async () => {
+    const folder = writeSet('maintenance_failing', {
+      '0002__kernel__syn_first.sql': 'create table kernel.syn_first (id serial primary key);',
+      'maintenance.sql': 'insert into kernel.syn_first default values;\nselect 1 / 0;',
+    });
+    const database = await emptyDatabase('maintenance_failing');
+    const connectionString = databaseUrl(database, 'migration');
+    await expect(migrateDatabase({ connectionString, folder })).rejects.toThrow(/maintenance\.sql failed/);
+    expect(await query(database, 'select id from kernel.syn_first')).toEqual([]);
   });
 
   it('applies each file once when two runs start together', async () => {
@@ -294,13 +323,10 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
     );
 
     expect(await recordedFiles(directory)).toEqual(DIRECTORY_FILES);
-    expect(await recordedFiles(first)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(await recordedFiles(first)).toEqual(ORGANISATION_FILES);
     expect(await exists(failing, 'kernel.migration')).toBe(false);
     expect(await exists(last, 'kernel.migration')).toBe(false);
-    expect(applied).toEqual([
-      `Organisation ${syntheticCode('ORG-A')} ${RECORD}`,
-      `Organisation ${syntheticCode('ORG-A')} 0002__kernel__refuse_change.sql`,
-    ]);
+    expect(applied).toEqual(ORGANISATION_FILES.map((file) => `Organisation ${syntheticCode('ORG-A')} ${file}`));
   });
 
   it('PRD-MOD-001 reads the directory after migrating it, so a first run migrates the directory and finds nobody', async () => {
@@ -322,7 +348,7 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
       organisationConnectionString,
     });
     expect(migrated).toEqual([{ organisationCode: syntheticCode('ORG-A'), databaseName: listed }]);
-    expect(await recordedFiles(listed)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(await recordedFiles(listed)).toEqual(ORGANISATION_FILES);
     expect(await exists(unlisted, 'kernel.migration')).toBe(false);
   });
 

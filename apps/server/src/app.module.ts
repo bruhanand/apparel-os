@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CommandRunnerModule, KernelModule, OrganisationRoutingModule } from './kernel/index.js';
+import { AuditModule } from './modules/audit/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
 import { OrganisationModule } from './modules/organisation/index.js';
@@ -11,6 +12,7 @@ import { OrganisationModule } from './modules/organisation/index.js';
     OrganisationRoutingModule,
     CommandRunnerModule,
     OrganisationModule,
+    AuditModule,
     CatalogueModule,
     PartiesModule,
   ],

@@ -81,7 +81,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | Path | What it holds |
 | --- | --- |
 | `apps/server` | The NestJS modular monolith; it starts only with `AOS_RUNTIME_DATABASE_URL` and `AOS_DATABASE_POOL_MAX` set (`deployment.md` section 4). `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
-| `apps/server/migrations` | The two migration sets, `directory/` and `organisation/`: reviewed SQL files `NNNN__<unit>__<what>.sql` with each set's table register, `tables.json` (code-house-rules 4.1) |
+| `apps/server/migrations` | The two migration sets, `directory/` and `organisation/`: reviewed SQL files `NNNN__<unit>__<what>.sql` with each set's table register, `tables.json`, and the Organisation set's restricted maintenance, `maintenance.sql`, run after every migration run (code-house-rules 4.1, 4.3) |
 | `apps/server/db` | `roles.sql`, which creates the migration and runtime roles; `runtime-limits-synthetic.sql`, the runtime role's starting time limits for synthetic work; and the runbook for creating them on Railway |
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
@@ -102,7 +102,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `pnpm test:integration` | Tests against real PostgreSQL through Testcontainers, each file in its own databases (copies of the migrated templates, or empty ones for the runner and seed tests), at least two files at once. Needs Docker |
 | `pnpm check:modules` | The module boundary check. Runs without an install |
 | `pnpm check:links` | The link and ID check of `docs/` and this file. Runs without an install |
-| `pnpm migrate` | The pre-deploy step: migrates the directory database, then every Organisation database the directory lists, in code order, as the migration role, reaching each on the same server by the name the directory keeps. Refuses a connection string without a host, any other role, or a database that role does not own, and stops and exits 1 at the first failure. Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
+| `pnpm migrate` | The pre-deploy step: migrates the directory database, then every Organisation database the directory lists, in code order, as the migration role, reaching each on the same server by the name the directory keeps, then runs each set's maintenance file. Refuses a connection string without a host, any other role, or a database that role does not own, and stops and exits 1 at the first failure. Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm seed` | The local seed: builds it apart from the application, then creates the two synthetic Organisations' databases, migrates them and the directory database, and lists both in the directory, as the migration role. Refuses unless `AOS_ENVIRONMENT` is `local` or `dev`, and on Railway unless both it and the Railway environment are `dev`; refuses, before changing anything, a directory that lists an Organisation that is not synthetic or a seed code at another database. Writes no other row until the setup step (`S1-F01-T10`). Needs `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm format`, `pnpm format:check` | Prettier |
 

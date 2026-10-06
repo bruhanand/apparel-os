@@ -101,7 +101,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 | Scope | The legal entity, Site, Store, business unit and brand of the record, as it carries them | `PRD-ACS-013`; GC-3 5.3 |
 | Record | Module, record type, identifier and version | `PRD-ACS-013` |
 | Operation | What was done | — |
-| Before and after | The changed fields only; restricted values as 4.3 says | `PRD-ACS-013` |
+| Before and after | The changed fields only; restricted values as 4.3 says; never a hash of a password, a session identifier or a credential (4.3; RR-210) | `PRD-ACS-013`, `PRD-SEC-014` |
 | Reason | The reason given, where one is asked | `PRD-ACS-013` |
 | Source | Screen, import batch and row, job, adapter or device | `PRD-ACS-013` |
 | Approval evidence | The approval decision, and its use when a job posted the document | `PRD-ACS-013`; GC-3 9.8 |
@@ -116,24 +116,33 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 ### 4.3 Restricted values
 
 - An encrypted value (bank details, identity documents, salary and payroll data, an authenticator secret) is never copied into an audit record. The record says the field changed and names the versions of the owning record that held the old and the new value, as supplier bank details are versioned ([structure-and-masters.md](../masters/structure-and-masters.md) 5.1). Where the owning record keeps no earlier version, such as a replaced authenticator secret, the record says so. **Design choice.**
-- Other restricted values (cost, margin, customer contact, employee photos, location evidence) are kept and shown only under field permissions (`PRD-ACS-008`; module-map 4.5).
+- A hash of a password, a session identifier or a credential is never copied either: the record says only that the field changed (`PRD-SEC-014`; RR-210). As a backstop, Record refuses any value that holds an Argon2 hash. **Design choice.**
+- Other restricted values (cost, margin, customer contact, employee photos, location evidence) are kept with their field class and shown only under field permissions (`PRD-ACS-008`; module-map 4.5).
+- The changed fields are stored as a JSON payload whose shape the versioned schema `audit-changes/1` states, each change of one kind: a plain value, a restricted value with its field class, an encrypted field named by versions only, or a secret named by the fact alone (code-house-rules 3.3). **Design choice.**
 
 ### 4.4 Protection
 
-- Append-only. The runtime role may insert and read audit rows, never update or delete them. A trigger refuses every update, and allows a delete only through the retention function (4.6) (`PRD-SEC-007`, `PRD-MOD-011`). **Design choice.**
+- Append-only. The runtime role may insert and read audit rows, never update or delete them. A trigger refuses every update, and allows a delete only through the retention function (4.6) (`PRD-SEC-007`, `PRD-MOD-011`). While no retention period is set the function deletes nothing, so the trigger admits no delete at all; the migration that gives the function its deletion lets the trigger admit it alone. **Design choice.**
+- The recording time is the database's: an insert that names any other recording time is refused, so no row can be dated into a block already sealed (code-house-rules 9). **Design choice.**
 - Sealing. A job seals each closed block of audit and access records: it hashes the block's rows together with the previous seal and stores the result. A check recomputes the chain and reports any difference. Seals go into backups and exports. **Design choice:** sealing after the fact keeps business transactions free of a shared lock.
+  - A block covers a span of recording time, from where the previous block ended (the first from the start) to the moment the job seals it. A row is recorded at its transaction's start, so the block ends at the start of the oldest other transaction still open in the database, or at the job's own start when none is older: no row can still arrive inside a sealed block. A job run that finds no row since the last block seals nothing. **Design choice.**
+  - Each seal names its hash format, `audit-seal/1`: a fixed list of columns of each row, in recording-time and identifier order, with times written in UTC, so a column added later changes no earlier hash. **Design choice.**
+  - Sealing and the check run as two `SECURITY DEFINER` functions, `audit.seal_block` and `audit.check_seals`, since both must see every row whatever the caller's scope (code-house-rules 5.2). The check reports only block numbers and the kind of difference (chain broken, rows differ, hash differs), never a row's content. **Design choice.**
 - The tables are partitioned by recording month. **Design choice.** Partitions are created ahead by restricted maintenance, at an Organisation's setup and on a schedule; a failure to cover the coming months raises an alert, and no audit record is ever silently dropped (DEC-112; [code-house-rules.md](code-house-rules.md) 3.2, CH-5).
+  - The mechanism, specified with the first `audit` migration (CH-5): `audit.ensure_partitions`, owned by the migration role and executable by no other, creates the partitions of both tables by UTC month from the current month through the third month after it, and gives each partition the append-only guard. It runs in that migration, so at every Organisation's setup, and from the Organisation set's `maintenance.sql` on every run of the migration runner, so at every deploy (code-house-rules 4.3). How it runs on a schedule between deploys is RR-240. **Design choice.**
+  - The coverage check reads the catalogue and raises the alert when either table cannot take rows through the end of next month, which leaves at least a month to act. An insert with no partition fails its command, so a record is refused loudly, never dropped. **Design choice.**
 
 ### 4.5 Reading history
 
 - The history of a record, or of an actor, is read inside the reader's scope. Audit rows carry the record's scope facts, and row-level security applies (`PRD-SEC-005`; GC-3 7.2). Restricted values follow field permissions (`PRD-ACS-008`).
+- Until `access` adds the read policy with `access.row_visible` (`S1-F01-T11`; RR-242), the tables carry only the insert policy of code-house-rules 6.3, so the runtime role reads no row.
 - A read model serves the stage 1 report "access and audit history" ([phases.md](../../phases.md), stage 1).
 
 ### 4.6 Retention
 
 - Retention is set by record class, including audit records, and checked against legal requirements (`POL-18.05`). The periods are OPEN (V-13; KDPS Owner, Admin, CA; stage 1 live use). Until they are set, nothing is deleted.
 - A legal hold overrides routine deletion (`POL-18.05`).
-- Deletion after retention runs only through the retention function, one sealed block at a time, and records which block went, when and under which schedule. **Design choice.**
+- Deletion after retention runs only through the retention function, one sealed block at a time, and records which block went, when and under which schedule. **Design choice.** The function, `audit.delete_after_retention`, exists and is `SECURITY DEFINER`; while no period is set it deletes nothing.
 - Retention, deletion and legal holds are designed with backup, restore and export (GC-9). Customer consent and notices are designed with the stage 4 counter, and employee data with the stage 6 HR design (DEC-105, module-map MM-15). **Design choice.**
 
 ## 5. The access record
