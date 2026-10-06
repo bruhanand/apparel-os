@@ -69,6 +69,19 @@ describe('UnavailableState (design-language 10.17; PRD-UXP-003)', () => {
     expect(html).toContain('bg-w-bg');
   });
 
+  it('PRD-UXP-003 names the missing permission: the action and the record type (S1-F01-AT18)', () => {
+    const html = renderToStaticMarkup(
+      <UnavailableState
+        missing={[
+          { kind: 'action', action: 'view', recordType: 'access.role' },
+          { kind: 'permission', action: 'approve', recordType: 'access.user' },
+        ]}
+      />,
+    );
+    expect(text(html)).toContain('Needs View on Role.');
+    expect(text(html)).toContain('Needs Approve on User.');
+  });
+
   it('names an item of a kind it has no text for as something missing, never nothing', () => {
     expect(text(renderToStaticMarkup(<UnavailableState missing={[{ kind: 'new-kind' }]} />))).toContain(
       'Something it needs is missing.',

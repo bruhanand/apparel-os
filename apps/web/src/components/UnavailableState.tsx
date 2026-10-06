@@ -2,8 +2,19 @@ import type { MissingItem } from '@apparel-os/schemas';
 import { isMessageId, t } from '../messages/catalogue';
 import { Banner } from './Banner';
 
-/** The text of one missing item, by its kind (code-house-rules 12.3 "What is missing"). */
+/**
+ * The text of one missing item, by its kind (code-house-rules 12.3 "What is missing"). A missing permission names its
+ * action and record type, so the person knows what to ask for (PRD-UXP-003).
+ */
 export function missingText(item: MissingItem): string {
+  const action = `action.${item.action ?? ''}`;
+  if ((item.kind === 'action' || item.kind === 'permission') && item.recordType !== undefined && isMessageId(action)) {
+    const recordType = `record-type.${item.recordType}`;
+    return t('missing.permission.named', {
+      action: t(action),
+      recordType: isMessageId(recordType) ? t(recordType) : item.recordType,
+    });
+  }
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
 }
