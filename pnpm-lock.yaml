@@ -260,6 +260,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@apparel-os/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@apparel-os/ui':
         specifier: workspace:*
         version: link:../../packages/ui

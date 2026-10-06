@@ -1,6 +1,6 @@
 # S1-F01-T04 — Idempotency and API conventions
 
-Status: in-progress
+Status: done
 Blocked by: T03 (done)
 Feature: [S1-F01 First access](../spec.md)
 
@@ -22,7 +22,9 @@ Idempotency helper; Nest wiring; OpenAPI output; typed client; tests, including 
 
 ## Notes
 
-- Partial work on the idempotency part only, unreviewed and with **no tests**: branch `worktree-agent-ac4283b04ef22abff`, commit `a98dcbe` (10 files, +1,242 lines: migration `organisation/0003__kernel__idempotency.sql`, `kernel/idempotency/` canonical form, contracts, errors, helper, module). It forks from `07c8acf` and should apply cleanly. Use it as a starting point; review it as new code.
-- Brief: section 11 of the spec and house rules 12.4 and 12.5 (replay, secrets, uncertain commit).
-- RR-208: how a secret shown once is sent and described (house rules 12.6, `DEC-113`); built here and in T08.
+- Built on branch `s1/f01-t04-impl` from the earlier unreviewed draft (`0469a12`), rebuilt test-first: commit `2f4835f`.
+- Idempotency: migration `organisation/0004__kernel__idempotency.sql` (three append-only `kernel` tables), `kernel/idempotency/` (canonical form, helper, contracts, module). Tested on real PostgreSQL in `test/idempotency.int.test.ts`: replay, scope, CH-14 replay access, kept and unkept refusals, stale version kept, changed content kept with secrets out and restricted values encrypted, 12.5 and 12.6 replays, two at once (wait, rollback, lock limit), and an uncertain commit (lost connection and time limit, committed and not) never giving a second effect.
+- API conventions (from T05): `packages/schemas` route table, error envelope and kernel codes, `shownOnceSecret()` (RR-208), generated `openapi.json` checked by a unit test, typed client; the server's route interceptor, envelope filter, route declaration check, `Cache-Control: no-store` and the request log line; the health endpoint on the route table; the web app's client in `apps/web/src/api.ts`. A command through the API under one key: `test/idempotency-api.int.test.ts`.
+- Design details written into code-house-rules 12.2, 12.3 and 12.4 in the same change: the `issues` field, `kernel.invalid-request` and `kernel.not-found`, the replay header on a kept refusal, the version token hashed as part of the body, `x-error-codes` and `x-access` in OpenAPI.
+- Follow-ups: RR-245 (Origin check, T08), RR-246 (access codes, T13), RR-247 (`paiseSchema` codec), RR-248 (secret check and cipher, T08), RR-249 (body limit, S1-F06).
 - T05 (API conventions in code) merged into this ticket on 6 Oct 2026 (product owner).

@@ -5,16 +5,16 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationSetFolder, type MigrationSetName } from '../src/kernel/index.js';
 // The kernel's own table definitions, read only to compare them with the database (code-house-rules 3.4, 10.4).
-import { directoryEntry } from '../src/kernel/db/schema.js';
+import * as kernelTables from '../src/kernel/db/schema.js';
 // The audit module's table definitions, read only for the same comparison.
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
-// S1-F01-T02, S1-F01-T07: the migrated databases against their table registers (code-house-rules 3.2, 4.1, 5.2,
-// 10.4). This covers the classes and marks the registers hold today: `unscoped` and `scoped`, marked `append-only` or
-// `partitioned`. An entry of any other class or with another mark fails here until this test checks what 10.4 asks of
-// it (the lock grant, the exclusion constraint), so no table can pass unchecked.
+// S1-F01-T02, S1-F01-T04, S1-F01-T07: the migrated databases against their table registers (code-house-rules 3.2,
+// 4.1, 5.2, 10.4). This covers the classes and marks the registers hold today: `unscoped` and `scoped`, marked
+// `append-only` or `partitioned`. An entry of any other class or with another mark fails here until this test checks
+// what 10.4 asks of it (the lock grant, the exclusion constraint), so no table can pass unchecked.
 
 interface RegisterEntry {
   readonly table: string;
@@ -121,6 +121,43 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        where a.attacl is not null and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'`,
     );
     expect(columnGrants).toEqual([]);
+  });
+
+  it('PRD-MOD-011 guards every append-only table with the refuse_change triggers and gives the runtime role no DELETE or UPDATE', async () => {
+    // code-house-rules 7.1: a BEFORE UPDATE OR DELETE row trigger and a BEFORE TRUNCATE statement trigger calling
+    // kernel.refuse_change(). The exact grants are checked above; here, that neither DELETE nor UPDATE is among them.
+    // A partition carries only the TRUNCATE guard; the per-partition test below checks it (S1-F01-T07).
+    const appendOnly = register(set).filter((entry) => entry.marks.includes('append-only'));
+    for (const entry of appendOnly) {
+      expect(entry.runtime, entry.table).not.toContain('DELETE');
+      expect(entry.runtime, entry.table).not.toContain('UPDATE');
+    }
+    const triggers = await read<{ name: string; timing: string }>(
+      databases[set],
+      `select n.nspname || '.' || c.relname as name,
+              case when (t.tgtype & 1) = 1 then 'row' else 'statement' end
+                || case when (t.tgtype & 2) = 2 then ' before' else ' after' end
+                || case when (t.tgtype & 16) = 16 then ' update' else '' end
+                || case when (t.tgtype & 8) = 8 then ' delete' else '' end
+                || case when (t.tgtype & 32) = 32 then ' truncate' else '' end as timing
+       from pg_catalog.pg_trigger t
+       join pg_catalog.pg_class c on c.oid = t.tgrelid
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+       join pg_catalog.pg_proc p on p.oid = t.tgfoid
+       join pg_catalog.pg_namespace pn on pn.oid = p.pronamespace
+       where not t.tgisinternal and pn.nspname = 'kernel' and p.proname = 'refuse_change' and t.tgenabled <> 'D'
+         and not c.relispartition
+       order by 1, 2`,
+    );
+    expect(triggers).toEqual(
+      appendOnly
+        .map((entry) => entry.table)
+        .sort()
+        .flatMap((name) => [
+          { name, timing: 'row before update delete' },
+          { name, timing: 'statement before truncate' },
+        ]),
+    );
   });
 
   it('PRD-SEC-005 leaves PUBLIC nothing on an application schema or function', async () => {
@@ -280,9 +317,29 @@ describe('the directory holds only codes and locations (DEC-093; deployment.md s
       { table_name: 'kernel.directory_entry', column_name: 'database_name', data_type: 'text', is_nullable: 'NO' },
     ]);
   });
+});
 
-  it('code-house-rules 3.4 the Drizzle definition matches the migrated table', async () => {
-    await expectDefinitionMatches(world.directory, directoryEntry);
+describe('the Drizzle definitions of kernel (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(kernelTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    const config = getTableConfig(table);
+    const qualified = `${config.schema ?? 'public'}.${config.name}`;
+    const set = register('directory').some((entry) => entry.table === qualified) ? 'directory' : 'organisation';
+    const columns = await read<{ column_name: string; data_type: string; is_nullable: string }>(
+      databases[set],
+      `select a.attname as column_name, pg_catalog.format_type(a.atttypid, a.atttypmod) as data_type,
+              case when a.attnotnull then 'NO' else 'YES' end as is_nullable
+       from pg_catalog.pg_attribute a
+       where a.attrelid = '${qualified}'::regclass and a.attnum > 0 and not a.attisdropped
+       order by a.attname`,
+    );
+    const defined = config.columns
+      .map((column) => ({
+        column_name: column.name,
+        data_type: column.getSQLType(),
+        is_nullable: column.notNull ? 'NO' : 'YES',
+      }))
+      .sort((a, b) => a.column_name.localeCompare(b.column_name));
+    expect(columns).toEqual(defined);
   });
 });
 

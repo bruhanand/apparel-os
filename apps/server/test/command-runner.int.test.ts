@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { sql } from 'drizzle-orm';
-import { Client, type PoolClient } from 'pg';
+import { Client } from 'pg';
 import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -25,6 +25,13 @@ import {
 } from '../src/kernel/index.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl, sqlState } from './support/postgres.js';
+import {
+  backendPid,
+  gate,
+  interceptingCommit,
+  terminateBackend as terminateBackendIn,
+  waitUntilWaitingForLock as waitUntilWaitingForLockIn,
+} from './support/transactions.js';
 
 // S1-F01-T03: the command context (code-house-rules 5.1, 6.2, 8.1 to 8.3, 9, 12.11; module-map 4.1; DEC-112, CH-3).
 // Every command runs as the runtime role through Organisation routing, as the application does (code-house-rules
@@ -235,42 +242,8 @@ async function setLockedRows(states: Readonly<Record<string, string>>): Promise<
   });
 }
 
-/** A gate a test opens to let a waiting command go on. */
-function gate(): { wait: Promise<void>; open: () => void } {
-  let open = (): void => undefined;
-  const wait = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { wait, open };
-}
-
-async function backendPid(context: TransactionContext): Promise<number> {
-  const result = await context.tx.execute<{ pid: number }>(sql`select pg_catalog.pg_backend_pid() as pid`);
-  const pid = result.rows[0]?.pid;
-  if (pid === undefined) throw new Error('No backend pid');
-  return pid;
-}
-
-/**
- * Waits until PostgreSQL shows the backend waiting for a lock (code-house-rules 10.3): the test drives the order by
- * what PostgreSQL reports, never by a sleep.
- */
-async function waitUntilWaitingForLock(pid: number): Promise<void> {
-  const observer = await connect(organisationA, 'superuser');
-  try {
-    const deadline = Date.now() + 20_000;
-    for (;;) {
-      const result = await observer.query<{ wait_event_type: string | null }>(
-        'select wait_event_type from pg_catalog.pg_stat_activity where pid = $1',
-        [pid],
-      );
-      if (result.rows[0]?.wait_event_type === 'Lock') return;
-      if (Date.now() > deadline) throw new Error(`Backend ${String(pid)} never waited for a lock`);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  } finally {
-    await observer.end();
-  }
+function waitUntilWaitingForLock(pid: number): Promise<void> {
+  return waitUntilWaitingForLockIn(organisationA, pid);
 }
 
 /** Whether another transaction holds a lock on the row that conflicts with FOR NO KEY UPDATE, without waiting. */
@@ -311,21 +284,8 @@ async function waitLongerForLocks(context: TransactionContext): Promise<void> {
 
 class SyntheticRefusal extends Error {}
 
-/** Ends a backend from another session, as a lost connection would, and waits until PostgreSQL shows it gone. */
-async function terminateBackend(pid: number): Promise<void> {
-  const operator = await connect(organisationA, 'superuser');
-  try {
-    await operator.query('select pg_catalog.pg_terminate_backend($1)', [pid]);
-    const deadline = Date.now() + 10_000;
-    for (;;) {
-      const left = await operator.query('select 1 from pg_catalog.pg_stat_activity where pid = $1', [pid]);
-      if (left.rows.length === 0) return;
-      if (Date.now() > deadline) throw new Error(`Backend ${String(pid)} did not end`);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-  } finally {
-    await operator.end();
-  }
+function terminateBackend(pid: number): Promise<void> {
+  return terminateBackendIn(organisationA, pid);
 }
 
 /** The runner's JSON log lines that carry a correlation identifier as their own field (code-house-rules 12.11). */
@@ -1094,36 +1054,6 @@ describe('time limits (code-house-rules 5.1; DEC-112, CH-3, RR-200)', () => {
 });
 
 describe('an uncertain commit (code-house-rules 12.3, 12.4)', () => {
-  type Query = (...args: unknown[]) => Promise<unknown>;
-
-  /**
-   * The Organisation as the runner sees it, with every COMMIT its connections send handed to `intercept`, which
-   * decides when the real COMMIT is sent. Everything else reaches the real connection unchanged.
-   */
-  function interceptingCommit(
-    base: RoutedOrganisation,
-    intercept: (send: () => Promise<unknown>, pid: number) => Promise<unknown>,
-  ): RoutedOrganisation {
-    const pool = base.db.$client;
-    const connect = async (): Promise<PoolClient> => {
-      const raw = await pool.connect();
-      const pid = (await raw.query<{ pid: number }>('select pg_catalog.pg_backend_pid() as pid')).rows[0]?.pid ?? 0;
-      return new Proxy(raw, {
-        get: (target, property) => {
-          if (property !== 'query') return Reflect.get(target, property, target) as unknown;
-          return (...args: unknown[]) => {
-            const send = (): Promise<unknown> => (target.query as unknown as Query).apply(target, args);
-            const statement = args[0];
-            const text =
-              typeof statement === 'object' && statement !== null && 'text' in statement ? statement.text : statement;
-            return text === 'commit' ? intercept(send, pid) : send();
-          };
-        },
-      });
-    };
-    return { ...base, db: { $client: { connect } } as unknown as RoutedOrganisation['db'] };
-  }
-
   const terminate = terminateBackend;
 
   const insertEntry = (context: TransactionContext, writtenBy: string): Promise<unknown> =>

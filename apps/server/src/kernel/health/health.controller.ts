@@ -1,10 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
-import { healthResponseSchema, type HealthResponse } from '@apparel-os/schemas';
+import { routes, type HealthResponse } from '@apparel-os/schemas';
+import { Controller } from '@nestjs/common';
+import { ApiRoute } from '../http/api-route.js';
 
-@Controller('health')
+/** The health check: a public read with no unit in its path (code-house-rules 12.1). */
+@Controller()
 export class HealthController {
-  @Get()
+  @ApiRoute(routes.health)
   get(): HealthResponse {
-    return healthResponseSchema.parse({ status: 'ok' });
+    return { status: 'ok' };
   }
 }
