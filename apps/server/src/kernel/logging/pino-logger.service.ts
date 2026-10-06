@@ -6,6 +6,51 @@ const REDACTED_KEYS = ['password', 'token', 'secret', 'authorization', 'cookie']
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+
+/** The database error behind an error, looking through the causes a library wraps it in (such as Drizzle's). */
+function databaseErrorOf(error: Error): (Error & { code: string }) | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if ('code' in current && typeof current.code === 'string' && SQLSTATE.test(current.code)) {
+      return current as Error & { code: string };
+    }
+    current = current.cause;
+  }
+  return undefined;
+}
+
+function textField(error: Error, key: 'constraint' | 'table' | 'schema'): string | undefined {
+  const value = (error as unknown as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** Whether an error is a query wrapper, such as Drizzle's, whose message holds the query and its parameters. */
+function wrapsQuery(error: Error): boolean {
+  return 'query' in error || 'params' in error;
+}
+
+/**
+ * What a log keeps of an error (code-house-rules 12.11; PRD-SEC-006, PRD-SEC-014). Of a database error, or one
+ * wrapping it: its type, SQLSTATE, constraint, schema and table, never the database's message, detail, where, query,
+ * bound parameters or stack, which can hold values. The message of the application's own wrapper, such as a failed
+ * migration naming its file, is kept: the application never puts a database's words into it. Of any other error: its
+ * type, message and stack.
+ */
+export function loggedError(error: Error): { readonly fields: Record<string, unknown>; readonly message: string } {
+  const database = databaseErrorOf(error);
+  if (database === undefined) {
+    return { fields: { type: error.name, message: error.message, stack: error.stack }, message: error.message };
+  }
+  const fields: Record<string, unknown> = { type: error.constructor.name, sqlState: database.code };
+  for (const key of ['constraint', 'schema', 'table'] as const) {
+    const value = textField(database, key);
+    if (value !== undefined) fields[key] = value;
+  }
+  const own = error !== database && !wrapsQuery(error);
+  return { fields, message: own ? error.message : `A database error, SQLSTATE ${database.code}` };
+}
+
 /**
  * A logger that writes named fields of their own on a line, such as the correlation identifier
  * (code-house-rules 12.11). Fields hold identifiers and codes only, never a secret, a restricted value or a body.
@@ -68,7 +113,8 @@ export class PinoLoggerService implements LoggerService, StructuredLogger {
       if (stack !== undefined) fields.stack = stack;
     }
     if (message instanceof Error) {
-      this.logger[level]({ ...fields, err: message }, message.message);
+      const logged = loggedError(message);
+      this.logger[level]({ ...fields, error: logged.fields }, logged.message);
     } else if (typeof message === 'string') {
       this.logger[level](fields, message);
     } else {
