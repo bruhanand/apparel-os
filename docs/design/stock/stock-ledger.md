@@ -352,7 +352,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 
 ### 10.1 Idempotency
 
-- Every write carries an idempotency key, scoped by operation kind and by the user or device that sent it. An offline bill uses its device, tax registration, financial year and bill number (`PRD-OFF-009`, `PRD-POS-020`, `PRD-OFF-012`).
+- Every write carries an idempotency key (sign-in excepted, [code-house-rules.md](../platform/code-house-rules.md) 12.4), scoped by operation kind and by the user, service identity or device that sent it; a job step uses the job's identity (code-house-rules 12.4). An offline bill uses its device, tax registration, financial year and bill number (`PRD-OFF-009`, `PRD-POS-020`, `PRD-OFF-012`).
 - The ledger keeps the key, a hash of the request and the result.
   - Same key, same content: return the first result. No second effect.
   - Same key, different content: reject, and keep the request for investigation (`PRD-INT-002`).

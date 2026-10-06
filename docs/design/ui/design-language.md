@@ -318,10 +318,11 @@ Rules:
 
 ### Proposed states (for design review)
 
-Only tax-document states are unsettled. Signed and Revoked (`DEC-092`) and Working set expired (`DEC-062`) are in the table above. Adding a state needs a design review; the product owner decides the final names.
+Tax-document states and Withdrawn are unsettled. Signed and Revoked (`DEC-092`) and Working set expired (`DEC-062`) are in the table above. Adding a state needs a design review; the product owner decides the final names.
 
 - An unsigned policy shows the 10.17 banner, not a badge.
 - Tax-document states (a cancelled or corrected tax invoice, `PRD-TAX-004`, `DEC-057`): state names and family are **OPEN** (product owner, design review; the CA for the treatment under `POL-10.11`; stage 4). They stay separate from the operational states of bills and returns.
+- Withdrawn: a Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change (product owner, 6 Oct 2026, RR-202; [code-house-rules.md](../platform/code-house-rules.md) 7.3). Name and family are **OPEN** (design review; code-house-rules CH-11; stage 1, `S1-F01-T11`).
 - "Ended" stays in Neutral (an offer or end-of-season price list that has run its course). A device registration or session that was ended by loss is Revoked (Stopped).
 
 ---

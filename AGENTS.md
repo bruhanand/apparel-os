@@ -146,7 +146,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
-| `packages/schemas` | Shared Zod schemas for the API |
+| `packages/schemas` | Shared Zod schemas for the API, with the route table and the typed client (code-house-rules 12.2) |
 | `packages/ui` | Shared UI helpers for shadcn/ui |
 | `tools/module-check` | The module boundary check |
 
@@ -168,7 +168,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
 - The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
-- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is not written yet.
+- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is drafted and awaits the product owner's approval before `S1-F01-T04`.
 
 ## Completing a code task
 
@@ -231,7 +231,7 @@ These come from the PRD's "Technical platform" section and apply to all code.
 - **Shared calculations.** Pricing, tax, discount allocation, rounding and incentive logic is written once in shared TypeScript and used by both server and counter.
 - **Records are append-only.** Official document payloads and posted stock and accounting entries are never updated or deleted. Corrections and lifecycle changes are their own linked, attributable records; status projections are separate and rebuildable. Stock balances are derived from movements.
 - **Money.** INR is stored as integer paise; another enabled currency in its configured integer minor unit. Intermediate steps are exact, and an amount becomes whole paise only under an explicit, named rounding rule. No binary floating point for money. Unknown values stay distinct from zero.
-- **Integrity.** Every write carries a scoped idempotency key. Locks are taken in a deterministic order, and authority, document version, state, independent approval and quantity are rechecked under the locks.
+- **Integrity.** Every write carries a scoped idempotency key (sign-in excepted, code-house-rules 12.4). Locks are taken in a deterministic order, and authority, document version, state, independent approval and quantity are rechecked under the locks.
 - **External systems.** Tally, GST, bank and messaging outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction. Retry only after reconciliation.
 
 

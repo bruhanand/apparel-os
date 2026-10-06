@@ -163,6 +163,7 @@ All are **design choices** that implement the cited rules.
 | `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it |
 | `merchandise` must not make a profile piece-tracked at a Site holding its stock without a planned labelling count (`PRD-MER-018`; 4.12) | `merchandise` defines a stock-presence contract; `stock` implements it |
 | `exceptions` must verify the business outcome before closure (`PRD-EXC-002`) | `exceptions` defines a resolution-check contract; the module that owns the linked record implements it |
+| `kernel`'s idempotency helper must check a replayed secret against a credential `access` owns ([code-house-rules.md](../platform/code-house-rules.md) 12.5) | `kernel` defines a credential-check contract; `access` implements it. `kernel` never reads `access` tables |
 
 7. **External systems.** One module owns each adapter. Outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction (`PRD-INT-006`, `PRD-INT-007`; section 9).
 8. **No bypass.** Jobs, imports, live updates, search and AI answers go through the same interfaces and the same access checks as a person's request (`PRD-SEC-005`). A service identity is an actor with its own audit identity (`PRD-SEC-018`).
