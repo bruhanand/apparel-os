@@ -28,16 +28,16 @@ Each item is counted once, at the earliest gate it blocks.
 | Category | Active | Design | Code | Accept | Exit | Live | None |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Missing implementation | 11 | — | 11: each is the work of its feature | — | — | — | — |
-| Missing or unreviewed design | 33 | 8 | 23 | — | 1 | 1 | — |
-| Unresolved product behaviour | 19 | 5 | 2 | 1 | — | 4 | 7 |
-| Customer configuration | 104 | 1 | 1 | 1 | — | 100 | 1 |
+| Missing or unreviewed design | 34 | 8 | 23 | — | 1 | 1 | 1 |
+| Unresolved product behaviour | 21 | 5 | 2 | 1 | — | 6 | 7 |
+| Customer configuration | 107 | 1 | 1 | 1 | — | 103 | 1 |
 | External approval | 30 | — | — | 1 | — | 29 | — |
 | Runtime verification | 12 | — | 2 | 7 | 1 | 1 | 1 |
-| **Total** | **209** | **14** | **39** | **10** | **2** | **135** | **9** |
+| **Total** | **215** | **14** | **39** | **10** | **2** | **140** | **10** |
 
 Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V-numbers, and the settled or baseline questions listed in section 10. Stale report entries are in section 9.
 
-**The short answer.** Nothing a KDPS person must answer blocks the start of coding: 135 of the 209 items block only live activation. The first feature waits only on the stage 0 start gate ([stage-0-preparation.md](stage-0-preparation.md) section 2): Doc check running in CI (RR-186), a verified toolchain (RR-185), house rules part A (RR-011), the migration roles and fixtures (RR-006) and the `AGENTS.md` reviews (RR-020). Inside the feature: house rules part B and the deployment reviews before `S1-F01-T04` (RR-011, RR-021); the review of the setup-step permission matrix, the rerun check of temporary passwords, session routing and first passwords before `S1-F01-T10` (RR-017; written by `S1-F01-T01`, the rest settled by `DEC-112`); the screen-design reviews before `S1-F01-T14` (RR-019, RR-023). Team size, the extra worktree and whether this plan is gated block nothing (RR-031, RR-050, RR-052). The stock-and-posting feature also waits on design that does not exist yet (RR-012, and RR-013, whose decisions H1 to H6 `DEC-112` has taken) and on 25 never-reviewed ledger sections (RR-018).
+**The short answer.** Nothing a KDPS person must answer blocks the start of coding: 140 of the 215 items block only live activation. The first feature waits only on the stage 0 start gate ([stage-0-preparation.md](stage-0-preparation.md) section 2): Doc check running in CI (RR-186), a verified toolchain (RR-185), house rules part A (RR-011), the migration roles and fixtures (RR-006) and the `AGENTS.md` reviews (RR-020). Inside the feature: house rules part B and the deployment reviews before `S1-F01-T04` (RR-011, RR-021); the review of the setup-step permission matrix, the rerun check of temporary passwords, session routing and first passwords before `S1-F01-T10` (RR-017; written by `S1-F01-T01`, the rest settled by `DEC-112`); the screen-design reviews before `S1-F01-T14` (RR-019, RR-023). Team size, the extra worktree and whether this plan is gated block nothing (RR-031, RR-050, RR-052). The stock-and-posting feature also waits on design that does not exist yet (RR-012, and RR-013, whose decisions H1 to H6 `DEC-112` has taken) and on 25 never-reviewed ledger sections (RR-018).
 
 ## 3. Missing implementation
 
@@ -95,6 +95,7 @@ Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V
 | RR-215 | `S1-F01-T01` round 2 review; [s1-f01-first-access.md](s1-f01-first-access.md) section 5 step 6 | The user, the role and the assignment are approved as separate requests; nothing says what happens to an assignment whose user's first version is still pending or was rejected. Settle in the approvals design before the decide command | Builders; reviewed under the doc gate | S1-F01-T13 | Code: S1-F01-T13 | Yes |
 | RR-217 | Round 1 review of house rules part B, 6 Oct 2026; house rules 12.5, CH-8; `PRD-INT-002` | Extends RR-207. An identical replay carrying a new password or temporary password cannot be compared on its secret when the first outcome was a kept refusal or the credential the first run wrote has since been replaced. Decide whether it is answered with the first answer or refused as changed content; until then it is refused (fail-safe). Also confirm that an authenticator code is proof, not content | Product owner | S1-F01 | Code: S1-F01-T04 | Yes |
 | RR-218 | Round 1 review of house rules part B, 6 Oct 2026; house rules 12.6, CH-12; `PRD-INT-002`, `PRD-SEC-014` | An identical replay of an answer that showed a secret once (enrolment, a service identity's secret) is refused instead of returning the original result. Decide whether that departure from `PRD-INT-002` stands; a PRD wording change would need a decision entry first. Until then the replay is refused (fail-safe) | Product owner | S1-F01-T08 | Code: S1-F01-T08 | Yes |
+| RR-224 | `S1-F11` review, 6 Oct 2026; code-house-rules 11.1, 11.2; [s1-f11-shared-calculations.md](s1-f11-shared-calculations.md) section 10 | House rules 11.1 say the labels of synthetic records come from `apps/server/test/fixtures/synthetic.ts`, but a package under `packages/` cannot import from `apps/`. `packages/calculations` keeps its own labelled file, `test/synthetic.ts`. Clarify 11.1 so a package keeps its own synthetic labels file | Product owner, through the doc gate | Code house rules | None; a tidy-up, not a code gate | Yes |
 
 ## 5. Unresolved product behaviour
 
@@ -119,6 +120,8 @@ Not counted: 21 data-note questions dropped as about old sheets only, 3 struck V
 | RR-201 | GC6-17; `DEC-112` (GC6-3); data notes G-33 | Whether an ordinary external hyperlink in a sheet, such as a Google Drive link in KDPS's files, is an unapproved link that refuses the file, or is kept as text and never followed. `DEC-112` says the dependency rule alone refuses no ordinary hyperlink and approves no external link; GC-6 9.3 keeps refusing unapproved links until this is answered | Product owner | S1-F06, S2-F12 | None: refused until decided | Yes |
 | RR-205 | Found 6 Oct 2026 (`S1-F01-T01`): [stages-and-features.md](stages-and-features.md) `S1-F06` and `S1-F07`; RR-033; GC6-2; GC-6 9.2 | **Decided by the product owner, 6 Oct 2026.** (1) CSV: `S1-F06` accepts on XLSX only; the CSV reader is chosen and built in `S1-F07`, still gated by RR-033. (2) PDF: stage 1 keeps a PDF as stored evidence only (GC-6 9.2); its text extraction comes in stage 2 with `S2-F05`, which completes `PRD-IMP-001`. [stages-and-features.md](stages-and-features.md) rows `S1-F06` and `S1-F07` are updated. PDF.js stays the reader `DEC-112` chose; its pin is RR-033's | Product owner | S1-F06, S1-F07 | None: decided | Yes |
 | RR-206 | GC3-13 (access-and-approvals 9.11, 16), found 6 Oct 2026 in `S1-F01-T01` | How the first Admin's or the first approver's lost password or authenticator is restored before anyone in the Organisation holds a credential reset. The setup step's roles hold no reset (9.11), so until a later approved role assignment grants one, nobody in the Organisation can reset either of them | Product owner | S1-F01 | Live S1 | Yes |
+| RR-222 | GC7-15 | `PRD-PTW-011` rounds ticket MARGIN half up; for a negative MARGIN (P RATE above MRP), which way does an exact half go? Until decided, only an exact negative half is refused (`not-decided`); every other margin rounds normally | Product owner | S1-F11, S2 PT workbench | Live S2 | Yes |
+| RR-223 | GC7-16 | The paise a spread leaves go to the line with the largest value (GC-7 5.6); where that line has less value left than those paise, where do they go? Until decided, such a bill is refused (`not-decided`) | Product owner | S1-F11, S4-F02 | Live S4 | Yes |
 
 ## 6. Customer configuration
 
@@ -230,6 +233,9 @@ Each value below is unset and has no default (`AGENTS.md`, "Never invent a value
 | RR-143 | GC7-8; CA 24 | For each registration: does a counter sale carry tax, which components and shares | CA | S1-F11, S4-F02 | Live S4 | Yes |
 | RR-144 | GC7-9; KDPS Owner 56 | Per offer: marked-down prices, reward units, the meaning of each offer kind, how combined offers apply | Brand manager; KDPS Owner | S4-F04 | Live S4 | Yes |
 | RR-145 | GC7-10; CA 20 | Is spreading a group discount by price (`DEC-109`) the correct tax treatment | CA | S1-F11, S4-F02 | Live S4 | Yes |
+| RR-219 | GC7-12; CA 25 | When tax is rounded on the whole bill, how each line's tax components and taxable value are worked out so the lines add up to the bill (statutory presentation, `POL-10.05`). Until decided, a bill-level tax rounding rule is refused | CA, Accounts; the product owner for the design | S1-F11, S4-F02 | Live S4 | Yes |
+| RR-220 | GC7-13; Accounts 22 | In an exchange, does the replacement bill's round-off count in what is compared with the returned units' value? Until decided, such an exchange is refused | Accounts, CA | S1-F11, S4-F05 | Live S4 | Yes |
+| RR-221 | GC7-14; Accounts 23 | How a free buy-X-get-Y unit worth a fraction of a paise is rounded. Until decided, such a bill is refused | Accounts | S1-F11, S4-F04 | Live S4 | Yes |
 | RR-146 | SL-5; CA 13 | How a net realisable value write-down is worked out, spread and reversed | CA | S5-F01 | Live S5 | Yes |
 | RR-147 | SL-6 | How value is divided when the cost formula or pool mode changes | CA | S1-F10, S5-F01 | Live: before any change | Yes |
 | RR-148 | SL-14; CA 14 | How Store value is shown under a book pool | Accounts, CA | S5-F07, S5-F09 | Live S5 | Yes |

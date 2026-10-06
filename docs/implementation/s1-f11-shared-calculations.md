@@ -107,7 +107,7 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 
 ## 10. Questions found while building
 
-All are now in GC-7, as **Proposed** text or as open questions of its section 13, and the code follows them. The new open questions:
+All are now in GC-7, as **Proposed** or **Design choice** text or as open questions of its section 13, and the code follows them. The new open questions, in the readiness register as RR-219 (GC7-12), RR-220 (GC7-13), RR-221 (GC7-14), RR-222 (GC7-15) and RR-223 (GC7-16):
 
 | # | Question | Owner | Blocks | GC-7 |
 | --- | --- | --- | --- | --- |
@@ -117,7 +117,7 @@ All are now in GC-7, as **Proposed** text or as open questions of its section 13
 | GC7-15 | Which way a negative MARGIN's half rounds under `PRD-PTW-011` | Product owner | 2 | 8 |
 | GC7-16 | Where the paise a spread leaves go when the largest line has less value left | Product owner | 4 | 5.5, 5.6 |
 
-Other points for the doc review: the server suite imports the package by name, so the package's `turbo.json` builds it before its typecheck, lint and tests, and its own `test` script builds it first, so a run of Vitest in the package never reads a stale `dist` (12.2); the synthetic labels of the package's tests come from its own labelled file, `packages/calculations/test/synthetic.ts`, not from `apps/server/test/fixtures/synthetic.ts` (code-house-rules 11.1; a clarification the coordinator logs as a follow-up).
+Other points for the doc review: the server suite imports the package by name, so the package's `turbo.json` builds it before its typecheck, lint and tests, and its own `test` script builds it first, so a run of Vitest in the package never reads a stale `dist` (12.2); the synthetic labels of the package's tests come from its own labelled file, `packages/calculations/test/synthetic.ts`, not from `apps/server/test/fixtures/synthetic.ts` (code-house-rules 11.1; the clarification is RR-224).
 
 ## 11. Deferred from this feature
 
