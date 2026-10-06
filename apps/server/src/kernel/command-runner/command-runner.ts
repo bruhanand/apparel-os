@@ -172,7 +172,7 @@ export class CommandRunner {
       }
       throw this.failure(request, error);
     } finally {
-      connection?.release();
+      await connection?.release();
     }
   }
 

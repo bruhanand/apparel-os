@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   LOGGER,
   ORGANISATION_TIMEZONE_SOURCE,
+  OUTBOX_AUTHORITY,
   OUTBOX_PROCESSOR_IDENTITY,
   ROUTING_ENVIRONMENT,
   WORKER,
@@ -10,7 +11,8 @@ import {
   WORKER_SETTINGS_VARIABLE,
   type Worker,
 } from '../src/kernel/index.js';
-import { AUDIT_JOBS_IDENTITY } from '../src/modules/audit/index.js';
+import { ACCESS_JOBS_IDENTITY, accessJobKinds } from '../src/modules/access/index.js';
+import { AUDIT_JOBS_IDENTITY, auditJobKinds } from '../src/modules/audit/index.js';
 import { WorkerModule } from '../src/worker.module.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
@@ -21,11 +23,12 @@ import { connect, databaseUrl } from './support/postgres.js';
 // kinds it sends for each Organisation (numbering-and-audit 4.4; RR-241). The settings are SYNTHETIC (CH-10).
 
 const AUDIT_QUEUES = ['audit.seal-closed-block', 'audit.check-seals', 'audit.check-partition-coverage'];
+const JOB_QUEUES = [...AUDIT_QUEUES, 'access.rebuild-grants'];
 const retry = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
 const SYNTHETIC_SETTINGS = {
   pollSeconds: 0.5,
   consumers: {},
-  jobKinds: Object.fromEntries(AUDIT_QUEUES.map((name) => [name, { ...retry, everySeconds: 1 }])),
+  jobKinds: Object.fromEntries(JOB_QUEUES.map((name) => [name, { ...retry, everySeconds: 1 }])),
 };
 
 let world: SyntheticWorld;
@@ -34,8 +37,18 @@ const log = capturingLogger();
 beforeAll(async () => {
   world = await createSyntheticOrganisations('workerapp');
   for (const organisation of world.organisations) {
-    await writeSyntheticServiceIdentity(organisation.database, OUTBOX_PROCESSOR_IDENTITY);
-    await writeSyntheticServiceIdentity(organisation.database, AUDIT_JOBS_IDENTITY);
+    // Each identity holds a role assignment for the actions its steps declare (RR-273).
+    await writeSyntheticServiceIdentity(organisation.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
+    await writeSyntheticServiceIdentity(
+      organisation.database,
+      AUDIT_JOBS_IDENTITY,
+      auditJobKinds.map((kind) => kind.authorises),
+    );
+    await writeSyntheticServiceIdentity(
+      organisation.database,
+      ACCESS_JOBS_IDENTITY,
+      accessJobKinds.map((kind) => kind.authorises),
+    );
   }
 });
 
@@ -74,13 +87,13 @@ describe('the worker start command (code-house-rules 12.9)', () => {
     await expect(compile({})).rejects.toThrow(new RegExp(WORKER_SETTINGS_VARIABLE));
   });
 
-  it('PRD-SEC-007 runs the audit sealing job, the seal check and the coverage check in every Organisation, under their service identity', async () => {
+  it('PRD-SEC-007 PRD-ACS-005 runs the audit jobs and the grants rebuild in every Organisation, each authorised under its service identity (RR-273)', async () => {
     const app = await compile({ [WORKER_SETTINGS_VARIABLE]: JSON.stringify(SYNTHETIC_SETTINGS) });
     await app.init();
     try {
       await app.get<Worker>(WORKER).start();
       for (const organisation of world.organisations) {
-        for (const queue of AUDIT_QUEUES) {
+        for (const queue of JOB_QUEUES) {
           await eventually(async () => (await completed(organisation.database, queue)).length > 0);
           expect((await completed(organisation.database, queue))[0]).toEqual({ outcome: 'done', replayed: false });
         }

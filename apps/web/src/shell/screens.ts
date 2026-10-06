@@ -12,8 +12,9 @@ export interface Grant {
 
 /**
  * What a screen needs. `none`: My work, which needs no permission (access-and-approvals 9.11, 11.2). `grant`: a
- * permission of a role assignment. The record type names are provisional until `access` and `audit` declare them in
- * the permission registry (access-and-approvals 4.1, 9.11; RR-261).
+ * permission of a role assignment. The record type names are those of the permission registry
+ * (`permissionRegistry` in `@apparel-os/schemas`; access-and-approvals 4.1, 9.11; RR-261), except
+ * `configuration.policy_status`, which `configuration` declares when it is built (S1-F04): until then no one holds it.
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 

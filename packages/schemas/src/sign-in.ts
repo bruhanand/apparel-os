@@ -7,6 +7,7 @@ import {
   personasHeldSchema,
   totpCodeSchema,
 } from './common.js';
+import { grantSchema } from './roles.js';
 import { secretString, shownOnceSecret } from './secret.js';
 
 // Sign-in, enrolment and passwords (PRD-SEC-001, POL-02.17, DEC-093, DEC-099; access-and-approvals 3.1 to 3.3).
@@ -43,13 +44,24 @@ export const signInOutcomeSchema = z.discriminatedUnion('outcome', [
 export type SignInOutcome = z.infer<typeof signInOutcomeSchema>;
 
 /**
- * The signed-in user, for a session that has finished first sign-in (access-and-approvals 3.3). Identifiers and the
- * display name only; the display name is no restricted field (access-and-approvals 6).
+ * The signed-in user, for a session that has finished first sign-in (access-and-approvals 3.3). Identifiers, the
+ * display name, the personas held and the grants only; none is a restricted field (access-and-approvals 6).
  */
 export const sessionViewSchema = z.strictObject({
   organisationCode: organisationCodeSchema,
   userId: idSchema,
   displayName: displayNameSchema,
+  /**
+   * The personas the user's version in force holds, in their order: the first sets the landing screen (personas.md
+   * section 2; DEC-116; RR-281). A persona grants nothing (PRD-ACS-002, PRD-ACS-003).
+   */
+  personasHeld: personasHeldSchema,
+  /**
+   * The user's effective grants today: each action on each record type some role assignment in force grants, from
+   * the effective-grant table (access-and-approvals 7.2; RR-261). The shell opens screens by them; every request is
+   * still authorised on its own (7.1 step 3).
+   */
+  grants: z.array(grantSchema),
 });
 export type SessionView = z.infer<typeof sessionViewSchema>;
 

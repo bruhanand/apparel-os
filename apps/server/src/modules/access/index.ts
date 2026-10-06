@@ -8,7 +8,11 @@ export {
   ORGANISATION_KEYS,
 } from './access.module.js';
 export { Access } from './access.js';
-export type { AccessInterface } from './access.js';
+export type { AccessDependencies, AccessInterface, ActionNeed } from './access.js';
+export type { Decider, Prepared, Preparer } from './commands/access-changes.js';
+export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
+export type { RecordFacts } from './domain/scope.js';
+export { ACCESS_JOBS_IDENTITY, accessJobKinds } from './jobs/job-kinds.js';
 export type { AuthenticatedServiceIdentity } from './queries/service-identities.js';
 export { ORGANISATION_KEYS_VARIABLE } from './domain/organisation-keys.js';
 export { SESSION_COOKIE_NAME } from './http/session-cookie.js';

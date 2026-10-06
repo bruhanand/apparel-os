@@ -7,6 +7,8 @@ const view = {
   organisationCode: 'SYN-ORG-A',
   userId: '01900000-0000-7000-8000-000000000001',
   displayName: 'SYNTHETIC User',
+  personasHeld: ['P-AUD' as const],
+  grants: [{ recordType: 'audit.audit_record', action: 'view' as const }],
 };
 const refusal = (code: string, kind: ErrorBody['kind'], missing?: { kind: string; step: string }[]) => ({
   ok: false as const,

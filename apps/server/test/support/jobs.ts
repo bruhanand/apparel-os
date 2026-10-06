@@ -2,16 +2,21 @@ import { Writable } from 'node:stream';
 import { uuidv7 } from '@apparel-os/domain';
 import { pino } from 'pino';
 import { PinoLoggerService } from '../../src/kernel/index.js';
+import { grantSynthetic, type SyntheticAuthority } from './grants.js';
 import { connect } from './postgres.js';
 
 // S1-F01-T06: what a worker test needs. Every value here is SYNTHETIC.
 
 /**
  * Writes a SYNTHETIC internal service identity directly, as the migration role: Approved and Active from yesterday,
- * until the setup step (S1-F01-T10) writes the identities the worker runs as (code-house-rules 11.2). Returns its
- * identifier.
+ * until the setup step (S1-F01-T10) writes the identities the worker runs as (code-house-rules 11.2), with a role
+ * assignment granting the authorities given, if any (RR-273). Returns its identifier.
  */
-export async function writeSyntheticServiceIdentity(database: string, code: string): Promise<string> {
+export async function writeSyntheticServiceIdentity(
+  database: string,
+  code: string,
+  authorities: readonly SyntheticAuthority[] = [],
+): Promise<string> {
   const owner = await connect(database, 'migration');
   const id = uuidv7();
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
@@ -22,10 +27,11 @@ export async function writeSyntheticServiceIdentity(database: string, code: stri
        values ($1, $2, 'Active', daterange($3::date, null), 'Approved')`,
       [uuidv7(), id, yesterday],
     );
-    return id;
   } finally {
     await owner.end();
   }
+  if (authorities.length > 0) await grantSynthetic(database, { kind: 'service-identity', id }, authorities);
+  return id;
 }
 
 /** A logger whose lines a test reads back, parsed. */

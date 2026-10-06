@@ -12,7 +12,18 @@ import {
   signInOutcomeSchema,
   signInRequestSchema,
 } from './sign-in.js';
-import type { FieldClass, PermissionAction } from './roles.js';
+import { idSchema } from './common.js';
+import {
+  assignmentPreparedSchema,
+  assignmentWithdrawalDraftSchema,
+  roleAssignmentDraftSchema,
+  roleDraftSchema,
+  rolePreparedSchema,
+  roleVersionDraftSchema,
+  withdrawalPreparedSchema,
+  type FieldClass,
+  type PermissionAction,
+} from './roles.js';
 import { secretRegistry } from './secret.js';
 
 // The route table (code-house-rules 12.1, 12.2). The server, the web app's typed client and the OpenAPI document are
@@ -170,6 +181,16 @@ function registeredSecretPaths(schema: z.ZodType, at: readonly string[]): string
   return [];
 }
 
+/** The codes every route that prepares an access change can answer (access-and-approvals 7.1, 9.11). */
+const PREPARE_CODES = [
+  'access.not-signed-in',
+  'access.sign-in-incomplete',
+  'access.not-authorised',
+  'access.business-date-not-set',
+  'access.starts-in-past',
+  'kernel.cross-site-request',
+] as const satisfies readonly ErrorCode[];
+
 /** The routes of the API. A unit adds its routes here as they are built. */
 export const routes = {
   health: defineRoute({
@@ -269,6 +290,66 @@ export const routes = {
       'access.password-rules-not-set',
       'kernel.cross-site-request',
     ],
+  }),
+  // Preparing access changes (access-and-approvals 4, 5, 9.11; POL-02.07). Each saves a draft that a different
+  // authorised person approves later (S1-F01-T13); nothing here takes effect. Authorise runs on the route's action and
+  // record type before the command (7.1 step 3).
+  prepareRole: defineRoute({
+    method: 'POST',
+    path: '/api/access/roles',
+    access: { kind: 'action', action: 'create', recordType: 'access.role' },
+    command: true,
+    body: roleDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: rolePreparedSchema,
+    codes: [...PREPARE_CODES, 'access.permission-not-declared', 'access.role-code-taken'],
+  }),
+  prepareRoleVersion: defineRoute({
+    method: 'POST',
+    path: '/api/access/roles/{roleId}/versions',
+    params: z.strictObject({ roleId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.role' },
+    command: true,
+    body: roleVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: rolePreparedSchema,
+    codes: [...PREPARE_CODES, 'access.permission-not-declared', 'access.role-not-found'],
+  }),
+  prepareRoleAssignment: defineRoute({
+    method: 'POST',
+    path: '/api/access/role-assignments',
+    access: { kind: 'action', action: 'create', recordType: 'access.role_assignment' },
+    command: true,
+    body: roleAssignmentDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: assignmentPreparedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'access.assignment-overlaps',
+      'access.self-service-scope',
+      'access.scope-members-not-available',
+      'access.role-not-found',
+      'access.actor-not-found',
+    ],
+  }),
+  prepareAssignmentWithdrawal: defineRoute({
+    method: 'POST',
+    path: '/api/access/role-assignments/{assignmentId}/withdrawal',
+    params: z.strictObject({ assignmentId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'access.role_assignment' },
+    command: true,
+    body: assignmentWithdrawalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: withdrawalPreparedSchema,
+    codes: [...PREPARE_CODES, 'access.assignment-not-found', 'access.not-withdrawable'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

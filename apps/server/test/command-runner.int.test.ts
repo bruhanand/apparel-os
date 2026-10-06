@@ -639,6 +639,26 @@ describe('the actor and row-level security (code-house-rules 6.2; access-and-app
       await single.close();
     }
   });
+
+  it('PRD-SEC-005 RR-232 resets an actor a command set for the whole session before the connection goes back to the pool', async () => {
+    const single = openRouter(1);
+    try {
+      const organisation = await routed(single, world.organisations[0].code);
+      // A module that wrongly sets the actor for the session, not the transaction (code-house-rules 6.2).
+      const first = await runner().run(request(organisation, asActor(ACTOR_A)), async (context) => {
+        await context.tx.execute(sql`select pg_catalog.set_config('aos.actor_id', ${ACTOR_A}, false)`);
+        return backendPid(context);
+      });
+      const second = await runner().read(request(organisation, NO_ACTOR), async (context) => ({
+        pid: await backendPid(context),
+        rows: (await context.tx.execute(sql`select id from syn_command.scoped_row`)).rows.length,
+      }));
+      expect(second.pid).toBe(first);
+      expect(second.rows).toBe(0);
+    } finally {
+      await single.close();
+    }
+  });
 });
 
 describe('the lock helper (code-house-rules 8.2, 10.3; stock-ledger 10.3, 10.4)', () => {

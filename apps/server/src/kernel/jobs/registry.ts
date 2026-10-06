@@ -2,7 +2,8 @@ import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import { CommandDefect } from '../command-runner/command-errors.js';
 import type { TransactionContext } from '../command-runner/transaction-context.js';
 import type { JsonValue } from '../idempotency/canonical-form.js';
-import type { CommandRefusal, ReplayAuthorisation } from '../idempotency/contracts.js';
+import type { CommandRefusal } from '../idempotency/contracts.js';
+import type { JobAuthority } from './contracts.js';
 import type { EventDefinition, EventScopeFacts, EventSubject } from '../outbox/event-definition.js';
 
 /** A consumer or job kind is named `<unit>.<name>` in lower case, stable and unique in the application (12.8). */
@@ -42,8 +43,8 @@ export interface ConsumerDefinition<Payload extends Record<string, unknown> = Re
   readonly event: EventDefinition<Payload>;
   /** The code of the internal service identity it runs as. */
   readonly serviceIdentity: string;
-  /** The access checks a redelivery passes again before it is answered (code-house-rules 12.4; CH-14). */
-  readonly authoriseReplay: ReplayAuthorisation;
+  /** The action its steps need, authorised in each step and again before a redelivery is answered (RR-273; CH-14). */
+  readonly authorises: JobAuthority;
   readonly handle: (context: TransactionContext, event: DeliveredEvent<Payload>) => Promise<ConsumerOutcome>;
 }
 
@@ -62,7 +63,7 @@ export interface JobKindDefinition {
   /** Its name, which is also its pg-boss queue, created by migration (code-house-rules 3.2). */
   readonly name: string;
   readonly serviceIdentity: string;
-  readonly authoriseReplay: ReplayAuthorisation;
+  readonly authorises: JobAuthority;
   readonly run: (context: TransactionContext, tools: JobStepTools) => Promise<JsonValue>;
 }
 

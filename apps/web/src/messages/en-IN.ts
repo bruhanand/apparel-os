@@ -112,6 +112,7 @@ export const englishIndia = {
   'unavailable.policy-readiness': 'See Setup › Policy readiness',
   'missing.count': { one: '{count} thing is missing', other: '{count} things are missing' },
   'missing.action': 'Your role assignments do not grant this action.',
+  'missing.permission': 'None of your role assignments grants this action on this kind of record.',
   'missing.record-type': 'Your role assignments grant nothing on this kind of record.',
   'missing.scope': 'None of your role assignments covers the record’s scope.',
   'missing.assignment': 'One of your role assignments nearly covers this, but its scope stops short.',
@@ -167,6 +168,23 @@ export const englishIndia = {
   'error.access.enrolment-not-started': 'Start setting up your authenticator app first.',
   'error.access.password-refused': 'This password does not meet the password rules. Choose another.',
   'error.access.password-rules-not-set': 'No password can be set yet: the password rules are not set.',
+  'error.access.not-authorised': 'Your role assignments do not allow this.',
+  'error.access.business-date-not-set': 'This is not available yet: the Organisation’s timezone is not set.',
+  'error.access.starts-in-past': 'The start date is in the past. Choose today or a later date.',
+  'error.access.assignment-overlaps':
+    'This person already has this role over this exact scope for some of these dates. Change the dates or the scope.',
+  'error.access.version-overlaps': 'A later version of this role is already approved. Start this one after it.',
+  'error.access.self-service-scope':
+    'A self-service role holds only self-service permissions, and only with own-record scope.',
+  'error.access.permission-not-declared': 'One of these permissions does not exist for that kind of record.',
+  'error.access.scope-members-not-available':
+    'Choosing particular legal entities, places or brands is not available yet. Use all members or none.',
+  'error.access.role-code-taken': 'Another role already has this code.',
+  'error.access.role-not-found': 'This role was not found.',
+  'error.access.actor-not-found': 'This person or service identity was not found.',
+  'error.access.assignment-not-found': 'This role assignment was not found.',
+  'error.access.not-withdrawable':
+    'Only an approved role assignment that has not started yet can be withdrawn. End a started one early instead.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',

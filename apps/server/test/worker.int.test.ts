@@ -10,6 +10,7 @@ import {
   IdempotencyHelper,
   newCorrelationId,
   OrganisationRouter,
+  OUTBOX_AUTHORITY,
   OUTBOX_PROCESSOR_IDENTITY,
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
@@ -20,7 +21,8 @@ import {
   type RoutedOrganisation,
   type WorkerSettings,
 } from '../src/kernel/index.js';
-import { Access } from '../src/modules/access/index.js';
+// The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
+import { jobIdentities } from '../src/modules/access/queries/job-identities.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -55,7 +57,7 @@ const echo: ConsumerDefinition = defineConsumer({
   name: 'kernel.synthetic-echo',
   event: recordChanged,
   serviceIdentity: CONSUMER_IDENTITY,
-  authoriseReplay: () => Promise.resolve({ kind: 'allowed' }),
+  authorises: { action: 'view', recordType: 'kernel.outbox_event' },
   handle: async (context, event) => {
     const recordId = event.payload.recordId;
     const mode = behaviour.get(recordId) ?? 'echo';
@@ -90,18 +92,17 @@ let consumerIdentityId: string;
 const workers: Worker[] = [];
 const log = capturingLogger();
 
-const identities: JobIdentities = {
-  authenticate: async (context, code) =>
-    (await new Access().authenticateInternalIdentity(context, code))?.serviceIdentityId,
-};
+const identities: JobIdentities = jobIdentities();
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('worker');
   for (const each of world.organisations) {
-    await writeSyntheticServiceIdentity(each.database, OUTBOX_PROCESSOR_IDENTITY);
+    await writeSyntheticServiceIdentity(each.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
   }
-  consumerIdentityId = await writeSyntheticServiceIdentity(world.organisations[0].database, CONSUMER_IDENTITY);
-  await writeSyntheticServiceIdentity(world.organisations[1].database, CONSUMER_IDENTITY);
+  consumerIdentityId = await writeSyntheticServiceIdentity(world.organisations[0].database, CONSUMER_IDENTITY, [
+    echo.authorises,
+  ]);
+  await writeSyntheticServiceIdentity(world.organisations[1].database, CONSUMER_IDENTITY, [echo.authorises]);
   router = openRouter();
   const found = await router.resolveForSignIn(world.organisations[0].code);
   if (!found.routed) throw new Error('not routed');
@@ -128,7 +129,11 @@ function runner(): CommandRunner {
   return new CommandRunner({ clock: { now: () => new Date() }, timezones: syntheticTimezone, logger: log.logger });
 }
 
-function worker(from: OrganisationRouter = router, workerSettings: WorkerSettings = settings): Worker {
+function worker(
+  from: OrganisationRouter = router,
+  workerSettings: WorkerSettings = settings,
+  workerRegistry: JobRegistry = registry,
+): Worker {
   const commandRunner = runner();
   const made = new Worker({
     router: from,
@@ -141,7 +146,7 @@ function worker(from: OrganisationRouter = router, workerSettings: WorkerSetting
     }),
     identities,
     logger: log.logger,
-    registry,
+    registry: workerRegistry,
     settings: workerSettings,
   });
   workers.push(made);
@@ -277,6 +282,30 @@ describe('delivery (code-house-rules 12.8 "One effect", 12.9)', () => {
     });
     expect(await echoes(recordId)).toEqual([]);
   });
+
+  it('PRD-SEC-018 RR-273 refuses a step its identity holds no role assignment for, naming the missing permission', async () => {
+    // The consumer's identity holds view on the outbox's events, not edit.
+    const unauthorised = defineConsumer({
+      ...echo,
+      name: 'kernel.synthetic-unauthorised',
+      authorises: { action: 'edit', recordType: 'kernel.outbox_event' },
+    });
+    // A consumer receives only events recorded after it was first registered, so the worker starts first.
+    await worker(
+      router,
+      { ...settings, consumers: { 'kernel.synthetic-unauthorised': echoRetry } },
+      { ...registry, consumers: [unauthorised] },
+    ).start();
+    const recordId = await publishChange();
+    await eventually(async () => (await dispatches(recordId)).length === 1);
+    const [dispatch] = await dispatches(recordId);
+    await eventually(async () => (await job(dispatch?.job_id ?? ''))?.state === 'completed');
+    expect(await job(dispatch?.job_id ?? '')).toMatchObject({
+      retry_count: 0,
+      output: { outcome: 'refused', code: 'access.not-authorised' },
+    });
+    expect(await echoes(recordId)).toEqual([]);
+  });
 });
 
 describe('starting the worker (code-house-rules 12.8, 12.9)', () => {
@@ -303,10 +332,11 @@ describe('starting the worker (code-house-rules 12.8, 12.9)', () => {
     const running = worker();
     await running.start();
     const seen = await query<{ name: string }>('select name from kernel.outbox_consumer');
-    expect(seen).toEqual([{ name: 'kernel.synthetic-echo' }]);
+    expect(seen).toContainEqual({ name: 'kernel.synthetic-echo' });
     const owner = await connect(world.organisations[1].database, 'migration');
     try {
-      await eventually(async () => (await owner.query('select 1 from kernel.outbox_consumer')).rows.length === 1);
+      const echoRow = "select 1 from kernel.outbox_consumer where name = 'kernel.synthetic-echo'";
+      await eventually(async () => (await owner.query(echoRow)).rows.length === 1);
     } finally {
       await owner.end();
     }

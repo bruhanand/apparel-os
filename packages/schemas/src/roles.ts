@@ -47,22 +47,29 @@ export const permissionSchema = z.discriminatedUnion('kind', [
 export type Permission = z.infer<typeof permissionSchema>;
 
 /**
- * A role draft: a code unique in the Organisation, a name and its permissions (POL-02.01). A role that holds a
- * self-service permission holds nothing else (PRD-ACS-022, DEC-100; access-and-approvals 4.2).
+ * A role draft: a code unique in the Organisation, a name, its permissions and the start of the version (POL-02.01;
+ * access-and-approvals 4.2). A role that holds a self-service permission holds nothing else (PRD-ACS-022, DEC-100),
+ * and whether a role is a self-service role is fixed when it is created (access-and-approvals 13.1).
  */
-export const roleDraftSchema = z
-  .strictObject({
-    code: z.string().min(1),
-    name: z.string().min(1),
-    permissions: z.array(permissionSchema),
-  })
-  .refine(
-    (role) => {
-      const selfService = role.permissions.filter((permission) => permission.selfService).length;
-      return selfService === 0 || selfService === role.permissions.length;
-    },
-    { message: 'A role with a self-service permission holds no other permission (PRD-ACS-022)', path: ['permissions'] },
-  );
+const roleFields = {
+  code: z.string().min(1),
+  name: z.string().min(1),
+  permissions: z.array(permissionSchema),
+  /** The first day of the version, today or later under the Organisation's timezone (GC2-7, DEC-105). */
+  validFrom: businessDateSchema,
+};
+
+function selfServiceAlone(role: { readonly permissions: readonly Permission[] }): boolean {
+  const selfService = role.permissions.filter((permission) => permission.selfService).length;
+  return selfService === 0 || selfService === role.permissions.length;
+}
+
+const SELF_SERVICE_ALONE = {
+  message: 'A role with a self-service permission holds no other permission (PRD-ACS-022)',
+  path: ['permissions'],
+};
+
+export const roleDraftSchema = z.strictObject(roleFields).refine(selfServiceAlone, SELF_SERVICE_ALONE);
 export type RoleDraft = z.infer<typeof roleDraftSchema>;
 
 /** A place member of a scope: a Site, a Store or a business unit (PRD-ACS-021, DEC-094). */
@@ -129,3 +136,27 @@ export const roleAssignmentDraftSchema = z
     path: ['validTo'],
   });
 export type RoleAssignmentDraft = z.infer<typeof roleAssignmentDraftSchema>;
+
+/** A new version of an existing role: its name, its permissions and its start (access-and-approvals 4.2). */
+export const roleVersionDraftSchema = z
+  .strictObject({ name: roleFields.name, permissions: roleFields.permissions, validFrom: roleFields.validFrom })
+  .refine(selfServiceAlone, SELF_SERVICE_ALONE);
+export type RoleVersionDraft = z.infer<typeof roleVersionDraftSchema>;
+
+/**
+ * A withdrawal of a Scheduled role assignment before its start: a document with its reason (access-and-approvals
+ * 4.3, 13.1; code-house-rules 7.3; RR-202, CH-11).
+ */
+export const assignmentWithdrawalDraftSchema = z.strictObject({ reason: z.string().min(1) });
+export type AssignmentWithdrawalDraft = z.infer<typeof assignmentWithdrawalDraftSchema>;
+
+/** What preparing a role answers: the role and its draft version. */
+export const rolePreparedSchema = z.strictObject({ roleId: idSchema, versionId: idSchema });
+/** What preparing a role assignment answers. */
+export const assignmentPreparedSchema = z.strictObject({ assignmentId: idSchema });
+/** What preparing a withdrawal answers: the withdrawal and its draft version. */
+export const withdrawalPreparedSchema = z.strictObject({ withdrawalId: idSchema, versionId: idSchema });
+
+/** One effective grant as the shell reads it: an action on a record type (access-and-approvals 7.2; RR-261). */
+export const grantSchema = z.strictObject({ recordType: recordTypeSchema, action: permissionActionSchema });
+export type GrantView = z.infer<typeof grantSchema>;

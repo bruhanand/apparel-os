@@ -10,19 +10,19 @@ import { WORKER_SETTINGS_VARIABLE, workerSettingsFromEnvironment } from './worke
 
 const changed = defineEvent({ type: 'kernel.synthetic-changed', version: 1, payload: z.object({ id: z.uuid() }) });
 const unknown = defineEvent({ type: 'kernel.synthetic-unknown', version: 1, payload: z.object({ id: z.uuid() }) });
-const allow = () => Promise.resolve({ kind: 'allowed' as const });
+const authority = { action: 'view', recordType: 'kernel.outbox_event' } as const;
 
 const consumer = defineConsumer({
   name: 'kernel.synthetic-consumer',
   event: changed,
   serviceIdentity: 'synthetic-consumer',
-  authoriseReplay: allow,
+  authorises: authority,
   handle: () => Promise.resolve({ kind: 'done' }),
 });
 const jobKind = defineJobKind({
   name: 'kernel.synthetic-job',
   serviceIdentity: 'synthetic-job',
-  authoriseReplay: allow,
+  authorises: authority,
   run: () => Promise.resolve({}),
 });
 const registry: JobRegistry = { events: [changed], consumers: [consumer], jobKinds: [jobKind] };

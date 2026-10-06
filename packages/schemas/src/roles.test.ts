@@ -2,11 +2,42 @@ import { uuidv7 } from '@apparel-os/domain';
 import { describe, expect, it } from 'vitest';
 import {
   assignmentScopeSchema,
+  permissionActionSchema,
   permissionSchema,
   roleAssignmentDraftSchema,
   roleDraftSchema,
+  roleVersionDraftSchema,
   scopeGrantsNothing,
 } from './roles.js';
+import { permissionRegistry, registryByCode } from './permissions.js';
+
+describe('the permission registry (access-and-approvals 4.1, 9.11)', () => {
+  it('declares each record type once, with explicit actions, including those the first two roles need', () => {
+    const byCode = registryByCode();
+    for (const code of [
+      'access.user',
+      'access.role',
+      'access.role_assignment',
+      'access.approval_rule_setting',
+      'access.approval_reason',
+      'access.approval_request',
+      'access.approval_decision',
+      'audit.audit_record',
+      'audit.access_record',
+    ]) {
+      expect(byCode.has(code), code).toBe(true);
+    }
+    for (const declaration of permissionRegistry) {
+      for (const action of declaration.actions) expect(permissionActionSchema.safeParse(action).success).toBe(true);
+    }
+  });
+
+  it('refuses a registry that declares a record type twice', () => {
+    const [first] = permissionRegistry;
+    if (first === undefined) throw new Error('The registry is empty');
+    expect(() => registryByCode([first, first])).toThrow(/declared twice/);
+  });
+});
 
 describe('permissions (POL-02.03, PRD-ACS-008)', () => {
   it('refuses a broad label instead of an explicit action', () => {
@@ -32,18 +63,24 @@ describe('self-service exclusivity (PRD-ACS-022, DEC-100)', () => {
   const own = { kind: 'action', recordType: 'hr.payslip', action: 'view', selfService: true } as const;
   const work = { kind: 'action', recordType: 'access.role', action: 'view', selfService: false } as const;
 
+  const validFrom = '2026-10-07';
+
   it('accepts a role of self-service permissions only, or of none', () => {
-    expect(roleDraftSchema.safeParse({ code: 'SYN-SELF', name: 'Synthetic self', permissions: [own] }).success).toBe(
-      true,
-    );
-    expect(roleDraftSchema.safeParse({ code: 'SYN-WORK', name: 'Synthetic work', permissions: [work] }).success).toBe(
-      true,
-    );
+    expect(
+      roleDraftSchema.safeParse({ code: 'SYN-SELF', name: 'Synthetic self', permissions: [own], validFrom }).success,
+    ).toBe(true);
+    expect(
+      roleDraftSchema.safeParse({ code: 'SYN-WORK', name: 'Synthetic work', permissions: [work], validFrom }).success,
+    ).toBe(true);
   });
 
   it('refuses a role mixing self-service with other permissions', () => {
     expect(
-      roleDraftSchema.safeParse({ code: 'SYN-MIX', name: 'Synthetic mix', permissions: [own, work] }).success,
+      roleDraftSchema.safeParse({ code: 'SYN-MIX', name: 'Synthetic mix', permissions: [own, work], validFrom })
+        .success,
+    ).toBe(false);
+    expect(
+      roleVersionDraftSchema.safeParse({ name: 'Synthetic mix', permissions: [own, work], validFrom }).success,
     ).toBe(false);
   });
 

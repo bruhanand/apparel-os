@@ -18,13 +18,14 @@ import { OwnCredentials } from './commands/own-credentials.js';
 import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
-import { authenticateInternalIdentity } from './queries/service-identities.js';
+import { AccessChangesController } from './http/access-changes.controller.js';
+import { jobIdentities } from './queries/job-identities.js';
+import { ACCESS } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
 
-/** The token of the access module's interface (AccessInterface). Inject it with @Inject(ACCESS). */
-export const ACCESS = 'access.Access';
+export { ACCESS } from './tokens.js';
 /** The token of the Organisation keys (access-and-approvals 6). */
 export const ORGANISATION_KEYS = 'access.OrganisationKeys';
 /** The variables the Organisation keys are read from: the process's, unless a test gives others. */
@@ -56,17 +57,16 @@ export const ACCESS_ENVIRONMENT = 'access.Environment';
 export class AccessContractsModule {}
 
 /**
- * The JobIdentities contract the worker needs from `access` (access-and-approvals 2.3, 7.1 step 1; PRD-SEC-018;
- * module-map section 3, rule 6): Authenticate for the internal service identity a job runs as. Apart from the other
- * contracts, so the worker starts without the Organisation keys, which no job step uses.
+ * The JobIdentities contract the worker needs from `access` (access-and-approvals 2.3, 7.1 steps 1 and 3;
+ * PRD-SEC-018; module-map section 3, rule 6): Authenticate for the internal service identity a job runs as, and
+ * Authorise for the action its step declares (RR-273). Apart from the other contracts, so the worker starts without
+ * the Organisation keys, which no job step uses.
  */
 @Module({
   providers: [
     {
       provide: JOB_IDENTITIES,
-      useFactory: (): JobIdentities => ({
-        authenticate: async (context, code) => (await authenticateInternalIdentity(context, code))?.serviceIdentityId,
-      }),
+      useFactory: (): JobIdentities => jobIdentities(),
     },
   ],
   exports: [JOB_IDENTITIES],
@@ -75,15 +75,15 @@ export class AccessJobIdentitiesModule {}
 
 /**
  * The access module (module-map 4.3): tier 1, uses `audit` and `kernel`. Sign-in, enrolment and the own password
- * change (access-and-approvals 3), Authenticate on every route that needs it (7.1 step 1), and service identities
- * (2.3). Needs the global idempotency module built with AccessContractsModule (idempotencyModuleWith).
+ * change (access-and-approvals 3), Authenticate on every route that needs it and Authorise on every `action` route
+ * (7.1 steps 1 and 3), service identities (2.3), and preparing roles, role assignments and withdrawals (4, 5, 9.11). Needs the global idempotency module built with AccessContractsModule (idempotencyModuleWith).
  */
 @Module({
   imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule],
-  controllers: [SignInController],
+  controllers: [SignInController, AccessChangesController],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
-    { provide: ACCESS, useClass: Access },
+    { provide: ACCESS, useFactory: (audit: AuditInterface) => new Access({ audit }), inject: [AUDIT] },
     {
       // One hash no one knows, made once per process and verified wherever no credential can be (DEC-116).
       provide: UNKNOWABLE_HASH,

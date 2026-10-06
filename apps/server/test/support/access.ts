@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { uuidv7 } from '@apparel-os/domain';
-import { Secret } from '@apparel-os/schemas';
+import { Secret, type PersonaId } from '@apparel-os/schemas';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { pino } from 'pino';
@@ -68,8 +68,8 @@ export interface SyntheticUser {
 }
 
 /**
- * Writes a SYNTHETIC user directly, as the migration role: an app_user, one version (Approved and Active by default),
- * a password credential (temporary or not) and, if asked, a confirmed second factor.
+ * Writes a SYNTHETIC user directly, as the migration role: an app_user, one version (Approved and Active by default)
+ * with the personas asked for, a password credential (temporary or not) and, if asked, a confirmed second factor.
  */
 export async function writeSyntheticUser(
   database: string,
@@ -81,6 +81,8 @@ export async function writeSyntheticUser(
     readonly enrolled?: boolean;
     readonly decision?: 'Approved' | 'Awaiting approval';
     readonly state?: 'Active' | 'Disabled';
+    /** The personas the version holds, in order (S1-F01-T11). None by default. */
+    readonly personas?: readonly PersonaId[];
   },
 ): Promise<SyntheticUser> {
   const id = uuidv7();
@@ -96,6 +98,12 @@ export async function writeSyntheticUser(
        values ($1, $2, $3, $4, daterange($5::date, null), $6)`,
       [versionId, id, displayName, options.state ?? 'Active', yesterday(), options.decision ?? 'Approved'],
     );
+    for (const [index, persona] of (options.personas ?? []).entries()) {
+      await owner.query(
+        'insert into access.persona_held (id, app_user_version_id, persona, position) values ($1, $2, $3, $4)',
+        [uuidv7(), versionId, persona, index + 1],
+      );
+    }
     await owner.query(
       `insert into access.password_credential (id, app_user_id, password_hash, temporary, entered_with_version_id, replaced_at)
        values ($1, $2, $3, $4, $5, null)`,
