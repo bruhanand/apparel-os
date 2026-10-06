@@ -32,7 +32,7 @@ import {
   type SyntheticUser,
 } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
-import { capturingLogger } from './support/jobs.js';
+import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl, sqlState } from './support/postgres.js';
 
@@ -565,16 +565,49 @@ describe('effective grants follow the dates (access-and-approvals 7.2)', () => {
   it('PRD-ACS-005 the scheduled job rebuilds the grants when a start or end date passes', async () => {
     const user = await newUser('DATED');
     const roleId = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
-    await approvedAssignment(assignmentDraft(user.id, roleId, { validFrom: dateIn(1), validTo: dateIn(2) }));
+    const assignmentId = await approvedAssignment(
+      assignmentDraft(user.id, roleId, { validFrom: dateIn(1), validTo: dateIn(2) }),
+    );
     const grants = (days: number) => as(user.id, (c) => access.ownAccess(c, user.id), days);
     expect((await grants(0)).grants).toEqual([]);
     const [job] = accessJobKinds;
     if (job === undefined) throw new Error('no job kind');
+    // The job runs under its internal service identity (access-and-approvals 2.3; PRD-SEC-018).
+    const jobIdentity = await writeSyntheticServiceIdentity(
+      database,
+      `syn-access-jobs-${String(randomInt(1_000_000))}`,
+    );
+    // What a date passing wrote for the assignment: outbox rows and audit records (spec section 9, last row).
+    const written = () =>
+      asOwner(async (c) => ({
+        events: (
+          await c.query<{ payload: unknown; actor: string }>(
+            `select payload, actor_id as actor from kernel.outbox_event
+             where event_type = 'access.assignment-changed' and subject_record_id = $1 and actor_id = $2
+             order by recorded_at, id`,
+            [assignmentId, jobIdentity],
+          )
+        ).rows,
+        audits: (
+          await c.query<{ operation: string; actor: string; source: string }>(
+            `select operation, actor_id as actor, source_kind as source from audit.audit_record
+             where record_id = $1 and operation = 'rebuild-grants-date-passed' order by recorded_at, id`,
+            [assignmentId],
+          )
+        ).rows,
+      }));
     // Tomorrow the assignment is in force; the day after it has ended.
-    await as(user.id, (c) => job.run(c, { logger: log.logger }), 1);
+    await as(jobIdentity, (c) => job.run(c, { logger: log.logger }), 1);
     expect((await grants(1)).grants).toEqual([{ recordType: 'access.role', action: 'view' }]);
-    await as(user.id, (c) => job.run(c, { logger: log.logger }), 2);
+    const started = { payload: { actorIds: [user.id] }, actor: jobIdentity };
+    const audited = { operation: 'rebuild-grants-date-passed', actor: jobIdentity, source: 'job' };
+    expect(await written()).toEqual({ events: [started], audits: [audited] });
+    // A run that changes nothing writes nothing.
+    await as(jobIdentity, (c) => job.run(c, { logger: log.logger }), 1);
+    expect(await written()).toEqual({ events: [started], audits: [audited] });
+    await as(jobIdentity, (c) => job.run(c, { logger: log.logger }), 2);
     expect((await grants(2)).grants).toEqual([]);
+    expect(await written()).toEqual({ events: [started, started], audits: [audited, audited] });
   });
 
   it('POL-02.01 a new role version takes effect from its start and ends the one it follows', async () => {
