@@ -148,7 +148,7 @@ Kept so that every RR number cited in code, designs or decisions still resolves.
 | RR-011 | Code house rules approved: part A on 5 Oct 2026, part B on 6 Oct 2026 |
 | RR-017 | Settled in access-and-approvals 9.11 by `S1-F01-T01`; what stayed open is RR-206 and GC3-5 |
 | RR-018 to RR-023 | Review records of the old document checker, retired with it on 6 Oct 2026. The stock ledger sections (RR-018) were reviewed on 6 Oct 2026. Builders read the design-language parts their screens use first (`S1-F01-T14`) |
-| RR-050 | Closing in the cleanup of 6 Oct 2026: the doc-checker worktree's uncommitted edits are saved to branch `saved/document-checker-improvements` before the worktree is removed |
+| RR-050 | Closed 6 Oct 2026: the doc-checker worktree's uncommitted edits were saved to branch `saved/document-checker-improvements` (`9c86c64`), then the worktree was removed |
 | RR-052 | Moot: the plan folder is no longer under a review gate |
 | RR-185 | Toolchain verified on the builder machine (`S0-T02`) |
 | RR-186 | The Doc check workflow was fixed, then retired with the checker on 6 Oct 2026 |
