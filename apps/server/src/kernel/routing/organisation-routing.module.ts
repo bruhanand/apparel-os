@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PinoLoggerService } from '../logging/pino-logger.service.js';
+import { LOGGER, LoggingModule } from '../logging/logging.module.js';
+import type { PinoLoggerService } from '../logging/pino-logger.service.js';
 import { OrganisationRouter } from './organisation-router.js';
 import { routingConfigFromEnvironment } from './routing-config.js';
 
@@ -14,13 +15,14 @@ export const ROUTING_ENVIRONMENT = 'kernel.RoutingEnvironment';
  * no connection until the first request needs one, and closes every pool when the application shuts down.
  */
 @Module({
+  imports: [LoggingModule],
   providers: [
     { provide: ROUTING_ENVIRONMENT, useValue: process.env },
     {
       provide: ORGANISATION_ROUTER,
-      useFactory: (env: Readonly<Record<string, string | undefined>>) =>
-        new OrganisationRouter(routingConfigFromEnvironment(env), new PinoLoggerService()),
-      inject: [ROUTING_ENVIRONMENT],
+      useFactory: (env: Readonly<Record<string, string | undefined>>, logger: PinoLoggerService) =>
+        new OrganisationRouter(routingConfigFromEnvironment(env), logger),
+      inject: [ROUTING_ENVIRONMENT, LOGGER],
     },
   ],
   exports: [ORGANISATION_ROUTER],

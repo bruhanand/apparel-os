@@ -11,5 +11,6 @@ create role aos_runtime with login nosuperuser nocreatedb nocreaterole noreplica
 
 -- Set on the role, not on a database, so it holds in every database and every copy (code-house-rules 5.1).
 -- No application schema is on the path: every name in SQL is schema-qualified (code-house-rules 3.2).
--- The lock wait and statement time limits are CH-3, OPEN: none is set here.
+-- The time limits of CH-3 are not set here, because this file also runs on `kdps-test`, whose limits are OPEN: the
+-- starting limits for synthetic work are in runtime-limits-synthetic.sql, run only locally, in tests and on `dev`.
 alter role aos_runtime set search_path = public;

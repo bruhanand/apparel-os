@@ -6,9 +6,10 @@ import type { TestProject } from 'vitest/node';
 import { migrateDatabase, migrationSetFolder, type MigrationSetName } from '../../src/kernel/index.js';
 import type { PostgresServer } from './postgres.js';
 
-// One PostgreSQL container for the whole integration run, with both roles created from the reviewed role SQL
-// (code-house-rules 5.1, 11.3), and one migrated template database of each kind. Each test file clones its own
-// databases from the templates (support/postgres.ts) and drops them at its end.
+// One PostgreSQL container for the whole integration run, with both roles created from the reviewed role SQL and
+// the runtime role's time limits for synthetic work (code-house-rules 5.1, 11.3), and one migrated template database
+// of each kind. Each test file clones its own databases from the templates (support/postgres.ts) and drops them at
+// its end.
 // The major version must match Railway's (CH-2, OPEN).
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   const container = await new PostgreSqlContainer('postgres:17-alpine').start();
@@ -26,6 +27,8 @@ export default async function setup(project: TestProject): Promise<() => Promise
   try {
     await client.connect();
     await client.query(readFileSync(new URL('../../db/roles.sql', import.meta.url), 'utf8'));
+    // Tests work on synthetic data, so the runtime role gets the starting time limits (DEC-112, CH-3, RR-200).
+    await client.query(readFileSync(new URL('../../db/runtime-limits-synthetic.sql', import.meta.url), 'utf8'));
     await client.query(`alter role aos_migration password ${client.escapeLiteral(credentials.migrationPassword)}`);
     await client.query(`alter role aos_runtime password ${client.escapeLiteral(credentials.runtimePassword)}`);
 

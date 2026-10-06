@@ -50,8 +50,11 @@ afterAll(async () => {
   await (world as SyntheticWorld | undefined)?.reset();
 });
 
-/** A router over this file's directory, as the runtime role, whose service log the test reads. */
-function openRouter(): { router: OrganisationRouter; log: () => string[] } {
+/**
+ * A router over this file's directory, as the runtime role, whose service log the test reads. `startupOptions` are
+ * PostgreSQL settings for the router's own sessions only, passed in the connection string.
+ */
+function openRouter(startupOptions?: string): { router: OrganisationRouter; log: () => string[] } {
   const lines: string[] = [];
   const sink = new Writable({
     write(chunk: Buffer, _encoding, done) {
@@ -65,7 +68,13 @@ function openRouter(): { router: OrganisationRouter; log: () => string[] } {
     },
   });
   const router = new OrganisationRouter(
-    { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: SYNTHETIC_POOL_MAX },
+    {
+      directoryConnectionString:
+        startupOptions === undefined
+          ? databaseUrl(world.directory, 'runtime')
+          : `${databaseUrl(world.directory, 'runtime')}?options=${encodeURIComponent(startupOptions)}`,
+      poolMax: SYNTHETIC_POOL_MAX,
+    },
     new PinoLoggerService(pino(sink)),
   );
   return { router, log: () => [...lines] };
@@ -196,8 +205,19 @@ describe('routing at sign-in (access-and-approvals 3.1)', () => {
   });
 
   it('creates no pool when it is closed while the directory read waits, and gives no Organisation', async () => {
-    const { router } = openRouter();
+    // The router's directory read waits for a lock while the test closes the router. Its own sessions get a longer
+    // lock wait than the runtime role's 1 s (CH-3), so the limit cannot end the wait before the test does.
+    const longerLockWait = '-c lock_timeout=60s';
     const [first] = world.organisations;
+    const probe = openRouter(longerLockWait).router;
+    try {
+      const organisation = await routed(probe, first.code);
+      const shown = await organisation.db.execute<{ lock_timeout: string }>(sql`show lock_timeout`);
+      expect(shown.rows).toEqual([{ lock_timeout: '1min' }]);
+    } finally {
+      await probe.close();
+    }
+    const { router } = openRouter(longerLockWait);
     // The migration role holds the directory table exclusively, so the router's read waits for it
     // (code-house-rules 10.3: PostgreSQL shows the wait; no sleep orders it).
     const holder = await connect(world.directory, 'migration');

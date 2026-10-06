@@ -4,8 +4,18 @@ import { pino, type Logger } from 'pino';
 // Never write these keys. Pino replaces their values in structured log objects.
 const REDACTED_KEYS = ['password', 'token', 'secret', 'authorization', 'cookie'];
 
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+
+/**
+ * A logger that writes named fields of their own on a line, such as the correlation identifier
+ * (code-house-rules 12.11). Fields hold identifiers and codes only, never a secret, a restricted value or a body.
+ */
+export interface StructuredLogger {
+  structured(level: LogLevel, fields: Readonly<Record<string, unknown>>, message: string, context: string): void;
+}
+
 /** Nest logger that writes one JSON object per line to stdout. */
-export class PinoLoggerService implements LoggerService {
+export class PinoLoggerService implements LoggerService, StructuredLogger {
   private readonly logger: Logger;
 
   constructor(logger?: Logger) {
@@ -41,12 +51,13 @@ export class PinoLoggerService implements LoggerService {
     this.write('fatal', message, optionalParams);
   }
 
+  /** One line whose fields stand at the top level of the JSON object, beside the message and the context. */
+  structured(level: LogLevel, fields: Readonly<Record<string, unknown>>, message: string, context: string): void {
+    this.logger[level]({ ...fields, context }, message);
+  }
+
   // Nest passes the context name as the last parameter and, for errors, a stack before it.
-  private write(
-    level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
-    message: unknown,
-    params: unknown[],
-  ): void {
+  private write(level: LogLevel, message: unknown, params: unknown[]): void {
     const last = params.at(-1);
     const context = typeof last === 'string' ? last : undefined;
     const rest = context === undefined ? params : params.slice(0, -1);

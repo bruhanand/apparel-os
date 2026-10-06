@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { configureApp, PinoLoggerService } from './kernel/index.js';
+import { configureApp, LOGGER, type PinoLoggerService } from './kernel/index.js';
 
-const logger = new PinoLoggerService();
-const app = await NestFactory.create(AppModule, { logger });
+// Nest's own lines wait until the application's one logger is in place (code-house-rules 12.11).
+const app = await NestFactory.create(AppModule, { bufferLogs: true });
+const logger = app.get<PinoLoggerService>(LOGGER);
+app.useLogger(logger);
 configureApp(app);
 // On SIGTERM from a deploy, close every database pool before the process ends (OrganisationRouter).
 app.enableShutdownHooks();

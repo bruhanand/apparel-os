@@ -1,7 +1,8 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
-export type Database = NodePgDatabase;
+/** A Drizzle database over a pool. The command runner takes one connection from the pool for each command. */
+export type Database = NodePgDatabase & { readonly $client: Pool };
 
 export interface DatabaseHandle {
   readonly db: Database;
