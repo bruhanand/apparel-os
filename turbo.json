@@ -21,6 +21,10 @@
       "dependsOn": ["^build"],
       "outputs": ["dist-seed/**"]
     },
+    "build:browser": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist-browser/**"]
+    },
     "test:integration": {
       "dependsOn": ["^build", "build", "build:seed"],
       "cache": false

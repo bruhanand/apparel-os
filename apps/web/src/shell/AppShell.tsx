@@ -32,7 +32,7 @@ export function PersonaChip({ persona }: { persona: PersonaId }) {
 /**
  * The back-office shell (design-language 6 A): skip link, environment banner, glass top bar, a solid sidebar listing
  * only what the person's role assignments grant (PRD-ACS-002), the page header and the screen. A locked session keeps
- * the page, inert, under the lock overlay (access-and-approvals 3.3). Signed out, it shows no menu and no screen.
+ * the page, inert, under the lock overlay (access-and-approvals 3.3). Signed out, it shows no menu and no screen: only the sign-in screens.
  * The scope chip and the search field arrive with the records they act on (S1-F02, S1-F03).
  */
 export function AppShell({
@@ -42,6 +42,7 @@ export function AppShell({
   children,
   renderLink = anchor,
   unlock,
+  signIn,
 }: {
   session: ShellSession;
   banner: EnvironmentBanner;
@@ -50,6 +51,8 @@ export function AppShell({
   renderLink?: RenderLink;
   /** The unlock form of the lock screen (S1-F01-T09). */
   unlock?: ReactNode;
+  /** The sign-in screens, shown while signed out (S1-F01-T15). */
+  signIn?: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -60,8 +63,8 @@ export function AppShell({
       </a>
       <Banner tone={banner.tone} message={banner.message} />
       {session.state === 'signed-out' ? (
-        <main id="content" className="p-8">
-          <EmptyState title="session.signed-out.title" body="session.signed-out.body" />
+        <main id="content" className="p-4 sm:p-8">
+          {signIn ?? <EmptyState title="session.signed-out.title" body="session.signed-out.body" />}
         </main>
       ) : (
         <>

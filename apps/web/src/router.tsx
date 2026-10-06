@@ -14,6 +14,7 @@ import { AppShell, type RenderLink } from './shell/AppShell';
 import { landingScreen } from './shell/landing';
 import { screenIds, screenOpen, screens, type ScreenId } from './shell/screens';
 import { useSession } from './shell/session';
+import { SignInScreens } from './sign-in/SignInScreens';
 
 // The router (PRD Stack: Web, TanStack Router): one route per screen of the registry, and `/`, which sends the person
 // to their landing screen (DEC-116).
@@ -32,7 +33,13 @@ function Root() {
   const { session } = useSession();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
-    <AppShell session={session} banner={banner} current={screenAt(pathname)} renderLink={renderLink}>
+    <AppShell
+      session={session}
+      banner={banner}
+      current={screenAt(pathname)}
+      renderLink={renderLink}
+      signIn={<SignInScreens />}
+    >
       <Outlet />
     </AppShell>
   );

@@ -706,6 +706,16 @@ Decided by the product owner, 6 Oct 2026. Both use only the components above; th
 - **Setup › Exception rules** gets a tab for the due times and escalation of approvals and tasks, per action type and Site (access-and-approvals 9.4, 11.3).
 - **Failed jobs** is a simple list in the operations view (`PRD-SEC-013`; module-map 4.1).
 
+### 10.20 Sign-in screens (back office)
+
+Built with `S1-F01-T15` from the parts above; they follow [access-and-approvals.md](../access/access-and-approvals.md) 3.1 to 3.3 (`PRD-SEC-001`, `POL-02.17`). **Design choice.**
+
+- **Layout:** while no session is in force, the back-office shell shows only the environment banner and one solid card (e1, 448 px wide at most) in the content area: no top bar, no sidebar, no screen.
+- **Sign in:** Organisation code (mono), Login, Password, Authenticator code (mono, numeric keyboard, optional, with help saying to leave it empty only before an app is set up), and **Sign in** as the one primary action. A refusal is a Danger banner at the top of the card with the code's text and the reference; an unavailable sign-in is an Attention banner that also names what is missing. The one refusal never says which part was wrong. The password and the code are cleared after a refused attempt (`PRD-SEC-006`).
+- **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. No QR code yet (RR-280).
+- **Choose your own password:** New password, New password again (checked on the screen only, never sent), a fresh authenticator code, and **Change password**.
+- After each step the screens ask the server what is still to do, so a reload returns to the same step; when nothing is left, the shell opens on the landing screen (`DEC-116`). Focus moves to each step's title.
+
 ---
 
 ## 11. Content style

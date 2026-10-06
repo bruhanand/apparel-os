@@ -8,6 +8,7 @@
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "build:seed": "tsc -p tsconfig.seed.json",
+    "build:browser": "tsc -p tsconfig.browser.json",
     "migrate": "node dist/migrate.js",
     "seed": "node dist-seed/test/seed/seed.js",
     "typecheck": "tsc -p tsconfig.json",

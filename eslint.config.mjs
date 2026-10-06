@@ -5,7 +5,17 @@ import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  globalIgnores(['**/dist/**', '**/dist-seed/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', 'docs/**']),
+  globalIgnores([
+    '**/dist/**',
+    '**/dist-seed/**',
+    '**/dist-browser/**',
+    '**/test-results/**',
+    '**/playwright-report/**',
+    '**/node_modules/**',
+    '**/.turbo/**',
+    '**/coverage/**',
+    'docs/**',
+  ]),
   {
     files: [
       'apps/**/*.{ts,tsx,mts}',
