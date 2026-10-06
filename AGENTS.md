@@ -8,7 +8,7 @@ Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. 
 
 The repository holds the documents (`docs/`, start at `docs/README.md` and `docs/STATUS.md`) and the code workspace (see "Code workspace"). Stage 1 is in progress: see `docs/plan/stage-1/README.md`. Use only the commands listed in "Code workspace"; do not invent others.
 
-The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with `S1-F01-T15`, the first browser journey, which also unblocks the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
+The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrived with `S1-F01-T15`, the first browser journey (`apps/web/e2e/`), which also unblocks the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
 
 ## Document order
 
@@ -104,13 +104,14 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `pnpm check:links` | The link and ID check of `docs/` and this file. Runs without an install |
 | `pnpm migrate` | The pre-deploy step: migrates the directory database, then every Organisation database the directory lists, in code order, as the migration role, reaching each on the same server by the name the directory keeps, then runs each set's maintenance file. Refuses a connection string without a host, any other role, or a database that role does not own, and stops and exits 1 at the first failure. Needs `pnpm build` and `AOS_MIGRATION_DATABASE_URL` |
 | `pnpm seed` | The local seed: builds it apart from the application, then creates the two synthetic Organisations' databases, migrates them and the directory database, and lists both in the directory, as the migration role. Refuses unless `AOS_ENVIRONMENT` is `local` or `dev`, and on Railway unless both it and the Railway environment are `dev`; refuses, before changing anything, a directory that lists an Organisation that is not synthetic or a seed code at another database. Writes no other row until the setup step (`S1-F01-T10`). Needs `AOS_MIGRATION_DATABASE_URL` |
+| `pnpm test:e2e` | The browser journeys (Playwright, Chromium, `apps/web/e2e/`): builds every package and the journeys' server (`build:browser`), starts it on its own PostgreSQL container with synthetic data and the built web app under `vite preview`, and keeps each run's trace in `apps/web/test-results`. Needs Docker and, once per machine, `pnpm --filter @apparel-os/web exec playwright install chromium` |
 | `pnpm format`, `pnpm format:check` | Prettier |
 
 - Another module is imported only through its `index.ts`, and calls go to a lower tier, or to the same tier only where module-map sections 4 and 5 list the call (`PRD-MOD-002`, `PRD-SEC-015`; `module-map.md` sections 2 and 3). `pnpm check:modules` enforces both; its tier table is in `tools/module-check/check.mts` and changes with the module map.
 - Every constructor injection names its token with `@Inject(...)`; nothing relies on decorator metadata.
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
-- The pre-commit hook (`.githooks/`; enable it once per clone with `git config core.hooksPath .githooks`) runs the link check when documents are staged, and the module check, lint and typecheck when code is staged and dependencies are installed. `.github/workflows/code-check.yml` runs all of them, the format check and both test suites on every push and pull request.
+- The pre-commit hook (`.githooks/`; enable it once per clone with `git config core.hooksPath .githooks`) runs the link check when documents are staged, and the module check, lint and typecheck when code is staged and dependencies are installed. `.github/workflows/code-check.yml` runs all of them, the format check, both test suites and the browser journeys on every push and pull request.
 - The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) was approved by the product owner on 6 Oct 2026, with CH-8 answered and CH-12 answered by `DEC-113`.
 
 ## How we work
@@ -124,7 +125,7 @@ Work runs through the skills in `.claude/skills/` (decided by the product owner,
 3. **Build.** `/implement` for a ticket or `/implement-spec` for a spec's ticket graph: test first with `/tdd`, reviewed with `/code-review`, as those skills say. Cite the PRD, policy or decision ID where a rule is enforced. A design detail found while coding is edited in the design in the same change.
 4. **Close.** Set the ticket's status, note any follow-up in `docs/plan/open-items.md` with its owner and the gate it blocks, and update `docs/STATUS.md`. Commit subjects start with the ticket label (`S1-F01-T04: idempotency helper`).
 
-- CI (`.github/workflows/code-check.yml`) runs every check and both test suites on each push; leave them passing.
+- CI (`.github/workflows/code-check.yml`) runs every check, both test suites and the browser journeys on each push; leave them passing.
 - When a fix would change business behaviour or a ticket's scope, stop and ask the product owner. A fix never fills an OPEN value.
 - The skills commit on their working or integration branch. Pushing, merging into `main` and anything on Railway wait for the product owner's go-ahead; because `main` deploys to `dev` automatically, an approval to merge must say it includes that deployment. Commits and pull requests carry no AI attribution lines.
 - Never throw away uncommitted work, even if it looks obsolete: save it to a `saved/<name>` branch first.

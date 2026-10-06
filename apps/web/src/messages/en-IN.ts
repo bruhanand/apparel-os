@@ -68,7 +68,36 @@ export const englishIndia = {
 
   // Session (access-and-approvals 3.3).
   'session.signed-out.title': 'Sign in to continue',
-  'session.signed-out.body': 'The sign-in screens are not built yet.',
+  'session.signed-out.body': 'Sign in with your Organisation code, login and password.',
+
+  // Sign-in, enrolment and the password change (access-and-approvals 3.1, 3.2; S1-F01-T15).
+  'sign-in.title': 'Sign in',
+  'sign-in.intro': 'Use the Organisation code, login and password you were given.',
+  'sign-in.organisation-code': 'Organisation code',
+  'sign-in.login': 'Login',
+  'sign-in.password': 'Password',
+  'sign-in.totp-code': 'Authenticator code',
+  'sign-in.totp-code.help':
+    'The code your authenticator app shows. Leave it empty only if you have not set up an authenticator app yet.',
+  'sign-in.submit': 'Sign in',
+  'enrolment.title': 'Set up your authenticator app',
+  'enrolment.body':
+    'Every sign-in needs a code from an authenticator app on your phone. Show the setup key, add it to the app, then enter the code the app shows.',
+  'enrolment.start': 'Show the setup key',
+  'enrolment.key': 'Setup key',
+  'enrolment.key-once':
+    'This key is shown only now and never again. Add it to your authenticator app before you go on.',
+  'enrolment.link': 'On the phone with the authenticator app, open this setup link instead',
+  'enrolment.code-help': 'The code the app now shows for this account.',
+  'enrolment.confirm': 'Confirm the app',
+  'password-change.title': 'Choose your own password',
+  'password-change.body':
+    'Replace the temporary password you were given. Your Organisation’s password rules apply. Nobody else learns the new one.',
+  'password-change.new': 'New password',
+  'password-change.again': 'New password again',
+  'password-change.mismatch': 'The two passwords are not the same. Enter the new password again.',
+  'password-change.code-help': 'A new code from your authenticator app, not the one you just used.',
+  'password-change.submit': 'Change password',
   'lock.title': 'Session locked',
   'lock.body':
     'Your unsaved work is kept. Restricted fields and secrets were cleared, so enter them again after you unlock.',

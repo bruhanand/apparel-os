@@ -3,6 +3,9 @@ docs/**
 pnpm-lock.yaml
 dist
 dist-seed
+dist-browser
+test-results
+playwright-report
 .turbo
 .*/
 !.github/

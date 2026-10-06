@@ -61,6 +61,7 @@ export interface SyntheticUser {
   readonly id: string;
   readonly versionId: string;
   readonly login: string;
+  readonly displayName: string;
   readonly password: string;
   /** The authenticator secret of a user written already enrolled. */
   readonly factorSecret: Buffer | undefined;
@@ -85,6 +86,7 @@ export async function writeSyntheticUser(
   const id = uuidv7();
   const versionId = uuidv7();
   const login = syntheticCode(`USER-${options.label}`);
+  const displayName = syntheticName(`User ${options.label}`);
   const password = `SYNTHETIC-password-${randomBytes(6).toString('hex')}`;
   const owner = await connect(database, 'migration');
   try {
@@ -92,14 +94,7 @@ export async function writeSyntheticUser(
     await owner.query(
       `insert into access.app_user_version (id, app_user_id, display_name, state, valid_during, decision)
        values ($1, $2, $3, $4, daterange($5::date, null), $6)`,
-      [
-        versionId,
-        id,
-        syntheticName(`User ${options.label}`),
-        options.state ?? 'Active',
-        yesterday(),
-        options.decision ?? 'Approved',
-      ],
+      [versionId, id, displayName, options.state ?? 'Active', yesterday(), options.decision ?? 'Approved'],
     );
     await owner.query(
       `insert into access.password_credential (id, app_user_id, password_hash, temporary, entered_with_version_id, replaced_at)
@@ -122,7 +117,7 @@ export async function writeSyntheticUser(
         [factorId, id, sealed.scheme, sealed.ciphertext],
       );
     }
-    return { id, versionId, login, password, factorSecret };
+    return { id, versionId, login, displayName, password, factorSecret };
   } finally {
     await owner.end();
   }
@@ -163,12 +158,17 @@ export interface AccessTestApp {
 
 /**
  * The whole application, as main.ts builds it, on the test world: routing to its directory, the SYNTHETIC keys,
- * origin and timezone, and a captured log.
+ * origin and timezone, and a captured log. The browser journeys give the origin their pages are served from and a
+ * fixed port (test/browser/serve.ts); other tests take any free port.
  */
 export async function startAccessApp(
   world: SyntheticWorld,
   keysEnvironment: Record<string, string>,
-  options: { readonly timezone?: OrganisationTimezoneSource } = {},
+  options: {
+    readonly timezone?: OrganisationTimezoneSource;
+    readonly origin?: string;
+    readonly port?: number;
+  } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
   const logger = new PinoLoggerService(
@@ -187,7 +187,7 @@ export async function startAccessApp(
     .overrideProvider(ROUTING_ENVIRONMENT)
     .useValue({ AOS_RUNTIME_DATABASE_URL: databaseUrl(world.directory, 'runtime'), AOS_DATABASE_POOL_MAX: '4' })
     .overrideProvider(HTTP_ENVIRONMENT)
-    .useValue({ AOS_PUBLIC_ORIGIN: SYNTHETIC_ORIGIN, AOS_TRUSTED_PROXY_HOPS: '1' })
+    .useValue({ AOS_PUBLIC_ORIGIN: options.origin ?? SYNTHETIC_ORIGIN, AOS_TRUSTED_PROXY_HOPS: '1' })
     .overrideProvider(ACCESS_ENVIRONMENT)
     .useValue(keysEnvironment)
     .overrideProvider(ORGANISATION_TIMEZONE_SOURCE)
@@ -196,7 +196,7 @@ export async function startAccessApp(
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
   app.enableShutdownHooks();
-  await app.listen(0, '127.0.0.1');
+  await app.listen(options.port ?? 0, '127.0.0.1');
   const baseUrl = await app.getUrl();
   return { app, baseUrl, logText: () => lines.join(''), close: () => app.close() };
 }
