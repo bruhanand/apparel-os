@@ -10,7 +10,7 @@ import type { JsonValue, RequestContent } from '../idempotency/canonical-form.js
 import type { CommandOutcome, IdempotencyHelper, IdempotentAnswer } from '../idempotency/idempotency-helper.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import type { OrganisationRouter, RoutedOrganisation } from '../routing/organisation-router.js';
-import type { JobIdentities } from './contracts.js';
+import type { JobAuthority, JobIdentities } from './contracts.js';
 import { KEEP_EVERY_JOB, startJobQueue } from './job-queue.js';
 import {
   checkRegistry,
@@ -29,6 +29,8 @@ export const OUTBOX_DELIVERY_QUEUE = 'kernel.outbox-delivery';
  * code-house-rules 6.3, 12.8). The setup step writes it with the Organisation's other service identities.
  */
 export const OUTBOX_PROCESSOR_IDENTITY = 'outbox';
+/** What the outbox processor's role assignment grants it: edit on the outbox's events (RR-273). */
+export const OUTBOX_AUTHORITY: JobAuthority = { action: 'edit', recordType: 'kernel.outbox_event' };
 
 /** A delivery job's data: identifiers only (code-house-rules 12.9). */
 export interface DeliveryData {
@@ -151,12 +153,14 @@ export class Worker {
     if (consumer === undefined) {
       return this.defect(fields, new CommandDefect(`No consumer named ${data.consumer} is registered`));
     }
-    return this.step(served.organisation, consumer.serviceIdentity, consumer.name, fields, (request) =>
+    return this.step(served.organisation, consumer.serviceIdentity, consumer.name, fields, (request, actorId) =>
       this.dependencies.helper.run(request, {
         key: data.eventId,
         content: contentOf({ eventId: data.eventId }),
-        authoriseReplay: consumer.authoriseReplay,
+        authoriseReplay: (context) => this.dependencies.identities.authorise(context, actorId, consumer.authorises),
         work: async (context) => {
+          const refused = await this.unauthorised(context, actorId, consumer.authorises);
+          if (refused !== undefined) return refused;
           const event = await readEvent(context, data.eventId);
           if (event.type !== consumer.event.type || event.payloadVersion !== consumer.event.version) {
             throw new CommandDefect(
@@ -177,14 +181,48 @@ export class Worker {
     const served = this.served.get(organisationCode);
     if (served === undefined) throw new CommandDefect(`The worker does not serve ${organisationCode}`);
     const fields = { organisationCode, jobKind: kind.name, jobId };
-    return this.step(served.organisation, kind.serviceIdentity, kind.name, fields, (request) =>
+    return this.step(served.organisation, kind.serviceIdentity, kind.name, fields, (request, actorId) =>
       this.dependencies.helper.run(request, {
         key: jobId,
         content: contentOf({ jobId }),
-        authoriseReplay: kind.authoriseReplay,
-        work: async (context) => success(await kind.run(context, { logger: this.dependencies.logger })),
+        authoriseReplay: (context) => this.dependencies.identities.authorise(context, actorId, kind.authorises),
+        work: async (context) =>
+          (await this.unauthorised(context, actorId, kind.authorises)) ??
+          success(await kind.run(context, { logger: this.dependencies.logger })),
       }),
     );
+  }
+
+  /**
+   * Authorise for a step (access-and-approvals 7.1 step 3; RR-273): undefined when one role assignment of the step's
+   * identity grants its action, otherwise the refusal, kept under the step's key and never retried (12.9).
+   */
+  private async unauthorised(
+    context: TransactionContext,
+    actorId: string,
+    need: JobAuthority,
+  ): Promise<CommandOutcome<JsonValue> | undefined> {
+    const access = await this.dependencies.identities.authorise(context, actorId, need);
+    if (access.kind === 'allowed') return undefined;
+    return refusal({ kind: 'not-authorised', code: access.refusal.code, missing: access.refusal.missing });
+  }
+
+  /**
+   * Whether the outbox processor's identity may dispatch the outbox (RR-273): one role assignment of it grants edit
+   * on `kernel.outbox_event`. Logged when it may not; the Organisation is tried again at the next pass.
+   */
+  private async processorAuthorised(organisation: RoutedOrganisation, actorId: string): Promise<boolean> {
+    const access = await this.dependencies.runner.read(
+      this.request(organisation, 'kernel.authorise-outbox', actorId),
+      (context) => this.dependencies.identities.authorise(context, actorId, OUTBOX_AUTHORITY),
+    );
+    if (access.kind === 'allowed') return true;
+    this.log(
+      'warn',
+      { organisationCode: organisation.organisationCode, serviceIdentity: OUTBOX_PROCESSOR_IDENTITY },
+      'The outbox processor’s service identity holds no role assignment to dispatch the outbox; nothing is dispatched',
+    );
+    return false;
   }
 
   private pass(): void {
@@ -239,6 +277,7 @@ export class Worker {
       );
       return undefined;
     }
+    if (!(await this.processorAuthorised(organisation, actorId))) return undefined;
     const { consumers } = this.dependencies.registry;
     return this.dependencies.runner.run(this.request(organisation, 'kernel.register-consumers', actorId), async (c) => {
       if (consumers.length > 0) {
@@ -274,6 +313,7 @@ export class Worker {
       );
       return;
     }
+    if (!(await this.processorAuthorised(organisation, actorId))) return;
     for (const consumer of this.dependencies.registry.consumers) {
       const consumerId = served.consumerIds.get(consumer.name);
       if (consumerId === undefined) throw new CommandDefect(`Consumer ${consumer.name} is not recorded`);
@@ -359,7 +399,7 @@ export class Worker {
     identity: string,
     commandName: string,
     fields: Record<string, string>,
-    command: (request: CommandRequest) => Promise<IdempotentAnswer<JsonValue>>,
+    command: (request: CommandRequest, actorId: string) => Promise<IdempotentAnswer<JsonValue>>,
   ): Promise<StepResult> {
     const correlationId = newCorrelationId();
     const logged = { ...fields, correlationId };
@@ -370,7 +410,7 @@ export class Worker {
         this.log('error', { ...logged, outcome: 'identity-not-enabled', serviceIdentity: identity }, 'Job not run');
         return { status: 'deadletter', output: { outcome: 'identity-not-enabled', serviceIdentity: identity } };
       }
-      const answer = await command(this.request(organisation, commandName, actorId, correlationId));
+      const answer = await command(this.request(organisation, commandName, actorId, correlationId), actorId);
       if (answer.kind === 'success') {
         this.log('info', { ...logged, outcome: 'done', replayed: answer.replayed }, 'Job step ended');
         return { status: 'completed', output: { outcome: 'done', replayed: answer.replayed } };

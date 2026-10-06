@@ -27,13 +27,19 @@ interface RegisterEntry {
 }
 
 const CHECKED_CLASSES = ['unscoped', 'scoped'];
-const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned', 'versions'];
+const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned', 'versions', 'projection', 'locked'];
 
 /** The functions a design names for the runtime role to execute, by set (code-house-rules 5.2). */
 const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
   directory: [],
   // numbering-and-audit 4.4 and 4.6: sealing, the seal check and the retention function, each SECURITY DEFINER.
-  organisation: ['audit.check_seals', 'audit.delete_after_retention', 'audit.seal_block'],
+  organisation: [
+    'access.row_visible',
+    'access.scope_key_of',
+    'audit.check_seals',
+    'audit.delete_after_retention',
+    'audit.seal_block',
+  ],
 };
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
 
@@ -364,13 +370,29 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
         `select (select count(*) from pg_catalog.pg_constraint c
                  where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
                    and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
-                   and pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%')::text
+                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3).
+                   and (pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%'
+                        or pg_catalog.pg_get_constraintdef(c.oid)
+                          like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'))::text
                   as exclusion,
                 (select count(*) from pg_catalog.pg_trigger t
                  where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'
                    and t.tgfoid = 'access.guard_version_change'::regproc)::text as guard`,
       );
       expect(rows, entry.table).toEqual([{ exclusion: '1', guard: '1' }]);
+    }
+  });
+
+  it('code-house-rules 5.2 a projection is rebuildable: never append-only, and the runtime role reads and writes it', () => {
+    for (const entry of register(set).filter((each) => each.marks.includes('projection'))) {
+      expect(entry.marks, entry.table).not.toContain('append-only');
+      expect(entry.runtime, entry.table).toEqual(expect.arrayContaining(['INSERT', 'SELECT']));
+    }
+  });
+
+  it('code-house-rules 5.2, 8.2 a locked table grants the runtime role the UPDATE every row lock needs', () => {
+    for (const entry of register(set).filter((each) => each.marks.includes('locked'))) {
+      expect(entry.runtime, entry.table).toContain('UPDATE');
     }
   });
 
@@ -449,7 +471,11 @@ async function expectDefinitionMatches(database: string, table: Parameters<typeo
   const config = getTableConfig(table);
   const columns = await read<{ column_name: string; data_type: string; is_nullable: string }>(
     database,
-    `select column_name, data_type, is_nullable from information_schema.columns
+    // An array column is `ARRAY` here; its element type is the udt name after the leading underscore.
+    `select column_name,
+            case when data_type = 'ARRAY' then substr(udt_name, 2) || '[]' else data_type end as data_type,
+            is_nullable
+     from information_schema.columns
      where table_schema = '${config.schema ?? ''}' and table_name = '${config.name}' order by column_name`,
   );
   const defined = config.columns

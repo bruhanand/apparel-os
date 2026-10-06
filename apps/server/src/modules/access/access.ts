@@ -1,5 +1,22 @@
-import type { Secret } from '@apparel-os/schemas';
+import {
+  permissionRegistry,
+  registryByCode,
+  type AssignmentWithdrawalDraft,
+  type FieldClass,
+  type GrantView,
+  type PermissionAction,
+  type PersonaId,
+  type RecordTypeDeclaration,
+  type RoleAssignmentDraft,
+  type RoleDraft,
+  type RoleVersionDraft,
+  type Secret,
+} from '@apparel-os/schemas';
 import type { TransactionContext } from '../../kernel/index.js';
+import type { AuditInterface } from '../audit/index.js';
+import { AccessChanges, type Decider, type Prepared, type Preparer } from './commands/access-changes.js';
+import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
+import { ownAccess } from './queries/own-access.js';
 import {
   authenticateInternalIdentity,
   authenticateServiceCredential,
@@ -7,9 +24,11 @@ import {
 } from './queries/service-identities.js';
 
 /**
- * The access module's interface to other modules (module-map 4.3), as far as S1-F01-T08 builds it: Authenticate for
- * service identities (access-and-approvals 2.3, 7.1 step 1). Authorise, roles and assignments arrive with T11.
- * Every operation joins the caller's transaction through its context (code-house-rules 8.1).
+ * The access module's interface to other modules (module-map 4.3): Authenticate for service identities
+ * (access-and-approvals 2.3, 7.1 step 1), Authorise and the Restrict-fields hook (7.1 step 3, 6), preparing roles,
+ * role assignments and withdrawals (4, 5, 9.11), making a decided one take effect (module-map 6.2 flow A), and
+ * rebuilding effective grants (7.2). Every operation joins the caller's transaction through its context
+ * (code-house-rules 8.1).
  */
 export interface AccessInterface {
   /** An internal identity, by its code, enabled today; undefined otherwise. */
@@ -23,14 +42,174 @@ export interface AccessInterface {
     credentialId: string,
     secret: Secret,
   ): Promise<AuthenticatedServiceIdentity | undefined>;
+  /** Authorise: the one assignment that grants the action, or what is missing (7.1 step 3). */
+  authorise(context: TransactionContext, request: AuthoriseRequest): Promise<Authorisation>;
+  /** Which of a record's field classes the assignment Authorise used grants for a use; the rest are masked (6). */
+  restrictFields(
+    context: TransactionContext,
+    request: {
+      readonly roleAssignmentId: string;
+      readonly actorId: string;
+      readonly fieldClasses: readonly FieldClass[];
+    },
+    use: 'view' | 'edit',
+  ): Promise<{ readonly granted: FieldClass[]; readonly masked: FieldClass[] }>;
+  /** The personas a user holds today and their effective grants, for the shell (RR-261, RR-281). */
+  ownAccess(
+    context: TransactionContext,
+    userId: string,
+  ): Promise<{ readonly personasHeld: PersonaId[]; readonly grants: GrantView[] }>;
+  prepareRole(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: RoleDraft,
+  ): Promise<Prepared<{ roleId: string; versionId: string }>>;
+  prepareRoleVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    roleId: string,
+    draft: RoleVersionDraft,
+  ): Promise<Prepared<{ roleId: string; versionId: string }>>;
+  prepareAssignment(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: RoleAssignmentDraft,
+  ): Promise<Prepared<{ assignmentId: string }>>;
+  prepareWithdrawal(
+    context: TransactionContext,
+    preparer: Preparer,
+    assignmentId: string,
+    draft: AssignmentWithdrawalDraft,
+  ): Promise<Prepared<{ withdrawalId: string; versionId: string }>>;
+  approveRoleVersion(
+    context: TransactionContext,
+    decider: Decider,
+    versionId: string,
+  ): Promise<Prepared<{ roleId: string }>>;
+  rejectRoleVersion(
+    context: TransactionContext,
+    decider: Decider,
+    versionId: string,
+  ): Promise<Prepared<{ roleId: string }>>;
+  approveAssignment(
+    context: TransactionContext,
+    decider: Decider,
+    assignmentId: string,
+  ): Promise<Prepared<{ assignmentId: string }>>;
+  rejectAssignment(
+    context: TransactionContext,
+    decider: Decider,
+    assignmentId: string,
+  ): Promise<Prepared<{ assignmentId: string }>>;
+  approveWithdrawal(
+    context: TransactionContext,
+    decider: Decider,
+    withdrawalVersionId: string,
+  ): Promise<Prepared<{ assignmentId: string }>>;
+  rejectWithdrawal(
+    context: TransactionContext,
+    decider: Decider,
+    withdrawalVersionId: string,
+  ): Promise<Prepared<{ assignmentId: string }>>;
+  /** Rebuilds the effective grants of the actors named, or of every actor (7.2). Returns the rows written. */
+  rebuildGrants(context: TransactionContext, actorIds?: readonly string[]): Promise<number>;
+}
+
+export interface AccessDependencies {
+  readonly audit: AuditInterface;
+  /** The permission registry; the declared one unless a test gives another (access-and-approvals 4.1). */
+  readonly registry?: readonly RecordTypeDeclaration[];
+}
+
+/** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
+export interface ActionNeed {
+  readonly action: PermissionAction;
+  readonly recordType: string;
 }
 
 export class Access implements AccessInterface {
+  private readonly registry: ReadonlyMap<string, RecordTypeDeclaration>;
+  private readonly changes: AccessChanges;
+
+  constructor(dependencies: AccessDependencies) {
+    this.registry = registryByCode(dependencies.registry ?? permissionRegistry);
+    this.changes = new AccessChanges(dependencies.audit, this.registry);
+  }
+
   authenticateInternalIdentity(context: TransactionContext, code: string) {
     return authenticateInternalIdentity(context, code);
   }
 
   authenticateServiceCredential(context: TransactionContext, credentialId: string, secret: Secret) {
     return authenticateServiceCredential(context, credentialId, secret);
+  }
+
+  authorise(context: TransactionContext, request: AuthoriseRequest) {
+    return authorise(context, this.registry, request);
+  }
+
+  restrictFields(
+    context: TransactionContext,
+    request: {
+      readonly roleAssignmentId: string;
+      readonly actorId: string;
+      readonly fieldClasses: readonly FieldClass[];
+    },
+    use: 'view' | 'edit',
+  ) {
+    return restrictFields(context, request, use);
+  }
+
+  ownAccess(context: TransactionContext, userId: string) {
+    return ownAccess(context, userId);
+  }
+
+  prepareRole(context: TransactionContext, preparer: Preparer, draft: RoleDraft) {
+    return this.changes.prepareRole(context, preparer, draft);
+  }
+
+  prepareRoleVersion(context: TransactionContext, preparer: Preparer, roleId: string, draft: RoleVersionDraft) {
+    return this.changes.prepareRoleVersion(context, preparer, roleId, draft);
+  }
+
+  prepareAssignment(context: TransactionContext, preparer: Preparer, draft: RoleAssignmentDraft) {
+    return this.changes.prepareAssignment(context, preparer, draft);
+  }
+
+  prepareWithdrawal(
+    context: TransactionContext,
+    preparer: Preparer,
+    assignmentId: string,
+    draft: AssignmentWithdrawalDraft,
+  ) {
+    return this.changes.prepareWithdrawal(context, preparer, assignmentId, draft);
+  }
+
+  approveRoleVersion(context: TransactionContext, decider: Decider, versionId: string) {
+    return this.changes.approveRoleVersion(context, decider, versionId);
+  }
+
+  rejectRoleVersion(context: TransactionContext, decider: Decider, versionId: string) {
+    return this.changes.rejectRoleVersion(context, decider, versionId);
+  }
+
+  approveAssignment(context: TransactionContext, decider: Decider, assignmentId: string) {
+    return this.changes.approveAssignment(context, decider, assignmentId);
+  }
+
+  rejectAssignment(context: TransactionContext, decider: Decider, assignmentId: string) {
+    return this.changes.rejectAssignment(context, decider, assignmentId);
+  }
+
+  approveWithdrawal(context: TransactionContext, decider: Decider, withdrawalVersionId: string) {
+    return this.changes.approveWithdrawal(context, decider, withdrawalVersionId);
+  }
+
+  rejectWithdrawal(context: TransactionContext, decider: Decider, withdrawalVersionId: string) {
+    return this.changes.rejectWithdrawal(context, decider, withdrawalVersionId);
+  }
+
+  rebuildGrants(context: TransactionContext, actorIds?: readonly string[]) {
+    return this.changes.rebuildGrants(context, actorIds);
   }
 }

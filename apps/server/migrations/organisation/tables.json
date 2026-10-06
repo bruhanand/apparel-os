@@ -183,6 +183,110 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "code-house-rules 12.8",
       "why": "Which event was handed to which consumer and by which job; only kernel's outbox processor reads it (code-house-rules 12.8 \"Dispatch\")"
+    },
+    {
+      "table": "access.persona_held",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 2.1, 13.1; personas.md section 2; code-house-rules 6.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.role",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 4.2, 13.1; code-house-rules 6.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.role_version",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 4.2, 13.1; code-house-rules 6.3, 7.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.role_permission",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 4.1, 4.2, 13.1; code-house-rules 6.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.role_version_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a role version, read by Request approval in access before any scope applies; only access code reads it"
+    },
+    {
+      "table": "access.role_assignment",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 4.3, 13.1; code-house-rules 6.3, 7.3 (overlap key: actor, role, scope_key; DEC-112, CH-7)",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.assignment_scope",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 5.1, 13.1; code-house-rules 6.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.assignment_scope_member",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 5.1, 5.2, 13.1; code-house-rules 6.3",
+      "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.role_assignment_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of an assignment, read by Request approval in access before any scope applies; only access code reads it"
+    },
+    {
+      "table": "access.role_assignment_withdrawal",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 4.3, 13.1; code-house-rules 7.2, 7.3",
+      "why": "The withdrawal document of an assignment, read with the assignment by Authorise's rebuild and by access; only access code reads it"
+    },
+    {
+      "table": "access.role_assignment_withdrawal_version",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 4.3, 13.1; code-house-rules 7.2, 7.3",
+      "why": "The withdrawal document's versions, read with the assignment by access; only access code reads it"
+    },
+    {
+      "table": "access.role_assignment_withdrawal_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a withdrawal version; only access code reads it"
+    },
+    {
+      "table": "access.effective_grant",
+      "class": "unscoped",
+      "marks": ["projection"],
+      "runtime": ["DELETE", "INSERT", "SELECT"],
+      "design": "access-and-approvals 7.2, 13.1; code-house-rules 6.2, 6.3",
+      "why": "Read by access.row_visible, which every policy calls, so it cannot itself be scoped (code-house-rules 6.2, 6.3); rebuildable from the assignments"
     }
   ]
 }

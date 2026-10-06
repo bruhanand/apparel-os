@@ -57,9 +57,13 @@ export function SignInScreens({ initial = { stage: 'read-session' } }: { initial
       };
     }
     if (stage.stage === 'signed-in') {
-      // The personas held and the grants arrive with the read of role assignments (S1-F01-T11; RR-281): until then the
-      // shell lands on My work, which needs no permission (DEC-116).
-      setSession({ state: 'active', user: { displayName: stage.view.displayName, personasHeld: [] }, grants: [] });
+      // The session read gives the personas held, in order, and the effective grants, so the shell lands by persona
+      // and opens only what a role assignment grants (DEC-116; RR-261, RR-281).
+      setSession({
+        state: 'active',
+        user: { displayName: stage.view.displayName, personasHeld: stage.view.personasHeld },
+        grants: stage.view.grants,
+      });
     }
     return undefined;
   }, [stage, setSession]);

@@ -41,7 +41,16 @@ export {
 } from './sign-in.js';
 export type { SessionView, SignInOutcome, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
 
+export { permissionRegistry, registryByCode } from './permissions.js';
+export type { RecordTypeCode, RecordTypeDeclaration, ScopeFactsDeclared } from './permissions.js';
+
 export {
+  assignmentPreparedSchema,
+  assignmentWithdrawalDraftSchema,
+  grantSchema,
+  rolePreparedSchema,
+  roleVersionDraftSchema,
+  withdrawalPreparedSchema,
   assignmentScopeSchema,
   fieldClassSchema,
   permissionActionSchema,
@@ -53,6 +62,9 @@ export {
   scopeGrantsNothing,
 } from './roles.js';
 export type {
+  AssignmentWithdrawalDraft,
+  GrantView,
+  RoleVersionDraft,
   AssignmentScope,
   FieldClass,
   Permission,
@@ -83,6 +95,7 @@ export {
   errorKinds,
   errorKindSchema,
   accessCodes,
+  accessRoleCodes,
   issueSchema,
   kernelCodes,
   missingItemSchema,

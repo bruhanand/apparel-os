@@ -134,6 +134,9 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
       organisationCode: orgA.code,
       userId: user.id,
       displayName: expect.stringContaining('SYNTHETIC') as unknown,
+      // A user written with no persona and no role assignment: nothing to land on, nothing granted (RR-281).
+      personasHeld: [],
+      grants: [],
     });
 
     const records = await rows<{ outcome: string; user_id: string }>(

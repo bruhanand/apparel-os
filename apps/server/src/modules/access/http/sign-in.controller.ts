@@ -3,21 +3,25 @@ import { Controller, Inject, Req, Res } from '@nestjs/common';
 import {
   ApiRefusal,
   ApiRoute,
+  COMMAND_RUNNER,
   commandAnswer,
   correlationIdOf,
   newCorrelationId,
   ORGANISATION_ROUTER,
   requestContentOf,
   RouteInput,
+  type CommandRunner,
   type HttpRequest,
   type HttpResponse,
   type OrganisationRouter,
   type RouteInputOf,
 } from '../../../kernel/index.js';
+import type { AccessInterface } from '../access.js';
 import type { OwnCredentials } from '../commands/own-credentials.js';
 import type { SignIn } from '../commands/sign-in.js';
 import { verifyPassword } from '../domain/password-hash.js';
 import { networkAddressOf, SignedIn, type SignedInUser } from './authenticate.guard.js';
+import { ACCESS } from '../tokens.js';
 import { sessionCookieHeader } from './session-cookie.js';
 
 /** The tokens of the access commands the controller calls. */
@@ -36,6 +40,8 @@ export class SignInController {
     @Inject(SIGN_IN) private readonly signIn: SignIn,
     @Inject(OWN_CREDENTIALS) private readonly credentials: OwnCredentials,
     @Inject(UNKNOWABLE_HASH) private readonly unknowableHash: () => Promise<string>,
+    @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
+    @Inject(ACCESS) private readonly access: AccessInterface,
   ) {}
 
   @ApiRoute(routes.signIn)
@@ -76,11 +82,23 @@ export class SignInController {
   }
 
   @ApiRoute(routes.session)
-  session(@SignedIn() user: SignedInUser) {
+  async session(@SignedIn() user: SignedInUser) {
+    // The personas held and the effective grants, for the shell's landing screen and menu (RR-261, RR-281).
+    const own = await this.runner.read(
+      {
+        commandName: 'access.read-own-access',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      (context) => this.access.ownAccess(context, user.userId),
+    );
     return {
       organisationCode: user.organisation.organisationCode,
       userId: user.userId,
       displayName: user.displayName,
+      personasHeld: own.personasHeld,
+      grants: own.grants,
     };
   }
 

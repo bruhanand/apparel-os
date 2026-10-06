@@ -134,8 +134,46 @@ export const accessCodes = declareCodes({
   'access.password-rules-not-set': 'unavailable',
 });
 
+/**
+ * The codes of `access` for roles, role assignments, scope and Authorise (access-and-approvals 4, 5, 7.1;
+ * code-house-rules 12.3; S1-F01-T11).
+ *
+ * - `access.not-authorised`: no role assignment in force grants the action on the record type, covering its scope
+ *   facts and field classes; `missing` names what is missing (7.1 step 3; PRD-UXP-003).
+ * - `access.business-date-not-set`: the Organisation's timezone is not set, so today is not known; `missing` names
+ *   the setting (code-house-rules 9; PRD-SEC-017).
+ * - `access.starts-in-past`: a version or an assignment starting before today (GC2-7, DEC-105).
+ * - `access.assignment-overlaps`: another approved assignment of the same actor, role and exact scope overlaps it
+ *   (DEC-112, CH-7).
+ * - `access.version-overlaps`: an approved role version starts on or after the start of the one being approved, so
+ *   it cannot follow it (code-house-rules 7.3).
+ * - `access.self-service-scope`: own-record scope with a role that is not self-service, or other scope with one that
+ *   is (PRD-ACS-022, DEC-100).
+ * - `access.permission-not-declared`: a permission on a record type or action the registry does not declare, or a
+ *   self-service permission on a type with no subject person (4.1, 5.4).
+ * - `access.scope-members-not-available`: selected members, which need the scope contract of `organisation` and
+ *   `merchandise` (S1-F02, S1-F03; 5.1).
+ * - `access.role-code-taken`, `access.role-not-found`, `access.actor-not-found`, `access.assignment-not-found`.
+ * - `access.not-withdrawable`: the assignment is not approved, is withdrawn already, or has started (7.3).
+ */
+export const accessRoleCodes = declareCodes({
+  'access.not-authorised': 'not-authorised',
+  'access.business-date-not-set': 'unavailable',
+  'access.starts-in-past': 'refused',
+  'access.assignment-overlaps': 'refused',
+  'access.version-overlaps': 'refused',
+  'access.self-service-scope': 'refused',
+  'access.permission-not-declared': 'refused',
+  'access.scope-members-not-available': 'unavailable',
+  'access.role-code-taken': 'refused',
+  'access.role-not-found': 'not-found',
+  'access.actor-not-found': 'not-found',
+  'access.assignment-not-found': 'not-found',
+  'access.not-withdrawable': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
-export const errorCodes = { ...kernelCodes, ...accessCodes } as const;
+export const errorCodes = { ...kernelCodes, ...accessCodes, ...accessRoleCodes } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
 /** The kind of a declared code. */

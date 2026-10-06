@@ -114,7 +114,7 @@ export { LOGGER, LoggingModule } from './logging/logging.module.js';
 export { PinoLoggerService } from './logging/pino-logger.service.js';
 export type { LogLevel, StructuredLogger } from './logging/pino-logger.service.js';
 export { JOB_IDENTITIES } from './jobs/contracts.js';
-export type { JobIdentities } from './jobs/contracts.js';
+export type { JobAuthority, JobIdentities } from './jobs/contracts.js';
 export { JOB_SCHEMA, KEEP_EVERY_JOB, startJobQueue } from './jobs/job-queue.js';
 export { checkRegistry, defineConsumer, defineJobKind } from './jobs/registry.js';
 export type {
@@ -127,7 +127,7 @@ export type {
 } from './jobs/registry.js';
 export { WORKER_SETTINGS_VARIABLE, workerSettingsFromEnvironment } from './jobs/worker-settings.js';
 export type { RetrySettings, WorkerSettings } from './jobs/worker-settings.js';
-export { OUTBOX_DELIVERY_QUEUE, OUTBOX_PROCESSOR_IDENTITY, Worker } from './jobs/worker.js';
+export { OUTBOX_AUTHORITY, OUTBOX_DELIVERY_QUEUE, OUTBOX_PROCESSOR_IDENTITY, Worker } from './jobs/worker.js';
 export { WORKER, WORKER_ENVIRONMENT, WORKER_SETTINGS, workerModuleWith } from './jobs/worker.module.js';
 export type { DeliveryData, StepResult, WorkerDependencies } from './jobs/worker.js';
 export { defineEvent } from './outbox/event-definition.js';

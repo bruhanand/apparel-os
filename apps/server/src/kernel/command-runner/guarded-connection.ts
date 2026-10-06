@@ -104,13 +104,23 @@ export class GuardedConnection {
   }
 
   /**
-   * Ends the command's use of the connection and gives it back to the pool, or destroys it when it may be broken or
-   * the commit's outcome is not known. A destroyed connection keeps its error listener, so a late error of its socket
+   * Ends the command's use of the connection and gives it back to the pool with no actor set, or destroys it when it
+   * may be broken or the commit's outcome is not known. A destroyed connection keeps its error listener, so a late error of its socket
    * cannot end the process.
    */
-  release(): void {
+  async release(): Promise<void> {
     this.state = 'ended';
     if (this.commit === 'unknown' || this.commit === 'in-flight') this.broken = true;
+    if (!this.broken) {
+      // RR-232: the actor is set for the transaction only (code-house-rules 6.2), but nothing stops a module setting
+      // it for the session. So it is cleared before the connection goes back to the pool; a connection where that
+      // fails is destroyed, never pooled again (PRD-SEC-005).
+      try {
+        await this.raw.query("select pg_catalog.set_config('aos.actor_id', '', false)");
+      } catch {
+        this.broken = true;
+      }
+    }
     if (!this.broken) this.raw.removeListener('error', this.onConnectionError);
     this.raw.release(this.broken ? true : undefined);
   }

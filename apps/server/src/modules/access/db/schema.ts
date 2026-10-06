@@ -1,4 +1,16 @@
-import { bigint, boolean, customType, inet, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  customType,
+  date,
+  inet,
+  integer,
+  jsonb,
+  pgSchema,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the access module's tables (code-house-rules 3.4). They mirror the reviewed migrations
 // (migrations/organisation/0005 and 0006) and never create or change a table; an integration test compares each with
@@ -121,5 +133,140 @@ export const signInFailure = access.table('sign_in_failure', {
   loginDigest: text('login_digest').notNull(),
   networkAddress: inet('network_address').notNull(),
   failedAt: at('failed_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The personas a user version holds, in order (access-and-approvals 2.1; personas.md section 2). Never changed. */
+export const personaHeld = access.table('persona_held', {
+  id: uuid('id').primaryKey(),
+  appUserVersionId: uuid('app_user_version_id').notNull(),
+  persona: text('persona').notNull(),
+  position: integer('position').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A role (access-and-approvals 4.2). Whether it is a self-service role is fixed. Never changed or deleted. */
+export const role = access.table('role', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  selfService: boolean('self_service').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A role's effective-dated versions (access-and-approvals 4.2; code-house-rules 7.3). */
+export const roleVersion = access.table('role_version', {
+  id: uuid('id').primaryKey(),
+  roleId: uuid('role_id').notNull(),
+  name: text('name').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A permission of a role version: an action on a record type, or a field class (access-and-approvals 4.1). */
+export const rolePermission = access.table('role_permission', {
+  id: uuid('id').primaryKey(),
+  roleVersionId: uuid('role_version_id').notNull(),
+  kind: text('kind').notNull(),
+  recordType: text('record_type'),
+  action: text('action'),
+  fieldClass: text('field_class'),
+  fieldAccess: text('field_access'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a role version: its preparers (access-and-approvals 9.1). */
+export const roleVersionChange = access.table('role_version_change', {
+  id: uuid('id').primaryKey(),
+  roleVersionId: uuid('role_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A role assignment: actor, role, scope and dates (access-and-approvals 4.3; code-house-rules 7.3). */
+export const roleAssignment = access.table('role_assignment', {
+  id: uuid('id').primaryKey(),
+  appUserId: uuid('app_user_id'),
+  serviceIdentityId: uuid('service_identity_id'),
+  roleId: uuid('role_id').notNull(),
+  roleSelfService: boolean('role_self_service').notNull(),
+  ownRecords: boolean('own_records').notNull(),
+  scopeKey: text('scope_key').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  withdrawalId: uuid('withdrawal_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One dimension of an assignment's scope (access-and-approvals 5.1). Never changed. */
+export const assignmentScope = access.table('assignment_scope', {
+  id: uuid('id').primaryKey(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  dimension: text('dimension').notNull(),
+  kind: text('kind').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A selected member of a scope dimension (access-and-approvals 5.1, 5.2). Never changed. */
+export const assignmentScopeMember = access.table('assignment_scope_member', {
+  id: uuid('id').primaryKey(),
+  assignmentScopeId: uuid('assignment_scope_id').notNull(),
+  memberType: text('member_type').notNull(),
+  memberId: uuid('member_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed an assignment: its preparers (access-and-approvals 9.1). */
+export const roleAssignmentChange = access.table('role_assignment_change', {
+  id: uuid('id').primaryKey(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The withdrawal of a Scheduled assignment: a document (access-and-approvals 4.3; code-house-rules 7.2, 7.3). */
+export const roleAssignmentWithdrawal = access.table('role_assignment_withdrawal', {
+  id: uuid('id').primaryKey(),
+  roleAssignmentId: uuid('role_assignment_id').notNull().unique(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A withdrawal's versions, frozen once decided (code-house-rules 7.2). */
+export const roleAssignmentWithdrawalVersion = access.table('role_assignment_withdrawal_version', {
+  id: uuid('id').primaryKey(),
+  withdrawalId: uuid('withdrawal_id').notNull(),
+  reason: text('reason').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a withdrawal version: its preparers (access-and-approvals 9.1). */
+export const roleAssignmentWithdrawalChange = access.table('role_assignment_withdrawal_change', {
+  id: uuid('id').primaryKey(),
+  withdrawalVersionId: uuid('withdrawal_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The effective grants, derived from the assignments in force on `as_of` (access-and-approvals 7.2). */
+export const effectiveGrant = access.table('effective_grant', {
+  id: uuid('id').primaryKey(),
+  actorId: uuid('actor_id').notNull(),
+  recordType: text('record_type').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  actions: text('actions').array().notNull(),
+  ownRecords: boolean('own_records').notNull(),
+  declaresLegalEntity: boolean('declares_legal_entity').notNull(),
+  declaresPlace: boolean('declares_place').notNull(),
+  declaresBrand: boolean('declares_brand').notNull(),
+  legalEntityAll: boolean('legal_entity_all').notNull(),
+  legalEntityIds: uuid('legal_entity_ids').array().notNull(),
+  placeAll: boolean('place_all').notNull(),
+  siteIds: uuid('site_ids').array().notNull(),
+  storeIds: uuid('store_ids').array().notNull(),
+  businessUnitIds: uuid('business_unit_ids').array().notNull(),
+  brandAll: boolean('brand_all').notNull(),
+  brandIds: uuid('brand_ids').array().notNull(),
+  asOf: date('as_of', { mode: 'string' }).notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

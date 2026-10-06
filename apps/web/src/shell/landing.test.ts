@@ -1,6 +1,7 @@
+import { permissionRegistry } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { landingScreen } from './landing';
-import type { Grant } from './screens';
+import { screenIds, screens, type Grant, type ScreenNeed } from './screens';
 
 // SYNTHETIC grants: each list stands for the effective grants of a synthetic role assignment. None is a KDPS role.
 const firstAdminSetupRole: Grant[] = (
@@ -8,6 +9,18 @@ const firstAdminSetupRole: Grant[] = (
 ).flatMap((recordType) => (['view', 'create', 'edit'] as const).map((action) => ({ recordType, action })));
 const historyReader: Grant[] = [{ recordType: 'audit.audit_record', action: 'view' }];
 const policyReadinessReader: Grant[] = [{ recordType: 'configuration.policy_status', action: 'view' }];
+
+describe('the record types the screens need (access-and-approvals 4.1; RR-261)', () => {
+  it('names only record types the permission registry declares, or configuration’s, which S1-F04 declares', () => {
+    const declared = new Set(permissionRegistry.map((declaration) => declaration.code));
+    for (const id of screenIds) {
+      const need: ScreenNeed = screens[id].need;
+      if (need.kind === 'none') continue;
+      if (need.grant.recordType === 'configuration.policy_status') continue;
+      expect(declared.has(need.grant.recordType), id).toBe(true);
+    }
+  });
+});
 
 describe('landingScreen (DEC-116; personas.md section 2 "Landing")', () => {
   it('PRD-ACS-002 lands the first Admin, whose setup role grants no Policy readiness, on Setup › Users', () => {

@@ -136,7 +136,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 ### 4.5 Reading history
 
 - The history of a record, or of an actor, is read inside the reader's scope. Audit rows carry the record's scope facts, and row-level security applies (`PRD-SEC-005`; GC-3 7.2). Restricted values follow field permissions (`PRD-ACS-008`).
-- Until `access` adds the read policy with `access.row_visible` (`S1-F01-T11`; RR-242), the tables carry only the insert policy of code-house-rules 6.3, so the runtime role reads no row.
+- The read policies (`S1-F01-T11`; RR-242). An audit record is read only by a reader who holds view on `audit.audit_record` and whose grants on the audited record's own type, `<record_module>.<record_type>` in the permission registry, cover the row's facts, so history never reaches past the records the reader's grants cover (access-and-approvals 9.11). An access record is read under `audit.access_record`, except sensitive-access records (`audit.sensitive_access_record`) and device records (`audit.device_access_record`), types apart; its facts are those of the place where it happened, and a sign-in, which has none, is read only through all-members scope, the Organisation-wide view of access-and-approvals 9.11. Inserting stays admitted for any row (code-house-rules 6.3). **Design choice.**
 - A read model serves the stage 1 report "access and audit history" ([phases.md](../../phases.md), stage 1).
 
 ### 4.6 Retention
