@@ -6,3 +6,5 @@ dist-seed
 .turbo
 .*/
 !.github/
+# Generated from the route table and compared by a unit test (code-house-rules 12.2).
+packages/schemas/openapi.json

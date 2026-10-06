@@ -7,6 +7,30 @@
       "runtime": [],
       "design": "code-house-rules 4.3",
       "why": "The runner's own record of applied files. Only the migration role reads or writes it"
+    },
+    {
+      "table": "kernel.idempotency_key",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.4",
+      "why": "The idempotency helper finds a key at step 2 of module-map 6.1, before Authorise and before the record's scope is known; only the helper reads it (code-house-rules 12.4 \"Storage\")"
+    },
+    {
+      "table": "kernel.idempotency_result",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.4",
+      "why": "Read with its key row at step 2 of module-map 6.1, before Authorise; it holds no restricted value, and a replay is answered only after the access checks pass again (code-house-rules 12.4 \"Storage\", \"Replay\")"
+    },
+    {
+      "table": "kernel.idempotency_conflict",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.4",
+      "why": "Written by the helper before Authorise; a kept refused request is protected by encrypting every restricted value and by the read rule of the operations view, not by row-level security (code-house-rules 12.4 \"Storage\", \"Changed content\")"
     }
   ]
 }

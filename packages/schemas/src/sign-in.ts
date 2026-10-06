@@ -6,7 +6,7 @@ import {
   personasHeldSchema,
   totpCodeSchema,
 } from './common.js';
-import { secretString } from './secret.js';
+import { secretString, shownOnceSecret } from './secret.js';
 
 // Sign-in, enrolment and passwords (PRD-SEC-001, POL-02.17, DEC-093, DEC-099; access-and-approvals 3.1 to 3.3).
 // Nothing here is sent by message: the second factor is an authenticator app (DEC-099).
@@ -47,12 +47,13 @@ export type SignInRefusal = Extract<SignInOutcome, { outcome: 'refused' }>;
 export const signInRefusal: SignInRefusal = Object.freeze({ outcome: 'refused' });
 
 /**
- * The authenticator secret, shown once at enrolment and never again (access-and-approvals 3.2). The server
- * reveals it explicitly into the response; a parsed copy stays wrapped until the screen shows it.
+ * The authenticator secret, shown once at enrolment and never again (access-and-approvals 3.2; code-house-rules 12.6,
+ * DEC-113). The server reveals it only where it encodes the answer; the typed client decodes it back into a `Secret`,
+ * which stays wrapped until the screen shows it. A replay of the request is refused, never answered again.
  */
 export const enrolmentStartResponseSchema = z.strictObject({
-  secret: secretString(),
-  otpauthUri: secretString(),
+  secret: shownOnceSecret(),
+  otpauthUri: shownOnceSecret(),
 });
 
 /** Enrolment is confirmed with a code from the newly enrolled app. */
@@ -63,7 +64,7 @@ export const enrolmentConfirmRequestSchema = z.strictObject({
 /**
  * The user's own password change, after a fresh authenticator code (access-and-approvals 3.2, 3.3). The new
  * password is checked against the password rules, which are a setting and OPEN (GC3-5). The idempotency hash
- * covers no secret; how a replay is told identical from changed content is part B's, before S1-F01-T04 (RR-207).
+ * covers no secret; a replay is told identical from changed content as code-house-rules 12.5 says (RR-207, CH-8).
  */
 export const passwordChangeRequestSchema = z.strictObject({
   newPassword: secretString(),

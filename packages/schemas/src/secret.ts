@@ -36,8 +36,11 @@ export class Secret {
   }
 }
 
-/** Every schema made by secretString() is registered here, so a test or a logger can find the secret fields. */
-export const secretRegistry = z.registry<{ secret: true }>();
+/**
+ * Every schema made by secretString() or shownOnceSecret() is registered here, so the OpenAPI generator, a test or a
+ * logger can find the secret fields (code-house-rules 12.2). `shownOnce` marks a secret an answer shows once (12.6).
+ */
+export const secretRegistry = z.registry<{ secret: true; shownOnce?: true }>();
 
 /**
  * A secret string. It refuses only an absent value: the password rules are OPEN (GC3-5) and are a setting,
@@ -49,5 +52,21 @@ export function secretString() {
     .min(1)
     .transform((value) => new Secret(value));
   secretRegistry.add(schema, { secret: true });
+  return schema;
+}
+
+/**
+ * A secret an answer shows once and never again: the authenticator secret at enrolment and a service identity's
+ * secret (code-house-rules 12.6; DEC-113; access-and-approvals 2.3, 3.2). On the wire it is a plain string. It is a
+ * codec between that string and a `Secret`: the server encodes the answer, revealing the value at that one place, and
+ * the typed client decodes it back into a `Secret`, so the web app's state, logs and error reports show only the
+ * placeholder until the screen shows it to the person (PRD-SEC-014).
+ */
+export function shownOnceSecret() {
+  const schema = z.codec(z.string().min(1), z.instanceof(Secret), {
+    decode: (value) => new Secret(value),
+    encode: (secret) => secret.reveal(),
+  });
+  secretRegistry.add(schema, { secret: true, shownOnce: true });
   return schema;
 }

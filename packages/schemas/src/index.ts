@@ -1,7 +1,7 @@
 export { healthResponseSchema } from './health.js';
 export type { HealthResponse } from './health.js';
 
-export { Secret, secretRegistry, secretString } from './secret.js';
+export { Secret, secretRegistry, secretString, shownOnceSecret } from './secret.js';
 
 export {
   businessDateSchema,
@@ -71,3 +71,35 @@ export type { ApprovalRequestView, ApprovalValue, DecisionRefusal, DecisionReque
 
 export { dueSchema, exposureSchema, workItemSchema } from './work-item.js';
 export type { Exposure, WorkItem } from './work-item.js';
+
+export {
+  errorCodes,
+  errorCodeSchema,
+  errorEnvelopeSchema,
+  errorKindOf,
+  errorKinds,
+  errorKindSchema,
+  issueSchema,
+  kernelCodes,
+  missingItemSchema,
+  statusOfKind,
+} from './errors.js';
+export type { ErrorBody, ErrorCode, ErrorEnvelope, ErrorKind, Issue, MissingItem } from './errors.js';
+
+export { CORRELATION_ID_HEADER, IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER } from './headers.js';
+
+export { codesOfRoute, defineRoute, needsIdempotencyKey, routes } from './route-table.js';
+export type {
+  CommandRoute,
+  ReadRoute,
+  RestrictedFieldDeclaration,
+  Route,
+  RouteAccess,
+  RouteTable,
+  SecretFieldDeclaration,
+} from './route-table.js';
+
+export { openApiDocument, openApiText } from './openapi.js';
+
+export { ApiContractError, createApiClient } from './client.js';
+export type { ApiClient, ApiClientOptions, CallInput, CallResult } from './client.js';

@@ -56,4 +56,25 @@ export default defineConfig(
       ],
     },
   },
+  {
+    // No schema in packages/schemas supplies a value through .default(), .prefault() or .catch() (code-house-rules
+    // 12.2; AGENTS.md "Never invent a value"). This block repeats the fixture rule above, since a later block's
+    // no-restricted-syntax replaces an earlier one's.
+    files: ['packages/schemas/src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/(^|\\/)(test|e2e|fixtures|seed)(\\/|$)/]',
+          message: 'Application code never imports tests, fixtures or the seed (code-house-rules 11.2).',
+        },
+        {
+          selector: 'CallExpression[callee.property.name=/^(default|prefault|catch)$/]',
+          message:
+            'No schema supplies a value of its own: no .default(), .prefault() or .catch() (code-house-rules 12.2).',
+        },
+      ],
+    },
+  },
 );

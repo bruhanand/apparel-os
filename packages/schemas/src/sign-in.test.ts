@@ -52,7 +52,11 @@ describe('sign-in (PRD-SEC-001, DEC-093; access-and-approvals 3.1)', () => {
 
 describe('enrolment and passwords (access-and-approvals 3.2)', () => {
   it('marks the authenticator secret, a new password and a temporary password as secrets', () => {
-    expect(secretRegistry.has(enrolmentStartResponseSchema.shape.secret)).toBe(true);
+    expect(secretRegistry.get(enrolmentStartResponseSchema.shape.secret)).toEqual({ secret: true, shownOnce: true });
+    expect(secretRegistry.get(enrolmentStartResponseSchema.shape.otpauthUri)).toEqual({
+      secret: true,
+      shownOnce: true,
+    });
     expect(secretRegistry.has(passwordChangeRequestSchema.shape.newPassword)).toBe(true);
     expect(secretRegistry.has(userCreateRequestSchema.shape.temporaryPassword)).toBe(true);
   });

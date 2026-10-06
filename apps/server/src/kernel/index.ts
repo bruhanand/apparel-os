@@ -43,7 +43,56 @@ export { migrateDatabase } from './db/migration-runner.js';
 export type { MigrateDatabaseOptions } from './db/migration-runner.js';
 export { migrationSetFolder, orderMigrationFileNames, readMigrationSet } from './db/migration-set.js';
 export type { MigrationFile, MigrationSetName } from './db/migration-set.js';
+export { ApiRefusal } from './http/api-refusal.js';
+export type { RefusalBody } from './http/api-refusal.js';
+export { ApiRoute, commandAnswer, requestContentOf, RouteAnswer, routeAnswer, RouteInput } from './http/api-route.js';
+export type { RouteInputOf } from './http/api-route.js';
 export { configureApp } from './http/configure-app.js';
+export type { HttpRequest, HttpResponse } from './http/http-types.js';
+export {
+  canonicalJson,
+  fieldName,
+  IDEMPOTENCY_FORM_VERSION,
+  prepareRequest,
+  sha256Hex,
+} from './idempotency/canonical-form.js';
+export type {
+  FieldPath,
+  JsonObject,
+  JsonValue,
+  PreparedRequest,
+  RequestContent,
+  RestrictedField,
+  SecretField,
+} from './idempotency/canonical-form.js';
+export { restrictedValueCipherNotConfigured, secretCheckNotImplemented } from './idempotency/contracts.js';
+export type {
+  CommandRefusal,
+  EncryptedValue,
+  KeptOutcome,
+  KeptRefusalKind,
+  MissingItem,
+  ReplayAccess,
+  ReplayAccessRefusal,
+  ReplayAuthorisation,
+  ReplaySecretCheck,
+  RestrictedValueCipher,
+} from './idempotency/contracts.js';
+export { IdempotencyConflict } from './idempotency/idempotency-errors.js';
+export type { IdempotencyConflictCode } from './idempotency/idempotency-errors.js';
+export { IdempotencyHelper } from './idempotency/idempotency-helper.js';
+export type {
+  CommandOutcome,
+  IdempotencyHelperDependencies,
+  IdempotentAnswer,
+  IdempotentCommand,
+} from './idempotency/idempotency-helper.js';
+export {
+  IDEMPOTENCY_HELPER,
+  IdempotencyModule,
+  REPLAY_SECRET_CHECK,
+  RESTRICTED_VALUE_CIPHER,
+} from './idempotency/idempotency.module.js';
 export { KernelModule } from './kernel.module.js';
 export { LOGGER, LoggingModule } from './logging/logging.module.js';
 export { PinoLoggerService } from './logging/pino-logger.service.js';

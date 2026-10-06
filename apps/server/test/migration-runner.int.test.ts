@@ -18,6 +18,8 @@ import {
 // written to a temporary folder; each starts with the repository's own runner record.
 
 const RECORD = '0001__kernel__migration_record.sql';
+/** The files of the Organisation set, in order. */
+const ORGANISATION_FILES = [RECORD, '0002__kernel__refuse_change.sql', '0003__kernel__idempotency.sql'];
 const scratch = mkdtempSync(join(tmpdir(), 'aos-migrations-'));
 const databases: string[] = [];
 
@@ -123,7 +125,7 @@ describe('migrateDatabase (code-house-rules 4.3)', () => {
       database,
       'select file_name, checksum_sha256, applied_by from kernel.migration order by file_name',
     );
-    expect(rows.map((row) => row.file_name)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(rows.map((row) => row.file_name)).toEqual(ORGANISATION_FILES);
     for (const row of rows) {
       expect(row.checksum_sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(row.applied_by).toBe('aos_migration');
@@ -294,13 +296,10 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
     );
 
     expect(await recordedFiles(directory)).toEqual(DIRECTORY_FILES);
-    expect(await recordedFiles(first)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(await recordedFiles(first)).toEqual(ORGANISATION_FILES);
     expect(await exists(failing, 'kernel.migration')).toBe(false);
     expect(await exists(last, 'kernel.migration')).toBe(false);
-    expect(applied).toEqual([
-      `Organisation ${syntheticCode('ORG-A')} ${RECORD}`,
-      `Organisation ${syntheticCode('ORG-A')} 0002__kernel__refuse_change.sql`,
-    ]);
+    expect(applied).toEqual(ORGANISATION_FILES.map((file) => `Organisation ${syntheticCode('ORG-A')} ${file}`));
   });
 
   it('PRD-MOD-001 reads the directory after migrating it, so a first run migrates the directory and finds nobody', async () => {
@@ -322,7 +321,7 @@ describe('migrateAll, the pre-deploy run (deployment.md section 4)', () => {
       organisationConnectionString,
     });
     expect(migrated).toEqual([{ organisationCode: syntheticCode('ORG-A'), databaseName: listed }]);
-    expect(await recordedFiles(listed)).toEqual([RECORD, '0002__kernel__refuse_change.sql']);
+    expect(await recordedFiles(listed)).toEqual(ORGANISATION_FILES);
     expect(await exists(unlisted, 'kernel.migration')).toBe(false);
   });
 

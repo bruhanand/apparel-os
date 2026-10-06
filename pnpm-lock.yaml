@@ -235,6 +235,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@nestjs/cli':
         specifier: ^12.0.8
@@ -257,6 +260,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@apparel-os/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@apparel-os/ui':
         specifier: workspace:*
         version: link:../../packages/ui

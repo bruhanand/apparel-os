@@ -1,7 +1,7 @@
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { Secret, secretRegistry, secretString } from './secret.js';
+import { Secret, secretRegistry, secretString, shownOnceSecret } from './secret.js';
 
 // Synthetic values only.
 const SYNTHETIC_PASSWORD = 'synthetic-temporary-password-1';
@@ -44,5 +44,23 @@ describe('Secret (PRD-SEC-006, PRD-SEC-014)', () => {
     }
     // Too short: the empty value is refused.
     expect(schema.safeParse({ password: '' }).success).toBe(false);
+  });
+});
+
+describe('a secret shown once (code-house-rules 12.6; DEC-113)', () => {
+  it('PRD-SEC-014 is a plain string on the wire, revealed only where the server encodes the answer', () => {
+    const schema = z.strictObject({ secret: shownOnceSecret() });
+    expect(z.encode(schema, { secret: new Secret(SYNTHETIC_PASSWORD) })).toEqual({ secret: SYNTHETIC_PASSWORD });
+  });
+
+  it('PRD-SEC-014 is decoded back into a Secret by the client, so its state and logs show the placeholder', () => {
+    const decoded = z.decode(z.strictObject({ secret: shownOnceSecret() }), { secret: SYNTHETIC_PASSWORD });
+    expect(decoded.secret).toBeInstanceOf(Secret);
+    expect(JSON.stringify(decoded)).not.toContain(SYNTHETIC_PASSWORD);
+  });
+
+  it('is registered as a secret shown once, and a secretString() as a secret only', () => {
+    expect(secretRegistry.get(shownOnceSecret())).toEqual({ secret: true, shownOnce: true });
+    expect(secretRegistry.get(secretString())).toEqual({ secret: true });
   });
 });
