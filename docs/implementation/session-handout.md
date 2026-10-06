@@ -4,42 +4,43 @@
 
 ## Where things stand
 
-- **`DEC-112` is merged to `main`** (`1c20267`): the stage 1 baseline of 5 Oct 2026 and the documents updated to match. Its review batch counts as reviewed once you approve it ([index.md](index.md) section 9).
-- **`S1-F01-T01` is complete**: built on branch `claude/apparel-os-s1-f01-t01-2b257b` from `1c20267`, reviewed, and its design edit agreed by you on 6 Oct 2026, R1 included.
-  - [access-and-approvals.md](../design/access/access-and-approvals.md): the two setup roles' permission matrix (9.11, baseline of `DEC-112`, KDPS confirms under V-01); the setup states across the directory and the Organisation database; reruns of an interrupted setup are identical only when the non-secret fingerprint matches and both temporary passwords verify against the credentials the first run wrote, with no form of a password kept for the check; the fingerprint's canonical-form version; how a session cookie finds its Organisation's database (3.3); how a first temporary password is issued and handed over, and what a first sign-in may reach (3.2, 7.1); users prepared and approved like other access changes, as `DEC-112` reads (2.1, 4.3, 9.11); tests 3d, 3e, 19e, 19f; GC3-13 new, GC3-5 extended.
-  - `packages/schemas`: the contract sketch as Zod schemas and types (setup, sign-in, roles and scope, approvals, work items, a `Secret` wrapper), with 35 new unit tests.
-  - [s1-f01-first-access.md](s1-f01-first-access.md) aligned; `S1-F01-AT01` now covers identical and conflicting reruns, a different temporary password, a changed fingerprint version and a user without a setup record.
-  - Readiness register: RR-017 updated; RR-205 (the CSV and PDF scheduling mismatch for `S1-F06` and `S1-F07`, tracked, not resolved); RR-206 (GC3-13); RR-207 to RR-215, the review follow-ups, each with its owner and gate.
-  - Reviewed: two rounds by an independent AI reviewer, every blocking finding fixed and rechecked, recorded as "Claude (AI review, independent reviewer, S1-F01-T01 round n)". Doc check 0 errors, 0 warnings.
-- **Agreed with T01 (round 2, R1):** following `DEC-112`, every user change after setup, disabling included, is prepared and independently approved. There is no one-person emergency cut-off: revoking sessions ends them but bars no new sign-in, and neither setup role may revoke other users' sessions.
-- **Stage 0 is complete.** `S0-T01` to `S0-T06` are done and merged.
-- **Local checkout:** the main checkout may still hold untracked copies of the two `DEC-112` report files in `docs/reports/`; delete them before pulling `main` into it. The worktrees `.claude/worktrees/document-checker-improvements-c67c98` (RR-050) and `.claude/worktrees/s0-t06-task-baa912` are untouched.
-- **Standing rule:** no Claude attribution in commits or PRs.
+Stage 1 is being built on branch `claude/apparel-os-stage-1-4d1059` (worktree `.claude/worktrees/apparel-os-stage-1-4d1059`), one local commit per task after its independent review and checks. The product owner allows pushing this branch for CI (no PR, no merge to `main`, no deploy). Railway `dev` steps are not authorised, so the `dev` restore drill and RR-187 stay open. `S1-F01-T01` (PR #5) is merged to `main`; the branch started from it (`eb81f53`).
 
-## Next steps, in order (each needs your go-ahead)
+### Done on the branch
 
-| Step | What | Needs from you |
-| --- | --- | --- |
-| 1 | Approve the `DEC-112` and `S1-F01-T01` AI review batches ([index.md](index.md) section 9) | Approval |
-| 2 | Answer the open questions: ordinary hyperlinks in KDPS sheets (GC6-17, RR-201); the synthetic opening-count handler on `dev` (GC6-18); withdrawing an approved assignment before it starts (RR-202, before `S1-F01-T11`); first-user credential recovery (GC3-13, RR-206, before live use) | Decisions |
-| 3 | `S1-F01-T02`: directory and Organisation routing ([s1-f01-first-access.md](s1-f01-first-access.md) section 13) | Go-ahead |
-| 4 | Apply the roles runbook on Railway `dev`: verify PostgreSQL 17 (CH-2, RR-187) and set the development time limits (CH-3, RR-200) | You run it |
-| 5 | Write house rules part B before `S1-F01-T04`, including the replay rule for requests that carry a secret (RR-207) | Review and approval |
-| 6 | PRD bullets for the five RR-047 picks, each through a decision entry citing `DEC-112`, before the `S1-F03` code | Approve the wording |
+| Commit | What |
+| --- | --- |
+| `ea754a1` | Plan: the `DEC-112` and `S1-F01-T01` review batches approved by the product owner; RR-205 decided (CSV reader in `S1-F07`, PDF text extraction in stage 2 with `S2-F05`) |
+| `fc62efb` | `S1-F01-T02` directory and Organisation routing: reviewed in two rounds, 97 integration tests; RR-195 done, RR-216 (pool size OPEN, deployment D-7) |
+| `359e4ce` | Code house rules part B (section 12) drafted and reviewed in five rounds; RR-202 withdrawal of a Scheduled version (house rules 7.3) |
 
-## Decisions and confirmations waiting (none blocks step 3)
+### In progress (uncommitted in the worktree unless said)
 
-- **Confirmations of `DEC-112` picks:** KDPS Owner for the two first users' roles (V-01, question 4), the layout confirmers, the customer-contact refusal and the opening rehearsal on `kdps-test` (RR-197; questions 37, 59); Accounts and the CA for the posting-map workflow and the journal series (RR-198; Accounts 21, CA 18); KDPS Owner and Booking for the season order and the "old" cutoff (RR-199).
-- **Tracked for `S1-F06` and `S1-F07`, not blocking T01:** the CSV reader is OPEN (GC6-2) while `S1-F06` acceptance cites CSV; `S1-F07` builds a PDF text reader in stage 1 while GC-6 9.2 proposes extraction in stage 2 (RR-205; PDF.js pin in RR-033). Also RR-203 and RR-204 in `S1-F06`.
-- **Still open from before:** the S0-T06 follow-ups RR-193 to RR-196 at their tasks; team size (RR-031); whether `docs/implementation/` becomes gated (RR-052); before production: earlier POS selling before a switch (`DEC-067`), rollout order (SL-9), production hosting (D-1).
+- **Part B approval round.** The product owner approved part B on 6 Oct 2026, answered CH-8 (an unverifiable password replay is refused as changed content; an authenticator code is proof, not content), and approved `DEC-113` (a shown-once secret is never replayed) and `DEC-114` (nor is a restricted value shown unmasked), both editing `PRD-INT-002`. Also decided: a replay is answered only after Authenticate and Authorise pass again; every restricted value kept for investigation is encrypted and no secret is ever kept; the key belongs to Organisation, actor, operation and key across sessions; an uncertain commit keeps the key (`kernel.outcome-unknown`); CH-9 retention stays OPEN (nothing is deleted yet only as a temporary safeguard). House rules 12.4 has a "Replay at a glance" table. Review of the 99 sections `PRD-INT-002` flags, with the broad sweep, is running.
+- **`S1-F01-T03` command context:** built, independently reviewed, blocking findings fixed (silent rollback on a caught error, kept handle after the command); the uncertain-commit report is being added; then recheck and commit.
+- **`S1-F11` shared calculations (server half):** on branch `worktree-agent-a945704b9d4e02c9a` at `31c28f4`, rebased on `359e4ce`; three code review rounds, no blocking finding left. Waiting for the doc gate on its GC-7 edits (new GC7-12 to GC7-16; RR-219 to RR-224) before merging. Its counter run and bundle check are blocked on RR-015 and Playwright (`S1-F01-T19`).
+- **Designs drafted, awaiting their review batches:** the stock ledger interface, tables and harness (stock-ledger 13 to 15; RR-012, RR-013; branch `worktree-agent-a13586bcf47ee714e`, `fcadbe8`) for DR-2 with the 25 never-reviewed ledger sections (RR-018); GC-9 backup and restore (`docs/design/platform/backup-and-restore.md`; branch `worktree-agent-a3c97e6046ec0685e`, `c725e23`) and GC-8 offline counter with the RR-015 proposal `apps/counter` (`docs/design/pos/offline-counter.md`; branch `worktree-agent-a5deacedc517698eb`, `0bb6852`) for DR-3.
+
+## Next, in order
+
+1. Finish the `PRD-INT-002` review round; record; commit part B approval with `DEC-113` and `DEC-114`.
+2. `S1-F01-T03`: recheck, final checks, commit.
+3. `S1-F11`: doc gate on GC-7, merge, commit.
+4. `S1-F01-T04` (idempotency helper, with the uncertain-commit test) and `S1-F01-T07` (audit) next; then T05, T08, T06, T11, T09, T10, T12, T13 by the plan's lanes.
+5. DR-2 (ledger design), DR-3 (GC-8, GC-9) and DR-1b (design-language sections for `S1-F01-T14`) as review batches, each needing the product owner's approval.
+
+## Open items for the product owner
+
+- GC8-1: `PRD-OFF-011` releases a lost counter's protected stock only after a pause on that counter, which a lost counter cannot give (stage 4).
+- Still open from before: GC6-17 (hyperlinks in KDPS sheets), GC6-18 (opening-count handler on `dev`), GC3-13 (first users' credential recovery), RR-206; the `DEC-112` confirmations by KDPS, Accounts and the CA; RR-042 stays deferred.
+- Not authorised in this run: Railway `dev` steps (roles runbook, restore drill), so stage 1 exit check 4 cannot be evidenced on `dev`.
 
 ## Facts to remember
 
-- 135 of the 209 register items block only live use; nothing a KDPS person must answer blocks coding.
-- The stock ledger still has no interface or tables design (RR-012), and 25 of its sections were never reviewed (RR-018); both come before `S1-F10` in DR-2.
-- The register still lists stage 0 items (RR-006, RR-020, RR-185, RR-186) as active although the start gate is met; tidy them in a later register update.
-- This machine runs every check locally; start Docker Desktop before `pnpm test:integration`.
+- Standing rule: no Claude attribution in commits or PRs.
+- Start Docker Desktop before `pnpm test:integration`.
+- `docs/reviews.json` is written only on this branch, one round at a time; design drafts in other worktrees are reviewed after they are merged here.
 
 ## To start the next session
 
-Say: "Read `docs/implementation/session-handout.md`, then do step N."
+Say: "Read `docs/implementation/session-handout.md`, then continue stage 1 from 'Next, in order'."

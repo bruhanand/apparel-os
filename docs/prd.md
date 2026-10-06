@@ -826,7 +826,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 ### Transaction and integration integrity
 
 - `PRD-INT-001` Authenticate Organisation and actor, then check role assignment, action, entity/Site/brand and permitted fields.
-- `PRD-INT-002` Use a scoped idempotency identity. Identical replay returns the original result; changed content under that identity is rejected and retained for investigation.
+- `PRD-INT-002` Use a scoped idempotency identity. Identical replay returns the original result; changed content under that identity is rejected and retained for investigation. An answer that showed a secret, such as an authenticator secret at enrolment, or a restricted value shown unmasked, is never repeated: its identical replay is refused and the request is started again.
 - `PRD-INT-003` Acquire locks in a deterministic order and recheck authority, document version, state, independent approval and quantity under the locks.
 - `PRD-INT-004` Commit number allocation, stock, monetary records, approval evidence, audit and outbox together or commit none.
 - `PRD-INT-005` Concurrency cannot oversell, duplicate a return, overlap PT coverage or reserve the same quantity for two movements.

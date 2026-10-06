@@ -168,7 +168,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 - Money is integer paise through `@apparel-os/domain` (`PRD-MOD-014`). Unknown stays distinct from zero (`PRD-MOD-015`).
 - Code and tests cite the PRD or policy ID where they enforce a rule.
 - The pre-commit hook runs the module check when code is staged, and lint and typecheck too once dependencies are installed. `.github/workflows/code-check.yml` runs them with both test suites.
-- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) is drafted and awaits the product owner's approval before `S1-F01-T04`.
+- The house rules for code are in `docs/design/platform/code-house-rules.md`. Part A (folder layout, database layout, migrations and roles, row-level security, append-only rows, transactions and locks, time, tests, fixtures) is reviewed and approved; `DEC-112` sets baselines for CH-1, CH-4, CH-5 and CH-7 and development baselines for CH-2 and CH-3, and its other open questions stay open at their gates. Part B (API shape, error envelope, idempotency key, version token, events, jobs, logs, screen text) was approved by the product owner on 6 Oct 2026, with CH-8 answered and CH-12 answered by `DEC-113`.
 
 ## Completing a code task
 

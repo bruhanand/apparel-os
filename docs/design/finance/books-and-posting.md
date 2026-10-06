@@ -253,7 +253,7 @@ The operations of module-map 4.14, made concrete. "Hold periods" is added as a *
 ### 9.3 Idempotency
 
 - A posting-source row is unique on source module, item key and component. Post is idempotent on its source reference: an item already posted with the same content returns its first result, and replay never doubles a journal (`PRD-INT-002`, `PRD-INT-008`).
-- An item already posted with different content is refused. The command fails, and the kernel's idempotency helper keeps the changed request for investigation, as for any key conflict (`PRD-INT-002`; module-map 4.1).
+- An item already posted with different content is refused (`refused`, 9.1), whatever idempotency key its command carries. The changed item is kept for investigation as an exception raised after the business transaction rolls back, in the way module-map 6.3 raises one for a missing posting map ([module-map.md](../architecture/module-map.md) 4.13, 6.3): its evidence names the source reference and keeps the changed item's content (component, amount, accounts and dimensions) with the hashes of the posted and the changed content, never a secret, and any restricted value only encrypted ([code-house-rules.md](../platform/code-house-rules.md) 12.4; `PRD-INT-002`). `finance` opens no transaction of its own inside Post. **Design choice.**
 
 ### 9.4 Correcting a posting
 
