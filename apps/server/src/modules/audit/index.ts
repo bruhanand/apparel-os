@@ -3,6 +3,9 @@ export { AUDIT, AuditModule } from './audit.module.js';
 export { Audit } from './audit.js';
 export type {
   AccessEntry,
+  AccessHistoryEntry,
+  AccessHistoryQuery,
+  AccessRecordGroup,
   AuditActor,
   AuditedRecord,
   AuditEntry,
@@ -11,6 +14,7 @@ export type {
   AuditRecordReference,
   AuditScope,
   AuditSource,
+  HistoryPosition,
   HistoryQuery,
   PartitionCoverage,
   PlainAccessKind,

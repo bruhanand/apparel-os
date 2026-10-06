@@ -19,6 +19,8 @@ import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
 import { AccessChangesController } from './http/access-changes.controller.js';
+import { HISTORY, HistoryController } from './http/history.controller.js';
+import { History } from './queries/history.js';
 import { jobIdentities } from './queries/job-identities.js';
 import { ACCESS } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
@@ -80,10 +82,16 @@ export class AccessJobIdentitiesModule {}
  */
 @Module({
   imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule],
-  controllers: [SignInController, AccessChangesController],
+  controllers: [SignInController, AccessChangesController, HistoryController],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
     { provide: ACCESS, useFactory: (audit: AuditInterface) => new Access({ audit }), inject: [AUDIT] },
+    {
+      // The history reads (numbering-and-audit 4.5): rows through `audit`, Authorise and masking through `access`.
+      provide: HISTORY,
+      useFactory: (audit: AuditInterface, access: Access) => new History(audit, access),
+      inject: [AUDIT, ACCESS],
+    },
     {
       // One hash no one knows, made once per process and verified wherever no credential can be (DEC-116).
       provide: UNKNOWABLE_HASH,

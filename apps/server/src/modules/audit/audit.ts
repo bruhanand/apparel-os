@@ -3,6 +3,8 @@ import { recordAccess } from './commands/record-access.js';
 import { recordChange } from './commands/record.js';
 import type {
   AccessEntry,
+  AccessHistoryEntry,
+  AccessHistoryQuery,
   AuditEntry,
   AuditHistoryEntry,
   AuditInterface,
@@ -14,6 +16,7 @@ import type {
 import { checkPartitionCoverage } from './jobs/partition-coverage.js';
 import { applyRetention } from './jobs/retention.js';
 import { checkSeals, sealClosedBlock } from './jobs/seals.js';
+import { readAccessHistory } from './queries/read-access-history.js';
 import { readHistory } from './queries/read-history.js';
 
 /** The audit module's interface (module-map 4.5; numbering-and-audit 4 and 5). */
@@ -30,6 +33,10 @@ export class Audit implements AuditInterface {
 
   readHistory(context: TransactionContext, query: HistoryQuery): Promise<readonly AuditHistoryEntry[]> {
     return readHistory(context, query);
+  }
+
+  readAccessHistory(context: TransactionContext, query: AccessHistoryQuery): Promise<readonly AccessHistoryEntry[]> {
+    return readAccessHistory(context, query);
   }
 
   sealClosedBlock(context: TransactionContext): Promise<number | null> {
