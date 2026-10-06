@@ -166,7 +166,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T04 Idempotency and API conventions](tickets/T04-idempotency-helper.md) | in-progress | T03 (done) |
 | [S1-F01-T05 API conventions in code](tickets/T05-api-conventions-in-code.md) | merged | → T04 |
 | [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | blocked | T04, T08 (its internal service identity) |
-| [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | ready-for-agent | T03 (done) |
+| [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | done | T03 (done) |
 | [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | blocked | T04, T07 |
 | [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | blocked | T11 (Authorise for resets and disabling), T15 |
 | [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | blocked | T01 (done), T07, T08, T09 (the recovery command's revocation and reset), T11 (roles and assignments) |
