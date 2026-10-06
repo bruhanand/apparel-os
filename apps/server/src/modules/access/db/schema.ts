@@ -270,3 +270,17 @@ export const effectiveGrant = access.table('effective_grant', {
   asOf: date('as_of', { mode: 'string' }).notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
+
+/**
+ * The setup record (access-and-approvals 9.11, 13.1): the fingerprint of the setup request's non-secret fields, the
+ * version of its canonical form, and the two first users. At most one row; append-only. Never a password.
+ */
+export const setupRecord = access.table('setup_record', {
+  id: uuid('id').primaryKey(),
+  organisationCode: text('organisation_code').notNull().unique(),
+  fingerprint: text('fingerprint').notNull(),
+  canonicalFormVersion: text('canonical_form_version').notNull(),
+  firstAdminUserId: uuid('first_admin_user_id').notNull(),
+  firstApproverUserId: uuid('first_approver_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});

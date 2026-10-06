@@ -19,13 +19,25 @@ export {
 export type { PersonaId, RecordVersionRef } from './common.js';
 
 export {
+  databaseNameSchema,
   setupFingerprintFieldsSchema,
   setupOutcomeSchema,
+  setupRequestFileSchema,
   setupRequestSchema,
   setupSettingsSchema,
   setupUserSchema,
 } from './setup.js';
-export type { SetupFingerprintFields, SetupOutcome, SetupRequest, SetupRequestInput } from './setup.js';
+export type {
+  SetupFingerprintFields,
+  SetupOutcome,
+  SetupRequest,
+  SetupRequestFile,
+  SetupRequestInput,
+  SetupSettings,
+} from './setup.js';
+
+export { passwordRulesSchema, sessionLimitsSchema, settingOriginSchema, signInThrottlingSchema } from './settings.js';
+export type { PasswordRules, SessionLimits, SettingOrigin, SignInThrottling } from './settings.js';
 
 export {
   enrolmentConfirmRequestSchema,

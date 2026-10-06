@@ -13,6 +13,7 @@ export {
   CLOCK,
   COMMAND_RUNNER,
   CommandRunnerModule,
+  CONFIGURED_TIMEZONE_SOURCE,
   ORGANISATION_TIMEZONE_SOURCE,
 } from './command-runner/command-runner.module.js';
 export {
@@ -35,7 +36,7 @@ export { connectionToDatabase } from './db/connection.js';
 export { createDb } from './db/create-db.js';
 export type { Database, DatabaseHandle, PoolOptions } from './db/create-db.js';
 export { applyDatabasePrivileges } from './db/database-privileges.js';
-export { listDirectory } from './db/directory.js';
+export { findDatabaseName, findDirectoryEntries, listDirectory, registerInDirectory } from './db/directory.js';
 export type { DirectoryEntry } from './db/directory.js';
 export { migrateAll } from './db/migrate-all.js';
 export type { MigrateAllOptions } from './db/migrate-all.js';

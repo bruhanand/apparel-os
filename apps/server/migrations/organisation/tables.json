@@ -287,6 +287,22 @@
       "runtime": ["DELETE", "INSERT", "SELECT"],
       "design": "access-and-approvals 7.2, 13.1; code-house-rules 6.2, 6.3",
       "why": "Read by access.row_visible, which every policy calls, so it cannot itself be scoped (code-house-rules 6.2, 6.3); rebuildable from the assignments"
+    },
+    {
+      "table": "configuration.organisation_timezone_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "code-house-rules 6.3, 7.3, 9, 12.14; module-map section 3 rule 6; RR-231",
+      "why": "Read by the command runner for every command, before any actor is set, to work out the business date (code-house-rules 6.3, 9); the timezone belongs to the Organisation, not to a place"
+    },
+    {
+      "table": "access.setup_record",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.11, 13.1; code-house-rules 6.3; DEC-112",
+      "why": "Read by the setup step and the recovery command, operator commands that act before any scope applies (code-house-rules 6.3); it holds a fingerprint and two user identifiers, never a secret, and only access code reads it"
     }
   ]
 }

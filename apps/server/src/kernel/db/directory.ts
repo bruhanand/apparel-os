@@ -1,4 +1,5 @@
-import { eq, sql } from 'drizzle-orm';
+import { uuidv7 } from '@apparel-os/domain';
+import { eq, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { directoryEntry } from './schema.js';
 
@@ -26,4 +27,31 @@ export async function findDatabaseName(db: NodePgDatabase, organisationCode: str
     .from(directoryEntry)
     .where(eq(directoryEntry.organisationCode, organisationCode));
   return rows[0]?.databaseName;
+}
+
+/**
+ * The directory's entries that list the code, or the database name, either one: what the setup step reads first
+ * (access-and-approvals 9.11). Compared exactly, as the directory keeps them.
+ */
+export async function findDirectoryEntries(
+  db: NodePgDatabase,
+  by: { readonly organisationCode: string; readonly databaseName: string },
+): Promise<DirectoryEntry[]> {
+  return db
+    .select({ organisationCode: directoryEntry.organisationCode, databaseName: directoryEntry.databaseName })
+    .from(directoryEntry)
+    .where(
+      or(eq(directoryEntry.organisationCode, by.organisationCode), eq(directoryEntry.databaseName, by.databaseName)),
+    );
+}
+
+/**
+ * Lists an Organisation in the directory: the setup step's last write (access-and-approvals 9.11; DEC-093). Unique by
+ * code and by database name, so of two runs at once one lists it and the other's insert fails; the caller reads the
+ * state again and never takes the failure as success. Run as the migration role, which owns the directory.
+ */
+export async function registerInDirectory(db: NodePgDatabase, entry: DirectoryEntry): Promise<void> {
+  await db
+    .insert(directoryEntry)
+    .values({ id: uuidv7(), organisationCode: entry.organisationCode, databaseName: entry.databaseName });
 }

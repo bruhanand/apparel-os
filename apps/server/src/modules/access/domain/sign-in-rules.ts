@@ -1,39 +1,21 @@
-import type { Secret } from '@apparel-os/schemas';
-import { z } from 'zod';
-
 // The settings sign-in reads and the rules they set (access-and-approvals 3.1, 3.2; code-house-rules 12.14). Each is
 // an effective-dated setting of access with no default anywhere: their values are OPEN (GC3-5; Admin, V-04; product
 // owner) and, until one is set, what needs it is unavailable. The shapes below are the design's; the numbers are not.
 
-/**
- * Sign-in throttling (access-and-approvals 3.1; DEC-116): once the failed sign-ins of the typed login, or of the
- * source address, within the last `windowSeconds` reach `failureLimit`, further attempts are slowed, answered without
- * checking any credential, until older failures leave the window. A login that exists and one that does not are
- * counted and answered alike.
- */
-export const signInThrottlingSchema = z.strictObject({
-  failureLimit: z.int().positive(),
-  windowSeconds: z.int().positive(),
-});
-export type SignInThrottling = z.infer<typeof signInThrottlingSchema>;
+import {
+  passwordRulesSchema,
+  sessionLimitsSchema,
+  signInThrottlingSchema,
+  type PasswordRules,
+  type Secret,
+  type SessionLimits,
+  type SignInThrottling,
+} from '@apparel-os/schemas';
+import type { z } from 'zod';
 
-/** The password rules (access-and-approvals 3.2; GC3-5): the least number of characters a new password has. */
-export const passwordRulesSchema = z.strictObject({
-  minimumLength: z.int().positive(),
-});
-export type PasswordRules = z.infer<typeof passwordRulesSchema>;
-
-/**
- * The limits of one kind of session (access-and-approvals 3.3; PRD-ACS-017, POL-02.18): it locks once no request has
- * come for `idleLockSeconds`, and ends `absoluteSeconds` after it started, locked or not. Their values are OPEN until
- * policy 2 is Signed and the Admin has validated them (V-04); `dev` and tests hold synthetic ones (DEC-102 for
- * `kdps-test`). The office kind is the only one so far: shared POS sessions need registered devices (S1-F12, RR-303).
- */
-export const sessionLimitsSchema = z.strictObject({
-  idleLockSeconds: z.int().positive(),
-  absoluteSeconds: z.int().positive(),
-});
-export type SessionLimits = z.infer<typeof sessionLimitsSchema>;
+// The value shapes live in @apparel-os/schemas (settings.ts), shared with the setup step's request (9.11).
+export { passwordRulesSchema, sessionLimitsSchema, signInThrottlingSchema };
+export type { PasswordRules, SessionLimits, SignInThrottling };
 
 /** The settings of access sign-in and sessions read, each with the versioned format of its value (code-house-rules 3.3). */
 export const SETTING_FORMATS = {

@@ -3,6 +3,7 @@ import { Secret, secretRegistry } from './secret.js';
 import {
   setupFingerprintFieldsSchema,
   setupOutcomeSchema,
+  setupRequestFileSchema,
   setupRequestSchema,
   setupSettingsSchema,
   setupUserSchema,
@@ -12,22 +13,38 @@ import {
 const ADMIN_PASSWORD = 'synthetic-admin-temporary-1';
 const APPROVER_PASSWORD = 'synthetic-approver-temporary-1';
 
+/** A copy of an object without one of its fields. */
+function without<T extends object, K extends keyof T>(value: T, name: K): Omit<T, K> {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== name)) as Omit<T, K>;
+}
+
+function syntheticSettings() {
+  return {
+    origin: 'synthetic' as const,
+    timezone: 'Asia/Kolkata',
+    passwordRules: { minimumLength: 12 },
+    signInThrottling: { failureLimit: 5, windowSeconds: 600 },
+    officeSessionLimits: { idleLockSeconds: 900, absoluteSeconds: 43_200 },
+  };
+}
+
 function syntheticRequest() {
   return {
     organisationCode: 'SYN-ORG-A',
+    databaseName: 'syn_org_a',
     firstAdmin: {
       login: 'synthetic.admin',
-      displayName: 'Synthetic Admin',
+      displayName: 'SYNTHETIC Admin',
       personas: ['P-ADM'],
       temporaryPassword: ADMIN_PASSWORD,
     },
     firstApprover: {
       login: 'synthetic.approver',
-      displayName: 'Synthetic Approver',
+      displayName: 'SYNTHETIC Approver',
       personas: [],
       temporaryPassword: APPROVER_PASSWORD,
     },
-    settings: { timezone: 'Asia/Kolkata' },
+    settings: syntheticSettings(),
   };
 }
 
@@ -55,21 +72,45 @@ describe('setup request (PRD-ACS-023, DEC-112; access-and-approvals 9.11)', () =
     expect(setupRequestSchema.safeParse(same).success).toBe(false);
   });
 
-  it('refuses fields it does not know', () => {
+  it('refuses fields it does not know, and a database name the directory cannot keep', () => {
     expect(setupRequestSchema.safeParse({ ...syntheticRequest(), extra: true }).success).toBe(false);
+    expect(setupRequestSchema.safeParse({ ...syntheticRequest(), databaseName: 'syn-org-a' }).success).toBe(false);
+    expect(setupRequestSchema.safeParse({ ...syntheticRequest(), databaseName: 'a'.repeat(64) }).success).toBe(false);
   });
 
-  it('gives no setting a default: an absent setting stays absent', () => {
-    expect(setupSettingsSchema.parse({})).toEqual({});
-    expect(setupSettingsSchema.parse({ sessionLimits: { office: {} } })).toEqual({ sessionLimits: { office: {} } });
+  it('the request file holds every field but the temporary passwords (access-and-approvals 3.2)', () => {
+    const { firstAdmin, firstApprover, ...rest } = syntheticRequest();
+    const admin = without(firstAdmin, 'temporaryPassword');
+    const approver = without(firstApprover, 'temporaryPassword');
+    expect(setupRequestFileSchema.safeParse({ ...rest, firstAdmin: admin, firstApprover: approver }).success).toBe(
+      true,
+    );
+    expect(setupRequestFileSchema.safeParse(syntheticRequest()).success).toBe(false);
+  });
+});
+
+describe('setup settings (code-house-rules 12.14; AGENTS.md "Never invent a value")', () => {
+  it('needs the origin, the timezone and the password rules, and gives none a default', () => {
+    for (const name of ['origin', 'timezone', 'passwordRules'] as const) {
+      const settings = without(syntheticSettings(), name);
+      expect(setupSettingsSchema.safeParse(settings).success).toBe(false);
+    }
   });
 
-  it('keeps the session limits per session kind, office and shared POS (access-and-approvals 3.3)', () => {
-    const limits = { office: { idleLockMinutes: 1, absoluteMinutes: 2 }, sharedPos: { idleLockMinutes: 3 } };
-    expect(setupSettingsSchema.parse({ sessionLimits: limits }).sessionLimits).toEqual(limits);
-    expect(setupSettingsSchema.safeParse({ sessionLimits: { absoluteMinutes: 2 } }).success).toBe(false);
-    expect(setupSettingsSchema.safeParse({ sessionLimits: { office: { idleLockMinutes: 0 } } }).success).toBe(false);
-    expect(setupSettingsSchema.safeParse({ timezone: 'Not/AZone' }).success).toBe(false);
+  it('leaves an absent throttling or session limit absent: not set, never a default', () => {
+    const least = without(without(syntheticSettings(), 'signInThrottling'), 'officeSessionLimits');
+    expect(setupSettingsSchema.parse(least)).toEqual(least);
+  });
+
+  it('refuses an unknown timezone, an unknown origin and a value of the wrong shape', () => {
+    expect(setupSettingsSchema.safeParse({ ...syntheticSettings(), timezone: 'Not/AZone' }).success).toBe(false);
+    expect(setupSettingsSchema.safeParse({ ...syntheticSettings(), origin: 'guess' }).success).toBe(false);
+    expect(setupSettingsSchema.safeParse({ ...syntheticSettings(), passwordRules: { minimumLength: 0 } }).success).toBe(
+      false,
+    );
+    expect(
+      setupSettingsSchema.safeParse({ ...syntheticSettings(), officeSessionLimits: { idleLockSeconds: 900 } }).success,
+    ).toBe(false);
   });
 });
 

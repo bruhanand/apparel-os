@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { workerModuleWith, type JobRegistry } from './kernel/index.js';
 import { AccessJobIdentitiesModule, accessJobKinds } from './modules/access/index.js';
 import { auditJobKinds } from './modules/audit/index.js';
+import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 
 /**
  * Everything the worker runs (code-house-rules 12.8, 12.9): the event types the units declare, their consumers and
@@ -11,5 +12,5 @@ import { auditJobKinds } from './modules/audit/index.js';
 export const jobRegistry: JobRegistry = { events: [], consumers: [], jobKinds: [...auditJobKinds, ...accessJobKinds] };
 
 /** The worker's composition root: the same build as the app, another start command (deployment.md section 2). */
-@Module({ imports: [workerModuleWith(AccessJobIdentitiesModule, jobRegistry)] })
+@Module({ imports: [ConfigurationTimezoneModule, workerModuleWith(AccessJobIdentitiesModule, jobRegistry)] })
 export class WorkerModule {}
