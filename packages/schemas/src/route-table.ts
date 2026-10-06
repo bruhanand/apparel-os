@@ -51,6 +51,7 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
+import { assignmentListSchema, reasonListSchema, roleListSchema, userListSchema } from './access-records.js';
 import {
   accessHistoryPageSchema,
   accessHistoryQuerySchema,
@@ -252,7 +253,7 @@ const PREPARE_CODES = [
   'kernel.cross-site-request',
 ] as const satisfies readonly ErrorCode[];
 
-/** The codes every history read can answer (access-and-approvals 7.1). */
+/** The codes every read of access records and history can answer (access-and-approvals 7.1). */
 const HISTORY_CODES = [
   'access.not-signed-in',
   'access.session-locked',
@@ -705,6 +706,41 @@ export const routes = {
       'kernel.stale-version',
       'kernel.cross-site-request',
     ],
+  }),
+  // The access setup screens' lists (access-and-approvals 2.1, 4, 5, 9.5, 14; S1-F01-T16; RR-326): every user, role,
+  // role assignment and reason, each version with the state the screen shows. The records carry no scope fact, so the
+  // view permission on the type decides (5.3).
+  listUsers: defineRoute({
+    method: 'GET',
+    path: '/api/access/users',
+    access: { kind: 'action', action: 'view', recordType: 'access.user' },
+    command: false,
+    response: userListSchema,
+    codes: HISTORY_CODES,
+  }),
+  listRoles: defineRoute({
+    method: 'GET',
+    path: '/api/access/roles',
+    access: { kind: 'action', action: 'view', recordType: 'access.role' },
+    command: false,
+    response: roleListSchema,
+    codes: HISTORY_CODES,
+  }),
+  listRoleAssignments: defineRoute({
+    method: 'GET',
+    path: '/api/access/role-assignments',
+    access: { kind: 'action', action: 'view', recordType: 'access.role_assignment' },
+    command: false,
+    response: assignmentListSchema,
+    codes: HISTORY_CODES,
+  }),
+  listApprovalReasonRecords: defineRoute({
+    method: 'GET',
+    path: '/api/access/approval-reasons/records',
+    access: { kind: 'action', action: 'view', recordType: 'access.approval_reason' },
+    command: false,
+    response: reasonListSchema,
+    codes: HISTORY_CODES,
   }),
   // My work (access-and-approvals 11.2; module-map 4.8; PRD-ACS-009): every signed-in user's own list, needing no
   // permission; each item shows only while its reader may act on it.

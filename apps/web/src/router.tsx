@@ -11,6 +11,11 @@ import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
+import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
+import { AssignmentsScreen } from './setup/AssignmentsScreen';
+import { ReasonsScreen } from './setup/ReasonsScreen';
+import { RolesScreen } from './setup/RolesScreen';
+import { UsersScreen } from './setup/UsersScreen';
 import { AppShell, type RenderLink } from './shell/AppShell';
 import { landingScreen } from './shell/landing';
 import { screenIds, screenOpen, screens, type ScreenId } from './shell/screens';
@@ -44,6 +49,7 @@ function Root() {
       signIn={<SignInScreens />}
       unlock={<UnlockForm />}
       signOut={<SignOutButton />}
+      myWork={<MyWorkCount />}
     >
       <Outlet />
     </AppShell>
@@ -59,7 +65,7 @@ function Landing() {
 
 /**
  * A screen of the registry. One the person's role assignments do not grant is unavailable and says what is missing
- * (PRD-UXP-003). Setup › Audit log is S1-F01-T18's; the access setup screens arrive with S1-F01-T16.
+ * (PRD-UXP-003). Setup › Audit log is S1-F01-T18's; My work and the access setup screens are S1-F01-T16's.
  */
 function ScreenPage({ id }: { id: ScreenId }) {
   const { session } = useSession();
@@ -70,7 +76,22 @@ function ScreenPage({ id }: { id: ScreenId }) {
       <UnavailableState missing={[{ kind: 'action', action: need.grant.action, recordType: need.grant.recordType }]} />
     );
   }
-  if (id === 'setup.audit-log') return <AuditLogScreen grants={session.grants} />;
+  switch (id) {
+    case 'my-work':
+      return <MyWorkScreen />;
+    case 'setup.users':
+      return <UsersScreen />;
+    case 'setup.roles':
+      return <RolesScreen />;
+    case 'setup.role-assignments':
+      return <AssignmentsScreen />;
+    case 'setup.reason-codes':
+      return <ReasonsScreen />;
+    case 'setup.audit-log':
+      return <AuditLogScreen grants={session.grants} />;
+    default:
+      break;
+  }
   return <EmptyState title="screen.not-built.title" body="screen.not-built.body" />;
 }
 

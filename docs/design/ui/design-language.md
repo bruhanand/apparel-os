@@ -658,6 +658,7 @@ Each entry covers anatomy, states and usage rules.
   - The limit is always shown next to the button.
   - Approval binds to the exact record version shown. A material change needs a fresh approval.
   - Reject always asks for a reason.
+  - An action whose approval has no value, such as an access change (DM-8), shows "No value" in place of the value and no limit bar; the Done message then says only that the reader did not prepare it. The panel shows the version's material facts, asks a reason (from the list in force, or in the reader's own words for a reason-list change, `DEC-104`) and a fresh authenticator code, and shows a decided, superseded or withdrawn request without the form (access-and-approvals 14 "As built"; `S1-F01-T16`).
 
 ### 10.15 Right drawer
 

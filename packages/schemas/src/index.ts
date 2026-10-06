@@ -193,3 +193,26 @@ export type {
   HistoryActor,
   HistoryChange,
 } from './history.js';
+
+export {
+  assignmentListSchema,
+  assignmentRecordSchema,
+  reasonListSchema,
+  reasonRecordSchema,
+  recordStateSchema,
+  roleListSchema,
+  roleRecordSchema,
+  userListSchema,
+  userRecordSchema,
+} from './access-records.js';
+export type {
+  AssignmentList,
+  AssignmentRecord,
+  ReasonList,
+  ReasonRecord,
+  RecordState,
+  RoleList,
+  RoleRecord,
+  UserList,
+  UserRecord,
+} from './access-records.js';
