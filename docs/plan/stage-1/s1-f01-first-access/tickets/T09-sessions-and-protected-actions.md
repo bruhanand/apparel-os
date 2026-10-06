@@ -21,7 +21,7 @@ Feature: [S1-F01 First access](../spec.md)
 ## Notes
 
 - The session-lock screen moved here from T15 on 6 Oct 2026 (product owner).
-- Built 7 Oct 2026 on branch `s1/f01-t09` (commit: see the branch tip, subject `S1-F01-T09: sessions, protected actions and the lock screen`). Tests 3a, 3b, 4 and 5 (sessions part) pass in `apps/server/test/sessions.int.test.ts`; the web lock screen and kept-draft offer have unit tests in `apps/web/src/lock/`.
+- Built 7 Oct 2026 on branch `s1/f01-t09` (commit 36e3189). Tests 3a, 3b, 4 and 5 (sessions part) pass in `apps/server/test/sessions.int.test.ts`; the web lock screen and kept-draft offer have unit tests in `apps/web/src/lock/`.
 - Left for a person: the manual check of the lock screen against design-language (RR-304); the journeys of T20 drive it.
 - Disabling a user: the session side is built (`AccessInterface.revokeSessions`, called by the decision's transaction; Authenticate refuses a user not Active). Preparing and deciding user changes is in no ticket yet (RR-300, product owner).
 - Follow-ups: RR-300 to RR-304. RR-264 closed.
