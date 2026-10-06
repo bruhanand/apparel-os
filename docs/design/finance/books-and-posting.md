@@ -8,7 +8,7 @@ Implements these PRD sections: Ledger and official books (the books, their perio
 
 - PRD IDs: `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACS-007`, `PRD-ACS-013`, `PRD-EXC-001`, `PRD-EXC-004`, `PRD-INT-002`–`PRD-INT-004`, `PRD-INT-008`, `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-008`–`PRD-LED-012`, `PRD-LED-014`–`PRD-LED-020`, `PRD-LIF-008`, `PRD-MOD-003`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-015`, `PRD-NAV-001`–`PRD-NAV-014`, `PRD-OFF-009`, `PRD-OFF-014`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-006`, `PRD-ORG-020`, `PRD-PRF-003`, `PRD-PRF-004`, `PRD-SEC-005`, `PRD-SEC-017`, `PRD-SEC-018`, `PRD-STG-002`, `PRD-UXP-003`.
 - Policies: 2 (`POL-02.16`), 9 (`POL-09.01`–`POL-09.05`, `POL-09.10`–`POL-09.13`, `POL-09.16`, `POL-09.19`, `POL-09.21`, `POL-09.23`, `POL-09.24`), 11 (`POL-11.01`).
-- Decisions: DEC-004, DEC-031, DEC-087, DEC-097, DEC-105, DEC-106, DEC-107, DEC-112.
+- Decisions: DEC-004, DEC-031, DEC-087, DEC-097, DEC-105, DEC-106, DEC-107, DEC-112, DEC-116.
 
 Depends on: [module-map.md](../architecture/module-map.md) (4.14, 6 and 7: the Post boundary and the one transaction), [domain-model.md](../architecture/domain-model.md) (3.10: the book records), [stock-ledger.md](../stock/stock-ledger.md) (sections 7, 10 and 11: valued movements, the lock order and the golden scenarios), [structure-and-masters.md](../masters/structure-and-masters.md) (3.2 and 3.4: books, legal entities and the business-unit mapping), [access-and-approvals.md](../access/access-and-approvals.md) (approvals, 9.8 for a document a job posts, and the exception record), [numbering-and-audit.md](../platform/numbering-and-audit.md) (journal numbers and the financial year).
 
@@ -38,7 +38,7 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 
 - Each book has an effective-dated cost setting: the cost formula, FIFO or moving weighted average, and the cost-pool mode, one pool per SKU across the book or one per SKU at each Site (`PRD-LED-014`, `PRD-LED-015`, DEC-004, DEC-031). The stock ledger reads it (stock-ledger 7.1); it is kept here (module-map 4.14).
 - There is no default. A book with no approved cost setting takes no valued movement (`PRD-SEC-017`). KDPS's formula and pool are OPEN (V-08, V-09, SL-1, `POL-09.19`); KDPS first keeps its current CA-approved method (`POL-09.21`).
-- A version that changes the formula or the pool mode of a book that has held stock is refused until the CA has said how value is divided at the change (stock-ledger 7.12, SL-6). **Design choice.**
+- A version that changes the formula or the pool mode of a book that has held stock is refused until the CA has said how value is divided at the change (stock-ledger 7.12, SL-6). **Design choice.** `finance` asks whether the book has held stock through a contract it defines, "has this book held stock?", which `stock` · ledger implements, since `finance` cannot call `stock` (module-map section 3, rules 4 and 6; stock-ledger 13.7; product owner, 6 Oct 2026).
 
 ### 2.3 Tally voucher model
 
@@ -151,7 +151,7 @@ Otherwise the map is missing or invalid, and the posting is refused with the fai
 ### 6.3 Approval and versions
 
 - Accounts and the CA supply the accounts and the maps, and approve the framework and rules before activation (`POL-09.01`, `POL-09.11`, `POL-09.23`). A map version, an account version, a cost setting and a voucher-model setting take effect only with an approval decision that records the approval of Accounts and the CA (`POL-09.01`).
-- Baseline (DEC-112, GC4-2): an authorised Accounts user prepares the change, and a different authorised Accounts user, never one of its preparers, decides it in the app ([access-and-approvals.md](../access/access-and-approvals.md) 9.3). Before the version takes effect, the decision attaches or references the CA's approval evidence. The CA need not use the app, and one piece of evidence may cover a named set of versions if it says which. Ordinary postings under an approved version need no fresh CA approval. This is the workflow only: Accounts and the CA confirm it (CA question 18), and their actual approval of the framework and rules is still needed before activation (`POL-09.01`).
+- Baseline (DEC-112, GC4-2): an authorised Accounts user prepares the change, and a different authorised Accounts user, never one of its preparers, decides it in the app ([access-and-approvals.md](../access/access-and-approvals.md) 9.3). Before the version takes effect, the decision attaches or references the CA's approval evidence. Attached evidence is a real stored file of `files-imports` (`S1-F06-T05`; module-map 4.7; product owner, 6 Oct 2026). A reference names what the evidence is, who gave it, its date and where it is kept. **Design choice** of the reference. The CA need not use the app, and one piece of evidence may cover a named set of versions if it says which. Ordinary postings under an approved version need no fresh CA approval. This is the workflow only: Accounts and the CA confirm it (CA question 18), and their actual approval of the framework and rules is still needed before activation (`POL-09.01`).
 - Versions are effective-dated and never overlap for one book and event kind (`PRD-MOD-010`). No version starts on a past date, as for every master (GC2-7, DEC-105; [structure-and-masters.md](../masters/structure-and-masters.md) 2.2). A version in force is never edited; a change is a new version.
 - Each journal keeps the map version it applied (`POL-09.12`). A later version never changes a posted journal.
 - A change emits `finance.posting-map-changed` (module-map section 8).
@@ -313,6 +313,7 @@ The books part's tables. The tax rules and operations parts add theirs in their 
 
 ## 14. Screens
 
+- In stage 1, book settings and the chart of accounts are reached through the API only. Their screens are designed and built before the first live posting, in stage 2 (product owner, 6 Oct 2026; DEC-116).
 - [ui-blueprint.html](../ui/ui-blueprint.html) holds these screens: Setup › Posting maps; Money › Internal ledger and trial balance, and Period close (checklist and locks).
 - GC-4 adds four things to them:
   - A map shows, for its book and event kind, every component and its lines, the version in force on a chosen date, and its approval.
@@ -447,7 +448,7 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | # | Question | Kind | Who decides | Blocks | Impact |
 | --- | --- | --- | --- | --- | --- |
 | GC4-1 | The periods of each book: which date ranges inside the financial year (4.1) | Business | Accounts, CA | 2 (first live posting) | Where journals fall; when locks apply |
-| GC4-2 | Baseline (DEC-112): an Accounts maker prepares a change to an account, map, cost setting or voucher-model setting; a different authorised Accounts approver decides it in the app; the CA's approval evidence is attached or referenced before it takes effect, and may cover a named set of versions (6.3, `POL-09.01`) | Business | Accounts, CA (confirm the workflow) | 2 (first live posting) | Who can make a map take effect |
+| GC4-2 | Baseline (DEC-112): an Accounts maker prepares a change to an account, map, cost setting or voucher-model setting; a different authorised Accounts approver decides it in the app; the CA's approval evidence is attached as a stored file or referenced before it takes effect, and may cover a named set of versions (6.3, `POL-09.01`). Tax-rule records are approved the same way (shared-calculations 10.1; `POL-10.05`; DEC-116) | Business | Accounts, CA (confirm the workflow) | 2 (first live posting) | Who can make a map take effect |
 | GC4-4 | Baseline (DEC-112): one journal series per book and financial year (5.4), its row held briefly without breaking one-transaction posting. Every posting in a book, counter sales included, holds that row from stock-ledger 10.3 step 8 until commit, so the wait is measured, not assumed away: concurrent posting and large jobs are proved before acceptance (test 10, stock-ledger 10.6), and if the performance test fails, for counters waiting in breach of `PRD-PRF-003` or for any other posting, the series is revisited with Accounts. Ordered chunks need their own decision | Technical, with Accounts consulted on journal numbering | Accounts (confirms) | Acceptance of S1-F10; the stage 4 counter performance test | Whether counters wait on journal numbers |
 | GC4-3 | When a journal posted under a map later found wrong is corrected, does the correction fall on its own date, as 9.4 builds it, or in the original period | Business | Accounts, CA | 5 | Which period shows a map correction |
 

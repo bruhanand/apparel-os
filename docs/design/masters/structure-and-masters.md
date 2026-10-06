@@ -8,7 +8,7 @@ Implements these PRD sections: Organisation, sites and ownership; Merchandise an
 
 - PRD IDs: `PRD-ORG-001`–`PRD-ORG-017`, `PRD-ORG-020`, `PRD-ORG-021`; `PRD-MER-001`–`PRD-MER-018`; `PRD-ACS-001`, `PRD-ACS-005`, `PRD-ACS-006`, `PRD-ACS-008`, `PRD-ACS-020`–`PRD-ACS-022`; `PRD-IMP-003`, `PRD-IMP-008`–`PRD-IMP-010`; `PRD-UXP-003`; `PRD-ACS-013`; cited as pointers only: `PRD-FRN-005`, `PRD-LED-002`, `PRD-OFR-001`, `PRD-TRF-001`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-017`, `PRD-LIF-019`–`PRD-LIF-021`, `PRD-LIF-029`; `PRD-MOD-002`, `PRD-MOD-008`–`PRD-MOD-011`, `PRD-MOD-015`; `PRD-SEC-006`; `PRD-TRF-004`; `PRD-ACP-013`, `PRD-ACP-019`.
 - Policies: 1 (`POL-01.01`–`POL-01.11`, `POL-01.14`), 2 (`POL-02.02`, `POL-02.07`, `POL-02.08`), 4 (`POL-04.01`–`POL-04.09`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.08`, `POL-10.09`).
-- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096, DEC-098, DEC-100, DEC-105.
+- Decisions: DEC-041, DEC-054, DEC-086, DEC-093, DEC-094, DEC-095, DEC-096, DEC-098, DEC-100, DEC-105, DEC-116.
 
 Depends on: [module-map.md](../architecture/module-map.md) (owners, interfaces and events of `organisation` and `merchandise`), [domain-model.md](../architecture/domain-model.md) (the records and invariants this document makes concrete), [stock-ledger.md](../stock/stock-ledger.md) (the place facts a movement carries).
 
@@ -49,7 +49,7 @@ It fixes no screen beyond pointers (section 8), no approval limit and no KDPS va
 - Independent approval applies where `POL-02.07` or the PRD requires it. For the records in this document that is: a supplier's bank-detail change (`POL-02.07`) and the confirmation of a vocabulary value or mapping rule (`PRD-IMP-008`, `POL-02.07`).
 - Accounts and the CA approve statutory settings (`POL-10.05`), and a business unit's mapping to a tax registration is verified before statutory goods-in processing (`POL-10.08`). Under the baseline, verifying a mapping is a separate permission, held by a different person from the one who made the mapping (GC2-2, DEC-105). Accounts and the CA confirm the verification rule, and whether a mapping also counts as a statutory setting under `POL-10.05`.
 - **Baseline (DEC-105).** A different authorised person from the preparer also approves: every change to the structure, to a business-unit mapping and to an agreement version (GC2-2); every other party's bank-detail change, not only a supplier's (5.1, GC2-6); and the confirmation of a product proposal (4.2, DM-5). **Design choice.** Who holds that authority is a KDPS setting with no default (OPEN, V-01; KDPS Owner, Admin; stage 1 live use).
-- A version waiting for approval shows Awaiting approval. The states of a master version are Awaiting approval, Scheduled, In force, Ended and Rejected ([design-language.md](../ui/design-language.md) section 7; DM-4, DEC-105). A Scheduled version withdrawn before its start through an approved change is never in force (product owner, 6 Oct 2026, RR-202; [code-house-rules.md](../platform/code-house-rules.md) 7.3); its state name, Withdrawn, is OPEN pending the design-language review.
+- A version waiting for approval shows Awaiting approval. The states of a master version are Awaiting approval, Scheduled, In force, Ended and Rejected ([design-language.md](../ui/design-language.md) section 7; DM-4, DEC-105). A Scheduled version withdrawn before its start through an approved change is never in force (product owner, 6 Oct 2026, RR-202; [code-house-rules.md](../platform/code-house-rules.md) 7.3); it shows Withdrawn, a state name the product owner approved the same day ([design-language.md](../ui/design-language.md) section 7).
 
 ### 2.4 Unknown and blank
 
@@ -112,7 +112,7 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 - A business unit is created with its first mapping version, and always has one in force after that (domain-model invariant 8). A new version ends the one before it (2.2).
 - The mapping is refused unless the tax registration and the book both belong to the mapped legal entity (`PRD-ORG-020`).
 - Two units at one Site may map differently. A transaction uses its own unit's mapping and stores the mapping version it used (`PRD-ORG-005`, `PRD-ACP-013`).
-- A mapping version's verification is a separate, append-only record linked to it: who verified it, when, and the evidence (`POL-10.08`). The version itself is never edited (2.2). Verifying it is a separate permission, held by a different person from the one who made the mapping (GC2-2, DEC-105). A missing or unverified registration mapping blocks the affected live statutory action (`POL-10.08`). Readiness checks the mapping before an activity is granted (`PRD-LIF-002`).
+- A mapping version's verification is a separate, append-only record linked to it: who verified it, when, and the evidence (`POL-10.08`). The evidence is stored files attached through `files-imports` from the start (`S1-F06-T05`; product owner, 6 Oct 2026). The version itself is never edited (2.2). Verifying it is a separate permission, held by a different person from the one who made the mapping (GC2-2, DEC-105). A missing or unverified registration mapping blocks the affected live statutory action (`POL-10.08`). Readiness checks the mapping before an activity is granted (`PRD-LIF-002`).
 - A unit's tax registration must be in the State of its Site. The mapping is refused unless the registration's State is the State of the unit's Site on the mapping's start date; the check compares them (GC2-1, DEC-105; the CA confirms it, question 16). A new Site Area version or registration State version that would put a mapping in force out of step is refused too, so the rule holds at all times (domain-model invariant 8). **Design choice.**
 
 ### 3.5 Internal stock locations
@@ -269,7 +269,7 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | Money terms | Margins, commissions, payment terms, credit-note terms, brand-funded promotion terms | `PRD-ORG-016`, `POL-01.14` |
 
 - Margins are restricted fields (`PRD-ACS-008`).
-- The signed agreement is attached as evidence through `files-imports`.
+- The signed agreement is attached as evidence through `files-imports`, as stored files from the start (`S1-F06-T05`; product owner, 6 Oct 2026).
 - A booking inherits the terms in force and may override them; that record belongs to `booking` (`POL-01.02`, `POL-01.04`, `POL-01.08`; stage 2). The costing profile shown on the Agreement screen belongs to `merchandise` · PT (policy 3; stage 2).
 - Each brand's real model and terms are OPEN (V-14; KDPS Owner, Accounts; stage 2).
 
@@ -361,7 +361,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 1 | **Stage 1 exit check.** One Site with two business units mapped to different books and tax registrations. A synthetic transaction on each stores its own unit's mapping version; a later mapping change leaves the stored versions unchanged | `PRD-ACP-013`, `PRD-ORG-005` |
 | 2 | A mapping whose registration or book belongs to another legal entity is refused | `PRD-ORG-020` |
 | 3 | Overlapping approved versions are refused, a Scheduled one included; a unit can never be left without a mapping | `PRD-MOD-010`, `PRD-ORG-005` |
-| 4 | Two Stores at one Site; one relocates on a date; reads before and after the date; a Site-scoped and a Store-scoped place expand as section 3.9 says | `PRD-ORG-021`, `PRD-LIF-029`, `PRD-ACS-021` |
+| 4 | Two Stores at one Site; one has a Scheduled (future-dated) Store–Site link version to another Site; reads before and after its start date; a Site-scoped and a Store-scoped place expand as section 3.9 says. Stage 1 proves it with that link version only; the relocation flow stays in stage 5 with test 17 (product owner, 6 Oct 2026, DEC-116) | `PRD-ORG-021`, `PRD-LIF-029`, `PRD-ACS-021` |
 | 5 | Brand coverage by unit kind | `PRD-ORG-006` |
 | 6 | A location whose unit is at another Site is refused (3.5, DM-9) | `PRD-ORG-012` |
 | 7 | External codes: leading zeros kept; a conflicting active mapping is refused; identical pieces share one; Resolve refuses an ambiguity across scopes | `PRD-MER-006`, `PRD-MER-007` |

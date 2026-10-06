@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current**, 3 Oct 2026; amended 6 Oct 2026 for the product owner's decisions on the `dev` pool size, Railway authorisation and the counter's path. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102, DEC-103, DEC-105. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
@@ -22,6 +22,7 @@ One Railway project with two environments. Each has its own services, databases,
 - Never copy data between the two. Synthetic data never becomes a default (AGENTS rule).
 - `kdps-test` holds real data only after KDPS agrees to it (KDPS Owner question 37).
 - Only the product owner has access to the Railway project. KDPS users get app logins, never Railway access.
+- Railway setup and each deploy need the product owner's separate authorisation (product owner, 6 Oct 2026). On `dev` a merge into the main branch deploys, so an approval to merge must say explicitly that it includes that deployment (product owner, 6 Oct 2026, `DEC-117`).
 - On `kdps-test`, actions whose policy is not signed stay disabled, even with real data. Only imports and checks that need no gated action run (`DEC-071`). So that KDPS staff can sign in for them, sessions there use the limits `POL-02.18` states before policy 2 is signed (`DEC-102`). So that they can do them, KDPS staff get role assignments prepared from what KDPS tells us and approved like any other access change (`PRD-ACS-023`), as settings of the test setup and not the signed role map of `POL-02.11` (`DEC-103`). None of these enables a gated action. Approving those assignments needs a reason list in force: the first list, with the reasons KDPS gives, is a setting of the test setup, approved first with a free-text reason (`DEC-105`, `DEC-104`; [access-and-approvals.md](../access/access-and-approvals.md) GC3-12). The app shows an environment banner.
 
 ## 2. Services in each environment
@@ -38,7 +39,7 @@ Services talk to each other over Railway's private network (`*.railway.internal`
 
 ## 3. One address for the browser
 
-The `app` service serves the API, the web app and the counter PWA from **one origin**. For example, `/` is the web app, `/counter/` is the counter PWA and `/api/` is the API.
+The `app` service serves the API, the web app and the counter PWA from **one origin**: `/` is the web app, `/counter/` is the counter PWA, built from `apps/counter` (approved by the product owner on 6 Oct 2026; [offline-counter.md](../pos/offline-counter.md) 5.2), and `/api/` is the API ([code-house-rules.md](code-house-rules.md) 12.1).
 
 Why one origin:
 
@@ -62,7 +63,7 @@ Idle and absolute session limits come from policy 2 (`POL-02.18`). On production
 - **Two database roles:**
   - A *migration role* owns the tables and runs reviewed SQL migrations (Stack: Database access).
   - A *runtime role* is used by `app` and `worker`. It neither owns the tables nor bypasses row-level security, so PostgreSQL scope controls always apply (`PRD-SEC-005`).
-- **Connections.** `app` and `worker` connect to the directory database as the runtime role through the variable `AOS_RUNTIME_DATABASE_URL`, and to each Organisation's database on the same server through it; the pre-deploy step does the same as the migration role through `AOS_MIGRATION_DATABASE_URL`. Neither is ever logged (section 9). Each database the server reaches has its own pool of connections, of at most `AOS_DATABASE_POOL_MAX`. **Design choice.** **OPEN:** that number. It has no default and the server refuses to start without it; a starting value is set for `dev` and tuned after measurement (product owner; blocks the first deploy to `dev`; RR-216).
+- **Connections.** `app` and `worker` connect to the directory database as the runtime role through the variable `AOS_RUNTIME_DATABASE_URL`, and to each Organisation's database on the same server through it; the pre-deploy step does the same as the migration role through `AOS_MIGRATION_DATABASE_URL`. Neither is ever logged (section 9). Each database the server reaches has its own pool of connections, of at most `AOS_DATABASE_POOL_MAX`. **Design choice.** It has no default and the server refuses to start without it. On `dev` it is 5 per pool, a development assumption (product owner, 6 Oct 2026; RR-216). Before the first deploy, the total across the directory and Organisation pools, every `app` instance and worker, and the migration and operator connections is checked against the database's connection budget; the value is then tuned from measurements. **OPEN:** the values for `kdps-test` and production, set only after measurement (product owner; RR-216).
 - **Migrations** run as Railway's pre-deploy command, before the new version takes traffic. A failed migration stops the deploy, and the old version keeps running.
 - **Backups.** Turn on Railway's scheduled PostgreSQL backups on `kdps-test`, and practise one restore so the steps are known before the go-live drill (`POL-18.03`). Include attachments in the rehearsal: the restored records must show their attachments and links again (`PRD-SEC-012`). Files are held in a Railway bucket (D-2, `DEC-105`); its backup steps are in the backup and restore design (GC-9). Name no frequency or retention here. The test setup makes **no recovery promise**: the `POL-18.01` targets apply to production. The earlier POS is the system of record, so losing test data loses nothing official; an exported PT file already loaded into the earlier POS is that system's record and is not lost with the test data (`DEC-053`).
 
@@ -128,4 +129,4 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 | D-4 | KDPS's agreement to hold real data on the test setup, and whether customer details are imported | KDPS Owner (question 37) | Before KDPS's side-by-side test |
 | D-5 | A separate test Tally company for the connector | Accounts | Stage 5 testing |
 | D-6 | Baseline (`DEC-105`): the local helper and the Tally local gateway call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office. Development uses the same sign-in as production, with synthetic users | — | — |
-| D-7 | The most connections each database pool opens (`AOS_DATABASE_POOL_MAX`, section 4); a technical setting with no default, tuned after measurement (RR-216) | Product owner | The first deploy to `dev` |
+| D-7 | The most connections each database pool opens (`AOS_DATABASE_POOL_MAX`, section 4); a technical setting with no default. On `dev`: 5 per pool, a development assumption, checked against the connection budget and tuned from measurements (product owner, 6 Oct 2026; RR-216). **OPEN** for `kdps-test` and production, after measurement | Product owner | The first deploy to `kdps-test` |

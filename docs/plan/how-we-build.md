@@ -24,7 +24,7 @@ An open item blocks work only at the gate it names. Most open KDPS values block 
 | --- | --- | --- |
 | **Design** | Writing or changing the design of the named feature | A product-owner choice the design needs |
 | **Code** | Coding the named feature or task | Approval of the stock ledger's Proposed choices before `S1-F10` (RR-012) |
-| **Accept** | Accepting the named feature: a test or its evidence needs it | The 10,000-line PT parse within one minute for `S1-F07` (RR-189) |
+| **Accept** | Accepting the named feature: a test or its evidence needs it | The 10,000-line PT parse within one minute for `S2-F13` (RR-189) |
 | **Exit** | The stage exit | The restore proof for stage 1 (RR-188) |
 | **Live** | Switching a policy-dependent operation on for a real Organisation, or using real KDPS data | The signed policy 2 and KDPS's role map (RR-158, RR-064) |
 
@@ -35,7 +35,7 @@ An open item blocks work only at the gate it names. Most open KDPS values block 
 ## 3. Rules for whoever builds a ticket
 
 - Follow `AGENTS.md`. Cite the PRD, policy or decision ID in code and tests where a rule is enforced.
-- Follow the loop of `AGENTS.md` "How we work": tests, one independent review, a focused recheck of the fixes, final checks. A blocking defect that remains keeps the ticket unfinished.
+- Follow `AGENTS.md` "How we work": build with the skills (`/implement` or `/implement-spec`, `/tdd`, `/code-review`).
 - Leave `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm check:links` and `pnpm format:check` passing.
 - Every setting whose value belongs to KDPS ships with no default. Tests set labelled synthetic values.
 - Nothing policy-dependent is switched on by default. A capability ships off (`PRD-SEC-017`).
@@ -70,7 +70,7 @@ Parallel work is safe only after the contract it calls is stable. Each contract 
 
 | Contract | Owner | Built in | Callers |
 | --- | --- | --- | --- |
-| API conventions: route shape, Zod schemas in `packages/schemas`, error envelope, idempotency-key header, version token for stale-version refusal, generated OpenAPI and typed client | Code house rules | `S0-T04` (built), first used in `S1-F01-T05` | Every feature |
+| API conventions: route shape, Zod schemas in `packages/schemas`, error envelope, idempotency-key header, version token for stale-version refusal, generated OpenAPI and typed client | Code house rules | `S0-T04` (built), first used in `S1-F01-T04` | Every feature |
 | Migration layout: one schema per module, directory and Organisation migration sets, migration and runtime roles | Code house rules | `S0-T05` (built) | Every feature with tables |
 | Synthetic fixtures and reset | Code house rules | `S0-T06` (built) | Every database and browser test |
 | Command context: one transaction, actor setting for row-level security, lock helper | `kernel` | `S1-F01-T03` (built) | Every module |
@@ -78,7 +78,7 @@ Parallel work is safe only after the contract it calls is stable. Each contract 
 | Outbox event envelope and consumer registration | `kernel` | `S1-F01-T06` | Every module that publishes or consumes |
 | Authenticate, Authorise, Restrict fields, Request approval, Decide, Verify under lock, Record use | `access` | `S1-F01` (limits in `S1-F05`, Record use in `S1-F10`) | Every module |
 | Record, Record access, Read history | `audit` | `S1-F01-T07` | Every module |
-| Publish, update and close a work item | `inbox` | `S1-F01-T12` | `access`, `exceptions`, later modules |
+| Publish, update and close a work item | `inbox` | `S1-F01-T13` | `access`, `exceptions`, later modules |
 | Check availability; register a validity check; activity grants | `configuration` | `S1-F04` | Every policy-dependent operation |
 | Read the structure; scope contract; location-in-use contract | `organisation` | `S1-F02` | `access`, `merchandise`, `finance`, `stock` |
 | Resolve a code; read a SKU; read the terms in force; stock-presence contract | `merchandise` | `S1-F03` | Imports, `stock`, stage 2 onwards |

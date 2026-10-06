@@ -1,17 +1,9 @@
 # S1-F11-T11 — Bundle exclusion on the counter bundle
 
-Status: blocked
-Blocked by: T10
+Status: merged
+Blocked by: —
 Feature: [S1-F11 Shared calculations](../spec.md)
 
-## Build
+## Notes
 
-A build check that fails if the counter bundle holds the costing entry point (2.3)
-
-## Expected outputs
-
-Build check
-
-## Done when
-
-`S1-F11-AT11` passes; a deliberate costing import fails it
+- Merged into [S1-F11-T10 — Counter test page, counter run and bundle exclusion](T10-counter-test-page-and-counter-run.md) on 6 Oct 2026 (product owner); its build and tests are there.

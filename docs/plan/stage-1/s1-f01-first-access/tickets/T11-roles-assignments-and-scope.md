@@ -19,5 +19,5 @@ Tests 5a, 5b, 6, 9 (all members and empty), 10 and 11 pass
 ## Notes
 
 - RR-232: reset `aos.actor_id` before a connection returns to the pool, and test it.
-- RR-202: withdrawal of a Scheduled assignment is in scope here; the state name "Withdrawn" is still open (design-language).
+- RR-202: withdrawal of a Scheduled assignment is in scope here. The state name Withdrawn and the withdrawal mechanism of house rules 7.3 are approved (CH-11; product owner, 6 Oct 2026, DEC-116).
 - RR-190: prove the runtime role owns no table and cannot bypass row-level security (mostly proved by `roles.int.test.ts`).

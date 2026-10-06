@@ -229,7 +229,7 @@ Rules:
 
 ### All states
 
-Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names.
+Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names. The product owner approved on 6 Oct 2026 state 64, Withdrawn (RR-202, code-house-rules CH-11; its Neutral family, like Cancelled and Superseded, confirmed by the product owner, `DEC-117`), and the billing-device states Setting up, Active, Ended and Revoked ([offline-counter.md](../pos/offline-counter.md) 3.1, GC8-7).
 
 | # | State | Family | Glyph | Where it appears |
 |---|---|---|---|---|
@@ -238,7 +238,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 3 | Cancelled before departure | Neutral | ○ | Supplier return |
 | 4 | Closed | Neutral | ○ | Booking, count, exception; Site, Store and business unit; number series |
 | 5 | Closed—partially returned | Neutral | ○ | Supplier return |
-| 6 | Ended | Neutral | ○ | Offer, end-of-season price list, master version, user |
+| 6 | Ended | Neutral | ○ | Offer, end-of-season price list, master version, user, billing device retired after use |
 | 7 | Unknown | Neutral | ○ | A value not known yet, such as pre-PT cost, season or identity. In tables the cell is blank instead (§8) |
 | 8 | Submitted | Pending | ◔ | PT, adjustment, offer, damage report |
 | 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval |
@@ -282,8 +282,8 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 47 | Damaged | Quarantine | ◆ | Damage report, GRN line |
 | 48 | Wrong | Quarantine | ◆ | GRN line |
 | 49 | Unidentified | Quarantine | ◆ | GRN line, count |
-| 50 | Setting up | Neutral | ○ | Site, Store and business unit before any activity is granted |
-| 51 | Active | Done | ✓ | Site, Store and business unit; user |
+| 50 | Setting up | Neutral | ○ | Site, Store and business unit before any activity is granted; billing device registered, not yet enrolled |
+| 51 | Active | Done | ✓ | Site, Store and business unit; user; billing device |
 | 52 | Closing | Moving | ▸ | Site, Store and business unit after closure starts |
 | 53 | Scheduled | Pending | ◔ | Master version approved with a later start date |
 | 54 | In force | Done | ✓ | Master version |
@@ -296,6 +296,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 61 | Locked | Done | ✓ | Financial period |
 | 62 | Unresolved | Attention | ! | Exception raised and not yet resolved |
 | 63 | Superseded | Neutral | ○ | Approval request ended by a material change |
+| 64 | Withdrawn | Neutral | ○ | A Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change, or a request withdrawn before approval, such as a rejected user's pending assignments; the record keeps which and why; never in force ([code-house-rules.md](../platform/code-house-rules.md) 7.3; `DEC-117`) |
 
 Rules:
 
@@ -308,11 +309,10 @@ Rules:
 
 ### Proposed states (for design review)
 
-Tax-document states and Withdrawn are unsettled. Signed and Revoked (`DEC-092`) and Working set expired (`DEC-062`) are in the table above. Adding a state needs a design review; the product owner decides the final names.
+Tax-document states are unsettled. Signed and Revoked (`DEC-092`), Working set expired (`DEC-062`) and Withdrawn (product owner, 6 Oct 2026, RR-202) are in the table above. Adding a state needs a design review; the product owner decides the final names.
 
 - An unsigned policy shows the 10.17 banner, not a badge.
 - Tax-document states (a cancelled or corrected tax invoice, `PRD-TAX-004`, `DEC-057`): state names and family are **OPEN** (product owner, design review; the CA for the treatment under `POL-10.11`; stage 4). They stay separate from the operational states of bills and returns.
-- Withdrawn: a Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change (product owner, 6 Oct 2026, RR-202; [code-house-rules.md](../platform/code-house-rules.md) 7.3). Name and family are **OPEN** (design review; code-house-rules CH-11; stage 1, `S1-F01-T11`).
 - "Ended" stays in Neutral (an offer or end-of-season price list that has run its course). A device registration or session that was ended by loss is Revoked (Stopped).
 
 ---
@@ -647,7 +647,7 @@ Each entry covers anatomy, states and usage rules.
   | Case | Message | Action |
   |---|---|---|
   | Within limit | Done: “Within your limit. You didn’t prepare this, so you can approve.” | **Approve** |
-  | Above limit | Attention: “Above your limit by ₹n. <Next approver> can approve this.” | **Send to <next approver>** |
+  | Above limit | Attention: “Above your limit by ₹n. <Next approver> can approve this.” | Approve **disabled**. No send action: the request already waits for an approver whose limit covers it and escalates when overdue (access-and-approvals 9.4; product owner, 6 Oct 2026, DEC-116) |
   | No approver set up | Attention: “No one is set up to approve this amount yet. It stays pending until policy 2 names an approver.” | Approve **disabled** |
   | Preparer | Stopped: “You prepared this, so a different person must approve.” | Approve **disabled** |
   | Unknown value | Attention: “The value isn’t known yet. Only an approver whose authority covers an unknown value can approve this.” | Approve **disabled** unless the approver's authority covers unknown value (`PRD-ACS-016`) |
@@ -695,9 +695,16 @@ Each entry covers anatomy, states and usage rules.
 - Personas are the PRD's 14 kinds of work, with IDs (P-OWN … P-AUD). A user can hold several; a persona grants nothing. Only role assignments grant access ([personas.md](../access/personas.md)).
 - **Persona chip:** 24 px pill in Neutral, mono ID + name (“P-STM Store manager”). Shown on the profile menu, on record history (“Approved by Meera N. · P-OPS”) and on approval panels.
 - **Menu:** the union of the sections the role assignments grant. Each section appears once, with the tabs of every persona merged.
-- **Home:** one block per persona held, in the user's chosen order. The first block's persona sets the landing page.
+- **Home:** one block per persona held, in the user's chosen order. The first block's persona sets the landing page. Where the user's roles do not grant that persona's landing screen, the first screen they grant in the persona's menu opens instead ([personas.md](../access/personas.md) section 2; DEC-116).
 - **Scope:** an action is enabled only where one assignment covers the current scope. Otherwise it is disabled and the reason names the gap: “Your Store manager assignment covers BLR01 only.”
 - **Independence:** a person who prepared a record cannot approve it through another persona. The approval panel shows the Preparer case (10.14).
+
+### 10.19 Two stage 1 screens from existing parts
+
+Decided by the product owner, 6 Oct 2026. Both use only the components above; the builder adds them to [ui-blueprint.html](ui-blueprint.html) with the code.
+
+- **Setup › Exception rules** gets a tab for the due times and escalation of approvals and tasks, per action type and Site (access-and-approvals 9.4, 11.3).
+- **Failed jobs** is a simple list in the operations view (`PRD-SEC-013`; module-map 4.1).
 
 ---
 

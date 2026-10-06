@@ -1,7 +1,7 @@
 # S1-F01-T06 — Outbox and worker
 
 Status: blocked
-Blocked by: T03, T08 (its internal service identity)
+Blocked by: T04, T08 (its internal service identity)
 Feature: [S1-F01 First access](../spec.md)
 
 ## Build

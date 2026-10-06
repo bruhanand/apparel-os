@@ -8,7 +8,7 @@ Implements these PRD sections: from Module and data boundaries, the shared prici
 
 - PRD IDs: `PRD-MOD-002`, `PRD-MOD-007`, `PRD-MOD-010`, `PRD-MOD-014`–`PRD-MOD-016`; `PRD-POS-002`–`PRD-POS-009`, `PRD-POS-013`, `PRD-POS-014`, `PRD-POS-023`, `PRD-POS-024`; `PRD-RET-001`, `PRD-RET-005`–`PRD-RET-008`, `PRD-RET-010`, `PRD-RET-022`, `PRD-RET-024`; `PRD-OFR-001`–`PRD-OFR-006`, `PRD-OFR-021`; `PRD-TAX-005`; `PRD-OFF-004`, `PRD-OFF-005`, `PRD-OFF-009`, `PRD-OFF-016`; `PRD-MER-009`, `PRD-MER-015`; `PRD-STK-013`; `PRD-PTW-010`, `PRD-PTW-011`; `PRD-ACS-015`; `PRD-HRM-010`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-PRF-003`; `PRD-ACP-008`, `PRD-ACP-010`, `PRD-ACP-017`, `PRD-ACP-018`.
 - Policies: 3 (`POL-03.06`–`POL-03.08`), 6 (`POL-06.04`, `POL-06.09`), 7 (`POL-07.01`, `POL-07.02`), 9 (`POL-09.13`, `POL-09.24`), 10 (`POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.10`, `POL-10.11`), 13 (`POL-13.06`, `POL-13.08`), 16 (`POL-16.04`), 19 (`POL-19.01`, `POL-19.02`, `POL-19.04`).
-- Decisions: DEC-007, DEC-105, DEC-108, DEC-109, DEC-110, DEC-111, DEC-112.
+- Decisions: DEC-007, DEC-105, DEC-108, DEC-109, DEC-110, DEC-111, DEC-112, DEC-116.
 
 Depends on: [module-map.md](../architecture/module-map.md) (4.2, 4.14, section 5 and 6.2 flow D: who calls the calculations and where they sit), [domain-model.md](../architecture/domain-model.md) (3.12: the working set), [structure-and-masters.md](../masters/structure-and-masters.md) (4.1: HSN on the style), [stock-ledger.md](../stock/stock-ledger.md) (section 4: which receipt origin a sale takes), [books-and-posting.md](../finance/books-and-posting.md) (7.3: the `pos` posting kinds that carry these amounts), [design-language.md](../ui/design-language.md) section 8 (money and Unknown on screen).
 
@@ -301,7 +301,7 @@ Server only (2.1). `PRD-PTW-010`, `PRD-PTW-011`, `POL-03.06`–`POL-03.08`.
 
 ## 10. Tax rule records
 
-Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for the golden cases; real values by stage 2 under policy 10 (`PRD-TAX-005`, `POL-10.02`, `POL-10.05`, `POL-10.06`).
+Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for the golden cases; real values by stage 2 under policy 10 (`PRD-TAX-005`, `POL-10.02`, `POL-10.05`, `POL-10.06`). In stage 1 the records are kept through the API only; their screens are designed and built before the first live posting, in stage 2 (product owner, 6 Oct 2026; DEC-116).
 
 ### 10.1 Records
 
@@ -313,7 +313,7 @@ Owner: `finance` · tax rules (module-map 4.14, tier 2). Shape in stage 1 for th
 | Price basis | Whether selling prices include tax | Per Organisation, versioned | One value in force (GC7-1) |
 | Rounding rule | Unit, mode and, for tax, level (3.3) | Per Organisation and kind, versioned | One version in force per kind |
 
-- Every version is effective-dated, takes effect only when approved, and never starts on a past date ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2; GC2-7, DEC-105). Accounts and the CA approve statutory settings (`POL-10.05`); who requests and approves is KDPS's (V-01).
+- Every version is effective-dated, takes effect only when approved, and never starts on a past date ([structure-and-masters.md](../masters/structure-and-masters.md) 2.2; GC2-7, DEC-105). Accounts and the CA approve statutory settings (`POL-10.05`). A version is approved as a posting map is: an authorised Accounts user prepares it, a different authorised Accounts user decides it, and the CA's evidence is attached as a stored file or referenced before it takes effect ([books-and-posting.md](../finance/books-and-posting.md) 6.3, GC4-2; product owner, 6 Oct 2026; DEC-116). Who holds those roles is KDPS's (V-01).
 - Missing required configuration blocks the affected statutory action and raises an exception (`POL-10.05`). The policy gate makes selling unavailable until these records are valid (`PRD-SEC-017`).
 - Gift-voucher tax on issue and redemption (`POL-10.10`, V-30) and the tax of a customer return's credit note (`POL-10.11`, V-72) are added to these records when the CA answers.
 
@@ -378,7 +378,7 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 
 ### 12.3 Synthetic rule data
 
-Every value below is synthetic, chosen to be unlike a real one, and never becomes a default.
+Every value below is synthetic, chosen to be unlike a real one, and never becomes a default. The package's unit and property tests take these labelled values from its own file, `packages/calculations/test/synthetic.ts`, as code-house-rules 11.1 allows a package under `packages/` (RR-224).
 
 | Rule | Synthetic version | Content |
 | --- | --- | --- |

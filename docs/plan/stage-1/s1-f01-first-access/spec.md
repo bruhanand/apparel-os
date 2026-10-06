@@ -156,31 +156,31 @@ No outside system is called inside any of these transactions (`PRD-INT-006`).
 
 ## 13. Tickets
 
-One file per task in [tickets/](tickets/). Each ticket leaves the full check set green and adds the tests named. The access tasks (`T08`, `T11`, `T09`, `T10`, `T13`) are the critical path.
+One file per task in [tickets/](tickets/). Each ticket leaves the full check set green and adds the tests named. The critical path runs `T04`, `T08`, `T06`, `T11`, `T09`, `T13`, `T16`, `T20`. Regrouped 6 Oct 2026 into two parts: part 1 "Sign-in and screens" (T04, T07, T08, T14, T15) and part 2 "Roles and approvals" (T06, T11, T09, T10, T13, T16, T18, T20).
 
 | Ticket | Status | Blocked by |
 | --- | --- | --- |
 | [S1-F01-T01 Design check and contract sketch](tickets/T01-design-check-and-contract-sketch.md) | done | — |
 | [S1-F01-T02 Directory and Organisation routing](tickets/T02-directory-and-organisation-routing.md) | done | — |
 | [S1-F01-T03 Command context](tickets/T03-command-context.md) | done | — |
-| [S1-F01-T04 Idempotency helper](tickets/T04-idempotency-helper.md) | in-progress | T03 (done) |
-| [S1-F01-T05 API conventions in code](tickets/T05-api-conventions-in-code.md) | blocked | T04 |
-| [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | blocked | T03, T08 (its internal service identity) |
+| [S1-F01-T04 Idempotency and API conventions](tickets/T04-idempotency-helper.md) | in-progress | T03 (done) |
+| [S1-F01-T05 API conventions in code](tickets/T05-api-conventions-in-code.md) | merged | → T04 |
+| [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | blocked | T04, T08 (its internal service identity) |
 | [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | ready-for-agent | T03 (done) |
-| [S1-F01-T08 Sign-in and enrolment](tickets/T08-sign-in-and-enrolment.md) | blocked | T05, T07 |
-| [S1-F01-T09 Sessions and protected actions](tickets/T09-sessions-and-protected-actions.md) | blocked | T08, T11 (Authorise for resets and disabling) |
-| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | blocked | T01, T07, T08, T11 (roles and assignments) |
+| [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | blocked | T04, T07 |
+| [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | blocked | T11 (Authorise for resets and disabling), T15 |
+| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | blocked | T01 (done), T07, T08, T09 (the recovery command's revocation and reset), T11 (roles and assignments) |
 | [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | blocked | T06, T08 |
-| [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | blocked | T06, T11 |
-| [S1-F01-T13 Approval rules, reasons and decisions](tickets/T13-approval-rules-reasons-and-decisions.md) | blocked | T09, T11, T12 |
-| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | T05 |
-| [S1-F01-T15 Sign-in screens](tickets/T15-sign-in-screens.md) | blocked | T08, T09, T14 |
-| [S1-F01-T16 Access setup screens](tickets/T16-access-setup-screens.md) | blocked | T11, T13, T14 |
-| [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | blocked | T12, T13, T14 |
+| [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
+| [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | blocked | T06, T09, T11 |
+| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | T04 |
+| [S1-F01-T15 Sign-in in the browser](tickets/T15-sign-in-screens.md) | blocked | T08, T14 |
+| [S1-F01-T16 Access setup screens and the approval panel](tickets/T16-access-setup-screens.md) | blocked | T13, T15 |
+| [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
 | [S1-F01-T18 History screens](tickets/T18-history-screens.md) | blocked | T07, T11, T14 |
-| [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | blocked | T10, T15 to T18 |
-| [S1-F01-T20 Concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | blocked | T10, T13 |
-| [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | blocked | T19, T20 |
+| [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | merged | → T15, T20 |
+| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | blocked | T10, T16, T18 |
+| [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
 
 
 ## 14. Tests
@@ -247,7 +247,7 @@ Unit tests in Vitest; integration tests on real PostgreSQL in Testcontainers und
 - An export or screenshot of the history of the approved assignment: preparer, approver, reason, versions, times.
 - A log sample from the journey showing correlation identifiers and no secret.
 - The list of synthetic settings used, each labelled synthetic.
-- The design edits of `T01` and `T21` reviewed.
+- The design edits of `T01` and `T20` reviewed.
 - If shown on `dev`: the Railway environment state checked (RR-187) and the migration pre-deploy command wired by the product owner.
 
 ## 16. Deferred from this feature

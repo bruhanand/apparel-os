@@ -2,15 +2,15 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-> **Draft — not yet approved.** Written 6 Oct 2026 on a side branch and brought into the docs unreviewed. Every engineering choice here is **Proposed** until the product owner approves it, when stage 1 reaches this design.
+> **Draft — not yet approved**, except GC9-9 and GC9-10, which the product owner approved on 6 Oct 2026. Written 6 Oct 2026 on a side branch and brought into the docs unreviewed. Every other engineering choice here is **Proposed** until the product owner approves it. The rest of this design, including file deletion after retention and key recovery, is finished when `S1-F14` starts (`S1-F14-T01`).
 
-Status: **Draft**, 6 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 6 Oct 2026, with GC9-9 and GC9-10 approved; the rest stays Draft until `S1-F14-T01`. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: from AI, security and operational reliability, backup, restore verification and export recovery, recovery status for operators, and retention, deletion and legal holds; from Opening, closure, migration and export, the complete export in outline. It is GC-9 in [gaps-before-code.md](../../history/gaps-before-code.md) and the design of readiness item RR-010. It places the platform work of policy 18 that [module-map.md](../architecture/module-map.md) 11.2 leaves to GC-9.
 
 - PRD IDs: `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-010`, `PRD-SEC-012`–`PRD-SEC-014`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-ACP-019`; `PRD-LIF-020`, `PRD-LIF-022`, `PRD-LIF-023`, `PRD-LIF-026`; `PRD-MOD-001`–`PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-008`, `PRD-MOD-009`, `PRD-MOD-011`, `PRD-MOD-014`, `PRD-MOD-015`; `PRD-INT-002`, `PRD-INT-004`, `PRD-INT-006`–`PRD-INT-008`; `PRD-IMP-002`; `PRD-ACS-008`, `PRD-ACS-013`, `PRD-ACS-020`; `PRD-OFF-009`, `PRD-OFF-010`; `PRD-EXC-001`, `PRD-EXC-011`; `PRD-PRF-004`.
 - Policies: 18 (`POL-18.01`–`POL-18.05`).
-- Decisions: DEC-028, DEC-052, DEC-053, DEC-075, DEC-093, DEC-105, DEC-112.
+- Decisions: DEC-028, DEC-052, DEC-053, DEC-075, DEC-093, DEC-105, DEC-112, DEC-116.
 
 Depends on: [deployment.md](deployment.md) (sections 1, 2, 4 and 9: environments, the bucket, the databases and roles, secrets; D-1, production hosting), [code-house-rules.md](code-house-rules.md) (3.1, 4.3, 5.1, 7.1, 8.1, 8.3: databases, the runner, roles, append-only guards, commands, no outside call in a transaction), [numbering-and-audit.md](numbering-and-audit.md) (3.6 and 3.7: series after a restore; 4.4 to 4.6: seals and retention), [imports-and-opening-data.md](imports-and-opening-data.md) (3.1, section 11 and 15.1: stored files, their hash and encryption), [access-and-approvals.md](../access/access-and-approvals.md) (2.3, 2.4, section 6 and 9.11: service identities, devices, keys outside the database, the setup step), [module-map.md](../architecture/module-map.md) (section 3, 4.1, 4.4 and section 5: tiers, contracts, the kernel operations view, `configuration`, `site-lifecycle`).
 
@@ -29,7 +29,7 @@ Used by: the stage 1 code of `S1-F14` in `kernel`, `files-imports`, `numbering`,
 - The complete export: its scope for `S5-F09` and what stage 1 needs now (section 9; `PRD-LIF-022`).
 - The implementation units, their owners, commands and tables (sections 10 and 11), the tests `S1-F14` runs (section 12), and the edits this design asks of other documents (section 13).
 
-It fixes no recovery target, backup frequency, backup keeping period, retention period, legal hold, restore operator, drill date or drill cadence. Those are KDPS's and the Admin's under policy 18, with the CA for legal retention; they stay OPEN with no default (section 14). Railway's capabilities are not verified here; every one this design leans on is an assumption to verify (RR-187; section 14.3). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says; every choice made here is **Proposed**.
+It fixes no recovery target, backup frequency, backup keeping period, retention period, legal hold, restore operator, drill date or drill cadence. Those are KDPS's and the Admin's under policy 18, with the CA for legal retention; they stay OPEN with no default (section 14). Railway's capabilities are not verified here; every one this design leans on is an assumption to verify (RR-187; section 14.3). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says; every choice made here is **Proposed**, except GC9-9 and GC9-10, approved by the product owner on 6 Oct 2026.
 
 ## 2. What is backed up
 
@@ -45,7 +45,7 @@ A backup of an environment has these parts. **Proposed.**
 | The manifest | One per backup: what it holds and how to check it (3.2). No record data, no key | `PRD-SEC-012` |
 
 - The unit of restore is one Organisation: its database, its objects in the file store and its keys. A whole environment is its directory plus every Organisation. One database per Organisation makes this possible (`PRD-MOD-001`). **Proposed.**
-- So that one Organisation's objects can be found without reading its database, every object key in the file store starts with the Organisation's identifier. **Proposed** (GC9-10); it adds a rule to [imports-and-opening-data.md](imports-and-opening-data.md) 15.1, where the bucket key is fixed per stored file.
+- So that one Organisation's objects can be found without reading its database, every object key in the file store starts with the Organisation's identifier. Approved by the product owner on 6 Oct 2026 (GC9-10); [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 holds the rule, where the bucket key is fixed per stored file.
 
 ### 2.2 What a backup never holds
 
@@ -59,7 +59,7 @@ A backup of an environment has these parts. **Proposed.**
 - **The backup is encrypted as a whole** (`POL-18.02`). The application backup of 3.2 encrypts each database dump and the manifest with a backup key before they leave the command, using authenticated encryption from Node's built-in crypto, so no dependency is added. File objects need no second layer: they are encrypted with the Organisation's key already. **Proposed.**
 - **The backup key is not an Organisation key.** It opens backups only. An Organisation's data key opens its encrypted fields and files only. Holding one never gives the other. **Proposed.**
 - **Key identifiers, not keys.** Every encrypted field and file records the identifier of the key version that encrypted it, and the manifest lists the identifiers each backup needs. A restore refuses before writing anything when a listed key version is not available (4.2). **Proposed.** It makes key rotation, which waits for production hosting (access-and-approvals section 6; D-1, RR-029), safe for old backups: a key version is kept while any backup still kept needs it.
-- **Copies of the keys are kept apart.** On test hosting each key is an environment secret (access-and-approvals section 6). A copy of every key version is held by the product owner outside Railway, in a store that holds no backup and that Railway credentials do not open. **Proposed** (GC9-12). Losing every copy of a key loses every backup it opens, so the drill checks the copies too (section 6).
+- **Copies of the keys are kept apart.** On test hosting each key is an environment secret (access-and-approvals section 6). A copy of every key version is held by a custodian outside Railway, in a store that holds no backup and that Railway credentials do not open. **Proposed** (GC9-12). This design names no custodian: the product owner names the `dev` custodian before the restore drill (RR-236); custody on production is for KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237) and blocks live use only. Losing every copy of a key loses every backup it opens, so the drill checks the copies too (section 6).
 - Key storage, backup and rotation on production are designed with production hosting (D-1, RR-029; GC9-11).
 
 ## 3. Two kinds of backup
@@ -181,7 +181,7 @@ A failed check is shown in the drill record and the operations view, and the Org
 - **Pause.** `numbering`'s restore participant pauses every open series and writes a series event for each (numbering-and-audit 6.1). It needs no caller from the owning module. **Proposed**, adding a row to numbering-and-audit 3.7 (section 13).
 - **Reconcile.** An authorised person records, for one series, the evidence of the highest number issued: printed or uploaded bills, the counters' records, or a statement that no document left the system, with its reason. `numbering` sets the next number past the higher of that number and the highest allocation in the restored database, records the skip and the reason as the series event "reconciled after a restore", and releases the series. **Proposed** (4.3).
 - A number is never given twice, including after a restore (`PRD-ACP-019`, `PRD-LIF-020`). A reconciliation never lowers a series' next number.
-- **Import batch codes** come from a PostgreSQL sequence that `files-imports` keeps itself ([imports-and-opening-data.md](imports-and-opening-data.md) 15.1). After a restore that sequence restarts from the snapshot, so a code given after the recovery point could be given again, against `PRD-ACP-019`. **Proposed** (GC9-9): batch codes come from a `numbering` series, so they are paused and reconciled like any other. Until it is decided, the restore participant of `files-imports` reports the clash and keeps import intake under the hold.
+- **Import batch codes** come from a `numbering` series ([imports-and-opening-data.md](imports-and-opening-data.md) 15.1), so they are paused and reconciled like any other. A PostgreSQL sequence would restart from the snapshot after a restore and could give a code a second time, against `PRD-ACP-019`. Approved by the product owner on 6 Oct 2026 (GC9-9); it closes RR-204.
 
 ### 5.4 Audit seals
 
@@ -346,7 +346,7 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 
 ## 13. Edits this design asks of other documents
 
-These follow only if the proposals are approved, with GC-9 and the edits it causes elsewhere. None is made here.
+These follow only if the proposals are approved, with GC-9 and the edits it causes elsewhere. None is made here. The [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 edit was made on 6 Oct 2026, when GC9-9 and GC9-10 were approved and `S1-F06-T05` took the write-once rule of 3.3 (DEC-116).
 
 | Document | Edit | Proposal |
 | --- | --- | --- |
@@ -374,17 +374,17 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC9-6 | Who records the Operations and the Accounts validations, whether they must be two different people when one person holds both personas, and who may reopen (4.3) | Business | KDPS Owner, Admin | Live S1 (go-live drill) | Who can put a restored Organisation back in service |
 | GC9-7 | **Proposed:** the backup and restore commands read and write as the migration role; or a separate read-only backup role that bypasses row-level security (3.2) | Technical | Product owner, at approval | Code: S1-F14 | Least privilege for backups |
 | GC9-8 | **Proposed:** the recovery commands sit in `configuration`, with a listed call to `numbering` (4.3) | Technical | Design review, at approval | Code: S1-F14 | Module boundaries |
-| GC9-9 | **Proposed:** import batch codes come from a `numbering` series, so a restore cannot give one twice (5.3) | Technical | Product owner, at approval | Accept: S1-F14 | `PRD-ACP-019` for batch codes |
-| GC9-10 | **Proposed:** object keys in the file store start with the Organisation's identifier (2.1) | Technical | Product owner, at approval | Code: S1-F06, before the first stored file | Restoring and exporting one Organisation's files |
+| GC9-9 | Approved by the product owner, 6 Oct 2026: import batch codes come from a `numbering` series, so a restore cannot give one twice (5.3; imports-and-opening-data 15.1). Closes RR-204 | Technical | — | — | `PRD-ACP-019` for batch codes |
+| GC9-10 | Approved by the product owner, 6 Oct 2026: object keys in the file store start with the Organisation's identifier (2.1; imports-and-opening-data 15.1) | Technical | — | — | Restoring and exporting one Organisation's files |
 | GC9-11 | Key storage, copies and rotation on production (2.3) | Technical | Product owner (D-1, RR-029) | Live S1 | Whether old backups stay readable |
-| GC9-12 | **Proposed:** on test hosting the product owner keeps a copy of every key version outside Railway, apart from the backups (2.3) | Technical | Product owner | Exit S1 (the drill checks the copies) | Whether a lost secret loses the backups |
+| GC9-12 | **Proposed:** a copy of every key version is kept outside Railway, apart from the backups (2.3). This design names no custodian: the product owner names the `dev` custodian before the restore drill (RR-236); custody on production is for KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237; DEC-116) | Technical; on production, business | Product owner (`dev`); KDPS Owner and Admin (production) | Exit S1 (the drill checks the `dev` copies); live use only, for production custody | Whether a lost secret loses the backups |
 | GC9-13 | The complete export's scopes, file format, package protection and who may run it (9.1) | Business and technical | Product owner, in the stage 5 design; KDPS Owner for who may run it | Design: S5-F09 | The export |
 | GC9-14 | How each record class other than audit is deleted after retention, and how its totals stay explainable (8.2) | Technical | The owning module's design | The first deletion in that class | Retention beyond audit |
 | GC9-15 | Whether every outside service credential is replaced after a restore, or only the revocations known from outside evidence are applied again (4.4) | Technical (security) | Product owner | Live S1 | What a restore can bring back |
 
 ### 14.2 Proposed choices at a glance
 
-Each is **Proposed** where it is written; this list helps the approval find them.
+Each is **Proposed** where it is written, except GC9-9 and GC9-10, approved by the product owner on 6 Oct 2026; this list helps the approval find them.
 
 - The Organisation as the unit of restore (2.1); object keys by Organisation (GC9-10).
 - Backups encrypted as a whole with a backup key apart from Organisation keys; key identifiers recorded; copies of keys kept apart (2.3; GC9-12).

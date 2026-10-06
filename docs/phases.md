@@ -39,7 +39,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - People, access and approvals: personas, roles, scoped permissions, independent approval, one inbox, audit record.
 - Merchandise and identifiers: brands, suppliers and other parties, SKUs, barcodes, units, product proposals.
 - Effective-dated commercial terms for brands and suppliers.
-- Source conversion and imports: file intake, saved mappings, staging, review, duplicate control. Stage 1 imports use the manual route only (`DEC-105`).
+- Source conversion and imports: file intake of XLSX workbooks, saved mappings, staging, review, duplicate control. Stage 1 imports use the manual route only (`DEC-105`); the other readers and the sample layouts are in stage 2 (`DEC-115`).
 - Technical platform: stack, module and data boundaries, transaction and integration integrity, login and sessions, access enforcement, encryption, backup and restore.
 - Recording rules: stock balances derived from movements, balanced journals per book, chart of accounts, financial periods, posting rules, document numbering.
 - Offline design: device registration, device bill series, and pricing, tax, discount allocation and rounding logic shared by server and counter (`PRD-MOD-007`). The shared module also holds incentive logic; its golden cases are completed in stage 6.
@@ -69,6 +69,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 **In scope (PRD sections)**
 
+- Sample layouts and readers: the XLS, XLSB and CSV readers beside stage 1's XLSX; the KDPS PT template and the chosen vendor-PT and earlier-POS layouts proved on synthetic replicas; a 10,000-line structured PT file parsed, mapped and validated in under one minute (PRD "Performance"; `PRD-IMP-001`, `PRD-PRF-001`, `DEC-115`).
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
 - The AI gateway for PT source files (`DEC-105`), switched off by default as a capability control (`PRD-SEC-017`).

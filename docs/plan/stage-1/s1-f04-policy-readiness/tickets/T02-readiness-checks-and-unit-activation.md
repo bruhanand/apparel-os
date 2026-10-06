@@ -1,0 +1,43 @@
+# S1-F04-T02 — Readiness checks and unit activation
+
+Status: blocked
+Blocked by: S1-F04-T01, S1-F02-T02, S1-F03-T02
+Feature: [S1-F04 Policy readiness and Site activation](../../spec.md)
+
+## Build
+
+The stage 1 part of `site-lifecycle` ([module-map.md](../../../../design/architecture/module-map.md) 4.16; [domain-model.md](../../../../design/architecture/domain-model.md) 3.6, section 5, section 6 "Granting an activity", invariant 7; `PRD-LIF-001` to `PRD-LIF-003`).
+
+- **Run readiness checks** for a Site and for a business unit (`PRD-LIF-002`): ask each module's check and keep a readiness record of what was verified, when and by whom. The checks are as the product owner answered RR-016 on 6 Oct 2026 (DEC-116), with no replenishment threshold and no new business prerequisite:
+  - **Mappings and locations**, from `organisation`: mappings in force and verified, and locations existing ([structure-and-masters.md](../../../../design/masters/structure-and-masters.md) 3.7, 3.8; `POL-10.08`).
+  - **Users and access**, from `access`: every permission the activity needs is held by someone with an active assignment covering the unit, and every independently approved action of the activity has two different people able to prepare and approve it (`PRD-ACS-006`).
+  - **Required policies**, from `configuration`: the Available check of S1-F04-T01 passes for each policy the activity's operations need.
+  - **Stock plan** (`PRD-LIF-003`): an approved opening plan for the unit, which need not have been posted yet, or an explicit zero declaration, which states that the unit genuinely holds no stock. A non-stock office needs none.
+  - **Devices**: as GC-8 section 11, added by S1-F12-T02.
+- **Approve an activity**: receiving, movement or selling for a business unit, combining the shared Site readiness with the unit's own approval (`PRD-LIF-001`). Refused while a check fails, naming it. Approved through `access` by a different person from the one who ran the checks (MM-8, `DEC-105`). The decision, the readiness record, the activity grant written into `configuration`, and the audit record commit together; emits `configuration.activity-changed`.
+- After a grant, Check availability answers available for that activity at that unit only. The Site and unit show Active ([design-language.md](../../../../design/ui/design-language.md) section 7; structure-and-masters 3.7).
+- **Screens**: Site opening and closure › Readiness (ui-blueprint): each check with its state and what is missing, and the request to activate; the approval from My work. Unavailable actions name what is missing (`PRD-UXP-003`).
+
+The stock-plan check reads an approved, unpublished opening-data batch for the unit, checking its approval and scope on their own, independently of activation, or an explicit zero declaration meaning the unit genuinely holds no stock (domain-model 3.6; `DEC-117`). This ticket proves the zero-declaration and not-ready paths; the approved-batch path is proved in S1-F13-T01.
+
+## Expected outputs
+
+`site-lifecycle` module with its `index.ts` and migration; the check answers in `organisation`, `access` and `configuration`; schemas and routes; the Readiness screen; tests
+
+## Done when
+
+- Stage 1 exit check 6 ([README](../../README.md) 7.1): an activity stays unavailable for a Site or unit until its checks pass and a different person approves it, and the refusal names the failing check
+- Activation approved by the person who ran the checks is refused; an activity granted at one unit leaves the other units at the Site unavailable
+- A unit whose mapping is not verified fails the mappings check; a unit with no location fails the locations check
+- The users-and-access check fails, naming what is missing, when a permission the activity needs is held by nobody with an active assignment covering the unit, or when an independently approved action has fewer than two people able to prepare and approve it
+- The required-policies check fails, naming the policy, while the Available check fails for a policy the activity needs
+- The stock-plan check passes with an approved opening plan that is not yet posted, or with an explicit zero declaration, and fails with neither
+- Readiness records and grants of one synthetic Organisation are invisible to the other
+- Browser journey: an Operations user runs the checks for a synthetic unit, sees a failing check and its reason, fixes it and runs them again; a different authorised person approves receiving from My work; the unit's receiving action becomes available
+
+## Notes
+
+- RR-016 is answered (product owner, 6 Oct 2026, DEC-116): the checks are as Build says. Where the opening plan and the zero declaration are held, and how each is approved and recorded, is written into module-map 4.16 with the code; who approves them is KDPS's, and tests use labelled synthetic approvers. A business choice found there goes to the product owner.
+- How Active is held for a Site or unit (a projection of its grants, or a status version under structure-and-masters 3.1) is not designed; write it into 3.7 with the code.
+- Who approves readiness and each activity is OPEN (MM-8; KDPS Owner question 49; RR-057; live S1); tests use labelled synthetic approvers. RR-177 confirms the MM-8 pick.
+- Withdrawing an activity at closure (`PRD-LIF-017`) is stage 5.

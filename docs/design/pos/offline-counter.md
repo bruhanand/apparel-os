@@ -2,15 +2,15 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-> **Draft — not yet approved.** Written 6 Oct 2026 on a side branch and brought into the docs unreviewed. Every engineering choice here is **Proposed** until the product owner approves it, when stage 1 reaches this design.
+> **Partly approved.** Sections 3 to 5 and 11 were approved by the product owner on 6 Oct 2026, with RR-015, GC8-7 and GC8-8 (DEC-116); a choice they mark **Proposed** is agreed. Sections 6 to 10 remain **Draft**: every engineering choice there is **Proposed** until the product owner approves it, and their remaining decisions are due before the stage 1 exit gate.
 
-Status: **Draft**, 6 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: sections 3 to 5 and 11 approved, 6 Oct 2026; sections 6 to 10 **Draft**. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: Offline counter; from Counter sales and payments, the billing device and its bill series; from AI, security and operational reliability, the revocation of lost devices and the bounded expiry of offline delegation; from Opening, closure, migration and export, the devices readiness check; from Technical platform, the counter row of the Stack. It details the `pos` billing-device part of [module-map.md](../architecture/module-map.md) 4.17 and the offline records of [domain-model.md](../architecture/domain-model.md) 3.12, and is GC-8 in [gaps-before-code.md](../../history/gaps-before-code.md). It also answers readiness items RR-014, RR-015 and, for the devices check, RR-016 of the [open items](../../plan/open-items.md).
 
 - PRD IDs: `PRD-OFF-001`–`PRD-OFF-019`; `PRD-POS-005`, `PRD-POS-012`–`PRD-POS-016`, `PRD-POS-019`, `PRD-POS-020`; `PRD-RET-016`, `PRD-RET-020`; `PRD-SEC-001`, `PRD-SEC-005`–`PRD-SEC-008`, `PRD-SEC-013`–`PRD-SEC-017`; `PRD-ACS-008`, `PRD-ACS-013`, `PRD-ACS-017`; `PRD-INT-001`–`PRD-INT-004`, `PRD-INT-006`; `PRD-MOD-002`, `PRD-MOD-007`–`PRD-MOD-011`; `PRD-ORG-005`; `PRD-STK-003`; `PRD-LIF-001`, `PRD-LIF-002`, `PRD-LIF-015`; `PRD-UXP-003`; `PRD-PRF-001`, `PRD-PRF-003`; `PRD-ACP-011`, `PRD-ACP-018`.
 - Policies: 2 (`POL-02.03`, `POL-02.07`, `POL-02.16`, `POL-02.18`), 10 (`POL-10.07`), 16 (`POL-16.01`–`POL-16.07`).
-- Decisions: DEC-005, DEC-051, DEC-062, DEC-064, DEC-071, DEC-077, DEC-082, DEC-092, DEC-105, DEC-112.
+- Decisions: DEC-005, DEC-051, DEC-062, DEC-064, DEC-071, DEC-077, DEC-082, DEC-092, DEC-105, DEC-112, DEC-116.
 
 Depends on: [module-map.md](../architecture/module-map.md) (4.3, 4.6, 4.16, 4.17: owners and operations), [domain-model.md](../architecture/domain-model.md) (3.2, 3.5, 3.12: device, series, working set), [access-and-approvals.md](../access/access-and-approvals.md) (2.4 devices, 3.3 sessions, 7.1 the order of checks), [numbering-and-audit.md](../platform/numbering-and-audit.md) (3: series, their states and interface), [stock-ledger.md](../stock/stock-ledger.md) (6.1 the offline protected quantity, 10.1 idempotency, 10.3 lock order, 10.5 offline bills that do not fit), [shared-calculations.md](../calculations/shared-calculations.md) (2.1, 2.3, 12.2: the counter's calculations and the counter run), [deployment.md](../platform/deployment.md) (3: one origin, `/counter/`), [structure-and-masters.md](../masters/structure-and-masters.md) (3.3, 3.4: Stores, business units and their mappings), [code-house-rules.md](../platform/code-house-rules.md) (2, 9, 10).
 
@@ -27,7 +27,7 @@ Used by: `S1-F12` (billing devices and device bill series), the counter run of `
 - The devices readiness check (`PRD-LIF-002`; RR-016).
 - What stage 1 builds, and the tests that prove it (section 13 and section 14).
 
-It fixes no offline limit, duration, amount, tender list, Store, counter, financial-year date or number format. Those are KDPS's, Accounts' or the CA's and stay OPEN (section 15). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says. Every **Proposed** here waits for the product owner's approval.
+It fixes no offline limit, duration, amount, tender list, Store, counter, financial-year date or number format. Those are KDPS's, Accounts' or the CA's and stay OPEN (section 15). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says. A **Proposed** in sections 3 to 5 and 11 is approved (product owner, 6 Oct 2026); every other **Proposed** waits for the product owner's approval.
 
 ## 2. Where the counter sits
 
@@ -61,7 +61,7 @@ The ownership split is module-map 4.17's. This document adds no module and moves
 - `access` keeps the device: its code, unique in the Organisation (access-and-approvals 2.4), its public key once enrolled (3.2), and its state. `pos` keeps, for the same identifier: its Store, fixed for life, and the business units of that Store it bills for, as a dated list. **Proposed.**
 - Its tax registrations are not chosen separately. They are those of its business units' mappings in force on the date (`PRD-ORG-005`; [structure-and-masters.md](../masters/structure-and-masters.md) 3.4). A device billing for two units mapped to two registrations holds two series (DEC-005, DEC-077). **Proposed:** recording units, not registrations, because every bill belongs to one business unit, and through it to one registration and one book (`PRD-ORG-005`); two units may share a registration and differ in book.
 - Only whole-store and brand-counter units of the device's own Store can be listed ([structure-and-masters.md](../masters/structure-and-masters.md) 3.3). **Design choice.**
-- States: Setting up (registered, not yet enrolled), Active, Ended (retired after use, not lost) and Revoked (reported lost, `DEC-092`). Revoked and Ended are final; a replacement is a new device (access-and-approvals 2.4). **Proposed:** Setting up, Active and Ended are names already in the settled list of [design-language.md](../ui/design-language.md) section 7, used here for a new record; that use needs the design review GC8-7 names.
+- States: Setting up (registered, not yet enrolled), Active, Ended (retired after use, not lost) and Revoked (reported lost, `DEC-092`). Revoked and Ended are final; a replacement is a new device (access-and-approvals 2.4). Setting up, Active and Ended are names already in the settled list of [design-language.md](../ui/design-language.md) section 7, used here for a new record. The four names were approved by the product owner on 6 Oct 2026 (GC8-7, DEC-116).
 
 ### 3.2 Registration and enrolment
 
@@ -69,10 +69,10 @@ Registration is online and needs the permission to register devices, given only 
 
 1. **Register.** In Setup › Devices, tills and bill series of the back office, an authorised person creates the device: code, label, Store and business units. It is Setting up. **Proposed.**
 2. **Enrol.** On the physical device, in Chrome or Edge (PRD Stack: Counter), an authorised person signs in at `/counter/` and chooses "enrol this browser" for that device. The page generates a key pair in the browser with WebCrypto, ECDSA on curve P-256, with the private key marked non-extractable, and keeps the private key in the counter's IndexedDB (5.3). It sends the public key and a signature over a one-time server challenge. **Proposed.**
-3. The server checks the challenge and the signature, binds the public key to the device, and makes the device Active, all in one transaction with its audit record and an access record (`PRD-ACS-013`, `PRD-SEC-007`, `PRD-INT-004`). In the same transaction `pos` defines the device's series (4.1).
+3. The server checks the challenge and the signature, binds the public key to the device, and makes the device Active, all in one transaction with its audit record and an access record (`PRD-ACS-013`, `PRD-SEC-007`, `PRD-INT-004`). In the same transaction `pos` defines the device's series, where their format and financial-year dates exist (4.1).
 
 - A device is enrolled once. Its key never changes; a new key is a new device (3.5). A second enrolment of the same device is refused. **Proposed.**
-- **Proposed:** enrolment is a protected action that asks for a fresh authenticator code ([access-and-approvals.md](../access/access-and-approvals.md) 3.3). It would add one action to the GC3-6 baseline list, so it waits for the KDPS Owner's confirmation (GC8-8).
+- Enrolment is a protected action that asks for a fresh authenticator code ([access-and-approvals.md](../access/access-and-approvals.md) 3.3), one more action on the GC3-6 list. Approved by the product owner on 6 Oct 2026 (GC8-8, DEC-116).
 - A browser profile holds at most one enrolled device identity per Organisation. Enrolling a second one in the same profile is refused while the first still holds a bill not yet uploaded or a protected quantity (6.6). **Proposed.**
 
 ### 3.3 Proving the device
@@ -111,6 +111,8 @@ Registration is online and needs the permission to register devices, given only 
 - A device gets one series for each registration of its units, for the current financial year, when it is enrolled; and for each new registration when a unit's mapping changes (4.3). A second open or paused series for the same device, registration and year is refused by `numbering`, so two live devices never share one (`PRD-POS-020`, `PRD-OFF-002`; numbering-and-audit 3.7).
 - A series needs a format. The bill-number format is set per Organisation within the statutory limit, and the CA confirms it for each registration (`PRD-POS-020`, `POL-10.07`). It is OPEN (V-40, RR-101). Until it is confirmed no live series can be defined, and the devices check fails with that reason (section 11). Tests use labelled synthetic formats.
 - A series needs the financial year's dates. They are an Organisation setting with no default (GC5-1, RR-060). Until they are set, defining a series is refused with that reason.
+- Enrolment waits for neither. With no confirmed format or no financial-year dates, enrolment succeeds and defines no series, and the devices check fails naming what is missing (section 11; test 8). Product owner, 6 Oct 2026 (DEC-116).
+- When an approved change later defines the bill format or the financial-year dates, the same change creates the missing series for every Active device that has none. It is retry-safe: a repeat creates nothing twice, and it never replaces, renumbers or resets an existing series (product owner, 6 Oct 2026, `DEC-117`).
 
 ### 4.2 Who writes the series
 
@@ -140,7 +142,7 @@ The state names are Open, Paused and Closed (DEC-105, DM-4). Closed is final.
 
 ## 5. The counter app
 
-This section answers RR-015. Everything in it is a **Proposed** engineering choice, approved by the product owner before the counter run of `S1-F11`.
+This section answers RR-015. The product owner approved it on 6 Oct 2026: the counter app is `apps/counter`, served at `/counter/`, with its browser tests in `apps/counter/e2e/`.
 
 ### 5.1 The package `apps/counter`
 
@@ -149,7 +151,7 @@ This section answers RR-015. Everything in it is a **Proposed** engineering choi
   - its bundle must provably exclude the costing entry point (shared-calculations 2.1) and every back-office screen that shows cost or margin (`PRD-OFF-004`, `PRD-ACS-008`); a separate build makes that a property of the build, not of routing;
   - its service worker, precache and IndexedDB database serve only the counter;
   - it installs as its own PWA.
-- It imports only packages: `@apparel-os/domain`, `@apparel-os/schemas`, the selling entry point of `@apparel-os/calculations`, and `@apparel-os/ui`. It never imports `apps/server` or `apps/web` (`PRD-MOD-002`). The module check gains that rule when the package is created (`PRD-SEC-015`).
+- It imports only packages: `@apparel-os/domain`, `@apparel-os/schemas`, the selling entry point of `@apparel-os/calculations`, and `@apparel-os/ui`; its golden-case page also bundles the golden runner of `packages/calculations` (5.5). It never imports `apps/server` or `apps/web` (`PRD-MOD-002`). The module check gains that rule when the package is created (`PRD-SEC-015`).
 - Dependencies come only from the Stack's Counter row: Dexie for IndexedDB, and Workbox for the service worker (code-house-rules 10.6). A wrapper plugin that is not itself in the Stack is not added. **Proposed.**
 
 ### 5.2 Served at `/counter/`
@@ -180,12 +182,12 @@ What the counter bundle includes and excludes follows shared-calculations 2.1 an
 
 ### 5.5 The golden-case test page and Playwright in CI
 
-- **The page.** `apps/counter` has a second HTML entry, `golden/index.html`, in the same Vite build as the counter. Both entries import the selling entry point, so Rollup places it in one shared chunk, and the page runs exactly the code the counter runs (shared-calculations 12.2). The page holds no case and no data. It exposes one function that takes a case's function name and input, calls the bundled package and returns the result or the refusal. **Proposed.**
-- **The run.** A Playwright test in `apps/counter/e2e/` starts `vite preview` of the built counter on a fixed local port, opens `/counter/golden/` in Chromium (Chrome and Edge both run on Chromium; PRD Stack: Counter), reads every case file in `packages/calculations/golden/` in Node, passes each to the page, and compares the whole result, versions included, with `expected` or `refusal`. It fails on any difference, and when the number of results differs from the number of case files. **Proposed.**
+- **The page.** `apps/counter` has a second HTML entry, `golden/index.html`, in the same Vite build as the counter. Both entries import the selling entry point, so Rollup places it in one shared chunk, and the page runs exactly the code the counter runs (shared-calculations 12.2). The golden runner that the server suite uses, `packages/calculations/test/golden-runner.ts`, is bundled into the page and given only the selling entry point, so costing cases are reported as server-only (shared-calculations 12.2). The page holds no case and no data. It exposes one function that takes a case and returns the runner's outcome. Approved by the product owner on 6 Oct 2026 (RR-015).
+- **The run.** A Playwright test in `apps/counter/e2e/` starts `vite preview` of the built counter on a fixed local port, opens `/counter/golden/` in Chromium (Chrome and Edge both run on Chromium; PRD Stack: Counter), reads every case file in `packages/calculations/golden/` in Node and passes each to the page. The runner compares the whole result, versions included, with `expected` or `refusal`. The test fails on any case the runner reports as failed, and when the number of outcomes differs from the number of case files. **Proposed.**
 - **The bundle check.** The same test reads the module list the build guard wrote and fails if any costing module is in it.
 - **CI.** The code-check workflow installs the Playwright Chromium build, runs `pnpm build`, then the counter run, on every push and pull request (code-house-rules 10.5; `PRD-SEC-016`). Turborepo builds `packages/calculations` before `apps/counter`. The root script that runs Playwright, and its `AGENTS.md` "Code workspace" entry, are added by `S1-F11`, the task that creates them. **Proposed.**
 - The stage 1 exit check passes only when both the server run and this counter run pass (`PRD-ACP-018`; shared-calculations 12.2).
-- `code-house-rules.md` section 2 says browser journeys sit in `apps/web/e2e/`. The counter run is not a journey; it sits in `apps/counter/e2e/`. If this is approved, code-house-rules section 2 gains one line saying so.
+- Browser journeys sit in `apps/web/e2e/` ([code-house-rules.md](../platform/code-house-rules.md) section 2). The counter run is not a journey; it sits in `apps/counter/e2e/`, as the product owner approved on 6 Oct 2026, and code-house-rules sections 2 and 10.1 are amended to say so.
 
 ## 6. Offline authority and the working set
 
@@ -410,7 +412,7 @@ Operations of `pos` for billing devices, in words; names and shapes become exact
 | Operation | Stage | What it does | Refuses when |
 | --- | --- | --- | --- |
 | Register a billing device | 1 | Creates it Setting up, for a Store and its units (3.2) | A unit is not a whole-store or brand-counter unit of the Store |
-| Enrol a device | 1 | Binds the public key; Active; defines its series (3.2, 4.1) | Already enrolled; bad proof; no format or financial-year dates for a series (4.1) |
+| Enrol a device | 1 | Binds the public key; Active; defines its series where their format and financial-year dates exist, and otherwise none (3.2, 4.1) | Already enrolled; bad proof |
 | Change a device's units | 1 | Dated change; defines series for any new registration (4.3) | The device is not Active |
 | Prove a device | 1 | Checks a signature over a challenge, for sign-in and device requests (3.3) | Unknown key; Revoked or Ended device |
 | Revoke, retire, replace | 1 | Section 3.5 | Revoked or Ended already |
@@ -456,7 +458,7 @@ The protected quantity is a reservation in `stock` (stock-ledger 6.1); series an
 | `apps/counter`: the build, the golden page and its Playwright run (`S1-F11`); the enrolment and sign-in pages, with Dexie for the device key (`S1-F12`); served at `/counter/` | Workbox, the offline shell, the local commit |
 
 - Live gates: the financial-year dates (GC5-1, RR-060) and the bill-number format (V-40, RR-101) before a live series; policy 2 for live sessions. Tests use labelled synthetic values (`AGENTS.md`: "Never invent a value").
-- `DEC-112` left RR-015 and the devices check open at their gates; this design answers both, for the product owner's approval.
+- `DEC-112` left RR-015 and the devices check open at their gates; this design answers both, and the product owner approved them on 6 Oct 2026 (sections 5 and 11; DEC-116).
 
 ## 14. Tests
 
@@ -518,7 +520,9 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC8-4 | Whether only users who signed in online on the device in the authority period may act offline, as **Proposed** in 6.5. A shift change during an outage cannot start a new user | Business | KDPS Owner, Operations | 4 live (offline) | Who can bill during an outage |
 | GC8-5 | The tax-document treatment of a duplicate bill number from a cloned or restored device, and of numbers a lost device used but never uploaded | Business, statutory | CA, Accounts | 4 live (offline) | Statutory invoice series |
 | GC8-6 | How a step needing online authority (provider-confirmed card, Store-credit or gift-voucher redemption, a fresh approval, an IRN) binds to a bill the offline counter numbers locally while online (4.2; `PRD-RET-016`, `PRD-RET-020`, `PRD-POS-019`) | Technical | Stage 4 counter design | `S4-F02` and `S4-F11` design | Online steps on the offline counter |
-| GC8-7 | Device state names: Setting up, Active, Ended, Revoked (3.1) | Design review | Product owner, at approval | `S1-F12` screen | Names on Setup › Devices |
-| GC8-8 | Enrolment as a protected action that asks for a fresh authenticator code (3.2), added to the GC3-6 list | Business | KDPS Owner | 1 live use | Who can enrol a device |
+| GC8-7 | Answered by the product owner, 6 Oct 2026 (DEC-116): the device state names Setting up, Active, Ended and Revoked are approved (3.1) | Design review | — | — | Names on Setup › Devices |
+| GC8-8 | Answered by the product owner, 6 Oct 2026 (DEC-116): yes. Enrolment is a protected action that asks for a fresh authenticator code (3.2), added to the GC3-6 list | Business | — | — | Who can enrol a device |
 | GC8-9 | How a device-signed upload, made with no user signed in, fits access-and-approvals 7.1 and row-level security: the device as principal, the bill's operator as actor, the Store as scope (8.1) | Technical | Product owner, in the stage 4 counter design and house rules part B | `S4-F11` code | Uploads after sign-out |
 | GC8-10 | How the offline counter's till session and the Store's day close treat bills not yet uploaded (10.2) | Business | Stage 4 Store-day design; Accounts | `S4-F08` and `S4-F11` design | Day close with an offline counter |
+
+**Approved by the product owner, 6 Oct 2026:** sections 3 to 5 and 11; RR-015 (`apps/counter`, served at `/counter/`, its browser tests in `apps/counter/e2e/`, the golden runner bundled into the test page, 5.5); GC8-7 and GC8-8 (DEC-116); enrolment with no format or financial-year dates succeeds and defines no series (4.1; DEC-116). **Still Draft:** sections 6 to 10; their remaining decisions are due before the stage 1 exit gate. GC8-1 to GC8-6, GC8-9 and GC8-10 stay open at their gates.

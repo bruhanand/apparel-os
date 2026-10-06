@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-> **Not ranked.** One spec for the whole of stage 1 of [phases.md](../../phases.md), written 6 Oct 2026 from the designs and the product owner's grilling answers of the same day. It decides nothing: the PRD, the policies and the designs win over it. Where a design still says otherwise, the design is edited to match these answers (listed in Further Notes) before the code that depends on it. Feature details, tickets and status stay in [README.md](README.md) and each feature folder.
+> **Not ranked.** One spec for the whole of stage 1 of [phases.md](../../phases.md), written 6 Oct 2026 from the designs and the product owner's grilling answers of the same day. It decides nothing: the PRD, the policies and the designs win over it. Where a design still says otherwise, the design is edited to match these answers (`DEC-115`, `DEC-116`; listed in Further Notes) before the code that depends on it. Feature details, tickets and status stay in [README.md](README.md) and each feature folder.
 
 ## Problem Statement
 
@@ -130,9 +130,9 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 
 79. As an Admin, I want each of the 19 policies listed with its status and what is missing, so that I know what blocks go-live (PRD "Required policy configuration").
 80. As an Admin, I want to record a policy as Signed with its signatory, date and evidence, so that the policy gate has an authoritative input (`DEC-092`).
-81. As Accounts, I want a policy's real values validated with evidence by a person who did not enter them, so that configuration is independently checked.
+81. As Accounts, I want a policy's real values validated with evidence by a person who did not enter them, so that configuration is independently checked (DM-6, `DEC-116`).
 82. As the Owner, I want every capability shipped off and switched on per Organisation, never bypassing a missing policy, so that nothing is on by default (`PRD-SEC-017`).
-83. As Operations, I want to run readiness checks for a Site and unit (mappings, users and access, locations, required policies, stock plan, devices), so that gaps show before activation (`PRD-LIF-002`, `PRD-LIF-003`).
+83. As Operations, I want to run readiness checks for a Site and unit (mappings, users and access, locations, required policies, stock plan, devices), so that gaps show before activation (`PRD-LIF-002`, `PRD-LIF-003`, `DEC-116`).
 84. As the Owner, I want receiving, movement or selling enabled for a unit only by a different person's approval after its checks pass, so that activation is independent (`PRD-LIF-001`).
 85. As any user, I want an unavailable action to show its state, its blocking reason and the next action, so that I know what to fix (`PRD-UXP-003`, `PRD-SEC-017`).
 86. As an Admin, I want Sites, Stores and units to move through Setting up, Active, Closing and Closed, so that each lifecycle is visible (`PRD-ORG-008`).
@@ -255,6 +255,7 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
   - **finance**: book settings, accounts, periods and reopenings, posting maps, journals and posting sources; tax-rule records.
   - **stock**: the ledger (movements, balances, pieces, coverage, acceptance, holds, reservations, cost pools and layers, valuations, transit value).
   - **files-imports**: intake, stored files, layouts, mappings and rules, batches, staging, issues, control totals, outcomes, comparison runs; target modules register import handlers.
+  - **ebo-imports**: in stage 1 only the historical-reference handler (synthetic SOH and daily sales); `S2-F12` extends it (`DEC-116`).
   - **pos**: billing device facts only (device and its units).
   - **calculations** package: pure functions, no database, clock or environment; a selling entry point (server and counter) and a costing entry point (server only).
 
@@ -274,6 +275,12 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 - Row-level security is a backstop: with no actor set, no scoped row shows. The runtime role owns nothing and cannot bypass it.
 - Locks follow one order (stock-ledger 10.3 as refined by RR-227): authority rows → document and approval rows → receipt origins (shared when only read) → the unit anchor (shared; exclusive to start or end a count freeze) with SKU balances → pieces → holds and reservations → cost pools and transit value (missing rows created at this step) → financial periods → number series last. Ascending identifiers within a step.
 
+### Policy gate and readiness (`DEC-116`)
+
+- The policy gate covers operations that record business effects: stock or money posting, opening-data publishing, device selling. Setup and configuration (access, structure, masters, book setup, readiness, policy readiness) are not policy-gated, because they are how a policy gets configured; they still need their permissions and independent approvals (`PRD-SEC-017`). A synthetic Organisation may record a labelled synthetic Signed status for tests and demos; never on `kdps-test` or production.
+- Readiness checks: users and access pass when every permission the activity needs is held by someone with an active assignment covering the unit, and every independently approved action has two different people able to prepare and approve; required policies pass when the Available check passes for each policy the activity's operations need; the stock plan passes with an approved opening plan (not an already-completed opening posting) or an explicit zero declaration that the unit genuinely holds no stock; devices as GC-8 11. No replenishment threshold and no new business prerequisite (`PRD-LIF-002`, `PRD-LIF-003`).
+- With no open exception-code series, an operation that would raise a numbered exception is unavailable and the Available check names the missing series; failed-job records and their diagnostic evidence are still kept in the operations view.
+
 ### Stock ledger (stock-ledger 13 to 15, approved 6 Oct 2026 with fixes)
 
 - One ledger request per document or step, inside the caller's transaction, through four operations: **Plan** (reads masters, mapping and cost setting; writes and locks nothing), **Lock**, **Recheck and value**, **Write** (movements, legs, projections, valuations, one Post call). A plan made stale by a new receipt origin is refused, never retried by the ledger.
@@ -286,7 +293,9 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 ### Books and posting (books-and-posting)
 
 - `finance` exposes Check postable (no writes, no locks), Hold periods, Post (one journal per book, event kind and accounting date; idempotent per source item and component), Reverse, Lock, the reopening commands, Maintain and Read.
-- Journals are insert-only with a deferred balance check and a period guard. Posting maps need maker and checker plus CA evidence. One journal series per book (GC4-4), held from step 8 to commit.
+- Journals are insert-only with a deferred balance check and a period guard. Posting maps need maker and checker plus CA evidence; tax-rule records are approved the same way (`POL-10.05`, `DEC-116`). One journal series per book (GC4-4), held from step 8 to commit.
+- `finance` defines a contract "has this book held stock?" that `stock` implements (module-map section 3, rule 6, like location-in-use); the books-and-posting 2.2 refusal of a formula or pool-mode change uses it (`DEC-116`).
+- Book settings, the chart of accounts and tax configuration are API only in stage 1; their screens come before the first live posting in stage 2 (`DEC-116`).
 
 ### Calculations (shared-calculations)
 
@@ -294,10 +303,11 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 
 ### Imports (imports-and-opening-data)
 
-- Files are stored before the recording transaction: encrypted with the Organisation's key, hashed before encryption, keyed by Organisation id, never overwritten or deleted by the app, served only through the app.
-- Stage 1 reads XLSX only; XLS, XLSB, CSV readers, the sample layouts and the 10,000-line parse test move to stage 2 as **S2-F13**, first in stage 2 (product owner, 6 Oct 2026). PDFs and photos are stored as evidence only.
-- Comparison runs, a synthetic SOH layout and the historical-reference handler stay in stage 1, because the opening-data work needs them.
-- Opening-data publishing stays unavailable without policy 14; the synthetic opening-count handler runs in tests only until RR-013 is answered.
+- Files are stored before the recording transaction: encrypted with the Organisation's key, hashed before encryption, keyed by Organisation id, never overwritten or deleted by the app, served only through the app within the reader's scope, and attachable as evidence. This is `S1-F06-T05`, built right after `S1-F01`: mapping verification, policy signature and validation, the CA's evidence for posting maps and tax rules, signed agreements, exceptions and approval decisions attach real files from the start; `S1-F06-T01` and `S1-F08-T03` build on it (`DEC-116`).
+- Stage 1 reads XLSX only; XLS, XLSB, CSV readers, the sample layouts and the 10,000-line parse test move to stage 2 as **S2-F13**, first in stage 2 (`DEC-115`). PDFs and photos are stored as evidence only.
+- Comparison runs, a synthetic SOH layout and the historical-reference handler (in a minimal `ebo-imports` module) stay in stage 1, because the opening-data work needs them.
+- An ordinary external hyperlink in a sheet is kept as inert text, never followed or rendered as a link; the file is accepted (`DEC-116`, GC6-17).
+- Opening-data publishing stays unavailable without policy 14; the synthetic opening-count handler runs in tests only (`DEC-116`, GC6-18).
 
 ### Devices (offline-counter 3 to 5 and 11, approved 6 Oct 2026)
 
@@ -305,7 +315,7 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 
 ### Backup and restore (backup-and-restore)
 
-- Organisation is the unit of restore; import batch codes come from `numbering` (GC9-9); stored objects are prefixed by Organisation id (GC9-10). The rest of the design, including deletion and key recovery, is finished when S1-F14 starts. The `dev` backup-key custodian is named before the restore drill; production custody is for KDPS's Owner and Admin under policy 18 and blocks live use only.
+- Organisation is the unit of restore; import batch codes come from `numbering` (GC9-9); stored objects are prefixed by Organisation id (GC9-10). The rest of the design, including deletion and key recovery, is finished when S1-F14 starts. The `dev` backup-key custodian is named by the product owner before the restore drill (RR-236); production custody is for KDPS's Owner and Admin under policy 18 and blocks live use only (`POL-18.02`, RR-237).
 
 ### Environments
 
@@ -314,14 +324,15 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 
 ### Build order (one builder)
 
-1. Documents: write today's approvals into the designs, the decision entry for S2-F13, the ticket splits.
-2. **Sign-in and access control (S1-F01), part 1 "Sign-in and screens"**: idempotency, audit, API conventions, sign-in and enrolment, web shell, sign-in screens, Playwright with one sign-in journey (T04, T07, T05, T08, T14, T15a, T19a). **Demo 0** once the web shell lands and Railway is authorised.
+1. Documents: write today's approvals into the designs, with the decision entries `DEC-115` (S2-F13) and `DEC-116` (the stage 1 questions).
+2. **Sign-in and access control (S1-F01), part 1 "Sign-in and screens"**: idempotency, audit, API conventions, sign-in and enrolment, web shell, sign-in screens, Playwright with one sign-in journey (T04, T07, T08, T14, T15). **Demo 0** once the web shell lands and Railway is authorised.
 3. **Shared calculations (S1-F11)** counter run: the counter build host and the golden run in Chromium.
-4. **S1-F01 part 2 "Roles and approvals"**: outbox and worker, roles and scope, sessions, session-lock screen, setup step, My work, approvals, access screens, history, remaining journeys, concurrency suite, acceptance (T06, T11, T09, T15b, T10, T12, T13, T16 to T18, T19b, T20, T21). **Demo 1.**
-5. **Stock ledger (S1-F10) part 1 "Stock quantities and movements"**.
-6. Organisation structure (S1-F02) → number series and exceptions (S1-F08) → approval authority (S1-F05) → product and party masters (S1-F03; RR-047 bullets drafted during S1-F02, approved before S1-F03) → policy readiness and activation (S1-F04).
-7. Books and periods (S1-F09) → **Stock ledger part 2 "Stock valuation and accounting"**.
-8. File intake and master import (S1-F06) → evidence files for exceptions → billing devices (S1-F12) → backup and restore (S1-F14) → opening-data layouts (S1-F13), last.
+4. **S1-F01 part 2 "Roles and approvals"**: outbox and worker, roles and scope, sessions, session-lock screen, setup step, My work, approvals, access screens, history, remaining journeys, concurrency suite, acceptance (T06, T11, T09, T10, T13, T16, T18, T20). **Demo 1.**
+5. **Stored files and evidence attachments (S1-F06-T05)**.
+6. **Stock ledger (S1-F10) part 1 "Stock quantities and movements"**.
+7. Organisation structure (S1-F02) → number series and exceptions (S1-F08) → approval authority (S1-F05) → product and party masters (S1-F03; RR-047 bullets drafted during S1-F02, approved before S1-F03) → policy readiness and activation (S1-F04).
+8. Books and periods (S1-F09) → **Stock ledger part 2 "Stock valuation and accounting"**.
+9. File intake and master import (S1-F06, T01 to T04) → evidence files for exceptions → billing devices (S1-F12) → backup and restore (S1-F14) → opening-data layouts (S1-F13), last.
 
 ## Testing Decisions
 
@@ -350,7 +361,7 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 - **Access and approvals** (access-and-approvals 15, tests 1 to 23 with their lettered variants; S1-F01 AT01 to AT18): unavailable operations, Organisation isolation, sign-in, fresh code, resets, session limits and revocation, past-start and overlapping assignments, persona grants nothing, field classes, place-tree coverage, self-service, row-level security, self-approval and every preparer refused, limits and Unknown, supersession, value under the lock, one use per decision, bulk, stand-ins, setup runs once, reasons, My work order, escalation, exceptions surviving rollback, service identities, no secret leaks.
 - **Numbering and audit** (numbering-and-audit 7, tests 1 to 14): gapless allocation, concurrency, one open series, closed series final, formats, reprints, pause after restore, audit atomic with change, append-only, seals, scoped history, no deletion without retention.
 - **Structure and masters** (structure-and-masters 9, tests 1 to 16 and 18 to 21; test 17 is stage 5).
-- **Readiness**: no design lists numbered tests, so the S1-F04 spec defines them: capability off until switched on; policy not Signed or not validated → unavailable with its reason; an activity stays disabled until its checks pass; activation approved by someone other than the checker; Signed and validated by different people; a browser journey shows the reason on screen.
+- **Readiness**: no design lists numbered tests, so the S1-F04 spec defines them: capability off until switched on; policy not Signed or not validated → unavailable with its reason; an activity stays disabled until its checks pass; activation approved by someone other than the checker; the person who entered a policy's values cannot validate them (DM-6); a browser journey shows the reason on screen.
 - **Books and posting** (books-and-posting 15, tests 1 to 18 with 15a; section 16 scenarios P1 to P6 and the checks of 16.5).
 - **Stock ledger** (stock-ledger 11): the story of 11.1 under both cost formulas and both pool modes, scenarios G2 to G13 with G10a (G10b waits for the rounding rule), the invariants of 11.7 after every step, the concurrency suite of 11.9, the anchor-row measurement, header brand-set visibility, no synthetic caller in the production composition.
 - **Shared calculations** (shared-calculations 12.4 and 12.5): cases CG-01 to CG-22 on server and counter (costing server-only), property tests, order invariance, snapshot repricing, the bundle-exclusion check, `not-decided` refusals.
@@ -363,15 +374,15 @@ Personas are those of [personas.md](../../design/access/personas.md). "Platform 
 
 - Live Store selling and any live, policy-dependent stock or financial posting; loading real opening balances (stage 4 switch, `DEC-013`); real KDPS data anywhere until KDPS agrees (RR-180).
 - Offline billing itself: offline authority, working set, local commit, upload, pause and release (stage 4, under the signed Offline operation policy). Its design sections stay Draft in stage 1.
-- Sample layouts, the XLS, XLSB and CSV readers and the 10,000-line PT parse (moved to S2-F13); PDF text extraction (stage 2, S2-F05); the AI gateway (stage 2); email, WhatsApp and SMS (stage 5, `DEC-099`); Hindi screens (stage 5).
+- Sample layouts, the XLS, XLSB and CSV readers and the 10,000-line PT parse (moved to S2-F13, `DEC-115`); PDF text extraction (stage 2, S2-F05); the AI gateway (stage 2); email, WhatsApp and SMS (stage 5, `DEC-099`); Hindi screens (stage 5).
 - Business documents (bookings, receipts, PT, transfers, bills) and their screens; relocation of units (stage 5); the complete export (stage 5); retention deletion and legal holds before their design is finished.
 - Production hosting (chosen before the first Store switch, RR-029); a native phone app (RR-051).
 - Every KDPS value: roles, limits, routing, reasons, sign-in settings, tracking profiles, cost method, periods, accounts, tax rates, retention, recovery targets. They stay OPEN; tests use labelled synthetic values.
 
 ## Further Notes
 
-- **Decisions of 6 Oct 2026 (product owner, grilling)** this spec relies on, to be written into the designs before the code that needs them: stock-ledger 13 to 15 approved with the pool-key and pool-initialisation fixes; RR-227 approved; RR-228 (b), (c), (e) accepted and (d) amended to the brand-set rule; GC-8 sections 3 to 5 and 11 with `apps/counter` and a fresh code at enrolment approved, browser tests allowed in the counter app, section 5.5 aligned with the golden runner; GC9-9 and GC9-10 approved; S1-F07 moved to S2-F13 (one decision entry amending `DEC-112` GC6-1, `phases.md` and the roadmap); S1-F13 kept in stage 1, last; ticket splits T15a/T15b and T19a/T19b; S1-F10 in two parts; S1-F10-T02 also blocked by S1-F09; the feature titles "Sign-in and access control" (S1-F01) and "Stock ledger" (S1-F10), labels unchanged; `dev` pool 5.
+- **Decisions of 6 Oct 2026 (product owner, grilling and the stage 1 questions)** this spec relies on, recorded as `DEC-115` (S1-F07 moved to S2-F13) and `DEC-116` (the stage 1 open questions answered) and written into the designs before the code that needs them: stock-ledger 13 to 15 approved with the pool-key and pool-initialisation fixes; RR-227 approved; RR-228 (b), (c), (e) accepted and (d) amended to the brand-set rule; GC-8 sections 3 to 5 and 11 with `apps/counter` and a fresh code at enrolment approved, browser tests allowed in the counter app, section 5.5 aligned with the golden runner; GC9-9 and GC9-10 approved; S1-F07 moved to S2-F13 (`DEC-115`, amending `DEC-112` GC6-1, `phases.md` and the roadmap); S1-F13 kept in stage 1, last; the remaining tickets regrouped into 50 vertical slices, now 52 with `S1-F06-T05` and `S1-F08-T04`, merged tickets keeping their labels (the earlier T15a/T15b and T19a/T19b splits are replaced by that regrouping); S1-F10 in two parts, with valuation (T03) waiting for books; the feature titles "Sign-in and access control" (S1-F01) and "Stock ledger" (S1-F10), labels unchanged; `dev` pool 5.
 - **Labels are fixed IDs**, never renumbered; the build order above is the only order. Plain names lead, labels follow.
-- **Open items that block code** (each with its owner in [open-items.md](../open-items.md)): RR-047 PRD bullets before S1-F03; RR-016 stock-plan check before S1-F04; RR-202 the Withdrawn state name before S1-F01-T11; RR-203 the customer-contact check before S1-F06 intake; GC8-7 device state names before the devices screen; GC9-7 and GC9-8 before S1-F14; CH-2 Railway's PostgreSQL version before the first deploy; RR-187 and RR-216 before Demo 0. Module-map section 8 must name the events for brands, parties, packs and vocabulary before code emits them.
-- **Open items that block only live use** are listed in [kdps-values.md](../kdps-values.md) and [open-items.md](../open-items.md); none blocks building or the stage 1 exit on synthetic data, except the restore drill (RR-188) and the `dev` backup-key custodian.
-- **Exit checks** are those of [phases.md](../../phases.md) stage 1 and [README.md](README.md) section 7, with the 10,000-line parse moved to stage 2.
+- **Open items that block code** (each with its owner in [open-items.md](../open-items.md)): RR-047 PRD bullets before S1-F03; RR-203 the customer-contact check before S1-F06 intake; GC9-7 and GC9-8 before S1-F14; CH-2 Railway's PostgreSQL version before the first deploy; RR-187 before Demo 0, with the `dev` pool of 5 checked against the database's connection budget (RR-216). Module-map section 8 must name the events for brands, parties, packs and vocabulary before code emits them.
+- **Open items that block only live use** are listed in [kdps-values.md](../kdps-values.md) and [open-items.md](../open-items.md); none blocks building or the stage 1 exit on synthetic data, except the restore drill (RR-188) and the `dev` backup-key custodian (RR-236).
+- **Exit checks** are those of [phases.md](../../phases.md) stage 1 and [README.md](README.md) section 7, with the 10,000-line parse moved to stage 2 (`DEC-115`).

@@ -1,6 +1,6 @@
 # S1-F10 — Stock ledger with balanced posting, and its synthetic harness
 
-> **Not ranked.** The spec of a stage 1 feature ([stage 1](../README.md)). It changes no rule. The product owner took decisions H1 to H6 on 5 Oct 2026 (`DEC-112`; section 5). They are written into the stock ledger design ([stock-ledger.md](../../../design/stock/stock-ledger.md) 13 to 15: interface, tables and harness), which was reviewed on 6 Oct 2026. Its **Proposed** choices await the product owner's approval (RR-012, RR-227, RR-228 in [open-items.md](../../open-items.md)); the tickets wait for that approval.
+> **Not ranked.** The spec of a stage 1 feature ([stage 1](../README.md)). It changes no rule. The product owner took decisions H1 to H6 on 5 Oct 2026 (`DEC-112`; section 5). They are written into the stock ledger design ([stock-ledger.md](../../../design/stock/stock-ledger.md) 13 to 15: interface, tables and harness), which was reviewed on 6 Oct 2026. The product owner approved its Proposed choices on 6 Oct 2026, with the fixes listed in the [stage 1 spec](../spec.md) (RR-012, RR-227, RR-228 in [open-items.md](../../open-items.md)); the design text is updated before the code that needs it.
 
 The ledger itself is built through the stock ledger design; this page adds what the synthetic harness must do to drive the golden scenarios through it.
 
@@ -57,7 +57,7 @@ Each harness command is one kernel command and follows module-map 6.1: idempoten
 
 ### 3.3 Fixtures
 
-Built through the real interfaces of `S1-F01` to `S1-F09`, never by direct inserts: the synthetic Organisation through the setup step; a preparer, an approver and an Accounts user; the book BK-SYN with warehouse W1 and Store S1 as in stock-ledger 11.1, each business unit's mapping verified by a different person; SKU X with a piece-tracked profile; the book's cost formula and pool mode for the combination under test; the synthetic chart and maps of books-and-posting 16.1, approved by a different person; open periods; policy 9 recorded Signed with its values validated by a different person, as labelled synthetic status (DM-6); approval limits on cost through `S1-F05`. Every value says SYNTHETIC.
+Built through the real interfaces of `S1-F01` to `S1-F09`, never by direct inserts: the synthetic Organisation through the setup step; a preparer, an approver and an Accounts user; the book BK-SYN with warehouse W1 and Store S1 as in stock-ledger 11.1, each business unit's mapping verified by a different person; SKU X with a piece-tracked profile; the book's cost formula and pool mode for the combination under test; the synthetic chart and maps of books-and-posting 16.1, approved by a different person; open periods; policy 9 recorded Signed with its values validated by a different person, as labelled synthetic status (DM-6); approval limits on cost through `S1-F05`. Every value says SYNTHETIC. Development tests of part 1 may use stand-ins built to the declared `organisation` and `merchandise` read contracts; acceptance runs through the real modules (product owner, 6 Oct 2026).
 
 ### 3.4 Scenario files
 
@@ -116,16 +116,16 @@ The table keeps the options as they were put.
 
 ## 6. Tickets
 
-Steps 1 and 2 of the earlier plan are done: the ledger interface and tables are written (stock-ledger 13, 14) and H1 to H6 are recorded (15.1), reviewed on 6 Oct 2026. The build, in order:
+Steps 1 and 2 of the earlier plan are done: the ledger interface and tables are written (stock-ledger 13, 14) and H1 to H6 are recorded (15.1), reviewed on 6 Oct 2026. The feature is built in two parts: part 1, "Stock quantities and movements" (T01, T02), and part 2, "Stock valuation and accounting" (T03, T04, T06, T07). The build, in order:
 
-| Ticket | Status |
-| --- | --- |
-| [S1-F10-T01 — Ledger tables and constraints](tickets/T01-ledger-tables-and-constraints.md) | blocked |
-| [S1-F10-T02 — Ledger operations of the story](tickets/T02-ledger-operations-of-the-story.md) | blocked |
-| [S1-F10-T03 — Hand-off to Post](tickets/T03-hand-off-to-post.md) | blocked |
-| [S1-F10-T04 — Harness driver, fixtures and scenario files](tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked |
-| [S1-F10-T05 — Four-combination matrix](tickets/T05-four-combination-matrix.md) | blocked |
-| [S1-F10-T06 — Scenarios G2 to G13 with G10a](tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked |
-| [S1-F10-T07 — Failure and concurrency suites](tickets/T07-failure-and-concurrency-suites.md) | blocked |
-| [S1-F10-T08 — Large-posting job](tickets/T08-large-posting-job.md) | blocked |
-| [S1-F10-T09 — Acceptance evidence](tickets/T09-acceptance-evidence.md) | blocked |
+| Ticket | Status | Blocked by |
+| --- | --- | --- |
+| [S1-F10-T01 — Stock tables, constraints and row security](tickets/T01-ledger-tables-and-constraints.md) | blocked | S1-F01-T11 (`access.row_visible`) |
+| [S1-F10-T02 — Quantity operations](tickets/T02-ledger-operations-of-the-story.md) | blocked | T01; S1-F01-T13 (approval use: Verify under lock and Record use) |
+| [S1-F10-T03 — Valuation and hand-off to Post](tickets/T03-hand-off-to-post.md) | blocked | T02; S1-F09-T02 (books, maps, open periods and Post), S1-F08-T02 (an exception raised after a rollback) |
+| [S1-F10-T04 — Harness and the story under four combinations](tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | T03; S1-F02-T03, S1-F03-T02, S1-F05-T01, S1-F08-T01, S1-F08-T02 |
+| [S1-F10-T05 — Four-combination matrix](tickets/T05-four-combination-matrix.md) | merged → T04 | — |
+| [S1-F10-T06 — Scenarios G2 to G13 with G10a](tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked | T04; S1-F08-T02 |
+| [S1-F10-T07 — Failure, concurrency, large posting and acceptance](tickets/T07-failure-and-concurrency-suites.md) | blocked | T06; S1-F08-T02 |
+| [S1-F10-T08 — Large-posting job](tickets/T08-large-posting-job.md) | merged → T07 | — |
+| [S1-F10-T09 — Acceptance evidence](tickets/T09-acceptance-evidence.md) | merged → T07 | — |

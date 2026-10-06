@@ -8,7 +8,7 @@ Implements these PRD sections: Module and data boundaries; Transaction and integ
 
 - PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`, `PRD-LED-019`, `PRD-LED-020`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
 - Policies: 1 (`POL-01.02`–`POL-01.04`, `POL-01.06`, `POL-01.07`), 2 (`POL-02.06`–`POL-02.09`, `POL-02.12`, `POL-02.14`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.05`), 4 (`POL-04.03`, `POL-04.04`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.01`), 9 (`POL-09.01`, `POL-09.02`, `POL-09.04`, `POL-09.11`–`POL-09.13`, `POL-09.24`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.07`, `POL-10.08`), 11 (`POL-11.01`), 14 (`POL-14.07`), 18 (`POL-18.05`). Section 11.2 places all 19 policies.
-- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100, DEC-101, DEC-105, DEC-106, DEC-107, DEC-113, DEC-114.
+- Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100, DEC-101, DEC-105, DEC-106, DEC-107, DEC-113, DEC-114, DEC-116.
 
 Depends on: [stock-ledger.md](../stock/stock-ledger.md) (the stock module's ledger; this map does not restate it), [personas.md](../access/personas.md) (users, personas, roles, role assignments), [deployment.md](../platform/deployment.md) (processes and the database per Organisation).
 
@@ -85,7 +85,7 @@ flowchart TB
 | 4 | `stock` · documents | stock | Damage reports (2); transfers, dispatches, counts, adjustments, write-offs, disposals (3) | 2–3 |
 | 4 | `supplier-returns` | supplier returns | Return eligibility and deadlines, proposed return lists, RTV documents, the supplier-claims register | 3 |
 | 4 | `pos` | POS | Billing devices and offline authority; till sessions, carts, bills, tenders, customer returns and exchanges, billed-retained records; customers, Store credit, Gift vouchers, loyalty | Device and offline design in 1; the rest in 4 |
-| 4 | `ebo-imports` | EBO imports | Earlier-POS side-by-side test imports (2); EBO report imports and their application (4) | 2, 4 |
+| 4 | `ebo-imports` | EBO imports | Historical-reference imports of synthetic SOH and daily sales, for checking only (1); earlier-POS side-by-side test imports (2); EBO report imports and their application (4) | 1, a minimal module holding only the historical-reference handler (DEC-116); 2, 4 |
 | 4 | `offers` | offers | Offers, price lists, markdowns | 4; markdown suggestions in 6 |
 | 5 | `finance` · operations | finance | Supplier invoices and matching (2); statutory movement documents recorded and linked (3); Store day close and cash, IRN evidence, tax-document cancellation and correction (4); payables, payments, receivables, bank matching, GST registers, e-way bills, TDS, Tally exchange, assets, net asset value (5) | 2, 3, 4, 5 |
 | 5 | `partners` | partners | Partner agreements, ledgers, statements | 5 |
@@ -161,6 +161,7 @@ All are **design choices** that implement the cited rules.
 | `files-imports` publishes rows into other modules' records | The target module registers an import handler. Publish calls the handler; the handler writes its own records |
 | `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it |
 | `merchandise` must not make a profile piece-tracked at a Site holding its stock without a planned labelling count (`PRD-MER-018`; 4.12) | `merchandise` defines a stock-presence contract; `stock` implements it |
+| `finance` · books must refuse a cost-setting version that changes the formula or pool mode of a book that has held stock ([books-and-posting.md](../finance/books-and-posting.md) 2.2) | `finance` defines a "has this book held stock?" contract; `stock` · ledger implements it (product owner, 6 Oct 2026; [stock-ledger.md](../stock/stock-ledger.md) 13.7) |
 | `exceptions` must verify the business outcome before closure (`PRD-EXC-002`) | `exceptions` defines a resolution-check contract; the module that owns the linked record implements it |
 | `kernel` works out business dates under the Organisation's timezone (`PRD-MOD-009`; code-house-rules 9), a setting `configuration` keeps one tier above it | `kernel` defines a timezone contract; `configuration` implements it and answers with the Organisation's timezone setting, which has no default. `kernel` keeps no copy and calls `configuration` only through the contract. **Proposed** (RR-231) |
 | `kernel`'s idempotency helper must check a replayed secret against a credential `access` owns ([code-house-rules.md](../platform/code-house-rules.md) 12.5) | `kernel` defines a credential-check contract; `access` implements it. `kernel` never reads `access` tables |
@@ -247,6 +248,8 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 - Nothing is on by default. A suggested value is never an active default (PRD "Required policy configuration"). Switching a capability on cannot bypass a missing policy or a stock or accounting invariant (`PRD-SEC-017`).
 - Versions in one scope never overlap (`PRD-MOD-010`).
 - On `kdps-test`, an action whose policy is not signed stays unavailable even with real data (DEC-071).
+- **What the gate stops** (`PRD-SEC-017`; product owner, 6 Oct 2026; DEC-116). Operations that record business effects are policy-gated: stock or money posting, opening-data publishing, device selling. Setup and configuration operations (access, structure, masters, book setup, readiness, policy readiness) are not, because they are how a policy gets configured; they still need their permissions and independent approvals.
+- A synthetic Organisation may record labelled synthetic Signed statuses for tests and demos. Never on `kdps-test` or production ([code-house-rules.md](../platform/code-house-rules.md) 11.1).
 - **Events:** `configuration.policy-status-changed`, `configuration.capability-changed`, `configuration.activity-changed`.
 - **Read model:** policy readiness: each policy, its status, what is missing. The screen shows the reason an action is unavailable (`PRD-UXP-003`).
 - Stage 1 exit check: an operation whose policy is not configured stays unavailable.
@@ -286,7 +289,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 ### 4.7 `files-imports`
 
-**Uses:** `access`, `configuration`, `audit`, `ai-gateway`, `kernel`.
+**Uses:** `access`, `configuration`, `audit`, `numbering` (import batch codes, GC9-9, approved 6 Oct 2026), `ai-gateway`, `kernel`.
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
@@ -405,6 +408,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - An exception settles nothing. Closing it changes no stock, money or saleability (`PRD-EXC-003`, `POL-03.05`). The correction, return, reversal or reconciliation happens in the owning module.
 - When a business transaction rolls back, the exception about it is raised in a new transaction, so it is not lost with the rollback. **Design choice.**
+- Raise takes the exception's code from a `numbering` series. With no open exception-code series, an operation that would raise a numbered exception is unavailable, and the Available check names the missing series. Failed-job records and their diagnostic evidence are still kept in the operations view (4.1), so nothing is lost (product owner, 6 Oct 2026; DEC-116).
 - **Events:** `exceptions.raised`, `exceptions.assigned`, `exceptions.resolved`, `exceptions.reopened`.
 - **Read model:** open exceptions by Store, brand and type (`PRD-EXC-004`).
 - **OPEN:** real owners, due times and escalation (V-03); alert thresholds (V-70).
@@ -438,7 +442,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - **Uses:** `access`, `configuration`, `audit`, `numbering`, `organisation`, `merchandise` · catalogue, `exceptions`, `finance` · books, `kernel`.
 - **Called by:** every tier 4 and tier 5 module that moves or values stock. They post through it in their own transaction (stock-ledger section 1).
-- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. The operations, their inputs and refusals, and its tables are in stock-ledger 13 and 14 (**Proposed**, awaiting the product owner's approval); the area designs name the documents that call them.
+- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. The operations, their inputs and refusals, and its tables are in stock-ledger 13 and 14 (approved by the product owner, 6 Oct 2026); the area designs name the documents that call them.
 - It writes no journal. For a valued movement it calls Post in `finance` · books inside the same transaction (stock-ledger 7.11, DEC-087).
 - **Events:** `stock.movements-posted`, `stock.hold-changed`, `stock.reservation-changed`, `stock.count-freeze-changed`.
 
@@ -458,7 +462,7 @@ Only its stage 1 part. **Uses:** all lower tiers.
 ### 4.17 `pos` · billing device (design only in stage 1)
 
 - A billing device is registered online. `access` holds the device identity; `pos` holds its Store, its tax registrations and its offline authority; `numbering` holds its bill series (`PRD-OFF-002`, `PRD-POS-020`).
-- One exclusively authorised offline counter per Store (`PRD-OFF-001`). Offline is designed in stage 1 and enabled only under the signed Offline operation policy (policy 16, DEC-051). The detailed design is GC-8, [offline-counter.md](../pos/offline-counter.md) (Draft): there `pos` records the business units a device bills for, and its tax registrations follow from their mappings (offline-counter 3.1).
+- One exclusively authorised offline counter per Store (`PRD-OFF-001`). Offline is designed in stage 1 and enabled only under the signed Offline operation policy (policy 16, DEC-051). The detailed design is GC-8, [offline-counter.md](../pos/offline-counter.md) (sections 3 to 5 and 11 approved by the product owner, 6 Oct 2026; sections 6 to 10 Draft): there `pos` records the business units a device bills for, and its tax registrations follow from their mappings (offline-counter 3.1).
 
 ## 5. Later-stage modules in outline
 
@@ -472,7 +476,7 @@ Outline only. Each gets its own design before its stage. Every module below also
 | `stock` · documents | 2–3 | Damage reports and their independent confirmation; transfers from request to acceptance; full and cycle counts; adjustments; write-offs; disposals | `stock` · ledger, `access` (approval on cost), `organisation` (routes), `exceptions` | `PRD-TRF-001`–`PRD-TRF-026`, `PRD-STK-008`–`PRD-STK-017`, `PRD-DMG-001`–`PRD-DMG-017`, policy 17 |
 | `supplier-returns` | 3 | Return rights and deadlines by receipt origin; proposed lists; RTV legs and outcomes; the claims register | `stock` · ledger (reservations, departure, handover), `merchandise` · parties (terms), `exceptions` | `PRD-OFR-008`–`PRD-OFR-020` |
 | `pos` | 4 | Till session, bill, tenders, returns and exchanges, billed-retained, customers, Store credit, Gift vouchers, loyalty, the offline counter | `calculations`, `numbering` (bill series), `stock` · ledger (sale issue, customer return), `finance` · books (revenue, tax, tender postings), `offers`, `merchandise` | `PRD-POS-001`–`PRD-POS-022`, `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`, `PRD-OFF-001`–`PRD-OFF-019`, policies 6, 7, 8, 16 |
-| `ebo-imports` | 2, 4 | Earlier-POS daily sales and SOH imports, for checking and reports only; EBO sales, returns, stock and payment reports applied once | `files-imports`, `stock` · ledger (EBO only; never for earlier-POS imports, `PRD-LIF-014`), `finance` · books, `exceptions` | `PRD-EBO-001`–`PRD-EBO-011`, `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-STK-016` |
+| `ebo-imports` | 1, 2, 4 | In stage 1 only the historical-reference handler, on synthetic SOH and daily sales (2.2); stage 2 extends it. Earlier-POS daily sales and SOH imports, for checking and reports only; EBO sales, returns, stock and payment reports applied once | `files-imports`, `stock` · ledger (EBO only; never for earlier-POS imports, `PRD-LIF-014`), `finance` · books, `exceptions` | `PRD-EBO-001`–`PRD-EBO-011`, `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-STK-016` |
 | `offers` | 4 | Offers, approval before activation, combination rules, price lists, markdowns; one evaluation for Running Offers and checkout | `calculations`, `merchandise`, `organisation` | `PRD-OFR-001`–`PRD-OFR-007`, policy 19 |
 | `finance` · operations | 2, 3, 4, 5 | Supplier invoice capture and matching (2); statutory movement documents (3); Store day close, petty cash and cash in transit, IRN evidence through a GSP (4); payables and payment runs, receivables, provider and bank matching, e-way bills, Tally exchange, assets, net asset value, month close, reconciliations (5) | `finance` · books, read models of `receiving`, `merchandise` · PT, `pos` and `stock`; `exceptions`; `notifications` | `PRD-LED-007`–`PRD-LED-013`, `PRD-CSH-001`–`PRD-CSH-011`, `PRD-PAY-001`–`PRD-PAY-014`, `PRD-TAX-001`–`PRD-TAX-009`, policies 9, 10, 11 |
 | `partners` | 5 | Partner agreements, ledgers, credit controls, monthly statements; EBO brand settlement | `finance`, `pos` and `ebo-imports` read models, `organisation` | `PRD-FRN-001`–`PRD-FRN-007`, `PRD-EBO-009`, policy 12 |
@@ -677,7 +681,7 @@ One owner per adapter (rule 7). Replacing an adapter never changes the meaning o
 
 From [deployment.md](../platform/deployment.md) section 2, with two **design choices** marked. Modules are not services.
 
-- `app` runs every module behind the API, the live-update stream and the static web app and counter PWA.
+- `app` runs every module behind the API, the live-update stream and the static web app and counter PWA. The counter is the package `apps/counter`, served at `/counter/` ([offline-counter.md](../pos/offline-counter.md) section 5, approved 6 Oct 2026).
 - `worker` is the same build. It runs the outbox processor and the queued jobs. **Design choice:** a job acts as a service identity with its own audit identity (`PRD-SEC-018`).
 - The counter PWA uses `calculations` and its own IndexedDB records, and commits a bill locally in one IndexedDB transaction (`PRD-OFF-007`). It never receives cost, margin or receipt-origin value (`PRD-OFF-004`).
 - `forecast` is the separate Python service, added in stage 6. It runs as one more service in the same hosting as the app (DEC-105). **Design choice:** only `planning` calls it.
@@ -794,7 +798,7 @@ What this map fixes for each design in [gaps-before-code.md](../../history/gaps-
 | GC-5 Document numbering and audit history | `numbering`, `audit` (4.5, 4.6) | Formats, series detail, retention: written in [numbering-and-audit.md](../platform/numbering-and-audit.md) |
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail: written in [imports-and-opening-data.md](../platform/imports-and-opening-data.md) |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions, tax rule records and golden cases: written in [shared-calculations.md](../calculations/shared-calculations.md) |
-| GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else: drafted in [offline-counter.md](../pos/offline-counter.md), not yet approved |
+| GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else: written in [offline-counter.md](../pos/offline-counter.md); sections 3 to 5 and 11 approved 6 Oct 2026, sections 6 to 10 Draft |
 | GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else: drafted in [backup-and-restore.md](../platform/backup-and-restore.md), not yet approved |
 
 ## 12. Open questions

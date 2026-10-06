@@ -6,7 +6,7 @@
 
 `packages/calculations` holds the shared selling and costing logic of [shared-calculations.md](../../../design/calculations/shared-calculations.md) (GC-7) as one pure TypeScript package with two entry points: `@apparel-os/calculations` for selling (price, offers, spread, tax, rounding, tenders, returns) and `@apparel-os/calculations/costing` for costing and ticket margin, which only the server imports. Every KDPS value (rates, slabs, components, rounding rules, offers, combination rules, thresholds, the cheaper-replacement rule, costing profiles) comes in as a versioned input and goes out again in the result; nothing has a default. The golden cases of GC-7 12.4 run on labelled synthetic rule data (12.3) in a Vitest suite on the server runtime, and the same case files run in a test page of the counter build in Chromium, with identical results. The counter bundle provably holds no costing entry point.
 
-Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs green in the same CI run. The server half is built (`8e71547`); the counter half waits for the counter build host (RR-015) and Playwright (`S1-F01-T19`).
+Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs green in the same CI run. The server half is built (`8e71547`); the counter half waits for Playwright (`S1-F01-T15`); the counter build host, `apps/counter`, was approved on 6 Oct 2026 (RR-015).
 
 ## 2. Binding references
 
@@ -16,7 +16,7 @@ Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs 
 | Policies | `POL-03.06` to `POL-03.08`, `POL-06.04`, `POL-06.09`, `POL-07.01`, `POL-07.02`, `POL-09.13`, `POL-09.24`, `POL-10.02`, `POL-10.05`, `POL-10.06`, `POL-10.10`, `POL-10.11`, `POL-13.06`, `POL-13.08`, `POL-16.04`, `POL-19.01`, `POL-19.02`, `POL-19.04` |
 | Decisions | `DEC-007`, `DEC-105`, `DEC-108`, `DEC-109`, `DEC-110`, `DEC-111`, `DEC-112` |
 | Designs | [shared-calculations.md](../../../design/calculations/shared-calculations.md) sections 2 to 12; [module-map.md](../../../design/architecture/module-map.md) 4.2, 4.14, 6.2 flow D; [domain-model.md](../../../design/architecture/domain-model.md) 3.12 and invariant 18; [structure-and-masters.md](../../../design/masters/structure-and-masters.md) 2.2, 4.1; [code-house-rules.md](../../../design/platform/code-house-rules.md) 2, 10, 11 |
-| Register | RR-005 (the package and its cases); RR-015 (the counter build host, not decided); RR-042 (which lines earn a group discount, deferred); RR-136 to RR-145 (the live values of GC7-1 to GC7-10) |
+| Register | RR-005 (the package and its cases); RR-015 (the counter build host, approved 6 Oct 2026: `apps/counter`); RR-042 (which lines earn a group discount, deferred); RR-136 to RR-145 (the live values of GC7-1 to GC7-10) |
 
 ## 3. Scope
 
@@ -44,8 +44,8 @@ Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs 
 | Item | Gate | Status |
 | --- | --- | --- |
 | RR-042: which lines earn a group discount (GC7-11) | Accept: any golden case whose result depends on it | No case of 12.4 depends on it (section 9); the calculation refuses where the readings differ |
-| RR-015: which workspace package hosts the counter PWA and its test page | Code: `S1-F11-T10`, `S1-F11-T11` | Not decided. The GC-8 draft ([offline-counter.md](../../../design/pos/offline-counter.md)) proposes `apps/counter`, served at `/counter/`; it needs the product owner's approval |
-| Playwright in the workspace and CI | Code: `S1-F11-T10` | Arrives with `S1-F01-T19` |
+| RR-015: which workspace package hosts the counter PWA and its test page | Code: `S1-F11-T10` | Approved by the product owner on 6 Oct 2026: `apps/counter` ([offline-counter.md](../../../design/pos/offline-counter.md)), served at `/counter/`, with its browser tests in `apps/counter/e2e/` |
+| Playwright in the workspace and CI | Code: `S1-F11-T10` | Arrives with `S1-F01-T15` |
 | RR-136 to RR-145: the real values of GC7-1 to GC7-10 | Live S4 | Not needed to build or test; synthetic rules stand in, labelled |
 
 ## 6. Tickets
@@ -63,9 +63,9 @@ One file per task in [tickets/](tickets/).
 | [S1-F11-T07 Golden-case format and server run](tickets/T07-golden-case-format-and-server-run.md) | done | — |
 | [S1-F11-T08 Other tests of 12.5](tickets/T08-other-tests-of-12-5.md) | done | — |
 | [S1-F11-T09 Entry points at the source](tickets/T09-entry-points-at-the-source.md) | done | — |
-| [S1-F11-T10 Counter test page and counter run](tickets/T10-counter-test-page-and-counter-run.md) | blocked | RR-015 (which package hosts the counter: the GC-8 draft proposes `apps/counter`, not yet approved); S1-F01-T19 (Playwright); T07 (done) |
-| [S1-F11-T11 Bundle exclusion on the counter bundle](tickets/T11-bundle-exclusion-on-the-counter-bundle.md) | blocked | T10 |
-| [S1-F11-T12 Review and acceptance](tickets/T12-review-and-acceptance.md) | blocked | T10, T11 |
+| [S1-F11-T10 Counter test page, counter run and bundle exclusion](tickets/T10-counter-test-page-and-counter-run.md) | blocked | S1-F01-T15 (Playwright); T07 (done) |
+| [S1-F11-T11 Bundle exclusion on the counter bundle](tickets/T11-bundle-exclusion-on-the-counter-bundle.md) | merged → T10 | — |
+| [S1-F11-T12 Review and acceptance](tickets/T12-review-and-acceptance.md) | merged → T10 | — |
 
 
 ## 7. Tests
@@ -84,7 +84,7 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 | `S1-F11-AT08` | The same lines in another order give the same amounts | 12.5 order | `PRD-POS-004` |
 | `S1-F11-AT09` | A bill priced again with its recorded versions gives the same result | 12.5 snapshot | `PRD-POS-014`, `PRD-OFF-009` |
 | `S1-F11-AT10` | Selling never reaches costing; the package imports only `@apparel-os/domain`; no clock, randomness, environment or floating-point helper; module check rule 4 fails on a selling import of costing or another package and passes otherwise | 2.1, 2.3 | `PRD-OFF-004`, `PRD-MOD-002`, `PRD-MOD-007` |
-| `S1-F11-AT11` | The counter bundle holds no costing entry point (blocked, T11) | 2.3 | `PRD-OFF-004` |
+| `S1-F11-AT11` | The counter bundle holds no costing entry point (blocked, T10) | 2.3 | `PRD-OFF-004` |
 | `S1-F11-AT12` | Where an open question would change an amount the calculation refuses with `not-decided` naming it: a rate the discount rounding rule takes past the line's value (GC7-5); combined offers without one order, or taking a line below zero on the start value (GC7-9); units left over after complete sets (GC7-11); bill-level tax rounding (GC7-12); a rounded replacement bill (GC7-13); a free unit worth part of a paise (GC7-14); a negative MARGIN needing rounding (GC7-15); a spread remainder above a line's value (GC7-16). A pending case is reported as pending, never as passed; a changed paise or version fails a case | 5.4 to 5.8, 5.10, 7.2, 8; 12.1 | `PRD-ACP-018`, `POL-19.04`, `PRD-POS-023`, `PRD-TAX-005`, `PRD-RET-008`, `PRD-PTW-011`; RR-042 |
 | `S1-F11-AT13` | Refusals beyond the cases: several lines at once, no price basis or registration, manual discounts by amount and rate and on an offer line, combined offers on the start value, offers out of place or date, a registration that charges no tax, slabs compared before discounts or with tax | 5.2 to 5.10 | `PRD-POS-003`, `PRD-MOD-015`, `PRD-SEC-017`, `PRD-OFR-002`, `POL-10.02` |
 
@@ -123,7 +123,7 @@ Other points: the server suite imports the package by name, so the package's `tu
 
 | Requirement or part | Goes to |
 | --- | --- |
-| The counter run and the bundle check (T10, T11) | When RR-015 is approved and Playwright arrives with `S1-F01-T19` |
+| The counter run and the bundle check (T10) | When Playwright arrives with `S1-F01-T15` |
 | Tax-rule tables, migrations and "Read tax rules" (10.3, 10.2) | `S1-F09` |
 | Zod schemas for priced bills and working sets (2.1) | The first API that carries them, `S4-F02` |
 | The performance test that sets how many overlapping offers the counter must handle (5.4, `PRD-PRF-003`) | `S4-F02`, `S4-F04` |

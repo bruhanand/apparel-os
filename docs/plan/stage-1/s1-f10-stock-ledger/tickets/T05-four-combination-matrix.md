@@ -1,17 +1,9 @@
 # S1-F10-T05 — Four-combination matrix
 
-Status: blocked
-Blocked by: T04
+Status: merged
+Blocked by: —
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
-## Build
+## Notes
 
-The story runs under moving average or FIFO with a book or Site pool, each in its own cloned template database ([spec](../spec.md) 3.6)
-
-## Expected outputs
-
-Matrix runner; tests
-
-## Done when
-
-stock-ledger 11.2 to 11.6 pass in all four combinations
+- Merged into [S1-F10-T04 — Harness and the story under four combinations](T04-harness-driver-fixtures-and-scenario-files.md) on 6 Oct 2026 (product owner); its build and tests are there.

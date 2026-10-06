@@ -1,17 +1,9 @@
 # S1-F10-T09 — Acceptance evidence
 
-Status: blocked
-Blocked by: T05 to T08
+Status: merged
+Blocked by: —
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
-## Build
+## Notes
 
-Run every acceptance test; gather the evidence for stage 1 exit check 3 ([stage-1 README](../../README.md)); update [STATUS.md](../../../../STATUS.md) and any design text the code proved wrong
-
-## Expected outputs
-
-Evidence bundle
-
-## Done when
-
-Stage 1 exit check 3 is evidenced; the product owner accepts
+- Merged into [S1-F10-T07 — Failure, concurrency, large posting and acceptance](T07-failure-and-concurrency-suites.md) on 6 Oct 2026 (product owner); its build and tests are there.

@@ -10,4 +10,4 @@ The skills speak of five canonical triage roles. This repo has no labels: a tick
 | `ready-for-human` | `ready-for-human` | Needs a person: an approval, a Railway step, a KDPS conversation |
 | `wontfix` | `wontfix` | Will not be done; the reason is in the ticket |
 
-The repo also uses three more values: `blocked` (its `Blocked by:` tickets or gates are not cleared), `in-progress` (someone is building it) and `done` (built, reviewed with no blocking finding left, checks passing).
+The repo also uses four more values: `blocked` (its `Blocked by:` tickets or gates are not cleared), `in-progress` (someone is building it), `done` (built, reviewed with no blocking finding left, checks passing) and `merged` (its work and tests moved into the ticket its Notes name; the file stays so its label still resolves).

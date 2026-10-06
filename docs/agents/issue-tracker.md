@@ -6,7 +6,7 @@ Specs and tickets for this repo live as Markdown files under `docs/plan/`. There
 
 - One folder per stage, `docs/plan/stage-N/`, with a `README.md` holding the stage's goal, status, features and exit checklist.
 - One folder per feature inside it, named by its label and title: `docs/plan/stage-1/s1-f01-first-access/`.
-- The spec is `<feature>/spec.md`.
+- The spec is `<feature>/spec.md`, or, for a feature without one, the stage's own spec, `docs/plan/stage-N/spec.md`.
 - Tickets are one file each in `<feature>/tickets/`, named `T<NN>-<slug>.md` with the task number of the feature's label (`T04-idempotency-helper.md` is `S1-F01-T04`), numbered from `T01`. Never one combined tickets file.
 - Each ticket starts with the heading `# <label> — <title>`, then the lines `Status:`, `Blocked by:` and `Feature:`, then the sections Build, Expected outputs and Done when, and Notes when there is something to note (it is optional; closing a ticket adds it, with the commit). `Status:` takes a value from [triage-labels.md](triage-labels.md). A ticket whose `Blocked by:` is not cleared is `blocked`, even if part of it is already done; say what is done in Notes.
 - Comments and conversation history are appended under a `## Comments` heading at the bottom of the ticket.

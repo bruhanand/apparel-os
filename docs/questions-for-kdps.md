@@ -30,6 +30,7 @@
 54. **How long a login code stays fresh.** Some actions, such as approving or changing bank details, ask for a fresh code from the authenticator app. For how many minutes after one code should the app trust it before asking again? (With the Admin.) · `PRD-SEC-001`; no policy bullet yet · access design GC3-6 · stage 1 live use
 59. **Who confirms import layouts.** Before the app imports data with a new or changed layout for a file, and how its columns map, a second authorised person must confirm it; the file can be checked and previewed before that. Who at KDPS may confirm them? Baseline (`DEC-112`): a different person from the one who prepared it confirms each new or changed version; an unchanged one needs no new confirmation for each file. · `PRD-IMP-008`, `POL-02.07` · imports design GC6-4 · stage 1 live use
 60. **Second-person approval of the structure.** Changes to the business structure (legal entities, Sites, Stores, business units and their mappings) and to agreement versions need approval by a different authorised person, and checking a business unit's mapping is a separate permission held by someone other than the person who made it. Is that how KDPS wants it? Baseline (`DEC-105`). (With the Admin; Accounts and the CA confirm the mapping check.) · `POL-02.07`, `POL-10.08` · structure design GC2-2 · stage 1 live use
+62. **Who keeps the backup key.** Backups of your records and files are encrypted, and the key that opens them is kept apart from the keys the app uses every day. Who at KDPS keeps that key for the live system, and who takes over if that person is not available? (With the Admin.) Building and testing never wait for this; only live use does. · `POL-18.02` · backup design GC9-12 · stage 1 live use
 
 ### Needed for stage 2 (goods in)
 
@@ -187,5 +188,5 @@ These come from the UI blueprint's open items. The blueprint names KDPS, not a p
 
 ## Admin
 
-- See KDPS Owner 4 and 5, and Owner 6 (recovery). Name the restore operator, set the pre-launch restore-test date and confirm how often restore drills run under `POL-18.03` (V-63, stage 1).
+- See KDPS Owner 4 and 5, Owner 6 (recovery) and Owner 62 (the backup key). Name the restore operator, set the pre-launch restore-test date and confirm how often restore drills run under `POL-18.03` (V-63, stage 1).
 - **Password rules and wrong tries.** How long and how varied must a password be? After how many wrong sign-in tries does sign-in slow down or stop, and for how long? Does a temporary password expire if it is not used, and after how long? Until you say, it does not expire. (With the product owner.) · policy 2; no policy bullet yet · access design GC3-5 · stage 1 live use

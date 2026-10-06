@@ -34,7 +34,7 @@
 | IDs | Requirement area | Owner | Complete at | Also builds or relies on | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- |
 | `PRD-PRO-001` | Stock by product, size, location, condition, owner | S2-F11 | Same | S1-F10 | Stage 2 reports |
-| `PRD-PRO-002` | Supplier files into reviewed PT records | S2-F04 | Same | S1-F06, S1-F07, S2-F05 | Stage 2 exit |
+| `PRD-PRO-002` | Supplier files into reviewed PT records | S2-F04 | Same | S1-F06, S2-F13, S2-F05 | Stage 2 exit |
 | `PRD-PRO-003` | Supplier commitments, return rights, claims, settlement | S3-F09 | S5-F04 | S2-F01, S3-F07, S5-F04 | Stage 3 exit |
 | `PRD-PRO-004` | Reconcile sales, cash, collections, bank | S5-F03 | Same | S4-F08 | Stage 5 exit |
 | `PRD-PRO-005` | Double-entry ledger and Tally vouchers | S5-F02 | Same | S1-F09 | Stage 5 exit |
@@ -71,8 +71,8 @@
 | `PRD-MER-016` | Bill, count, transfer and return piece-tracked goods by piece-ID scan | S2-F07 | S4-F05 | S3-F02, S3-F05, S4-F02 | Stage 4 exit |
 | `PRD-MER-017` | Piece rules start at the switch | S4-F12 | Same | — | Stage 4 switch checks |
 | `PRD-MER-018` | Tracking profile changed to piece-tracked only through a labelling count | S1-F03 | S2-F07 | S2-F07 (the labelling count) | structure-and-masters 9 test 10 |
-| `PRD-IMP-001` | Formats: spreadsheets, CSV, PDF, photographs | S1-F07 | S2-F05 | S1-F06, S2-F05 (photographs) | imports-and-opening-data 17 test 1 |
-| `PRD-IMP-002` to `PRD-IMP-005`, `PRD-IMP-007` to `PRD-IMP-013` | Intake, mappings, staging, review, duplicates, outcomes | S1-F06 | Same | S1-F07, S1-F13, S2-F12 | imports-and-opening-data 17 tests 2–17 |
+| `PRD-IMP-001` | Formats: spreadsheets, CSV, PDF, photographs | S2-F13 | S2-F05 | S1-F06 (XLSX), S2-F05 (photographs) | imports-and-opening-data 17 test 1 |
+| `PRD-IMP-002` to `PRD-IMP-005`, `PRD-IMP-007` to `PRD-IMP-013` | Intake, mappings, staging, review, duplicates, outcomes | S1-F06 | Same | S2-F13, S1-F13, S2-F12 | imports-and-opening-data 17 tests 2–17 |
 | `PRD-IMP-006` | Supplied, calculated, mapped and AI-suggested values kept apart | S1-F06 | S2-F05 | S2-F05 (AI origin) | imports-and-opening-data 17 test 11 |
 | `PRD-BKG-001` to `PRD-BKG-006`, `PRD-BKG-009`, `PRD-BKG-010`, `PRD-BKG-013` | Bookings, terms, open-to-buy, tracking, confirmations | S2-F01 | Same | — | Stage 2 exit and reports |
 | `PRD-BKG-007`, `PRD-BKG-008` | GRN links to bookings; deliveries without booking | S2-F02 | Same | S2-F01 | Stage 2 exit |
@@ -201,7 +201,7 @@
 | `PRD-SEC-013` | Failed jobs, stale data, stuck sync visible | S1-F08 | Stage 5 | S4-F11 | S1-F08 acceptance |
 | `PRD-SEC-015`, `PRD-SEC-016` | Pinned dependencies; required checks on every change | S0 | Every stage | every feature | CI on every push |
 | `PRD-SEC-017` | Capability controls | S1-F04 | Same | every feature | Stage 1 exit |
-| `PRD-PRF-001` | Measured against the reference workload | S4-F02 | Same | S1-F07 (PT import target) | Side-by-side measurements |
+| `PRD-PRF-001` | Measured against the reference workload | S4-F02 | Same | S2-F13 (PT import target) | Side-by-side measurements |
 | `PRD-PRF-002` | External calls measured apart | S4-F09 | Same | — | Stage 4 scope |
 | `PRD-PRF-003` | Background work never delays counters | S1-F10 | S4-F02 | S4-F02 | stock-ledger 11.9 |
 | `PRD-PRF-004` | Freshness shown | S1-F01 | Every stage | every feature | Read models show as-of |

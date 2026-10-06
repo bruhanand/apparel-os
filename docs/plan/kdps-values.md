@@ -8,7 +8,7 @@
 
 | RR | Original ID and source | Decision or value needed | Owner | Affects | Blocks at | Synthetic work proceeds |
 | --- | --- | --- | --- | --- | --- | --- |
-| RR-054 | GC3-5; Admin (questions list) | Password rules, including whether a temporary password expires unused (access-and-approvals 3.2), and after how many failed sign-ins attempts slow or stop, for how long. Until expiry is set, a temporary password does not expire: that fails open, and is acceptable only because GC3-5 gates live use | Admin; product owner | S1-F01 | Live S1 | Yes, labelled synthetic settings |
+| RR-054 | GC3-5; Admin (questions list) | Password rules, including whether a temporary password expires unused (access-and-approvals 3.2), and after how many failed sign-ins attempts slow or stop, for how long. Attempts are counted by typed login and by source address, with equivalent answers for a login that exists and one that does not (`DEC-116`); only the numbers are open. Until expiry is set, a temporary password does not expire: that fails open, and is acceptable only because GC3-5 gates live use | Admin; product owner | S1-F01 | Live S1 | Yes, labelled synthetic settings |
 | RR-055 | GC3-6; KDPS Owner 54 | How long a fresh authenticator code stays fresh for protected actions | KDPS Owner | S1-F01 | Live S1 | Yes: until set, every protected action asks again |
 | RR-056 | `POL-02.23`; KDPS Owner 45; GC3-12 | The approve and reject reason list. Deciding is unavailable until a list is in force; the first list is approved with a free-text reason (`DEC-104`) | KDPS Owner, Admin | S1-F01 | Live S1; on `kdps-test` the first list is a test setting | Yes, a labelled synthetic list |
 | RR-057 | MM-8; KDPS Owner 49 | Who approves Site readiness and each business unit's activity | KDPS Owner | S1-F04 | Live S1 | Yes |
@@ -100,7 +100,7 @@ Each value below is unset and has no default (`AGENTS.md`, "Never invent a value
 | --- | --- | --- | --- | --- | --- | --- |
 | RR-132 | GC6-9; Accounts 19 | What counts as valuation evidence for an opening row; whether the earlier POS's `Rate` may serve | Accounts, CA | S1-F13, S4-F12 | Live S4 (switch) | Yes |
 | RR-133 | GC6-10; Accounts 20 | Fields of the dues, advances and deposits layouts; what "outstanding commercial stock" holds; the form of the closed-books balances | Accounts, CA | S1-F13, S4-F12 | Live S4 (switch); stage 1 builds the layouts on synthetic fields | Yes |
-| RR-134 | GC6-13; Accounts 24 | Rounding rule for each money column whose value has more decimals than paise | Accounts | S1-F06, S1-F07 | Live: the first real import of that column | Yes |
+| RR-134 | GC6-13; Accounts 24 | Rounding rule for each money column whose value has more decimals than paise | Accounts | S1-F06, S2-F13 | Live: the first real import of that column | Yes |
 | RR-135 | GC6-14; Operations 7 | Which reason texts and bill series mark an earlier-POS line as a transfer keyed as a sale | Operations, Accounts | S2-F12 | Live: side-by-side reports | Yes |
 | RR-136 | GC7-1; CA 21 | Do selling prices, MRP and price lists include tax | CA | S1-F11, S4-F02 | Live S4 | Yes: golden cases cover both bases as rule data |
 | RR-137 | GC7-2; CA 22 | Which value is compared with a value slab, and what applies near a bound | CA | S1-F11, S4-F02 | Live S4 | Yes |
@@ -131,10 +131,11 @@ Each value below is unset and has no default (`AGENTS.md`, "Never invent a value
 | RR-230 | SL-27; CA 28; stock-ledger 7.5; `PRD-LED-018` | A FIFO reversal of an inflow made in error, once the inflow's own layer and the layers from it no longer hold the value to come off: from which other layers the rest comes off, at pool level. Until set, such a reversal is refused (`rule-not-set`) | CA, with Accounts | S1-F10 (refusal only), S2 | Live S2, moving FIFO reversals of inflows live | Yes |
 | RR-234 | SL-28 (stock ledger review round 2, 6 Oct 2026); CA 29 for the settlement | Whether a found piece may be swapped with a missing piece of the same SKU that belongs to another owner or legal entity (`PRD-STK-015`, DEC-035), which changes what each owner is owed. Until decided, such a pair is treated as no match: held with an exception | Product owner; CA for the settlement effect | S3-F05 | Live S3 | Yes |
 | RR-235 | `DEC-112` (data notes gap 4); Accounts 25; the decided part is RR-047 | The supplier cash-discount and interest term values per supplier (rate, days, from when). How they are calculated, applied and posted is left to the later payment design | Accounts, CA | S1-F03 (recorded on the agreement), S5-F04 | Live S1 (supplier masters); used from S5 | Yes |
+| RR-237 | GC9-12; `POL-18.02`; KDPS Owner 62; `DEC-116` | Who at KDPS holds the production backup key, kept apart from the Organisation keys, and who stands in when that person is unavailable. GC9-12 names no custodian. The `dev` custodian is the product owner's (RR-236) | KDPS Owner, Admin | S1-F14 | Live S1 (production backups) | Yes |
 
 ## 4. Policy signatures
 
-All 19 policies are Open: none is signed ([kdps-policies.md](../kdps-policies.md) status table). A policy is Signed when its "Signed by, date" line is complete (`DEC-092`). Its live operations also need their real values configured and validated by a different person (DM-6, `DEC-105`). Synthetic work proceeds for every policy.
+All 19 policies are Open: none is signed ([kdps-policies.md](../kdps-policies.md) status table). A policy is Signed when its "Signed by, date" line is complete (`DEC-092`). Its live operations also need their real values configured and validated by a person who did not enter them (DM-6, `DEC-105`, `DEC-116`). Synthetic work proceeds for every policy.
 
 | RR | Policy | Decided by | Live gate | Features it switches on |
 | --- | --- | --- | --- | --- |

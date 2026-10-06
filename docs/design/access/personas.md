@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: People, access and approvals; Operator experience; Franchise and partner accounts; HRMS and payroll. Policy: 2 (permissions and approvals).
 
-Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-022`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05`; `DEC-105` (cited beside the persona cards and notes that use them).
+Requirement and policy IDs applied: `PRD-ACS-001` to `PRD-ACS-009`, `PRD-ACS-015` to `PRD-ACS-022`, `PRD-UXP-001`, `PRD-UXP-004` to `PRD-UXP-010`, `PRD-TRF-005`, `PRD-CSH-011`, `PRD-FRN-007`, `PRD-SEC-018`; `POL-02.01` to `POL-02.11`, `POL-02.13` to `POL-02.21`; `POL-05.09`, `POL-13.13`, `POL-17.10`, `POL-19.05`; `DEC-105` (cited beside the persona cards and notes that use them); `DEC-116` (landing, section 2).
 
 Used by: [access-and-approvals.md](access-and-approvals.md) (GC-3), [design-language.md](../ui/design-language.md), [ui-blueprint.html](../ui/ui-blueprint.html) and [design-system.html](../ui/design-system.html).
 
@@ -57,6 +57,8 @@ In PRD order. "Work" is the PRD text. "Lands on", "Menu" and "Usual scope" are d
 The template column follows the proposed, Open template map in policy 2 (eleven templates, `POL-02.01`). A template label alone grants no permission.
 
 Menus. The sidebar for each persona lists every section where the access grid in [ui-blueprint.html](../ui/ui-blueprint.html) (section 3a) gives that persona more than "none", so a section is never granted and missing from the menu (`PRD-ACS-002`, `PRD-ACS-003`). Home appears where the grid gives it (the cashier, salesperson and EBO staff land on the till or the portal). Portal and Self-service are shells, not grid sections: each portal page sits under the section that holds it (Uploads under External sales; Petty cash and cash deposit under Money), and Self-service is granted only through an assignment of the self-service role, scoped to the person's own records (`PRD-ACS-002`, `PRD-ACS-003`, `PRD-ACS-022`, `DEC-041`, `DEC-100`).
+
+Landing. A person lands on their persona's "Lands on" screen when their role assignments grant it; otherwise on the first screen their role assignments grant in that persona's menu. So the first Admin, whose setup role grants no Policy readiness ([access-and-approvals.md](access-and-approvals.md) 9.11), lands on Setup › Users. Decided by the product owner, 6 Oct 2026 (`DEC-116`, RR-212).
 
 Menu names are working labels. `PRD-UXP-004` lists Store capabilities and areas, not menu labels (`DEC-056`). Sell groups billing, bills and till session; Stock Count, Damage & supplier returns and External sales keep their own menus.
 

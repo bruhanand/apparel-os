@@ -8,7 +8,7 @@ Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. 
 
 The repository holds the documents (`docs/`, start at `docs/README.md` and `docs/STATUS.md`) and the code workspace (see "Code workspace"). Stage 1 is in progress: see `docs/plan/stage-1/README.md`. Use only the commands listed in "Code workspace"; do not invent others.
 
-The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with `S1-F01-T19`, the first browser journeys, which also unblocks the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
+The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with `S1-F01-T15`, the first browser journey, which also unblocks the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
 
 ## Document order
 
@@ -117,18 +117,16 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 
 The plan lives in `docs/plan/`. Each stage has a folder (`docs/plan/stage-1/`); each feature in it has a folder with `spec.md` (what it does) and `tickets/` (one file per piece of work, named with its task label, such as `T04-idempotency-helper.md` for `S1-F01-T04`). `docs/STATUS.md` says, in plain words, where the work stands and what waits on the product owner.
 
-1. **Grill.** Before a feature's tickets are written, settle with the product owner only what the PRD, the policies and the designs leave open. Business answers go up as "Document order" says; KDPS values go to `docs/questions-for-kdps.md`.
-2. **Spec and tickets.** Write the feature's `spec.md` and its tickets. Each ticket has `Status:` (see "Agent skills"), `Blocked by:`, what to build, the design sections and IDs it follows, and when it is done.
-3. **Build.** One ticket at a time, with the tests it names. Cite the PRD, policy or decision ID where a rule is enforced. A design detail found while coding is edited in the design in the same change.
-4. **Review.** An independent reviewer (a fresh agent session or a person who did not write the change) reads the change against the ticket, the designs and IDs it follows, the code house rules and this file. It is given the ticket, the change and its sources, not the implementer's account. It returns findings, each with the file, the rule or design it breaks, why, and whether it is blocking. It edits nothing.
-5. **Fix and recheck.** Fix every confirmed defect, with a test that proves the fix where one can; say why each rejected finding is not a defect. The reviewer then rechecks the fixes and what they touch, once. One review and one focused recheck is the normal process, but **a blocking defect that remains means the ticket stays unfinished**: its status is not `done` and it is not committed as complete; fix and recheck again, or take a disputed finding to the product owner. A finding is blocking when it shows the change breaks the ticket, a requirement, policy or decision, a design, the code house rules or this file, or that a test does not prove what it claims.
-6. **Final checks.** On the final revision run `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm check:links` and `pnpm format:check` (`PRD-SEC-015`, `PRD-SEC-016`); browser journeys join them once Playwright exists.
-7. **Close.** Set the ticket's status, note any non-blocking follow-up in `docs/plan/open-items.md` with its owner and the gate it blocks, and update `docs/STATUS.md`. Commit with the ticket label at the start of the subject (`S1-F01-T04: idempotency helper`).
+Work runs through the skills in `.claude/skills/` (decided by the product owner, 6 Oct 2026); they replace the earlier separate review-and-recheck loop:
 
-- Keep a review to the ticket's change. A finding outside it becomes a follow-up, not a fix in this ticket.
-- If no independent reviewer can run, report that as a blocker and the ticket as not reviewed. Never call it reviewed.
-- When a fix would change business behaviour or the ticket's scope, stop and ask the product owner. A fix never fills an OPEN value.
-- Committing, pushing and merging wait for the product owner's go-ahead. Commits and pull requests carry no AI attribution lines.
+1. **Grill.** `/grill-with-docs` settles with the product owner only what the PRD, the policies and the designs leave open. Business answers go up as "Document order" says; KDPS values go to `docs/questions-for-kdps.md`.
+2. **Spec and tickets.** `/to-spec` and `/to-tickets`, published as "Agent skills" says. Each ticket has `Status:`, `Blocked by:`, what to build, the design sections and IDs it follows, and when it is done.
+3. **Build.** `/implement` for a ticket or `/implement-spec` for a spec's ticket graph: test first with `/tdd`, reviewed with `/code-review`, as those skills say. Cite the PRD, policy or decision ID where a rule is enforced. A design detail found while coding is edited in the design in the same change.
+4. **Close.** Set the ticket's status, note any follow-up in `docs/plan/open-items.md` with its owner and the gate it blocks, and update `docs/STATUS.md`. Commit subjects start with the ticket label (`S1-F01-T04: idempotency helper`).
+
+- CI (`.github/workflows/code-check.yml`) runs every check and both test suites on each push; leave them passing.
+- When a fix would change business behaviour or a ticket's scope, stop and ask the product owner. A fix never fills an OPEN value.
+- The skills commit on their working or integration branch. Pushing, merging into `main` and anything on Railway wait for the product owner's go-ahead; because `main` deploys to `dev` automatically, an approval to merge must say it includes that deployment. Commits and pull requests carry no AI attribution lines.
 - Never throw away uncommitted work, even if it looks obsolete: save it to a `saved/<name>` branch first.
 - A change that touches only documents needs no code review: keep the document order, log PRD and policy changes in `docs/decisions.md` first, and run the link check.
 

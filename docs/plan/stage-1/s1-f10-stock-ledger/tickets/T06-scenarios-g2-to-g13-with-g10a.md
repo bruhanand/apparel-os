@@ -1,7 +1,7 @@
 # S1-F10-T06 — Scenarios G2 to G13 with G10a
 
 Status: blocked
-Blocked by: T05
+Blocked by: T04; S1-F08-T02
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
 ## Build

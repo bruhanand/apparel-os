@@ -1,22 +1,9 @@
 # S1-F01-T19 — Browser journeys
 
-Status: blocked
-Blocked by: T10, T15 to T18
+Status: merged
+Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
-
-## Build
-
-Playwright added to the workspace and to CI in Chromium (PRD Stack: Verification); journeys of section 14 test `S1-F01-AT18`, including a keyboard-only path through sign-in and approval
-
-## Expected outputs
-
-Playwright config; journeys; CI job
-
-## Done when
-
-Journeys pass in CI and keep their traces as artefacts
 
 ## Notes
 
-- RR-192: persona browser journeys; Playwright arrives here and unblocks the counter run of S1-F11-T10.
-- Synthetic users and role assignments for the journeys come from the fixtures (house rules 11).
+- Merged into [S1-F01-T15 — Sign-in in the browser](T15-sign-in-screens.md) (Playwright setup and the first sign-in journey) and [S1-F01-T20 — Acceptance: journeys, concurrency, isolation and leak suite](T20-concurrency-isolation-and-leak-suite.md) (the other journeys) on 6 Oct 2026 (product owner); its build and tests are there.
