@@ -37,9 +37,32 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
 };
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
 
-function register(set: MigrationSetName): RegisterEntry[] {
+/** A third-party schema, such as pg-boss's, listed as one entry (code-house-rules 3.2, 10.4). */
+interface ThirdPartyEntry {
+  readonly schema: string;
+  readonly package: string;
+  readonly runtime: readonly string[];
+  readonly functions: readonly string[];
+  readonly design: string;
+  readonly why: string;
+}
+
+function registerFile(set: MigrationSetName): { tables: RegisterEntry[]; thirdParty?: ThirdPartyEntry[] } {
   const text = readFileSync(join(migrationSetFolder(set), 'tables.json'), 'utf8');
-  return (JSON.parse(text) as { tables: RegisterEntry[] }).tables;
+  return JSON.parse(text) as { tables: RegisterEntry[]; thirdParty?: ThirdPartyEntry[] };
+}
+
+function register(set: MigrationSetName): RegisterEntry[] {
+  return registerFile(set).tables;
+}
+
+function thirdParty(set: MigrationSetName): ThirdPartyEntry[] {
+  return registerFile(set).thirdParty ?? [];
+}
+
+/** The SQL list of the schemas checked as third-party entries of the set, which the per-table checks leave out. */
+function thirdPartySchemas(set: MigrationSetName): string {
+  return `(${['', ...thirdParty(set).map((entry) => entry.schema)].map((name) => `'${name}'`).join(', ')})`;
 }
 
 let world: SyntheticWorld;
@@ -73,6 +96,7 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
        where c.relkind in ('r', 'p') and not c.relispartition
          and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
+         and n.nspname not in ${thirdPartySchemas(set)}
        order by 1`,
     );
     // A partitioned table is listed once, not each partition (code-house-rules 3.2).
@@ -104,6 +128,7 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        cross join lateral pg_catalog.aclexplode(coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))) a
        left join pg_catalog.pg_roles r on r.oid = a.grantee
        where c.relkind in ('r', 'p') and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
+         and n.nspname not in ${thirdPartySchemas(set)}
          and a.grantee <> c.relowner
        order by 1, 2, 3`,
     );
@@ -167,14 +192,14 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
       `select n.nspname as name
        from pg_catalog.pg_namespace n
        cross join lateral pg_catalog.aclexplode(coalesce(n.nspacl, pg_catalog.acldefault('n', n.nspowner))) a
-       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'`,
+       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg\\_%'`,
     );
     const onFunctions = await read<{ name: string }>(
       databases[set],
       `select n.nspname || '.' || p.proname as name
        from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
        cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
-       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'
+       where a.grantee = 0 and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg\\_%'
          -- An extension of code-house-rules 4.2, such as btree_gist, keeps PostgreSQL's own grants on its functions.
          and not exists (select 1 from pg_catalog.pg_depend d
                          where d.classid = 'pg_catalog.pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')`,
@@ -205,10 +230,16 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        from pg_catalog.pg_namespace n
        cross join lateral pg_catalog.aclexplode(coalesce(n.nspacl, pg_catalog.acldefault('n', n.nspowner))) a
        join pg_catalog.pg_roles r on r.oid = a.grantee
-       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'
+       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg\\_%'
        order by 1, 2`,
     );
-    const schemas = [...new Set(['public', ...register(set).map((entry) => entry.table.split('.')[0] ?? '')])].sort();
+    const schemas = [
+      ...new Set([
+        'public',
+        ...register(set).map((entry) => entry.table.split('.')[0] ?? ''),
+        ...thirdParty(set).map((entry) => entry.schema),
+      ]),
+    ].sort();
     expect(onSchemas).toEqual(schemas.map((name) => ({ name, privilege: 'USAGE' })));
 
     const onFunctions = await read<{ name: string }>(
@@ -217,10 +248,42 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
        cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
        join pg_catalog.pg_roles r on r.oid = a.grantee
-       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_%'
+       where r.rolname = 'aos_runtime' and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg\\_%'
        order by 1`,
     );
-    expect(onFunctions.map((row) => row.name)).toEqual(RUNTIME_FUNCTIONS[set]);
+    expect(onFunctions.map((row) => row.name)).toEqual(
+      [...RUNTIME_FUNCTIONS[set], ...thirdParty(set).flatMap((entry) => entry.functions)].sort(),
+    );
+  });
+
+  it('PRD-SEC-005 a third-party schema grants the runtime role exactly its entry, on every table, and PUBLIC nothing (code-house-rules 3.2, 10.4)', async () => {
+    for (const entry of thirdParty(set)) {
+      expect(entry.design, entry.schema).not.toBe('');
+      expect(entry.why, entry.schema).not.toBe('');
+      const grants = await read<{ name: string; grantee: string; privileges: string }>(
+        databases[set],
+        `select c.relname as name, coalesce(r.rolname, 'PUBLIC') as grantee,
+                string_agg(a.privilege_type, ',' order by a.privilege_type) as privileges
+         from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         cross join lateral pg_catalog.aclexplode(coalesce(c.relacl, pg_catalog.acldefault('r', c.relowner))) a
+         left join pg_catalog.pg_roles r on r.oid = a.grantee
+         where c.relkind in ('r', 'p') and n.nspname = '${entry.schema}' and a.grantee <> c.relowner
+         group by 1, 2 order by 1, 2`,
+      );
+      const tables = await read<{ name: string }>(
+        databases[set],
+        `select c.relname as name from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where c.relkind in ('r', 'p') and n.nspname = '${entry.schema}' order by 1`,
+      );
+      expect(tables.length, entry.schema).toBeGreaterThan(0);
+      expect(grants, entry.schema).toEqual(
+        tables.map((table) => ({
+          name: table.name,
+          grantee: 'aos_runtime',
+          privileges: [...entry.runtime].sort().join(','),
+        })),
+      );
+    }
   });
 
   it('PRD-SEC-005 a scoped table has row-level security on and a policy for the runtime role (code-house-rules 6.2, 6.3)', async () => {

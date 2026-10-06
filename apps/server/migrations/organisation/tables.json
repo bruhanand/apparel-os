@@ -1,4 +1,14 @@
 {
+  "thirdParty": [
+    {
+      "schema": "pgboss",
+      "package": "pg-boss",
+      "runtime": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "functions": ["pgboss.job_now"],
+      "design": "code-house-rules 3.2, 12.9",
+      "why": "pg-boss's own tables, installed by migration 0008 at the version the lockfile pins; the worker sends, fetches, completes and fails jobs and runs pg-boss's supervision as the runtime role, which creates no object in it"
+    }
+  ],
   "tables": [
     {
       "table": "kernel.migration",
@@ -149,6 +159,30 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "access-and-approvals 3.1, 13.1; DEC-116",
       "why": "Counted by sign-in before any actor exists (code-house-rules 6.3); it holds a keyed digest of the typed login and the source address, never the login, and only access code reads it"
+    },
+    {
+      "table": "kernel.outbox_event",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.8",
+      "why": "Only kernel reads it, for the worker's outbox processor and the live-update stream; each consumer then reads the record through its owner's interface under its own authorisation (code-house-rules 12.8 \"The row\")"
+    },
+    {
+      "table": "kernel.outbox_consumer",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.8",
+      "why": "The worker's own record of the consumers it has registered; only kernel reads it (code-house-rules 12.8 \"Consumers\")"
+    },
+    {
+      "table": "kernel.outbox_dispatch",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "code-house-rules 12.8",
+      "why": "Which event was handed to which consumer and by which job; only kernel's outbox processor reads it (code-house-rules 12.8 \"Dispatch\")"
     }
   ]
 }

@@ -1,5 +1,12 @@
 // Public interface of the access module (module-map 4.3). Other code imports only from here.
-export { ACCESS, ACCESS_ENVIRONMENT, AccessContractsModule, AccessModule, ORGANISATION_KEYS } from './access.module.js';
+export {
+  ACCESS,
+  ACCESS_ENVIRONMENT,
+  AccessContractsModule,
+  AccessJobIdentitiesModule,
+  AccessModule,
+  ORGANISATION_KEYS,
+} from './access.module.js';
 export { Access } from './access.js';
 export type { AccessInterface } from './access.js';
 export type { AuthenticatedServiceIdentity } from './queries/service-identities.js';

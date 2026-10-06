@@ -21,6 +21,8 @@ import { isInsideCommand, runMarked } from './command-mark.js';
 import { isCorrelationId } from './correlation.js';
 import { GuardedConnection } from './guarded-connection.js';
 import { takeLocks, type LockResult, type LockStep, type LockTarget } from './lock-helper.js';
+import type { EventDefinition, PublishedEvent } from '../outbox/event-definition.js';
+import { writeOutboxEvent } from '../outbox/outbox-writer.js';
 import type { ActorSetting, BusinessDate, Transaction, TransactionContext } from './transaction-context.js';
 
 /** One command or read, as the runner is asked to run it. */
@@ -276,6 +278,7 @@ class CommandContext implements TransactionContext {
   readonly actor: ActorSetting;
   private lastLockStep: LockStep | undefined;
   private ended = false;
+  private notified = false;
 
   constructor(
     request: CommandRequest,
@@ -324,6 +327,29 @@ class CommandContext implements TransactionContext {
       timezone: setting.timezone,
       timezoneVersionId: setting.versionId,
     };
+  }
+
+  async publish<Payload extends Record<string, unknown>>(
+    definition: EventDefinition<Payload>,
+    event: PublishedEvent<Payload>,
+  ): Promise<string> {
+    this.refuseIfEnded();
+    if (this.readOnly) {
+      throw new CommandDefect('A read publishes no event; only a command writes to the outbox (code-house-rules 12.8)');
+    }
+    const id = await writeOutboxEvent(
+      {
+        tx: this.transaction,
+        actorId: this.actor.kind === 'actor' ? this.actor.actorId : null,
+        correlationId: this.correlationId,
+        startedAt: this.startedAt,
+        notified: this.notified,
+      },
+      definition,
+      event,
+    );
+    this.notified = true;
+    return id;
   }
 
   /** Called by the runner when the work returns or throws: the transaction is over. */
