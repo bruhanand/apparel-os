@@ -1,1 +1,241 @@
 @import 'tailwindcss';
+
+/*
+ * Tokens of design-language sections 2 to 5 and 7 (Sand & Navy). The theme follows the device unless the user's
+ * choice sets data-theme on <html> (design-language 2 "Theme"); the CSS alone applies it before first paint.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f7f5f0;
+  --surface: #fffefb;
+  --sunken: #f0ede6;
+  --raised: #ffffff;
+  --border: #ddd8cc;
+  --control: #8a8478;
+  --text: #1a1a1c;
+  --text-2: #4d4a44;
+  --text-3: #66625a;
+  --accent: #1f3a68;
+  --accent-hover: #172d52;
+  --on-accent: #ffffff;
+  --tint: #e4e9f2;
+  --on-tint: #1a3160;
+  --hover: #f5f2ec;
+  --danger: #b3261e;
+  --on-danger: #ffffff;
+  --glass: rgba(255, 254, 251, 0.7);
+  --glass-border: rgba(26, 26, 28, 0.1);
+  --scrim: rgba(26, 26, 28, 0.32);
+  --sh1: 0 1px 2px rgba(40, 34, 20, 0.06), 0 1px 1px rgba(40, 34, 20, 0.04);
+  --sh2: 0 4px 12px rgba(40, 34, 20, 0.08), 0 1px 3px rgba(40, 34, 20, 0.06);
+  --sh3: 0 18px 44px rgba(40, 34, 20, 0.16), 0 2px 8px rgba(40, 34, 20, 0.08);
+  --n-bg: #ece9e2;
+  --n-fg: #4a463f;
+  --i-bg: #e3ebfb;
+  --i-fg: #1e4aa8;
+  --p-bg: #d9eff0;
+  --p-fg: #0c5f66;
+  --s-bg: #dcf1e4;
+  --s-fg: #1b6b3a;
+  --w-bg: #fbeccf;
+  --w-fg: #7d4a00;
+  --d-bg: #fbe3e1;
+  --d-fg: #a1261d;
+  --q-bg: #f1e3f6;
+  --q-fg: #7a2690;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #111214;
+    --surface: #191a1d;
+    --sunken: #15161a;
+    --raised: #212226;
+    --border: #33343a;
+    --control: #76716a;
+    --text: #eceae6;
+    --text-2: #b3aea5;
+    --text-3: #959087;
+    --accent: #9db8e8;
+    --accent-hover: #b6cbf0;
+    --on-accent: #111214;
+    --tint: #1f2b42;
+    --on-tint: #c8d8f5;
+    --hover: #1f2024;
+    --danger: #ff8a80;
+    --on-danger: #111214;
+    --glass: rgba(25, 26, 29, 0.66);
+    --glass-border: rgba(236, 234, 230, 0.1);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --sh1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --sh2: 0 4px 14px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --sh3: 0 20px 48px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --n-bg: #2a2a2e;
+    --n-fg: #c9c5bd;
+    --i-bg: #1c2b4d;
+    --i-fg: #a9c2ff;
+    --p-bg: #133a3d;
+    --p-fg: #8fd9df;
+    --s-bg: #173726;
+    --s-fg: #8fdcac;
+    --w-bg: #3d2c0e;
+    --w-fg: #f2c475;
+    --d-bg: #43191a;
+    --d-fg: #ffaaa3;
+    --q-bg: #36193f;
+    --q-fg: #e3b0f2;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #111214;
+  --surface: #191a1d;
+  --sunken: #15161a;
+  --raised: #212226;
+  --border: #33343a;
+  --control: #76716a;
+  --text: #eceae6;
+  --text-2: #b3aea5;
+  --text-3: #959087;
+  --accent: #9db8e8;
+  --accent-hover: #b6cbf0;
+  --on-accent: #111214;
+  --tint: #1f2b42;
+  --on-tint: #c8d8f5;
+  --hover: #1f2024;
+  --danger: #ff8a80;
+  --on-danger: #111214;
+  --glass: rgba(25, 26, 29, 0.66);
+  --glass-border: rgba(236, 234, 230, 0.1);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --sh1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh2: 0 4px 14px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --sh3: 0 20px 48px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --n-bg: #2a2a2e;
+  --n-fg: #c9c5bd;
+  --i-bg: #1c2b4d;
+  --i-fg: #a9c2ff;
+  --p-bg: #133a3d;
+  --p-fg: #8fd9df;
+  --s-bg: #173726;
+  --s-fg: #8fdcac;
+  --w-bg: #3d2c0e;
+  --w-fg: #f2c475;
+  --d-bg: #43191a;
+  --d-fg: #ffaaa3;
+  --q-bg: #36193f;
+  --q-fg: #e3b0f2;
+}
+
+/* Tailwind utilities named after the tokens, such as bg-surface, text-text-2 and border-control. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-raised: var(--raised);
+  --color-border: var(--border);
+  --color-control: var(--control);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-tint: var(--tint);
+  --color-on-tint: var(--on-tint);
+  --color-hover: var(--hover);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-scrim: var(--scrim);
+  --color-n-bg: var(--n-bg);
+  --color-n-fg: var(--n-fg);
+  --color-i-bg: var(--i-bg);
+  --color-i-fg: var(--i-fg);
+  --color-p-bg: var(--p-bg);
+  --color-p-fg: var(--p-fg);
+  --color-s-bg: var(--s-bg);
+  --color-s-fg: var(--s-fg);
+  --color-w-bg: var(--w-bg);
+  --color-w-fg: var(--w-fg);
+  --color-d-bg: var(--d-bg);
+  --color-d-fg: var(--d-fg);
+  --color-q-bg: var(--q-bg);
+  --color-q-fg: var(--q-fg);
+  --shadow-e1: var(--sh1);
+  --shadow-e2: var(--sh2);
+  --shadow-e3: var(--sh3);
+  /* Source Sans 3 and Source Code Pro are named first; their font files are not bundled yet (RR-262). */
+  --font-sans: 'Source Sans 3', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --text-title: 28px;
+  --text-title--line-height: 34px;
+  --text-h1: 24px;
+  --text-h1--line-height: 30px;
+  --text-h2: 18px;
+  --text-h2--line-height: 24px;
+  --text-h3: 16px;
+  --text-h3--line-height: 22px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 18px;
+  --text-label: 12px;
+  --text-label--line-height: 16px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --radius-chip: 4px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-dialog: 12px;
+}
+
+html {
+  scroll-padding-top: 56px;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Focus ring for keyboard focus only (design-language 9). */
+:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent);
+}
+
+/* Glass at e3 only, with a solid fallback (design-language 5). */
+.glass {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass {
+    background: var(--surface);
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

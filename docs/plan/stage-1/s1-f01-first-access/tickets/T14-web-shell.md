@@ -1,7 +1,7 @@
 # S1-F01-T14 — Web shell
 
 Status: blocked
-Blocked by: T04
+Blocked by: RR-187 (Demo 0 on Railway `dev` waits for the product owner's authorisation); everything else is built
 Feature: [S1-F01 First access](../spec.md)
 
 ## Build
@@ -24,3 +24,7 @@ Router, data layer, forms with Zod, components themed from the reviewed design-l
 - RR-193: one environment variable names the environment for the seed and the screen banner.
 - RR-212 answered (product owner, 6 Oct 2026, DEC-116): the landing rule of Build.
 - RR-030: proposed state names in design-language 7.
+- Built 7 Oct 2026 on branch `s1/f01-t14` (commit named in the merge): `apps/web` shell with TanStack Router and Query, React Hook Form with Zod (`useRouteForm`, `FormField`), tokens of design-language 2 to 5 and 7 in `index.css`, the components `Button`, `StatusBadge`, `Banner`, the empty, loading, error and unavailable states, the back-office `AppShell` with the environment banner, persona chips and theme switch, the lock overlay with `keptInput` (drops declared secret and restricted fields), and the catalogue `messages/en-IN.ts` with tests for every refusal code, every design-language 7 state and every identifier the code names. Landing rule in `shell/landing.ts`.
+- RR-193 done: `AOS_ENVIRONMENT`, read at build (deployment.md section 1). The error reference's display form is settled in code-house-rules 12.3.
+- Not done: Demo 0 on Railway `dev` (not authorised; built and checked locally only). Follow-ups RR-260 to RR-264.
+
