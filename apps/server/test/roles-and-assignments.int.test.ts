@@ -624,6 +624,22 @@ describe('effective grants follow the dates (access-and-approvals 7.2)', () => {
     );
     if (next.kind !== 'success') throw new Error('version not prepared');
     await as(approver.id, (c) => access.approveRoleVersion(c, decider(), next.answer.versionId));
+    // The grants changed by a role version are published with the role as the subject (module-map section 8).
+    const published = await asOwner((c) =>
+      c.query<{ type: string; id: string; version: string | null; payload: unknown }>(
+        `select subject_record_type as type, subject_record_id as id, subject_version_id as version, payload
+         from kernel.outbox_event where event_type = 'access.assignment-changed' and subject_record_id = $1
+         order by recorded_at, id`,
+        [roleId],
+      ),
+    );
+    expect(published.rows.at(-1)).toEqual({
+      type: 'access.role',
+      id: roleId,
+      version: next.answer.versionId,
+      payload: { actorIds: [user.id] },
+    });
+    expect(published.rows.map((row) => row.type)).not.toContain('access.role_assignment');
     expect((await authorise(user.id, 'view', 'access.role')).kind).toBe('allowed');
     expect((await authorise(user.id, 'view', 'access.role', 1)).kind).toBe('refused');
     expect((await authorise(user.id, 'view', 'access.user', 1)).kind).toBe('allowed');

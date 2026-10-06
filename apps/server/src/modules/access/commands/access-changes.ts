@@ -14,6 +14,7 @@ import {
   lockTable,
   sqlStateOf,
   type CommandRefusal,
+  type EventSubject,
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
@@ -519,7 +520,11 @@ export class AccessChanges {
       .where(and(eq(roleAssignment.roleId, version.roleId), eq(roleAssignment.decision, 'Approved')));
     const actorIds = holders.map((holder) => holder.actorId);
     await this.rebuildGrants(context, actorIds);
-    await this.publishGrantsChanged(context, version.roleId, actorIds);
+    await this.publishGrantsChanged(
+      context,
+      { module: 'access', recordType: 'access.role', recordId: version.roleId, versionId },
+      actorIds,
+    );
     await this.recordEffect(context, decider, {
       record: { module: 'access', type: 'role', id: version.roleId, versionId },
       operation: 'approve-role-version',
@@ -757,10 +762,20 @@ export class AccessChanges {
     return rebuildGrants(context, this.registry, actorIds);
   }
 
-  /** `access.assignment-changed`: the actors whose grants were rebuilt (module-map section 8). */
-  private async publishGrantsChanged(context: TransactionContext, recordId: string, actorIds: readonly string[]) {
+  /**
+   * `access.assignment-changed`: the actors whose grants were rebuilt (module-map section 8). The subject is the
+   * record that changed them: the role assignment, or the role and its version taking effect.
+   */
+  private async publishGrantsChanged(
+    context: TransactionContext,
+    subject: string | EventSubject,
+    actorIds: readonly string[],
+  ) {
     await context.publish(assignmentChanged, {
-      subject: { module: 'access', recordType: 'access.role_assignment', recordId },
+      subject:
+        typeof subject === 'string'
+          ? { module: 'access', recordType: 'access.role_assignment', recordId: subject }
+          : subject,
       payload: { actorIds: [...actorIds].sort() },
     });
   }
