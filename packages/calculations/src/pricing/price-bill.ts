@@ -5,9 +5,9 @@
 
 import { type Paise, isKnown, known, unknownValue } from '@apparel-os/domain';
 import { assertIsoDate } from '../dates.js';
-import { amountIn, amountOut } from '../numbers/amounts.js';
-import { parsePercent } from '../numbers/decimal.js';
-import { fraction, mul } from '../numbers/fraction.js';
+import { amountOut } from '../numbers/amounts.js';
+import { isDecimal, parseDecimal, parsePercent } from '../numbers/decimal.js';
+import { HUNDRED, compare, fraction, mul } from '../numbers/fraction.js';
 import { roundByRule } from '../numbers/rounding.js';
 import { type Refusal, type Result, ok, refusal, refused } from '../result.js';
 import {
@@ -154,10 +154,20 @@ export function priceBill(input: PriceBillInput): Result<PricedBill> {
       manualRefusals.push(refusal('manual-discount-not-permitted', { ...named, input: 'manual-discount' }));
       return;
     }
+    // PRD-POS-008, 5.10: an amount or rate the cashier enters that is not valid is refused, never thrown.
+    const invalid = refusal('invalid-amount', { ...named, input: 'manual-discount' });
     let amount: bigint;
     if (requested.kind === 'amount') {
-      amount = amountIn(requested.amount, `Line ${line.input.id}: manual discount`);
+      if (!Number.isSafeInteger(requested.amount) || requested.amount < 0) {
+        manualRefusals.push(invalid);
+        return;
+      }
+      amount = BigInt(requested.amount);
     } else {
+      if (!isDecimal(requested.rate) || compare(parseDecimal(requested.rate), HUNDRED) > 0) {
+        manualRefusals.push(invalid);
+        return;
+      }
       const discountRule = input.rounding.discount;
       if (discountRule === undefined) {
         manualRefusals.push(refusal('rounding-rule-missing', { ...named, input: 'discount' }));
@@ -165,10 +175,16 @@ export function priceBill(input: PriceBillInput): Result<PricedBill> {
       }
       usedDiscountRounding = true;
       amount = roundByRule(mul(fraction(afterOffers), parsePercent(requested.rate)), discountRule);
+      // A rate of at most 100% that the discount rounding rule takes past the line's value: how such a discount is
+      // rounded is GC7-5's question (5.5, 5.7).
+      if (amount > afterOffers) {
+        manualRefusals.push(refusal('not-decided', { ...named, input: 'manual-discount', question: 'GC7-5' }));
+        return;
+      }
     }
-    // A manual discount of nothing, or above the line's value after step 2, is refused (Proposed, 5.7).
+    // A manual discount of nothing, or above the line's value after step 2, is refused (Design choice, 5.7).
     if (amount === 0n || amount > afterOffers) {
-      manualRefusals.push(refusal('invalid-amount', { ...named, input: 'manual-discount' }));
+      manualRefusals.push(invalid);
       return;
     }
     manual.push(amount);

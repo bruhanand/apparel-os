@@ -39,7 +39,11 @@ export function resolveStartPrice(
   if (source.source === 'mrp') {
     startPrice = mrp;
   } else if (source.source === 'manual') {
-    startPrice = amountIn(source.pricePerUnit, `Line ${line.id}: manual price`);
+    // PRD-POS-003, 5.10: a manual price that is not whole paise, or below zero, is refused, never thrown.
+    if (!Number.isSafeInteger(source.pricePerUnit) || source.pricePerUnit < 0) {
+      return { ok: false, refusals: [...refusals, refusal('invalid-amount', { ...named, input: 'manual-price' })] };
+    }
+    startPrice = BigInt(source.pricePerUnit);
   } else {
     const list = priceLists.find((p) => p.id === source.priceList);
     const entry = list?.prices.find((p) => p.item === line.item);

@@ -96,7 +96,7 @@ export function costLine(input: CostLineInput): Result<CostLine> {
     steps.push({ kind: step.kind, value: toExactString(value) });
   }
   // A P RATE that is not whole paise needs a rounding step the profile does not have. Costing returns Unknown with the
-  // missing input listed instead of refusing (3.4, POL-03.08; Proposed in section 8).
+  // missing input listed instead of refusing (3.4, POL-03.08; Design choice in section 8).
   if (!isInteger(value)) {
     return ok({ profileVersion: input.profile.version, pRate: unknownValue(), missing: ['rounding step'], steps });
   }
@@ -139,9 +139,9 @@ export function matchCost(input: {
 
 /**
  * Ticket MARGIN (PRD-PTW-011): (MRP − P RATE) ÷ MRP × 100, rounded half up to two decimal places. Unknown P RATE
- * gives Unknown MARGIN. A P RATE above the MRP gives a negative margin: given as it is when it is exact to two
- * decimals, and refused `not-decided` when it needs rounding, since what half up means below zero is open (GC7-15).
- * A zero MRP gives no margin and is refused `invalid-amount` (Proposed, section 8).
+ * gives Unknown MARGIN. A P RATE above the MRP gives a negative margin, rounded to the nearest hundredth like any
+ * other; only an exact negative half is refused `not-decided`, since which way half up takes it is open (GC7-15).
+ * A zero MRP gives no margin and is refused `invalid-amount` (Design choice, section 8).
  */
 export function ticketMargin(input: {
   readonly mrp: MaybeKnown<number>;
@@ -153,8 +153,8 @@ export function ticketMargin(input: {
   if (mrp === 0n) return refused(refusal('invalid-amount', { input: 'mrp' }));
   const exact = mul(div(fraction(mrp - pRate), fraction(mrp)), HUNDRED);
   const scaled = mul(exact, HUNDRED);
-  if (scaled.n < 0n && !isInteger(scaled))
-    return refused(refusal('not-decided', { input: 'margin', question: 'GC7-15' }));
+  // GC7-15: only an exact negative half is ambiguous under half up; any other negative value rounds to the nearest.
+  if (scaled.n < 0n && scaled.d === 2n) return refused(refusal('not-decided', { input: 'margin', question: 'GC7-15' }));
   const hundredths = roundToInteger(scaled, 'half-up');
   return ok(known(formatFixed(fraction(hundredths, 100n), 2)));
 }

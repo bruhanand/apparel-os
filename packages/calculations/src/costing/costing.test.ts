@@ -110,17 +110,20 @@ describe('ticket margin (PRD-PTW-011)', () => {
     expect(ticketMargin({ mrp: unknownValue(), pRate: known(1) })).toEqual({ ok: true, value: unknownValue() });
   });
 
-  it('PRD-PTW-011 gives an exact negative margin, and refuses one that needs rounding (GC7-15)', () => {
-    // (8.00 − 8.08) ÷ 8.00 × 100 = −1, exact to two decimals.
+  it('PRD-PTW-011 rounds a negative margin to the nearest hundredth, and refuses only an exact negative half (GC7-15)', () => {
+    // (8.00 − 8.08) ÷ 8.00 × 100 = −1, exact.
     expect(ticketMargin({ mrp: known(800), pRate: known(808) })).toEqual({ ok: true, value: known('-1.00') });
-    // (8.00 − 8.01) ÷ 8.00 × 100 = −0.125: what half up means below zero is open.
+    // (3.00 − 3.01) ÷ 3.00 × 100 = −0.3333…, nearest −0.33; (3.00 − 3.02) ÷ 3.00 × 100 = −0.6666…, nearest −0.67.
+    expect(ticketMargin({ mrp: known(300), pRate: known(301) })).toEqual({ ok: true, value: known('-0.33') });
+    expect(ticketMargin({ mrp: known(300), pRate: known(302) })).toEqual({ ok: true, value: known('-0.67') });
+    // (8.00 − 8.01) ÷ 8.00 × 100 = −0.125, an exact half: which way half up goes below zero is open.
     expect(ticketMargin({ mrp: known(800), pRate: known(801) })).toEqual({
       ok: false,
       refusals: [{ code: 'not-decided', input: 'margin', question: 'GC7-15' }],
     });
   });
 
-  it('PRD-PTW-011 refuses a zero MRP, which gives no margin (Proposed, section 8)', () => {
+  it('PRD-PTW-011 refuses a zero MRP, which gives no margin (Design choice, section 8)', () => {
     expect(ticketMargin({ mrp: known(0), pRate: known(1) })).toEqual({
       ok: false,
       refusals: [{ code: 'invalid-amount', input: 'mrp' }],

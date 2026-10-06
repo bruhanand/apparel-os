@@ -4,7 +4,7 @@
 
 import type { Paise } from '@apparel-os/domain';
 import { canonicalJson } from '../canonical.js';
-import { amountIn, amountOut } from '../numbers/amounts.js';
+import { amountOut } from '../numbers/amounts.js';
 import type { PricedBill } from '../pricing/types.js';
 import { type Result, ok, refusal, refused } from '../result.js';
 
@@ -67,9 +67,12 @@ export function checkTenders(input: CheckTendersInput): Result<CheckedTenders> {
   // total (Proposed, shared-calculations section 6).
   const cashLines = allocation.lines.filter((line) => line.kind === CASH);
   const cash = cashLines.length === 0 ? null : cashLines.reduce((acc, line) => acc + BigInt(line.amount), 0n);
-  // 3.1: an amount is never negative; a negative cash-received entry is a caller defect.
-  const received =
-    allocation.cashReceived === undefined ? undefined : amountIn(allocation.cashReceived, 'Cash received');
+  // PRD-POS-008: an invalid cash-received entry (negative, or not whole paise) is refused, never thrown (5.10).
+  const entered = allocation.cashReceived;
+  if (entered !== undefined && (!Number.isSafeInteger(entered) || entered < 0)) {
+    return refused(refusal('invalid-amount', { input: 'cash-received' }));
+  }
+  const received = entered === undefined ? undefined : BigInt(entered);
   // PRD-POS-008: cash received given with no cash line is refused.
   if (cash === null) {
     if (received !== undefined) return refused(refusal('cash-received-without-cash', { input: 'cash-received' }));

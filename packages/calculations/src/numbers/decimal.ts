@@ -8,6 +8,11 @@ export type DecimalString = string;
 
 const DECIMAL = /^(\d+)(?:\.(\d+))?$/;
 
+/** Whether the text is a non-negative decimal string. */
+export function isDecimal(text: string): boolean {
+  return DECIMAL.test(text);
+}
+
 /** Reads a non-negative decimal string exactly. Malformed text is a caller defect, so it throws. */
 export function parseDecimal(text: DecimalString): Fraction {
   const match = DECIMAL.exec(text);

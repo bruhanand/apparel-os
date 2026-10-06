@@ -46,19 +46,21 @@ describe('check tenders (section 6)', () => {
     });
   });
 
-  it('PRD-POS-008 refuses a negative tender line; a negative cash-received entry is a caller defect', () => {
+  it('PRD-POS-008 refuses a negative tender line and a negative or fractional cash-received entry', () => {
     expect(
       checkTenders({ bill, allocation: { billReference: reference, lines: [{ kind: 'card', amount: -1 }] } }),
     ).toMatchObject({
       ok: false,
       refusals: [{ code: 'invalid-amount' }],
     });
-    expect(() =>
-      checkTenders({
-        bill,
-        allocation: { billReference: reference, lines: [{ kind: 'cash', amount: 110000 }], cashReceived: -5 },
-      }),
-    ).toThrow(RangeError);
+    for (const cashReceived of [-5, 110000.5]) {
+      expect(
+        checkTenders({
+          bill,
+          allocation: { billReference: reference, lines: [{ kind: 'cash', amount: 110000 }], cashReceived },
+        }),
+      ).toEqual({ ok: false, refusals: [{ code: 'invalid-amount', input: 'cash-received' }] });
+    }
   });
 
   it('PRD-POS-009 gives a different reference for any price change', () => {

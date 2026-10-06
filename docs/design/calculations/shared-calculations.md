@@ -101,7 +101,7 @@ It fixes no tax rate, value slab, rounding rule, stacking order, offer, price, c
 
 - An input that may be Unknown is a `MaybeKnown` value of `@apparel-os/domain`: the MRP of goods with no official PT coverage, a style's HSN, a costing input (`PRD-MOD-015`, `PRD-MER-015`).
 - A selling calculation that needs an Unknown input refuses and names it. It never treats Unknown as zero and never prices part of a bill (`PRD-MOD-015`). The refusals are in 5.10.
-- Costing returns Unknown, with the missing inputs listed, instead of refusing; `merchandise` · PT raises the exception and holds final costing approval (`POL-03.08`). A P RATE left as a fraction of a paise by a profile with no rounding step after it is Unknown the same way, with the rounding step listed as missing (section 8). **Proposed.**
+- Costing returns Unknown, with the missing inputs listed, instead of refusing; `merchandise` · PT raises the exception and holds final costing approval (`POL-03.08`). A P RATE left as a fraction of a paise by a profile with no rounding step after it is Unknown the same way, with the rounding step listed as missing (section 8). **Design choice.**
 - The exact-cash shorthand is not Unknown. An omitted cash-received entry is resolved to the declared cash amount before anything is stored; an entered zero is zero (`PRD-MOD-016`, `PRD-POS-007`; section 6).
 
 ## 4. Versioned inputs and the snapshot
@@ -118,11 +118,11 @@ It fixes no tax rate, value slab, rounding rule, stacking order, offer, price, c
 | Return policy | `pos` | The policy that applied to the sale, for later returns (`PRD-RET-001`, `POL-06.04`) |
 | Working set | `pos` | Offline bills only (`PRD-OFF-005`) |
 
-- What the offer rows record (**Proposed**, so that a bill priced again with only its recorded versions makes the same choice, 12.5):
+- What the offer rows record (**Design choice**, so that a bill priced again with only its recorded versions makes the same choice, 12.5):
   - **Considered:** every offer version in force at the Store, or at one of its groups, on the business date that covers at least one line of the bill once its markdown setting is applied (5.3). An offer that covers no line is not considered.
   - **Applied:** the offers of the chosen set (5.4), and the offers that overlap nothing, that give a discount above zero.
   - **Combination rules used:** every combination rule version in force on the date that names two or more considered offers, since together they decide which sets are permitted.
-- The rounding rule versions a priced bill records (**Proposed**): the discount rule when working out any candidate set (5.4) or a manual discount used it; the tax rule when the registration charges tax; the bill rule always. A rule not used is recorded as none.
+- The rounding rule versions a priced bill records (**Design choice**): the discount rule when working out any candidate set (5.4) or a manual discount used it; the tax rule when the registration charges tax; the bill rule always. A rule not used is recorded as none.
 - A held cart keeps no prices. On recall it is priced again with the versions in force then (`PRD-POS-013`).
 - A return or exchange reads the sale's recorded snapshot for what was paid, and current versions only for replacement goods (`PRD-RET-005`, `PRD-RET-007`; section 7).
 
@@ -158,7 +158,7 @@ Discounts are allocated to lines before tax and rounding, so each line carries i
 - Running Offers lists the eligible offers for goods, Store and date through the same function, with their dates and combination rules (`PRD-OFR-003`).
 - An offer or a combination rule is in force from its start date up to, but not including, its end date, as [structure-and-masters.md](../masters/structure-and-masters.md) 2.2 reads versions. **Proposed**; the offers design confirms it (stage 4).
 - A line whose start price is a manual price change is not a markdown line for the markdown setting; only a markdown price list makes one. **Proposed** (GC7-9).
-- A rate is a percentage from 0 to 100; an offer with a higher rate is malformed. **Proposed.**
+- A rate is a percentage from 0 to 100; an offer with a higher rate is malformed. **Design choice.**
 
 ### 5.4 Offers: which apply
 
@@ -171,7 +171,7 @@ Discounts are allocated to lines before tax and rounding, so each line carries i
 - The calculation works out every permitted set and applies the one that gives the largest total discount on the bill. A tie goes to the set holding the offer approved first: order each tied set's offers by approval time, compare the lists from the start, and the earlier time wins; then the lower offer identifier (`PRD-OFR-021`). **Design choice** of the comparison.
 - Offers that overlap nothing apply alongside the chosen set; they need no rule.
 - **Proposed** (GC7-9): the offers of a set that share a line apply in the order of a rule in force that names all of them, and the way that rule gives. Where no one rule names them all, or the rules that do disagree on the order or the way, the set's order is not given and the calculation refuses `not-decided` (5.10), naming GC7-9. Across the bill the offers apply in one order that keeps every line's order; offers with no order between them go by approval time, then identifier.
-- **Proposed:** in the tie-break, a set whose ordered list is the start of the other's comes first.
+- **Design choice:** in the tie-break, a set whose ordered list is the start of the other's comes first.
 - Running Offers makes the same choice: for a cart or goods the person enters, it shows the set checkout would apply and why, from the same function (`PRD-OFR-021`, `PRD-OFR-003`).
 - The number of sets grows quickly with overlapping offers. A performance test on the counter's devices sets the size the counter must handle (`PRD-PRF-003`). **Design choice.**
 
@@ -184,7 +184,7 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
 - **Flat-value:** the amount off each eligible unit, never more than the unit's value at its turn.
 - **Basket-value:** if the eligible lines' value at its turn meets the threshold, the discount; a rate is rounded by the discount rounding rule. The discount is spread (5.6).
 - **Buy-X-get-Y:** the qualifying units, ordered by value as the offer states (ties in bill order), make as many complete sets of X + Y as they can; that many times Y units are the reward units. The discount is their value, or the stated rate of it rounded by the discount rounding rule. The discount is spread (5.6).
-- No line's value goes below zero. A step that would take a line below zero is refused, never capped. Under a rule that applies offers to the start value, that is how combined offers apply to each other's values: `not-decided`, naming GC7-9. A flat-value offer takes at most the units' value at its turn, and a basket amount at most the eligible lines' value at its turn. **Proposed.**
+- No line's value goes below zero. By its meaning above, a flat-value offer is worth no more than the units' value at its turn, and a basket amount no more than the eligible lines' value at its turn. Beyond that, a step that would take a line below zero is refused, never capped, naming the question that decides it: a rate that the discount rounding rule takes past the value it is a rate of, GC7-5; under a rule that applies offers to the start value, an offer taking more than is left, which is how combined offers apply to each other's values, GC7-9; the paise a spread leaves, GC7-16 (5.6). **Proposed.**
 - When the reward units' value is not whole paise (a line's value at its turn does not divide by its quantity), a free reward has no named rounding step: the calculation refuses `not-decided`, naming GC7-14. **Proposed.**
 
 ### 5.6 Spreading a group discount
@@ -201,7 +201,7 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
 
 - A manual discount, by amount or rate, needs the configured authority and reason (`PRD-POS-003`); its approval limit uses bill value as its basis (`PRD-ACS-015`). A rate is rounded by the discount rounding rule.
 - On a line with no offer it applies to the line's value after step 2.
-- A manual discount of nothing, or above the line's value after step 2, is refused `invalid-amount`. **Proposed.**
+- A manual discount of nothing, a rate above 100%, an amount or rate that is not valid, or an amount above the line's value after step 2, is refused `invalid-amount`. **Design choice.** A rate of at most 100% that the discount rounding rule takes past the line's value is refused `not-decided`, naming GC7-5. **Proposed.**
 - On a line that has an offer, whether a manual discount may apply, and in which order, is OPEN (GC7-7). Until KDPS sets it, the calculation refuses a manual discount on such a line.
 
 ### 5.8 Tax
@@ -215,7 +215,7 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
 - **Components.** The registration applicability of the Store's tax registration says which tax components a counter sale carries and each one's share of the rate (GC7-8). Each component is worked out on the exact taxable value and rounded by the tax rounding rule. A tax rounding rule at the bill level is refused (3.3, GC7-12).
 - **No tax charged.** Where the registration charges no tax on a counter sale, the line still needs a known classification in force; no rate rule is read, and the line carries no rate and no component. **Proposed** (GC7-8).
 - **Taxable value with tax included.** It is the price paid less the rounded components, so the two always add up to what the customer pays. **Proposed** (the CA confirms, GC7-3).
-- **The tax effect of a discount.** When a discount moves a line into a different slab, the result marks the line with the rate before and after, so the counter can show it (`PRD-OFR-005`). Every slab change is marked; no threshold is assumed. **Design choice.** If no single slab fits the value before discounts, the mark shows the rate before, and the taxable value at it, as Unknown. **Proposed.**
+- **The tax effect of a discount.** When a discount moves a line into a different slab, the result marks the line with the rate before and after, so the counter can show it (`PRD-OFR-005`). Every slab change is marked; no threshold is assumed. **Design choice.** If no single slab fits the value before discounts, the mark shows the rate before, and the taxable value at it, as Unknown. **Proposed** (the CA confirms, GC7-2).
 - No rate, slab, component or date is set here. They are Accounts' and the CA's (V-18, `POL-10.05`, `POL-10.06`).
 
 ### 5.9 Bill total and round-off
@@ -229,9 +229,9 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
 
 - A priced bill returns, per line: the start price and its source, each offer's discount, the spread shares, the manual discount, the taxable value, each tax component with its rate, the slab-change mark, and the amount paid; for the bill: the totals, the round-off, the amount due, and the versions of section 4.
 - A business condition is a typed refusal, never an exception thrown: `price-unknown`, `price-above-mrp`, `classification-unknown`, `no-tax-rule`, `slab-undetermined`, `rounding-rule-missing`, `manual-discount-not-permitted`, `invalid-quantity`. A refusal names the line and the missing or failing input. **Design choice** of the names.
-- Tenders, returns and exchanges refuse with the codes of the cases in 12.4, and a cheaper-replacement rule that refuses the exchange with `cheaper-replacement-refused` (7.2). A manual discount out of bounds (5.7) and a zero MRP for MARGIN (section 8) give `invalid-amount`. **Proposed.**
-- `not-decided`: a step whose rule an open question of section 13 leaves undecided refuses, naming the question, and never picks a reading. **Proposed.**
-- Malformed input, such as a negative amount, a malformed rate or two lines with one identity, is a defect in the caller and is not a refusal. **Proposed.**
+- Tenders, returns and exchanges refuse with the codes of the cases in 12.4, and a cheaper-replacement rule that refuses the exchange with `cheaper-replacement-refused` (7.2). A manual discount out of bounds (5.7) and a zero MRP for MARGIN (section 8) give `invalid-amount`, as does an amount a person enters that is not valid: a negative or fractional manual price, manual discount, tender line or cash received (`PRD-POS-008`). **Design choice.**
+- `not-decided`: a step whose rule an open question of section 13 leaves undecided refuses, naming the question, and never picks a reading. **Design choice.**
+- Malformed rule data and identities are a defect in the caller, not a refusal: a malformed rate in an offer or a rule, a negative MRP or price-list price, two lines with one identity. An amount a person enters is never treated so. **Design choice.**
 - The priced bill has one canonical serialisation. Tender allocation refers to it (section 6). **Design choice.**
 
 ## 6. Tenders
@@ -246,7 +246,7 @@ What each offer kind means in amounts is **Proposed** below; the PRD names the k
   - the allocation refers to a priced bill other than the current one: any item, quantity, offer or price change makes the old allocation stale (`PRD-POS-009`).
 - An omitted cash-received entry becomes the cash line's amount before anything is stored (`PRD-MOD-016`, `PRD-POS-007`).
 - Change is cash received less the cash line, on cash only (`PRD-POS-008`).
-- A tender line is cash when its kind is cash; every other kind is checked by its amount only. Where an allocation holds more than one cash line, the cash line is their total. **Proposed.**
+- A tender line is cash when its kind is cash; every other kind is checked by its amount only. Where an allocation holds more than one cash line, the cash line is their total. **Proposed**; the `pos` design confirms it (stage 4).
 - Which tenders are enabled, whether an instrument is confirmed, and which tenders need online authority are `pos` and policy matters (`PRD-POS-005`, `PRD-OFF-016`). The calculation checks amounts only.
 
 ## 7. Returns, exchanges and refunds
@@ -287,10 +287,10 @@ Server only (2.1). `PRD-PTW-010`, `PRD-PTW-011`, `POL-03.06`–`POL-03.08`.
 
 - A costing profile version (owned by `merchandise` · PT) is an ordered list of steps from BASIC to P RATE: a percentage or flat discount, a percentage or flat addition, a charge spread over the lines of a document by the basis the profile names, a non-recoverable tax addition, and a rounding step. Recoverable tax is kept apart from cost (`POL-03.06`). The profile also names the matching tolerance (`POL-03.06`).
 - The function returns P RATE, each step's value, and the profile version. An Unknown or missing input gives Unknown P RATE with the missing inputs listed (`POL-03.08`; 3.4).
-- **Proposed:** each step's value is exact; a P RATE that is not whole paise after the last step, with no rounding step to make it so, is Unknown with the rounding step listed as missing (3.4). A charge spread over a document's lines comes in as this line's share: how the profile's basis spreads a charge over the lines is worked out by the caller, and its shape is the `merchandise` · PT design's (stage 2).
+- **Design choice:** each step's value is exact; a P RATE that is not whole paise after the last step, with no rounding step to make it so, is Unknown with the rounding step listed as missing (3.4). A charge spread over a document's lines comes in as this line's share: how the profile's basis spreads a charge over the lines is worked out by the caller; the `merchandise` · PT design confirms the shape (stage 2).
 - A matching check returns the difference between P RATE and the supplier-provided cost, and whether it lies within the profile's tolerance. It decides nothing (`POL-03.07`). The tolerance comes in as an input: an amount, and whether a difference equal to it lies within it. **Proposed**; the `merchandise` · PT design confirms the shape (stage 2).
 - Ticket MARGIN is (MRP − P RATE) ÷ MRP × 100, rounded half up to two decimal places (`PRD-PTW-011`). Unknown P RATE gives Unknown MARGIN.
-- **Proposed:** a P RATE above the MRP gives a negative MARGIN. It is given as it is when it needs no rounding; when it does, the calculation refuses `not-decided`, naming GC7-15, because half up does not say which way a negative half goes. A zero MRP gives no MARGIN and is refused `invalid-amount`.
+- A P RATE above the MRP gives a negative MARGIN, rounded to the nearest hundredth like any other. Only an exact half below zero, such as −0.125, is refused `not-decided`, naming GC7-15, because half up does not say which way a negative half goes. **Proposed.** A zero MRP gives no MARGIN and is refused `invalid-amount`. **Design choice.**
 - Each brand's profile is OPEN (V-15). Nothing here is a formula for any brand.
 
 ## 9. Incentives (outline)
@@ -353,7 +353,7 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 | Split a refund | Original tenders, remaining amounts, refund | An amount per tender, or a refusal | `PRD-RET-022` |
 | Cost a line (costing entry) | BASIC and other inputs; costing profile version | P RATE and its steps, or Unknown | `PRD-PTW-010`, `POL-03.06` |
 | Ticket margin (costing entry) | MRP, P RATE | MARGIN, or Unknown | `PRD-PTW-011` |
-| Round by a rule | An exact value in paise as a decimal string; a rounding rule version | Whole paise. **Proposed**, for the mechanics cases (12.4 CG-20a) | `PRD-MOD-014` |
+| Round by a rule | An exact value in paise as a decimal string; a rounding rule version | Whole paise. **Design choice**, for the mechanics cases (12.4 CG-20a) | `PRD-MOD-014` |
 | Incentives | Stage 6 | Stage 6 | `PRD-HRM-010` |
 
 ## 12. Golden cases
@@ -363,10 +363,10 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 
 - One JSON file per case in `packages/calculations/golden/`, named by its case ID. **Design choice.**
 - A case holds: `id`; `title`; `synthetic: true`; `covers`, the PRD and policy IDs it proves; `function`; `input`, with every rule version it uses; and either `expected`, the full result with the versions echoed, or `refusal`, the refusal code and the line it names.
-- **Proposed** precisions:
+- **Design choice** precisions:
   - `refusal` is the list of refusals the call returns, each with its code and, where there is one, the line, the input and, for `not-decided`, the question (5.10). A priced bill can refuse several lines at once.
   - A row of 12.4 that runs the function more than once ("then", "both times", (a) to (c), the four modes) holds `runs` instead of `input`: an ordered list, each with its own `input` and `expected` or `refusal`.
-  - Three pointers keep a case from copying another's bill: `{"$pricedBill": <case ID or bill input>}` stands for that bill priced, `{"$billReference": …}` for its reference (section 6), and `{"$billLine": {"bill": …, "line": <line ID>}}` for one of its lines as a return reads it (7.1). A case named by a pointer holds every rule version it uses, and a bill input given in place holds its own, so every rule version a case uses is still in the case or in the one it names.
+  - Three pointers keep a case from copying another's bill: `{"$pricedBill": <case ID or bill input>}` stands for that bill priced, `{"$billReference": …}` for its reference (section 6), and `{"$billLine": {"bill": …, "line": <line ID>}}` for one of its lines as a return reads it (7.1). A `$billLine` naming a bill with a round-off is an error in the case file, since whether a round-off counts in a line's paid value is open (GC7-6). A case named by a pointer holds every rule version it uses, and a bill input given in place holds its own, so every rule version a case uses is still in the case or in the one it names.
   - `function` names an operation of section 11; `round` is "Round by a rule".
   - A case whose expected result depends on an open reading carries `pending` with the reason, such as "RR-042 deferred". The runner reports it as skipped with that reason, never as passed.
 - Amounts are integer paise as JSON numbers; rates are decimal strings; dates are ISO dates. **Design choice.**
@@ -375,7 +375,7 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 ### 12.2 One set, two runtimes
 
 - **Server:** a Vitest suite in Node loads every case file and runs it through `@apparel-os/calculations` as the server imports it.
-- One runner, with no file access and no test framework, runs a case on both: the server gives it both entry points, the counter page only the selling one, so the costing cases are server-only. **Proposed.**
+- One runner, with no file access and no test framework, runs a case on both: the server gives it both entry points, the counter page only the selling one, so the costing cases are server-only. **Design choice.**
 - **Counter:** a Playwright test opens a test page of the counter build in Chromium and runs every case file through the package as bundled in the counter. The page reports each result; the test compares it with `expected` and fails on any difference. Chrome and Edge both run on Chromium (PRD Stack: Counter).
 - Both compare whole results exactly, including the versions. The stage 1 exit check passes only when both runs pass (`PRD-ACP-018`, [phases.md](../../phases.md) stage 1). They also run in the checks on every change (`PRD-SEC-016`).
 - Playwright, already in the PRD Stack, is added in stage 1 for this test page, ahead of the first real screen; the counter run needs only that page. **Design choice.**
@@ -491,7 +491,7 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC7-9 | For each offer: does it apply to marked-down prices, and for buy-X-get-Y, are the reward units the lowest- or highest-valued (5.3)? Set at approval; this asks KDPS to say it for each offer. Also confirm the **Proposed** meaning of each offer kind (5.5) and how combined offers apply to each other's values (5.4) | Business | Brand manager; KDPS Owner (approver) | 4 | Which offers apply, to which units, and for how much |
 | GC7-10 | Spreading a group discount by price (DEC-109) changes each line's taxable value and maybe its slab. Is that the correct tax treatment (5.6)? | Business | CA (confirms) | 4 | Tax on offer bills |
 | GC7-11 | Which lines earned a group discount (`PRD-POS-023`): every line the offer covers, as **Proposed** in 5.6, or for buy-X-get-Y only the units in complete sets? | Business | Product owner | 4 | Each line's taxable value on offer bills |
-| GC7-12 | When tax is rounded on the whole bill (GC7-3), how are each line's tax components and taxable value worked out so that the lines add up to the bill (3.3, 5.8)? Until it is decided, a bill-level tax rounding rule is refused | Business | Product owner, with Accounts and the CA | 4 | Tax on every line under bill-level rounding |
+| GC7-12 | When tax is rounded on the whole bill (GC7-3), how are each line's tax components and taxable value worked out so that the lines add up to the bill (3.3, 5.8)? Until it is decided, a bill-level tax rounding rule is refused | Business | CA and Accounts (statutory presentation, `POL-10.05`); the product owner for the design | 4 | Tax on every line under bill-level rounding |
 | GC7-13 | In an exchange, does the replacement bill's round-off count in what is compared with the returned units' value (7.2)? | Business | Accounts, CA | 4 | What is collected or refunded on a rounded exchange |
 | GC7-14 | A free buy-X-get-Y unit can be worth a fraction of a paise when its line's value does not divide by its quantity. How is that discount rounded (5.5)? | Business | Accounts | 4 | The amount of a buy-X-get-Y discount |
 | GC7-15 | `PRD-PTW-011` rounds MARGIN half up. For a negative MARGIN, where P RATE is above MRP, does a half go toward zero or away from it (section 8)? | Business | Product owner | 2 | MARGIN on loss-making tickets |

@@ -23,7 +23,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "tsc -p tsconfig.build.json && vitest run"
   },
   "dependencies": {
     "@apparel-os/domain": "workspace:*"

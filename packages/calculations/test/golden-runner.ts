@@ -116,7 +116,11 @@ function resolve(value: unknown, cases: ReadonlyMap<string, GoldenCase>, api: Go
     // A bill line as its snapshot records it, for a return (7.1): the sold quantity and the paid value.
     const argument = value[pointer];
     if (!isRecord(argument) || typeof argument.line !== 'string') throw new Error('$billLine needs a bill and a line');
-    const line = pricedFrom(argument.bill, cases, api).lines.find((l) => l.id === argument.line);
+    const bill = pricedFrom(argument.bill, cases, api);
+    // GC7-6: whether a bill's round-off counts in its lines' paid value is open, so no case may read a line of a
+    // bill with a round-off as a return's snapshot (12.1).
+    if (bill.roundOffUp !== 0 || bill.roundOffDown !== 0) throw new Error('$billLine names a bill with a round-off');
+    const line = bill.lines.find((l) => l.id === argument.line);
     if (line === undefined) throw new Error(`$billLine: no line ${argument.line}`);
     return { id: line.id, soldQuantity: line.quantity, paidValue: line.amountPaid };
   }

@@ -52,7 +52,7 @@ export interface OfferChoice {
   readonly chosen: readonly Offer[];
   readonly outcome: SetOutcome;
   /**
-   * The combination rules in force that name two or more considered offers (Proposed, section 4): they decided which sets were permitted,
+   * The combination rules in force that name two or more considered offers (Design choice, section 4): they decided which sets were permitted,
    * so the bill records them (section 4) and a replay with the recorded versions makes the same choice.
    */
   readonly combinationRules: readonly CombinationRule[];
@@ -233,9 +233,10 @@ export function evaluateSet(
   // The value an offer works on at its turn: the value left, or the start value where the line's rule says so.
   const base = (index: number): bigint =>
     lineMode[index] === 'on-start-value' ? (lines[index]?.startValue ?? 0n) : (value[index] ?? 0n);
-  // No line's value goes below zero (5.5). A take above what is left is never capped: under a rule applying offers to
-  // the start value it is how combined offers apply to each other's values (GC7-9); otherwise it can only be the paise
-  // a spread leaves, given to the largest line (GC7-16). Either way the calculation refuses (Proposed, 5.5, 5.6).
+  // No line's value goes below zero (5.5). A take above what is left is never capped. A rate rounded past the value it
+  // was taken from is refused at its step (GC7-5); after that, under a rule applying offers to the start value, an
+  // over-take is how combined offers apply to each other's values (GC7-9); otherwise it can only be the paise a spread
+  // leaves, given to the largest line (GC7-16). Each is refused naming its question (Proposed, 5.5, 5.6).
   const take = (index: number, wanted: bigint): bigint | Refusal => {
     const left = value[index] ?? 0n;
     if (wanted > left) {
@@ -254,6 +255,8 @@ export function evaluateSet(
       for (const i of indexes) {
         const rounded = roundDiscount(mul(fraction(base(i)), parsePercent(terms.rate)));
         if (typeof rounded !== 'bigint') return { ok: false, refusal: rounded };
+        // GC7-5: the discount rounding rule took the discount past the value it was a rate of.
+        if (rounded > base(i)) return { ok: false, refusal: notDecided('GC7-5', offer.id) };
         const taken = take(i, rounded);
         if (typeof taken !== 'bigint') return { ok: false, refusal: taken };
         if (taken > 0n) offerDiscounts[i]?.set(offer.id, taken);
@@ -281,6 +284,7 @@ export function evaluateSet(
           } else {
             const rounded = roundDiscount(mul(fraction(eligibleValue), parsePercent(terms.discount.rate)));
             if (typeof rounded !== 'bigint') return { ok: false, refusal: rounded };
+            if (rounded > eligibleValue) return { ok: false, refusal: notDecided('GC7-5', offer.id) };
             discount = rounded;
           }
         }
@@ -313,6 +317,7 @@ export function evaluateSet(
         } else {
           const rounded = roundDiscount(mul(rewardValue, parsePercent(terms.reward.rate)));
           if (typeof rounded !== 'bigint') return { ok: false, refusal: rounded };
+          if (compare(fraction(rounded), rewardValue) > 0) return { ok: false, refusal: notDecided('GC7-5', offer.id) };
           discount = rounded;
         }
       }

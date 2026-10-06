@@ -15,6 +15,16 @@ const cg03 = load('CG-03');
 const cases = new Map([[cg03.id, cg03]]);
 
 describe('golden-case runner', () => {
+  it('PRD-RET-005 GC7-6 refuses, as a case-file error, a $billLine that names a bill with a round-off', () => {
+    const cg17 = load('CG-17');
+    const rounded = load('CG-20b').runs?.[1]?.input;
+    expect(rounded).toBeDefined();
+    const input = cg17.input as Record<string, unknown>;
+    const pointing = { ...cg17, input: { ...input, line: { $billLine: { bill: rounded, line: 'L1' } } } };
+    expect(() => runCase(pointing, cases, { selling, costing })).toThrow(/round-off/);
+    expect(runCase(cg17, new Map([['CG-06', load('CG-06')]]), { selling, costing })).toEqual({ status: 'passed' });
+  });
+
   it('PRD-ACP-018 fails a case whose expected result differs by one paise', () => {
     const expected = cg03.expected as { amountDue: number };
     const tampered = { ...cg03, expected: { ...expected, amountDue: expected.amountDue + 1 } };

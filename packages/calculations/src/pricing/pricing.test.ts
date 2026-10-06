@@ -188,6 +188,25 @@ describe('offers: no line below zero (5.5, 5.6)', () => {
     expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-9', input: 'line A1' }] });
   });
 
+  it('PRD-MOD-014 GC7-5 refuses a percentage the discount rounding rule takes past the line value', () => {
+    const P100 = synOffer('SYN-P100', { kind: 'percentage', rate: '100' });
+    const rounding = { ...SYN_ROUNDING, discount: { version: 'syn-round-up-100', unit: 100, mode: 'up' as const } };
+    // 100% of 1.50 is 1.50, rounded up to a whole rupee: 2.00, above the line.
+    const result = priceBill(synBill([synLine('A1', 150)], { offers: [P100], rounding }));
+    expect(result).toEqual({ ok: false, refusals: [{ code: 'not-decided', question: 'GC7-5', input: 'SYN-P100' }] });
+  });
+
+  it('PRD-POS-003 GC7-5 refuses a manual rate the discount rounding rule takes past the line value', () => {
+    const rounding = { ...SYN_ROUNDING, discount: { version: 'syn-round-up-100', unit: 100, mode: 'up' as const } };
+    const result = priceBill(
+      synBill([synLine('A1', 150, { manualDiscount: { kind: 'rate', rate: '100' } })], { rounding }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      refusals: [{ code: 'not-decided', line: 'A1', input: 'manual-discount', question: 'GC7-5' }],
+    });
+  });
+
   it('PRD-POS-023 GC7-16 refuses when the paise left by a spread would take the largest line below zero', () => {
     const K = synOffer('SYN-K299', { kind: 'basket', threshold: 0, discount: { kind: 'amount', amount: 299 } });
     // Three lines of 1.00: shares of 0.99 each leave 0.02 for the first line, which has only 0.01 left.
@@ -297,6 +316,31 @@ describe('manual discounts (5.7)', () => {
     );
     expect(byRate.lines[0]).toMatchObject({ manualDiscount: 13750, value: 96250, taxableValue: 87500 });
     expect(byRate.versions.rounding.discount).toBe('syn-round-1');
+  });
+
+  it('PRD-POS-008 refuses, never throws on, a manual price or discount that is not a valid amount or rate', () => {
+    const cases = [
+      synLine('A1', 110000, { startPrice: { source: 'manual', pricePerUnit: -1 } }),
+      synLine('A2', 110000, { startPrice: { source: 'manual', pricePerUnit: 1.5 } }),
+      synLine('A3', 110000, { manualDiscount: { kind: 'amount', amount: -100 } }),
+      synLine('A4', 110000, { manualDiscount: { kind: 'amount', amount: 10.5 } }),
+      synLine('A5', 110000, { manualDiscount: { kind: 'rate', rate: '1e2' } }),
+      synLine('A6', 110000, { manualDiscount: { kind: 'rate', rate: '100.5' } }),
+    ];
+    const inputs = [
+      'manual-price',
+      'manual-price',
+      'manual-discount',
+      'manual-discount',
+      'manual-discount',
+      'manual-discount',
+    ];
+    cases.forEach((line, i) => {
+      expect(priceBill(synBill([line]))).toEqual({
+        ok: false,
+        refusals: [{ code: 'invalid-amount', line: line.id, input: inputs[i] }],
+      });
+    });
   });
 
   it('PRD-POS-003 refuses a manual discount of nothing or above the line value', () => {
