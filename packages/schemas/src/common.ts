@@ -1,4 +1,4 @@
-import { paise } from '@apparel-os/domain';
+import { paise, type Paise } from '@apparel-os/domain';
 import { z } from 'zod';
 
 // Shared building blocks for the S1-F01 contract sketch (docs/plan/stage-1/s1-f01-first-access/spec.md, S1-F01-T01).
@@ -49,11 +49,19 @@ export const personasHeldSchema = z
   .array(personaIdSchema)
   .refine((list) => new Set(list).size === list.length, { message: 'A persona is listed once' });
 
-/** PRD-MOD-014: INR in whole paise, a safe integer, never a binary fraction. */
-export const paiseSchema = z
-  .number()
-  .refine((value) => Number.isSafeInteger(value), { message: 'Paise must be a safe integer' })
-  .transform((value) => paise(value));
+const safeInteger = (value: number) => Number.isSafeInteger(value);
+
+/**
+ * PRD-MOD-014: INR in whole paise, a safe integer, never a binary fraction. A codec, so an answer holding an amount
+ * encodes back to the same integer through the route contract (code-house-rules 12.2).
+ */
+export const paiseSchema = z.codec(
+  z.number().refine(safeInteger, { message: 'Paise must be a safe integer' }),
+  z.custom<Paise>((value) => typeof value === 'number' && safeInteger(value), {
+    message: 'Paise must be a safe integer',
+  }),
+  { decode: (value) => paise(value), encode: (value) => value },
+);
 
 /**
  * PRD-MOD-015: an amount that may be Unknown, in the shape of @apparel-os/domain's MaybeKnown. Unknown is never

@@ -250,6 +250,13 @@ test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My 
       await expect(approved).toHaveCount(1);
       await expect(approved).toContainText(world.approver.displayName);
       await expect(approved).toContainText(APPROVE_REASON.text);
+      // The versions: the one prepared is the one approved (PRD-ACS-007); an assignment is its own version
+      // (code-house-rules 7.3), so both entries name the same one.
+      const versionOf = async (entry: typeof prepared) =>
+        /Version\s+([0-9a-f-]{36})/.exec(await entry.innerText())?.[1];
+      const preparedVersion = await versionOf(prepared);
+      expect(preparedVersion).toMatch(/^[0-9a-f-]{36}$/);
+      expect(await versionOf(approved)).toBe(preparedVersion);
       await expect(drawer.getByText(/^as of /)).toBeVisible();
       await test.info().attach('history-of-the-approved-assignment', {
         body: await reader.screenshot({ fullPage: true }),

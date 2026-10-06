@@ -328,7 +328,7 @@ export class AccessChanges {
     await this.audit.record(context, {
       actor: { kind: 'user', id: preparer.userId },
       roleAssignmentId: preparer.roleAssignmentId,
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'prepare-role-assignment',
       changes: [
         { kind: 'value', field: 'actor', before: null, after: draft.actor },
@@ -591,7 +591,10 @@ export class AccessChanges {
     await this.recordEffect(
       context,
       decider,
-      { record: { module: 'access', type: 'role_assignment', id: assignmentId }, operation: 'approve-role-assignment' },
+      {
+        record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
+        operation: 'approve-role-assignment',
+      },
       found.userId,
     );
     return { kind: 'success', answer: { assignmentId } };
@@ -611,7 +614,7 @@ export class AccessChanges {
     await context.tx.update(roleAssignment).set({ decision: 'Rejected' }).where(eq(roleAssignment.id, assignmentId));
     await this.audit.record(context, {
       ...this.auditActor(decider),
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'reject-role-assignment',
       changes: [{ kind: 'value', field: 'decision', before: 'Awaiting approval', after: 'Rejected' }],
       source: { kind: 'screen' },
@@ -745,7 +748,7 @@ export class AccessChanges {
       .where(eq(roleAssignment.id, assignmentId));
     await this.audit.record(context, {
       ...this.auditActor(decider),
-      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      record: { module: 'access', type: 'role_assignment', id: assignmentId, versionId: assignmentId },
       operation: 'withdraw-role-assignment-before-approval',
       changes: [
         { kind: 'value', field: 'decision', before: 'Awaiting approval', after: 'Withdrawn' },
