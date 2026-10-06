@@ -135,3 +135,25 @@ export { openApiDocument, openApiText } from './openapi.js';
 
 export { ApiContractError, createApiClient } from './client.js';
 export type { ApiClient, ApiClientOptions, CallInput, CallResult } from './client.js';
+
+export {
+  accessHistoryEntrySchema,
+  accessHistoryPageSchema,
+  accessHistoryQuerySchema,
+  actorHistoryQuerySchema,
+  auditHistoryEntrySchema,
+  auditHistoryPageSchema,
+  HISTORY_PAGE_CAP,
+  historyActorSchema,
+  historyChangeSchema,
+  historyCursorSchema,
+  recordHistoryQuerySchema,
+} from './history.js';
+export type {
+  AccessHistoryEntry,
+  AccessHistoryPage,
+  AuditHistoryEntry,
+  AuditHistoryPage,
+  HistoryActor,
+  HistoryChange,
+} from './history.js';

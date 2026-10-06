@@ -102,14 +102,66 @@ export type AccessEntry =
       readonly exposure: 'shown' | 'exported';
     });
 
+/**
+ * Where a row sits in history order: its recording time in UTC to the microsecond, as text so no precision is lost,
+ * and its identifier. A page starts after (or before) a position (code-house-rules 12.1 "Reads": a cursor).
+ */
+export interface HistoryPosition {
+  readonly recordedAt: string;
+  readonly id: string;
+}
+
+/** How much of a history to read: at most `limit` rows, from after `after` (code-house-rules 12.1). */
+interface HistoryPage {
+  readonly after?: HistoryPosition;
+  readonly limit?: number;
+}
+
 /** Whose history to read (numbering-and-audit 4.5). */
-export type HistoryQuery =
+export type HistoryQuery = (
   | { readonly of: 'record'; readonly module: string; readonly type: string; readonly id: string }
-  | { readonly of: 'actor'; readonly actorId: string };
+  | { readonly of: 'actor'; readonly actorId: string }
+) &
+  HistoryPage;
+
+/**
+ * Which access records to read, newest first (numbering-and-audit 4.5, 5.1): each group is the record type its kinds
+ * are read under, `audit.access_record`, `audit.sensitive_access_record` or `audit.device_access_record`.
+ */
+export interface AccessHistoryQuery {
+  readonly group: AccessRecordGroup;
+  readonly userId?: string;
+  /** Read only rows older than this position. */
+  readonly before?: HistoryPosition;
+  readonly limit?: number;
+}
+
+export type AccessRecordGroup = 'access' | 'sensitive-access' | 'device';
+
+/** One access record as Read access history returns it (numbering-and-audit 5.2). */
+export interface AccessHistoryEntry {
+  readonly id: string;
+  readonly position: HistoryPosition;
+  readonly recordedAt: Date;
+  readonly occurredAt: Date;
+  readonly kind: string;
+  readonly outcome: 'succeeded' | 'refused';
+  readonly userId: string | null;
+  readonly deviceId: string | null;
+  readonly networkAddress: string | null;
+  readonly identityVerification: string | null;
+  readonly auditRecordId: string | null;
+  readonly record: AuditedRecord | null;
+  readonly fieldClass: string | null;
+  readonly exposure: 'shown' | 'exported' | null;
+  readonly scope: AuditScope;
+  readonly correlationId: string;
+}
 
 /** One audit record as Read history returns it, oldest first. */
 export interface AuditHistoryEntry {
   readonly id: string;
+  readonly position: HistoryPosition;
   readonly recordedAt: Date;
   readonly occurredAt: Date;
   /** Null when the Organisation's timezone was not set (PRD-MOD-015). */
@@ -151,6 +203,8 @@ export interface AuditInterface {
   recordAccess(context: TransactionContext, entry: AccessEntry): Promise<void>;
   /** The history of a record or an actor inside the reader's scope, oldest first (PRD-SEC-005). */
   readHistory(context: TransactionContext, query: HistoryQuery): Promise<readonly AuditHistoryEntry[]>;
+  /** The access records of one group, of every user or of one, newest first, inside the reader's scope (PRD-SEC-007). */
+  readAccessHistory(context: TransactionContext, query: AccessHistoryQuery): Promise<readonly AccessHistoryEntry[]>;
   /** The sealing job's step: seals the block closed so far, if it holds any row. Returns its number, or null. */
   sealClosedBlock(context: TransactionContext): Promise<number | null>;
   /** The seal check: recomputes the chain and returns every difference (PRD-SEC-007). */

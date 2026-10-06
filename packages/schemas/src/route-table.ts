@@ -35,6 +35,13 @@ import {
   type PermissionAction,
 } from './roles.js';
 import { secretRegistry } from './secret.js';
+import {
+  accessHistoryPageSchema,
+  accessHistoryQuerySchema,
+  actorHistoryQuerySchema,
+  auditHistoryPageSchema,
+  recordHistoryQuerySchema,
+} from './history.js';
 
 // The route table (code-house-rules 12.1, 12.2). The server, the web app's typed client and the OpenAPI document are
 // all made from it, so they cannot drift apart (PRD Stack: API).
@@ -55,7 +62,17 @@ export type RouteAccess =
        */
       readonly whileLocked?: true;
     }
-  | { readonly kind: 'action'; readonly action: PermissionAction; readonly recordType: string };
+  | {
+      readonly kind: 'action';
+      readonly action: PermissionAction;
+      readonly recordType: string;
+      /**
+       * `command`: the record type carries scope facts, so the guard Authenticates only and the command runs
+       * Authorise with each record's facts (access-and-approvals 5.3, 7.1 step 3; RR-296). Any other route on such a
+       * type is a defect.
+       */
+      readonly authorisedIn?: 'command';
+    };
 
 /**
  * A step of first sign-in, or of sign-in after a reset (access-and-approvals 3.2, 7.1 step 1). Until each is done, a
@@ -209,6 +226,15 @@ const PREPARE_CODES = [
   'access.business-date-not-set',
   'access.starts-in-past',
   'kernel.cross-site-request',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes every history read can answer (access-and-approvals 7.1). */
+const HISTORY_CODES = [
+  'access.not-signed-in',
+  'access.session-locked',
+  'access.sign-in-incomplete',
+  'access.not-authorised',
+  'access.business-date-not-set',
 ] as const satisfies readonly ErrorCode[];
 
 /** The routes of the API. A unit adds its routes here as they are built. */
@@ -476,6 +502,48 @@ export const routes = {
       'access.password-rules-not-set',
       'kernel.cross-site-request',
     ],
+  }),
+  // History (numbering-and-audit 4.5, 5; access-and-approvals 6, 7.2, 9.11; module-map 4.3, 4.5). Served by
+  // `access`, which reads the rows through `audit` and masks each restricted value its field permissions do not
+  // grant, since `audit` uses only `kernel` (PRD-ACS-008). Each row is shown through one assignment that grants view
+  // on it, inside the reader's scope (PRD-SEC-005); the answer names the time it was read (PRD-PRF-004).
+  readRecordHistory: defineRoute({
+    method: 'GET',
+    path: '/api/access/history/record',
+    query: recordHistoryQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'audit.audit_record' },
+    command: false,
+    response: auditHistoryPageSchema,
+    codes: HISTORY_CODES,
+  }),
+  readActorHistory: defineRoute({
+    method: 'GET',
+    path: '/api/access/history/actor',
+    query: actorHistoryQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'audit.audit_record' },
+    command: false,
+    response: auditHistoryPageSchema,
+    codes: HISTORY_CODES,
+  }),
+  // The access history report: sign-ins, sessions, credential events and permission changes.
+  readAccessHistory: defineRoute({
+    method: 'GET',
+    path: '/api/access/history/access-records',
+    query: accessHistoryQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'audit.access_record', authorisedIn: 'command' },
+    command: false,
+    response: accessHistoryPageSchema,
+    codes: HISTORY_CODES,
+  }),
+  // Sensitive access: an encrypted field shown unmasked, an export with a restricted field (numbering-and-audit 5.1).
+  readSensitiveAccessHistory: defineRoute({
+    method: 'GET',
+    path: '/api/access/history/sensitive-access-records',
+    query: accessHistoryQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'audit.sensitive_access_record', authorisedIn: 'command' },
+    command: false,
+    response: accessHistoryPageSchema,
+    codes: HISTORY_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

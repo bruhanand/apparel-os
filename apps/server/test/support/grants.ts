@@ -3,6 +3,7 @@ import {
   permissionRegistry,
   registryByCode,
   type AssignmentScope,
+  type FieldClass,
   type PermissionAction,
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
@@ -41,7 +42,12 @@ export async function grantSynthetic(
   database: string,
   actor: { readonly kind: 'user' | 'service-identity'; readonly id: string },
   authorities: readonly SyntheticAuthority[],
-  options: { readonly scope?: AssignmentScope; readonly registry?: readonly RecordTypeDeclaration[] } = {},
+  options: {
+    readonly scope?: AssignmentScope;
+    readonly registry?: readonly RecordTypeDeclaration[];
+    /** Field classes the role also grants (access-and-approvals 4.1, 6). None by default. */
+    readonly fieldClasses?: readonly { readonly fieldClass: FieldClass; readonly access: 'view' | 'view-and-edit' }[];
+  } = {},
 ): Promise<{ roleId: string; assignmentId: string }> {
   const scope = options.scope ?? ALL_MEMBERS;
   const roleId = uuidv7();
@@ -66,6 +72,13 @@ export async function grantSynthetic(
         `insert into access.role_permission (id, role_version_id, kind, record_type, action, field_class, field_access)
          values ($1, $2, 'action', $3, $4, null, null)`,
         [uuidv7(), versionId, authority.recordType, authority.action],
+      );
+    }
+    for (const granted of options.fieldClasses ?? []) {
+      await owner.query(
+        `insert into access.role_permission (id, role_version_id, kind, record_type, action, field_class, field_access)
+         values ($1, $2, 'field-class', null, null, $3, $4)`,
+        [uuidv7(), versionId, granted.fieldClass, granted.access],
       );
     }
     await owner.query(`update access.role_version set decision = 'Approved' where id = $1`, [versionId]);

@@ -65,8 +65,8 @@ export function networkAddressOf(request: HttpRequest): string {
  * An `action` route then passes Authorise for its action on its record type (7.1 step 3; PRD-INT-001, PRD-UXP-003):
  * one role assignment in force today must grant it, or the request is refused as `access.not-authorised`, naming
  * what is missing. The guard can do this only for a record type that declares no scope fact, since it does not know
- * the record; a route on a record type that carries facts authorises in its command, with the record's facts, and is
- * refused here as a defect until one exists (5.3). Available (7.1 step 2) asks nothing of the access setup operations,
+ * the record; a route on a record type that carries facts declares `authorisedIn: 'command'` and its command
+ * authorises with each record's facts (5.3; RR-296); any other mismatch is a defect. Available (7.1 step 2) asks nothing of the access setup operations,
  * which are not policy-gated (DEC-116).
  */
 @Injectable()
@@ -111,14 +111,15 @@ export class AuthenticateGuard implements CanActivate {
       const declared = registryByCode().get(route.access.recordType);
       if (declared === undefined)
         throw new CommandDefect(`Route record type ${route.access.recordType} is not declared`);
-      if (
-        declared.scopeFacts.legalEntity ||
-        declared.scopeFacts.place ||
-        declared.scopeFacts.brand ||
-        declared.subject
-      ) {
-        throw new CommandDefect('A route on a record type with scope facts authorises in its command (5.3)');
+      const scoped =
+        declared.scopeFacts.legalEntity || declared.scopeFacts.place || declared.scopeFacts.brand || declared.subject;
+      if (scoped !== (route.access.authorisedIn === 'command')) {
+        throw new CommandDefect(
+          'A route on a record type with scope facts, and only such a route, authorises in its command (5.3)',
+        );
       }
+    }
+    if (route.access.kind === 'action' && route.access.authorisedIn !== 'command') {
       const need = { actorId: found.userId, action: route.access.action, recordType: route.access.recordType };
       const authorised = await this.runner.read(
         {

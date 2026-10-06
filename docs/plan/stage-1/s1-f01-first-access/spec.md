@@ -177,7 +177,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T15 Sign-in in the browser](tickets/T15-sign-in-screens.md) | done | T08, T14 |
 | [S1-F01-T16 Access setup screens and the approval panel](tickets/T16-access-setup-screens.md) | blocked | T13, T15 |
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
-| [S1-F01-T18 History screens](tickets/T18-history-screens.md) | blocked | T07, T11, T14 |
+| [S1-F01-T18 History screens](tickets/T18-history-screens.md) | done | T07, T11, T14 |
 | [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | merged | → T15, T20 |
 | [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | blocked | T10, T16, T18 |
 | [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
