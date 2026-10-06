@@ -11,7 +11,7 @@ Updated 6 Oct 2026.
   - **Stock ledger (`S1-F10`):** designed and reviewed, waiting for your approval (item 1 below).
   - **The other 11 features:** not started.
 - **The documents were reorganised on 6 Oct 2026.** The doc checker and its review gate are gone. A small link check replaces it, and the plan now lives in [plan/](plan/roadmap.md).
-- **Not pushed yet.** Local `main` is 12 commits ahead of GitHub, and this reorganisation is on branch `docs/reorganise`. Nothing is pushed without your go-ahead.
+- **On GitHub.** The stage 1 work and this reorganisation were merged into `main` and pushed on 6 Oct 2026.
 
 ## What's next
 
