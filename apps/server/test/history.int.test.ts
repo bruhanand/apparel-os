@@ -259,8 +259,15 @@ describe('the history of a record (numbering-and-audit 4.5; PRD-SEC-005, PRD-ACS
     const second = auditHistoryPageSchema.parse(
       await (await get('/api/access/history/record', { ...query, after: first.next ?? '' }, cookie)).json(),
     );
-    expect(second.entries.map((entry) => entry.operation)).toEqual([`step-${String(HISTORY_PAGE_CAP)}`]);
+    expect(second.entries).toHaveLength(1);
     expect(second.next).toBeNull();
+    // Rows written in one transaction share recorded_at, and UUIDv7 ids within one millisecond
+    // have no promised order, so check the two pages together hold every row exactly once.
+    const operations = [...first.entries, ...second.entries].map((entry) => entry.operation);
+    expect(new Set(operations).size).toBe(HISTORY_PAGE_CAP + 1);
+    expect(operations.sort()).toEqual(
+      Array.from({ length: HISTORY_PAGE_CAP + 1 }, (_, index) => `step-${String(index)}`).sort(),
+    );
   });
 });
 
