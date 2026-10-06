@@ -14,11 +14,15 @@ import { PinoLoggerService } from '../logging/pino-logger.service.js';
 import { ApiRefusal } from './api-refusal.js';
 import { ApiRoute, routeAnswer, RouteInput, type RouteInputOf } from './api-route.js';
 import { configureApp } from './configure-app.js';
+import { HTTP_ENVIRONMENT } from './origin-check.guard.js';
 
 // S1-F01-T04: the API conventions in code (code-house-rules 12.1 to 12.3, 12.11), on a synthetic controller that
 // reaches no database. Every value here is SYNTHETIC.
 
 const ID = '01900000-0000-7000-8000-000000000a01';
+/** The SYNTHETIC own origin of the test application (code-house-rules 12.1; AOS_PUBLIC_ORIGIN). */
+const ORIGIN = 'http://synthetic.localhost';
+const HTTP_SETTINGS_SYNTHETIC = { AOS_PUBLIC_ORIGIN: ORIGIN, AOS_TRUSTED_PROXY_HOPS: '0' };
 const KEY = '01900000-0000-7000-8000-000000000a02';
 
 const syntheticRoutes = {
@@ -108,6 +112,8 @@ beforeAll(async () => {
   const moduleRef = await Test.createTestingModule({ imports: [SyntheticModule] })
     .overrideProvider(LOGGER)
     .useValue(logger)
+    .overrideProvider(HTTP_ENVIRONMENT)
+    .useValue(HTTP_SETTINGS_SYNTHETIC)
     .compile();
   app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
@@ -122,7 +128,7 @@ afterAll(async () => {
 function echo(body: unknown, headers: Record<string, string> = { 'Idempotency-Key': KEY }, id = ID) {
   return fetch(`${baseUrl}/api/synthetic/${id}/echo`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: { 'content-type': 'application/json', origin: ORIGIN, ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
@@ -294,10 +300,58 @@ describe('every route declares its contract (code-house-rules 12.1 "Access on ev
     const moduleRef = await Test.createTestingModule({ imports: [UndeclaredModule] })
       .overrideProvider(LOGGER)
       .useValue(logger)
+      .overrideProvider(HTTP_ENVIRONMENT)
+      .useValue(HTTP_SETTINGS_SYNTHETIC)
       .compile();
     const undeclared = moduleRef.createNestApplication({ logger: false });
     configureApp(undeclared);
     await expect(undeclared.init()).rejects.toThrow(/UndeclaredController\.get/);
     await undeclared.close();
+  });
+});
+
+// S1-F01-T08: writes from another site (code-house-rules 12.1; RR-245).
+describe('writes from another site (code-house-rules 12.1 "Writes from another site")', () => {
+  it('PRD-SEC-005 refuses a command whose Origin is another site, or missing, before the handler runs', async () => {
+    const body = { note: 'abc', lines: [] };
+    for (const headers of [
+      { 'Idempotency-Key': KEY, origin: 'https://synthetic-elsewhere.example' },
+      { 'Idempotency-Key': KEY, origin: `${ORIGIN}:8080` },
+      { 'Idempotency-Key': KEY, origin: 'null' },
+    ]) {
+      const response = await echo(body, headers);
+      expect(response.status).toBe(400);
+      expect(await envelope(response)).toMatchObject({ kind: 'invalid', code: 'kernel.cross-site-request' });
+    }
+    const missing = await fetch(`${baseUrl}/api/synthetic/${ID}/echo`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': KEY },
+      body: JSON.stringify(body),
+    });
+    expect(missing.status).toBe(400);
+    expect((await envelope(missing)).code).toBe('kernel.cross-site-request');
+  });
+
+  it('takes a command from the app’s own origin, and a read with no Origin at all', async () => {
+    expect((await echo({ note: 'abc', lines: [] })).status).toBe(200);
+    expect((await behave('ok')).status).toBe(200);
+  });
+
+  it('refuses to start without its own origin or the proxies it trusts, naming the variable (12.14)', async () => {
+    for (const env of [
+      {},
+      { AOS_PUBLIC_ORIGIN: ORIGIN },
+      { AOS_PUBLIC_ORIGIN: `${ORIGIN}/path`, AOS_TRUSTED_PROXY_HOPS: '0' },
+      { AOS_PUBLIC_ORIGIN: ORIGIN, AOS_TRUSTED_PROXY_HOPS: 'one' },
+    ]) {
+      await expect(
+        Test.createTestingModule({ imports: [SyntheticModule] })
+          .overrideProvider(LOGGER)
+          .useValue(logger)
+          .overrideProvider(HTTP_ENVIRONMENT)
+          .useValue(env)
+          .compile(),
+      ).rejects.toThrow(/AOS_PUBLIC_ORIGIN|AOS_TRUSTED_PROXY_HOPS/);
+    }
   });
 });

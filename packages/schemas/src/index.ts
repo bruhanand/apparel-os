@@ -29,14 +29,17 @@ export type { SetupFingerprintFields, SetupOutcome, SetupRequest, SetupRequestIn
 
 export {
   enrolmentConfirmRequestSchema,
+  enrolmentConfirmResponseSchema,
+  enrolmentStartRequestSchema,
   enrolmentStartResponseSchema,
   passwordChangeRequestSchema,
+  passwordChangeResponseSchema,
+  sessionViewSchema,
   signInOutcomeSchema,
-  signInRefusal,
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
-export type { SignInOutcome, SignInRefusal, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
+export type { SessionView, SignInOutcome, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
 
 export {
   assignmentScopeSchema,
@@ -79,6 +82,7 @@ export {
   errorKindOf,
   errorKinds,
   errorKindSchema,
+  accessCodes,
   issueSchema,
   kernelCodes,
   missingItemSchema,
@@ -97,6 +101,7 @@ export type {
   RouteAccess,
   RouteTable,
   SecretFieldDeclaration,
+  SignInStep,
 } from './route-table.js';
 
 export { openApiDocument, openApiText } from './openapi.js';

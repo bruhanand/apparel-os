@@ -26,10 +26,12 @@ export type FieldPath = readonly string[];
  * - `authenticator-code`: proves presence and is not content, so a replay is never compared on it (CH-8).
  * - `new-secret`: a password or a temporary password the request sets. A replay is compared on it against the
  *   credential the first run wrote, while that credential is current (12.5).
+ * - `presented-secret`: the password presented at sign-in. Only the public sign-in route carries one, and it has no
+ *   key (12.4), so a keyed request holding one is a defect.
  */
 export interface SecretField {
   readonly path: FieldPath;
-  readonly kind: 'authenticator-code' | 'new-secret';
+  readonly kind: 'authenticator-code' | 'new-secret' | 'presented-secret';
 }
 
 /**
@@ -193,6 +195,9 @@ function where(path: readonly (string | number)[]): string {
 function checkPaths(content: RequestContent): void {
   const seen = new Set<string>();
   for (const field of content.secretFields) {
+    if (field.kind === 'presented-secret') {
+      throw new CommandDefect('A presented secret is carried only by sign-in, which has no idempotency key (12.4)');
+    }
     if (field.path.length === 0 || field.path.some((segment) => segment === '' || segment === WILDCARD)) {
       throw new CommandDefect('A secret field is named by its property names, with no list wildcard');
     }

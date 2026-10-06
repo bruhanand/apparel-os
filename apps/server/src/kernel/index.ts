@@ -45,10 +45,25 @@ export { migrationSetFolder, orderMigrationFileNames, readMigrationSet } from '.
 export type { MigrationFile, MigrationSetName } from './db/migration-set.js';
 export { ApiRefusal } from './http/api-refusal.js';
 export type { RefusalBody } from './http/api-refusal.js';
-export { ApiRoute, commandAnswer, requestContentOf, RouteAnswer, routeAnswer, RouteInput } from './http/api-route.js';
+export {
+  ApiRoute,
+  commandAnswer,
+  requestContentOf,
+  ROUTE_METADATA,
+  RouteAnswer,
+  routeAnswer,
+  RouteInput,
+} from './http/api-route.js';
 export type { RouteInputOf } from './http/api-route.js';
 export { configureApp } from './http/configure-app.js';
 export type { HttpRequest, HttpResponse } from './http/http-types.js';
+export {
+  httpSettingsFromEnvironment,
+  PUBLIC_ORIGIN_VARIABLE,
+  TRUSTED_PROXY_HOPS_VARIABLE,
+} from './http/http-settings.js';
+export type { HttpSettings } from './http/http-settings.js';
+export { HTTP_ENVIRONMENT, HTTP_SETTINGS } from './http/origin-check.guard.js';
 export {
   canonicalJson,
   fieldName,
@@ -90,6 +105,7 @@ export type {
 export {
   IDEMPOTENCY_HELPER,
   IdempotencyModule,
+  idempotencyModuleWith,
   REPLAY_SECRET_CHECK,
   RESTRICTED_VALUE_CIPHER,
 } from './idempotency/idempotency.module.js';

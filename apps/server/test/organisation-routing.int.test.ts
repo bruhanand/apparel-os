@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { uuidv7 } from '@apparel-os/domain';
-import { signInOutcomeSchema, signInRefusal } from '@apparel-os/schemas';
 import { Test } from '@nestjs/testing';
 import { sql } from 'drizzle-orm';
 import { pino } from 'pino';
@@ -155,11 +154,9 @@ describe('routing at sign-in (access-and-approvals 3.1)', () => {
     const typed = syntheticCode('ORG-UNLISTED');
     try {
       const result = await router.resolveForSignIn(typed);
-      expect(result).toEqual({ routed: false, refusal: signInRefusal });
-      if (result.routed) throw new Error('routed');
-      // The one refusal of sign-in, the same object every wrong part gets (access-and-approvals 3.1).
-      expect(result.refusal).toBe(signInRefusal);
-      expect(signInOutcomeSchema.parse(result.refusal)).toEqual({ outcome: 'refused' });
+      // Not routed, and nothing else: sign-in answers it with the one refusal every wrong part gets,
+      // access.sign-in-refused (access-and-approvals 3.1; S1-F01-T08).
+      expect(result).toEqual({ routed: false });
       expect(JSON.stringify(result)).not.toContain(typed);
 
       const lines = log();
@@ -177,7 +174,7 @@ describe('routing at sign-in (access-and-approvals 3.1)', () => {
     const [first] = world.organisations;
     try {
       for (const typed of [first.code.toLowerCase(), ` ${first.code}`, first.database, '']) {
-        expect(await router.resolveForSignIn(typed)).toEqual({ routed: false, refusal: signInRefusal });
+        expect(await router.resolveForSignIn(typed)).toEqual({ routed: false });
       }
       expect(log().join('\n')).not.toContain(first.code.toLowerCase());
     } finally {
@@ -190,8 +187,8 @@ describe('routing at sign-in (access-and-approvals 3.1)', () => {
     const [first] = world.organisations;
     const typed = `${first.code}\u0000`;
     try {
-      expect(await router.resolveForSignIn(typed)).toEqual({ routed: false, refusal: signInRefusal });
-      expect(await router.resolveForSignIn('\u0000')).toEqual({ routed: false, refusal: signInRefusal });
+      expect(await router.resolveForSignIn(typed)).toEqual({ routed: false });
+      expect(await router.resolveForSignIn('\u0000')).toEqual({ routed: false });
       const lines = log();
       expect(lines).toHaveLength(2);
       for (const line of lines) {

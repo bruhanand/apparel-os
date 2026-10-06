@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   displayNameSchema,
+  idSchema,
   loginSchema,
   organisationCodeSchema,
   personasHeldSchema,
@@ -26,25 +27,31 @@ export const signInRequestSchema = z.strictObject({
 export type SignInRequestInput = z.input<typeof signInRequestSchema>;
 
 /**
- * What sign-in answers. Enrolment and the password change come first when the user signs in with a temporary
- * password or has no second factor; until both are done the sign-in reaches nothing else (access-and-approvals 3.2).
- * Every refusal is the same one; "slowed" follows the throttling setting, whose values are OPEN (GC3-5).
+ * What a sign-in that passed answers, with the session cookie. Enrolment and the password change come first when the
+ * user signs in with a temporary password or has no second factor; until both are done the session reaches nothing
+ * else (access-and-approvals 3.2, 7.1 step 1).
+ *
+ * A refused or slowed sign-in is no success: it is the error envelope with one code and no `missing`,
+ * `access.sign-in-refused` for any wrong part and `access.sign-in-slowed` after repeated failures, the same for a
+ * login that exists and one that does not (code-house-rules 12.3; DEC-116). The throttling values are OPEN (GC3-5).
  */
 export const signInOutcomeSchema = z.discriminatedUnion('outcome', [
   z.strictObject({ outcome: z.literal('signed-in') }),
   z.strictObject({ outcome: z.literal('enrolment-required') }),
   z.strictObject({ outcome: z.literal('password-change-required') }),
-  z.strictObject({ outcome: z.literal('refused') }),
-  z.strictObject({ outcome: z.literal('slowed') }),
 ]);
 export type SignInOutcome = z.infer<typeof signInOutcomeSchema>;
 
 /**
- * The one refusal for a wrong Organisation code, login, password or code (access-and-approvals 3.1). It carries
- * nothing else, so a failed attempt never says which part was wrong.
+ * The signed-in user, for a session that has finished first sign-in (access-and-approvals 3.3). Identifiers and the
+ * display name only; the display name is no restricted field (access-and-approvals 6).
  */
-export type SignInRefusal = Extract<SignInOutcome, { outcome: 'refused' }>;
-export const signInRefusal: SignInRefusal = Object.freeze({ outcome: 'refused' });
+export const sessionViewSchema = z.strictObject({
+  organisationCode: organisationCodeSchema,
+  userId: idSchema,
+  displayName: displayNameSchema,
+});
+export type SessionView = z.infer<typeof sessionViewSchema>;
 
 /**
  * The authenticator secret, shown once at enrolment and never again (access-and-approvals 3.2; code-house-rules 12.6,
@@ -56,9 +63,23 @@ export const enrolmentStartResponseSchema = z.strictObject({
   otpauthUri: shownOnceSecret(),
 });
 
+/** Enrolment starts with nothing but the session: the server makes the secret (access-and-approvals 3.2). */
+export const enrolmentStartRequestSchema = z.strictObject({});
+
 /** Enrolment is confirmed with a code from the newly enrolled app. */
 export const enrolmentConfirmRequestSchema = z.strictObject({
   totpCode: totpCodeSchema,
+});
+
+/** The confirmed second factor, by its identifier and state; never its secret (code-house-rules 12.4). */
+export const enrolmentConfirmResponseSchema = z.strictObject({
+  secondFactorId: idSchema,
+  state: z.literal('Confirmed'),
+});
+
+/** The password was changed. The credential's identifier is never sent (code-house-rules 12.5). */
+export const passwordChangeResponseSchema = z.strictObject({
+  outcome: z.literal('password-changed'),
 });
 
 /**

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CORRELATION_ID_HEADER, isCorrelationId } from '../command-runner/correlation.js';
 import { configureApp } from '../http/configure-app.js';
+import { HTTP_ENVIRONMENT } from '../http/origin-check.guard.js';
 import { KernelModule } from '../kernel.module.js';
 
 describe('GET /api/health', () => {
@@ -11,7 +12,11 @@ describe('GET /api/health', () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [KernelModule] }).compile();
+    // SYNTHETIC HTTP settings: the test's own origin, no proxy in front.
+    const moduleRef = await Test.createTestingModule({ imports: [KernelModule] })
+      .overrideProvider(HTTP_ENVIRONMENT)
+      .useValue({ AOS_PUBLIC_ORIGIN: 'http://synthetic.localhost', AOS_TRUSTED_PROXY_HOPS: '0' })
+      .compile();
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.listen(0, '127.0.0.1');

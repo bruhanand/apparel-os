@@ -100,10 +100,42 @@ export const kernelCodes = declareCodes({
   'kernel.timed-out': 'timed-out',
   'kernel.failed': 'failed',
   'kernel.outcome-unknown': 'failed',
+  // A command whose Origin is not the app's own: a write from another site (code-house-rules 12.1; RR-245).
+  'kernel.cross-site-request': 'invalid',
+});
+
+/**
+ * The codes of `access` for sign-in, enrolment and the own password change (access-and-approvals 3.1, 3.2, 7.1;
+ * code-house-rules 12.3; S1-F01-T08).
+ *
+ * - `access.sign-in-refused`: the one refusal for a wrong Organisation code, login, password or code; it names no
+ *   part and carries no `missing` (access-and-approvals 3.1).
+ * - `access.sign-in-slowed`: repeated failures for the typed login or the source address reached the throttling
+ *   setting; the same answer whether the login exists or not (DEC-116).
+ * - `access.sign-in-unavailable`: a setting sign-in needs is not set; `missing` names it (code-house-rules 12.14).
+ * - `access.not-signed-in`: no session in force (code-house-rules 12.3).
+ * - `access.sign-in-incomplete`: the session reaches only enrolment and the password change until both are done;
+ *   `missing` names the steps (access-and-approvals 3.2, 7.1 step 1).
+ * - `access.authenticator-code-refused`: a wrong or already used authenticator code; never kept under the key (12.5).
+ * - `access.already-enrolled`, `access.enrolment-not-started`: enrolment asked for when it does not apply.
+ * - `access.password-refused`: the new password fails the password rules; caused by a secret, never kept (12.5).
+ * - `access.password-rules-not-set`: no password rules are in force, so no password can be set (GC3-5).
+ */
+export const accessCodes = declareCodes({
+  'access.sign-in-refused': 'not-signed-in',
+  'access.sign-in-slowed': 'not-signed-in',
+  'access.sign-in-unavailable': 'unavailable',
+  'access.not-signed-in': 'not-signed-in',
+  'access.sign-in-incomplete': 'not-signed-in',
+  'access.authenticator-code-refused': 'not-authorised',
+  'access.already-enrolled': 'refused',
+  'access.enrolment-not-started': 'refused',
+  'access.password-refused': 'refused',
+  'access.password-rules-not-set': 'unavailable',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
-export const errorCodes = { ...kernelCodes } as const;
+export const errorCodes = { ...kernelCodes, ...accessCodes } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
 /** The kind of a declared code. */

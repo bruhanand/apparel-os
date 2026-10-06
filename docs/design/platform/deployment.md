@@ -44,7 +44,8 @@ The `app` service serves the API, the web app and the counter PWA from **one ori
 Why one origin:
 
 - Sessions are PostgreSQL-backed server sessions in a cookie (`PRD-SEC-001`; Stack: Authentication). With one origin, the cookie is first-party. It needs no cross-site settings, which browsers increasingly block, and no CORS.
-- Cookie: `Secure`, `HttpOnly`, `SameSite=Lax`, host-only (no `Domain` attribute), path `/`.
+- Cookie: `Secure`, `HttpOnly`, `SameSite=Lax`, host-only (no `Domain` attribute), path `/`, named `__Host-aos-session` (access-and-approvals 3.3).
+- The server is told its own origin in `AOS_PUBLIC_ORIGIN` (on Railway, `https://` and the service's public domain), and how many proxies in front of it add to `X-Forwarded-For` in `AOS_TRUSTED_PROXY_HOPS`, so it can refuse a command from another site and know a request's source address for the access record and sign-in throttling ([code-house-rules.md](code-house-rules.md) 12.1; access-and-approvals 3.1). Neither has a default; the server refuses to start without them. **Design choice.**
 - The PWA service worker and IndexedDB belong to the same origin as the API that registers the device (`PRD-OFF-002`).
 - Sign-in asks for the Organisation code as well as the login (DEC-093). The server finds the Organisation in the directory (section 4), then the user and the session in that Organisation's database. A user belongs to one Organisation (`PRD-ACS-020`). **Design choice:** a browser is signed in to one Organisation at a time.
 - The cost: web, counter and server deploy together. That is acceptable for testing, since they share one repository.
@@ -117,7 +118,7 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 
 - Until KDPS answers question 37, imports keep **no customer name or phone number** from the earlier POS reports (`PRD-SEC-009`, `PRD-SEC-010`). Nothing personal is kept by default.
 - Logs are pino JSON to standard output, read in Railway's log view (Stack: Diagnostics). Logs carry no secrets or unneeded personal data (`PRD-SEC-014`).
-- Secrets live in each environment's Railway variables, never in the repository.
+- Secrets live in each environment's Railway variables, never in the repository. Among them, `AOS_ORGANISATION_KEYS` holds the key of each Organisation that encrypts authenticator secrets and restricted values (access-and-approvals 6); the server refuses to start without it.
 
 ## 10. Open questions
 

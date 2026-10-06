@@ -1,4 +1,3 @@
-import { signInRefusal, type SignInRefusal } from '@apparel-os/schemas';
 import type { LoggerService, OnApplicationShutdown } from '@nestjs/common';
 import { connectionToDatabase } from '../db/connection.js';
 import { createDb, type Database, type DatabaseHandle } from '../db/create-db.js';
@@ -14,10 +13,12 @@ export interface RoutedOrganisation {
   readonly db: Database;
 }
 
-/** Sign-in: the Organisation, or the one generic refusal (access-and-approvals 3.1). */
+/**
+ * Sign-in: the Organisation, or not routed, which sign-in answers with the one refusal every wrong part gets
+ * (access-and-approvals 3.1; `access.sign-in-refused`).
+ */
 export type SignInRouting =
-  | { readonly routed: true; readonly organisation: RoutedOrganisation }
-  | { readonly routed: false; readonly refusal: SignInRefusal };
+  { readonly routed: true; readonly organisation: RoutedOrganisation } | { readonly routed: false };
 
 /**
  * A later request: the Organisation its session cookie names and the identifier to look for there by its hash,
@@ -64,7 +65,7 @@ export class OrganisationRouter implements OnApplicationShutdown {
         'Sign-in refused: the Organisation code is not in the directory (nothing typed is logged)',
         CONTEXT,
       );
-      return { routed: false, refusal: signInRefusal };
+      return { routed: false };
     }
     return { routed: true, organisation };
   }

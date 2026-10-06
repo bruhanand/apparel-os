@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Secret, secretRegistry } from './secret.js';
+import { errorKindOf } from './errors.js';
 import {
   enrolmentStartResponseSchema,
   passwordChangeRequestSchema,
   signInOutcomeSchema,
-  signInRefusal,
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
@@ -39,14 +39,19 @@ describe('sign-in (PRD-SEC-001, DEC-093; access-and-approvals 3.1)', () => {
     ).toBe(false);
   });
 
-  it('has one refusal that names no part', () => {
-    expect(signInOutcomeSchema.safeParse({ outcome: 'refused' }).success).toBe(true);
-    expect(signInOutcomeSchema.safeParse({ outcome: 'refused', part: 'password' }).success).toBe(false);
+  it('answers a sign-in that passed with the step it still needs, and nothing else', () => {
+    for (const outcome of ['signed-in', 'enrolment-required', 'password-change-required']) {
+      expect(signInOutcomeSchema.safeParse({ outcome }).success).toBe(true);
+    }
+    expect(signInOutcomeSchema.safeParse({ outcome: 'signed-in', userId: 'x' }).success).toBe(false);
   });
 
-  it('gives that one refusal as a frozen value every caller shares', () => {
-    expect(signInOutcomeSchema.parse(signInRefusal)).toEqual({ outcome: 'refused' });
-    expect(Object.isFrozen(signInRefusal)).toBe(true);
+  it('refuses in the error envelope with one code that names no part, and slows with another (code-house-rules 12.3)', () => {
+    // A refused or slowed sign-in is no success: it is the envelope, with one code and no `missing` (DEC-116).
+    expect(signInOutcomeSchema.safeParse({ outcome: 'refused' }).success).toBe(false);
+    expect(signInOutcomeSchema.safeParse({ outcome: 'slowed' }).success).toBe(false);
+    expect(errorKindOf('access.sign-in-refused')).toBe('not-signed-in');
+    expect(errorKindOf('access.sign-in-slowed')).toBe('not-signed-in');
   });
 });
 
