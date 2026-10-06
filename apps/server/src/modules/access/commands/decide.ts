@@ -15,6 +15,7 @@ import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { approvalDecided } from '../events.js';
 import { authorise } from '../queries/authorise.js';
+import { identityTarget, reliedAuthorityTargets } from './authority.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
@@ -64,6 +65,11 @@ type RequestRow = typeof approvalRequest.$inferSelect;
 
 /** What Decide does with one kind of document (module-map 6.2 flow A). */
 interface DocumentHandler {
+  /**
+   * The authority rows the decision changes, which Decide locks exclusively at step 0 with the approver's own
+   * (code-house-rules 8.2 "Authority first"; RR-325): a user being changed, an assignment taking effect or withdrawn.
+   */
+  authorityTargets?(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
   /** The rows Decide locks with the request at step 1 (code-house-rules 8.2). */
   targets(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
   /** A check of the document's own, under the locks, before the code is taken. */
@@ -108,7 +114,8 @@ export class Approvals {
       [
         'access.role_assignment.change',
         {
-          targets: (_c, v) => Promise.resolve(changes.assignmentTargets(v)),
+          authorityTargets: (_c, v) => Promise.resolve(changes.assignmentTargets(v)),
+          targets: () => Promise.resolve([]),
           // A new user's assignment waits until the user's first version is approved (4.3; DEC-116).
           precheck: async (c, v) => {
             const userId = await changes.assignmentUser(c, v);
@@ -128,7 +135,8 @@ export class Approvals {
       [
         'access.role_assignment.withdrawal',
         {
-          targets: (c, v) => changes.withdrawalTargets(c, v),
+          authorityTargets: (c, v) => changes.withdrawalAuthorityTargets(c, v),
+          targets: (_c, v) => Promise.resolve(changes.withdrawalTargets(v)),
           approve: (c, d, v) => changes.approveWithdrawal(c, d, v, HELD),
           reject: (c, d, v) => changes.rejectWithdrawal(c, d, v, HELD),
         },
@@ -152,15 +160,23 @@ export class Approvals {
       [
         'access.user.change',
         {
-          // The user's pending assignments and their open requests too: rejecting the user's first version
-          // withdraws them in the same transaction (4.3; DEC-116, DEC-117).
+          // The user's identity row and pending assignments at step 0, their open requests at step 1: rejecting the
+          // user's first version withdraws them in the same transaction (4.3; DEC-116, DEC-117).
+          authorityTargets: async (c, v) => {
+            const userId = await users.userOfVersion(c, v);
+            if (userId === undefined) return [];
+            const pending = await changes.pendingAssignmentsOf(c, userId);
+            return [
+              identityTarget({ kind: 'user', id: userId }, 'exclusive'),
+              ...pending.flatMap((id) => changes.assignmentTargets(id)),
+            ];
+          },
           targets: async (c, v) => {
             const userId = await users.userOfVersion(c, v);
             const pending = userId === undefined ? [] : await changes.pendingAssignmentsOf(c, userId);
             const requests = await this.openRequestsOf(c, pending);
             return [
               ...users.userVersionTargets(v),
-              ...pending.flatMap((id) => changes.assignmentTargets(id)),
               ...requests.map((request) => ({ table: APPROVAL_REQUEST, id: request.id, mode: 'exclusive' as const })),
             ];
           },
@@ -445,8 +461,10 @@ export class Approvals {
   }
 
   /**
-   * Decide (access-and-approvals 9.5; module-map 6.2 flow A). Reads the request, locks it with the document's rows at
-   * step 1 in one call (code-house-rules 8.2), then rechecks under the locks: the request is still open and not
+   * Decide (access-and-approvals 9.5; module-map 6.2 flow A). Reads the request, locks the authority rows at step 0
+   * (the approver's user row and assignment, shared; the user or assignment the decision changes, exclusive), then
+   * the request with the document's rows at step 1, each step in one call (code-house-rules 8.2; RR-325), then
+   * rechecks under the locks: the request is still open and not
    * superseded (9.6), the version reviewed is its version (PRD-ACS-007), the decider is eligible (9.3), the reason
    * fits (POL-02.23, DEC-104), the document's own checks pass, and a fresh authenticator code is given (3.3). Then,
    * in this one transaction: the decision, the request's state, the version taking effect or rejected, effective
@@ -464,6 +482,14 @@ export class Approvals {
     if (actor.kind !== 'user') return refused('not-authorised', 'access.not-eligible', [{ kind: 'person' }]);
     const rule = this.ruleOf(found.actionType);
     const handler = this.handlerOf(found.actionType);
+    // Step 0: the approver's user row and the assignment they rely on, shared, with the authority rows the decision
+    // changes, exclusive (code-house-rules 8.2 "Authority first"; RR-325). The assignment is the one Authorise finds
+    // before the locks; an approver who is not eligible then locks none of theirs and is refused under the locks.
+    const relied = await this.eligibility(context, actor, found);
+    await context.lock(LOCK_STEP.authority, [
+      ...(relied.kind === 'eligible' ? reliedAuthorityTargets(actor, relied.roleAssignmentId) : []),
+      ...((await handler.authorityTargets?.(context, found.documentVersionId)) ?? []),
+    ]);
     await context.lock(LOCK_STEP.document, [
       { table: APPROVAL_REQUEST, id: found.id, mode: 'exclusive' },
       ...(await handler.targets(context, found.documentVersionId)),
@@ -475,6 +501,10 @@ export class Approvals {
     if (request.documentVersionId !== input.versionId) return refused('conflict', 'kernel.stale-version');
     const eligible = await this.eligibility(context, actor, request);
     if (eligible.kind === 'refused') return { kind: 'refusal', refusal: eligible.refusal, causedBySecret: false };
+    // Eligible now through another assignment than the one locked: the authority changed while the locks were taken.
+    if (relied.kind !== 'eligible' || relied.roleAssignmentId !== eligible.roleAssignmentId) {
+      return refused('conflict', 'kernel.stale-version');
+    }
     const checked = await this.checkReason(context, rule, input);
     if (checked.kind === 'refusal') return { kind: 'refusal', refusal: checked.refusal, causedBySecret: false };
     const reason = checked.reason;

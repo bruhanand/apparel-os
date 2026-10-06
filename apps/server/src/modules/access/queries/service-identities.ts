@@ -12,7 +12,7 @@ export interface AuthenticatedServiceIdentity {
 }
 
 /** Whether the identity has an Approved version in force on the date that is Active (access-and-approvals 7.1). */
-async function activeOn(
+export async function serviceIdentityActiveOn(
   context: TransactionContext,
   serviceIdentityId: string,
   businessDate: string,
@@ -46,7 +46,7 @@ export async function authenticateInternalIdentity(
     .from(serviceIdentity)
     .where(and(eq(serviceIdentity.code, code), eq(serviceIdentity.kind, 'internal')));
   const found = rows[0];
-  if (found === undefined || !(await activeOn(context, found.id, today.date))) return undefined;
+  if (found === undefined || !(await serviceIdentityActiveOn(context, found.id, today.date))) return undefined;
   return { serviceIdentityId: found.id, code: found.code, kind: 'internal' };
 }
 
@@ -74,6 +74,6 @@ export async function authenticateServiceCredential(
     .where(and(eq(serviceCredential.id, credentialId), isNull(serviceCredential.revokedAt)));
   const found = rows[0];
   if (found === undefined || !(await verifyPassword(found.hash, secret))) return undefined;
-  if (!(await activeOn(context, found.id, today.date))) return undefined;
+  if (!(await serviceIdentityActiveOn(context, found.id, today.date))) return undefined;
   return { serviceIdentityId: found.id, code: found.code, kind: found.kind as AuthenticatedServiceIdentity['kind'] };
 }

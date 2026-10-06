@@ -213,6 +213,15 @@ export class AccessChangesController {
         content,
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
+          // Step 0: the preparer and the assignment the guard's Authorise found, rechecked under the locks
+          // (code-house-rules 8.2 "Authority first"; access-and-approvals 7.1 step 4; RR-325).
+          const held = await this.access.holdAuthority(
+            context,
+            { kind: 'user', id: user.userId },
+            preparer.roleAssignmentId,
+            { action: need.action, recordType: need.recordType },
+          );
+          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
           const outcome = await work(context, preparer);
           if (outcome.kind === 'success') {
             // A new user's temporary password: its credential, for the replay check (code-house-rules 12.5).
