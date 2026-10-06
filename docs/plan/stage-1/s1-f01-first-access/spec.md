@@ -173,7 +173,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | blocked | T06, T08 |
 | [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
 | [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | blocked | T06, T09, T11 |
-| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | T04 |
+| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | code merged; Demo 0 deploy waits on RR-187 |
 | [S1-F01-T15 Sign-in in the browser](tickets/T15-sign-in-screens.md) | blocked | T08, T14 |
 | [S1-F01-T16 Access setup screens and the approval panel](tickets/T16-access-setup-screens.md) | blocked | T13, T15 |
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
