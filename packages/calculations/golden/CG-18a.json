@@ -1,0 +1,44 @@
+{
+  "id": "CG-18a",
+  "title": "Split refund, paise left",
+  "synthetic": true,
+  "covers": ["PRD-RET-022"],
+  "function": "splitRefund",
+  "input": {
+    "tenders": [
+      {
+        "tender": "cash",
+        "allocation": 60000,
+        "remaining": 60000
+      },
+      {
+        "tender": "card",
+        "allocation": 30000,
+        "remaining": 30000
+      },
+      {
+        "tender": "upi",
+        "allocation": 10000,
+        "remaining": 10000
+      }
+    ],
+    "refund": 10001
+  },
+  "expected": {
+    "refund": 10001,
+    "shares": [
+      {
+        "tender": "cash",
+        "amount": 6001
+      },
+      {
+        "tender": "card",
+        "amount": 3000
+      },
+      {
+        "tender": "upi",
+        "amount": 1000
+      }
+    ]
+  }
+}

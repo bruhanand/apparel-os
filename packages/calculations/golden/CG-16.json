@@ -1,0 +1,77 @@
+{
+  "id": "CG-16",
+  "title": "Part of a line",
+  "synthetic": true,
+  "covers": ["PRD-RET-024"],
+  "function": "returnValue",
+  "runs": [
+    {
+      "input": {
+        "line": {
+          "id": "L1",
+          "soldQuantity": 3,
+          "paidValue": 100000
+        },
+        "earlierReturns": [],
+        "quantity": 1
+      },
+      "expected": {
+        "line": "L1",
+        "quantity": 1,
+        "refund": 33333,
+        "remainingQuantity": 2
+      }
+    },
+    {
+      "input": {
+        "line": {
+          "id": "L1",
+          "soldQuantity": 3,
+          "paidValue": 100000
+        },
+        "earlierReturns": [
+          {
+            "quantity": 1,
+            "refund": 33333,
+            "status": "completed"
+          }
+        ],
+        "quantity": 1
+      },
+      "expected": {
+        "line": "L1",
+        "quantity": 1,
+        "refund": 33333,
+        "remainingQuantity": 1
+      }
+    },
+    {
+      "input": {
+        "line": {
+          "id": "L1",
+          "soldQuantity": 3,
+          "paidValue": 100000
+        },
+        "earlierReturns": [
+          {
+            "quantity": 1,
+            "refund": 33333,
+            "status": "completed"
+          },
+          {
+            "quantity": 1,
+            "refund": 33333,
+            "status": "completed"
+          }
+        ],
+        "quantity": 1
+      },
+      "expected": {
+        "line": "L1",
+        "quantity": 1,
+        "refund": 33334,
+        "remainingQuantity": 0
+      }
+    }
+  ]
+}

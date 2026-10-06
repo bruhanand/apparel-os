@@ -1,0 +1,33 @@
+{
+  "id": "CG-15d",
+  "title": "Does not add up",
+  "synthetic": true,
+  "covers": ["PRD-POS-006"],
+  "function": "checkTenders",
+  "input": {
+    "bill": {
+      "$pricedBill": "CG-03"
+    },
+    "allocation": {
+      "billReference": {
+        "$billReference": "CG-03"
+      },
+      "lines": [
+        {
+          "kind": "card",
+          "amount": 196000
+        },
+        {
+          "kind": "cash",
+          "amount": 199000
+        }
+      ]
+    }
+  },
+  "refusal": [
+    {
+      "code": "allocation-mismatch",
+      "input": "allocation"
+    }
+  ]
+}

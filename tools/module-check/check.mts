@@ -16,6 +16,9 @@
 //   2. A unit imports a lower-tier unit, or a same-tier unit on SAME_TIER_CALLS. Anything else is an error,
 //      and so is a unit folder missing from TIERS.
 //   3. Nothing under packages/ imports from apps/. Nothing under apps/web imports from apps/server.
+//   4. The shared calculations (shared-calculations.md 2.1, 2.3): a source file of packages/calculations/src, other
+//      than a test, imports only @apparel-os/domain and the package's own files; and nothing outside src/costing
+//      imports into it, so the selling entry point never reaches the costing entry point (PRD-OFF-004).
 //
 // Limit: imports are found by pattern, not by a parser. A regular expression literal that holds a quote
 // character can hide the imports that follow it.
@@ -28,6 +31,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 // Tiers from module-map.md section 2.1. A call goes to the same tier or a lower one, never upward.
 const TIERS: Readonly<Record<string, number>> = {
   kernel: 0,
+  // The calculations module is the package packages/calculations, not a server folder (shared-calculations.md 2.1);
+  // the entry stays as a guard, so a server folder of that name could only be tier 0. Rule 4 checks the package.
   calculations: 0,
 
   access: 1,
@@ -489,9 +494,41 @@ function checkIsolation(): Finding[] {
   return findings;
 }
 
+// Rule 4.
+function checkCalculations(): Finding[] {
+  const findings: Finding[] = [];
+  const src = join(ROOT, 'packages/calculations/src');
+  const costingDir = join(src, 'costing');
+  for (const file of listCodeFiles(src)) {
+    if (/\.test\.[cm]?[jt]sx?$/.test(file)) continue;
+    for (const ref of findImports(readFileSync(file, 'utf8'))) {
+      const where = `${show(file)}:${String(ref.line)}`;
+      if (!ref.specifier.startsWith('.')) {
+        if (ref.specifier !== '@apparel-os/domain') {
+          findings.push({
+            where,
+            text: `packages/calculations imports only @apparel-os/domain, not "${ref.specifier}" (shared-calculations.md 2.1)`,
+          });
+        }
+        continue;
+      }
+      const target = resolve(dirname(file), ref.specifier);
+      if (!isInside(src, target)) {
+        findings.push({ where, text: `"${ref.specifier}" points outside packages/calculations/src` });
+      } else if (isInside(costingDir, target) && !isInside(costingDir, file)) {
+        findings.push({
+          where,
+          text: `"${ref.specifier}" reaches the costing entry point from outside it; selling never imports costing (shared-calculations.md 2.3)`,
+        });
+      }
+    }
+  }
+  return findings;
+}
+
 // ---- Run -------------------------------------------------------------------------------------------------
 
-const findings = [...checkTables(), ...checkServer(), ...checkIsolation()];
+const findings = [...checkTables(), ...checkServer(), ...checkIsolation(), ...checkCalculations()];
 if (findings.length > 0) {
   console.log('\nModule boundaries');
   for (const finding of findings) console.log(`  ${finding.where} — ${finding.text}`);

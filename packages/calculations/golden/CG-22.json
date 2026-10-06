@@ -1,0 +1,21 @@
+{
+  "id": "CG-22",
+  "title": "Ticket margin",
+  "synthetic": true,
+  "covers": ["PRD-PTW-011"],
+  "function": "ticketMargin",
+  "input": {
+    "mrp": {
+      "kind": "known",
+      "value": 199900
+    },
+    "pRate": {
+      "kind": "known",
+      "value": 94500
+    }
+  },
+  "expected": {
+    "kind": "known",
+    "value": "52.73"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "CG-17",
+  "title": "Return the reward unit",
+  "synthetic": true,
+  "covers": ["PRD-RET-024", "PRD-ACP-008"],
+  "function": "returnValue",
+  "input": {
+    "line": {
+      "$billLine": {
+        "bill": "CG-06",
+        "line": "L1"
+      }
+    },
+    "earlierReturns": [],
+    "quantity": 1
+  },
+  "expected": {
+    "line": "L1",
+    "quantity": 1,
+    "refund": 88000,
+    "remainingQuantity": 0
+  }
+}

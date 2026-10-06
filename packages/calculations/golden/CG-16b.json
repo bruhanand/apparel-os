@@ -1,0 +1,34 @@
+{
+  "id": "CG-16b",
+  "title": "Too many",
+  "synthetic": true,
+  "covers": ["PRD-RET-005", "PRD-RET-006"],
+  "function": "returnValue",
+  "input": {
+    "line": {
+      "id": "L1",
+      "soldQuantity": 3,
+      "paidValue": 100000
+    },
+    "earlierReturns": [
+      {
+        "quantity": 1,
+        "refund": 33333,
+        "status": "completed"
+      },
+      {
+        "quantity": 1,
+        "refund": 33333,
+        "status": "pending"
+      }
+    ],
+    "quantity": 2
+  },
+  "refusal": [
+    {
+      "code": "exceeds-entitlement",
+      "line": "L1",
+      "input": "quantity"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ This file guides AI coding agents working in this repository. `CLAUDE.md` is a l
 
 Apparel OS is a retail ERP for apparel, footwear and packaged-goods businesses. The first customer is KDPS Lifestyle Pvt. Ltd. (KDPS).
 
-The repository holds the documents, the doc checker (see "Checking the documents") and the code workspace skeleton (see "Code workspace"). There is no business code yet. Use only the commands listed there; do not invent others.
+The repository holds the documents, the doc checker (see "Checking the documents") and the code workspace (see "Code workspace"). Stage 1 code has begun in the kernel and `packages/calculations`. Use only the commands listed in "Checking the documents" and "Code workspace"; do not invent others.
 
 The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces with Turborepo, strict TypeScript, Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier. Playwright arrives with the first real screen, or earlier with the counter run of the shared golden cases (`docs/design/calculations/shared-calculations.md` 12.2).
 
@@ -146,6 +146,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
+| `packages/calculations` | The shared calculations of `shared-calculations.md` (GC-7): selling at `@apparel-os/calculations`, costing at `@apparel-os/calculations/costing` (server only); the golden cases in `golden/`. It imports only `@apparel-os/domain` |
 | `packages/schemas` | Shared Zod schemas for the API, with the route table and the typed client (code-house-rules 12.2) |
 | `packages/ui` | Shared UI helpers for shadcn/ui |
 | `tools/module-check` | The module boundary check |

@@ -1,0 +1,30 @@
+{
+  "id": "CG-15e",
+  "title": "Cash received with no cash line",
+  "synthetic": true,
+  "covers": ["PRD-POS-008"],
+  "function": "checkTenders",
+  "input": {
+    "bill": {
+      "$pricedBill": "CG-03"
+    },
+    "allocation": {
+      "billReference": {
+        "$billReference": "CG-03"
+      },
+      "lines": [
+        {
+          "kind": "card",
+          "amount": 396000
+        }
+      ],
+      "cashReceived": 10000
+    }
+  },
+  "refusal": [
+    {
+      "code": "cash-received-without-cash",
+      "input": "cash-received"
+    }
+  ]
+}

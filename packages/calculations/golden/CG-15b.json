@@ -1,0 +1,45 @@
+{
+  "id": "CG-15b",
+  "title": "Change",
+  "synthetic": true,
+  "covers": ["PRD-POS-008"],
+  "function": "checkTenders",
+  "input": {
+    "bill": {
+      "$pricedBill": "CG-03"
+    },
+    "allocation": {
+      "billReference": {
+        "$billReference": "CG-03"
+      },
+      "lines": [
+        {
+          "kind": "card",
+          "amount": 196000
+        },
+        {
+          "kind": "cash",
+          "amount": 200000
+        }
+      ],
+      "cashReceived": 250000
+    }
+  },
+  "expected": {
+    "amountDue": 396000,
+    "lines": [
+      {
+        "kind": "card",
+        "amount": 196000,
+        "instrument": null
+      },
+      {
+        "kind": "cash",
+        "amount": 200000,
+        "instrument": null
+      }
+    ],
+    "cashReceived": 250000,
+    "change": 50000
+  }
+}
