@@ -22,9 +22,23 @@ declare module 'vitest' {
 
 export type TestRole = 'superuser' | 'migration' | 'runtime';
 
+let outsideVitest: PostgresServer | undefined;
+
+/**
+ * Names the server for code that runs outside Vitest, such as the server of the browser journeys
+ * (test/browser/serve.ts), which starts its own container. Inside Vitest the run's global setup provides it.
+ */
+export function usePostgresServer(server: PostgresServer): void {
+  outsideVitest = server;
+}
+
+function testServer(): PostgresServer {
+  return outsideVitest ?? inject('postgres');
+}
+
 /** A connection string to one database of the test server as one role. */
 export function databaseUrl(database: string, role: TestRole): string {
-  const server = inject('postgres');
+  const server = testServer();
   if (role === 'superuser') {
     const url = new URL(server.superuserUrl);
     url.pathname = `/${database}`;
@@ -43,7 +57,7 @@ export async function connect(database: string, role: TestRole): Promise<Client>
 }
 
 async function asSuperuser<T>(work: (client: Client) => Promise<T>): Promise<T> {
-  const client = new Client({ connectionString: inject('postgres').superuserUrl });
+  const client = new Client({ connectionString: testServer().superuserUrl });
   await client.connect();
   try {
     return await work(client);
@@ -82,7 +96,7 @@ export async function dropDatabase(name: string): Promise<void> {
  */
 export async function createTestDatabase(set: MigrationSetName, label: string): Promise<string> {
   const name = `syn_${label}_${randomBytes(4).toString('hex')}`;
-  const template = inject('postgres').templates[set];
+  const template = testServer().templates[set];
   await asSuperuser((client) =>
     client.query(
       `create database ${client.escapeIdentifier(name)} template ${client.escapeIdentifier(template)} owner aos_migration`,

@@ -22,3 +22,25 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm test:integration
+
+  # The browser journeys in Chromium (code-house-rules 10.1, 10.5; PRD-SEC-016; S1-F01-T15). Every run keeps its
+  # Playwright trace and report as an artefact, passed or failed.
+  browser-journeys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @apparel-os/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-traces
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/

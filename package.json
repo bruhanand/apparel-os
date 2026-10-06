@@ -16,6 +16,7 @@
     "typecheck:tools": "tsc -p tools/module-check/tsconfig.json && tsc -p tools/link-check/tsconfig.json",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run build build:browser && pnpm --filter @apparel-os/web test:e2e",
     "check:modules": "node tools/module-check/check.mts",
     "check:links": "node tools/link-check/check.mts",
     "migrate": "pnpm --filter @apparel-os/server migrate",

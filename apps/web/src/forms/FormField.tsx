@@ -10,21 +10,30 @@ export function issueMessage(type: string | undefined): MessageId {
 /**
  * A form field of design-language 10.7: the label above (with a red * and the word "Required" for screen readers),
  * the control, then help or the error below, which shows on blur and on submit. The error text comes from the issue
- * code, never from the input. The control names `${id}-error` in aria-describedby when it has one.
+ * code, never from the input; `message` gives an error a check of the screen found, not the route schema. Help shows
+ * until an error replaces it. The control names `${id}-error`, or else `${id}-help`, in aria-describedby
+ * (describedBy).
  */
 export function FormField({
   id,
   label,
   required = false,
   error,
+  message,
+  help,
   children,
 }: {
   id: string;
   label: MessageId;
   required?: boolean;
   error?: { type?: string | number | undefined } | undefined;
+  message?: MessageId | undefined;
+  help?: MessageId;
   children: ReactNode;
 }) {
+  const shown =
+    message ??
+    (error === undefined ? undefined : issueMessage(error.type === undefined ? undefined : String(error.type)));
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-body-sm font-semibold text-text">
@@ -40,11 +49,26 @@ export function FormField({
         )}
       </label>
       {children}
-      {error !== undefined && (
+      {shown !== undefined ? (
         <p id={`${id}-error`} className="text-caption font-semibold text-d-fg">
-          ! {t(issueMessage(error.type === undefined ? undefined : String(error.type)))}
+          ! {t(shown)}
         </p>
+      ) : (
+        help !== undefined && (
+          <p id={`${id}-help`} className="text-caption text-text-2">
+            {t(help)}
+          </p>
+        )
       )}
     </div>
   );
+}
+
+/** The accessibility attributes of a field's control: invalid while it shows an error, described by it or its help. */
+export function describedBy(
+  id: string,
+  { invalid, help }: { invalid: boolean; help: boolean },
+): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+  if (invalid) return { 'aria-invalid': true, 'aria-describedby': `${id}-error` };
+  return help ? { 'aria-describedby': `${id}-help` } : {};
 }
