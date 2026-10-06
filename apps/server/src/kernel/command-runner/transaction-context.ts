@@ -1,4 +1,5 @@
 import type { Database } from '../db/create-db.js';
+import type { EventDefinition, PublishedEvent } from '../outbox/event-definition.js';
 import type { LockResult, LockStep, LockTarget } from './lock-helper.js';
 
 /** The command's one database transaction, as Drizzle gives it. Modules read and write through it (code-house-rules 3.4). */
@@ -54,4 +55,13 @@ export interface TransactionContext {
   lock(step: LockStep, targets: readonly LockTarget[]): Promise<LockResult>;
   /** The business date of `at`, by default the command's start, under the Organisation's timezone (PRD-MOD-009). */
   businessDate(at?: Date): Promise<BusinessDate>;
+  /**
+   * Saves an event in this transaction's outbox, with the context's actor and correlation identifier
+   * (code-house-rules 12.8; PRD-MOD-006, PRD-INT-004): it commits with the command's other writes, or none do.
+   * Refused in a read. Returns the event's identity.
+   */
+  publish<Payload extends Record<string, unknown>>(
+    definition: EventDefinition<Payload>,
+    event: PublishedEvent<Payload>,
+  ): Promise<string>;
 }

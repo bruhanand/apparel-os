@@ -1,7 +1,7 @@
 import type { LoggerService, OnApplicationShutdown } from '@nestjs/common';
 import { connectionToDatabase } from '../db/connection.js';
 import { createDb, type Database, type DatabaseHandle } from '../db/create-db.js';
-import { findDatabaseName } from '../db/directory.js';
+import { findDatabaseName, listDirectory } from '../db/directory.js';
 import type { OrganisationRoutingConfig } from './routing-config.js';
 import { decodeSessionCookieValue } from './session-cookie.js';
 
@@ -92,6 +92,20 @@ export class OrganisationRouter implements OnApplicationShutdown {
       return { routed: false };
     }
     return { routed: true, organisation, sessionIdentifier: parts.sessionIdentifier };
+  }
+
+  /**
+   * Every Organisation the directory lists, in code order, each bound to its own database: for the worker, which
+   * runs pg-boss and the outbox processor in each Organisation database (code-house-rules 12.9). No request uses it.
+   */
+  async listOrganisations(): Promise<RoutedOrganisation[]> {
+    this.refuseIfClosed();
+    const entries = await listDirectory(this.directory.db);
+    return entries.map((entry) => ({
+      organisationCode: entry.organisationCode,
+      databaseName: entry.databaseName,
+      db: this.poolFor(entry.databaseName).db,
+    }));
   }
 
   /** Closes the directory's pool and every Organisation's. Called when the application shuts down. */

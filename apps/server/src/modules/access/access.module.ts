@@ -4,11 +4,13 @@ import {
   COMMAND_RUNNER,
   CommandRunnerModule,
   IDEMPOTENCY_HELPER,
+  JOB_IDENTITIES,
   OrganisationRoutingModule,
   REPLAY_SECRET_CHECK,
   RESTRICTED_VALUE_CIPHER,
   type CommandRunner,
   type IdempotencyHelper,
+  type JobIdentities,
 } from '../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { Access } from './access.js';
@@ -16,6 +18,7 @@ import { OwnCredentials } from './commands/own-credentials.js';
 import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
+import { authenticateInternalIdentity } from './queries/service-identities.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
@@ -51,6 +54,24 @@ export const ACCESS_ENVIRONMENT = 'access.Environment';
   exports: [ORGANISATION_KEYS, REPLAY_SECRET_CHECK, RESTRICTED_VALUE_CIPHER],
 })
 export class AccessContractsModule {}
+
+/**
+ * The JobIdentities contract the worker needs from `access` (access-and-approvals 2.3, 7.1 step 1; PRD-SEC-018;
+ * module-map section 3, rule 6): Authenticate for the internal service identity a job runs as. Apart from the other
+ * contracts, so the worker starts without the Organisation keys, which no job step uses.
+ */
+@Module({
+  providers: [
+    {
+      provide: JOB_IDENTITIES,
+      useFactory: (): JobIdentities => ({
+        authenticate: async (context, code) => (await authenticateInternalIdentity(context, code))?.serviceIdentityId,
+      }),
+    },
+  ],
+  exports: [JOB_IDENTITIES],
+})
+export class AccessJobIdentitiesModule {}
 
 /**
  * The access module (module-map 4.3): tier 1, uses `audit` and `kernel`. Sign-in, enrolment and the own password
