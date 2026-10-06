@@ -1,6 +1,6 @@
 # S1-F11-T12 — Review and acceptance
 
-Status: in-progress
+Status: blocked
 Blocked by: T10, T11
 Feature: [S1-F11 Shared calculations](../spec.md)
 
@@ -18,4 +18,4 @@ Section 8 complete; the product owner accepts
 
 ## Notes
 
-- The server half was reviewed in three code-review rounds before `8e71547`. Acceptance waits for T10 and T11.
+- Partly done: the server half was reviewed in three code-review rounds before `8e71547`. The rest (acceptance) waits for T10 and T11.

@@ -65,7 +65,7 @@ One file per task in [tickets/](tickets/).
 | [S1-F11-T09 Entry points at the source](tickets/T09-entry-points-at-the-source.md) | done | — |
 | [S1-F11-T10 Counter test page and counter run](tickets/T10-counter-test-page-and-counter-run.md) | blocked | RR-015 (which package hosts the counter: the GC-8 draft proposes `apps/counter`, not yet approved); S1-F01-T19 (Playwright); T07 (done) |
 | [S1-F11-T11 Bundle exclusion on the counter bundle](tickets/T11-bundle-exclusion-on-the-counter-bundle.md) | blocked | T10 |
-| [S1-F11-T12 Review and acceptance](tickets/T12-review-and-acceptance.md) | in-progress | T10, T11 |
+| [S1-F11-T12 Review and acceptance](tickets/T12-review-and-acceptance.md) | blocked | T10, T11 |
 
 
 ## 7. Tests
