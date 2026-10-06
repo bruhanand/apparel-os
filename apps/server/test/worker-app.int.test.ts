@@ -13,6 +13,7 @@ import {
 } from '../src/kernel/index.js';
 import { ACCESS_JOBS_IDENTITY, accessJobKinds } from '../src/modules/access/index.js';
 import { AUDIT_JOBS_IDENTITY, auditJobKinds } from '../src/modules/audit/index.js';
+import { INBOX_IDENTITY, inboxConsumers } from '../src/modules/inbox/index.js';
 import { WorkerModule } from '../src/worker.module.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
@@ -27,7 +28,7 @@ const JOB_QUEUES = [...AUDIT_QUEUES, 'access.rebuild-grants'];
 const retry = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
 const SYNTHETIC_SETTINGS = {
   pollSeconds: 0.5,
-  consumers: {},
+  consumers: Object.fromEntries(inboxConsumers.map((consumer) => [consumer.name, retry])),
   jobKinds: Object.fromEntries(JOB_QUEUES.map((name) => [name, { ...retry, everySeconds: 1 }])),
 };
 
@@ -49,6 +50,9 @@ beforeAll(async () => {
       ACCESS_JOBS_IDENTITY,
       accessJobKinds.map((kind) => kind.authorises),
     );
+    await writeSyntheticServiceIdentity(organisation.database, INBOX_IDENTITY, [
+      { action: 'edit', recordType: 'inbox.work_item' },
+    ]);
   }
 });
 

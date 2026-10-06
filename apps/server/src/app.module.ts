@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CommandRunnerModule, idempotencyModuleWith, KernelModule, OrganisationRoutingModule } from './kernel/index.js';
 import { AccessContractsModule, AccessModule } from './modules/access/index.js';
 import { AuditModule } from './modules/audit/index.js';
+import { InboxModule } from './modules/inbox/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
@@ -20,6 +21,7 @@ import { OrganisationModule } from './modules/organisation/index.js';
     OrganisationModule,
     AuditModule,
     AccessModule,
+    InboxModule,
     CatalogueModule,
     PartiesModule,
   ],

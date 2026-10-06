@@ -25,7 +25,8 @@ export const dueSchema = z.discriminatedUnion('kind', [
 
 /**
  * One item of My work: its kind, the owner's record and version (keyed so a replay never makes a second item,
- * PRD-INT-008), when it is due, its exposure, its state, and what blocks it and what to do next (PRD-UXP-003).
+ * PRD-INT-008), when it is due, its exposure, its state, and what blocks it and what to do next (PRD-UXP-003). For
+ * an approval, the owner is the approval request and its version the document version it binds to.
  */
 export const workItemSchema = z.strictObject({
   id: idSchema,
@@ -38,3 +39,13 @@ export const workItemSchema = z.strictObject({
   nextAction: z.string().min(1).optional(),
 });
 export type WorkItem = z.infer<typeof workItemSchema>;
+
+/**
+ * My work as read: the items the reader may act on now, ordered by due time, earliest first, then by exposure,
+ * largest first, Unknown above every known amount (PRD-ACS-009, PRD-MOD-015), with the time it was read (PRD-PRF-004).
+ */
+export const myWorkSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  items: z.array(workItemSchema),
+});
+export type MyWork = z.infer<typeof myWorkSchema>;

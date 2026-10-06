@@ -83,7 +83,7 @@
     {
       "table": "access.app_user_version",
       "class": "unscoped",
-      "marks": ["versions"],
+      "marks": ["versions", "locked"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "access-and-approvals 2.1, 9.11, 13.1; code-house-rules 6.3, 7.3",
       "why": "Read by sign-in and Authenticate before any actor exists (code-house-rules 6.3); only access code reads it"
@@ -287,6 +287,118 @@
       "runtime": ["DELETE", "INSERT", "SELECT"],
       "design": "access-and-approvals 7.2, 13.1; code-house-rules 6.2, 6.3",
       "why": "Read by access.row_visible, which every policy calls, so it cannot itself be scoped (code-house-rules 6.2, 6.3); rebuildable from the assignments"
+    },
+    {
+      "table": "access.app_user_version_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a user version, read by Request approval and Decide in access before any scope applies; only access code reads it"
+    },
+    {
+      "table": "access.approval_reason",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.5, 13.1; POL-02.23",
+      "why": "Read by access before any scope applies (code-house-rules 6.3); only access code reads it; a reason belongs to the Organisation, not to a place"
+    },
+    {
+      "table": "access.approval_reason_version",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 9.5, 13.1; code-house-rules 7.3",
+      "why": "Read by access before any scope applies (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.approval_reason_version_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a reason version; only access code reads it"
+    },
+    {
+      "table": "access.approval_rule_setting",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 8, 13.1",
+      "why": "Read by access before any scope applies (code-house-rules 6.3); only access code reads it; a rule belongs to the Organisation, not to a place"
+    },
+    {
+      "table": "access.approval_rule_setting_version",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 8, 13.1; code-house-rules 7.3",
+      "why": "Read by access before any scope applies (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.approval_rule_setting_version_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a rule setting version; only access code reads it"
+    },
+    {
+      "table": "access.approval_request",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 9.1, 9.6, 13.1; code-house-rules 8.2",
+      "why": "Read by Decide and by the eligibility check of My work in access; an access change carries no scope fact (access-and-approvals 9.11); only access code reads it"
+    },
+    {
+      "table": "access.approval_request_preparer",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 9.3, 13.1",
+      "why": "The preparers a request binds to, read by Decide and the eligibility check in access; only access code reads it"
+    },
+    {
+      "table": "access.approval_decision",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.5, 13.1; domain-model 3.2",
+      "why": "Read with its request by access; an access change carries no scope fact (access-and-approvals 9.11); only access code reads it"
+    },
+    {
+      "table": "inbox.work_item",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 11, 13.2; module-map 4.8",
+      "why": "My work needs no permission (access-and-approvals 9.11, 11.2), so no grant can admit its reader through row-level security; who may act is checked when the list is read; only inbox code reads it"
+    },
+    {
+      "table": "inbox.work_item_actor",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 11.1, 13.2",
+      "why": "Who may act on a work item, read with it by inbox; only inbox code reads it"
+    },
+    {
+      "table": "inbox.work_item_routing",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.4, 11.3, 13.2; RR-058",
+      "why": "Due times and escalation of tasks and approvals, read by inbox when it receives an item; no rows until KDPS sets them; only inbox code reads it"
+    },
+    {
+      "table": "inbox.work_item_routing_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 9.4, 11.3, 13.2; code-house-rules 7.3",
+      "why": "The routing's versions; only inbox code reads it"
     },
     {
       "table": "configuration.organisation_timezone_version",

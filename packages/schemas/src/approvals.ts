@@ -1,7 +1,32 @@
 import { z } from 'zod';
-import { idSchema, paiseSchema, recordVersionRefSchema, totpCodeSchema } from './common.js';
+import {
+  businessDateSchema,
+  displayNameSchema,
+  idSchema,
+  paiseSchema,
+  personasHeldSchema,
+  recordVersionRefSchema,
+  totpCodeSchema,
+} from './common.js';
+import { errorCodeSchema, missingItemSchema, type ErrorCode } from './errors.js';
 
-// Approval requests and decisions (access-and-approvals 9.1, 9.3, 9.5, 9.6; PRD-ACS-006, PRD-ACS-007, PRD-ACS-010).
+// Approval requests and decisions (access-and-approvals 9.1, 9.3, 9.5, 9.6; PRD-ACS-006, PRD-ACS-007, PRD-ACS-010),
+// and the access changes S1-F01-T13 adds: user versions, approve and reject reasons, approval rule settings
+// (access-and-approvals 2.1, 8, 9.11; DEC-112).
+
+/**
+ * The action types of access changes that need approval, one approval rule each, kept in code (access-and-approvals
+ * 8, 9.11; POL-02.07). Each is approved by an authorised person other than its preparers, and has no value (DM-8).
+ */
+export const accessActionTypeSchema = z.enum([
+  'access.user.change',
+  'access.role.change',
+  'access.role_assignment.change',
+  'access.role_assignment.withdrawal',
+  'access.approval_reason.change',
+  'access.approval_rule_setting.change',
+]);
+export type AccessActionType = z.infer<typeof accessActionTypeSchema>;
 
 /** The money bases of PRD-ACS-015 and DEC-105 (DM-8). Quantity and discount-percentage bases arrive with S1-F05. */
 export const moneyBasisSchema = z.enum([
@@ -24,13 +49,39 @@ export const approvalValueSchema = z.discriminatedUnion('kind', [
 ]);
 export type ApprovalValue = z.infer<typeof approvalValueSchema>;
 
-/** The states of an approval request (DM-4, DEC-105; design-language section 7). */
-export const approvalRequestStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected', 'Superseded']);
+/**
+ * The states of an approval request (DM-4, DEC-105; design-language section 7). Withdrawn: a request withdrawn
+ * before approval, such as a rejected user's pending assignment (DEC-117).
+ */
+export const approvalRequestStateSchema = z.enum([
+  'Awaiting approval',
+  'Approved',
+  'Rejected',
+  'Superseded',
+  'Withdrawn',
+]);
+
+/** A reason as a decision gives it, and as the panel shows it back. */
+const shownReasonSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('listed'), reasonId: idSchema, code: z.string().min(1), text: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('free-text'), text: z.string().min(1) }),
+]);
+
+/**
+ * Whether the reader may decide the request now, or what is missing (PRD-UXP-003; spec section 6 "Approval panel"):
+ * `available` with the kind of reason the decision takes; `unavailable` with the refusal code and what is missing,
+ * such as no reason list in force, not eligible or self-preparation. A fresh authenticator code is asked at the
+ * decision itself (access-and-approvals 3.3).
+ */
+export const decidableSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('available'), reason: z.enum(['listed', 'free-text']) }),
+  z.strictObject({ kind: z.literal('unavailable'), code: errorCodeSchema, missing: z.array(missingItemSchema) }),
+]);
 
 /**
  * An approval request as the approval panel reads it: bound to one document version (PRD-ACS-007), with every
  * user who recorded a change in that version as a preparer (DEC-105, GC3-1), none of whom may decide it
- * (PRD-ACS-006, POL-02.08).
+ * (PRD-ACS-006, POL-02.08), its decision once decided, and whether the reader may decide it.
  */
 export const approvalRequestViewSchema = z.strictObject({
   id: idSchema,
@@ -39,12 +90,26 @@ export const approvalRequestViewSchema = z.strictObject({
   value: approvalValueSchema,
   preparers: z.array(idSchema).min(1),
   state: approvalRequestStateSchema,
+  requestedAt: z.iso.datetime({ offset: true }),
+  decision: z
+    .strictObject({
+      id: idSchema,
+      outcome: z.enum(['Approved', 'Rejected']),
+      approverId: idSchema,
+      reason: shownReasonSchema,
+      comment: z.string().min(1).optional(),
+      decidedAt: z.iso.datetime({ offset: true }),
+    })
+    .optional(),
+  decidable: decidableSchema,
+  asOf: z.iso.datetime({ offset: true }),
 });
 export type ApprovalRequestView = z.infer<typeof approvalRequestViewSchema>;
 
 /**
  * The reason of a decision: one from the list in force, or free text. Free text is allowed only on a change to
- * the reason list itself (POL-02.23, DEC-104); `access` checks that against the request's action type.
+ * the reason list itself, which takes nothing else (POL-02.23, DEC-104); `access` checks that against the request's
+ * action type.
  */
 export const decisionReasonSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('listed'), reasonId: idSchema }),
@@ -52,32 +117,123 @@ export const decisionReasonSchema = z.discriminatedUnion('kind', [
 ]);
 
 /**
- * Deciding a request. It names the version the approver reviewed, so a decision on an older version is refused
- * (PRD-ACS-007), and carries a fresh authenticator code, since deciding is a protected action (PRD-SEC-001;
- * access-and-approvals 3.3). A service identity never decides (PRD-SEC-018).
+ * Deciding a request, named in the path. It names the version the approver reviewed, so a decision on an older
+ * version is refused (PRD-ACS-007), and carries a fresh authenticator code, since deciding is a protected action
+ * (PRD-SEC-001; access-and-approvals 3.3). A service identity never decides (PRD-SEC-018). Evidence files arrive with
+ * `S1-F06-T05` (RR-320).
  */
 export const decisionRequestSchema = z.strictObject({
-  requestId: idSchema,
   versionId: idSchema,
   outcome: z.enum(['approve', 'reject']),
   reason: decisionReasonSchema,
   comment: z.string().min(1).optional(),
-  evidenceFileIds: z.array(idSchema).optional(),
   totpCode: totpCodeSchema,
 });
 export type DecisionRequest = z.infer<typeof decisionRequestSchema>;
 
+/** What a decision answers. */
+export const decisionAnswerSchema = z.strictObject({
+  requestId: idSchema,
+  decisionId: idSchema,
+  outcome: z.enum(['Approved', 'Rejected']),
+});
+
 /**
- * Why deciding is unavailable or refused, so the panel names what is missing (PRD-UXP-003;
- * docs/plan/stage-1/s1-f01-first-access/spec.md section 6).
+ * The codes a decision can be unavailable or refused with, so the panel names what is missing (PRD-UXP-003;
+ * docs/plan/stage-1/s1-f01-first-access/spec.md section 6; RR-246). Each is an `access` code with its kind.
  */
-export const decisionRefusalSchema = z.enum([
-  'no-reason-list-in-force',
-  'free-text-not-allowed',
-  'not-eligible',
-  'self-preparation',
-  'fresh-code-required',
-  'not-open',
-  'superseded',
-]);
-export type DecisionRefusal = z.infer<typeof decisionRefusalSchema>;
+export const decisionRefusalCodes = [
+  'access.no-reason-list-in-force',
+  'access.free-text-not-allowed',
+  'access.free-text-required',
+  'access.reason-not-in-force',
+  'access.not-eligible',
+  'access.self-preparation',
+  'access.authenticator-code-refused',
+  'access.approval-not-open',
+  'access.approval-superseded',
+  'access.user-not-approved',
+] as const satisfies readonly ErrorCode[];
+export type DecisionRefusal = (typeof decisionRefusalCodes)[number];
+
+/**
+ * A new user, prepared by a person who holds create on users (access-and-approvals 2.1, 3.2; DEC-112): a draft
+ * version Awaiting approval that cannot sign in until a different authorised person approves it. Its temporary
+ * password is kept as an Argon2 hash with the version and handed over in person (DEC-099). See
+ * `userCreateRequestSchema`.
+ */
+export const userPreparedSchema = z.strictObject({ userId: idSchema, versionId: idSchema, requestId: idSchema });
+
+/**
+ * A new version of a user: details, personas held and state (access-and-approvals 2.1, 9.11; DEC-112). It takes
+ * effect on the day it is approved: a disabling at once, revoking every session of the user (PRD-SEC-008).
+ */
+export const userVersionDraftSchema = z.strictObject({
+  displayName: displayNameSchema,
+  personas: personasHeldSchema,
+  state: z.enum(['Active', 'Disabled', 'Ended']),
+});
+export type UserVersionDraft = z.infer<typeof userVersionDraftSchema>;
+
+/** A new approve or reject reason, with its first version (access-and-approvals 9.5; POL-02.23). */
+export const approvalReasonDraftSchema = z.strictObject({
+  code: z.string().min(1),
+  kind: z.enum(['approve', 'reject']),
+  text: z.string().min(1),
+  validFrom: businessDateSchema,
+});
+export type ApprovalReasonDraft = z.infer<typeof approvalReasonDraftSchema>;
+
+/** A new version of a reason: its text and start. Its code and kind are fixed. */
+export const approvalReasonVersionDraftSchema = z.strictObject({
+  text: z.string().min(1),
+  validFrom: businessDateSchema,
+});
+export type ApprovalReasonVersionDraft = z.infer<typeof approvalReasonVersionDraftSchema>;
+
+/** What preparing a reason answers. */
+export const approvalReasonPreparedSchema = z.strictObject({
+  reasonId: idSchema,
+  versionId: idSchema,
+  requestId: idSchema,
+});
+
+/**
+ * The configured parts of one action type's approval rule (access-and-approvals 8; POL-02.19, POL-02.22): whether
+ * bulk and phone approval are allowed. Both are stated; neither has a default.
+ */
+export const approvalRuleSettingDraftSchema = z.strictObject({
+  actionType: z.string().min(1),
+  bulkAllowed: z.boolean(),
+  phoneAllowed: z.boolean(),
+  validFrom: businessDateSchema,
+});
+export type ApprovalRuleSettingDraft = z.infer<typeof approvalRuleSettingDraftSchema>;
+
+export const approvalRuleSettingVersionDraftSchema = z.strictObject({
+  bulkAllowed: z.boolean(),
+  phoneAllowed: z.boolean(),
+  validFrom: businessDateSchema,
+});
+export type ApprovalRuleSettingVersionDraft = z.infer<typeof approvalRuleSettingVersionDraftSchema>;
+
+/** What preparing a rule setting answers. */
+export const approvalRuleSettingPreparedSchema = z.strictObject({
+  settingId: idSchema,
+  versionId: idSchema,
+  requestId: idSchema,
+});
+
+/** The reasons in force today, for the reason picker (access-and-approvals 9.5; PRD-PRF-004). */
+export const approvalReasonsInForceSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  reasons: z.array(
+    z.strictObject({
+      id: idSchema,
+      versionId: idSchema,
+      code: z.string().min(1),
+      kind: z.enum(['approve', 'reject']),
+      text: z.string().min(1),
+    }),
+  ),
+});

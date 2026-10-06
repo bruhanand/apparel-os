@@ -99,18 +99,41 @@ export type {
 } from './roles.js';
 
 export {
+  accessActionTypeSchema,
+  approvalReasonDraftSchema,
+  approvalReasonPreparedSchema,
+  approvalReasonsInForceSchema,
+  approvalReasonVersionDraftSchema,
   approvalRequestStateSchema,
   approvalRequestViewSchema,
+  approvalRuleSettingDraftSchema,
+  approvalRuleSettingPreparedSchema,
+  approvalRuleSettingVersionDraftSchema,
   approvalValueSchema,
+  decidableSchema,
+  decisionAnswerSchema,
   decisionReasonSchema,
-  decisionRefusalSchema,
+  decisionRefusalCodes,
   decisionRequestSchema,
   moneyBasisSchema,
+  userPreparedSchema,
+  userVersionDraftSchema,
 } from './approvals.js';
-export type { ApprovalRequestView, ApprovalValue, DecisionRefusal, DecisionRequest } from './approvals.js';
+export type {
+  AccessActionType,
+  ApprovalReasonDraft,
+  ApprovalReasonVersionDraft,
+  ApprovalRequestView,
+  ApprovalRuleSettingDraft,
+  ApprovalRuleSettingVersionDraft,
+  ApprovalValue,
+  DecisionRefusal,
+  DecisionRequest,
+  UserVersionDraft,
+} from './approvals.js';
 
-export { dueSchema, exposureSchema, workItemSchema } from './work-item.js';
-export type { Exposure, WorkItem } from './work-item.js';
+export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-item.js';
+export type { Exposure, MyWork, WorkItem } from './work-item.js';
 
 export {
   errorCodes,
@@ -122,6 +145,7 @@ export {
   accessCodes,
   accessRoleCodes,
   accessSessionCodes,
+  accessApprovalCodes,
   issueSchema,
   kernelCodes,
   missingItemSchema,

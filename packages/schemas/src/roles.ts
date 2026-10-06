@@ -151,11 +151,15 @@ export const assignmentWithdrawalDraftSchema = z.strictObject({ reason: z.string
 export type AssignmentWithdrawalDraft = z.infer<typeof assignmentWithdrawalDraftSchema>;
 
 /** What preparing a role answers: the role and its draft version. */
-export const rolePreparedSchema = z.strictObject({ roleId: idSchema, versionId: idSchema });
+export const rolePreparedSchema = z.strictObject({ roleId: idSchema, versionId: idSchema, requestId: idSchema });
 /** What preparing a role assignment answers. */
-export const assignmentPreparedSchema = z.strictObject({ assignmentId: idSchema });
+export const assignmentPreparedSchema = z.strictObject({ assignmentId: idSchema, requestId: idSchema });
 /** What preparing a withdrawal answers: the withdrawal and its draft version. */
-export const withdrawalPreparedSchema = z.strictObject({ withdrawalId: idSchema, versionId: idSchema });
+export const withdrawalPreparedSchema = z.strictObject({
+  withdrawalId: idSchema,
+  versionId: idSchema,
+  requestId: idSchema,
+});
 
 /** One effective grant as the shell reads it: an action on a record type (access-and-approvals 7.2; RR-261). */
 export const grantSchema = z.strictObject({ recordType: recordTypeSchema, action: permissionActionSchema });

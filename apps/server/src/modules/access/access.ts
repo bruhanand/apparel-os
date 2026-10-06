@@ -1,6 +1,10 @@
 import {
   permissionRegistry,
   registryByCode,
+  type ApprovalReasonDraft,
+  type ApprovalReasonVersionDraft,
+  type ApprovalRuleSettingDraft,
+  type ApprovalRuleSettingVersionDraft,
   type AssignmentWithdrawalDraft,
   type FieldClass,
   type GrantView,
@@ -11,12 +15,28 @@ import {
   type RoleDraft,
   type RoleVersionDraft,
   type Secret,
+  type UserVersionDraft,
 } from '@apparel-os/schemas';
 import { CommandDefect, type TransactionContext } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
-import { AccessChanges, type Decider, type Prepared, type Preparer } from './commands/access-changes.js';
+import {
+  AccessChanges,
+  type Decider,
+  type EffectOptions,
+  type Prepared,
+  type Preparer,
+} from './commands/access-changes.js';
+import { ApprovalSettingsChanges } from './commands/approval-settings.js';
+import {
+  Approvals,
+  type Decidable,
+  type DecidingActor,
+  type DecisionInput,
+  type DecisionOutcome,
+} from './commands/decide.js';
 import { checkFreshCode, type FreshCode } from './commands/fresh-code.js';
 import { revokeSessions, type Revoker, type RevocationTarget } from './commands/sessions.js';
+import { UserChanges, type NewUser, type PreparedWithCredential } from './commands/user-changes.js';
 import type { OrganisationKeys } from './domain/organisation-keys.js';
 import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
 import { ownAccess } from './queries/own-access.js';
@@ -26,12 +46,16 @@ import {
   type AuthenticatedServiceIdentity,
 } from './queries/service-identities.js';
 
+/** A request as the approval panel reads it (access-and-approvals 9.3, 9.5; S1-F01-T13). */
+export type ApprovalRequestRead = NonNullable<Awaited<ReturnType<Approvals['view']>>>;
+
 /**
  * The access module's interface to other modules (module-map 4.3): Authenticate for service identities
- * (access-and-approvals 2.3, 7.1 step 1), Authorise and the Restrict-fields hook (7.1 step 3, 6), preparing roles,
- * role assignments and withdrawals (4, 5, 9.11), making a decided one take effect (module-map 6.2 flow A), and
- * rebuilding effective grants (7.2). Every operation joins the caller's transaction through its context
- * (code-house-rules 8.1).
+ * (access-and-approvals 2.3, 7.1 step 1), Authorise and the Restrict-fields hook (7.1 step 3, 6), preparing users,
+ * roles, role assignments, withdrawals, reasons and approval rule settings, each with its approval request (2.1, 4,
+ * 5, 8, 9.1, 9.11), deciding them (9.3, 9.5), making a decided one take effect (module-map 6.2 flow A), the
+ * eligibility My work asks (11.2), and rebuilding effective grants (7.2). Every operation joins the caller's
+ * transaction through its context (code-house-rules 8.1).
  */
 export interface AccessInterface {
   /** An internal identity, by its code, enabled today; undefined otherwise. */
@@ -62,28 +86,90 @@ export interface AccessInterface {
     context: TransactionContext,
     userId: string,
   ): Promise<{ readonly personasHeld: PersonaId[]; readonly grants: GrantView[] }>;
+  prepareUser(
+    context: TransactionContext,
+    preparer: Preparer,
+    user: NewUser,
+  ): Promise<PreparedWithCredential<{ userId: string; versionId: string; requestId: string }>>;
+  prepareUserVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    userId: string,
+    draft: UserVersionDraft,
+  ): Promise<Prepared<{ userId: string; versionId: string; requestId: string }>>;
   prepareRole(
     context: TransactionContext,
     preparer: Preparer,
     draft: RoleDraft,
-  ): Promise<Prepared<{ roleId: string; versionId: string }>>;
+  ): Promise<Prepared<{ roleId: string; versionId: string; requestId: string }>>;
   prepareRoleVersion(
     context: TransactionContext,
     preparer: Preparer,
     roleId: string,
     draft: RoleVersionDraft,
-  ): Promise<Prepared<{ roleId: string; versionId: string }>>;
+  ): Promise<Prepared<{ roleId: string; versionId: string; requestId: string }>>;
   prepareAssignment(
     context: TransactionContext,
     preparer: Preparer,
     draft: RoleAssignmentDraft,
-  ): Promise<Prepared<{ assignmentId: string }>>;
+  ): Promise<Prepared<{ assignmentId: string; requestId: string }>>;
   prepareWithdrawal(
     context: TransactionContext,
     preparer: Preparer,
     assignmentId: string,
     draft: AssignmentWithdrawalDraft,
-  ): Promise<Prepared<{ withdrawalId: string; versionId: string }>>;
+  ): Promise<Prepared<{ withdrawalId: string; versionId: string; requestId: string }>>;
+  prepareApprovalReason(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: ApprovalReasonDraft,
+  ): Promise<Prepared<{ reasonId: string; versionId: string; requestId: string }>>;
+  prepareApprovalReasonVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    reasonId: string,
+    draft: ApprovalReasonVersionDraft,
+  ): Promise<Prepared<{ reasonId: string; versionId: string; requestId: string }>>;
+  prepareApprovalRuleSetting(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: ApprovalRuleSettingDraft,
+  ): Promise<Prepared<{ settingId: string; versionId: string; requestId: string }>>;
+  prepareApprovalRuleSettingVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    settingId: string,
+    draft: ApprovalRuleSettingVersionDraft,
+  ): Promise<Prepared<{ settingId: string; versionId: string; requestId: string }>>;
+  /**
+   * Decide an approval request (access-and-approvals 9.3, 9.5; module-map 6.2 flow A): a protected action asking a
+   * fresh code (3.3); never by a service identity or a preparer (PRD-ACS-006, PRD-SEC-018).
+   */
+  decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput): Promise<DecisionOutcome>;
+  /** A request as the approval panel reads it, or undefined when there is none (9.3, 9.5; PRD-UXP-003). */
+  readApprovalRequest(
+    context: TransactionContext,
+    actor: DecidingActor,
+    requestId: string,
+  ): Promise<ApprovalRequestRead | undefined>;
+  /** The approve and reject reasons in force today (9.5). */
+  reasonsInForce(
+    context: TransactionContext,
+  ): Promise<{ id: string; versionId: string; code: string; kind: 'approve' | 'reject'; text: string }[]>;
+  /** Of the requests named, those still open that the user may decide now: My work's eligibility (11.2). */
+  eligibleRequests(context: TransactionContext, userId: string, requestIds: readonly string[]): Promise<string[]>;
+  /** Authorise for a replayed decision: the same actor, still holding approve on the request's type (12.4). */
+  decisionReplayAccess(
+    context: TransactionContext,
+    actor: DecidingActor,
+    requestId: string,
+  ): Promise<Authorisation | { readonly kind: 'allowed' }>;
+  approveUserVersion(
+    context: TransactionContext,
+    decider: Decider,
+    versionId: string,
+    options?: EffectOptions,
+  ): Promise<Prepared<{ userId: string; revokedSessionIds: string[] }>>;
   approveRoleVersion(
     context: TransactionContext,
     decider: Decider,
@@ -152,10 +238,23 @@ export interface ActionNeed {
 export class Access implements AccessInterface {
   private readonly registry: ReadonlyMap<string, RecordTypeDeclaration>;
   private readonly changes: AccessChanges;
+  private readonly users: UserChanges;
+  private readonly settings: ApprovalSettingsChanges;
+  private readonly approvals: Approvals;
 
   constructor(private readonly dependencies: AccessDependencies) {
     this.registry = registryByCode(dependencies.registry ?? permissionRegistry);
     this.changes = new AccessChanges(dependencies.audit, this.registry);
+    this.users = new UserChanges(dependencies.audit);
+    this.settings = new ApprovalSettingsChanges(dependencies.audit);
+    this.approvals = new Approvals({
+      audit: dependencies.audit,
+      registry: this.registry,
+      changes: this.changes,
+      users: this.users,
+      settings: this.settings,
+      keys: dependencies.keys,
+    });
   }
 
   checkFreshCode(context: TransactionContext, userId: string, totpCode: string) {
@@ -196,6 +295,14 @@ export class Access implements AccessInterface {
     return ownAccess(context, userId);
   }
 
+  prepareUser(context: TransactionContext, preparer: Preparer, user: NewUser) {
+    return this.users.prepareUser(context, preparer, user);
+  }
+
+  prepareUserVersion(context: TransactionContext, preparer: Preparer, userId: string, draft: UserVersionDraft) {
+    return this.users.prepareUserVersion(context, preparer, userId, draft);
+  }
+
   prepareRole(context: TransactionContext, preparer: Preparer, draft: RoleDraft) {
     return this.changes.prepareRole(context, preparer, draft);
   }
@@ -215,6 +322,56 @@ export class Access implements AccessInterface {
     draft: AssignmentWithdrawalDraft,
   ) {
     return this.changes.prepareWithdrawal(context, preparer, assignmentId, draft);
+  }
+
+  prepareApprovalReason(context: TransactionContext, preparer: Preparer, draft: ApprovalReasonDraft) {
+    return this.settings.prepareReason(context, preparer, draft);
+  }
+
+  prepareApprovalReasonVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    reasonId: string,
+    draft: ApprovalReasonVersionDraft,
+  ) {
+    return this.settings.prepareReasonVersion(context, preparer, reasonId, draft);
+  }
+
+  prepareApprovalRuleSetting(context: TransactionContext, preparer: Preparer, draft: ApprovalRuleSettingDraft) {
+    return this.settings.prepareRuleSetting(context, preparer, draft);
+  }
+
+  prepareApprovalRuleSettingVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    settingId: string,
+    draft: ApprovalRuleSettingVersionDraft,
+  ) {
+    return this.settings.prepareRuleSettingVersion(context, preparer, settingId, draft);
+  }
+
+  decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput) {
+    return this.approvals.decide(context, actor, input);
+  }
+
+  readApprovalRequest(context: TransactionContext, actor: DecidingActor, requestId: string) {
+    return this.approvals.view(context, actor, requestId);
+  }
+
+  reasonsInForce(context: TransactionContext) {
+    return this.approvals.reasonsInForce(context);
+  }
+
+  eligibleRequests(context: TransactionContext, userId: string, requestIds: readonly string[]) {
+    return this.approvals.eligibleRequests(context, userId, requestIds);
+  }
+
+  decisionReplayAccess(context: TransactionContext, actor: DecidingActor, requestId: string) {
+    return this.approvals.replayAccess(context, actor, requestId);
+  }
+
+  approveUserVersion(context: TransactionContext, decider: Decider, versionId: string, options?: EffectOptions) {
+    return this.users.approveUserVersion(context, decider, versionId, options);
   }
 
   approveRoleVersion(context: TransactionContext, decider: Decider, versionId: string) {
@@ -245,3 +402,5 @@ export class Access implements AccessInterface {
     return this.changes.rebuildGrants(context, actorIds);
   }
 }
+
+export type { Decidable, DecidingActor, DecisionInput, DecisionOutcome, NewUser, PreparedWithCredential };

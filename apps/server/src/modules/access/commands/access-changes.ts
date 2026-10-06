@@ -9,7 +9,14 @@ import type {
   RoleVersionDraft,
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import {
+  LOCK_STEP,
+  lockTable,
+  sqlStateOf,
+  type CommandRefusal,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 import type { AuditActor, AuditInterface } from '../../audit/index.js';
 import {
   appUser,
@@ -26,12 +33,15 @@ import {
   serviceIdentity,
 } from '../db/schema.js';
 import { scopeKeyOf } from '../domain/scope.js';
+import { assignmentChanged } from '../events.js';
 import { rebuildGrants } from './rebuild-grants.js';
+import { requestApproval } from './request-approval.js';
 
 // Roles, role assignments and their withdrawal (access-and-approvals 4, 5, 7.2, 9.11; code-house-rules 7.2, 7.3;
-// S1-F01-T11). Preparing saves a draft that a different authorised person approves (POL-02.07); the effects make an
-// approved version take effect in the decision's transaction (module-map 6.2 flow A). Every operation joins the
-// caller's transaction through its context (code-house-rules 8.1).
+// S1-F01-T11, S1-F01-T13). Preparing saves a version and requests its approval in the same transaction (9.1); a
+// different authorised person decides it (POL-02.07); the effects make an approved version take effect in the
+// decision's transaction (module-map 6.2 flow A). Every operation joins the caller's transaction through its context
+// (code-house-rules 8.1).
 
 /** A command's own outcome: its answer, or a refusal it decides. */
 export type Prepared<Answer> =
@@ -54,11 +64,20 @@ export interface Decider {
   readonly approvalDecisionId?: string;
 }
 
+/**
+ * How an effect runs. `locksHeld`: Decide has locked the effect's rows already, with its own request row, in one call
+ * of the lock helper (code-house-rules 8.2), so the effect takes no lock of its own. Otherwise it locks them itself.
+ */
+export interface EffectOptions {
+  readonly locksHeld?: boolean;
+}
+
 const ROLE_ASSIGNMENT = lockTable('access', 'role_assignment');
 const ROLE_VERSION = lockTable('access', 'role_version');
 const WITHDRAWAL_VERSION = lockTable('access', 'role_assignment_withdrawal_version');
+const EXCLUSION_VIOLATION = '23P01';
 
-function refusal<Answer>(
+export function refusal<Answer>(
   kind: CommandRefusal['kind'],
   code: string,
   missing: CommandRefusal['missing'] = [],
@@ -67,7 +86,7 @@ function refusal<Answer>(
 }
 
 /** Today under the Organisation's timezone, or the refusal that says it is not set (code-house-rules 9). */
-async function today(context: TransactionContext): Promise<string | CommandRefusal> {
+export async function today(context: TransactionContext): Promise<string | CommandRefusal> {
   const date = await context.businessDate();
   if (date.kind === 'set') return date.date;
   return {
@@ -78,8 +97,16 @@ async function today(context: TransactionContext): Promise<string | CommandRefus
 }
 
 /** The upper end of a half-open daterange in PostgreSQL's text form, or undefined when unbounded. */
-function rangeOf(validFrom: string, validTo: string | undefined): string {
+export function rangeOf(validFrom: string, validTo: string | undefined): string {
   return `[${validFrom},${validTo ?? ''})`;
+}
+
+async function lockUnlessHeld(
+  context: TransactionContext,
+  options: EffectOptions,
+  targets: readonly LockTarget[],
+): Promise<void> {
+  if (options.locksHeld !== true) await context.lock(LOCK_STEP.document, targets);
 }
 
 export class AccessChanges {
@@ -110,7 +137,7 @@ export class AccessChanges {
     roleId: string,
     draft: RoleVersionDraft,
     operation: 'prepare-role' | 'prepare-role-version',
-  ): Promise<string> {
+  ): Promise<{ versionId: string; requestId: string }> {
     const versionId = uuidv7();
     await context.tx.insert(roleVersion).values({
       id: versionId,
@@ -159,19 +186,24 @@ export class AccessChanges {
       ],
       source: { kind: 'screen' },
     });
-    return versionId;
+    const requestId = await requestApproval(context, this.audit, {
+      actionType: 'access.role.change',
+      document: { recordType: 'access.role', recordId: roleId, versionId },
+      preparer,
+    });
+    return { versionId, requestId };
   }
 
   /**
-   * Prepares a new role and its first version, Awaiting approval (access-and-approvals 4.2; POL-02.01). Whether it is
-   * a self-service role is fixed by its permissions now (PRD-ACS-022, DEC-100). Refused when it starts before today
-   * (GC2-7), a permission is not declared, or the code is taken.
+   * Prepares a new role and its first version, Awaiting approval, and requests its approval (access-and-approvals
+   * 4.2, 9.1; POL-02.01). Whether it is a self-service role is fixed by its permissions now (PRD-ACS-022, DEC-100).
+   * Refused when it starts before today (GC2-7), a permission is not declared, or the code is taken.
    */
   async prepareRole(
     context: TransactionContext,
     preparer: Preparer,
     draft: RoleDraft,
-  ): Promise<Prepared<{ roleId: string; versionId: string }>> {
+  ): Promise<Prepared<{ roleId: string; versionId: string; requestId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
@@ -186,17 +218,20 @@ export class AccessChanges {
     }
     const roleId = uuidv7();
     await context.tx.insert(role).values({ id: roleId, code: draft.code, selfService });
-    const versionId = await this.writeRoleVersion(context, preparer, roleId, draft, 'prepare-role');
-    return { kind: 'success', answer: { roleId, versionId } };
+    const written = await this.writeRoleVersion(context, preparer, roleId, draft, 'prepare-role');
+    return { kind: 'success', answer: { roleId, ...written } };
   }
 
-  /** Prepares a new version of an existing role, Awaiting approval, effective from its start (4.2). */
+  /**
+   * Prepares a new version of an existing role, Awaiting approval, effective from its start (4.2). A request still
+   * open on an earlier version of the role is Superseded (9.6; PRD-ACS-007): editing a submitted role is a new version.
+   */
   async prepareRoleVersion(
     context: TransactionContext,
     preparer: Preparer,
     roleId: string,
     draft: RoleVersionDraft,
-  ): Promise<Prepared<{ roleId: string; versionId: string }>> {
+  ): Promise<Prepared<{ roleId: string; versionId: string; requestId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     const [found] = await context.tx.select().from(role).where(eq(role.id, roleId));
@@ -207,23 +242,23 @@ export class AccessChanges {
     if (draft.permissions.some((permission) => permission.selfService !== found.selfService)) {
       return refusal('refused', 'access.self-service-scope');
     }
-    const versionId = await this.writeRoleVersion(context, preparer, roleId, draft, 'prepare-role-version');
-    return { kind: 'success', answer: { roleId, versionId } };
+    const written = await this.writeRoleVersion(context, preparer, roleId, draft, 'prepare-role-version');
+    return { kind: 'success', answer: { roleId, ...written } };
   }
 
   /**
-   * Prepares a role assignment, Awaiting approval (access-and-approvals 4.3, 5): a user or service identity, a role,
-   * a scope and dates. Refused when it starts before today (GC2-7, DEC-105); when own-record scope meets a role that
-   * is not self-service, or other scope a self-service role (PRD-ACS-022); when a dimension selects members, which
-   * need the scope contract of S1-F02 and S1-F03 (5.1); or when an Approved, not withdrawn assignment of the same
-   * actor, role and exact scope overlaps it (DEC-112, CH-7). An empty dimension is allowed and grants nothing
-   * (PRD-ACS-005).
+   * Prepares a role assignment, Awaiting approval, and requests its approval (access-and-approvals 4.3, 5, 9.1): a
+   * user or service identity, a role, a scope and dates. Refused when it starts before today (GC2-7, DEC-105); when
+   * own-record scope meets a role that is not self-service, or other scope a self-service role (PRD-ACS-022); when a
+   * dimension selects members, which need the scope contract of S1-F02 and S1-F03 (5.1); or when an Approved, not
+   * withdrawn assignment of the same actor, role and exact scope overlaps it (DEC-112, CH-7). An empty dimension is
+   * allowed and grants nothing (PRD-ACS-005). A new user's assignment may wait with the user's first version (DEC-116).
    */
   async prepareAssignment(
     context: TransactionContext,
     preparer: Preparer,
     draft: RoleAssignmentDraft,
-  ): Promise<Prepared<{ assignmentId: string }>> {
+  ): Promise<Prepared<{ assignmentId: string; requestId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
@@ -297,20 +332,27 @@ export class AccessChanges {
       ],
       source: { kind: 'screen' },
     });
-    return { kind: 'success', answer: { assignmentId } };
+    // An assignment is a dated row, its own version (code-house-rules 7.3).
+    const requestId = await requestApproval(context, this.audit, {
+      actionType: 'access.role_assignment.change',
+      document: { recordType: 'access.role_assignment', recordId: assignmentId, versionId: assignmentId },
+      preparer,
+    });
+    return { kind: 'success', answer: { assignmentId, requestId } };
   }
 
   /**
    * Prepares the withdrawal of a Scheduled assignment before its start: a new version of its withdrawal document,
-   * Awaiting approval (access-and-approvals 4.3; code-house-rules 7.3; RR-202, CH-11). Refused unless the assignment
-   * is Approved, not withdrawn, and starts after today; one that has started is ended early instead.
+   * Awaiting approval, and its request (access-and-approvals 4.3, 9.1; code-house-rules 7.3; RR-202, CH-11). Refused
+   * unless the assignment is Approved, not withdrawn, and starts after today; one that has started is ended early
+   * instead. A request open on an earlier version of the same withdrawal is Superseded (9.6).
    */
   async prepareWithdrawal(
     context: TransactionContext,
     preparer: Preparer,
     assignmentId: string,
     draft: AssignmentWithdrawalDraft,
-  ): Promise<Prepared<{ withdrawalId: string; versionId: string }>> {
+  ): Promise<Prepared<{ withdrawalId: string; versionId: string; requestId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     const [assignment] = await context.tx
@@ -334,9 +376,14 @@ export class AccessChanges {
       await context.tx.insert(roleAssignmentWithdrawal).values({ id: withdrawalId, roleAssignmentId: assignmentId });
     }
     const versionId = uuidv7();
-    await context.tx
-      .insert(roleAssignmentWithdrawalVersion)
-      .values({ id: versionId, withdrawalId, reason: draft.reason, decision: 'Awaiting approval' });
+    await context.tx.insert(roleAssignmentWithdrawalVersion).values({
+      id: versionId,
+      withdrawalId,
+      reason: draft.reason,
+      decision: 'Awaiting approval',
+      kind: 'before-start',
+      causedByDecisionId: null,
+    });
     await context.tx
       .insert(roleAssignmentWithdrawalChange)
       .values({ id: uuidv7(), withdrawalVersionId: versionId, changedByUserId: preparer.userId });
@@ -352,7 +399,12 @@ export class AccessChanges {
       ],
       source: { kind: 'screen' },
     });
-    return { kind: 'success', answer: { withdrawalId, versionId } };
+    const requestId = await requestApproval(context, this.audit, {
+      actionType: 'access.role_assignment.withdrawal',
+      document: { recordType: 'access.role_assignment', recordId: withdrawalId, versionId },
+      preparer,
+    });
+    return { kind: 'success', answer: { withdrawalId, versionId, requestId } };
   }
 
   private async overlapping(
@@ -380,6 +432,25 @@ export class AccessChanges {
     return rows.length > 0;
   }
 
+  /** The rows a decision on a role version locks at step 1 (code-house-rules 8.2). */
+  roleVersionTargets(versionId: string): LockTarget[] {
+    return [{ table: ROLE_VERSION, id: versionId, mode: 'exclusive' }];
+  }
+
+  /** The rows a decision on an assignment locks at step 1. */
+  assignmentTargets(assignmentId: string): LockTarget[] {
+    return [{ table: ROLE_ASSIGNMENT, id: assignmentId, mode: 'exclusive' }];
+  }
+
+  /** The rows a decision on a withdrawal version locks at step 1: the assignment as its own record, and the version. */
+  async withdrawalTargets(context: TransactionContext, withdrawalVersionId: string): Promise<LockTarget[]> {
+    const target = await this.withdrawalTarget(context, withdrawalVersionId);
+    return [
+      ...(target === undefined ? [] : this.assignmentTargets(target.assignmentId)),
+      { table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' },
+    ];
+  }
+
   /**
    * Makes an approved role version take effect (access-and-approvals 4.2; module-map 6.2 flow A): locks it, rechecks
    * that it is Awaiting approval and starts today or later, ends the Approved version it follows on its start, records
@@ -390,10 +461,11 @@ export class AccessChanges {
     context: TransactionContext,
     decider: Decider,
     versionId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ roleId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    await context.lock(LOCK_STEP.document, [{ table: ROLE_VERSION, id: versionId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, this.roleVersionTargets(versionId));
     const [version] = await context.tx
       .select({
         roleId: roleVersion.roleId,
@@ -434,10 +506,9 @@ export class AccessChanges {
       })
       .from(roleAssignment)
       .where(and(eq(roleAssignment.roleId, version.roleId), eq(roleAssignment.decision, 'Approved')));
-    await this.rebuildGrants(
-      context,
-      holders.map((holder) => holder.actorId),
-    );
+    const actorIds = holders.map((holder) => holder.actorId);
+    await this.rebuildGrants(context, actorIds);
+    await this.publishGrantsChanged(context, version.roleId, actorIds);
     await this.recordEffect(context, decider, {
       record: { module: 'access', type: 'role', id: version.roleId, versionId },
       operation: 'approve-role-version',
@@ -450,8 +521,9 @@ export class AccessChanges {
     context: TransactionContext,
     decider: Decider,
     versionId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ roleId: string }>> {
-    await context.lock(LOCK_STEP.document, [{ table: ROLE_VERSION, id: versionId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, this.roleVersionTargets(versionId));
     const [version] = await context.tx.select().from(roleVersion).where(eq(roleVersion.id, versionId));
     if (version === undefined) return refusal('not-found', 'access.role-not-found');
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -470,16 +542,18 @@ export class AccessChanges {
    * Makes an approved role assignment take effect (access-and-approvals 4.3; module-map 6.2 flow A): locks it,
    * rechecks under the lock that it is Awaiting approval, starts today or later (GC2-7) and overlaps no Approved, not
    * withdrawn assignment of the same actor, role and exact scope (DEC-112, CH-7), records the decision and rebuilds
-   * the actor's effective grants (7.2). The exclusion constraint is the backstop for two decided at once.
+   * the actor's effective grants (7.2). Two overlapping ones approved at the same moment: the second meets the
+   * exclusion constraint under a savepoint and is refused as overlapping, never failed (RR-295).
    */
   async approveAssignment(
     context: TransactionContext,
     decider: Decider,
     assignmentId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ assignmentId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    await context.lock(LOCK_STEP.document, [{ table: ROLE_ASSIGNMENT, id: assignmentId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, this.assignmentTargets(assignmentId));
     const found = await this.assignmentRow(context, assignmentId);
     if (found === undefined) return refusal('not-found', 'access.assignment-not-found');
     if (found.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -487,8 +561,17 @@ export class AccessChanges {
     if (await this.overlapping(context, found.actorId, found.roleId, found.scopeKey, found.range, assignmentId)) {
       return refusal('refused', 'access.assignment-overlaps');
     }
-    await context.tx.update(roleAssignment).set({ decision: 'Approved' }).where(eq(roleAssignment.id, assignmentId));
+    await context.tx.execute(sql`savepoint access_approve_assignment`);
+    try {
+      await context.tx.update(roleAssignment).set({ decision: 'Approved' }).where(eq(roleAssignment.id, assignmentId));
+      await context.tx.execute(sql`release savepoint access_approve_assignment`);
+    } catch (error) {
+      if (sqlStateOf(error) !== EXCLUSION_VIOLATION) throw error;
+      await context.tx.execute(sql`rollback to savepoint access_approve_assignment`);
+      return refusal('refused', 'access.assignment-overlaps');
+    }
     await this.rebuildGrants(context, [found.actorId]);
+    await this.publishGrantsChanged(context, assignmentId, [found.actorId]);
     await this.recordEffect(
       context,
       decider,
@@ -503,8 +586,9 @@ export class AccessChanges {
     context: TransactionContext,
     decider: Decider,
     assignmentId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ assignmentId: string }>> {
-    await context.lock(LOCK_STEP.document, [{ table: ROLE_ASSIGNMENT, id: assignmentId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, this.assignmentTargets(assignmentId));
     const found = await this.assignmentRow(context, assignmentId);
     if (found === undefined) return refusal('not-found', 'access.assignment-not-found');
     if (found.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
@@ -530,15 +614,13 @@ export class AccessChanges {
     context: TransactionContext,
     decider: Decider,
     withdrawalVersionId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ assignmentId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     const target = await this.withdrawalTarget(context, withdrawalVersionId);
     if (target === undefined) return refusal('not-found', 'access.assignment-not-found');
-    await context.lock(LOCK_STEP.document, [
-      { table: ROLE_ASSIGNMENT, id: target.assignmentId, mode: 'exclusive' },
-      { table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' },
-    ]);
+    await lockUnlessHeld(context, options, await this.withdrawalTargets(context, withdrawalVersionId));
     const [version] = await context.tx
       .select({ decision: roleAssignmentWithdrawalVersion.decision })
       .from(roleAssignmentWithdrawalVersion)
@@ -558,6 +640,7 @@ export class AccessChanges {
       .set({ withdrawalId: target.withdrawalId })
       .where(eq(roleAssignment.id, target.assignmentId));
     await this.rebuildGrants(context, [found.actorId]);
+    await this.publishGrantsChanged(context, target.assignmentId, [found.actorId]);
     await this.recordEffect(
       context,
       decider,
@@ -576,10 +659,11 @@ export class AccessChanges {
     context: TransactionContext,
     decider: Decider,
     withdrawalVersionId: string,
+    options: EffectOptions = {},
   ): Promise<Prepared<{ assignmentId: string }>> {
     const target = await this.withdrawalTarget(context, withdrawalVersionId);
     if (target === undefined) return refusal('not-found', 'access.assignment-not-found');
-    await context.lock(LOCK_STEP.document, [{ table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' }]);
+    await lockUnlessHeld(context, options, [{ table: WITHDRAWAL_VERSION, id: withdrawalVersionId, mode: 'exclusive' }]);
     const [version] = await context.tx
       .select({ decision: roleAssignmentWithdrawalVersion.decision })
       .from(roleAssignmentWithdrawalVersion)
@@ -599,9 +683,72 @@ export class AccessChanges {
     return { kind: 'success', answer: { assignmentId: target.assignmentId } };
   }
 
+  /** The assignments of a user still Awaiting approval, which a rejection of the user's first version withdraws. */
+  async pendingAssignmentsOf(context: TransactionContext, userId: string): Promise<string[]> {
+    const rows = await context.tx
+      .select({ id: roleAssignment.id })
+      .from(roleAssignment)
+      .where(and(eq(roleAssignment.appUserId, userId), eq(roleAssignment.decision, 'Awaiting approval')));
+    return rows.map((row) => row.id).sort();
+  }
+
+  /**
+   * Withdraws an assignment before approval, because the user's first version was rejected (access-and-approvals
+   * 4.3; DEC-116, DEC-117). Its locks are held by the decision. The withdrawal document keeps that it was withdrawn
+   * before approval and the decision that caused it; the assignment takes the final decision Withdrawn and never
+   * takes effect. Answers false when the assignment no longer waits.
+   */
+  async withdrawBeforeApproval(
+    context: TransactionContext,
+    decider: Decider & { readonly approvalDecisionId: string },
+    assignmentId: string,
+    withdrawnByUserId: string,
+  ): Promise<boolean> {
+    const found = await this.assignmentRow(context, assignmentId);
+    if (found?.decision !== 'Awaiting approval') return false;
+    const withdrawalId = uuidv7();
+    const versionId = uuidv7();
+    await context.tx.insert(roleAssignmentWithdrawal).values({ id: withdrawalId, roleAssignmentId: assignmentId });
+    await context.tx.insert(roleAssignmentWithdrawalVersion).values({
+      id: versionId,
+      withdrawalId,
+      reason: 'user-first-version-rejected',
+      decision: 'Approved',
+      kind: 'before-approval',
+      causedByDecisionId: decider.approvalDecisionId,
+    });
+    await context.tx
+      .insert(roleAssignmentWithdrawalChange)
+      .values({ id: uuidv7(), withdrawalVersionId: versionId, changedByUserId: withdrawnByUserId });
+    await context.tx
+      .update(roleAssignment)
+      .set({ decision: 'Withdrawn', withdrawalId })
+      .where(eq(roleAssignment.id, assignmentId));
+    await this.audit.record(context, {
+      ...this.auditActor(decider),
+      record: { module: 'access', type: 'role_assignment', id: assignmentId },
+      operation: 'withdraw-role-assignment-before-approval',
+      changes: [
+        { kind: 'value', field: 'decision', before: 'Awaiting approval', after: 'Withdrawn' },
+        { kind: 'value', field: 'withdrawalId', before: null, after: withdrawalId },
+        { kind: 'value', field: 'withdrawalKind', before: null, after: 'before-approval' },
+      ],
+      source: { kind: 'screen' },
+    });
+    return true;
+  }
+
   /** Rebuilds the effective grants of the actors named, or of every actor (access-and-approvals 7.2). */
   rebuildGrants(context: TransactionContext, actorIds?: readonly string[]): Promise<number> {
     return rebuildGrants(context, this.registry, actorIds);
+  }
+
+  /** `access.assignment-changed`: the actors whose grants were rebuilt (module-map section 8). */
+  private async publishGrantsChanged(context: TransactionContext, recordId: string, actorIds: readonly string[]) {
+    await context.publish(assignmentChanged, {
+      subject: { module: 'access', recordType: 'access.role_assignment', recordId },
+      payload: { actorIds: [...actorIds].sort() },
+    });
   }
 
   private auditActor(decider: Decider) {
@@ -653,6 +800,11 @@ export class AccessChanges {
       .from(roleAssignment)
       .where(eq(roleAssignment.id, assignmentId));
     return row;
+  }
+
+  /** The user an assignment is of, if a user (4.3). */
+  async assignmentUser(context: TransactionContext, assignmentId: string): Promise<string | null | undefined> {
+    return (await this.assignmentRow(context, assignmentId))?.userId;
   }
 
   private async withdrawalTarget(context: TransactionContext, withdrawalVersionId: string) {

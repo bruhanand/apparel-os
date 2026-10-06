@@ -1,7 +1,7 @@
 # S1-F01-T13 — Approvals and My work
 
-Status: blocked
-Blocked by: T06, T09, T11
+Status: done
+Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
 ## Build
@@ -26,3 +26,5 @@ A rejected user's pending assignments become Withdrawn, keeping that they were w
 - RR-214: wording fixes for the 9.11 matrix and the user states (Active, Disabled, Ended).
 - RR-215 answered (product owner, 6 Oct 2026, DEC-116): as Build says.
 - T12 (Inbox and My work) merged into this ticket on 6 Oct 2026 (product owner).
+- Built on branch `s1/f01-t13`, commit 2832d30. Also built here: user changes (RR-300, named by the orchestrator), approve and reject reasons, approval rule settings, the approval panel read and the reasons read. Migrations `0015__access__approvals.sql`, `0016__inbox__work_items.sql`. Tests: `test/approvals.int.test.ts` (12, 12a, 14, 19, 19b, 19f, 19g, 22, concurrent decisions), `test/my-work.int.test.ts` (20, replay, idempotent decision through the API), `src/modules/inbox/domain/order.test.ts`.
+- Closed: RR-214, RR-246, RR-291, RR-295, RR-300. Follow-ups: RR-320 (evidence files), RR-321 (same-day disabling, product owner), RR-322 (`inbox` identity and worker settings on `dev`), RR-323 (rejection task in My work), RR-325 (step-0 authority locks), RR-326 (list reads for T16).
