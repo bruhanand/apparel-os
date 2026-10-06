@@ -2,7 +2,7 @@
 
 > **Not ranked.** Stage 1 of [phases.md](../../phases.md), split into features. It decides nothing; phases.md, the PRD and the policies win over it.
 
-Each feature with a spec has its own folder here: `spec.md` says what it does; `tickets/` holds one file per piece of work, with its status. Later stages are in [roadmap.md](../roadmap.md).
+The whole stage in one document: [spec.md](spec.md). Each feature with a spec has its own folder here: `spec.md` says what it does; `tickets/` holds one file per piece of work, with its status. Later stages are in [roadmap.md](../roadmap.md).
 
 ## 1. Goal
 
