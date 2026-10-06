@@ -1,0 +1,87 @@
+// The states of design-language section 7, each in its family. A screen shows a state through its identifier; its name
+// comes from the message catalogue (code-house-rules 12.13), and a test compares both with design-language 7.
+
+export const families = ['neutral', 'pending', 'moving', 'done', 'attention', 'stopped', 'quarantine'] as const;
+export type Family = (typeof families)[number];
+
+/** Each family's glyph: a state never shows its colour alone (design-language 1, principle 3; section 7). */
+export const familyGlyphs: Readonly<Record<Family, string>> = {
+  neutral: '○',
+  pending: '◔',
+  moving: '▸',
+  done: '✓',
+  attention: '!',
+  stopped: '✕',
+  quarantine: '◆',
+};
+
+/** Every state of design-language 7, in its table order, with its family. */
+export const stateFamilies = {
+  draft: 'neutral',
+  cancelled: 'neutral',
+  'cancelled-before-departure': 'neutral',
+  closed: 'neutral',
+  'closed-partially-returned': 'neutral',
+  ended: 'neutral',
+  unknown: 'neutral',
+  submitted: 'pending',
+  'awaiting-approval': 'pending',
+  'awaiting-outcome': 'pending',
+  queued: 'pending',
+  'recorded-manually': 'pending',
+  'partly-received': 'pending',
+  'in-transit': 'moving',
+  'in-progress': 'moving',
+  dispatched: 'moving',
+  initiated: 'moving',
+  approved: 'done',
+  issued: 'done',
+  confirmed: 'done',
+  official: 'done',
+  completed: 'done',
+  live: 'done',
+  authorised: 'done',
+  accepted: 'done',
+  resolved: 'done',
+  'provider-confirmed': 'done',
+  settled: 'done',
+  signed: 'done',
+  held: 'attention',
+  overdue: 'attention',
+  offline: 'attention',
+  paused: 'attention',
+  'outcome-unknown': 'attention',
+  stale: 'attention',
+  reopened: 'attention',
+  reversed: 'stopped',
+  rejected: 'stopped',
+  failed: 'stopped',
+  refused: 'stopped',
+  conflict: 'stopped',
+  'connection-lost': 'stopped',
+  'authority-expired': 'stopped',
+  'working-set-expired': 'stopped',
+  revoked: 'stopped',
+  quarantine: 'quarantine',
+  damaged: 'quarantine',
+  wrong: 'quarantine',
+  unidentified: 'quarantine',
+  'setting-up': 'neutral',
+  active: 'done',
+  closing: 'moving',
+  scheduled: 'pending',
+  'in-force': 'done',
+  disabled: 'stopped',
+  staged: 'neutral',
+  validated: 'pending',
+  published: 'done',
+  proposed: 'pending',
+  open: 'done',
+  locked: 'done',
+  unresolved: 'attention',
+  superseded: 'neutral',
+  withdrawn: 'neutral',
+} as const satisfies Record<string, Family>;
+
+export type StateId = keyof typeof stateFamilies;
+export const stateIds = Object.keys(stateFamilies) as StateId[];

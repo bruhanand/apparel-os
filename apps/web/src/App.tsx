@@ -1,10 +1,36 @@
-import { cn } from '@apparel-os/ui';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from '@tanstack/react-router';
+import { useCallback, useMemo, useState } from 'react';
+import { createQueryClient } from './api/query';
+import { router } from './router';
+import { SessionContext, type ShellSession } from './shell/session';
 
+/**
+ * The web app: the session the shell shows, the query cache and the router. The cache lives in memory only and is
+ * cleared when the person is signed out (code-house-rules 12.1). The sign-in screens set the session (S1-F01-T15).
+ */
 export function App() {
+  const [session, setSessionState] = useState<ShellSession>({ state: 'signed-out' });
+  const [queryClient] = useState(() => {
+    const client = createQueryClient(() => {
+      client.clear();
+      setSessionState({ state: 'signed-out' });
+    });
+    return client;
+  });
+  const setSession = useCallback(
+    (next: ShellSession) => {
+      if (next.state === 'signed-out') queryClient.clear();
+      setSessionState(next);
+    },
+    [queryClient],
+  );
+  const control = useMemo(() => ({ session, setSession }), [session, setSession]);
   return (
-    <main className={cn('mx-auto max-w-2xl p-8')}>
-      <h1 className={cn('text-2xl font-semibold')}>Apparel OS</h1>
-      <p className={cn('mt-2 text-neutral-600')}>Workspace skeleton. No screens yet.</p>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <SessionContext value={control}>
+        <RouterProvider router={router} />
+      </SessionContext>
+    </QueryClientProvider>
   );
 }
