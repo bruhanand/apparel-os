@@ -16,19 +16,19 @@ The whole stage in one document: [spec.md](spec.md). Each feature with a spec ha
 
 ## 2. Where we are
 
-Updated 6 Oct 2026.
+Updated 7 Oct 2026.
 
 | Feature | State |
 | --- | --- |
-| `S1-F01` Sign-in and access control | 3 tickets done (directory routing, command context, contracts); 13 open after the regrouping of 6 Oct 2026, in two parts: "Sign-in and screens" and "Roles and approvals". Ticket 4 (idempotency and API conventions) half-built on a side branch, no tests yet. Ticket 7 (audit) ready to start |
-| `S1-F11` Shared calculations | Server half done: 38 golden cases pass. The counter half waits for Playwright (`S1-F01-T15`); the counter app's home, `apps/counter` at `/counter/`, was approved on 6 Oct 2026 (`DEC-116`) |
+| `S1-F01` Sign-in and access control | Built on the local branch `s1/f01-first-access` (not pushed, not merged), with the review fixes; every check and the three browser journeys pass locally. 13 tickets done; three wait: T09 (the lock screen's check by hand, RR-304) and T20 (acceptance evidence, RR-350) are ready for the product owner, and T14 is blocked on the Demo 0 deploy (RR-187) |
+| `S1-F11` Shared calculations | Server half done: 38 golden cases pass. The counter half can start: Playwright arrived with `S1-F01-T15`; the counter app's home, `apps/counter` at `/counter/`, was approved on 6 Oct 2026 (`DEC-116`) |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) starts right after `S1-F01`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC9-9 and GC9-10 approved; the rest of GC-9 is finished in `S1-F14-T01` (RR-010) |
 | `S1-F06` File intake | Not started. Gains `S1-F06-T05` (stored files and evidence attachments), built right after `S1-F01` (`DEC-116`) |
 | `S1-F08` Number series and exceptions | Not started. Gains `S1-F08-T04` (live updates and the failed-jobs view), split from T02 (`DEC-116`) |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
-Next: tickets 4 and 7 of `S1-F01`, then 8, 14 (Demo 0) and 15; the build order is in the [stage spec](spec.md).
+Next: the counter run of `S1-F11` (`S1-F11-T10`), then stored files (`S1-F06-T05`) and stock ledger part 1 (`S1-F10`); the build order is in the [stage spec](spec.md).
 
 ## 3. Scope
 
@@ -100,9 +100,9 @@ flowchart LR
 
 | Feature | Starts when |
 | --- | --- |
-| `S1-F01` | Started |
+| `S1-F01` | Built; waits for acceptance (RR-350) |
 | `S1-F06-T05` (stored files and evidence attachments) | `S1-F01` merged |
-| `S1-F11` | Started; the server half is built. The counter run waits for Playwright (`S1-F01-T15`) |
+| `S1-F11` | Started; the server half is built. The counter run can start (Playwright arrived with `S1-F01-T15`) |
 | `S1-F02` | `S1-F01` merged (kernel, access, audit and inbox settled) |
 | `S1-F08` | `S1-F01` merged (numbering first); evidence files after `S1-F06-T05` |
 | `S1-F05` | The `S1-F02` access tasks merged |
@@ -165,23 +165,13 @@ On `kdps-test`, for KDPS's real masters before the side-by-side test:
 
 ## 8. Tickets
 
-Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open, including `S1-F06-T05` and `S1-F08-T04`, which the answers of `DEC-116` added. Labels are fixed: a merged ticket keeps its file with `Status: merged` and a pointer to the ticket that took its work. "Blocked by" lists open tickets only; "+ gate" means the ticket also waits for a decision or step named in its file. Rows follow the build order of the [stage spec](spec.md).
+Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then, 42 open on 7 Oct 2026 after `S1-F01` was built, including `S1-F06-T05` and `S1-F08-T04`, which the answers of `DEC-116` added. Labels are fixed: a merged ticket keeps its file with `Status: merged` and a pointer to the ticket that took its work. "Blocked by" lists open tickets only; "+ gate" means the ticket also waits for a decision or step named in its file. Rows follow the build order of the [stage spec](spec.md).
 
 | Ticket | Status | Blocked by |
 | --- | --- | --- |
-| [F01-T04 Idempotency and API conventions](s1-f01-first-access/tickets/T04-idempotency-helper.md) | in-progress | — |
-| [F01-T06 Outbox and worker](s1-f01-first-access/tickets/T06-outbox-and-worker.md) | blocked | F01-T04, F01-T08 |
-| [F01-T07 Audit and access records](s1-f01-first-access/tickets/T07-audit-and-access-records.md) | ready-for-agent | — |
-| [F01-T08 Sign-in and enrolment (API)](s1-f01-first-access/tickets/T08-sign-in-and-enrolment.md) | blocked | F01-T04, F01-T07 |
-| [F01-T09 Sessions, protected actions and the lock screen](s1-f01-first-access/tickets/T09-sessions-and-protected-actions.md) | blocked | F01-T11, F01-T15 |
-| [F01-T10 Setup step](s1-f01-first-access/tickets/T10-setup-step.md) | blocked | F01-T07, F01-T08, F01-T09, F01-T11 |
-| [F01-T11 Roles, assignments and scope](s1-f01-first-access/tickets/T11-roles-assignments-and-scope.md) | blocked | F01-T06, F01-T08 |
-| [F01-T13 Approvals and My work](s1-f01-first-access/tickets/T13-approval-rules-reasons-and-decisions.md) | blocked | F01-T06, F01-T09, F01-T11 |
-| [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | blocked | F01-T04 |
-| [F01-T15 Sign-in in the browser](s1-f01-first-access/tickets/T15-sign-in-screens.md) | blocked | F01-T08, F01-T14 |
-| [F01-T16 Access setup screens and the approval panel](s1-f01-first-access/tickets/T16-access-setup-screens.md) | blocked | F01-T13, F01-T15 |
-| [F01-T18 History screens](s1-f01-first-access/tickets/T18-history-screens.md) | blocked | F01-T07, F01-T11, F01-T14 |
-| [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | blocked | F01-T10, F01-T16, F01-T18 |
+| [F01-T09 Sessions, protected actions and the lock screen](s1-f01-first-access/tickets/T09-sessions-and-protected-actions.md) | ready-for-human | — (the check by hand, RR-304) |
+| [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | blocked | — (the Demo 0 deploy, RR-187) |
+| [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | — (acceptance evidence, RR-350) |
 | [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | blocked | F01-T15 |
 | [F06-T05 Stored files and evidence attachments](s1-f06-file-intake/tickets/T05-stored-files-and-evidence-attachments.md) | blocked | F01-T07, F01-T11 |
 | [F10-T01 Stock tables, constraints and row security](s1-f10-stock-ledger/tickets/T01-ledger-tables-and-constraints.md) | blocked | F01-T11 |

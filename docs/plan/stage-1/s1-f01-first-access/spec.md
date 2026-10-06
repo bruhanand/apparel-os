@@ -167,19 +167,19 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T05 API conventions in code](tickets/T05-api-conventions-in-code.md) | merged | → T04 |
 | [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | done | T04, T08 (its internal service identity) |
 | [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | done | T03 (done) |
-| [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | done | T04, T07 |
-| [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | ready-for-human | code merged; manual design-language check of the lock screen outstanding |
-| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | done | T01, T07, T08, T11 (done), T09 (merged, ready-for-human) |
-| [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | done | T06, T08 |
+| [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | done | T04 (done), T07 (done) |
+| [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | ready-for-human | T11 (done), T15 (done) |
+| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | done | T01 (done), T07, T08, T09 (session revocation and the credential reset the recovery command uses), T11 (roles and assignments) |
+| [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | done | T06 (done), T08 (done) |
 | [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
-| [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | done | T06, T09, T11 |
-| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | code merged; Demo 0 deploy waits on RR-187 |
+| [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | done | — |
+| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | RR-187 (Demo 0 on Railway `dev` waits for the product owner's authorisation); everything else is built |
 | [S1-F01-T15 Sign-in in the browser](tickets/T15-sign-in-screens.md) | done | T08, T14 |
 | [S1-F01-T16 Access setup screens and the approval panel](tickets/T16-access-setup-screens.md) | done | T13, T15 |
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
 | [S1-F01-T18 History screens](tickets/T18-history-screens.md) | done | T07, T11, T14 |
 | [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | merged | → T15, T20 |
-| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 |
+| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 (done); RR-350 (CI on a pushed branch, the product owner's acceptance, Demo 1) |
 | [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
 
 
