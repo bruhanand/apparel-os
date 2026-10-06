@@ -44,6 +44,7 @@ export function AppShell({
   unlock,
   signIn,
   signOut,
+  myWork,
 }: {
   session: ShellSession;
   banner: EnvironmentBanner;
@@ -56,6 +57,8 @@ export function AppShell({
   signIn?: ReactNode;
   /** The sign-out action of the profile menu (S1-F01-T09). */
   signOut?: ReactNode;
+  /** The My work counter of the top bar (design-language 10.5; S1-F01-T16); the plain label without it. */
+  myWork?: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -85,7 +88,11 @@ export function AppShell({
               </button>
               <span role="img" aria-label={t('shell.logo')} className="h-8 w-[200px] max-w-[30vw]" />
               <span className="flex-1" />
-              {renderLink('my-work', 'text-body-sm font-medium text-text hover:text-accent', t('my-work.label'))}
+              {renderLink(
+                'my-work',
+                'text-body-sm font-medium text-text hover:text-accent',
+                myWork ?? t('my-work.label'),
+              )}
               <ThemeSwitch />
               <details className="relative">
                 <summary className="cursor-pointer list-none text-body-sm font-medium" aria-label={t('shell.profile')}>

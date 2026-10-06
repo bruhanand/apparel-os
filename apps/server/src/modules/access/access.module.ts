@@ -21,6 +21,7 @@ import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
 import { AccessChangesController } from './http/access-changes.controller.js';
+import { AccessRecordsController } from './http/access-records.controller.js';
 import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
 import { History } from './queries/history.js';
@@ -86,7 +87,14 @@ export class AccessJobIdentitiesModule {}
  */
 @Module({
   imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule],
-  controllers: [SignInController, AccessChangesController, ApprovalsController, SessionsController, HistoryController],
+  controllers: [
+    SignInController,
+    AccessChangesController,
+    AccessRecordsController,
+    ApprovalsController,
+    SessionsController,
+    HistoryController,
+  ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
     {
