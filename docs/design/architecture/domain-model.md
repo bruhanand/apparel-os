@@ -360,7 +360,7 @@ Owner: `stock` · ledger. [stock-ledger.md](../stock/stock-ledger.md) defines th
 | Receipt origin | The counted source a quantity came from; carries owner, PT revision and cost or Unknown | stock-ledger 4 |
 | Piece | One record per piece ID | stock-ledger 5 |
 | Coverage, acceptance | Status records | stock-ledger 3 |
-| Hold, reservation | Status records, twelve kinds | stock-ledger 6 |
+| Hold, reservation | Status records, of the kinds of stock-ledger 6.1 | stock-ledger 6 |
 | Balance | Projection | stock-ledger 2.1 |
 | Cost pool, cost layer | Valued in posting order; each valued movement records the pool's quantity and value before and after | stock-ledger 7 |
 

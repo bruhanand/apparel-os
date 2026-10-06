@@ -40,7 +40,7 @@ Verified on 5 Oct 2026 by reading the repository and running the checks listed i
 | `files-imports` | Nothing | GC-6 [imports-and-opening-data.md](../design/platform/imports-and-opening-data.md) | All of it |
 | `numbering`, `exceptions` | Nothing | GC-5; GC-3 section 12 | All of it |
 | `finance` · books and tax rules | Nothing | GC-4 [books-and-posting.md](../design/finance/books-and-posting.md); GC-7 section 10 | All of it |
-| `stock` · ledger | Nothing | [stock-ledger.md](../design/stock/stock-ledger.md) (rules, golden scenarios) | Its interface operations and tables are not designed yet (RR-012) |
+| `stock` · ledger | Nothing | [stock-ledger.md](../design/stock/stock-ledger.md) (rules, golden scenarios; interface, tables and harness Proposed in sections 13 to 15) | Review of the interface, tables and harness in DR-2 (RR-012, RR-013) |
 | `calculations` | Nothing: `packages/calculations` does not exist | GC-7 [shared-calculations.md](../design/calculations/shared-calculations.md) | The package, its golden cases, the counter test page |
 | Offline counter | Nothing | Outline only (module-map 4.17, domain-model 3.12) | GC-8 design |
 | Backup, restore, export | Nothing | Test-hosting notes only ([deployment.md](../design/platform/deployment.md) 4) | GC-9 design |

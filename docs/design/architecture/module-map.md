@@ -163,6 +163,7 @@ All are **design choices** that implement the cited rules.
 | `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it |
 | `merchandise` must not make a profile piece-tracked at a Site holding its stock without a planned labelling count (`PRD-MER-018`; 4.12) | `merchandise` defines a stock-presence contract; `stock` implements it |
 | `exceptions` must verify the business outcome before closure (`PRD-EXC-002`) | `exceptions` defines a resolution-check contract; the module that owns the linked record implements it |
+| `kernel` works out business dates under the Organisation's timezone (`PRD-MOD-009`; code-house-rules 9), a setting `configuration` keeps one tier above it | `kernel` defines a timezone contract; `configuration` implements it and answers with the Organisation's timezone setting, which has no default. `kernel` keeps no copy and calls `configuration` only through the contract. **Proposed** (RR-231) |
 | `kernel`'s idempotency helper must check a replayed secret against a credential `access` owns ([code-house-rules.md](../platform/code-house-rules.md) 12.5) | `kernel` defines a credential-check contract; `access` implements it. `kernel` never reads `access` tables |
 
 7. **External systems.** One module owns each adapter. Outcomes are tracked as pending, unknown, failed or succeeded, outside the local transaction (`PRD-INT-006`, `PRD-INT-007`; section 9).
@@ -439,7 +440,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - **Uses:** `access`, `configuration`, `audit`, `numbering`, `organisation`, `merchandise` · catalogue, `exceptions`, `finance` · books, `kernel`.
 - **Called by:** every tier 4 and tier 5 module that moves or values stock. They post through it in their own transaction (stock-ledger section 1).
-- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. stock-ledger.md names no operations; the area designs name them.
+- **Its interface, by purpose:** post the movements of a business document (stock-ledger 2.3); record coverage and acceptance; place and release a hold; reserve and release; start and end a count freeze; answer balance, availability and sellable questions (stock-ledger 6.3); serve its read models. The operations, their inputs and refusals, and its tables are in stock-ledger 13 and 14 (**Proposed**, for DR-2); the area designs name the documents that call them.
 - It writes no journal. For a valued movement it calls Post in `finance` · books inside the same transaction (stock-ledger 7.11, DEC-087).
 - **Events:** `stock.movements-posted`, `stock.hold-changed`, `stock.reservation-changed`, `stock.count-freeze-changed`.
 

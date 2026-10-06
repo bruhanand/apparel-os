@@ -2,13 +2,13 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current**, 3 Oct 2026, for sections 1 to 12. Sections 13 to 15 (interface, tables, synthetic harness) are **Proposed**, 6 Oct 2026, for review in DR-2 (RR-012, RR-013). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: Stock and warehouse control; Ledger and official books (cost formulas and pools); Merchandise and identifiers (piece and quantity tracking); Receiving and price tickets, Transfers and physical movement, Damage, quarantine and disposal (their stock effects); Opening, closure, migration and export (the switch); Module and data boundaries; Transaction and integration integrity.
 
-- PRD IDs: `PRD-STK-001`–`PRD-STK-005`, `PRD-STK-008`–`PRD-STK-017`; `PRD-LED-003`, `PRD-LED-005`–`PRD-LED-009`, `PRD-LED-014`–`PRD-LED-018`; `PRD-MER-003`, `PRD-MER-006`, `PRD-MER-010`–`PRD-MER-012`, `PRD-MER-014`–`PRD-MER-018`; `PRD-REC-004`, `PRD-REC-006`, `PRD-REC-008`, `PRD-REC-009`, `PRD-REC-012`, `PRD-REC-013`, `PRD-REC-015`, `PRD-REC-017`, `PRD-REC-019`, `PRD-REC-021`, `PRD-REC-022`; `PRD-PTW-010`; `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-009`, `PRD-ORG-012`, `PRD-ORG-014`, `PRD-ORG-015`, `PRD-ORG-017`–`PRD-ORG-020`; `PRD-TRF-004`, `PRD-TRF-006`–`PRD-TRF-013`, `PRD-TRF-016`, `PRD-TRF-018`–`PRD-TRF-020`, `PRD-TRF-022`, `PRD-TRF-023`; `PRD-DMG-001`–`PRD-DMG-003`, `PRD-DMG-005`–`PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016`; `PRD-OFR-008`, `PRD-OFR-012`, `PRD-OFR-014`, `PRD-OFR-016`, `PRD-OFR-019`; `PRD-RET-013`, `PRD-RET-017`; `PRD-POS-018`, `PRD-POS-020`; `PRD-OFF-006`, `PRD-OFF-009`, `PRD-OFF-011`, `PRD-OFF-012`, `PRD-OFF-014`; `PRD-EBO-003`, `PRD-EBO-005`, `PRD-EBO-011`; `PRD-LIF-003`–`PRD-LIF-005`, `PRD-LIF-008`, `PRD-LIF-010`, `PRD-LIF-012`–`PRD-LIF-016`, `PRD-LIF-018`, `PRD-LIF-025`–`PRD-LIF-028`; `PRD-IMP-011`, `PRD-IMP-012`; `PRD-ACS-006`, `PRD-ACS-007`, `PRD-ACS-013`–`PRD-ACS-016`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-009`–`PRD-MOD-015`; `PRD-INT-002`–`PRD-INT-005`, `PRD-INT-008`; `PRD-PRF-001`, `PRD-PRF-003`; `PRD-STG-002`; `PRD-SEC-016`, `PRD-SEC-017`; `PRD-NAV-015`, `PRD-NAV-016`; `PRD-FRN-006`; `PRD-EXC-001`; `PRD-ACP-001`–`PRD-ACP-006`, `PRD-ACP-012`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACP-020`.
-- Policies: 1 (`POL-01.05`, `POL-01.07`, `POL-01.13`), 2 (`POL-02.12`, `POL-02.16`, `POL-02.21`, `POL-02.24`), 3 (`POL-03.03`), 4 (`POL-04.03`–`POL-04.09`), 6 (`POL-06.02`), 7 (`POL-07.08`), 8 (`POL-08.02`, `POL-08.03`, `POL-08.05`, `POL-08.06`), 9 (`POL-09.02`–`POL-09.08`, `POL-09.11`, `POL-09.12`, `POL-09.19`, `POL-09.21`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 16 (`POL-16.04`, `POL-16.05`), 17 (`POL-17.01`, `POL-17.02`, `POL-17.05`, `POL-17.07`).
-- Decisions: DEC-002, DEC-004, DEC-008, DEC-019, DEC-023, DEC-030, DEC-031, DEC-032, DEC-033, DEC-034, DEC-035, DEC-054, DEC-055, DEC-059, DEC-066, DEC-069, DEC-071, DEC-087, DEC-088, DEC-089, DEC-090, DEC-091, DEC-097, DEC-105.
+- PRD IDs: `PRD-STK-001`–`PRD-STK-006`, `PRD-STK-008`–`PRD-STK-017`; `PRD-LED-003`, `PRD-LED-005`–`PRD-LED-009`, `PRD-LED-014`–`PRD-LED-018`; `PRD-MER-003`, `PRD-MER-006`, `PRD-MER-010`–`PRD-MER-012`, `PRD-MER-014`–`PRD-MER-018`; `PRD-REC-004`, `PRD-REC-006`, `PRD-REC-008`, `PRD-REC-009`, `PRD-REC-012`, `PRD-REC-013`, `PRD-REC-015`, `PRD-REC-017`, `PRD-REC-019`, `PRD-REC-021`, `PRD-REC-022`; `PRD-PTW-010`; `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ORG-009`, `PRD-ORG-012`, `PRD-ORG-014`, `PRD-ORG-015`, `PRD-ORG-017`–`PRD-ORG-020`; `PRD-TRF-004`, `PRD-TRF-006`–`PRD-TRF-013`, `PRD-TRF-016`, `PRD-TRF-018`–`PRD-TRF-020`, `PRD-TRF-022`, `PRD-TRF-023`; `PRD-DMG-001`–`PRD-DMG-003`, `PRD-DMG-005`–`PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016`; `PRD-OFR-008`, `PRD-OFR-012`, `PRD-OFR-014`, `PRD-OFR-016`, `PRD-OFR-019`; `PRD-RET-013`, `PRD-RET-017`; `PRD-POS-018`, `PRD-POS-020`; `PRD-OFF-004`, `PRD-OFF-006`, `PRD-OFF-009`, `PRD-OFF-011`, `PRD-OFF-012`, `PRD-OFF-014`; `PRD-EBO-003`, `PRD-EBO-005`, `PRD-EBO-011`; `PRD-LIF-003`–`PRD-LIF-005`, `PRD-LIF-008`, `PRD-LIF-010`, `PRD-LIF-012`–`PRD-LIF-016`, `PRD-LIF-018`, `PRD-LIF-025`–`PRD-LIF-028`; `PRD-IMP-010`–`PRD-IMP-012`; `PRD-ACS-006`–`PRD-ACS-008`, `PRD-ACS-013`–`PRD-ACS-016`; `PRD-MOD-002`, `PRD-MOD-003`, `PRD-MOD-006`, `PRD-MOD-008`–`PRD-MOD-015`; `PRD-INT-002`–`PRD-INT-005`, `PRD-INT-008`; `PRD-PRF-001`, `PRD-PRF-003`, `PRD-PRF-004`; `PRD-STG-002`; `PRD-SEC-005`, `PRD-SEC-016`–`PRD-SEC-018`; `PRD-NAV-015`, `PRD-NAV-016`; `PRD-FRN-006`; `PRD-EXC-001`, `PRD-EXC-002`; `PRD-UXP-003`; `PRD-ACP-001`–`PRD-ACP-006`, `PRD-ACP-012`, `PRD-ACP-013`, `PRD-ACP-018`, `PRD-ACP-020`.
+- Policies: 1 (`POL-01.05`, `POL-01.07`, `POL-01.13`), 2 (`POL-02.09`, `POL-02.12`, `POL-02.16`, `POL-02.21`, `POL-02.24`), 3 (`POL-03.03`), 4 (`POL-04.03`–`POL-04.09`), 6 (`POL-06.02`), 7 (`POL-07.08`), 8 (`POL-08.02`, `POL-08.03`, `POL-08.05`, `POL-08.06`), 9 (`POL-09.02`–`POL-09.08`, `POL-09.11`, `POL-09.12`, `POL-09.19`, `POL-09.21`), 10 (`POL-10.01`), 11 (`POL-11.01`), 14 (`POL-14.02`–`POL-14.04`, `POL-14.07`), 16 (`POL-16.04`, `POL-16.05`), 17 (`POL-17.01`, `POL-17.02`, `POL-17.05`, `POL-17.07`).
+- Decisions: DEC-002, DEC-004, DEC-008, DEC-019, DEC-023, DEC-030, DEC-031, DEC-032, DEC-033, DEC-034, DEC-035, DEC-054, DEC-055, DEC-059, DEC-066, DEC-069, DEC-071, DEC-087, DEC-088, DEC-089, DEC-090, DEC-091, DEC-097, DEC-105, DEC-112.
 
 Used by: the future designs for receiving, PT, transfers, counts, supplier returns, the counter, EBO imports, the switch and financial posting. Each of them posts stock through this ledger.
 
@@ -132,18 +132,19 @@ Every hold and reservation is its own record: kind, the pieces or quantity it co
 | --- | --- | --- | --- |
 | Damage hold | A damage report, at once, before confirmation | Independent rejection of that report; confirmation turns it into a damaged condition | `PRD-DMG-001`–`PRD-DMG-003`, `PRD-ACP-005` |
 | Quarantine | Damaged, wrong or unidentified condition | An approved decision for that goods; never by time | `PRD-DMG-006`, `PRD-DMG-010`, `PRD-REC-012` |
-| Excess hold | Receiving excess; a count surplus with no known origin | Explicit authority and the PT route; or a link to a recorded loss | `PRD-REC-013`, `PRD-STK-014` |
+| Excess hold | Receiving excess; a count surplus with no known origin | Explicit authority and the PT route; for a count surplus with no known origin, its owner established and a PT for the counted quantity approved (8.4); or a link to a recorded loss | `PRD-REC-013`, `PRD-STK-014` |
 | Source-conflict hold | An open cost, MRP, attribute or tax conflict on the line | Resolution of that conflict | `POL-03.03` |
 | Expiry hold | Failing the configured shelf-life rule | A rule change, supplier return, write-off or disposal | `POL-04.05` |
 | Ordinary hold | A person, to settle a question | That person's or an authorised release | `PRD-STK-001` |
 | Count freeze | An open count over its scope | Count closure | `PRD-STK-008`, `PRD-STK-009`, DEC-019 |
 | Transfer reservation | Transfer approval | Dispatch or explicit cancellation; never by time | `PRD-TRF-006`–`PRD-TRF-010`, `PRD-TRF-022` |
 | Supplier-return reservation | Approved return list | Departure or explicit withdrawal | `PRD-OFR-012`, `PRD-OFR-016` |
-| Offline protected quantity | Allocation to the Store's offline counter | Release online after queue reconciliation | `PRD-OFF-006`, `PRD-OFF-011`, `POL-16.04` |
+| Offline protected quantity | Allocation to the Store's offline counter | Release only while online, after sequence and queue reconciliation and a durable local and central billing pause | `PRD-OFF-006`, `PRD-OFF-011`, `POL-16.04` |
 | Inspection hold | A cancelled billed-retained sale coming back | Inspection | `POL-08.05` |
+| Write-off hold | A write-off: the goods stay in custody, unavailable (7.9). **Proposed** | Disposal of the goods, or a reversal of the write-off | `PRD-DMG-011`, `POL-17.05` |
 | Held-goods reservation | Approval of a quarantine movement, a supplier return of damaged, wrong or excess goods, or a pre-PT custody movement, under its own authority | Departure or explicit cancellation | `PRD-DMG-007`–`PRD-DMG-009`, `POL-17.01` |
 
-Count freeze and Inspection hold are kinds of Hold, and Held-goods reservation is a kind of Reservation (PRD Words used: Hold, Reservation; DEC-069).
+Count freeze, Inspection hold and Write-off hold are kinds of Hold, and Held-goods reservation is a kind of Reservation (PRD Words used: Hold, Reservation; DEC-069).
 
 **Billed-retained** (PRD Words used, `PRD-POS-018`, `POL-08.02`) is not a hold: goods paid for but still held in the Store until handover, for collection or alteration. Not available for sale or allocation. Alteration and ready-for-collection are tracked apart, piece by piece (`POL-08.03`).
 
@@ -238,7 +239,7 @@ A unit is in a cost pool only when the Organisation owns it **and** its cost is 
   - **Found goods matched to a recorded loss:** the cost the loss took (section 8.4).
   - **Goods coming back from a dispatch or a supplier return shipment** (failed delivery, supplier rejection): the value held on the shipment (7.8).
   - **A reversal of an outflow** made in error: the cost the outflow took.
-- **A reversal of an inflow made in error** (a wrong receipt count, opening row, cost established or cost adjustment) takes off the value that inflow added, not the formula cost (`PRD-LED-018`, DEC-034). Under FIFO it comes off the inflow's own layer and the layers that came from it, while they hold units; under moving average, off the pool. Any part that would take a layer or pool below zero is shown as a separate variance. Its account is mapped under the Financial posting policy (V-10).
+- **A reversal of an inflow made in error** (a wrong receipt count, opening row, cost established or cost adjustment) takes off the value that inflow added, not the formula cost (`PRD-LED-018`, DEC-034). Only the part that would take the cost pool below zero is shown as a separate variance (`PRD-LED-018`). Under moving average the value comes off the pool. Under FIFO it comes off the inflow's own layer and the layers that came from it, while they hold units; how any value still to come off is taken from the pool's other layers is OPEN (SL-27), and until it is set such a reversal is refused. Its account is mapped under the Financial posting policy (V-10).
 
 ### 7.6 Unknown cost and cost establishment
 
@@ -306,6 +307,7 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 - Piece-tracked goods are counted by piece-ID scan (`PRD-MER-016`). Recounts are new count records; the first count is kept (`PRD-STK-010`).
 - Before a full count freezes, the tills are reconciled (`PRD-STK-008`) and the offline queue is reconciled before the freeze starts. This ordering is a design rule; the PRD does not state it (it covers only releasing protected quantity, `PRD-OFF-011`, `PRD-OFF-006`).
 - Billed-retained pieces are counted apart from the Store's own stock (6.1).
+- A count whose scope holds offline protected quantity freezes only after that quantity is released (6.1; `PRD-OFF-011`), so the freeze holds against every sale (`PRD-STK-009`, `PRD-OFF-006`). Until it is released the count does not freeze.
 
 ### 8.2 Differences
 
@@ -317,14 +319,14 @@ A change is effective-dated (`PRD-LED-015`). At that moment the old pools close 
 ### 8.3 Shortages
 
 - **Piece-tracked:** the missing pieces are known by ID; their receipt origin and owner are known.
-- **Quantity-tracked:** the oldest receipt origin at that place goes first (`PRD-STK-013`).
+- **Quantity-tracked:** the oldest receipt origin at that place goes first; where batch or expiry is tracked, the soonest expiry first (`PRD-STK-013`, DEC-032).
 - Value leaves at the formula cost (7.5).
 
 ### 8.4 Surpluses
 
 - **A piece recorded as lost:** reverse that loss. The piece comes back with its receipt origin, owner, coverage and the cost the loss took (`PRD-LED-017`).
-- **A piece recorded at another place:** a correction movement from the recorded place to the found place, under approval. Between pools it is valued like a transfer (7.8).
-- **A piece recorded as sold, returned to its supplier or disposed of** (`PRD-STK-015`, DEC-035). A mis-scan can cause it: the bill names piece A while the customer took piece B of the same SKU. An approver links A to the movement that wrongly named it, and a correction record swaps the two: A comes back into custody with its own receipt origin, coverage and cost, and B is recorded as the piece that left. The bill or other document never changes. Both pieces are the same SKU in the same pool, so no value moves. With no matching missing piece, or a different SKU, A is held with an ordinary hold and an owned exception.
+- **A piece recorded at another place:** a correction movement from the recorded place to the found place, under approval. Between pools it is valued like a transfer (7.8). Between places of different legal entities it is refused and goes to the commercial or inter-entity process (`PRD-TRF-004`, `PRD-FRN-006`; 7.1).
+- **A piece recorded as sold, returned to its supplier or disposed of** (`PRD-STK-015`, DEC-035). A mis-scan can cause it: the bill names piece A while the customer took piece B of the same SKU. An approver links A to the movement that wrongly named it, and a correction record swaps the two: A comes back into custody with its own receipt origin, coverage and cost, and B is recorded as the piece that left. The bill or other document never changes. The two pieces must be the same SKU. In the same pool no value moves; in different pools value moves as for a transfer between pools (7.8). With no matching missing piece, or a different SKU, A is held with an ordinary hold and an owned exception. **OPEN (SL-28):** whether a swap between pieces of different owners or legal entities is made as `PRD-STK-015` describes, which would also change what each owner is owed, or is treated as no match; until it is decided, such a pair is treated as no match and goes the source's own route above, held with an exception, so no owner's settlement changes without a decision.
 - **Goods of a known SKU with no known receipt origin**, piece-tracked without an ID or quantity-tracked (`PRD-STK-014`, DEC-032): custody held as excess, with owner, PT coverage and cost unknown. It becomes available only when the approver links it to a recorded loss of the same SKU (that loss is reversed with its origin, owner, coverage and cost) or when its owner is established and a PT for the counted quantity is approved, as for opening stock.
 - **Goods whose SKU is unknown:** unidentified; quarantined until their identity is resolved through the applicable route (`PRD-DMG-010`, `PRD-REC-012`).
 
@@ -548,7 +550,7 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | # | Question | Who decides | Blocks |
 | --- | --- | --- | --- |
 | SL-1 | KDPS's actual cost formula and pool mode: today's method (V-08), then its confirmation (V-09) | Accounts, CA | 1 (V-08); 2 (V-09) |
-| SL-2 | Rounding rule for an outflow, or a customer return under moving average, that does not divide to whole paise | Accounts, CA | 2 |
+| SL-2 | Rounding rule for an outflow, a customer return under moving average, or a share of a late cost change, that does not divide to whole paise (13.4) | Accounts, CA | 2 |
 | SL-3 | Accounts for the supplier-return variance, late-cost shares of goods gone, late-cost excess in cost of goods sold, and the variance left by a reversal of an inflow (V-10) | Accounts, CA | 2 |
 | SL-4 | Validate these rules with real cases (`POL-09.06`). First, the supplier return: it leaves at the formula cost, not the receipt's own cost, so a variance appears even when the supplier credits the purchase price (7.5, 11.4). Then: late-cost split and its excess to cost of goods sold (7.7), reversals at their original cost, and reversals of mistaken inflows at their own value (7.5), FIFO layers dated when units enter the pool (7.4), valuation in posting order (7.10), consignment pass-through (7.2), including how a customer return of a pass-through unit is accounted for under each agreement (`POL-01.05`, `POL-01.13`, `POL-09.03`; ownership effect follows the agreement, DEC-091) and what a supplier-owned unit's loss or supplier return costs | CA; product owner | 2 |
 | SL-5 | How a net realisable value write-down is worked out and spread under each formula, and how it is reversed | CA | 5 |
@@ -567,5 +569,318 @@ Nothing below has a default. Each live operation that needs one stays unavailabl
 | SL-21 | Settled: journals for valued movements are written in the same transaction as the movement so books balance at commit (`DEC-087`, `PRD-MOD-013`) | — | — |
 | SL-22 | Settled: the click records the approval decision; the job's transaction records its use, which is the approval evidence; a failed job leaves the decision unused (10.6; `DEC-097`; [access-and-approvals.md](../access/access-and-approvals.md) 9.8) | — | — |
 | SL-23 | Baseline (DEC-105): Outcome A. A valued movement with no valid posting map does not commit; the document stays as it was, and an exception is raised in its own transaction (`PRD-MOD-013`, `POL-09.12`, DEC-087; 7.11; module-map 6.3) | CA (confirms) | — |
+| SL-24 | Lock-order refinements for the ledger's tables, **Proposed** in 14.3: receipt origins only read are locked in shared mode at step 2; a unit anchor at step 3, shared for every item and exclusive to start or end a count freeze; a missing cost pool row, or a missing transit value row, is created empty at step 6, as balance rows are at step 3. Each changes 10.3 and code-house-rules 8.2, which are amended only once it is approved | Product owner, in DR-2 | Code S1-F10 (the first stock migration) |
+| SL-25 | Row-level security for stock rows (14.1, 14.3). (a) A command that writes legs in two scopes, such as a dispatch, an arrival or a failed delivery between Sites, or a location move between two units at one Site, by an actor whose scope covers only one: a write rule of its own (code-house-rules 6.2) or the answer to CH-6. (b) A row at a business unit that belongs to no Store, such as a warehouse unit: **Proposed**, it carries no Store and is matched by its Site and unit, not read as an Unknown place. (c) A whole-book pool, which has no Site: **Proposed**, it carries none, so only all-members place scope reads its value; how Store value is shown stays SL-14. (b) and (c) depart from code-house-rules 6.2, where a null in a declared fact is Unknown, and amend it only once approved. They fit structure-and-masters 2.4 as structural rules, not as a null meaning none: the unit belongs to no Store, as `organisation` records, and the pool's mode is book, as its `pool_mode` column states, with a `CHECK` that the Site is null exactly then. (d) A header row that can cover goods of several brands (`movement`, `hold`, `hold_scope`, `reservation`, `unit_anchor`) declares no brand (14.1), so a brand-limited reader sees the header though access-and-approvals 5.3 wants several brands covered only when every brand is; the brand-bearing rows below it carry the quantities and values. (e) Pool rows (`cost_pool`, `cost_layer`, and the pool rows of `valuation` and `valuation_layer`) declare no Store or unit, so only a reader whose place scope covers the pool's whole Site, by a selected Site or wider, sees a Site pool's rows, and only all-members place scope sees a book pool's; a reader scoped to one unit or Store does not (access-and-approvals 5.2). **Proposed** | Product owner, in the access design (CH-6) | (b) to (e): Code S1-F10. (a): stage 3 transfers live; until then the harness acts with synthetic actors whose scope covers both places |
+| SL-26 | Value entering a pool through an ownership change after its cost is established (7.2; `POL-01.05` lets an agreement's ownership event fall between receipt and sale): which posting event kind it posts and what that recognises (`POL-09.03`). Until set, such an item is refused (13.4) | Accounts, CA (recognition); the event kind is declared in books-and-posting 7.2 first | 2, for an agreement whose ownership event falls between receipt and sale |
+| SL-27 | A reversal of an inflow made in error under FIFO, once the inflow's own layer and the layers that came from it no longer hold the value to come off: from which of the pool's other layers the rest comes off, at pool level as `PRD-LED-018` sets (7.5). Until set, such a reversal is refused (`rule-not-set`) | CA, with Accounts | Before FIFO reversals of inflows go live (2) |
+| SL-28 | Whether a piece found after it was recorded as gone may be swapped with a missing piece of the same SKU that belongs to another owner or legal entity (8.4; `PRD-STK-015`, DEC-035), which changes what each owner is owed (`POL-01.13`). Until decided, such a pair is treated as no match: the found piece is held and an exception raised | Product owner; CA for the settlement effect | Stage 3 counts of consignment or mixed-owner goods live |
 
 SL-12, SL-13 and SL-16 were settled by DEC-034 and DEC-035; their numbers are not reused.
+
+## 13. Interface
+
+**Proposed**, 6 Oct 2026, for review in DR-2 (RR-012). Sections 13 to 15 add the ledger's interface, its tables and the synthetic harness to the rules of sections 1 to 11; they change none of those rules, except the changes to 10.3 that SL-24 proposes, which apply only once approved. Every engineering choice in them is **Proposed**, labelled as module-map section 1 says, and waits for DR-2 and the product owner. The rules they apply keep their IDs beside them. Refusal names are Proposed; their envelope is part B of the house rules (code-house-rules 12).
+
+### 13.1 How a caller posts
+<!-- deps: PRD-MOD-002, PRD-MOD-006, PRD-INT-002, PRD-INT-003, PRD-INT-004, PRD-MOD-013, DEC-087, DEC-097 — the four phases of a ledger request inside the caller's command -->
+
+- Every change to the ledger's records is one **ledger request**: the stock effects of one business document, or of one step of it, from one registered caller (13.2), inside that caller's command (`PRD-MOD-002`, `PRD-MOD-006`). The ledger joins the command's transaction and never opens or commits one; each operation takes the command's transaction context as its first argument (code-house-rules 8.1; module-map section 3, rule 3). **Proposed.**
+- A request holds items: movements (13.4) and status changes (13.5). One request is all or nothing; one failing item fails the request and the command rolls back (`PRD-INT-004`, `PRD-IMP-012`).
+- A request runs in four operations, at the steps of module-map 6.1:
+
+| Operation | At | What it does | Returns | Refuses with (13.8) |
+| --- | --- | --- | --- | --- |
+| Plan | Step 4, before any lock | Checks the caller's registration and every item's shape; reads the SKU, unit, tracking profile and pack conversion as of the business date from `merchandise`, the place and the unit's mapping (book, legal entity) from `organisation`, the book's cost setting from `finance`; finds the receipt origins, pieces, balances, holds, reservations, pools and transit values the items touch; works out inflow values (10.6); asks `finance` Check postable for the valued items. Writes nothing and locks nothing | The plan: the lock targets of 10.3 steps 2 to 6, and from Check postable the period rows for step 7 and the journal series for step 8 | `caller-not-registered`, `item-not-registered`, `historical-reference-source`, `invalid-item`, `place-invalid`, `route-not-allowed`, `no-cost-setting`, `posting-refused` |
+| Lock | Step 5, as 10.3 steps 2 to 6 | Creates the missing `unit_anchor` and balance rows of step 3 (and, Proposed, the missing pool and transit value rows of step 6, SL-24), then takes each step's targets through `kernel`'s lock helper, one call per step, with any targets the caller adds for those steps (code-house-rules 8.2) | — | — (a lock wait past the runtime limit fails the command, code-house-rules 5.1) |
+| Recheck and value | Step 6, after every lock and before any write | Rereads under the locks what 10.4 rechecks for stock: available quantity, where each piece is, holds, reservations, a count freeze, coverage, acceptance and sellability (6.3); then values every outflow in posting order under the pool locks (7.10). Writes nothing | Each item's value on its approval basis, cost or Unknown, and the total, which is Unknown when any item's value is Unknown, for `access` Verify under lock (`PRD-ACS-015`, `PRD-ACS-016`, DEC-066) | `plan-stale`, `insufficient-available`, `not-in-custody`, `piece-not-at-place`, `count-freeze-active`, `held`, `reserved`, `not-covered`, `not-accepted`, `not-sellable`, `coverage-overlap`, `reservation-overlap`, `exceeds-source`, `wrong-release-event`, `condition-route`, `rule-not-set` |
+| Write | Step 7 | Writes the movements and their legs, pieces, balances, receipt origins, status records, valuations, layers and transit values; calls `finance` Post once for the request's valued items (books-and-posting 8.1); records one audit record naming the movements; saves the event rows of 13.7 | The movement and status identifiers, each valued item's value, and Post's result (books-and-posting 9.2) | `posting-refused`; a constraint of section 14 refusing a row is a defect, logged as one (10.4, last guard) |
+
+The caller's command, in order (module-map 6.1; `PRD-INT-003`):
+
+1. Before any lock: the caller's own slow work, then Plan.
+2. Locks: step 0, the authority rows (`access`); step 1, its document and approval rows; Lock, for steps 2 to 6; step 7, `finance` Hold periods with the plan's period rows and the caller's own; step 8, every number series, the plan's journal series with its own (code-house-rules 8.2).
+3. Rechecks: `access` Authorise again; Recheck and value; then `access` Verify under lock with the returned value (access-and-approvals 9.7).
+4. Writes: first `access` Record use, where the action needed approval, which writes the use of the decision with the identifier the caller made for it (DEC-097); then Write, whose movements carry that identifier (13.3); then the caller's own records; `numbering` Allocate; audit; outbox. All commit together (`PRD-INT-004`). **Proposed** order.
+
+- Post runs inside Write, so a valued movement and its balanced journals per book commit together or not at all (`PRD-MOD-013`, DEC-087). A refusal by Post rolls the command back, and the caller raises the exception in its own transaction (SL-23; books-and-posting 10).
+- A value whose basis is Unknown is returned as Unknown, never as zero (`PRD-MOD-015`, `PRD-ACS-016`).
+- **Plan staleness.** For quantity-tracked goods whose origin is not named, Plan names as lock targets every receipt origin with stock of that SKU at that place, and Lock locks them, so that Recheck and value can take the oldest first, or the soonest expiry (`PRD-STK-013`). If an origin appeared after Plan, the request is refused as `plan-stale` and the command fails; the person or job submits it again. The kernel never retries it (code-house-rules 8.1). **Proposed.**
+- The ledger allocates no number of its own in stage 1. Piece codes come from the caller (13.4); journal numbers are drawn by Post. **Proposed.**
+
+### 13.2 Registered callers
+<!-- deps: PRD-MOD-002, PRD-SEC-005, PRD-SEC-017, PRD-LIF-014, PRD-IMP-010, DEC-112 — harness decision H2: the ledger accepts registered callers only -->
+
+Harness decision H2 (DEC-112): the ledger accepts registered callers only, and synthetic callers exist only in tests.
+
+- **Registration.** At start, each module that posts stock registers, through the ledger's interface: its module (or part) name; each record type it posts from; for each record type, the item kinds of 13.4 and 13.5 it may send; and the import kinds it may carry, such as opening balance. A registration is fixed once the application has started. **Proposed.**
+- **Every request names its source:** owning module, record type, record identifier, version identifier, the document line of each item, and the import kind, or none (books-and-posting 5.1). Plan refuses a source whose module and record type are not registered (`caller-not-registered`), an item kind the registration does not list (`item-not-registered`), and any source whose import kind is historical reference (`historical-reference-source`), as a last guard behind the import handler's own rule (`PRD-LIF-014`, `PRD-IMP-010`; the proposal of imports-and-opening-data 4.2, taken here). A `CHECK` on `movement` refuses that kind again (14.2).
+- **Synthetic callers.** A registration may be marked synthetic. The registry accepts one only when the application was composed by the test application factory, which lives in `apps/server/test/` and which no code under `src/` can import (code-house-rules 11.2). A test proves that the production composition registers no synthetic caller and that a synthetic registration outside it fails the start. **Proposed.**
+- **What the guard is.** Registration keeps wrong or synthetic documents out of the ledger. It is not an access control: Authorise and row-level security still decide who may act (`PRD-SEC-005`), and `pnpm check:modules` decides which modules may call (module-map section 3).
+- **Who registers.** In stage 1 the production composition registers no caller, so no stock posts outside tests (2.3, "Stage live"). The callers of later stages, indicative only, each confirmed by its own design: `receiving` (receipt count, putaway, acceptance, holds; stage 2), `merchandise` · PT (coverage, cost established, cost adjustment; stage 2), `stock` · documents (damage in stage 2; transfers, counts, write-off and disposal in stage 3), `supplier-returns` (stage 3), `pos` (stage 4), `ebo-imports` (stage 4, never for an earlier-POS import), `site-lifecycle` (the opening count, stage 4).
+- In tests: the synthetic document driver (section 15) and the GC-6 opening-count test handler (imports-and-opening-data 12). Whether that handler may also run on `dev` is OPEN (GC6-18); until it is answered it is registered in tests only (15.5).
+
+### 13.3 The request
+<!-- deps: PRD-MOD-008, PRD-MOD-009, PRD-MOD-010, PRD-ACS-013, PRD-MER-010, PRD-MER-011, PRD-ORG-005, PRD-ORG-012, POL-04.03 — the inputs every item carries -->
+
+Every request carries the source of 13.2, the business date and event time (`PRD-MOD-009`), and the actor: the user or service identity, the person a job acts for, and the role assignment Authorise returned (`PRD-ACS-013`, `PRD-SEC-018`). Where the action needed approval it also carries the approval decision and the identifier of its use, a UUIDv7 the caller made before Record use wrote it in the same transaction, so each movement keeps its approval evidence (2.2; `PRD-ACS-013`, `PRD-INT-004`, DEC-097). Every item adds:
+
+| Input | Rule | IDs |
+| --- | --- | --- |
+| Item kind | One of 13.4 or 13.5, allowed by the registration | — |
+| Document line | The identifier of the source line, kept without a foreign key | `PRD-ACS-007` |
+| SKU, unit | The SKU, or Unknown where the kind allows it; the quantity in the stock unit, or in a pack with the conversion version used. Units are never combined silently | `PRD-MER-010`, `PRD-MER-012`, `POL-04.03`, `POL-04.04` |
+| Batch, expiry | Present exactly when the tracking profile in force requires them; a missing value refuses the item | `PRD-MER-011`, `POL-04.05` |
+| Quantity | A whole number above zero in the stock unit; for a value-only kind, the units whose value changes | 2.2 |
+| Places | From and to, as the kind needs: Site, business unit, internal location, condition (good, damaged, wrong, unidentified) and how the goods are held (in custody, in transit on a named dispatch or supplier-return shipment, billed-retained). The location must belong to both the Site and the unit (structure-and-masters 3.5) | `PRD-ORG-005`, `PRD-ORG-012`, `PRD-STK-001`, `PRD-STK-002` |
+| Origins and pieces | Piece codes for piece-tracked goods (`PRD-MER-016`); receipt origins where the document names them, otherwise chosen by `PRD-STK-013` | `PRD-STK-004`, `PRD-STK-013` |
+| Value inputs | Only for cost established and cost adjustment: the amount, its evidence and the PT revision or cost record it comes from | `PRD-PTW-010`, `PRD-LED-016` |
+| Links | The movement reversed; the hold or reservation released; the reservation a hold sits inside, as the kind needs | `PRD-ACS-014` |
+
+### 13.4 Movement items
+<!-- deps: PRD-REC-008, PRD-LIF-003, PRD-LIF-004, PRD-LIF-008, PRD-STK-005, PRD-DMG-010, PRD-TRF-011, PRD-TRF-016, PRD-TRF-019, PRD-POS-018, PRD-RET-013, PRD-OFR-012, PRD-STK-012, PRD-DMG-012, PRD-PTW-010, PRD-LED-016, PRD-LED-017, PRD-LED-018 — one item per movement kind of 2.3 -->
+
+One item kind per movement kind of 2.3. "Under the locks" adds to the common rechecks of 13.1. Event kinds are those of books-and-posting 7.2; a kind marked "none" calls no Post.
+
+| Item | Specific inputs | Under the locks | Refusals | Value and event kind | IDs |
+| --- | --- | --- | --- | --- | --- |
+| Receipt count | GRN line; to place; owner and agreement version from `receiving`; piece codes printed from the count | Piece codes unused | `invalid-item` (a piece code already used) | Unknown; none. Creates a receipt origin, and pieces for piece-tracked goods | `PRD-REC-008`, `PRD-MER-015`, `PRD-ORG-019`, `PRD-ACP-001` |
+| Opening count | As a receipt count, from an opening batch; owner verified by Operations | As a receipt count | As a receipt count | Unknown until its opening PT is approved (cost established); none. Creates opening receipt origins | `PRD-LIF-003`, `PRD-LIF-004`, `PRD-LIF-027`, `POL-14.02` |
+| Location move | From and to place inside one Site | Units at the from place | `route-not-allowed` when the two units differ in book, legal entity or tax registration (7.1, DEC-066; MM-13) | None; none. Keeps condition and acceptance | `PRD-STK-005` |
+| Condition change | To condition; the hold the condition raises (13.5) | Goods at the place | `condition-route`: damaged to good; wrong or unidentified to good outside the identity route | None; none | `PRD-DMG-003`, `PRD-DMG-010`, `POL-17.02` |
+| Identity resolved | The resolved SKU and the approved identity decision | Goods Unknown and quarantined | `condition-route` without the approved route | None; none. A new receipt origin with the old one as parent | `PRD-DMG-005`, `POL-17.02` |
+| Dispatch | Dispatch identifier; the transfer or held-goods reservation it consumes | Reservation covers the units; held units go only under a held-goods reservation; same legal entity | `reserved`, `held`, `route-not-allowed` | Different pools: issue at formula cost onto the dispatch; `stock.pool-dispatch`. Same pool: none | `PRD-TRF-007`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-TRF-004` |
+| Arrival count | Counted good, damaged, wrong, unidentified and excess quantities | Units in transit on that dispatch | `exceeds-source` | Different pools: into the destination pool at the dispatch value, one layer per source layer under FIFO; `stock.pool-arrival`. Same pool: no value moves; none. Excess: a new receipt origin held as excess, no value (13.5). Missing units stay on the dispatch | `PRD-TRF-012`, `PRD-TRF-016`, `PRD-TRF-018` |
+| Failed-delivery return | The dispatch; counted quantities at the source | Units in transit on that dispatch | `exceeds-source` | Different pools: back to the source pool at the dispatch value; `stock.failed-delivery-return`. Same pool: no value moves; none | `PRD-TRF-019` |
+| Sale issue | Bill line; handover now, or billed-retained until handover; for an uploaded offline bill, the offline protected-quantity reservation it sold from | Sellable at the Store (6.3, conditions 1 to 5); a later handover issues from billed-retained. An offline bill is checked against every hold and reservation except that protected-quantity reservation, which the sale consumes (6.3 condition 4; 10.5; `PRD-OFF-006`); a bill that does not fit goes to the reconciliation queue, as GC-8 designs | `not-sellable`; `rule-not-set` for billed-retained value timing until SL-17 is set | Formula cost; `stock.sale-issue`. A supplier-owned unit whose ownership passes at sale: `stock.pass-through` (SL-4) | `PRD-STK-003`, `PRD-POS-018`, `PRD-LED-014` |
+| Customer return | The sale movement; condition after acceptance | Returned quantity within what that sale issued and was not yet returned | `exceeds-source`; `rule-not-set` for a unit supplier-owned at its sale, whose ownership on return is not settled (7.2, SL-4), and for a partial return under moving average that does not divide into whole paise (SL-2); a return with no sale in the app is not an item (SL-10) | A unit the Organisation owned at its sale: the cost its sale issued (7.5); `stock.customer-return`. Damaged: quarantined (13.5) | `PRD-RET-013`, `PRD-LED-017`, `PRD-INT-005` |
+| Supplier-return departure | RTV leg; the supplier-return or held-goods reservation it consumes | Reservation covers the units | `reserved` | Formula cost onto the shipment, in both pool modes; `stock.supplier-return-departure` | `PRD-OFR-012`, `PRD-TRF-020` |
+| Supplier handover | The shipment; confirmed handover or supplier receipt | Units on the shipment | `exceeds-source` | Leaves the shipment; `stock.supplier-handover` | `PRD-TRF-020` |
+| Supplier rejection return | The shipment; counted quantities | Units on the shipment | `exceeds-source` | Back at the shipment's value; `stock.supplier-rejection-return` | `PRD-OFR-014` |
+| Count difference | The count and its approved differences | Freeze still holds the scope; expected quantities unchanged since the freeze | `count-freeze-active` for any other item in the scope | Loss: formula cost, `stock.count-loss`; units lost on a dispatch, `stock.dispatch-loss`. Gain linked to a recorded loss: the reversal of that loss at its cost. Gain with no known origin: a new receipt origin held as excess, no value | `PRD-STK-012`, `PRD-STK-014`, `PRD-STK-015`, `PRD-ACS-015` |
+| Disposal | Method and evidence | Goods held | `exceeds-source` | Formula cost unless written off first, `stock.disposal-loss`; after a write-off, none; pre-PT, none and no journal | `PRD-DMG-012`, `PRD-DMG-015`, `PRD-DMG-016` |
+| Ownership change | The agreement's ownership event | Owner on the receipt origin is the one the event changes | `rule-not-set` when units of known cost would enter a pool, while no event kind exists for that (SL-26) | Owner changes on the origin; units with known cost enter the pool (7.2) | `PRD-ORG-014`, `POL-01.05` |
+| Cost established | The covering PT revision; the P RATE | Origin still Unknown; coverage recorded in the same request (13.5) | `exceeds-source` | Owned units: into the pool, or onto the dispatch in transit (7.6); `stock.cost-established`. Supplier-owned units: the cost is recorded on the origin only; nothing enters the pool and nothing posts (7.2; `PRD-ORG-015`). For an opening receipt origin, none: opening stock makes no automatic journal | `PRD-PTW-010`, `PRD-REC-017`, `PRD-LIF-008` |
+| Cost adjustment | Amount and evidence; the receipt origin | No count freeze over the affected units (8.1) | `count-freeze-active` | Follows its goods (7.7); `stock.cost-adjustment` with its components | `PRD-LED-006`, `PRD-LED-016`, `PRD-REC-019` |
+| Write-off | Quantity and reason | Value established | `exceeds-source` | Formula cost leaves; goods stay in custody under a write-off hold placed in the same request, so they are unavailable (6.1); `stock.write-off`. Pre-PT: nothing to write off | `PRD-DMG-011`, `POL-17.05`, `POL-17.07` |
+| Net realisable value write-down | — | — | `rule-not-set` until SL-5 is set | `stock.nrv-write-down` | `PRD-LED-007` |
+| Reversal | The movement reversed and the quantity | Quantity within what that movement moved and was not reversed | `exceeds-source` | An outflow comes back at the cost it took; an inflow comes off at the value it added, with a variance only for a part that would take the pool below zero (7.5); under FIFO, `rule-not-set` where the rest must come off other layers (SL-27); the reversal kind of the original event kind | `PRD-MOD-011`, `PRD-ACS-014`, `PRD-LED-018`, `PRD-STK-017` |
+| Piece correction | Piece A found, the movement that wrongly named it, piece B of the same SKU | A and B are the same SKU; while SL-28 is open, the same owner and legal entity | `invalid-item` for another SKU; `rule-not-set` naming SL-28 where owners or legal entities differ, so the caller takes the no-match route (8.4) | A reversal for A and a movement of the same kind for B, both with the correction as their source and linked to the movement corrected. Same pool: no value moves. Different pools: value moves as for a transfer between pools (7.8) | `PRD-STK-015` |
+
+- A valued outflow, a partial customer return under moving average (7.5) or a share of a cost adjustment (7.7) that does not divide into whole paise is refused as `rule-not-set` while the rounding rule is not set; an outflow that empties a pool takes all that is left and needs none (7.3, 7.10; SL-2, G10a).
+- **Supplier-owned units** take no pool value (7.2; `PRD-ORG-015`, `POL-09.03`). Their count loss, disposal, write-off and supplier-return legs move custody only, with no valuation and no Post; what such a loss or return costs follows the agreement and is not posted by the ledger (`POL-01.13`; SL-4).
+- Value never posts for Unknown cost; the item has no valuation and calls no Post (`PRD-MOD-015`, `PRD-ACP-004`).
+
+### 13.5 Status items
+<!-- deps: PRD-REC-015, PRD-REC-019, PRD-REC-021, PRD-REC-022, PRD-STK-001, PRD-STK-008, PRD-STK-009, PRD-TRF-006, PRD-TRF-007, PRD-TRF-022, PRD-OFF-006, PRD-OFF-011, PRD-DMG-003, PRD-INT-005, POL-17.01 — coverage, acceptance, holds, reservations and freezes as items -->
+
+Status records are not movements (2.3). Each item locks the balance and piece rows it claims (10.3 steps 3 and 4), so it queues with any movement of the same goods.
+
+| Item | Inputs | Under the locks | Refusals | IDs |
+| --- | --- | --- | --- | --- |
+| Split receipt origin | The origin and the counted portions a primary and supplemental PT cover | Portions add up to the origin's units | `exceeds-source` | `PRD-REC-015`; section 4 |
+| Record coverage | PT revision; the receipt origin, or the pieces | No unit already covered by another approved revision | `coverage-overlap` | `PRD-REC-015`, `PRD-REC-017`, `PRD-ACP-002`, `PRD-INT-005` |
+| Remove coverage | The linked PT correction | No dependent quantity relies on it | `exceeds-source` | `PRD-REC-019` |
+| Record acceptance | Barcode or tag verified; the units or pieces at the Site | Units in custody at that Site | `piece-not-at-place` | `PRD-REC-021`, `PRD-REC-022`, `PRD-STK-003` |
+| Place hold | Kind (damage, quarantine, excess, source conflict, expiry, ordinary, inspection, write-off), reason, evidence; pieces or a quantity at a place; optionally the reservation it sits inside | Units in custody at the place. Holds coexist, and a hold may fall on reserved or already held units (6.2) | `not-in-custody` | 6.1; `PRD-DMG-001`, `PRD-REC-006`, `PRD-TRF-007`, `PRD-STK-001` |
+| Release hold | The hold; the release event of its kind (6.1) | The event is the hold's own | `wrong-release-event` | `PRD-DMG-003`, `PRD-REC-013`, `POL-08.05` |
+| Start count freeze | The count; scope: locations, brands or SKUs at one Site and business unit | No other freeze over the same units; no offline protected quantity in the scope (8.1) | `count-freeze-active`; `reserved` for offline protected quantity | `PRD-STK-008`, `PRD-STK-009`, DEC-019 |
+| End count freeze | The count's closure | — | `wrong-release-event` | `PRD-STK-008`, `PRD-STK-009` |
+| Reserve | Kind (transfer, supplier return, held goods, offline protected quantity); pieces or a quantity at a place | Transfer and sale: within stock covered, accepted, good and not held. Held goods: only goods under the hold the item names, under its own authority. Reservations never overlap | `not-covered`, `not-accepted`, `held`, `reservation-overlap`, `insufficient-available` | `PRD-TRF-006`–`PRD-TRF-009`, `PRD-DMG-007`–`PRD-DMG-009`, `PRD-OFF-006`, `PRD-INT-005`, `POL-17.01` |
+| End reservation | The reservation; its event: dispatch or departure (inside that item), cancellation, withdrawal; for offline protected quantity, a sale from an uploaded offline bill (13.4) or a release only while online, after sequence and queue reconciliation and a durable local and central billing pause, which `pos` checks and states in the request (`PRD-OFF-011`) | The event is the reservation's own; never by time | `wrong-release-event` | `PRD-TRF-022`, `PRD-OFR-016`, `PRD-OFF-011` |
+
+- A hold moves with its goods and stays on them at the destination (`POL-17.01`): a movement of held goods moves the hold's claim in the same request.
+- Releasing one hold or reservation never releases another (6.2; `PRD-DMG-003`, `PRD-TRF-022`).
+- The count freeze's expected quantities are the balances under the freeze's locks; Start count freeze returns them (8.1).
+
+### 13.6 Reads and read models
+<!-- deps: PRD-MOD-003, PRD-MOD-012, PRD-PRF-004, PRD-SEC-005, PRD-ACS-008, PRD-OFF-004, PRD-STK-001, PRD-STK-003, PRD-STK-006, PRD-LED-008, PRD-ORG-014 — what the ledger answers, with an as-of time, under the reader's authorisation -->
+
+Reads take no lock and run in a read-only transaction under the reader's actor (code-house-rules 8.1). Every answer carries its as-of time and says when it is partial (`PRD-MOD-003`, `PRD-PRF-004`). Reports reach them through the kernel's read-model gateway (module-map section 3, rule 5).
+
+| Read | Answers | Called by | IDs |
+| --- | --- | --- | --- |
+| Custody | Quantity by place, location, condition, how held, SKU and receipt origin, as of a time | Every stock module; reports; stock search | `PRD-STK-001`, `PRD-STK-002`, `PRD-STK-004`, `PRD-STK-006` |
+| Piece | Where a piece is, how held, its origin, coverage and acceptance, and its movements | `pos`, `stock` · documents, reports | `PRD-MER-003` |
+| Coverage and acceptance | The PT revision covering each origin or piece, and what is accepted where, as of a time | `merchandise` · PT, `receiving`, reports | `PRD-STK-001` |
+| Availability | Custody less holds, reservations and freezes, given coverage and acceptance (6.2) | Transfer approval, supplier returns, the offline allocation | `PRD-TRF-006`, `PRD-INT-005` |
+| Sellable | Conditions 1 to 5 of 6.3 for a piece or quantity at a Store; condition 6 is asked of `pos` | `pos` | `PRD-STK-003`, `PRD-ACP-003` |
+| Ownership | The owner and agreement version on each receipt origin, as of a time | `supplier-returns`, `finance` · operations, reports | `PRD-ORG-014`, `PRD-OFR-008` |
+| Value | Pools and FIFO layers, valued movements with their before and after, values held on dispatches and shipments, as of a time | Reports, `finance` · operations | `PRD-LED-014`, `PRD-LED-015` |
+| Inventory reconciliation | Pool value per book, and each valued movement's identifier and components, for matching with the posting-source rows of books-and-posting 8.3 | `finance` · operations | `PRD-LED-008` |
+| Rebuild and compare | Rebuilds every projection of section 14 from the entries and compares, in a read-only transaction; it changes nothing and returns the differences. Run by a job under a service identity on a schedule, which then raises an exception for each difference as a separate command, in its own transaction (`exceptions` Raise); and by tests (11.7) | A job; tests | `PRD-MOD-011`, `PRD-MOD-012` |
+
+- Accounting recognition is not read here: it is the journals of `finance` · books (books-and-posting 12), joined to movements through the posting-source rows (section 3).
+- Cost and value are the restricted field class cost: masked unless the assignment that grants the read grants cost, and never sent to the counter (`PRD-ACS-008`, `PRD-OFF-004`; access-and-approvals 6).
+- Rows are filtered by row-level security as a backstop to Authorise (`PRD-SEC-005`; 14.3).
+
+### 13.7 Contracts, events and limits
+<!-- deps: PRD-MOD-006, PRD-INT-008, PRD-SEC-017, PRD-MER-018, POL-04.04, DEC-087 — contracts the ledger implements, its events, and what it never does -->
+
+- **Contracts it implements** (module-map section 3, rule 6): location in use, for `organisation` before a location is retired (structure-and-masters 3.5); stock presence, for `merchandise` before a tracking profile becomes piece-tracked or a SKU's stock unit changes (structure-and-masters 4.4 and 4.6; `PRD-MER-018`, `POL-04.04`, GC2-5); the resolution check, for exceptions the ledger raises, such as a rebuild difference (`PRD-EXC-002`).
+- **Events** (module-map section 8; identifiers only, saved in the request's transaction): `stock.movements-posted` once per request with movements; `stock.hold-changed`, `stock.reservation-changed` and `stock.count-freeze-changed` when those change. Coverage and acceptance publish no event in stage 1; the stage 2 PT and receiving designs add one if a consumer needs it, in module-map section 8 first (`PRD-MOD-006`, `PRD-INT-008`).
+- **No validity check.** The ledger keeps no configured records, so it registers none with `configuration`. The cost setting is `finance`'s, the shelf-life rule and tracking profiles `merchandise`'s (`PRD-SEC-017`).
+- **Never:** a journal of its own (7.11, DEC-087); a call to an outside system (code-house-rules 8.3); a movement from an import of historical reference (13.2); a business value of its own, such as a tolerance or a rounding rule (section 12).
+
+### 13.8 Refusals
+<!-- deps: PRD-UXP-003, PRD-INT-002, PRD-INT-005, PRD-SEC-017 — the names the ledger refuses with -->
+
+Each refusal names the item and what failed, so the caller can show the reason (`PRD-UXP-003`). Names **Proposed**.
+
+| Name | Meaning |
+| --- | --- |
+| `caller-not-registered` | The source's module and record type are not registered (13.2) |
+| `item-not-registered` | The registration does not list this item kind |
+| `historical-reference-source` | The source is an import of historical reference (`PRD-LIF-014`) |
+| `invalid-item` | Quantity not a whole number above zero; unit or pack conversion wrong; batch or expiry missing where required; piece codes missing for piece-tracked goods or already used; a link that does not exist |
+| `place-invalid` | The location is not of that Site and unit; the unit's mapping is not in force on the business date |
+| `route-not-allowed` | A move that needs another route: between books or legal entities (7.8), a registration-only change (MM-13), a transfer between legal entities (`PRD-TRF-004`) |
+| `no-cost-setting` | A valued item in a book with no approved cost setting (books-and-posting 2.2) |
+| `posting-refused` | Check postable or Post refused, with its reason (SL-23) |
+| `plan-stale` | Under the locks, the request needs a row Plan did not lock (13.1) |
+| `insufficient-available` | Not enough available units at the place (6.2; `PRD-INT-005`) |
+| `not-in-custody` | The units or pieces a hold would claim are not in custody at that place |
+| `piece-not-at-place` | A piece is not where the document says |
+| `count-freeze-active` | A count freeze covers the units (8.1) |
+| `held`, `reserved` | A hold or reservation covers the units, with its kind |
+| `not-covered`, `not-accepted` | No official PT coverage, or no acceptance at the Site, where the item needs it |
+| `not-sellable` | A condition of 6.3 fails; the answer names which |
+| `coverage-overlap`, `reservation-overlap` | Coverage or a reservation would overlap another (`PRD-INT-005`) |
+| `exceeds-source` | More than the source allows: a return beyond what was issued, a reversal beyond what was moved, an arrival beyond what was dispatched, a release beyond what was claimed |
+| `wrong-release-event` | A hold or reservation ended by an event that is not its own (6.2) |
+| `condition-route` | A condition or identity change outside its route (`PRD-DMG-010`, `POL-17.02`) |
+| `rule-not-set` | A rule the item needs is OPEN: the rounding rule (SL-2), the customer return of a unit supplier-owned at its sale (SL-4), net realisable value (SL-5), billed-retained timing (SL-17), the ownership event kind (SL-26), a FIFO reversal of an inflow beyond its own layers (SL-27), a piece swap across owners or legal entities (SL-28) (`PRD-SEC-017`) |
+
+- The same request sent twice returns its first result, and changed content under the same key is refused and kept: that is the kernel's idempotency helper, in the caller's command (10.1; `PRD-INT-002`). The ledger adds a unique key per source line as a last guard (14.2).
+
+## 14. Tables
+
+**Proposed**, 6 Oct 2026, for review in DR-2 (RR-012), with the migration that creates them. The house rules set how each table is written (code-house-rules 3.2, 3.3 and 7.1); this section says which tables, columns and keys.
+
+### 14.1 Conventions
+<!-- deps: PRD-MOD-002, PRD-MOD-008, PRD-MOD-011, PRD-MOD-012, PRD-MOD-014, PRD-MOD-015 — how the stock tables follow the house rules -->
+
+- One schema, `stock`. The ledger part writes the tables below; `stock` · documents adds its own tables in its own design, in the same schema (code-house-rules 3.2; `PRD-MOD-002`).
+- Every table has `id uuid`, a UUIDv7 made by the application (`PRD-MOD-008`). A reference to another module's record keeps its identifier with no foreign key; every reference inside `stock` has one (structure-and-masters 2.5).
+- **Entries and projections.** Movements, legs, valuations, receipt origins, status records and their releases are append-only (`PRD-MOD-011`). Balances, piece state, pool state, layers, transit values and claims are projections: rebuildable from the entries, changed only under the lock 14.3 names, and checked by Rebuild and compare (`PRD-MOD-012`; 2.1).
+- **Unknown and none.** An Unknown value is a null in a nullable column, and a column that holds an amount says whether it is known: a `value_known boolean`, with a `CHECK` that the amount is null exactly when it is not known. A link that a kind does not have (a reversal's original, a parent origin) is null only where a `CHECK` on the kind says the link does not exist, so a null link never stands for Unknown (code-house-rules 3.3; `PRD-MOD-015`).
+- Amounts are `bigint` in paise, with names ending `_paise` (`PRD-MOD-014`). Quantities are whole numbers in the stock unit, `integer`. Times are `occurred_at`, `recorded_at` and `business_date` (code-house-rules 9).
+- States and kinds are `text` with a `CHECK` listing their names: movement kinds as in 2.3; conditions good, damaged, wrong, unidentified; held as custody, in transit, billed-retained; hold and reservation kinds as in 6.1.
+- **Scope facts.** Every table is `scoped`. A row carries one value of each fact its record type declares (access-and-approvals 5.3). The legal entity comes from the unit's mapping version the row used (`POL-10.01`). The brand is the SKU's; Unknown for goods of Unknown SKU, so only all-members brand scope sees them (access-and-approvals 5.3). No table holds two values of one fact (code-house-rules 6.2, CH-6):
+  - a movement between two places is written as legs, one place each (14.2);
+  - `unit_anchor`, `movement`, `hold`, `hold_scope` and `reservation` can cover goods of several brands, such as a count freeze over a location, a multi-line reservation or an identity resolved from Unknown, so they declare `site_id`, `store_id`, `business_unit_id` and `legal_entity_id` only, and no brand (**Proposed**, SL-25 (d));
+  - `cost_pool`, `cost_layer` and the pool rows of `valuation` and `valuation_layer` declare no Store and no business unit, since a Site pool is shared by every unit of its book at the Site, and a book pool declares no Site either (SL-25 (c), (e)); they declare legal entity and brand;
+  - every other table declares all five, `brand_id` included: each of its rows holds one SKU, so one brand. Releases and reservation events name the one claim they end, and `transit_value` has one row per SKU;
+  - `cost_pool` declares no Site in book mode (SL-25 (c)).
+
+  The questions this leaves are SL-25.
+
+### 14.2 Schema `stock`
+<!-- deps: PRD-STK-001, PRD-STK-002, PRD-STK-004, PRD-MER-003, PRD-REC-015, PRD-ORG-014, PRD-LED-014, PRD-LED-015, PRD-MOD-010, PRD-MOD-011, PRD-MOD-012, PRD-INT-005, PRD-IMP-010, PRD-LIF-014 — the stock ledger's tables, columns and constraints -->
+
+"Scope" is the scope facts of 14.1; "source" is the source of 13.2 (`source_module`, `source_record_type`, `source_record_id`, `source_version_id`, `source_line_id`, `source_import_kind`); "actor" is `actor_user_id` or `actor_service_identity_id`, `on_behalf_of_user_id` and `role_assignment_id`. Register marks are those of code-house-rules 3.2.
+
+| Table | Holds | Columns beyond `id` | Keys and constraints | Register |
+| --- | --- | --- | --- | --- |
+| `unit_anchor` | One lock row per Site and business unit (13.1, 14.3) | `site_id`, `business_unit_id`, scope | Unique (`site_id`, `business_unit_id`) | scoped, append-only, locked |
+| `receipt_origin` | A receipt origin's fixed facts (section 4) | `origin_kind` (receipt, opening, surplus, split, identity resolved); `parent_origin_id`; source; `sku_id`, `sku_version_id` (Unknown allowed); `stock_unit`; `piece_tracked boolean`; `batch_tracked boolean`, `batch_code`, `expiry_date`; `quantity integer`; `count_date date`; receiving scope; `mapping_version_id`; `book_id`; `occurred_at`, `recorded_at` | Parent present exactly for split and identity resolved; batch and expiry present exactly when tracked; quantity above zero | scoped, append-only, locked |
+| `receipt_origin_state` | What changes on an origin | `receipt_origin_id` (unique); `owner_kind` (organisation, supplier, brand), `owner_legal_entity_id`, `owner_party_id`, `owner_brand_id`, `agreement_version_id` (all null while the owner is Unknown); `value_known`; `p_rate_paise`, the P RATE of the covering revision as the PT gives it, per unit; `established_value_paise`, the exact total that cost established and cost adjustments added; `origin_quantity`, copied from the origin; `pt_revision_id`, `covered_quantity`; `last_state_movement_id`, the last movement that changed this row, always under the origin's exclusive lock; scope | Exactly one owner column, the one its kind names, or none while the owner is Unknown; covered quantity within `origin_quantity`, which a trigger keeps equal to the origin's; amounts null exactly when not known. No per-unit cost is stored, so no rounding hides in it (`PRD-MOD-014`; SL-2) | scoped, projection |
+| `movement` | One movement, recorded at the place where it happens: the source Site for a dispatch, the destination for an arrival, the unit it leaves for a move between two units at one Site (2.2) | `kind`; source; actor; `approval_use_id` (from `access`); `reverses_movement_id`; `correction_of_movement_id`; `business_date`, `occurred_at`, `recorded_at`; scope of that place | `CHECK` `source_import_kind` is not historical reference (`PRD-LIF-014`); reverses present exactly for a reversal; unique (`source_module`, `source_record_type`, `source_record_id`, `source_line_id`, `kind`, `reverses_movement_id`) with nulls not distinct, so one source line posts each kind once. A movement that a later event of the same line makes, such as the handover of a billed-retained sale after the bill, names that event's own source record (the `pos` design names it before SL-17 is set) | scoped, append-only |
+| `movement_leg` | One side of a movement at one place: out of a place or into it. A value-only kind (cost established, cost adjustment, write-off, ownership change) has no legs; its valuations carry its units | `movement_id`; `direction` (out, in); `receipt_origin_id`; `sku_id`; `quantity`; `location_id`; `condition`; `held_as`; `transit_kind` (dispatch, return shipment), `transit_ref`; batch and expiry; scope of its place | Quantity above zero; transit kind and reference present exactly when held in transit; location present exactly when not in transit | scoped, append-only |
+| `movement_piece` | The pieces a movement moved | `movement_id`, `piece_id`, scope of the movement | Unique (`movement_id`, `piece_id`) | scoped, append-only |
+| `sku_balance` | Total quantity per Site, business unit and SKU: the lock row of 10.3 step 3 | `site_id`, `business_unit_id`, `sku_id`, `stock_unit`, `quantity`, scope | Unique (`site_id`, `business_unit_id`, `sku_id`) with nulls not distinct; quantity not below zero | scoped, projection, locked |
+| `balance` | Quantity at one balance key: place, location, condition, how held, transit reference, SKU, batch, expiry and receipt origin (6.2) | `sku_balance_id`; the key columns; `count_date`, copied from the receipt origin; `quantity`; `accepted_quantity`; scope | Unique on the key with nulls not distinct; `count_date` equal to the origin's (trigger); quantity not below zero; accepted within quantity; changed only under its `sku_balance` row's lock | scoped, projection |
+| `piece` | One piece's current state (section 5) | `code` (the piece ID label); `sku_id`; `receipt_origin_id`; place, location, condition, held as, transit reference; `in_custody boolean`; `pt_revision_id`; `accepted_site_id`; `last_movement_id`; scope of its place | Unique `code`; code never changes (trigger) | scoped, projection, locked |
+| `coverage` | PT coverage records | `pt_revision_id`; `receipt_origin_id`; `piece_tracked`, copied from the origin; `piece_id`; `quantity`; `action` (cover, remove); `removes_coverage_id`; source; actor; times; scope | `piece_id` present exactly when `piece_tracked`; the copy is held true by a foreign key on (`receipt_origin_id`, `piece_tracked`) to the origin's unique (`id`, `piece_tracked`); remove names the record it removes, once | scoped, append-only |
+| `acceptance` | Acceptance records: barcode verified and physically accepted at a Site | `receipt_origin_id`; `piece_id`; `quantity`; place; source; actor; times; scope | Quantity above zero | scoped, append-only |
+| `hold` | A hold, with its kind, reason, evidence, who raised it, and the reservation it may sit inside (6.1) | `kind`; `reason`; `evidence_file_id`; `within_reservation_id`; source; actor; times; scope where raised | Kind among the hold kinds of 6.1, count freeze and write-off included; unique (`id`, `kind`) for the copies below | scoped, append-only, locked |
+| `hold_scope` | A count freeze's scope | `hold_id`; `hold_kind`, copied; `location_id`, `scope_brand_id` or `sku_id`; scope | Exactly one of the three per row; `hold_kind` is count freeze, held true by a foreign key on (`hold_id`, `hold_kind`) to `hold` (`id`, `kind`) | scoped, append-only |
+| `hold_claim` | What a hold covers now: pieces, or a quantity at a balance key | `hold_id`; `piece_id` or `balance_id` and `quantity`; scope of the place | Changed only under the hold's lock; moves with its goods (`POL-17.01`) | scoped, projection |
+| `hold_release` | The release event | `hold_id`; `hold_kind`, copied as for `hold_scope`; `hold_claim_id`, the one claim it ends; `release_event`; `quantity` or pieces; source; actor; times; scope | `CHECK` that the release event is one of the hold kind's own (6.1); quantity within the claim, rechecked under the hold's lock (13.5) | scoped, append-only |
+| `reservation` | A reservation, with its kind and the document that made it | `kind`; source; actor; times; scope of the place reserved | Kind among the reservation kinds of 6.1 | scoped, append-only, locked |
+| `reservation_claim` | What a reservation covers now | `reservation_id`; `piece_id` or `balance_id` and `quantity`; scope | Changed only under the reservation's lock | scoped, projection |
+| `reservation_event` | Consumption, cancellation, withdrawal or release | `reservation_id`; `reservation_claim_id`, the one claim it ends; `event`; `quantity` or pieces; `movement_id` where a dispatch, departure or offline sale consumed it; source; actor; times; scope | Never by time; quantity within what the claim holds, rechecked under the reservation's lock (13.5) | scoped, append-only |
+| `cost_pool` | One pool (7.1) | `book_id`; `sku_id`; `pool_mode` (book, site); `site_id`; `formula` (moving average, FIFO); `cost_setting_version_id` (from `finance`); `quantity`; `value_paise`; `last_sequence bigint`; `closed_at`; `legal_entity_id`, `brand_id` | Site present exactly in Site mode; one open pool per book, SKU and Site (partial unique); `formula` never changes (trigger); unique (`id`, `formula`) for the copy below; quantity and value not below zero | scoped, projection, locked |
+| `cost_layer` | One FIFO layer (7.4) | `cost_pool_id`; `pool_formula`, copied; `entered_sequence`; `entered_at`; `quantity_in`, `quantity_left`; `value_in_paise`, `value_left_paise`; `from_layer_id`, `receipt_origin_id`, `from_valuation_id` (lineage); scope of the pool | `pool_formula` is FIFO, held true by a foreign key on (`cost_pool_id`, `pool_formula`) to `cost_pool` (`id`, `formula`); left amounts not below zero; changed only under the pool's lock | scoped, projection |
+| `valuation` | One valued movement's effect on one pool or one transit value (7.10) | `movement_id`; `receipt_origin_id`, the origin whose units the value belongs to; `cost_pool_id` or `transit_value_id`; `sequence`; `quantity_delta`, `value_delta_paise`; quantity and value before and after; `event_kind`, `component`; `business_date`, `accounting_date`; scope | Unique (`cost_pool_id`, `sequence`); after = before + delta | scoped, append-only |
+| `valuation_layer` | The layers a valuation took or made, per piece for piece-tracked goods (7.4) | `valuation_id`; `cost_layer_id`; `piece_id`; `quantity`; `value_paise`; scope | — | scoped, append-only |
+| `transit_value` | Value held on a dispatch between pools or on a supplier-return shipment (7.8) | `transit_kind`; `transit_ref`; `book_id`; `sku_id`; `quantity`; `value_paise`; scope of the source place, with the SKU's brand | Unique (`transit_kind`, `transit_ref`, `book_id`, `sku_id`): one row per SKU, so one brand; not below zero | scoped, projection, locked |
+| `transit_value_layer` | Under FIFO, the source layers a transit value holds (7.7, 7.8) | `transit_value_id`; `source_layer_id`; `quantity`; `value_paise`; scope | Changed only under the transit value's lock | scoped, projection |
+
+- The source line's unique key on `movement` and Post's unique posting-source rows (books-and-posting 9.3) are the last guards against a second effect; the first is the kernel's idempotency helper (10.1; `PRD-INT-002`).
+- A piece is in one place by construction: its place is one set of columns on its one `piece` row (11.7).
+- No column has a default except `recorded_at` (code-house-rules 3.3).
+- **Rules across tables** are held by a column copied from the row they depend on, kept true by a composite foreign key or a trigger, as each row above says; a rule over a running quantity, such as a release within its claim, is rechecked by the command under the lock that guards it (13.1). **Proposed.**
+
+### 14.3 Locks, indexes and row-level security
+<!-- deps: PRD-INT-003, PRD-SEC-005, PRD-MOD-003, PRD-PRF-003, DEC-105 — which stock rows each lock step takes, the indexes they need, and the scope policy -->
+
+| 10.3 step | Rows | Mode | Rows changed only under them |
+| --- | --- | --- | --- |
+| 2 | `receipt_origin` | Exclusive when its state changes (cost, owner, coverage, split, identity); shared when only read, as by a sale or a transfer (**Proposed**, SL-24) | `receipt_origin_state`, changed only by a command holding the origin exclusively; a sale or transfer never writes it |
+| 3 | `unit_anchor` and `sku_balance`, in one call, in the helper's ascending order | `unit_anchor`: shared for every item at that unit; exclusive to start or end a count freeze (**Proposed**, SL-24). `sku_balance`: exclusive | `balance`; new receipt origins at that unit |
+| 4 | `piece` | Exclusive | — |
+| 5 | `hold`, `reservation` being released, consumed or moved | Exclusive | `hold_claim`, `reservation_claim` |
+| 6 | `cost_pool`, `transit_value` | Exclusive | `cost_layer`, `transit_value_layer`, `valuation` sequence |
+
+- **Why a unit anchor.** A count freeze over a location or a brand must stop goods of a SKU that is not yet at the unit from moving in while the freeze starts (11.9). Every item takes its unit's anchor in shared mode, so items never wait for each other on it; a freeze start takes it exclusively, so it waits for items in flight, and every item that locks after it sees the freeze. **Proposed.**
+- **Missing rows.** Step 3 creates missing `unit_anchor` and `sku_balance` rows, empty, in ascending key order, before its lock call (10.3; code-house-rules 8.2). A pool or a transit value that does not exist yet is created the same way at step 6, since two commands can need the same one at once (**Proposed**, SL-24). Every other new row, such as a receipt origin, a piece or a layer, is a new identity no other command can be writing, so it is written with the effects.
+- **Indexes.** Each unique key above. For the oldest-first choice (`PRD-STK-013`): `balance` on (`sku_balance_id`, `expiry_date`, `count_date`), using its copy of the origin's count date. For as-of reads (`PRD-MOD-003`): `movement_leg` on (`business_unit_id`, `sku_id`, `recorded_at`) and (`site_id`, `recorded_at`); `valuation` on (`cost_pool_id`, `sequence`) and (`recorded_at`); `movement` on the source columns. Every foreign key and every scope column has its own index (code-house-rules 3.3).
+- **Row-level security.** Every table has the one policy of code-house-rules 6.2, passing `site_id`, `store_id`, `business_unit_id`, `legal_entity_id` and `brand_id` (`PRD-SEC-005`). Cost and value columns are the restricted class cost, protected by masking, not by the policy (access-and-approvals 6).
+- **Register.** Each table has its entry in `apps/server/migrations/organisation/tables.json` (code-house-rules 3.2 and 4.1), with the class and marks of 14.2 and the section "stock-ledger 14.2". A `locked` append-only table grants the runtime role `UPDATE (id)` only (code-house-rules 5.2 and 7.1).
+- **Large documents.** The staged commit of 10.6 holds: Plan does the slow work; Lock takes every row of a step in one call; Write uses set-based inserts in lock order (`PRD-PRF-003`).
+
+## 15. Synthetic harness
+
+**Proposed**, 6 Oct 2026, for review in DR-2 (RR-013). It writes the harness decisions H1 to H6 that the product owner took on 5 Oct 2026 (DEC-112) into this design. The plan and its options are [s1-f10-stock-harness.md](../../implementation/s1-f10-stock-harness.md), which is not ranked; this section is the design.
+
+### 15.1 Where H1 to H6 sit
+<!-- deps: PRD-ACP-018, PRD-LED-014, PRD-LED-015, PRD-SEC-016, PRD-INT-004, DEC-112 — the six harness decisions placed in the ledger design -->
+
+| Decision (DEC-112) | Where it sits |
+| --- | --- |
+| H1. A test-only synthetic document driver exercises the real stock and posting logic | The driver plays the owning module of each document of the golden scenarios. It calls only public interfaces (`kernel`, `configuration`, `access`, `numbering`, `exceptions`, `audit`, `stock` · ledger, `finance` · books), runs each command in the shape of module-map 6.1 and the four operations of 13.1, and writes no other module's tables. Its commands and the items they send are those of s1-f10-stock-harness 3.2 |
+| H2. Registered callers; synthetic callers only in tests | 13.2. The driver registers as a synthetic caller, with the record types and item kinds of its commands |
+| H3. A test-only schema | 15.2 |
+| H4. Synthetic approval action types through the real approval machinery | 15.3 |
+| H5. Test runs only, in isolated test databases, never live | 15.5 |
+| H6. Read models first; raw queries only under a read-only test role | Checks run through Rebuild and compare and the read models of 13.6, and through the trial balance and posting-source rows of books-and-posting 12 and 8.3. Raw invariant queries, such as "every piece is in exactly one place", run under the role of 15.4 |
+
+- Every golden scenario stays: receipt, transfer, sale, customer return, cost established at PT approval, late cost change, opening count, the supplier-return legs, damage, count and reversals (DEC-112; section 11). They run under both formulas and both pool modes, each combination in its own database copy (code-house-rules 11.3; `PRD-LED-014`, `PRD-LED-015`, `PRD-ACP-018`).
+- Expected values come from 11.2 to 11.8 and books-and-posting 16, written by hand into scenario files and reviewed; never produced by the code under test.
+- The concurrency tests of 11.9 run on separate connections, ordered as code-house-rules 10.3 says (`PRD-SEC-016`). The large-posting timing is an early signal; the binding measurement is the counter's in stage 4.
+- Tests of the real source documents are still needed when those documents arrive; the same scenario files are then run with the real document in place of the driver's command (DEC-112).
+
+### 15.2 The test-only schema
+<!-- deps: PRD-SEC-016, PRD-MOD-002, PRD-ACS-007, DEC-112 — harness decision H3: where the driver's documents live -->
+
+- Schema `test_stock_harness`, created by the test-only migration set `apps/server/test/migrations/` and applied by test setup only, after the Organisation set (code-house-rules 11.4). The catalogue test fails if it exists in a database the pre-deploy runner migrated (code-house-rules 10.4).
+- Four tables, **Proposed**, in place of the one table of the implementation plan, so the driver follows code-house-rules 3.3 and 7.2:
+  - `document`: `id`; `kind` (the driver's command kinds); `version_id`, a new UUIDv7 for each change, and `version_no`; `state`; the Site, Store, business unit, legal entity and book of the document, and for a transfer its destination's; `occurred_at`, `recorded_at`;
+  - `document_line`: one row per line of a version, with typed columns: `document_id`, `version_id`, `line_id`, SKU, quantity, places, the receipt origin or movement it names, piece codes in `document_line_piece`, and amounts as `bigint` paise with `value_known`. No amount or constraint column is held in `jsonb`;
+  - `document_change`: who recorded a change in which version and when, so a version can have several preparers and independence is tested as access-and-approvals 9.1 requires.
+- The driver locks its rows at 10.3 step 1, and a change after approval makes a new version, so stale-version and material-change refusals are real (`PRD-ACS-007`; access-and-approvals 9.7).
+- Their register entries, in the test set's own `tables.json`: `unscoped`, because a driver document can span two places and every row is synthetic. `document` is `locked` and changes its state and current version; `document_line`, `document_line_piece` and `document_change` are append-only. **Proposed.** The ledger's own rows the driver causes keep their scope and their policies (14.3), so the isolation tests read real scoped rows.
+
+### 15.3 Synthetic approvals
+<!-- deps: PRD-ACS-006, PRD-ACS-007, PRD-ACS-015, PRD-ACS-016, POL-02.09, DEC-097, DEC-112 — harness decision H4: synthetic action types through the real approval machinery -->
+
+- The driver declares its approval action types in test code, as each owning module declares its own (access-and-approvals 8). Each requires independent approval and has cost as its value basis, like the stock actions of domain-model 5 (`PRD-ACS-006`, `PRD-ACS-015`). Their names begin `test-stock-harness.`, and `access` accepts them only in a test composition, as 13.2 does for callers. **Proposed.**
+- Request approval, Decide, Verify under lock and Record use are the real operations of `access`, and so is the queued posting job of 10.6 (DEC-097; access-and-approvals 9.8). Synthetic limits are set through the real limit interface and labelled synthetic (`POL-02.09`; code-house-rules 11.1).
+- The real action types arrive with their modules, and their tests follow then.
+
+### 15.4 The read-only role
+<!-- deps: PRD-SEC-005, PRD-SEC-016, DEC-112 — harness decision H6 and house rules CH-4: name, grants and row-level security of the read-only test role -->
+
+Code-house-rules 5.1 leaves the role's name, grants and reading under row-level security to the stock harness. **Proposed:**
+
+- Name `syn_verify`, made by test setup, once per test container, as test plumbing is (code-house-rules 11.1). Never created by the runner, the local seed or the Railway runbook (DEC-112, CH-4).
+- Grants: membership of PostgreSQL's `pg_read_all_data`, which reads every table and uses every schema; `BYPASSRLS`, so that an invariant query sees every row of the synthetic database it checks; `default_transaction_read_only` on; nothing else. It owns nothing and cannot write.
+- Each database copy: the test helper grants it `CONNECT` when it applies the runner's privilege step (code-house-rules 4.3 and 11.3).
+- It only reads isolated test databases holding synthetic data. Scope tests never use it: they read as the runtime role with an actor set (code-house-rules 10.1; `PRD-SEC-005`).
+
+### 15.5 Where the harness runs
+<!-- deps: PRD-SEC-016, PRD-SEC-017, PRD-LIF-004, DEC-071, DEC-112 — harness decision H5 and the open dev handler question -->
+
+- In test runs only, in each test file's own database copies (code-house-rules 11.3). Never on `dev`, `kdps-test` or production, never in a production composition, and it never sets a KDPS value (DEC-112; `PRD-SEC-017`).
+- The GC-6 opening-count test handler is a synthetic caller in the same way (13.2). Whether it may also run on `dev` is OPEN for the product owner (GC6-18; imports-and-opening-data 12). Until it is answered, it runs in tests only.
+- What it proves and how it is accepted is the implementation plan's: s1-f10-stock-harness 3.4 to 3.7 and the stage 1 exit checklist.
