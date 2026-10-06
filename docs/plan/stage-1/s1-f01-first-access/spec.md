@@ -169,7 +169,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | done | T03 (done) |
 | [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | done | T04, T07 |
 | [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | ready-for-human | code merged; manual design-language check of the lock screen outstanding |
-| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | blocked | T01 (done), T07, T08, T09 (the recovery command's revocation and reset), T11 (roles and assignments) |
+| [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | done | T01, T07, T08, T11 (done), T09 (merged, ready-for-human) |
 | [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | done | T06, T08 |
 | [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
 | [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | blocked | T06, T09, T11 |
