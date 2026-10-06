@@ -96,7 +96,8 @@ class Refused extends Error {
  * - the directory lists the code: refused as a duplicate before anything else is read, no password checked;
  * - the directory lists the database name under another code: refused as a conflict, so the step never writes into
  *   another Organisation's database (DEC-093);
- * - no database, or one with no setup record and no user: it creates the database if missing (as the migration
+ * - no database, or one with no setup record and no user: it checks the temporary passwords against the request's
+ *   password rules (GC3-5), naming neither user when one fails, then creates the database if missing (as the migration
  *   role, which owns it), migrates it, writes the one transaction as the runtime role under the `setup` identity,
  *   then registers the code: created;
  * - a setup record and an identical request (the same fingerprint, and each temporary password verifying against the
@@ -155,17 +156,22 @@ export async function runSetupStep(options: SetupStepOptions): Promise<SetupOutc
   }
 }
 
-/** Checks the request before anything is read: the password rules (3.2; GC3-5) and the identities to write. */
-function checkRequest(options: SetupStepOptions, registry: ReadonlyMap<string, RecordTypeDeclaration>): void {
-  const { request } = options;
-  for (const [who, user] of [
-    ['first Admin', request.firstAdmin],
-    ['first approver', request.firstApprover],
-  ] as const) {
-    if (!meetsPasswordRules(request.settings.passwordRules, user.temporaryPassword)) {
-      throw new SetupRequestRefused(`The ${who}'s temporary password does not meet the password rules of the request`);
-    }
+/**
+ * Checks the temporary passwords against the request's password rules (3.2; GC3-5), only once the step knows it will
+ * create the Organisation: a finished setup is refused as a duplicate before any password is checked (spec section
+ * 10). Both are checked, and the refusal names neither user.
+ */
+function checkPasswords(request: SetupRequest): void {
+  const meets = [request.firstAdmin, request.firstApprover].map((user) =>
+    meetsPasswordRules(request.settings.passwordRules, user.temporaryPassword),
+  );
+  if (meets.includes(false)) {
+    throw new SetupRequestRefused('A temporary password does not meet the password rules of the request');
   }
+}
+
+/** Checks the request before anything is read: the identities to write. */
+function checkRequest(options: SetupStepOptions, registry: ReadonlyMap<string, RecordTypeDeclaration>): void {
   const codes = options.serviceIdentities.map((identity) => identity.code);
   if (codes.includes(SETUP_IDENTITY) || new Set(codes).size !== codes.length) {
     throw new SetupRequestRefused('Each service identity is written once, and `setup` only by the step itself');
@@ -215,6 +221,7 @@ async function attemptOnce(
     return { outcome: 'completed', organisationCode: code };
   }
 
+  checkPasswords(request);
   if (state.kind === 'absent') {
     await withClient(options.migrationConnectionString, async (client) => {
       // Made by aos_migration, which so owns it (code-house-rules 5.1). Losing the race is 42P04: read again.

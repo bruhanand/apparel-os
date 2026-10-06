@@ -378,6 +378,17 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
     expect(JSON.stringify(again.lines)).not.toContain('SYNTHETIC-other-password');
   });
 
+  it('spec section 10 a finished setup is a duplicate even when the rerun’s passwords fail its password rules', async () => {
+    const before = await footprint(organisation.databaseName);
+    const failingRules = request(organisation, (input) => (input.settings.passwordRules = { minimumLength: 64 }));
+    expect(await run(failingRules)).toEqual({
+      outcome: 'refused',
+      reason: 'duplicate',
+      organisationCode: organisation.code,
+    });
+    expect(await footprint(organisation.databaseName)).toEqual(before);
+  });
+
   it('there is no API route to the setup step or the recovery command (code-house-rules 4.3; CH-1; DEC-116)', () => {
     const paths = Object.values(routes).map((route) => route.path);
     expect(paths.filter((path) => /setup|recover/i.test(path))).toEqual([]);
@@ -518,7 +529,10 @@ describe('the request itself (access-and-approvals 3.2, 9.11)', () => {
   it('GC3-5 refuses a temporary password the password rules refuse, before anything is created', async () => {
     const organisation = freshOrganisation();
     const short = request(organisation, (input) => (input.settings.passwordRules = { minimumLength: 64 }));
-    await expect(run(short)).rejects.toBeInstanceOf(SetupRequestRefused);
+    const refused = run(short);
+    await expect(refused).rejects.toBeInstanceOf(SetupRequestRefused);
+    // The refusal never says which user's password it was (spec section 10).
+    await expect(refused).rejects.not.toThrow(/Admin|approver/i);
     const exists = await rows<{ count: string }>(
       directory,
       'select count(*)::text as count from pg_catalog.pg_database where datname = $1',
