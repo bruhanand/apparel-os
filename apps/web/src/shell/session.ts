@@ -4,6 +4,9 @@ import type { Grant } from './screens';
 
 /** The signed-in person as the shell needs them: no secret, no restricted value (access-and-approvals 3.3, 6). */
 export interface ShellUser {
+  /** The Organisation and the user, which own the input kept on the device across a session's end (3.3). */
+  readonly organisationCode: string;
+  readonly userId: string;
   readonly displayName: string;
   /** In the person's chosen order: the first sets the landing screen (design-language 10.18). */
   readonly personasHeld: readonly PersonaId[];
@@ -11,7 +14,7 @@ export interface ShellUser {
 
 /**
  * The session as the shell shows it (access-and-approvals 3.3). `locked`: the idle limit passed; the page stays,
- * covered by the lock overlay, until the same user unlocks it (S1-F01-T09 builds the unlock). The sign-in screens
+ * covered by the lock overlay, until the same user unlocks it (UnlockForm, S1-F01-T09). The sign-in screens
  * (S1-F01-T15) and the read of the person's effective grants (S1-F01-T11) set it.
  */
 export type ShellSession =

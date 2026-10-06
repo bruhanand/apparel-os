@@ -114,6 +114,8 @@ export const kernelCodes = declareCodes({
  *   setting; the same answer whether the login exists or not (DEC-116).
  * - `access.sign-in-unavailable`: a setting sign-in needs is not set; `missing` names it (code-house-rules 12.14).
  * - `access.not-signed-in`: no session in force (code-house-rules 12.3).
+ * - `access.session-locked`: the session passed its idle limit and is locked; only the same user's password unlocks
+ *   it, and `next` is `access.unlock-session` (access-and-approvals 3.3; S1-F01-T09).
  * - `access.sign-in-incomplete`: the session reaches only enrolment and the password change until both are done;
  *   `missing` names the steps (access-and-approvals 3.2, 7.1 step 1).
  * - `access.authenticator-code-refused`: a wrong or already used authenticator code; never kept under the key (12.5).
@@ -126,6 +128,7 @@ export const accessCodes = declareCodes({
   'access.sign-in-slowed': 'not-signed-in',
   'access.sign-in-unavailable': 'unavailable',
   'access.not-signed-in': 'not-signed-in',
+  'access.session-locked': 'not-signed-in',
   'access.sign-in-incomplete': 'not-signed-in',
   'access.authenticator-code-refused': 'not-authorised',
   'access.already-enrolled': 'refused',
@@ -172,8 +175,21 @@ export const accessRoleCodes = declareCodes({
   'access.not-withdrawable': 'refused',
 });
 
+/**
+ * The codes of `access` for sessions and credential resets (access-and-approvals 3.2, 3.3; S1-F01-T09).
+ *
+ * - `access.own-credential-reset`: nobody resets their own credential, even holding the permission (GC3-4, DEC-105).
+ * - `access.user-not-found`: no user has that identifier.
+ * - `access.session-not-found`: the user has no session in force or locked with that identifier.
+ */
+export const accessSessionCodes = declareCodes({
+  'access.own-credential-reset': 'refused',
+  'access.user-not-found': 'not-found',
+  'access.session-not-found': 'not-found',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
-export const errorCodes = { ...kernelCodes, ...accessCodes, ...accessRoleCodes } as const;
+export const errorCodes = { ...kernelCodes, ...accessCodes, ...accessRoleCodes, ...accessSessionCodes } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
 /** The kind of a declared code. */

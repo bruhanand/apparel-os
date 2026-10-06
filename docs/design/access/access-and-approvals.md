@@ -101,6 +101,13 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 - A session, every session of a user, or every session of a device can be revoked. Revocation takes effect at the next request and closes the session's live-update stream (`PRD-SEC-008`). Event: `access.session-revoked`.
 - Protected actions ask for a fresh authenticator code (`PRD-SEC-001`): deciding an approval, changing access, changing bank details, showing or exporting an encrypted field, resetting another user's credential, and changing one's own password (3.2). The first four are the baseline of GC3-6 (DEC-105); the reset follows from GC3-4, and the own-password change is a **Design choice**. How long a code stays fresh is a setting with no default; it stays OPEN (GC3-6; KDPS Owner; stage 1 live use). Until it is set, each protected action asks for a new code. **Design choice** (fail-safe; no duration chosen).
 - A browser is signed in to one Organisation at a time ([deployment.md](../platform/deployment.md) section 3): the one its session cookie names.
+- **As built** (`S1-F01-T09`). **Design choice** throughout; no value is chosen.
+  - The limits of an office session are the setting `access.office-session-limits`: the idle-lock seconds and the absolute seconds, effective-dated, with no default. While it is not set, sign-in is unavailable and names it, and an existing session counts as not signed in (code-house-rules 12.14). Shared POS sessions get a setting of their own with registered devices (`S1-F12`).
+  - Authenticate keeps the limits at each request, in a transaction of its own, before the request's: past the absolute limit the session ends (`session-ended` access record); past the idle limit since its last activity it locks (`session-locked` access record); otherwise the request is its activity. Every authenticated request counts as activity, so a screen does not poll in the background.
+  - A locked session reaches only the unlock and the sign-out; every other request is refused `not-signed-in` with the code `access.session-locked`, so the web app tells it from an ended session, which gets `access.not-signed-in` (RR-264). The unlock is an attempt to sign in again: it writes a `sign-in` access record, answers a wrong password with the one sign-in refusal, and counts and slows failures as sign-in does (3.1), by the user's login and the source address.
+  - Signing out ends the session (`sign-out` access record) and clears the cookie. A user revokes one or all of their own sessions with no permission (3.2); another user's sessions need edit on `access.session`. Resetting another user's credential needs edit on `access.user_credential`. Neither is a prepared record type: each takes effect at once.
+  - With no freshness setting, a fresh code counts only for a time step later than any the person's authenticator gave before, so each protected action needs a code of its own.
+  - Unsaved screen input is kept on the device in the browser's local storage, under the Organisation code and the user, without its secret and restricted fields, and offered back after the next sign-in of that user.
 
 ## 4. Permissions, roles and role assignments
 
@@ -315,7 +322,7 @@ A large document is approved by a click and posted later by a job, one at a time
   | Approve and reject reasons (9.5) | view, create, edit | view, approve |
   | Approval request and approval decision | view | view |
   | History: the audit records of the record types above, and the access records of sign-ins and sessions, second-factor and password events, and permission changes ([numbering-and-audit.md](../platform/numbering-and-audit.md) 4, 5.1) | view | view |
-  | Every other record type, including another user's credentials (a reset, 3.2), other users' sessions, approval limits, stand-in grants, service identities, devices, settings, policy status and every business record | none | none |
+  | Every other record type, including another user's credentials (a reset, 3.2; `access.user_credential`), other users' sessions (`access.session`), approval limits, stand-in grants, service identities, devices, settings, policy status and every business record | none | none |
 
   - Field classes: none, so every restricted field stays masked to both (section 6).
   - Actions never granted: cancel, export and override. Approve is never granted to the first Admin, and create and edit never to the first approver, so the first approver can never be a preparer.

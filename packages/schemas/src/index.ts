@@ -41,6 +41,19 @@ export {
 } from './sign-in.js';
 export type { SessionView, SignInOutcome, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
 
+export {
+  credentialResetKindSchema,
+  credentialResetRequestSchema,
+  credentialResetResponseSchema,
+  sessionRevocationRequestSchema,
+  sessionRevocationResponseSchema,
+  signOutRequestSchema,
+  signOutResponseSchema,
+  unlockRequestSchema,
+  unlockResponseSchema,
+} from './sessions.js';
+export type { CredentialResetKind, CredentialResetRequestInput } from './sessions.js';
+
 export { permissionRegistry, registryByCode } from './permissions.js';
 export type { RecordTypeCode, RecordTypeDeclaration, ScopeFactsDeclared } from './permissions.js';
 
@@ -96,6 +109,7 @@ export {
   errorKindSchema,
   accessCodes,
   accessRoleCodes,
+  accessSessionCodes,
   issueSchema,
   kernelCodes,
   missingItemSchema,

@@ -7,12 +7,14 @@ import { Test } from '@nestjs/testing';
 import { pino } from 'pino';
 import { AppModule } from '../../src/app.module.js';
 import {
+  CLOCK,
   configureApp,
   HTTP_ENVIRONMENT,
   LOGGER,
   ORGANISATION_TIMEZONE_SOURCE,
   PinoLoggerService,
   ROUTING_ENVIRONMENT,
+  type Clock,
   type OrganisationTimezoneSource,
 } from '../../src/kernel/index.js';
 import { ACCESS_ENVIRONMENT, ORGANISATION_KEYS_VARIABLE } from '../../src/modules/access/index.js';
@@ -134,7 +136,7 @@ export async function writeSyntheticUser(
 /** Writes a SYNTHETIC setting of access, Approved, in force from yesterday, labelled synthetic (12.14; 11.1). */
 export async function writeSyntheticSetting(
   database: string,
-  key: 'access.sign-in-throttling' | 'access.password-rules',
+  key: 'access.sign-in-throttling' | 'access.password-rules' | 'access.office-session-limits',
   value: Record<string, number>,
 ): Promise<void> {
   const owner = await connect(database, 'migration');
@@ -151,9 +153,25 @@ export async function writeSyntheticSetting(
   }
 }
 
-/** The code of the authenticator, for a step from now (0 now, 1 the next, ...). */
-export function codeFor(secret: Buffer, stepsFromNow = 0): string {
-  return totpCode(secret, timeStep(new Date()) + stepsFromNow);
+/** The code of the authenticator, for a step from now (0 now, 1 the next, ...), or from the instant given. */
+export function codeFor(secret: Buffer, stepsFromNow = 0, at: Date = new Date()): string {
+  return totpCode(secret, timeStep(at) + stepsFromNow);
+}
+
+/**
+ * A clock a test moves forward (code-house-rules 9): the system time plus an offset, so session limits pass without
+ * waiting (S1-F01-T09).
+ */
+export class SyntheticClock implements Clock {
+  private offsetMs = 0;
+
+  now(): Date {
+    return new Date(Date.now() + this.offsetMs);
+  }
+
+  advance(seconds: number): void {
+    this.offsetMs += seconds * 1000;
+  }
 }
 
 export interface AccessTestApp {
@@ -176,6 +194,8 @@ export async function startAccessApp(
     readonly timezone?: OrganisationTimezoneSource;
     readonly origin?: string;
     readonly port?: number;
+    /** The kernel's clock; the system clock unless a test moves time (S1-F01-T09). */
+    readonly clock?: Clock;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -189,7 +209,9 @@ export async function startAccessApp(
       }),
     ),
   );
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  const moduleRef = await builder
     .overrideProvider(LOGGER)
     .useValue(logger)
     .overrideProvider(ROUTING_ENVIRONMENT)

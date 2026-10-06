@@ -12,7 +12,12 @@ import { SessionContext, type ShellSession } from './shell/session';
 export function App() {
   const [session, setSessionState] = useState<ShellSession>({ state: 'signed-out' });
   const [queryClient] = useState(() => {
-    const client = createQueryClient(() => {
+    const client = createQueryClient((refused) => {
+      if (refused === 'locked') {
+        // The page stays, inert, under the lock overlay, with its unsaved input (access-and-approvals 3.3).
+        setSessionState((current) => (current.state === 'active' ? { ...current, state: 'locked' } : current));
+        return;
+      }
       client.clear();
       setSessionState({ state: 'signed-out' });
     });

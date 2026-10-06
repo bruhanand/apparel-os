@@ -62,6 +62,11 @@ beforeAll(async () => {
   keys = syntheticKeysEnvironment(world);
   await writeSyntheticSetting(database, 'access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 });
   await writeSyntheticSetting(database, 'access.password-rules', { minimumLength: 12 });
+  // SYNTHETIC office session limits: sign-in is unavailable without them (S1-F01-T09).
+  await writeSyntheticSetting(database, 'access.office-session-limits', {
+    idleLockSeconds: 1800,
+    absoluteSeconds: 28800,
+  });
   writer = await writeSyntheticUser(database, routed.organisationCode, keys, { label: 'WRITER' });
   api = await startAccessApp(world, keys);
 });

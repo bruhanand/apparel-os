@@ -48,7 +48,8 @@ function declare<const Code extends string>(
  * `access`: the records of access changes, each prepared and approved by a different authorised person
  * (access-and-approvals 9.11; POL-02.07). They belong to the Organisation as a whole, so they carry no scope fact: the
  * permission on the type decides (5.3). The approval request and decision are read only; `access.effective_grant` is
- * rebuilt by the scheduled job when a start or end date passes (7.2).
+ * rebuilt by the scheduled job when a start or end date passes (7.2). Revoking another user's sessions and resetting
+ * another user's credential take effect at once, with no approval (3.2, 3.3), so they are no prepared types.
  */
 const accessRecordTypes = [
   declare('access.user', PREPARED, NONE),
@@ -59,6 +60,10 @@ const accessRecordTypes = [
   declare('access.approval_request', ['view'], NONE),
   declare('access.approval_decision', ['view'], NONE),
   declare('access.effective_grant', ['edit'], NONE),
+  // Another user's sessions: edit revokes them (3.3). A user's own sessions need no permission (3.2; S1-F01-T09).
+  declare('access.session', ['view', 'edit'], NONE),
+  // Another user's credentials: edit resets them (3.2; GC3-4). Nobody resets their own (S1-F01-T09).
+  declare('access.user_credential', ['edit'], NONE),
 ] as const;
 
 /**
