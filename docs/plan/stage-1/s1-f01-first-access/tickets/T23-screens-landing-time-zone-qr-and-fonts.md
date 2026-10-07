@@ -1,6 +1,6 @@
 # S1-F01-T23 — Screens: no-access landing, Organisation time zone, enrolment QR code and fonts
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
@@ -22,3 +22,11 @@ Web app changes in `apps/web` (shell landing, the no-access page, time formattin
 - A browser journey (Playwright): a synthetic user with no role assignment signs in, sees "No access assigned" and signs out; the enrolment screen shows a QR code and the setup key, and the network log shows no request to another origin.
 - The browser's network log shows the three font families loaded from the app's own origin; the licence files are in the repository beside the font files.
 - The full check set and the browser journeys pass.
+
+## Notes
+
+- Built 7 Oct 2026 on `s1/f01-t23`, commit 08bb36c. No migration.
+- Server: the session read (`access` `ownAccess`, `sign-in.controller.ts`) answers `roleAssignmentInForce` and `timezone` (schemas `sessionViewSchema`; `openapi.json` regenerated). With no timezone in force no session authenticates, so the read never answers without one (access-and-approvals 3.3 "The session read as built").
+- Web: `landingScreen(roleAssignmentInForce, personasHeld, grants)` returns `'no-access-assigned'` without an assignment in force; `AppShell` then shows `shell/NoAccessAssigned.tsx` at any address. `formatDateTime(iso, timeZone)` takes the timezone as required; screens get it from `useTimeZone()` (`shell/session.ts`). The enrolment screen draws the setup link with `qrcode.react` (PRD Stack, Authentication row) as inline SVG with a text alternative; the grouped key stays. Fonts in `apps/web/public/fonts/` with Adobe's `LICENSE.md` and Noto's `OFL.txt`; Noto's TTF repacked losslessly as WOFF2 (design-language 3 "As built").
+- Tests: `apps/web/src/shell/landing.test.ts`, `shell/shell.test.tsx`, `history/format.test.ts`, `sign-in/screens.test.tsx`; `apps/server/test/roles-and-assignments.int.test.ts`, `sign-in.int.test.ts`; journey `apps/web/e2e/no-access.spec.ts` (no-access page, QR code, fonts from the own origin with their licences, no request to another origin). The sign-in journey's user now holds a synthetic role assignment so it still lands on My work.
+- Follow-ups: RR-380 (recheck the QR library before production), RR-381 (date fields could open on the Organisation's today).
