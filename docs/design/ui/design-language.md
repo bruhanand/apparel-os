@@ -156,6 +156,7 @@ Rules:
 - A modal drawer or dialog puts `--scrim` over the page. A non-modal drawer has no scrim, and the page gets right padding equal to the drawer width.
 - The back-office sidebar is **solid** (`--surface`).
 - Browsers without `backdrop-filter` fall back to `--surface` at 100% opacity.
+- **As built** (S1-F01 visual review, 7 Oct 2026): every overlay (drawer, dialog, lock) starts at the environment banner's lower edge, so the banner stays visible and the scrim covers the top bar; the lock sits above every other overlay, an open drawer included, so nothing under it looks usable. **Design choice.**
 
 ---
 
@@ -168,6 +169,7 @@ Rules:
 - **Page header:** breadcrumb (body-sm) · title (28/34) · status badge · scope chip · context line · **one** primary action plus secondary actions.
 - **Body:** stepper or tabs, then workspace (table, grid or form). The right drawer holds preview, exception, approval or history.
 - **Below 1024 px:** the sidebar becomes a glass drawer from the left and the header actions go into a “More” menu.
+- **As built** (S1-F01 visual review, 7 Oct 2026): the environment banner is sticky above the top bar, and the top bar sticks under it; the shell measures the banner and keeps its height in `--banner-h`, so the sticky top bar and the overlays (5) start under it. The shell fills the window exactly: the sidebar stretches to the page's height, never to a fixed window height, so a short page has no blank band below it. **Design choice.**
 
 ### B · Till
 
@@ -411,6 +413,7 @@ Each entry covers anatomy, states and usage rules.
 - See §7.
 - Use in lists, record headers and drawers.
 - Never make a badge clickable. Filters use filter chips (10.9).
+- It hugs its text wherever it sits, never stretching across a column (as built, S1-F01 visual review).
 
 ### 10.3 Scope chip
 
@@ -454,6 +457,7 @@ Each entry covers anatomy, states and usage rules.
   | Zero | plain “0” in `--text-3`, no pill |
 - **Count:** tasks, approvals and exceptions assigned to the user that are not yet resolved (`PRD-ACS-009`; My work in the PRD's Words used). One inbox covers every persona the user holds. The list is ordered by due time and exposure. Resolved work is tracked inside My work. Approve, reject, delegation and escalation follow `PRD-ACS-010`.
 - Items delegated during someone's absence, and escalated overdue items, carry a label saying so.
+- **List row, as built** (S1-F01 visual review, 7 Oct 2026; access-and-approvals 11.2): each row says what the item is for: for an approval, the action ("Role change"), the record by its name where the reader may view its type ("SYN-AUDIT · SYNTHETIC auditor"), and "Prepared by … · requested …"; then its state, due time and value, and **Open and decide**. The names come from the request read and the setup lists, only where the reader's role assignments grant them; otherwise the row says only what the request says, never an identifier, and a row whose request is not read yet shows its kind. **Design choice.**
 
 ### 10.6 Restricted field and cell
 
@@ -628,7 +632,7 @@ Each entry covers anatomy, states and usage rules.
 
 | State | Content | Rules |
 |---|---|---|
-| Empty | 40 px neutral mark · title (“No deliveries waiting”) · one line explaining why, naming the scope · one secondary action | Always explain why the list is empty and what to do next |
+| Empty | 40 px neutral mark · title (“No deliveries waiting”) · one line explaining why, naming the scope · one secondary action | Always explain why the list is empty and what to do next. **As built:** the mark is design-system 3.7's, a `--sunken` circle with a 1 px `--border` and a bold “0” in `--text-3` |
 | Loading | Skeleton rows at the real row height, using `--sunken` blocks | `aria-busy`; pulse off under reduced motion |
 | Error | `--d-bg` glyph · “Couldn’t load …” · cause · mono reference (ERR-xxxxxx) · Retry (primary) | Keep the user’s filters and selection; `role="alert"` |
 | Partial | Data shown + trust chip in the Partial state | See 10.4 |
@@ -660,7 +664,7 @@ Each entry covers anatomy, states and usage rules.
   - The limit is always shown next to the button.
   - Approval binds to the exact record version shown. A material change needs a fresh approval.
   - Reject always asks for a reason.
-  - An action whose approval has no value, such as an access change (DM-8), shows "No value" in place of the value and no limit bar; the Done message then says only that the reader did not prepare it. The panel shows the version's material facts, asks a reason (from the list in force, or in the reader's own words for a reason-list change, `DEC-104`) and a fresh authenticator code, and shows a decided, superseded or withdrawn request without the form (access-and-approvals 14 "As built"; `S1-F01-T16`).
+  - An action whose approval has no value, such as an access change (DM-8), shows "No value" in place of the value and no limit bar; the Done message then says only that the reader did not prepare it. The panel shows the version's material facts, asks a reason (from the list in force, or in the reader's own words for a reason-list change, `DEC-104`) and a fresh authenticator code, and shows a decided, superseded or withdrawn request without the form (access-and-approvals 14 "As built"; `S1-F01-T16`). An unavailable decision says why once: the code's text, with the missing items listed only where they add to it, such as the permission or scope that falls short (S1-F01 visual review).
 
 ### 10.15 Right drawer
 
@@ -676,6 +680,8 @@ Each entry covers anatomy, states and usage rules.
   - Opening never loses the list position.
   - Modal use adds `--scrim`. Non-modal use adds right scroll padding.
   - Content behind it reflows to the remaining width when it is open, and back to full width when it closes.
+  - **As built** (S1-F01 visual review): the header's status badge comes from the same read as the body, so it changes when the record does (an approval decided in the drawer shows Approved in its header too). A drawer opened from My work is titled with the record's name where the reader may view it.
+  - **History tab, as built:** each changed field by its label from the message catalogue, never its code, and each value as the screens write it: persona IDs with names, users and roles by name where the reader may view them (otherwise "a user you may not view"), scope in words, business dates as DD MMM YYYY, times in the Organisation's timezone. A long identifier, such as a version, shows its last six characters, the whole identifier as its tooltip. A value of a shape the screen does not know shows as recorded. **Design choice.**
 
 ### 10.16 Theme setting (My profile › Theme)
 
@@ -692,11 +698,12 @@ Each entry covers anatomy, states and usage rules.
 - On `kdps-test`, gated actions stay disabled until their policy is signed and configured, even though the data is real KDPS data (`DEC-071`). Show an environment banner; chip wording is a design choice after policy signatures.
 - In the side-by-side test the earlier POS stays the system of record: Apparel OS issues no tax invoice and bills no real customer (`PRD-LIF-026`). Its imports of the earlier POS's daily sales report and stock-on-hand are for checking and reports only and never move stock (`PRD-LIF-014`).
 - Show the state, the blocking reason and the next action (`PRD-UXP-003`).
+- **Missing permission, as built** (S1-F01 visual review, 7 Oct 2026): where only the person's role assignments fall short (a permission, a scope, a field class), the same Attention banner is titled “Not available to you”, names each missing permission (“Needs View on Role.”) and says who to ask (“Ask an Admin for a role assignment that grants it.”), with no policy and no Policy readiness link, since no policy is involved. A gap that includes a policy, a setting or a capability keeps the policy gate above. **Design choice** from the nearest rules: this section's anatomy and 11's “name the people and the rule”.
 
 ### 10.18 Several personas
 
 - Personas are the PRD's 14 kinds of work, with IDs (P-OWN … P-AUD). A user can hold several; a persona grants nothing. Only role assignments grant access ([personas.md](../access/personas.md)).
-- **Persona chip:** 24 px pill in Neutral, mono ID + name (“P-STM Store manager”). Shown on the profile menu, on record history (“Approved by Meera N. · P-OPS”) and on approval panels.
+- **Persona chip:** 24 px pill in Neutral, mono ID + name (“P-STM Store manager”). Shown on the profile menu, on record history (“Approved by Meera N. · P-OPS”) and on approval panels. The ID never breaks across lines; a long name may wrap beside it, and the chip grows from 24 px (as built, S1-F01 visual review).
 - **Menu:** the union of the sections the role assignments grant. Each section appears once, with the tabs of every persona merged.
 - **Home:** one block per persona held, in the user's chosen order. The first block's persona sets the landing page. Where the user's roles do not grant that persona's landing screen, the first screen they grant in the persona's menu opens instead ([personas.md](../access/personas.md) section 2; DEC-116).
 - **Scope:** an action is enabled only where one assignment covers the current scope. Otherwise it is disabled and the reason names the gap: “Your Store manager assignment covers BLR01 only.”
@@ -716,7 +723,7 @@ Built with `S1-F01-T15` from the parts above; they follow [access-and-approvals.
 
 - **Layout:** while no session is in force, the back-office shell shows only the environment banner and one solid card (e1, 448 px wide at most) in the content area: no top bar, no sidebar, no screen.
 - **Sign in:** Organisation code (mono), Login, Password, Authenticator code (mono, numeric keyboard, optional, with help saying to leave it empty only before an app is set up), and **Sign in** as the one primary action. A refusal is a Danger banner at the top of the card with the code's text and the reference; an unavailable sign-in is an Attention banner that also names what is missing. The one refusal never says which part was wrong. The password and the code are cleared after a refused attempt (`PRD-SEC-006`).
-- **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. A QR code of the setup link sits beside the key, drawn in the browser by the QR code library of the PRD Stack, never by an outside service; its text alternative says to type the key instead (product owner, 7 Oct 2026, DEC-118; RR-280; access-and-approvals 3.2). **As built** (`S1-F01-T23`): inline SVG from `qrcode.react`, 168 px with the four-module quiet zone the QR specification requires, error correction M, dark modules on a white ground in both themes so phones can read it. **Design choice.**
+- **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, each group unbroken, a line breaking only between groups, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. A QR code of the setup link sits beside the key, drawn in the browser by the QR code library of the PRD Stack, never by an outside service; its text alternative says to type the key instead (product owner, 7 Oct 2026, DEC-118; RR-280; access-and-approvals 3.2). **As built** (`S1-F01-T23`): inline SVG from `qrcode.react`, 168 px with the four-module quiet zone the QR specification requires, error correction M, dark modules on a white ground in both themes so phones can read it. **Design choice.**
 - **No access assigned:** a signed-in person who holds no role assignment in force sees one solid card with the title "No access assigned", a line saying that an Admin must assign a role, and **Sign out** as the one action; no sidebar menu (personas.md section 2; DEC-118, RR-260). **As built** (`S1-F01-T23`): the shell shows it, with the environment banner and no top bar, at whatever address the person opens, from `roleAssignmentInForce` in the session read (access-and-approvals 3.3); a locked session covers it with the lock overlay like any page. **Design choice.**
 - **Choose your own password:** New password, New password again (checked on the screen only, never sent), a fresh authenticator code, and **Change password**.
 - After each step the screens ask the server what is still to do, so a reload returns to the same step; when nothing is left, the shell opens on the landing screen (`DEC-116`). Focus moves to each step's title.

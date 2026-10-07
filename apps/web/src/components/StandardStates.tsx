@@ -10,7 +10,8 @@ export function codeText(code: string): string {
 }
 
 /**
- * Empty (design-language 10.13): a neutral mark, a title, one line saying why the list is empty, naming the scope,
+ * Empty (design-language 10.13): the neutral mark of design-system 3.7 (a 40 px sunken circle with a border and a bold
+ * "0" in --text-3), a title, one line saying why the list is empty, naming the scope,
  * and at most one secondary action, passed as children.
  */
 export function EmptyState({
@@ -24,7 +25,12 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-      <span aria-hidden="true" className="h-10 w-10 rounded-full bg-n-bg" />
+      <span
+        aria-hidden="true"
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-sunken font-bold text-text-3"
+      >
+        {t('empty-state.mark')}
+      </span>
       <h2 className="text-h3 font-semibold">{t(title)}</h2>
       <p className="max-w-prose text-body text-text-2">{t(body)}</p>
       {children}

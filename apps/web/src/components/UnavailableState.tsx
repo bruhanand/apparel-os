@@ -19,11 +19,29 @@ export function missingText(item: MissingItem): string {
   return t(isMessageId(id) ? id : 'missing.other');
 }
 
+/** The kinds of missing item a policy or setting gate names (design-language 10.17). */
+const gateKinds: ReadonlySet<string> = new Set(['policy', 'setting', 'capability']);
+
 /**
- * Live action unavailable (design-language 10.17; PRD-UXP-003, PRD-SEC-017): an Attention banner that names each thing
- * the server listed as missing and points to Setup › Policy readiness. The action itself stays visible and disabled.
+ * Unavailable (PRD-UXP-003, PRD-SEC-017). Where a policy, setting or capability is missing, it is Live action
+ * unavailable (design-language 10.17): an Attention banner that names each thing the server listed as missing and
+ * points to Setup › Policy readiness. Where only the person's role assignments fall short, it is Not available to you
+ * (design-language 10.17 "Missing permission", as built): the same banner naming the missing permission or scope and
+ * saying who to ask, with no policy link, since no policy is involved. The action itself stays visible and disabled.
  */
 export function UnavailableState({ missing }: { missing: readonly MissingItem[] }) {
+  if (!missing.some((item) => gateKinds.has(item.kind))) {
+    return (
+      <Banner tone="warning" message="unavailable.access.title" role="status">
+        <ul className="list-none p-0">
+          {missing.map((item, index) => (
+            <li key={index}>{missingText(item)}</li>
+          ))}
+        </ul>
+        <span>{t('unavailable.access.next')}</span>
+      </Banner>
+    );
+  }
   return (
     <Banner tone="warning" message="unavailable.title" role="status">
       <span>{t('missing.count', { count: missing.length })}</span>

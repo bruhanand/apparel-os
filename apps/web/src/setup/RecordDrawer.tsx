@@ -5,6 +5,7 @@ import { stateIdOf } from './states';
 
 /**
  * The right drawer (design-language 10.15): a modal dialog over a scrim, full height under the top bar, 420 px wide
+ * (the scrim starts under the environment banner and covers the top bar, which a modal drawer makes unusable)
  * (full screen on a phone), with the record's mono reference, title, one status badge and a close button; the tabs
  * Details · History (RR-312: the record's history is read here, so nobody types an identifier); a scrolling body of
  * solid cards; and an optional footer. Esc closes it, and focus goes back to the control that opened it. Evidence
@@ -44,14 +45,17 @@ export function RecordDrawer({
     };
   }, []);
   return (
-    <div className="fixed inset-0 top-14 z-40 flex justify-end bg-scrim">
+    <div
+      className="fixed inset-x-0 bottom-0 top-[var(--banner-h)] z-40 flex justify-end bg-scrim"
+      data-testid="drawer-scrim"
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"
-        className="glass flex h-full w-full flex-col border-l sm:w-[420px]"
+        className="glass mt-14 flex min-h-0 w-full flex-col border-l sm:w-[420px]"
       >
-        <header className="flex items-start gap-2 border-b border-border p-4">
+        <header data-testid="drawer-header" className="flex items-start gap-2 border-b border-border p-4">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             {reference !== undefined && <span className="font-mono text-body-sm text-text-2">{reference}</span>}
             <h2 id="drawer-title" ref={heading} tabIndex={-1} className="text-h2 font-semibold">

@@ -1,4 +1,5 @@
 import type { MyWork, WorkItem } from '@apparel-os/schemas';
+import type { ApprovalSubject } from '../approvals/subject';
 import { cn } from '@apparel-os/ui';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
@@ -67,16 +68,23 @@ function exposureText(item: WorkItem): string {
   }
 }
 
-/** The list: each item's kind, state, due time, exposure and next action (PRD-UXP-003), or why it is empty. */
+/**
+ * The list: each item's subject (what it is for, who prepared it and when; access-and-approvals 11.2, visual review
+ * finding 3), state, due time, exposure and next action (PRD-UXP-003), or why it is empty. An item with no subject
+ * read yet, or none the reader may read, shows its kind.
+ */
 export function MyWorkList({
   work,
   onOpen,
   timeZone,
+  subjects = new Map(),
 }: {
   work: MyWork;
   onOpen: (item: WorkItem) => void;
   /** The Organisation's timezone (PRD-MOD-017; DEC-118). */
   timeZone: string;
+  /** The subject of each approval item, by item identifier. */
+  subjects?: ReadonlyMap<string, ApprovalSubject>;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -87,29 +95,48 @@ export function MyWorkList({
         <EmptyState title="my-work.empty.title" body="my-work.empty.body" />
       ) : (
         <ul className="flex list-none flex-col gap-2 p-0">
-          {work.items.map((item) => (
-            <li
-              key={item.id}
-              className="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface px-4 py-3"
-            >
-              <span className="font-semibold">{t(`my-work.kind.${item.kind}`)}</span>
-              <StatusBadge state={stateIdOf(item.state)} />
-              <span className="text-body-sm text-text-2">{dueText(item, timeZone)}</span>
-              <span className="text-body-sm tabular-nums text-text-2">{exposureText(item)}</span>
-              <span className="flex-1" />
-              {item.nextAction === 'access.decide-approval' && (
-                <button
-                  type="button"
-                  className="h-9 rounded-control px-3 font-semibold text-accent hover:bg-tint"
-                  onClick={() => {
-                    onOpen(item);
-                  }}
-                >
-                  {t('my-work.open-decide')}
-                </button>
-              )}
-            </li>
-          ))}
+          {work.items.map((item) => {
+            const subject = subjects.get(item.id);
+            return (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface px-4 py-3"
+              >
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{subject?.title ?? t(`my-work.kind.${item.kind}`)}</span>
+                    {subject?.name !== null && subject?.name !== undefined && (
+                      <span className="text-body">{subject.name}</span>
+                    )}
+                    <StatusBadge state={stateIdOf(item.state)} />
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-body-sm text-text-2">
+                    {subject !== undefined && (
+                      <span>
+                        {t('approval.prepared-by', {
+                          names: subject.preparedBy,
+                          time: formatDateTime(subject.requestedAt, timeZone),
+                        })}
+                      </span>
+                    )}
+                    <span>{dueText(item, timeZone)}</span>
+                    <span className="tabular-nums">{exposureText(item)}</span>
+                  </div>
+                </div>
+                {item.nextAction === 'access.decide-approval' && (
+                  <button
+                    type="button"
+                    className="h-9 rounded-control px-3 font-semibold text-accent hover:bg-tint"
+                    onClick={() => {
+                      onOpen(item);
+                    }}
+                  >
+                    {t('my-work.open-decide')}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

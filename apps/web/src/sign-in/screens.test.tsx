@@ -80,6 +80,20 @@ describe('enrolment and the password change (access-and-approvals 3.2)', () => {
     expect(groupedKey('ABCDEFGHI')).toBe('ABCD EFGH I');
   });
 
+  it('keeps each group of four unbroken and wraps only between groups (visual review finding 11)', () => {
+    const html = renderToStaticMarkup(
+      <EnrolmentSecret
+        secret={new Secret('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')}
+        otpauthUri={new Secret('otpauth://totp/SYNTHETIC?secret=ABCD')}
+      />,
+    );
+    const key = /<code[^>]*data-testid="enrolment-key"[^>]*>(.*?)<\/code>/s.exec(html);
+    expect(key?.[0]).not.toContain('break-all');
+    expect(key?.[1]).toContain(
+      '<span class="whitespace-nowrap">ABCD</span> <span class="whitespace-nowrap">EFGH</span>',
+    );
+  });
+
   it('PRD-SEC-001 draws the setup link as a QR code in the page, with a text alternative to type the key (DEC-118; RR-280)', () => {
     const html = renderToStaticMarkup(
       <EnrolmentSecret

@@ -166,7 +166,8 @@ describe('the approval panel', () => {
       view({ decidable: { kind: 'unavailable', code: 'access.self-preparation', missing: [{ kind: 'preparer' }] } }),
     );
     expect(text(html)).toContain('You prepared or changed this version, so another person must decide it');
-    expect(text(html)).toContain('You are one of the people who prepared this version.');
+    // Said once: the preparer item repeats the code's words, so it is not listed again (visual review finding 7).
+    expect(text(html)).not.toContain('You are one of the people who prepared this version.');
     expect(html).not.toContain('one-time-code');
   });
 
@@ -182,6 +183,29 @@ describe('the approval panel', () => {
     );
     expect(text(html)).toContain('No approve or reject reasons are in force yet');
     expect(html).not.toContain('one-time-code');
+  });
+
+  it('PRD-UXP-003 says why a decision is unavailable once, not again as a missing item (visual review finding 7)', () => {
+    const html = render(
+      view({
+        decidable: { kind: 'unavailable', code: 'access.user-not-approved', missing: [{ kind: 'approval' }] },
+      }),
+    );
+    expect(text(html)).toContain('The user this role assignment is for is not approved yet. Decide the user first.');
+    expect(text(html)).not.toContain('The user this is for must be approved first.');
+  });
+
+  it('PRD-UXP-003 still names a missing permission beside the reason, since the reason does not say which', () => {
+    const html = render(
+      view({
+        decidable: {
+          kind: 'unavailable',
+          code: 'access.not-eligible',
+          missing: [{ kind: 'permission', action: 'approve', recordType: 'access.role' }],
+        },
+      }),
+    );
+    expect(text(html)).toContain('Needs Approve on Role.');
   });
 
   it('shows a decision with its outcome, reason and approver, and a superseded request as such', () => {

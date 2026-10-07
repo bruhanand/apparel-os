@@ -94,6 +94,8 @@
  */
 :root {
   color-scheme: light;
+  /* The environment banner's height, kept by the shell (AppShell useBannerHeight); overlays start under it. */
+  --banner-h: 0px;
   --bg: #f7f5f0;
   --surface: #fffefb;
   --sunken: #f0ede6;
@@ -282,7 +284,7 @@
 }
 
 html {
-  scroll-padding-top: 56px;
+  scroll-padding-top: calc(var(--banner-h) + 56px);
 }
 
 body {

@@ -1,9 +1,11 @@
 import type { WorkItem } from '@apparel-os/schemas';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
 import { readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
+import { approvalSubject } from '../approvals/subject';
+import { approvalRead, subjectReads, useApprovalSubjects, useSubjectLists } from '../approvals/use-subjects';
 import { Button } from '../components/Button';
 import { t } from '../messages/catalogue';
 import { ListRead, Toolbar } from '../setup/parts';
@@ -23,6 +25,8 @@ export function MyWorkScreen() {
   const query = useQuery(myWorkRead());
   const timeZone = useTimeZone();
   const [open, setOpen] = useState<WorkItem | null>(null);
+  const subjects = useApprovalSubjects(query.data?.items ?? []);
+  const queryClient = useQueryClient();
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -30,25 +34,49 @@ export function MyWorkScreen() {
         <Button
           label="my-work.refresh"
           onClick={() => {
+            // The names on the rows are read again too, so a record prepared since is named (visual review).
+            for (const read of subjectReads) void queryClient.invalidateQueries({ queryKey: [read] });
             void query.refetch();
           }}
         />
       </Toolbar>
       <ListRead query={query} what="my-work.what">
-        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} />}
+        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} subjects={subjects} />}
       </ListRead>
       {open !== null && (
-        <RecordDrawer
-          title={t(`my-work.kind.${open.kind}`)}
-          state={open.state}
+        <ApprovalDrawer
+          item={open}
           onClose={() => {
             setOpen(null);
             void query.refetch();
           }}
-          details={<ApprovalPanel requestId={open.owner.recordId} />}
         />
       )}
     </div>
+  );
+}
+
+/** The state a drawer's header shows: the request's own, as last read, over the item's from when the list was read. */
+export function drawerState(item: WorkItem, request: { readonly state: string } | undefined): string {
+  return request?.state ?? item.state;
+}
+
+/**
+ * The drawer of one approval: its header names the record and shows the request's state from the same read as the
+ * panel, so it changes with the decision (design-language 10.15; visual review finding 4).
+ */
+function ApprovalDrawer({ item, onClose }: { item: WorkItem; onClose: () => void }) {
+  const request = useQuery(approvalRead(item.owner.recordId));
+  const lists = useSubjectLists();
+  // Named from its own read, so the title stays once the decision takes the item out of My work.
+  const name = request.data === undefined ? null : approvalSubject(request.data, lists).name;
+  return (
+    <RecordDrawer
+      title={name ?? t(`my-work.kind.${item.kind}`)}
+      state={drawerState(item, request.data)}
+      onClose={onClose}
+      details={<ApprovalPanel requestId={item.owner.recordId} />}
+    />
   );
 }
 

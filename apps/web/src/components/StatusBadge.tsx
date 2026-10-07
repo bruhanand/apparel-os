@@ -15,14 +15,14 @@ export const familyClasses: Readonly<Record<Family, string>> = {
 
 /**
  * A record's one status badge: glyph and word in its family's colours, 22 px, never clickable (design-language 7,
- * 10.2).
+ * 10.2). It hugs its text wherever it sits, even in a column that stretches its children.
  */
 export function StatusBadge({ state }: { state: StateId }) {
   const family = stateFamilies[state];
   return (
     <span
       className={cn(
-        'inline-flex h-[22px] items-center gap-1 rounded-full px-[9px] text-[12px] font-semibold',
+        'inline-flex h-[22px] w-fit shrink-0 items-center gap-1 self-start whitespace-nowrap rounded-full px-[9px] text-[12px] font-semibold',
         familyClasses[family],
       )}
     >

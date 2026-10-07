@@ -13,20 +13,48 @@ function recordTypeText(recordType: string): string {
   return isMessageId(id) ? t(id) : recordType;
 }
 
-/** What else an access record names: the record and field class of a sensitive access, how it was exposed. */
+function operationText(operation: string): string {
+  const id = `history.operation.${operation}`;
+  return isMessageId(id) ? t(id) : operation;
+}
+
+function fieldClassText(fieldClass: string): string {
+  const id = `field-class.${fieldClass}`;
+  return isMessageId(id) ? t(id) : fieldClass;
+}
+
+/**
+ * What else an access record names (numbering-and-audit 5.1, 5.2; visual review finding 8): for a permission change,
+ * the record type and operation its audit record changed, or where to read it when the reader may not; for a
+ * sensitive access, the record, field class and how it was exposed; for a sign-in, session or credential event, the
+ * device (none registered, for the back office) and any identity verification of a recovery.
+ */
 function detailOf(entry: AccessHistoryEntry): string {
+  if (entry.kind === 'permission-changed') {
+    return entry.change === null
+      ? t('history.detail.change-not-shown')
+      : `${recordTypeText(entry.change.recordType)} · ${operationText(entry.change.operation)}`;
+  }
   const parts: string[] = [];
   if (entry.record !== null) parts.push(recordTypeText(entry.record.recordType));
-  if (entry.fieldClass !== null) parts.push(entry.fieldClass);
+  if (entry.fieldClass !== null) parts.push(fieldClassText(entry.fieldClass));
   if (entry.exposure !== null) parts.push(t(`history.exposure.${entry.exposure}`));
+  if (entry.record === null)
+    parts.push(t(entry.deviceId === null ? 'history.detail.no-device' : 'history.detail.device'));
   if (entry.identityVerification !== null) parts.push(entry.identityVerification);
   return parts.join(' · ');
 }
 
+/** Whose access the record is about: the user, or why none is named (PRD-SEC-014). */
+function userText(entry: AccessHistoryEntry): string {
+  if (entry.user !== null) return actorName(entry.user);
+  return t(entry.kind === 'permission-changed' ? 'history.not-one-user' : 'history.no-user');
+}
+
 /**
  * The access history report as a data table (numbering-and-audit 5.2; design-language 10.9), newest first: when, the
- * kind of event, its outcome, the user (none for a failed sign-in whose login matched no user, PRD-SEC-014) and the
- * network address.
+ * kind of event, its outcome, the user (none for a failed sign-in whose login matched no user, PRD-SEC-014; none for
+ * a permission change to a role, setting or service identity), the network address and the detail.
  */
 export function AccessRecordTable({ entries, timeZone }: { entries: readonly AccessHistoryEntry[]; timeZone: string }) {
   return (
@@ -62,7 +90,7 @@ export function AccessRecordTable({ entries, timeZone }: { entries: readonly Acc
               </td>
               <td className="px-3">{kindText(entry.kind)}</td>
               <td className="px-3">{t(`history.outcome.${entry.outcome}`)}</td>
-              <td className="px-3">{entry.user === null ? t('history.no-user') : actorName(entry.user)}</td>
+              <td className="px-3">{userText(entry)}</td>
               <td className="px-3 font-mono">{entry.networkAddress ?? ''}</td>
               <td className="px-3">{detailOf(entry)}</td>
             </tr>

@@ -99,6 +99,11 @@ export const accessHistoryEntrySchema = z.strictObject({
   identityVerification: z.string().nullable(),
   /** The audit record of a permission change. */
   auditRecordId: z.uuid().nullable(),
+  /**
+   * What a permission change changed: the audited record's type and the operation, never a value; null where the
+   * reader may not read that audit record (numbering-and-audit 4.5, 5.1).
+   */
+  change: z.strictObject({ recordType: z.string(), operation: z.string() }).nullable(),
   /** The record, field class and exposure of a sensitive access. */
   record: z.strictObject({ recordType: z.string(), recordId: z.uuid() }).nullable(),
   fieldClass: z.string().nullable(),

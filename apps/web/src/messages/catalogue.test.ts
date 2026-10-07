@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorCodes } from '@apparel-os/schemas';
+import { errorCodes, permissionRegistry } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { families, stateFamilies, stateIds } from '../components/states';
 import { englishIndia } from './en-IN';
@@ -16,6 +16,28 @@ function sourceFiles(directory: string): string[] {
     return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
   });
 }
+
+describe('record type names (code-house-rules 12.13; visual review finding 9)', () => {
+  it('names every record type of the permission registry, so no screen shows a code such as access.session', () => {
+    const unnamed = permissionRegistry
+      .map((declaration) => declaration.code)
+      .filter((code) => !isMessageId(`record-type.${code}`));
+    expect(unnamed).toEqual([]);
+  });
+});
+
+describe('operation names (code-house-rules 12.13; visual review)', () => {
+  it('has words for every operation the server records, so no history shows a code such as set-up-organisation', () => {
+    const SERVER = join(SRC, '../../server/src');
+    const operations = new Set(
+      sourceFiles(SERVER).flatMap((file) =>
+        [...readFileSync(file, 'utf8').matchAll(/operation: '([a-z-]+)'/g)].map((match) => match[1] ?? ''),
+      ),
+    );
+    expect(operations.size).toBeGreaterThan(10);
+    expect([...operations].filter((operation) => !isMessageId(`history.operation.${operation}`))).toEqual([]);
+  });
+});
 
 describe('t (code-house-rules 12.13)', () => {
   it('fills named parameters', () => {
