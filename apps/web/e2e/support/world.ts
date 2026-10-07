@@ -5,11 +5,13 @@ import { join } from 'node:path';
 // (apps/server/test/browser/serve.ts). The user comes from the synthetic test fixtures, never from application code
 // (code-house-rules 11.2). Every value is SYNTHETIC.
 
-/** The port of the web app's preview, and its origin: the one origin of pages and API (code-house-rules 12.1). */
-export const WEB_PORT = 4173;
-export const WEB_ORIGIN = `http://localhost:${String(WEB_PORT)}`;
-/** The port the server of the journeys listens on: the one vite.config.ts sends /api to. */
+/** The port the server of the journeys listens on. */
 export const SERVER_PORT = 3000;
+/**
+ * The origin of the server of the journeys, which serves the built web app and the API from one origin, as the `app`
+ * service does (deployment.md section 3; code-house-rules 12.1; S1-F01-T27).
+ */
+export const WEB_ORIGIN = `http://localhost:${String(SERVER_PORT)}`;
 /** Git ignores this folder. */
 export const WORLD_FILE = join(import.meta.dirname, '..', '.synthetic', 'world.json');
 

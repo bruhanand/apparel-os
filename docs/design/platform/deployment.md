@@ -44,6 +44,14 @@ Services talk to each other over Railway's private network (`*.railway.internal`
 
 The `app` service serves the API, the web app and the counter PWA from **one origin**: `/` is the web app, `/counter/` is the counter PWA, built from `apps/counter` (approved by the product owner on 6 Oct 2026; [offline-counter.md](../pos/offline-counter.md) 5.2), and `/api/` is the API ([code-house-rules.md](code-house-rules.md) 12.1).
 
+How `app` serves the web app (**design choice**, built in `S1-F01-T27`):
+
+- `pnpm build` builds `apps/web` into `apps/web/dist`, beside the server's own build, and the server serves it from there; it refuses to start without the web app's `index.html`. The web build reads `AOS_ENVIRONMENT` from the build's environment (section 1), so on Railway the variable set on `app` reaches it, and the build cache keys on it.
+- A `GET` or `HEAD` outside `/api/` answers the build's file at that path. A path whose last segment has no file extension is a client route and answers `index.html`, so a reload or a link opens the screen. Anything else outside `/api/`, a missing file included, answers the not-found error envelope, never `index.html`; so does an unknown path under `/api/` ([code-house-rules.md](code-house-rules.md) 12.3).
+- Caching: the build's hashed files under `/assets/` may be kept by a browser for a year (`immutable`), since a new build names new files; `index.html` is never kept (`no-store`), so a deploy reaches the next page load; any other file, such as the self-hosted fonts, is revalidated on each use (`no-cache`). Every `/api` answer stays `no-store` (12.1).
+- Every answer, page or API, carries `Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: same-origin`: a page loads scripts, styles, fonts, images and API calls only from its own origin, no other site frames it, and no referrer leaves it.
+- `/counter/` answers not-found until `apps/counter` exists and is built (RR-420).
+
 Why one origin:
 
 - Sessions are PostgreSQL-backed server sessions in a cookie (`PRD-SEC-001`; Stack: Authentication). With one origin, the cookie is first-party. It needs no cross-site settings, which browsers increasingly block, and no CORS.

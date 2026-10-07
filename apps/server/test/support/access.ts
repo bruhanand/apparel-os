@@ -9,6 +9,7 @@ import { AppModule } from '../../src/app.module.js';
 import {
   CLOCK,
   configureApp,
+  serveWebApp,
   HTTP_ENVIRONMENT,
   LOGGER,
   ORGANISATION_TIMEZONE_SOURCE,
@@ -221,6 +222,8 @@ export async function startAccessApp(
     readonly port?: number;
     /** The kernel's clock; the system clock unless a test moves time (S1-F01-T09). */
     readonly clock?: Clock;
+    /** A built web app to serve from the same origin, as the real server does (S1-F01-T27). */
+    readonly webApp?: string;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -250,6 +253,7 @@ export async function startAccessApp(
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
+  if (options.webApp !== undefined) serveWebApp(app, options.webApp);
   app.enableShutdownHooks();
   await app.listen(options.port ?? 0, '127.0.0.1');
   const baseUrl = await app.getUrl();

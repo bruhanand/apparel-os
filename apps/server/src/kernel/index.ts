@@ -57,6 +57,7 @@ export {
 } from './http/api-route.js';
 export type { RouteInputOf } from './http/api-route.js';
 export { configureApp } from './http/configure-app.js';
+export { serveWebApp } from './http/web-app.js';
 export type { HttpRequest, HttpResponse } from './http/http-types.js';
 export {
   httpSettingsFromEnvironment,

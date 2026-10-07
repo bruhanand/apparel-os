@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator, decodeBase32 } from './support/authenticator';
+import { watchSecurityPolicy } from './support/security-policy';
 import { readWorld } from './support/world';
 
 // S1-F01-T15: the first sign-in journey (code-house-rules 10.1; PRD-SEC-016). A synthetic user with a temporary
@@ -22,6 +23,8 @@ test('PRD-SEC-001 a synthetic user signs in for the first time, enrols an authen
   browser,
 }) => {
   const world = readWorld();
+  // The pages of the journey, the enrolment QR code included, load nothing the one-origin policy refuses (S1-F01-T27).
+  const violations = watchSecurityPolicy(page);
 
   await test.step('access-and-approvals 3.1: sign in with the temporary password and no code', async () => {
     await page.goto('/');
@@ -88,4 +91,5 @@ test('PRD-SEC-001 a synthetic user signs in for the first time, enrols an authen
   } finally {
     await fresh.close();
   }
+  expect(violations()).toEqual([]);
 });

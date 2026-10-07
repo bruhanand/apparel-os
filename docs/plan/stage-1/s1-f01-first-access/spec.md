@@ -185,6 +185,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | done | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |
 | [S1-F01-T24 Worker retries, history upkeep and the test Organisations](tickets/T24-worker-retries-history-upkeep-and-test-organisations.md) | done | — (`DEC-118`; RR-270 part, RR-240, RR-330); the intervals stay OPEN (RR-270) |
 | [S1-F01-T25 Changing essential security settings](tickets/T25-changing-essential-security-settings.md) | done | T22 (done) (`DEC-118`; RR-334) |
+| [S1-F01-T27 The `app` service serves the web app](tickets/T27-serve-web-app.md) | done | — (deployment.md section 3; found in the Railway `dev` setup); `/counter/` waits for RR-420 |
 
 
 ## 14. Tests

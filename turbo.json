@@ -8,6 +8,11 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@apparel-os/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["AOS_ENVIRONMENT"]
+    },
     "typecheck": {
       "dependsOn": ["^build"]
     },
