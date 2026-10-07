@@ -63,7 +63,7 @@ Why one origin:
 
 `kdps-test` uses the Railway-provided address. A custom domain can be added later (D-3, `DEC-105`).
 
-Idle and absolute session limits come from policy 2 (`POL-02.18`). On production they apply once policy 2 is signed and the Admin has validated them (V-04); on `kdps-test` the stated values apply before signing (`DEC-102`, section 1). Production and `kdps-test` require TOTP (`PRD-SEC-001`, `POL-02.17`). Development uses the same sign-in as production, with synthetic users, so it has no easier path, nothing in it weakens production login, and its test access stays apart from production authentication (`PRD-ACS-017`, `POL-02.17`; D-6, `DEC-105`). Hosting changes none of this.
+Idle and absolute session limits come from policy 2 (`POL-02.18`). On production they apply once policy 2 is signed and the Admin has validated them (V-04); on `kdps-test` the stated values apply before signing (`DEC-102`, section 1). Production and `kdps-test` require TOTP (`PRD-SEC-001`, `POL-02.17`). Development uses the same sign-in as production, with synthetic users; the one easier path is the test sign-in of `local` and `dev` (DEC-121; [access-and-approvals.md](../access/access-and-approvals.md) 3.4), on only where `AOS_ENVIRONMENT` is `local` or `dev` and `AOS_DEMO_SIGN_IN` lists SYNTHETIC people, and the server refuses to start with it set anywhere else, so nothing in it weakens production login and its test access stays apart from production authentication (`PRD-ACS-017`, `POL-02.17`; D-6, `DEC-105`). Hosting changes none of this.
 
 ## 4. Database
 
@@ -140,5 +140,5 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 | D-3 | Baseline (`DEC-105`): `kdps-test` uses the Railway-provided address; a custom domain can be added later | — | — |
 | D-4 | KDPS's agreement to hold real data on the test setup, and whether customer details are imported | KDPS Owner (question 37) | Before KDPS's side-by-side test |
 | D-5 | A separate test Tally company for the connector | Accounts | Stage 5 testing |
-| D-6 | Baseline (`DEC-105`): the local helper and the Tally local gateway call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office. Development uses the same sign-in as production, with synthetic users | — | — |
+| D-6 | Baseline (`DEC-105`): the local helper and the Tally local gateway call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office. Development uses the same sign-in as production, with synthetic users, apart from the test sign-in of `local` and `dev` (DEC-121) | — | — |
 | D-7 | The most connections each database pool opens (`AOS_DATABASE_POOL_MAX`, section 4); a technical setting with no default. On `dev`: 5 per pool, a development assumption, checked against the connection budget and tuned from measurements (product owner, 6 Oct 2026; RR-216). **OPEN** for `kdps-test` and production, after measurement | Product owner | The first deploy to `kdps-test` |

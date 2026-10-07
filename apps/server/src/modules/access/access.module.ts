@@ -19,6 +19,7 @@ import { OwnCredentials } from './commands/own-credentials.js';
 import { Sessions } from './commands/sessions.js';
 import { SignIn } from './commands/sign-in.js';
 import { OrganisationKeyCipher, PasswordReplayCheck } from './contracts/credential-contracts.js';
+import { demoSignInFromEnvironment, type DemoSignInSettings } from './domain/demo-sign-in.js';
 import { OrganisationKeys } from './domain/organisation-keys.js';
 import { AccessChangesController } from './http/access-changes.controller.js';
 import { AccessRecordsController } from './http/access-records.controller.js';
@@ -26,7 +27,7 @@ import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
 import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
-import { ACCESS } from './tokens.js';
+import { ACCESS, DEMO_SIGN_IN } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { CREDENTIAL_RESETS, SESSIONS, SessionsController } from './http/sessions.controller.js';
@@ -52,6 +53,11 @@ export const ACCESS_ENVIRONMENT = 'access.Environment';
       useFactory: (env: Readonly<Record<string, string | undefined>>) => OrganisationKeys.fromEnvironment(env),
       inject: [ACCESS_ENVIRONMENT],
     },
+    {
+      provide: DEMO_SIGN_IN,
+      useFactory: (env: Readonly<Record<string, string | undefined>>) => demoSignInFromEnvironment(env),
+      inject: [ACCESS_ENVIRONMENT],
+    },
     { provide: REPLAY_SECRET_CHECK, useClass: PasswordReplayCheck },
     {
       provide: RESTRICTED_VALUE_CIPHER,
@@ -59,7 +65,7 @@ export const ACCESS_ENVIRONMENT = 'access.Environment';
       inject: [ORGANISATION_KEYS],
     },
   ],
-  exports: [ORGANISATION_KEYS, REPLAY_SECRET_CHECK, RESTRICTED_VALUE_CIPHER],
+  exports: [ORGANISATION_KEYS, DEMO_SIGN_IN, REPLAY_SECRET_CHECK, RESTRICTED_VALUE_CIPHER],
 })
 export class AccessContractsModule {}
 
@@ -118,9 +124,14 @@ export class AccessJobIdentitiesModule {}
     },
     {
       provide: SIGN_IN,
-      useFactory: (runner: CommandRunner, audit: AuditInterface, keys: OrganisationKeys, hash: () => Promise<string>) =>
-        new SignIn({ runner, audit, keys, unknowableHash: hash }),
-      inject: [COMMAND_RUNNER, AUDIT, ORGANISATION_KEYS, UNKNOWABLE_HASH],
+      useFactory: (
+        runner: CommandRunner,
+        audit: AuditInterface,
+        keys: OrganisationKeys,
+        hash: () => Promise<string>,
+        demoSignIn: DemoSignInSettings,
+      ) => new SignIn({ runner, audit, keys, unknowableHash: hash, demoSignIn }),
+      inject: [COMMAND_RUNNER, AUDIT, ORGANISATION_KEYS, UNKNOWABLE_HASH, DEMO_SIGN_IN],
     },
     {
       provide: OWN_CREDENTIALS,

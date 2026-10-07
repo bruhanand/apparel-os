@@ -86,6 +86,9 @@ export const englishIndia = {
   'sign-in.totp-code.help':
     'The code your authenticator app shows. Leave it empty only if you have not set up an authenticator app yet.',
   'sign-in.submit': 'Sign in',
+  'demo-sign-in.title': 'Test sign-in (dev only)',
+  'demo-sign-in.intro':
+    'Signs in a SYNTHETIC person straight away, without the password or the authenticator code. Never on KDPS test or production.',
   'enrolment.title': 'Set up your authenticator app',
   'enrolment.body':
     'Every sign-in needs a code from an authenticator app on your phone. Show the setup key, add it to the app, then enter the code the app shows.',
@@ -438,6 +441,7 @@ export const englishIndia = {
   'access-kind.device-registered': 'Device registered',
   'access-kind.device-revoked': 'Device revoked',
   'access-kind.operator-recovery': 'Recovery by the platform operator',
+  'access-kind.demo-sign-in': 'Test sign-in',
   'access-kind.permission-changed': 'Permission changed',
   'access-kind.sensitive-access': 'Sensitive access',
   'record-type.access.user': 'User',

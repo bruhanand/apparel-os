@@ -115,6 +115,16 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
   - Unsaved screen input is kept on the device in the browser's local storage, under the Organisation code and the user, without its secret and restricted fields, and offered back after the next sign-in of that user.
 - **The session read as built** (`S1-F01-T23`). **Design choice.** `GET /api/access/session` answers the signed-in user's Organisation code, identifier, display name, personas held and effective grants (RR-261, RR-281), whether they hold at least one role assignment in force today (`roleAssignmentInForce`, which decides between My work and "No access assigned"; personas.md section 2; DEC-118, RR-260), and the Organisation's timezone in force (`timezone`, an IANA name), in which the web app formats every time it shows (`PRD-MOD-017`; DEC-118, RR-310; code-house-rules 9). With no timezone in force no session authenticates and sign-in is unavailable naming it (3.1), so the read never answers without one.
 
+### 3.4 Test sign-in on the development environments
+
+`POL-02.17`, `PRD-ACS-017`; DEC-121; `S1-F01-T28`. **Design choice.**
+
+- On `local` and `dev` only, the sign-in screen shows, below the Sign in form, one button per SYNTHETIC person the server's `AOS_DEMO_SIGN_IN` lists (a JSON array of `{organisationCode, login, label}`). One press signs that person in without the password or the authenticator code.
+- The server reads the variable at start (code-house-rules 12.14): unset, the test sign-in is off, `GET /api/access/demo-sign-in` lists nobody and `POST /api/access/demo-sign-in` refuses every request. Set while `AOS_ENVIRONMENT` is not `local` or `dev`, or naming an Organisation whose code does not begin `SYN-`, the server refuses to start. So `kdps-test` and production can never have it.
+- Only a listed person, exactly by Organisation code and login, in a SYNTHETIC Organisation, and still Active with a current password, as for any sign-in (3.1); the required security settings must be in force, as for any sign-in. An unfinished first sign-in still leads to enrolment and the password change (3.2). Anything else gets the one sign-in refusal.
+- Every attempt in a known Organisation writes an access record of kind `demo-sign-in` (numbering-and-audit 5.2), so the sign-in history never shows it as an ordinary sign-in. The session is an ordinary office session (3.3): the same cookie, idle lock and limits.
+- The command carries no idempotency key, as sign-in (code-house-rules 12.4), and passes the same-origin check.
+
 ## 4. Permissions, roles and role assignments
 
 ### 4.1 Permissions

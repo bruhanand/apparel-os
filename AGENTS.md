@@ -80,7 +80,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 
 | Path | What it holds |
 | --- | --- |
-| `apps/server` | The NestJS modular monolith; it starts only with `AOS_RUNTIME_DATABASE_URL` and `AOS_DATABASE_POOL_MAX` set (`deployment.md` section 4). `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation`, `configuration` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
+| `apps/server` | The NestJS modular monolith; it starts only with `AOS_RUNTIME_DATABASE_URL` and `AOS_DATABASE_POOL_MAX` set (`deployment.md` section 4); `AOS_DEMO_SIGN_IN` turns on the test sign-in buttons, only with `AOS_ENVIRONMENT` `local` or `dev` (DEC-121). `src/kernel` holds plumbing; `src/modules/` holds one folder per module or part, such as `organisation`, `configuration` and `merchandise/catalogue`, each with an `index.ts` as its public interface |
 | `apps/server/migrations` | The two migration sets, `directory/` and `organisation/`: reviewed SQL files `NNNN__<unit>__<what>.sql` with each set's table register, `tables.json`, and the Organisation set's restricted maintenance, `maintenance.sql`, run after every migration run (code-house-rules 4.1, 4.3) |
 | `apps/server/db` | `roles.sql`, which creates the migration and runtime roles; `runtime-limits-synthetic.sql`, the runtime role's starting time limits for synthetic work; and the runbook for creating them on Railway |
 | `apps/server/test` | Tests that span units; `support/` (the test database helpers), `fixtures/` (synthetic labels and the two synthetic Organisations) and `seed/` (the local seed), none of which application code imports (code-house-rules 11) |

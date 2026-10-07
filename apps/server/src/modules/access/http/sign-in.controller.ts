@@ -18,10 +18,11 @@ import {
 } from '../../../kernel/index.js';
 import type { AccessInterface } from '../access.js';
 import type { OwnCredentials } from '../commands/own-credentials.js';
-import type { SignIn } from '../commands/sign-in.js';
+import type { SignIn, SignInResult } from '../commands/sign-in.js';
+import type { DemoSignInSettings } from '../domain/demo-sign-in.js';
 import { verifyPassword } from '../domain/password-hash.js';
 import { networkAddressOf, SignedIn, type SignedInUser } from './authenticate.guard.js';
-import { ACCESS } from '../tokens.js';
+import { ACCESS, DEMO_SIGN_IN } from '../tokens.js';
 import { sessionCookieHeader } from './session-cookie.js';
 
 /** The tokens of the access commands the controller calls. */
@@ -42,6 +43,7 @@ export class SignInController {
     @Inject(UNKNOWABLE_HASH) private readonly unknowableHash: () => Promise<string>,
     @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
     @Inject(ACCESS) private readonly access: AccessInterface,
+    @Inject(DEMO_SIGN_IN) private readonly demoSettings: DemoSignInSettings,
   ) {}
 
   @ApiRoute(routes.signIn)
@@ -64,21 +66,32 @@ export class SignInController {
       password: input.body.password,
       totpCode: input.body.totpCode,
     });
-    switch (result.kind) {
-      case 'refused':
-        throw refused();
-      case 'slowed':
-        throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.sign-in-slowed' });
-      case 'unavailable':
-        throw new ApiRefusal({ kind: 'unavailable', code: 'access.sign-in-unavailable', missing: result.missing });
-      case 'signed-in':
-        // A new sign-in replaces the browser's cookie; the earlier session, in any Organisation, is not ended (3.3).
-        response.setHeader(
-          'Set-Cookie',
-          sessionCookieHeader(routed.organisation.organisationCode, result.sessionIdentifier),
-        );
-        return result.outcome;
-    }
+    return answerOf(result, routed.organisation.organisationCode, response);
+  }
+
+  // The test sign-in of the development environments (access-and-approvals 3.4; POL-02.17, PRD-ACS-017; DEC-121).
+  // The list is empty wherever the setting is off, so the screen shows no button.
+  @ApiRoute(routes.demoSignInPeople)
+  demoSignInPeople() {
+    return { people: this.demoSettings.enabled ? [...this.demoSettings.people] : [] };
+  }
+
+  @ApiRoute(routes.demoSignIn)
+  async demoSignInRoute(
+    @RouteInput() input: RouteInputOf<typeof routes.demoSignIn>,
+    @Req() request: HttpRequest,
+    @Res({ passthrough: true }) response: HttpResponse,
+  ) {
+    if (!this.demoSettings.enabled) throw refused();
+    const routed = await this.router.resolveForSignIn(input.body.organisationCode);
+    if (!routed.routed) throw refused();
+    const result = await this.signIn.demo({
+      organisation: routed.organisation,
+      correlationId: correlationIdOf(request) ?? newCorrelationId(),
+      networkAddress: networkAddressOf(request),
+      login: input.body.login,
+    });
+    return answerOf(result, routed.organisation.organisationCode, response);
   }
 
   @ApiRoute(routes.session)
@@ -181,4 +194,20 @@ function ownRequest(
     key,
     content,
   };
+}
+
+/** The answer of a sign-in or a test sign-in: the outcome with the session cookie, or the one refusal (3.1). */
+function answerOf(result: SignInResult, organisationCode: string, response: HttpResponse) {
+  switch (result.kind) {
+    case 'refused':
+      throw refused();
+    case 'slowed':
+      throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.sign-in-slowed' });
+    case 'unavailable':
+      throw new ApiRefusal({ kind: 'unavailable', code: 'access.sign-in-unavailable', missing: result.missing });
+    case 'signed-in':
+      // A new sign-in replaces the browser's cookie; the earlier session, in any Organisation, is not ended (3.3).
+      response.setHeader('Set-Cookie', sessionCookieHeader(organisationCode, result.sessionIdentifier));
+      return result.outcome;
+  }
 }

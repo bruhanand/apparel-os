@@ -212,10 +212,28 @@ await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsAdmin.id
 await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsApprover.id }, FIRST_APPROVER_ROLE.code);
 await writeSyntheticReason(settingsDatabase, 'approve');
 
+// The test sign-in journey (demo-sign-in.spec.ts; access-and-approvals 3.4; DEC-121): one enrolled user with the
+// first Admin's role, listed in AOS_DEMO_SIGN_IN, which the journeys' server sets as on `local`.
+const demoUser = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-DEMO',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+await assignSyntheticRole(settingsDatabase, { kind: 'user', id: demoUser.id }, FIRST_ADMIN_ROLE.code);
+const demoLabel = 'SYNTHETIC Demo Admin';
+
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
-const app = await startAccessApp(world, keys, { origin, port, webApp });
+const app = await startAccessApp(
+  world,
+  {
+    ...keys,
+    AOS_ENVIRONMENT: 'local',
+    AOS_DEMO_SIGN_IN: JSON.stringify([{ organisationCode: settingsCode, login: demoUser.login, label: demoLabel }]),
+  },
+  { origin, port, webApp },
+);
 
 // The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A). It serves every
 // Organisation whose outbox identity the setup step wrote: here, the journey's.
@@ -272,6 +290,7 @@ writeFileSync(
       factorSecretHex: lockUser.factorSecret?.toString('hex') ?? '',
       idleLockSeconds: SYNTHETIC_SHORT_IDLE_LIMITS.idleLockSeconds,
     },
+    demo: { label: demoLabel, displayName: demoUser.displayName },
     settings: {
       organisationCode: settingsCode,
       admin: {

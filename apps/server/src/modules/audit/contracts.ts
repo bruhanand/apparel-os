@@ -76,6 +76,8 @@ interface AccessCommon {
 /** The kinds of access record that carry nothing beyond the common fields (numbering-and-audit 5.1). */
 export type PlainAccessKind =
   | 'sign-in'
+  /** A test sign-in, without the password or the authenticator code, on `local` and `dev` only (DEC-121). */
+  | 'demo-sign-in'
   | 'sign-out'
   | 'session-locked'
   | 'session-ended'

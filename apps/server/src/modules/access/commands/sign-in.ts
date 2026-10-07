@@ -4,6 +4,7 @@ import type { MissingItem, Secret, SignInOutcome } from '@apparel-os/schemas';
 import type { CommandRequest, CommandRunner, RoutedOrganisation, TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session, signInFailure } from '../db/schema.js';
+import { findDemoPerson, type DemoSignInSettings } from '../domain/demo-sign-in.js';
 import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
@@ -25,6 +26,9 @@ export interface SignInAttempt {
   readonly totpCode: string | undefined;
 }
 
+/** One test sign-in, as the controller gives it: no password and no code (access-and-approvals 3.4; DEC-121). */
+export type DemoSignInAttempt = Pick<SignInAttempt, 'organisation' | 'correlationId' | 'networkAddress' | 'login'>;
+
 /**
  * What an attempt comes to. `signed-in` carries the new session's random identifier, for the cookie only: the
  * database keeps its SHA-256 hash, and it is never logged (access-and-approvals 3.3; PRD-SEC-014).
@@ -41,6 +45,8 @@ export interface SignInDependencies {
   readonly keys: OrganisationKeys;
   /** An Argon2id hash of a value no one knows, verified when no credential can be (equal timing, DEC-116). */
   readonly unknowableHash: () => Promise<string>;
+  /** The test sign-in setting, read at start: off unless AOS_ENVIRONMENT is local or dev (DEC-121; POL-02.17). */
+  readonly demoSignIn: DemoSignInSettings;
 }
 
 /** What the read step found: enough to decide without a second read. */
@@ -57,6 +63,7 @@ type Looked =
     };
 
 const COMMAND = 'access.sign-in';
+const DEMO_COMMAND = 'access.demo-sign-in';
 /** 256 bits from a cryptographically secure generator (access-and-approvals 3.3). */
 const SESSION_IDENTIFIER_BYTES = 32;
 
@@ -137,30 +144,44 @@ export class SignIn {
         await this.recordAccess(context, attempt, looked, false);
         return { kind: 'refused' };
       }
-      const identifier = randomBytes(SESSION_IDENTIFIER_BYTES).toString('base64url');
-      await context.tx.insert(session).values({
-        id: uuidv7(),
-        appUserId: looked.userId,
-        identifierHash: sessionIdentifierHash(identifier),
-        kind: 'office',
-        deviceId: null,
-        state: 'In force',
-        startedAt: context.startedAt,
-        lastActivityAt: context.startedAt,
-      });
+      const identifier = await startSession(context, looked.userId);
       await this.recordAccess(context, attempt, looked, true);
-      const [next] = pendingSteps(signable);
-      const outcome: SignInOutcome =
-        next === 'enrolment'
-          ? { outcome: 'enrolment-required' }
-          : next === 'password-change'
-            ? { outcome: 'password-change-required' }
-            : { outcome: 'signed-in' };
-      return { kind: 'signed-in', outcome, sessionIdentifier: identifier };
+      return { kind: 'signed-in', outcome: outcomeOf(signable), sessionIdentifier: identifier };
     });
   }
 
-  private async look(context: TransactionContext, attempt: SignInAttempt): Promise<Looked> {
+  /**
+   * The test sign-in (access-and-approvals 3.4; deployment.md section 3; POL-02.17, PRD-ACS-017; DEC-121): signs in a
+   * person the AOS_DEMO_SIGN_IN list names, without the password or the authenticator code. Off, it refuses every
+   * request; on, only on `local` and `dev` and only for SYNTHETIC Organisations, as the setting's reader makes sure at
+   * start. The person must still be Active with a current password, as for any sign-in, and an unfinished first
+   * sign-in still leads to enrolment and the password change (3.2). Every attempt in a known Organisation writes an
+   * access record of its own kind, `demo-sign-in` (PRD-SEC-007).
+   */
+  async demo(attempt: DemoSignInAttempt): Promise<SignInResult> {
+    const listed = findDemoPerson(this.dependencies.demoSignIn, attempt.organisation.organisationCode, attempt.login);
+    if (!this.dependencies.demoSignIn.enabled || listed === undefined) return { kind: 'refused' };
+    const request: CommandRequest = {
+      commandName: DEMO_COMMAND,
+      organisation: attempt.organisation,
+      correlationId: attempt.correlationId,
+      actor: { kind: 'no-actor', path: 'sign-in' },
+    };
+    const looked = await this.dependencies.runner.read(request, (context) => this.look(context, attempt));
+    if (looked.kind === 'unavailable') return looked;
+    return this.dependencies.runner.run(request, async (context): Promise<SignInResult> => {
+      const signable = looked.signable;
+      if (signable === undefined || looked.userId === undefined) {
+        await this.recordAccess(context, attempt, looked, false, 'demo-sign-in');
+        return { kind: 'refused' };
+      }
+      const identifier = await startSession(context, looked.userId);
+      await this.recordAccess(context, attempt, looked, true, 'demo-sign-in');
+      return { kind: 'signed-in', outcome: outcomeOf(signable), sessionIdentifier: identifier };
+    });
+  }
+
+  private async look(context: TransactionContext, attempt: DemoSignInAttempt): Promise<Looked> {
     // Sign-in stays unavailable while any required security setting is not set, naming every one missing; nothing
     // falls back to a value (access-and-approvals 3.1; code-house-rules 12.14; PRD-SEC-017; DEC-118). The office
     // session limits too: with none set, no session can be kept, so none starts (3.3).
@@ -197,16 +218,43 @@ export class SignIn {
 
   private recordAccess(
     context: TransactionContext,
-    attempt: SignInAttempt,
+    attempt: DemoSignInAttempt,
     looked: Extract<Looked, { kind: 'looked' }>,
     succeeded: boolean,
+    kind: 'sign-in' | 'demo-sign-in' = 'sign-in',
   ): Promise<void> {
     return this.dependencies.audit.recordAccess(context, {
-      kind: 'sign-in',
+      kind,
       outcome: succeeded ? 'succeeded' : 'refused',
       // Only a login that matched a user names one; a typed login is never kept (numbering-and-audit 5.2).
       ...(looked.userId === undefined ? {} : { userId: looked.userId }),
       networkAddress: attempt.networkAddress,
     });
   }
+}
+
+/** Starts an office session for the user and answers its random identifier, for the cookie only (3.3). */
+async function startSession(context: TransactionContext, userId: string): Promise<string> {
+  const identifier = randomBytes(SESSION_IDENTIFIER_BYTES).toString('base64url');
+  await context.tx.insert(session).values({
+    id: uuidv7(),
+    appUserId: userId,
+    identifierHash: sessionIdentifierHash(identifier),
+    kind: 'office',
+    deviceId: null,
+    state: 'In force',
+    startedAt: context.startedAt,
+    lastActivityAt: context.startedAt,
+  });
+  return identifier;
+}
+
+/** What a sign-in that passed answers: the first step of first sign-in still to do, or signed in (3.2). */
+function outcomeOf(signable: CredentialState): SignInOutcome {
+  const [next] = pendingSteps(signable);
+  return next === 'enrolment'
+    ? { outcome: 'enrolment-required' }
+    : next === 'password-change'
+      ? { outcome: 'password-change-required' }
+      : { outcome: 'signed-in' };
 }

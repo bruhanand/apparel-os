@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
 import {
+  demoSignInListSchema,
+  demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
   enrolmentConfirmResponseSchema,
   enrolmentStartRequestSchema,
@@ -298,6 +300,29 @@ export const routes = {
       'access.sign-in-unavailable',
       'kernel.cross-site-request',
     ],
+  }),
+  // The test sign-in of the development environments (access-and-approvals 3.4; POL-02.17, PRD-ACS-017; DEC-121):
+  // the people listed, empty wherever it is off, and the sign-in itself, a public command like sign-in, with no key
+  // (code-house-rules 12.4), each attempt its own access record. It carries no secret.
+  demoSignInPeople: defineRoute({
+    method: 'GET',
+    path: '/api/access/demo-sign-in',
+    access: { kind: 'public' },
+    command: false,
+    response: demoSignInListSchema,
+    codes: [],
+  }),
+  demoSignIn: defineRoute({
+    method: 'POST',
+    path: '/api/access/demo-sign-in',
+    access: { kind: 'public' },
+    command: true,
+    body: demoSignInRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: signInOutcomeSchema,
+    codes: ['access.sign-in-refused', 'access.sign-in-unavailable', 'kernel.cross-site-request'],
   }),
   // The signed-in user (access-and-approvals 3.3). Refused, naming the steps left, until first sign-in is done.
   session: defineRoute({

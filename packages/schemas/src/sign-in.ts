@@ -44,6 +44,26 @@ export const signInOutcomeSchema = z.discriminatedUnion('outcome', [
 export type SignInOutcome = z.infer<typeof signInOutcomeSchema>;
 
 /**
+ * The test sign-in of the development environments (access-and-approvals 3.4; deployment.md section 3; POL-02.17,
+ * PRD-ACS-017; DEC-121): one button per SYNTHETIC person the server's AOS_DEMO_SIGN_IN lists, signing in without the
+ * password or the authenticator code. The list is empty, and the buttons hidden, wherever it is off.
+ */
+export const demoSignInPersonSchema = z.strictObject({
+  organisationCode: organisationCodeSchema,
+  login: loginSchema,
+  label: z.string().min(1),
+});
+export const demoSignInListSchema = z.strictObject({ people: z.array(demoSignInPersonSchema) });
+export type DemoSignInList = z.infer<typeof demoSignInListSchema>;
+
+/** A test sign-in names the person only: no password and no code travel (DEC-121). */
+export const demoSignInRequestSchema = z.strictObject({
+  organisationCode: organisationCodeSchema,
+  login: loginSchema,
+});
+export type DemoSignInRequestInput = z.input<typeof demoSignInRequestSchema>;
+
+/**
  * The signed-in user, for a session that has finished first sign-in (access-and-approvals 3.3). Identifiers, the
  * display name, the personas held and the grants only; none is a restricted field (access-and-approvals 6).
  */

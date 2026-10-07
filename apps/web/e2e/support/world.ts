@@ -52,6 +52,8 @@ export interface SyntheticWorld {
    * The security settings journey's Organisation, made by the setup step, with an enrolled Admin who may prepare a
    * setting change and an enrolled approver who may approve it (S1-F01-T25).
    */
+  /** The test sign-in journey's person, listed in AOS_DEMO_SIGN_IN (DEC-121). */
+  readonly demo: { readonly label: string; readonly displayName: string };
   readonly settings: {
     readonly organisationCode: string;
     readonly admin: EnrolledUser;

@@ -42,6 +42,9 @@ export { passwordRulesSchema, sessionLimitsSchema, settingOriginSchema, signInTh
 export type { PasswordRules, SessionLimits, SettingOrigin, SignInThrottling } from './settings.js';
 
 export {
+  demoSignInListSchema,
+  demoSignInPersonSchema,
+  demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
   enrolmentConfirmResponseSchema,
   enrolmentStartRequestSchema,
@@ -53,7 +56,14 @@ export {
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
-export type { SessionView, SignInOutcome, SignInRequestInput, UserCreateRequestInput } from './sign-in.js';
+export type {
+  DemoSignInList,
+  DemoSignInRequestInput,
+  SessionView,
+  SignInOutcome,
+  SignInRequestInput,
+  UserCreateRequestInput,
+} from './sign-in.js';
 
 export {
   credentialResetKindSchema,

@@ -154,7 +154,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 
 The access record logs sign-ins, permission changes and sensitive access (`PRD-SEC-007`):
 
-- sign-in attempts and their outcome; sign-out; a session locked, ended or revoked;
+- sign-in attempts and their outcome, a test sign-in of `local` and `dev` as its own kind, `demo-sign-in` ([access-and-approvals.md](../access/access-and-approvals.md) 3.4; DEC-121); sign-out; a session locked, ended or revoked;
 - enrolment and reset of the second factor; password changes and resets, including the platform operator's recovery of a first user's password or authenticator, with how the person's identity was verified ([access-and-approvals.md](../access/access-and-approvals.md) 3.2; DEC-116);
 - device registration and revocation;
 - permission changes, each pointing to its audit record ([access-and-approvals.md](../access/access-and-approvals.md) 9.11);

@@ -1,4 +1,4 @@
-import { routes, type ErrorBody, type Secret } from '@apparel-os/schemas';
+import { routes, type DemoSignInList, type ErrorBody, type Secret } from '@apparel-os/schemas';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FieldError } from 'react-hook-form';
 import { api } from '../api';
@@ -179,7 +179,82 @@ function SignInForm({ refusal, onNext }: { refusal: ErrorBody | undefined; onNex
         </FormField>
         <Button label="sign-in.submit" variant="primary" type="submit" disabled={isSubmitting} />
       </form>
+      <DemoSignIn
+        onNext={onNext}
+        onRefused={(refusal) => {
+          setOutcome({ refusal });
+        }}
+      />
     </Card>
+  );
+}
+
+/**
+ * The test sign-in, below the form (access-and-approvals 3.4; deployment.md section 3; POL-02.17, PRD-ACS-017;
+ * DEC-121): one button per SYNTHETIC person the server lists, signing in without the password or the code. The server
+ * lists nobody, and nothing shows, wherever it is off: on `local` and `dev` only.
+ */
+function DemoSignIn({
+  onNext,
+  onRefused,
+}: {
+  onNext: (stage: SignInStage) => void;
+  onRefused: (refusal: ErrorBody | null) => void;
+}) {
+  const [people, setPeople] = useState<DemoSignInList['people']>([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let current = true;
+    api.call('demoSignInPeople', {}).then(
+      (result) => {
+        if (current && result.ok) setPeople(result.data.people);
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (people.length === 0) return null;
+  const signInAs = async (person: DemoSignInList['people'][number]) => {
+    setBusy(true);
+    try {
+      const result = await api.call('demoSignIn', {
+        body: { organisationCode: person.organisationCode, login: person.login },
+      });
+      if (result.ok) {
+        onNext(stageAfterSignIn(result.data));
+        return;
+      }
+      onRefused(result.error);
+    } catch {
+      onRefused(null);
+    }
+    setBusy(false);
+  };
+  return (
+    <section aria-labelledby="demo-sign-in-title" className="flex flex-col gap-2 border-t border-border pt-4">
+      <h2 id="demo-sign-in-title" className="text-body font-semibold">
+        {t('demo-sign-in.title')}
+      </h2>
+      <p className="text-caption text-text-2">{t('demo-sign-in.intro')}</p>
+      <div className="flex flex-wrap gap-2">
+        {people.map((person) => (
+          <button
+            key={`${person.organisationCode}/${person.login}`}
+            type="button"
+            disabled={busy}
+            onClick={() => void signInAs(person)}
+            className={
+              'inline-flex h-9 items-center rounded-control border border-control bg-surface px-3 text-body ' +
+              'font-semibold text-text hover:bg-hover disabled:border-dashed disabled:bg-sunken disabled:text-text-3'
+            }
+          >
+            {person.label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

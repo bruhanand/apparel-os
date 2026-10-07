@@ -125,7 +125,7 @@ describe('defineRoute (code-house-rules 12.1, 12.2)', () => {
 
 // S1-F01-T08: sign-in, enrolment and the own password change (access-and-approvals 3.1, 3.2, 7.1).
 describe('the sign-in routes (access-and-approvals 3.1, 3.2; code-house-rules 12.1, 12.4)', () => {
-  it('PRD-SEC-001 serves sign-in as the one public command, with no idempotency key (12.4)', () => {
+  it('PRD-SEC-001 serves sign-in as a public command, with no idempotency key (12.4)', () => {
     expect(routes.signIn).toMatchObject({ method: 'POST', path: '/api/access/sign-in', access: { kind: 'public' } });
     expect(needsIdempotencyKey(routes.signIn)).toBe(false);
     expect(routes.signIn.secretFields).toEqual([
@@ -173,5 +173,21 @@ describe('the sign-in routes (access-and-approvals 3.1, 3.2; code-house-rules 12
         codes: [],
       }),
     ).toThrow();
+  });
+});
+
+// S1-F01-T28: the test sign-in of the development environments (access-and-approvals 3.4; DEC-121).
+describe('the test sign-in routes (POL-02.17, PRD-ACS-017; DEC-121)', () => {
+  it('POL-02.17 serves the list as a public read and the sign-in as a public command carrying no secret', () => {
+    expect(routes.demoSignInPeople).toMatchObject({ method: 'GET', path: '/api/access/demo-sign-in' });
+    expect(routes.demoSignIn).toMatchObject({ method: 'POST', path: '/api/access/demo-sign-in' });
+    expect(needsIdempotencyKey(routes.demoSignIn)).toBe(false);
+    expect(routes.demoSignIn.secretFields).toEqual([]);
+    expect(routes.demoSignIn.body.safeParse({ organisationCode: 'SYN-ORG-A', login: 'syn-admin-a' }).success).toBe(
+      true,
+    );
+    expect(
+      routes.demoSignIn.body.safeParse({ organisationCode: 'SYN-ORG-A', login: 'syn-admin-a', password: 'x' }).success,
+    ).toBe(false);
   });
 });
