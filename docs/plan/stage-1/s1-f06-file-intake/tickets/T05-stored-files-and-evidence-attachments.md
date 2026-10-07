@@ -1,7 +1,7 @@
 # S1-F06-T05 — Stored files and evidence attachments
 
-Status: blocked
-Blocked by: S1-F01-T07 (audit and access records); S1-F01-T11 (roles, assignments and scope, for who may read a file)
+Status: done
+Blocked by: S1-F01-T07 (done); S1-F01-T11 (done)
 Feature: [S1-F06 File intake and a synthetic master import](../../spec.md)
 
 ## Build
@@ -39,6 +39,8 @@ Evidence files are checked before they are stored (product owner, 6 Oct 2026, `D
 A renamed file of another type, a PDF with active content and a file just over a size limit are each refused with the reason named, and nothing is stored (`DEC-117`)
 
 ## Notes
+
+- Built 8 Oct 2026 on `s1/f06-file-intake`: `b133877` (stored files and evidence attachments), `9d5def4` (review fixes: the recorded scheme checked against an object already there, only HTTP 412 taken as already there, the large upload body read only for an open session, the receipt logged after commit). Size limit 10 MiB, builder-chosen under `DEC-117`, in GC-6 9.3. File storage stays unavailable until the six `AOS_FILE_STORE_*` variables are set; the `dev` bucket waits on RR-187. Tests use a Chainguard MinIO image pinned by digest. Open for the product owner: RR-432 (fresh authenticator code on a restricted download), RR-433 (original names readable without row-level security). Follow-up: RR-434 (PDF filters other than zlib, `S1-F06-T02`).
 
 - Built right after S1-F01 so that mapping verification (S1-F02-T02), policy signature and validation (S1-F04-T01), the CA's evidence for book settings, posting maps and tax rules (S1-F09-T01, S1-F09-T02, S1-F09-T04), signed agreements (S1-F03-T03), and exceptions and approval decisions (S1-F08-T03) attach real files from the start (product owner, 6 Oct 2026, DEC-116). S1-F06-T01 and S1-F08-T03 build on it; S1-F14-T02 backs its files up.
 - The safety refusals and caps of GC-6 9.3 (active content, uploaded and expanded size) are built in S1-F06-T02, later in the build order; they apply to evidence files too.
