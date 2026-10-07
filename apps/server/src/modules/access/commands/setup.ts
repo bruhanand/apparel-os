@@ -156,7 +156,8 @@ export async function writeSetup(
       appUserId: userId,
       displayName: user.displayName,
       state: 'Active',
-      validDuring: from,
+      // User versions are dated by instants (access-and-approvals 9.5; DEC-118): from the setup step's start.
+      validDuring: `[${context.startedAt.toISOString()},)`,
       decision: 'Approved',
     });
     if (user.personas.length > 0) {

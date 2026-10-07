@@ -56,7 +56,11 @@ export function syntheticKeysEnvironment(world: SyntheticWorld): Record<string, 
 
 /** Yesterday as a business date in the synthetic timezone: the start of every synthetic version. */
 function yesterday(): string {
-  return new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  return dayAgo().slice(0, 10);
+}
+
+function dayAgo(): string {
+  return new Date(Date.now() - 86_400_000).toISOString();
 }
 
 export interface SyntheticUser {
@@ -97,8 +101,9 @@ export async function writeSyntheticUser(
     await owner.query('insert into access.app_user (id, login, partner_id) values ($1, $2, null)', [id, login]);
     await owner.query(
       `insert into access.app_user_version (id, app_user_id, display_name, state, valid_during, decision)
-       values ($1, $2, $3, $4, daterange($5::date, null), $6)`,
-      [versionId, id, displayName, options.state ?? 'Active', yesterday(), options.decision ?? 'Approved'],
+       values ($1, $2, $3, $4, tstzrange($5::timestamptz, null), $6)`,
+      // User versions are dated by instants (access-and-approvals 9.5; DEC-118): from a day before now.
+      [versionId, id, displayName, options.state ?? 'Active', dayAgo(), options.decision ?? 'Approved'],
     );
     for (const [index, persona] of (options.personas ?? []).entries()) {
       await owner.query(

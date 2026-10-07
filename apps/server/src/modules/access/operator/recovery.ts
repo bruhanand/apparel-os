@@ -186,7 +186,7 @@ async function recoverIn(
     if (!meetsPasswordRules(rules.value, options.temporaryPassword)) throw new Refused('password-refused');
   }
 
-  const { changes } = await replaceCredentials(context, user.id, today.date, {
+  const { changes } = await replaceCredentials(context, user.id, {
     passwordHash,
     authenticator: options.reset !== 'password',
   });

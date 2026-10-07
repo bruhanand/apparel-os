@@ -10,7 +10,6 @@ import { readSetting } from '../queries/settings.js';
 import { findUser, findUserByLogin } from '../queries/users.js';
 import {
   lockUnlessHeld,
-  rangeOf,
   refusal,
   today,
   type Decider,
@@ -24,8 +23,9 @@ import { revokeSessions } from './sessions.js';
 
 // Users (access-and-approvals 2.1, 3.2, 9.11; DEC-112; S1-F01-T13; RR-300). Creating a user after the setup step,
 // and every change to a user's details, personas held or state, is a user version: Awaiting approval until an
-// authorised person other than its preparers decides it (POL-02.07). A user version takes effect on the day it is
-// approved: a disabling at once, revoking every session of the user in the decision's transaction (PRD-SEC-008).
+// authorised person other than its preparers decides it (POL-02.07). A user version takes effect at the instant it is
+// approved: a disabling at once, revoking every session of the user in the decision's transaction (PRD-SEC-008,
+// PRD-SEC-019; DEC-118). User versions are dated by instants, not business dates (9.5; S1-F01-T22).
 
 const USER_VERSION = lockTable('access', 'app_user_version');
 
@@ -158,15 +158,14 @@ export class UserChanges {
     userId: string,
     draft: UserVersionDraft,
   ): Promise<string> {
-    const date = await today(context);
     const versionId = uuidv7();
-    // The start is written again on the day it is approved, which is when it takes effect (2.1).
+    // The start is written again at the instant it is approved, which is when it takes effect (2.1, 9.5).
     await context.tx.insert(appUserVersion).values({
       id: versionId,
       appUserId: userId,
       displayName: draft.displayName,
       state: draft.state,
-      validDuring: rangeOf(typeof date === 'string' ? date : '-infinity', undefined),
+      validDuring: instantsFrom(context.startedAt),
       decision: 'Awaiting approval',
     });
     if (draft.personas.length > 0) {
@@ -222,12 +221,13 @@ export class UserChanges {
   }
 
   /**
-   * Makes an approved user version take effect today (access-and-approvals 2.1; module-map 6.2 flow A): locks it,
-   * rechecks it is Awaiting approval, ends the version in force on today and starts this one today. A disabled or
-   * ended user's sessions are all revoked in the same transaction (PRD-SEC-008); Authenticate refuses any user not
-   * Active from the next request (7.1 step 1). Every user change writes a permission-change access record (9.11;
-   * RR-214). Refused when the version in force started today, since versions are dated by day and a second cannot
-   * follow it until tomorrow (code-house-rules 7.3; RR-321).
+   * Makes an approved user version take effect at the decision's recording time (access-and-approvals 2.1, 9.5;
+   * module-map 6.2 flow A; PRD-SEC-019, DEC-118): locks it, rechecks it is Awaiting approval, ends the version in force
+   * at that instant and starts this one there, so a user approved earlier the same day can be disabled at once. A
+   * disabled or ended user's sessions are all revoked in the same transaction (PRD-SEC-008); Authenticate and sign-in
+   * refuse any user not Active from then (7.1 step 1). Every user change writes a permission-change access record
+   * (9.11; RR-214). Refused as stale when the version in force started after the decision's recording time: a decision
+   * that began earlier but locked the user later, which is tried again (code-house-rules 8.2).
    */
   async approveUserVersion(
     context: TransactionContext,
@@ -235,42 +235,36 @@ export class UserChanges {
     versionId: string,
     options: EffectOptions = {},
   ): Promise<Prepared<{ userId: string; revokedSessionIds: string[] }>> {
-    const date = await today(context);
-    if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     await this.lockUserVersion(context, options, versionId);
     const [version] = await context.tx.select().from(appUserVersion).where(eq(appUserVersion.id, versionId));
     if (version === undefined) return refusal('not-found', 'access.user-not-found');
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
-    const startedToday = await context.tx
-      .select({ id: appUserVersion.id })
-      .from(appUserVersion)
-      .where(
-        and(
-          eq(appUserVersion.appUserId, version.appUserId),
-          eq(appUserVersion.decision, 'Approved'),
-          sql`lower(${appUserVersion.validDuring}) >= ${date}::date`,
-        ),
-      );
-    if (startedToday.length > 0) return refusal('refused', 'access.version-overlaps');
+    const at = context.startedAt.toISOString();
     const [inForce] = await context.tx
-      .select({ id: appUserVersion.id, state: appUserVersion.state, displayName: appUserVersion.displayName })
+      .select({
+        id: appUserVersion.id,
+        state: appUserVersion.state,
+        displayName: appUserVersion.displayName,
+        startsLater: sql<boolean>`lower(${appUserVersion.validDuring}) >= ${at}::timestamptz`,
+      })
       .from(appUserVersion)
       .where(
         and(
           eq(appUserVersion.appUserId, version.appUserId),
           eq(appUserVersion.decision, 'Approved'),
-          sql`${appUserVersion.validDuring} @> ${date}::date`,
+          sql`upper_inf(${appUserVersion.validDuring})`,
         ),
       );
+    if (inForce?.startsLater === true) return refusal('conflict', 'kernel.stale-version');
     if (inForce !== undefined) {
       await context.tx
         .update(appUserVersion)
-        .set({ validDuring: sql`daterange(lower(${appUserVersion.validDuring}), ${date}::date)` })
+        .set({ validDuring: sql`tstzrange(lower(${appUserVersion.validDuring}), ${at}::timestamptz)` })
         .where(eq(appUserVersion.id, inForce.id));
     }
     await context.tx
       .update(appUserVersion)
-      .set({ decision: 'Approved', validDuring: rangeOf(date, undefined) })
+      .set({ decision: 'Approved', validDuring: instantsFrom(context.startedAt) })
       .where(eq(appUserVersion.id, versionId));
     const auditRecord = await this.audit.record(context, {
       ...auditActor(decider),
@@ -344,6 +338,11 @@ export class UserChanges {
     });
     return { kind: 'success', answer: { userId: version.appUserId, firstVersionRejected } };
   }
+}
+
+/** A half-open range of instants from the one given, with no end, in PostgreSQL's text form (code-house-rules 7.3). */
+function instantsFrom(start: Date): string {
+  return `[${start.toISOString()},)`;
 }
 
 function versionChanges(draft: UserVersionDraft): AuditChange[] {

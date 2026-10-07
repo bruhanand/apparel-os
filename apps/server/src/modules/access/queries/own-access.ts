@@ -24,7 +24,7 @@ export interface OwnAccess {
 export async function ownAccess(context: TransactionContext, userId: string): Promise<OwnAccess> {
   const today = await context.businessDate();
   if (today.kind === 'not-set') return { personasHeld: [], grants: [], roleAssignmentInForce: false, timezone: null };
-  const version = await userInForce(context, userId, today.date);
+  const version = await userInForce(context, userId);
   const personas =
     version === undefined
       ? []

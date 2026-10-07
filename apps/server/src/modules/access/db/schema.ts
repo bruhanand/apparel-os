@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the access module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0005 and 0006) and never create or change a table; an integration test compares each with
+// (migrations/organisation/0005, 0006 and later) and never create or change a table; an integration test compares each with
 // the migrated database. Never exported from the module's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -24,6 +24,11 @@ const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' 
 /** A half-open range of business dates, `[start, end)`, read and written as PostgreSQL's text form (7.3). */
 const daterange = customType<{ data: string; driverData: string }>({
   dataType: () => 'daterange',
+});
+
+/** A half-open range of instants, `[start, end)`, read and written as PostgreSQL's text form (7.3, 9; DEC-118). */
+const tstzrange = customType<{ data: string; driverData: string }>({
+  dataType: () => 'tstzrange',
 });
 
 /** A user (access-and-approvals 2.1). Never changed or deleted. */
@@ -40,7 +45,8 @@ export const appUserVersion = access.table('app_user_version', {
   appUserId: uuid('app_user_id').notNull(),
   displayName: text('display_name').notNull(),
   state: text('state').notNull(),
-  validDuring: daterange('valid_during').notNull(),
+  // Dated by instants, so a disabling takes effect at its decision (access-and-approvals 9.5; DEC-118).
+  validDuring: tstzrange('valid_during').notNull(),
   decision: text('decision').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
