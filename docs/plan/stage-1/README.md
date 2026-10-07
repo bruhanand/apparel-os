@@ -20,7 +20,7 @@ Updated 7 Oct 2026.
 
 | Feature | State |
 | --- | --- |
-| `S1-F01` Sign-in and access control | Built on the local branch `s1/f01-first-access` (not pushed, not merged), with the review fixes; every check and the three browser journeys pass locally. 13 tickets done; three wait: T09 (the lock screen's check by hand, RR-304) and T20 (acceptance evidence, RR-350) are ready for the product owner, and T14 is blocked on the Demo 0 deploy (RR-187). Four tickets added from the product owner's answers of 7 Oct 2026 (`DEC-118`): T22 to T24 ready, T25 blocked by T22 |
+| `S1-F01` Sign-in and access control | Built on the local branch `s1/f01-first-access` (not pushed, not merged), with both rounds of review fixes; every check and the five browser journeys pass locally. 17 tickets done, including T22 to T25 from the product owner's answers of 7 Oct 2026 (`DEC-118`), built and reviewed; three wait: T09 (the lock screen's check by hand, RR-304) and T20 (acceptance evidence, RR-350) are ready for the product owner, and T14 is blocked on the Demo 0 deploy (RR-187). New questions from T22 to T25: RR-370, RR-380, RR-390, RR-400 to RR-402 |
 | `S1-F11` Shared calculations | Server half done: 38 golden cases pass. The counter half can start: Playwright arrived with `S1-F01-T15`; the counter app's home, `apps/counter` at `/counter/`, was approved on 6 Oct 2026 (`DEC-116`) |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) starts right after `S1-F01`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC9-9 and GC9-10 approved; the rest of GC-9 is finished in `S1-F14-T01` (RR-010) |
@@ -100,7 +100,7 @@ flowchart LR
 
 | Feature | Starts when |
 | --- | --- |
-| `S1-F01` | Built; waits for acceptance (RR-350); T22 to T25 to build (`DEC-118`) |
+| `S1-F01` | Built, with T22 to T25 (`DEC-118`); waits for acceptance (RR-350) |
 | `S1-F06-T05` (stored files and evidence attachments) | `S1-F01` merged |
 | `S1-F11` | Started; the server half is built. The counter run can start (Playwright arrived with `S1-F01-T15`) |
 | `S1-F02` | `S1-F01` merged (kernel, access, audit and inbox settled) |
