@@ -1,0 +1,49 @@
+{
+  "pollSeconds": 5,
+  "consumers": {
+    "inbox.publish-approval": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
+    },
+    "inbox.close-approval": { "retries": 4, "retryDelaySeconds": 10, "retryBackoff": true, "activeLimitSeconds": 300 }
+  },
+  "jobKinds": {
+    "audit.seal-closed-block": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 900
+    },
+    "audit.check-seals": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 3600
+    },
+    "audit.check-partition-coverage": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 3600
+    },
+    "audit.ensure-partitions": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 3600
+    },
+    "access.rebuild-grants": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 3600
+    }
+  }
+}

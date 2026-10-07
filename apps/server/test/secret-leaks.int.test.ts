@@ -11,6 +11,7 @@ import {
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
   Worker,
+  type JobRegistry,
 } from '../src/kernel/index.js';
 import { approvalDecided, approvalRequested } from '../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
@@ -32,6 +33,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 
 // S1-F01-T20: the leak suite (spec section 7 "Secrets and restricted values never reach logs, errors, audit records or
 // live updates"; S1-F01-AT17; access-and-approvals 15 test 23, part; numbering-and-audit 7 test 11; PRD-SEC-006,
@@ -46,7 +48,12 @@ import { connect, databaseUrl } from './support/postgres.js';
 const SYNTHETIC_THROTTLING = { failureLimit: 50, windowSeconds: 600 };
 const SYNTHETIC_PASSWORD_RULES = { minimumLength: 12 };
 const SYNTHETIC_LIMITS = { idleLockSeconds: 600, absoluteSeconds: 7200 };
-const retry = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
+/** The inbox's consumers, with SYNTHETIC worker settings (DEC-118, DEC-119; CH-10). */
+const inboxRegistry: JobRegistry = {
+  events: [approvalRequested, approvalDecided],
+  consumers: inboxConsumers,
+  jobKinds: [],
+};
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 type Enrolled = SyntheticUser & { factorSecret: Buffer };
@@ -115,12 +122,8 @@ beforeAll(async () => {
     }),
     identities: jobIdentities(),
     logger: workerLog.logger,
-    registry: { events: [approvalRequested, approvalDecided], consumers: inboxConsumers, jobKinds: [] },
-    settings: {
-      pollSeconds: 0.5,
-      consumers: Object.fromEntries(inboxConsumers.map((consumer) => [consumer.name, retry])),
-      jobKinds: {},
-    },
+    registry: inboxRegistry,
+    settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
   });
   await worker.start();
 });
