@@ -1,7 +1,6 @@
 // The package's shape (shared-calculations 2.1, 2.3): two entry points, the selling one never reaching costing; only
 // @apparel-os/domain imported; no clock, randomness, environment or binary floating point in the calculations. This
-// proves at the source what the counter's bundle check proves on the bundle, which waits for the counter build host
-// (RR-015). The module check enforces the import rules on every change too (`pnpm check:modules`).
+// proves at the source what the counter's build guard proves on the bundle (apps/counter/build-guard.ts). The module check enforces the import rules on every change too (`pnpm check:modules`).
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';

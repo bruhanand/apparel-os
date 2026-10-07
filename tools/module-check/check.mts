@@ -19,6 +19,9 @@
 //   4. The shared calculations (shared-calculations.md 2.1, 2.3): a source file of packages/calculations/src, other
 //      than a test, imports only @apparel-os/domain and the package's own files; and nothing outside src/costing
 //      imports into it, so the selling entry point never reaches the costing entry point (PRD-OFF-004).
+//   5. The counter (offline-counter.md 5.1, 5.4): apps/counter imports no code of apps/server or apps/web; its src and
+//      golden folders import only @apparel-os/domain, @apparel-os/schemas, @apparel-os/ui and the selling entry point of
+//      @apparel-os/calculations (never ./costing), and no file outside the folder but the golden runner.
 //
 // Limit: imports are found by pattern, not by a parser. A regular expression literal that holds a quote
 // character can hide the imports that follow it.
@@ -475,6 +478,16 @@ function checkIsolation(): Finding[] {
       forbidden: join(ROOT, 'apps/server'),
       message: 'apps/web must not import from apps/server',
     },
+    {
+      dir: join(ROOT, 'apps/counter'),
+      forbidden: join(ROOT, 'apps/server'),
+      message: 'apps/counter must not import from apps/server',
+    },
+    {
+      dir: join(ROOT, 'apps/counter'),
+      forbidden: join(ROOT, 'apps/web'),
+      message: 'apps/counter must not import from apps/web',
+    },
   ];
   for (const scope of scopes) {
     for (const file of listCodeFiles(scope.dir)) {
@@ -526,9 +539,40 @@ function checkCalculations(): Finding[] {
   return findings;
 }
 
+// Rule 5 (the part rule 3 does not cover).
+function checkCounter(): Finding[] {
+  const findings: Finding[] = [];
+  const counter = join(ROOT, 'apps/counter');
+  const runner = join(ROOT, 'packages/calculations/test/golden-runner.ts');
+  const allowed = ['@apparel-os/domain', '@apparel-os/schemas', '@apparel-os/ui', '@apparel-os/calculations'];
+  for (const folder of ['src', 'golden']) {
+    for (const file of listCodeFiles(join(counter, folder))) {
+      for (const ref of findImports(readFileSync(file, 'utf8'))) {
+        const where = `${show(file)}:${String(ref.line)}`;
+        if (ref.specifier.startsWith('@apparel-os/') && !allowed.includes(ref.specifier)) {
+          findings.push({
+            where,
+            text: `apps/counter imports only the domain, schemas, ui and the selling entry point of calculations, not "${ref.specifier}" (offline-counter.md 5.1, 5.4)`,
+          });
+        }
+        if (ref.specifier.startsWith('.')) {
+          const target = resolve(dirname(file), ref.specifier).replace(/\.[cm]?[jt]sx?$/, '');
+          if (!isInside(counter, target) && target !== runner.replace(/\.ts$/, '')) {
+            findings.push({
+              where,
+              text: `"${ref.specifier}" points outside apps/counter; only the golden runner may (offline-counter.md 5.5)`,
+            });
+          }
+        }
+      }
+    }
+  }
+  return findings;
+}
+
 // ---- Run -------------------------------------------------------------------------------------------------
 
-const findings = [...checkTables(), ...checkServer(), ...checkIsolation(), ...checkCalculations()];
+const findings = [...checkTables(), ...checkServer(), ...checkIsolation(), ...checkCalculations(), ...checkCounter()];
 if (findings.length > 0) {
   console.log('\nModule boundaries');
   for (const finding of findings) console.log(`  ${finding.where} — ${finding.text}`);

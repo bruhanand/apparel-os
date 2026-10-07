@@ -28,7 +28,7 @@ Updated 7 Oct 2026.
 | `S1-F08` Number series and exceptions | Not started. Gains `S1-F08-T04` (live updates and the failed-jobs view), split from T02 (`DEC-116`) |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
-Next: the counter run of `S1-F11` (`S1-F11-T10`), then stored files (`S1-F06-T05`) and stock ledger part 1 (`S1-F10`); the build order is in the [stage spec](spec.md).
+Next: review and acceptance of the counter run of `S1-F11` (`S1-F11-T10`, built), then stored files (`S1-F06-T05`) and stock ledger part 1 (`S1-F10`); the build order is in the [stage spec](spec.md).
 
 ## 3. Scope
 
@@ -171,7 +171,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | --- | --- | --- |
 | [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | done | — |
 | [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | — (acceptance evidence, RR-350) |
-| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | blocked | F01-T15 |
+| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | in-progress | F01-T15 (done) |
 | [F06-T05 Stored files and evidence attachments](s1-f06-file-intake/tickets/T05-stored-files-and-evidence-attachments.md) | blocked | F01-T07, F01-T11 |
 | [F10-T01 Stock tables, constraints and row security](s1-f10-stock-ledger/tickets/T01-ledger-tables-and-constraints.md) | blocked | F01-T11 |
 | [F10-T02 Quantity operations](s1-f10-stock-ledger/tickets/T02-ledger-operations-of-the-story.md) | blocked | F01-T13, F10-T01 |

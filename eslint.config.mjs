@@ -11,6 +11,7 @@ export default defineConfig(
     '**/dist-browser/**',
     '**/test-results/**',
     '**/playwright-report/**',
+    '**/.build-report/**',
     '**/node_modules/**',
     '**/.turbo/**',
     '**/coverage/**',

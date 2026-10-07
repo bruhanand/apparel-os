@@ -1,8 +1,8 @@
 // The server run of the shared golden cases (shared-calculations 12.2; PRD-ACP-018, PRD-MOD-007, PRD-SEC-016):
 // Vitest in Node loads every case file of golden/ and runs it through the package's two entry points, imported by
 // package name as the server imports them (built first: this package's turbo.json). A pending case
-// is reported as skipped with its reason, never as passed. The counter run of the same files waits for the counter
-// build host (RR-015) and Playwright (S1-F01-T19).
+// is reported as skipped with its reason, never as passed. The counter run of the same files is `apps/counter/e2e/golden.spec.ts`
+// (S1-F11-T10).
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

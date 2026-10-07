@@ -45,7 +45,7 @@ Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs 
 | --- | --- | --- |
 | RR-042: which lines earn a group discount (GC7-11) | Accept: any golden case whose result depends on it | No case of 12.4 depends on it (section 9); the calculation refuses where the readings differ |
 | RR-015: which workspace package hosts the counter PWA and its test page | Code: `S1-F11-T10` | Approved by the product owner on 6 Oct 2026: `apps/counter` ([offline-counter.md](../../../design/pos/offline-counter.md)), served at `/counter/`, with its browser tests in `apps/counter/e2e/` |
-| Playwright in the workspace and CI | Code: `S1-F11-T10` | Arrives with `S1-F01-T15` |
+| Playwright in the workspace and CI | Code: `S1-F11-T10` | Arrived with `S1-F01-T15`; the counter run is in CI (T10) |
 | RR-136 to RR-145: the real values of GC7-1 to GC7-10 | Live S4 | Not needed to build or test; synthetic rules stand in, labelled |
 
 ## 6. Tickets
@@ -63,7 +63,7 @@ One file per task in [tickets/](tickets/).
 | [S1-F11-T07 Golden-case format and server run](tickets/T07-golden-case-format-and-server-run.md) | done | — |
 | [S1-F11-T08 Other tests of 12.5](tickets/T08-other-tests-of-12-5.md) | done | — |
 | [S1-F11-T09 Entry points at the source](tickets/T09-entry-points-at-the-source.md) | done | — |
-| [S1-F11-T10 Counter test page, counter run and bundle exclusion](tickets/T10-counter-test-page-and-counter-run.md) | blocked | S1-F01-T15 (Playwright); T07 (done) |
+| [S1-F11-T10 Counter test page, counter run and bundle exclusion](tickets/T10-counter-test-page-and-counter-run.md) | in-progress | S1-F01-T15 (done); T07 (done) |
 | [S1-F11-T11 Bundle exclusion on the counter bundle](tickets/T11-bundle-exclusion-on-the-counter-bundle.md) | merged → T10 | — |
 | [S1-F11-T12 Review and acceptance](tickets/T12-review-and-acceptance.md) | merged → T10 | — |
 
@@ -79,12 +79,12 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 | `S1-F11-AT03` | The return, exchange and split-refund cases | 12.4 CG-16 to CG-19c | `PRD-RET-005` to `PRD-RET-008`, `PRD-RET-022`, `PRD-RET-024`, `PRD-ACP-008` |
 | `S1-F11-AT04` | Rounding mechanics: the four modes, the bill round-off, a missing rule | 12.4 CG-20a to CG-20c | `PRD-MOD-014`, `PRD-MOD-015`, `PRD-SEC-017` |
 | `S1-F11-AT05` | Costing and margin, server only | 12.4 CG-21, CG-21b, CG-22 | `POL-03.06`, `POL-03.08`, `PRD-PTW-010`, `PRD-PTW-011` |
-| `S1-F11-AT06` | The same case files on the counter build in Chromium give identical results (blocked, T10) | 12.2 | `PRD-ACP-018`, `PRD-MOD-007` |
+| `S1-F11-AT06` | The same case files on the counter build in Chromium give identical results (built in T10; acceptance open) | 12.2 | `PRD-ACP-018`, `PRD-MOD-007` |
 | `S1-F11-AT07` | Spread shares add up to the discount; tender lines add up to the amount due; refunds of all units add up to the paid value; split refunds add up and respect caps; no line below zero; every number in a result is whole paise | 12.5 property tests | `PRD-MOD-014`, `PRD-ACP-010`, `PRD-POS-023`, `PRD-RET-022`, `PRD-RET-024` |
 | `S1-F11-AT08` | The same lines in another order give the same amounts | 12.5 order | `PRD-POS-004` |
 | `S1-F11-AT09` | A bill priced again with its recorded versions gives the same result | 12.5 snapshot | `PRD-POS-014`, `PRD-OFF-009` |
 | `S1-F11-AT10` | Selling never reaches costing; the package imports only `@apparel-os/domain`; no clock, randomness, environment or floating-point helper; module check rule 4 fails on a selling import of costing or another package and passes otherwise | 2.1, 2.3 | `PRD-OFF-004`, `PRD-MOD-002`, `PRD-MOD-007` |
-| `S1-F11-AT11` | The counter bundle holds no costing entry point (blocked, T10) | 2.3 | `PRD-OFF-004` |
+| `S1-F11-AT11` | The counter bundle holds no costing entry point (built in T10: build guard, its test, the module list checked in the counter run; acceptance open) | 2.3 | `PRD-OFF-004` |
 | `S1-F11-AT12` | Where an open question would change an amount the calculation refuses with `not-decided` naming it: a rate the discount rounding rule takes past the line's value (GC7-5); combined offers without one order, or taking a line below zero on the start value (GC7-9); units left over after complete sets (GC7-11); bill-level tax rounding (GC7-12); a rounded replacement bill (GC7-13); a free unit worth part of a paise (GC7-14); a negative MARGIN needing rounding (GC7-15); a spread remainder above a line's value (GC7-16). A pending case is reported as pending, never as passed; a changed paise or version fails a case | 5.4 to 5.8, 5.10, 7.2, 8; 12.1 | `PRD-ACP-018`, `POL-19.04`, `PRD-POS-023`, `PRD-TAX-005`, `PRD-RET-008`, `PRD-PTW-011`; RR-042 |
 | `S1-F11-AT13` | Refusals beyond the cases: several lines at once, no price basis or registration, manual discounts by amount and rate and on an offer line, combined offers on the start value, offers out of place or date, a registration that charges no tax, slabs compared before discounts or with tax | 5.2 to 5.10 | `PRD-POS-003`, `PRD-MOD-015`, `PRD-SEC-017`, `PRD-OFR-002`, `POL-10.02` |
 
@@ -123,7 +123,6 @@ Other points: the server suite imports the package by name, so the package's `tu
 
 | Requirement or part | Goes to |
 | --- | --- |
-| The counter run and the bundle check (T10) | When Playwright arrives with `S1-F01-T15` |
 | Tax-rule tables, migrations and "Read tax rules" (10.3, 10.2) | `S1-F09` |
 | Zod schemas for priced bills and working sets (2.1) | The first API that carries them, `S4-F02` |
 | The performance test that sets how many overlapping offers the counter must handle (5.4, `PRD-PRF-003`) | `S4-F02`, `S4-F04` |

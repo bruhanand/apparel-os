@@ -1,0 +1,26 @@
+{
+  "name": "@apparel-os/counter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The offline counter app (offline-counter.md 5.1): so far the build, its guard against the costing entry point, and the golden-case test page",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+  },
+  "dependencies": {
+    "@apparel-os/calculations": "workspace:*",
+    "@apparel-os/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "catalog:",
+    "vite": "^8.3.2",
+    "vitest": "catalog:"
+  }
+}

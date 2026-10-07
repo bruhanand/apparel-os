@@ -6,6 +6,7 @@ dist-seed
 dist-browser
 test-results
 playwright-report
+.build-report
 .turbo
 .*/
 !.github/
