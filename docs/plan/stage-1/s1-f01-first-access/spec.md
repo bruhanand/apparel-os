@@ -173,7 +173,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | done | T06 (done), T08 (done) |
 | [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
 | [S1-F01-T13 Approvals and My work](tickets/T13-approval-rules-reasons-and-decisions.md) | done | — |
-| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | blocked | RR-187 (Demo 0 on Railway `dev` waits for the product owner's authorisation); everything else is built |
+| [S1-F01-T14 Web shell](tickets/T14-web-shell.md) | done | Demo 0 on Railway `dev` done 7 Oct 2026 (RR-187) |
 | [S1-F01-T15 Sign-in in the browser](tickets/T15-sign-in-screens.md) | done | T08, T14 |
 | [S1-F01-T16 Access setup screens and the approval panel](tickets/T16-access-setup-screens.md) | done | T13, T15 |
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |

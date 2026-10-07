@@ -1,6 +1,6 @@
 # Runbook: database roles and the directory database on Railway
 
-Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Steps 1 to 6 were run on `dev` on 7 Oct 2026, with the product owner's authorisation; see "Done on `dev`" below. Step 7's first run and step 8 wait for the first deploy, which the merge of `s1/f01-first-access` into `main` makes. Nothing has been run on `kdps-test`, which does not exist yet.
+Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Steps 1 to 8 were run on `dev` on 7 Oct 2026, with the product owner's authorisation: 1 to 6 before the first deploy, 7 and 8 at the merge of `s1/f01-first-access` into `main`; see "Done on `dev`" below. Nothing has been run on `kdps-test`, which does not exist yet.
 
 ## What it sets up
 
@@ -32,7 +32,7 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 
 ## Done on `dev` (7 Oct 2026)
 
-Authorised by the product owner on 7 Oct 2026. No application code was deployed and no GitHub source is connected.
+Authorised by the product owner on 7 Oct 2026. The list below is the state before the first deploy; what the merge into `main` did follows it, under "At the merge".
 
 - **Project** `apparel-os`, one environment `dev` (Railway's default environment, renamed). No `kdps-test`.
 - **Region:** Asia Southeast (Singapore, `asia-southeast1-eqsg3a`) for every service and the database volume; the bucket in `sin` (deployment.md section 8).
@@ -44,6 +44,19 @@ Authorised by the product owner on 7 Oct 2026. No application code was deployed 
 - **Connection budget (step 6):** directory plus two Organisation pools, 5 each, for one `app` and one `worker` is 30, plus the migration and operator connections, against 500. It fits.
 
 ### At the merge of `s1/f01-first-access` into `main`
+
+Done on 7 Oct 2026, after the product owner approved the merge and the deploy to `dev` (`main` at `86f08ce`):
+
+- **Source.** The GitHub repository `bruhanand/apparel-os`, branch `main`, connected to `app` and to `worker` with the Railway CLI (`railway service source connect`); each has a deploy trigger on `main` (automatic deploys). No GitHub app step or terms were asked for. Railpack built both with `pnpm build` in about a minute.
+- **`app`.** The pre-deploy `pnpm migrate` applied `0001__kernel__migration_record.sql` and `0002__kernel__directory_entry.sql` to the directory database and printed `Migrated the directory database and 0 Organisation database(s): none listed`. The health check passed; `GET /api/health` on the public domain answers `200 {"status":"ok"}`. `/` and a deep link such as `/sign-in` serve the web app; its bundle was built with `AOS_ENVIRONMENT` `dev`, so the banner reads `dev · SYNTHETIC data only`. `GET /api/access/session` without a session answers `401`.
+- **Seed and setup.** `pnpm seed` from `railway ssh --service app`, with `AOS_SEED_FIRST_USERS_FILE` naming a `SYNTHETIC-*.secrets.json` file in the container's `/tmp`. It ran the setup step for both synthetic Organisations: `SYN-ORG-A` in `syn_org_a` and `SYN-ORG-B` in `syn_org_b`, each `created` with its own first Admin (`syn-admin-a`, `syn-admin-b`) and first approver (`syn-approver-a`, `syn-approver-b`) and the seed's labelled SYNTHETIC settings. The seed runs the setup step itself, so `setup-organisation` was not run separately. The temporary passwords were copied to the product owner's machine, in a git-ignored `SYNTHETIC-dev-first-users.secrets.json` at the repository root, readable by its owner only, and the container's copy was deleted. Each must be changed at first sign-in.
+- **Second migrate.** A `pnpm migrate` by hand afterwards printed only `Migrated the directory database and 2 Organisation database(s): SYN-ORG-A, SYN-ORG-B`.
+- **`worker`.** Its log shows `The worker is running`, then, within two minutes of the seed and with no restart, its job steps (`audit.ensure-partitions`, `audit.check-seals`, `audit.check-partition-coverage`, `audit.seal-closed-block`, `access.rebuild-grants`) ending `done` for both `SYN-ORG-A` and `SYN-ORG-B`.
+- **Role limits (step 8).** As `aos_runtime`, in `aos_directory`, `syn_org_a` and `syn_org_b`: `lock_timeout` `1s`, `statement_timeout` `5s`, not a superuser. No log line of `app` or `worker` reports a timeout. Measuring them under real use (RR-200) waits for Demo 1's traffic.
+- **Not yet checked.** `AOS_TRUSTED_PROXY_HOPS` (`1`) against the address in the access record of a real sign-in (RR-254): it needs a sign-in, which Demo 1 makes.
+
+The steps as planned:
+
 
 1. Connect the GitHub repository to `app` and to `worker`, branch `main`, with automatic deploys on. Connecting it deploys both.
 2. Watch the `app` deploy: the pre-deploy `pnpm migrate` prints `Migrated the directory database and 0 Organisation database(s): none listed` (step 8). A failure stops the deploy.

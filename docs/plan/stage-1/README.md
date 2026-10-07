@@ -20,7 +20,7 @@ Updated 7 Oct 2026.
 
 | Feature | State |
 | --- | --- |
-| `S1-F01` Sign-in and access control | Built on the branch `s1/f01-first-access`, pushed to GitHub for CI but not merged, with both rounds of review fixes; every check and the six browser journeys pass locally. 20 tickets done, including T22 to T25 (`DEC-118`) and T26 and T27 from 7 Oct 2026: the starting roles can prepare and approve security settings changes, and assignment dates are checked at every request (T26, `DEC-120`); the server serves the screens at one address (T27). The Railway `dev` project `apparel-os` is set up with no code deployed. CI is green on the pushed branch (run 37603828723) and the product owner approved the screens on 7 Oct 2026 (T09 done). Left: the go-ahead to merge, which deploys to `dev`. T20 (acceptance evidence, RR-350) and T14 (the Demo 0 deploy, RR-187) follow it. Open questions: RR-380, RR-401, RR-420 |
+| `S1-F01` Sign-in and access control | Built on the branch `s1/f01-first-access` with both rounds of review fixes, merged into `main` and deployed to Railway `dev` on 7 Oct 2026; every check and the six browser journeys pass locally. 21 tickets done, including T22 to T25 (`DEC-118`) and T26 and T27 from 7 Oct 2026: the starting roles can prepare and approve security settings changes, and assignment dates are checked at every request (T26, `DEC-120`); the server serves the screens at one address (T27). The Railway `dev` project `apparel-os` runs `main` with automatic deploys; the two synthetic Organisations are set up there (RR-187; T14's Demo 0 done). CI is green on the pushed branch (run 37603828723) and the product owner approved the screens on 7 Oct 2026 (T09 done). Left: T20 (Demo 1 and acceptance, RR-350). Open questions: RR-380, RR-401, RR-420 |
 | `S1-F11` Shared calculations | Server half done: 38 golden cases pass. The counter half can start: Playwright arrived with `S1-F01-T15`; the counter app's home, `apps/counter` at `/counter/`, was approved on 6 Oct 2026 (`DEC-116`) |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) starts right after `S1-F01`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC9-9 and GC9-10 approved; the rest of GC-9 is finished in `S1-F14-T01` (RR-010) |
@@ -169,7 +169,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 
 | Ticket | Status | Blocked by |
 | --- | --- | --- |
-| [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | blocked | — (the Demo 0 deploy, RR-187) |
+| [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | done | — |
 | [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | — (acceptance evidence, RR-350) |
 | [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | blocked | F01-T15 |
 | [F06-T05 Stored files and evidence attachments](s1-f06-file-intake/tickets/T05-stored-files-and-evidence-attachments.md) | blocked | F01-T07, F01-T11 |

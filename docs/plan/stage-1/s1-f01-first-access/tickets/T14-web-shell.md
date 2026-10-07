@@ -1,7 +1,7 @@
 # S1-F01-T14 — Web shell
 
-Status: blocked
-Blocked by: RR-187 (Demo 0 on Railway `dev` waits for the product owner's authorisation); everything else is built
+Status: done
+Blocked by: none
 Feature: [S1-F01 First access](../spec.md)
 
 ## Build
@@ -26,5 +26,5 @@ Router, data layer, forms with Zod, components themed from the reviewed design-l
 - RR-030: proposed state names in design-language 7.
 - Built 7 Oct 2026 on branch `s1/f01-t14` (commit named in the merge): `apps/web` shell with TanStack Router and Query, React Hook Form with Zod (`useRouteForm`, `FormField`), tokens of design-language 2 to 5 and 7 in `index.css`, the components `Button`, `StatusBadge`, `Banner`, the empty, loading, error and unavailable states, the back-office `AppShell` with the environment banner, persona chips and theme switch, the lock overlay with `keptInput` (drops declared secret and restricted fields), and the catalogue `messages/en-IN.ts` with tests for every refusal code, every design-language 7 state and every identifier the code names. Landing rule in `shell/landing.ts`.
 - RR-193 done: `AOS_ENVIRONMENT`, read at build (deployment.md section 1). The error reference's display form is settled in code-house-rules 12.3.
-- Not done: Demo 0 on Railway `dev` (not authorised; built and checked locally only). Follow-ups RR-260 to RR-264.
+- Demo 0 done 7 Oct 2026: `main` (`86f08ce`) deployed to Railway `dev`, the pre-deploy `pnpm migrate` ran, and `https://app-dev-53bf.up.railway.app/` serves the web shell with the banner `dev · SYNTHETIC data only` (runbook "At the merge"; RR-187). Follow-ups RR-260 to RR-264.
 
