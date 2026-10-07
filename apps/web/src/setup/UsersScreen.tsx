@@ -17,7 +17,7 @@ import { t } from '../messages/catalogue';
 import { PersonaChip } from '../shell/AppShell';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
 
@@ -60,6 +60,7 @@ function NewUserForm() {
   const errors = form.formState.errors;
   return (
     <form
+      id="user-new-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -108,14 +109,7 @@ function NewUserForm() {
           {...form.register('temporaryPassword')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="user-new-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
@@ -134,6 +128,7 @@ function UserVersionForm({ user }: { user: UserRecord }) {
   const errors = form.formState.errors;
   return (
     <form
+      id="user-version-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -171,14 +166,7 @@ function UserVersionForm({ user }: { user: UserRecord }) {
           ))}
         </select>
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="user-version-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }

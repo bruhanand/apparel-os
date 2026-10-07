@@ -10,7 +10,13 @@ type ThemeChoice = (typeof choices)[number];
  * choice is saved to the user once My profile › Theme has its setting (RR-263); until then it lasts for the page.
  */
 export function ThemeSwitch() {
-  const [choice, setChoice] = useState<ThemeChoice>('system');
+  // Starts from what the page shows, since the switch sits in the top bar from 640 px up and in the left drawer below
+  // it, and mounts afresh each time the drawer opens (S1-F01-T32).
+  const [choice, setChoice] = useState<ThemeChoice>(() =>
+    typeof document === 'undefined'
+      ? 'system'
+      : (choices.find((value) => value === document.documentElement.dataset.theme) ?? 'system'),
+  );
   return (
     <label className="flex items-center gap-2 text-body-sm">
       <span className="sr-only">{t('theme.label')}</span>

@@ -207,6 +207,7 @@ Rules:
 - The same web routes in a phone browser. The separate phone client in the PRD stack is parked and not yet in a stage.
 - Glass top bar with menu (44 px), logo slot and My work.
 - The sidebar becomes a glass drawer from the left: 300 px wide, scope chip at the top, 44 px rows, profile at the bottom.
+  - **As built** (S1-F01-T32): below 640 px the top bar holds only the menu, the logo slot and My work; the theme switch, the person's name and the profile menu are hidden there, and the open drawer ends with the profile (name, personas held, theme, Sign out). From 640 px up the top bar holds them as on desktop. **Design choice.**
 - **Scan to receive:**
   - Scan field: handheld or Bluetooth scanner (PRD Hardware). Camera scanning is built for phones in the browser, for lookup, receiving and counts, and is switched off by default (`DEC-105`).
   - Condition segmented control: Good · Damaged · Wrong · Unidentified (48 px). It stays selected until changed.
@@ -675,6 +676,7 @@ Each entry covers anatomy, states and usage rules.
   - Scrolling body of **solid** cards and fields.
   - Footer: secondary + one primary.
 - **Widths:** 420 px (640 px for a PT preview); full screen on mobile.
+- **Form actions, as built** (S1-F01-T33): a form inside the drawer draws its actions into the footer, outside the scrolling body: Cancel (closes the drawer) and the one primary button, which submits the form by its `form` attribute. The decision form of the approval panel is the exception: Approve and Reject stay in the panel beside what the approver reads (1 rule 5). **Design choice.**
 - **Behaviour:**
   - Esc closes, and focus returns to the opener.
   - Opening never loses the list position.

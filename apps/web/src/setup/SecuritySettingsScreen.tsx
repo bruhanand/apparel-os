@@ -16,7 +16,7 @@ import { useTimeZone } from '../shell/session';
 import { businessDayAfter, useBusinessToday } from './business-date';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Toolbar } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 
 // Setup › Security settings (design-language 10.19; access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118,
@@ -72,10 +72,21 @@ function whenText(version: Version, timeZone: string): string {
 function ChangeForm({ view }: { view: SettingView }) {
   const today = useBusinessToday();
   const inForce = view.versions.find((version) => version.id === view.inForceVersionId);
-  const form = useRouteForm(routes.prepareSecuritySettingVersion, {
-    setting: view.setting,
-    ...(inForce === undefined ? {} : { value: inForce.value }),
-  } as never);
+  // The server refuses a setting that starts today or before (`access.starts-in-past`), so its earliest day is the next.
+  const form = useRouteForm(
+    routes.prepareSecuritySettingVersion,
+    {
+      setting: view.setting,
+      ...(inForce === undefined ? {} : { value: inForce.value }),
+    } as never,
+    [
+      {
+        path: 'takesEffect.date',
+        earliest: businessDayAfter(today),
+        when: (values) => (values as { takesEffect?: { kind?: string } }).takesEffect?.kind === 'from-date',
+      },
+    ],
+  );
   const submission = useSubmission('prepareSecuritySettingVersion', LIST_READS);
   const errors = form.formState.errors as Record<string, unknown>;
   const valueErrors = (errors.value ?? {}) as Record<string, { type?: string } | undefined>;
@@ -84,6 +95,7 @@ function ChangeForm({ view }: { view: SettingView }) {
   const id = (field: string) => `security-${view.setting.replace('access.', '')}-${field}`;
   return (
     <form
+      id="security-change-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -145,18 +157,12 @@ function ChangeForm({ view }: { view: SettingView }) {
             min={businessDayAfter(today)}
             className={inputClass}
             {...describedBy(id('date'), { invalid: takesEffectErrors.date !== undefined, help: false })}
-            {...form.register('takesEffect.date' as Path<never>)}
+            // The date goes, with its error, when the setting no longer takes effect from a date: the route refuses a date beside "when approved".
+            {...form.register('takesEffect.date' as Path<never>, { shouldUnregister: true })}
           />
         </FormField>
       )}
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="security-change-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }

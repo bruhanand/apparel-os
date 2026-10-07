@@ -1,6 +1,6 @@
 # S1-F01-T32 — Phone-width top bar as designed
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
@@ -18,3 +18,4 @@ Feature: [S1-F01 First access](../spec.md)
 
 - Found in the hands-on test, [test-report.md](../test-report.md) F5.
 - The design already decided this; the code did not follow it.
+- Built: below 640 px (Tailwind `sm`, the phone width the drawer already uses) the top bar holds the menu (44 px), the logo slot and My work; the theme switch, name and profile menu are hidden there and the open left drawer ends with the profile (name, personas held, theme, Sign out). The profile renders once at a time, so the browser journeys find one "Profile". Component test in `apps/web/src/shell/shell.test.tsx`; the 375 px check is a browser journey step.

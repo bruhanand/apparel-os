@@ -12,6 +12,7 @@ import {
 import type { z } from 'zod';
 import { keptInput, type DeclaredFields } from '../lock/kept-input';
 import { useSession } from '../shell/session';
+import { withStartDateChecks, type StartDateCheck } from './start-date';
 
 /**
  * The resolver of a command route's form: it checks the input with the route's body schema, and hands on the input
@@ -28,7 +29,8 @@ export function routeResolver<Body extends z.ZodType<unknown, FieldValues>>(rout
 /**
  * A form for one command route (PRD Stack: Web, React Hook Form and Zod; code-house-rules 12.2): validated with the
  * route's body schema on blur and on submit (design-language 10.7), starting from `defaultValues` when given, such as
- * the version a change starts from. Its values are the body's input, as typed, which
+ * the version a change starts from. `startDates` names the form's start-date fields: a start before the earliest
+ * day allowed fails with `access.starts-in-past` beside the route's own findings (S1-F01-T34). Its values are the body's input, as typed, which
  * is what the typed client sends (routeResolver). When the session locks, the form keeps its unsaved
  * input but clears every field the route declares secret or restricted (access-and-approvals 3.3; PRD-SEC-006), so
  * the person enters those again after unlocking.
@@ -36,10 +38,11 @@ export function routeResolver<Body extends z.ZodType<unknown, FieldValues>>(rout
 export function useRouteForm<Body extends z.ZodType<unknown, FieldValues>>(
   route: DeclaredFields & { body: Body },
   defaultValues?: DefaultValues<z.input<Body>>,
+  startDates: readonly StartDateCheck<z.input<Body>>[] = [],
 ): UseFormReturn<z.input<Body>> {
   type Values = z.input<Body>;
   const form = useForm<Values>({
-    resolver: routeResolver(route),
+    resolver: startDates.length === 0 ? routeResolver(route) : withStartDateChecks(routeResolver(route), startDates),
     mode: 'onBlur',
     ...(defaultValues === undefined ? {} : { defaultValues }),
   });

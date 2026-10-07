@@ -8,9 +8,9 @@ import { SessionContext, type ShellSession } from '../shell/session';
 import { AssignmentScopeFields, AssignmentsScreen, scopeOfChoices } from './AssignmentsScreen';
 import { formatDate, formatPaise } from './format';
 import { permissionGrid, permissionsOfGrid, withAllActions } from './permission-grid';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { ReasonsScreen } from './ReasonsScreen';
-import { RolesScreen } from './RolesScreen';
+import { NewRoleForm, RolesScreen } from './RolesScreen';
 import { SecuritySettingsScreen } from './SecuritySettingsScreen';
 import { UsersScreen } from './UsersScreen';
 
@@ -280,6 +280,49 @@ describe('the record drawer (design-language 10.15; RR-312)', () => {
     expect(text(html)).toContain('Details');
     expect(text(html)).toContain('History');
     expect(html).toContain('aria-label="Close"');
+  });
+});
+
+// S1-F01-T33 (design-language 1 rule 6, 10.15; test report F7). A static render draws no portal, and the footer of a
+// drawer is filled by one once the page has mounted it, so what is checked here is where each part lives; the browser
+// journeys check that the buttons show in the footer without scrolling and still send the form.
+describe('form actions in the drawer footer (S1-F01-T33; design-language 10.15)', () => {
+  const roleDrawer = () =>
+    render(
+      <RecordDrawer title="New role" onClose={() => undefined} details={<NewRoleForm roles={[]} />} />,
+      [create('access.role')],
+      () => undefined,
+    );
+  const panel = (html: string) => /<div id="drawer-panel"[^>]*>(.*)<footer/s.exec(html)?.[1] ?? '';
+  const footer = (html: string) => /<footer[^>]*data-testid="drawer-footer"[^>]*>(.*?)<\/footer>/s.exec(html)?.[1];
+
+  it('has a footer after the scrolling body, outside it, that is hidden while it is empty', () => {
+    const html = roleDrawer();
+    expect(html.indexOf('id="drawer-panel"')).toBeLessThan(html.indexOf('data-testid="drawer-footer"'));
+    expect(footer(html)).toBe('');
+    expect(html).toMatch(/<footer[^>]*class="[^"]*empty:hidden/);
+    expect(panel(html)).not.toContain('data-testid="drawer-footer"');
+  });
+
+  it('leaves the role form with no submit button of its own: Request approval is the footer’s, tied to the form by id', () => {
+    const html = roleDrawer();
+    const form = /<form[^>]*id="role-new-form"[^>]*>(.*?)<\/form>/s.exec(html)?.[1];
+    expect(form).toBeDefined();
+    expect(form).not.toContain('type="submit"');
+    expect(text(form ?? '')).not.toContain('Request approval');
+  });
+
+  it('shows the actions in the form itself where there is no drawer, so the form still sends', () => {
+    const html = renderToStaticMarkup(<FormActions form="role-new-form" pending={false} />);
+    expect(html).toContain('type="submit"');
+    expect(html).toContain('form="role-new-form"');
+    expect(text(html)).toBe('Request approval');
+  });
+
+  it('disables the primary button while the request is pending', () => {
+    expect(renderToStaticMarkup(<FormActions form="f" pending />)).toMatch(
+      /<button[^>]*disabled=""[^>]*>Request approval/,
+    );
   });
 });
 

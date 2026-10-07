@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react';
 import { isMessageId, t, type MessageId } from '../messages/catalogue';
 
-/** The catalogue message of a Zod issue code, as React Hook Form's resolver reports it in an error's `type`. */
+/**
+ * The catalogue message of a Zod issue code, as React Hook Form's resolver reports it in an error's `type`, or of a
+ * refusal code a screen checks before the request goes (`access.starts-in-past`, S1-F01-T34), which has the server's
+ * own message.
+ */
 export function issueMessage(type: string | undefined): MessageId {
-  const id = `issue.${type ?? 'custom'}`;
-  return isMessageId(id) ? id : 'issue.custom';
+  const issue = `issue.${type ?? 'custom'}`;
+  if (isMessageId(issue)) return issue;
+  const refusal = `error.${type ?? ''}`;
+  return isMessageId(refusal) ? refusal : 'issue.custom';
 }
 
 /**
