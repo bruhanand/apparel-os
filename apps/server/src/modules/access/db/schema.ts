@@ -270,12 +270,18 @@ export const roleAssignmentWithdrawalChange = access.table('role_assignment_with
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** The effective grants, derived from the assignments in force on `as_of` (access-and-approvals 7.2). */
+/**
+ * The effective grants (access-and-approvals 7.2): for each assignment and each Approved version of its role in force
+ * on `as_of` or later, the business days both hold (`valid_during`), which row-level security checks against today
+ * (DEC-120; migration 0022).
+ */
 export const effectiveGrant = access.table('effective_grant', {
   id: uuid('id').primaryKey(),
   actorId: uuid('actor_id').notNull(),
   recordType: text('record_type').notNull(),
   roleAssignmentId: uuid('role_assignment_id').notNull(),
+  roleVersionId: uuid('role_version_id').notNull(),
+  validDuring: daterange('valid_during').notNull(),
   actions: text('actions').array().notNull(),
   ownRecords: boolean('own_records').notNull(),
   declaresLegalEntity: boolean('declares_legal_entity').notNull(),

@@ -74,7 +74,8 @@ const COMMAND_NAME = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
  *   PRD-INT-003). A read runs in a READ ONLY transaction.
  * - The actor is set at the start of every transaction, reads included, with set_config('aos.actor_id', id, true):
  *   local to the transaction, so a pooled connection never carries it into the next one. Nothing sets it for the
- *   session. With no actor, which only the paths of 6.3 allow, row-level security shows no scoped row
+ *   session. Beside it, the business date of the command's instant, as 'aos.business_date', when the Organisation has
+ *   a timezone in force (code-house-rules 6.2, 9; DEC-120). With no actor, which only the paths of 6.3 allow, row-level security shows no scoped row
  *   (code-house-rules 6.2, 6.3; access-and-approvals 7.2; PRD-SEC-005).
  * - A command that reaches the runtime role's lock_timeout or statement_timeout rolls back and fails with
  *   CommandTimedOut (code-house-rules 5.1; DEC-112, CH-3), even when its code caught the error: before COMMIT the
@@ -129,10 +130,17 @@ export class CommandRunner {
           async (tx) => {
             guarded.open();
             try {
+              const context = new CommandContext(request, readOnly, startedAt, tx, this.dependencies.timezones);
               if (request.actor.kind === 'actor') {
                 await tx.execute(sql`select set_config('aos.actor_id', ${request.actor.actorId}, true)`);
+                // Today under the Organisation's timezone, at the command's instant: row-level security admits a
+                // grant only while its dates hold it, whether or not the grants rebuild has run (code-house-rules
+                // 6.2, 9; DEC-120). With no timezone in force it stays unset, and no grant is admitted.
+                const today = await context.businessDate();
+                if (today.kind === 'set') {
+                  await tx.execute(sql`select set_config('aos.business_date', ${today.date}, true)`);
+                }
               }
-              const context = new CommandContext(request, readOnly, startedAt, tx, this.dependencies.timezones);
               let result: T;
               try {
                 result = await work(context);

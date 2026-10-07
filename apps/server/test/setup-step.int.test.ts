@@ -211,16 +211,22 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       'access.user',
     ];
     const viewed = ['access.approval_decision', 'access.approval_request', 'audit.access_record', 'audit.audit_record'];
+    // DEC-120 (RR-402): the essential security settings, which take no create (access-and-approvals 3.3), are
+    // prepared (edit) by the first Admin and approved by the first approver; neither holds both.
     expect(await permissionsOf(organisation.databaseName, 'first-admin')).toEqual(
       [
         ...prepared.flatMap((type) => [`${type} create`, `${type} edit`, `${type} view`]),
         ...viewed.map((type) => `${type} view`),
+        'access.setting edit',
+        'access.setting view',
       ].sort(),
     );
     expect(await permissionsOf(organisation.databaseName, 'first-approver')).toEqual(
       [
         ...prepared.flatMap((type) => [`${type} approve`, `${type} view`]),
         ...viewed.map((type) => `${type} view`),
+        'access.setting approve',
+        'access.setting view',
       ].sort(),
     );
     const assignments = await rows<{ login: string; scope_key: string; field_classes: string }>(

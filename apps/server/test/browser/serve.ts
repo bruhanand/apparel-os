@@ -19,6 +19,8 @@ import {
 } from '../../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../../src/modules/access/commands/job-identities.js';
+// The codes of the two roles the setup step creates, so the journey assigns exactly those roles (9.11).
+import { FIRST_ADMIN_ROLE, FIRST_APPROVER_ROLE } from '../../src/modules/access/domain/first-roles.js';
 import { inboxConsumers } from '../../src/modules/inbox/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
@@ -32,7 +34,7 @@ import {
   writeSyntheticSetting,
   writeSyntheticUser,
 } from '../support/access.js';
-import { grantSynthetic } from '../support/grants.js';
+import { assignSyntheticRole, grantSynthetic } from '../support/grants.js';
 import { capturingLogger } from '../support/jobs.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
@@ -46,8 +48,9 @@ import { startPostgresServer } from '../support/postgres-server.js';
 // - the second, with a user already enrolled whose session locks after a short synthetic idle limit (lock.spec.ts);
 // - a third, made by the real setup step (access-and-approvals 9.11; PRD-ACS-023), whose first Admin and first
 //   approver walk the approval journey (approval.spec.ts; S1-F01-AT18);
-// - a fourth, also made by the setup step, with an enrolled Admin who may prepare security setting changes and an
-//   enrolled approver who may approve them, and an approve reason in force (security-settings.spec.ts; S1-F01-T25).
+// - a fourth, also made by the setup step, with an enrolled Admin holding the first Admin's role, who may prepare
+//   security setting changes, and an enrolled approver holding the first approver's role, who may approve them, and an
+//   approve reason in force (security-settings.spec.ts; S1-F01-T25, S1-F01-T26).
 // It is built apart from the application (tsconfig.browser.json), so nothing here reaches dist. Every value is
 // SYNTHETIC.
 //
@@ -190,8 +193,8 @@ await grantSynthetic(orgB.database, { kind: 'user', id: lockUser.id }, [
   { recordType: 'access.user', action: 'create' },
 ]);
 
-// The security settings journey: two enrolled users, SYNTHETIC grants standing in for approved role assignments, and an
-// approve reason in force (access-and-approvals 3.3, 9.5; DEC-118).
+// The security settings journey: two enrolled users, SYNTHETIC assignments of the first two roles standing in for
+// approved ones, and an approve reason in force (access-and-approvals 3.3, 9.5; DEC-118, DEC-120).
 const settingsAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
   label: 'BROWSER-SETTINGS-ADMIN',
   enrolled: true,
@@ -202,17 +205,10 @@ const settingsApprover = await writeSyntheticUser(settingsDatabase, settingsCode
   enrolled: true,
   personas: ['P-OWN'],
 });
-await grantSynthetic(settingsDatabase, { kind: 'user', id: settingsAdmin.id }, [
-  { recordType: 'access.setting', action: 'view' },
-  { recordType: 'access.setting', action: 'edit' },
-]);
-await grantSynthetic(settingsDatabase, { kind: 'user', id: settingsApprover.id }, [
-  { recordType: 'access.setting', action: 'view' },
-  { recordType: 'access.setting', action: 'approve' },
-  // The approval panel reads the request and the reasons in force (access-and-approvals 9.3, 9.5).
-  { recordType: 'access.approval_request', action: 'view' },
-  { recordType: 'access.approval_reason', action: 'view' },
-]);
+// Each holds the role the setup step made, so the first Admin's role is enough to prepare a setting change and the
+// first approver's to approve it (access-and-approvals 9.11; DEC-120, RR-402).
+await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsAdmin.id }, FIRST_ADMIN_ROLE.code);
+await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsApprover.id }, FIRST_APPROVER_ROLE.code);
 await writeSyntheticReason(settingsDatabase, 'approve');
 
 const app = await startAccessApp(world, keys, { origin, port });
