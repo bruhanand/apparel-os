@@ -1,7 +1,7 @@
 # S1-F01-T25 — Changing essential security settings
 
-Status: blocked
-Blocked by: T22 (both change `access` versions and Decide)
+Status: ready-for-agent
+Blocked by: T22 (done; both change `access` versions and Decide)
 Feature: [S1-F01 First access](../spec.md)
 
 ## Build
