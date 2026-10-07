@@ -1,6 +1,6 @@
 # S1-F01-T22 — Same-day disabling and role locking
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
@@ -19,3 +19,11 @@ A reviewed `access` migration; changes to `access` versions, Decide and `holdAut
 - Test 19i passes: a role version taking effect and a command relying on that role, raced both ways, never pass each other; the one that locks second waits and sees the other's commit; no command succeeds on the replaced version.
 - The existing tests 19f, AT05 and AT10 and `authority-locks.int.test.ts` still pass; history shows the disabling with its decision instant.
 - The full check set is green (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm check:modules`, `pnpm check:links`, `pnpm format:check`).
+
+## Notes
+
+- Built in commit `172db33` on `s1/f01-t22`. Migration `0018__access__user_instants_and_role_lock.sql` changes `app_user_version.valid_during` to `tstzrange` in place (each recorded day becomes its start under the Organisation's timezone) and grants `UPDATE (id)` on `access.role`, now marked `locked`.
+- The user version in force is the Approved one with no end, so a command that waited at step 0 for a disabling sees it. A decision whose recording time is earlier than the start of the version in force is refused as stale (access-and-approvals 9.5 "As built").
+- Tests: 19h in `test/same-day-disabling.int.test.ts` (through the API); 19i in `test/authority-locks.int.test.ts`. `userInForce(context, userId)` lost its date argument; `replaceCredentials` lost its business date.
+- Follow-up: RR-370 (migration 0018 is not compatible with the version running for the first `dev` deploy after it; product owner).
+
