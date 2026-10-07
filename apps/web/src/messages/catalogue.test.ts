@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorCodes } from '@apparel-os/schemas';
+import { errorCodes, permissionRegistry } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { families, stateFamilies, stateIds } from '../components/states';
 import { englishIndia } from './en-IN';
@@ -16,6 +16,15 @@ function sourceFiles(directory: string): string[] {
     return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
   });
 }
+
+describe('record type names (code-house-rules 12.13; visual review finding 9)', () => {
+  it('names every record type of the permission registry, so no screen shows a code such as access.session', () => {
+    const unnamed = permissionRegistry
+      .map((declaration) => declaration.code)
+      .filter((code) => !isMessageId(`record-type.${code}`));
+    expect(unnamed).toEqual([]);
+  });
+});
 
 describe('t (code-house-rules 12.13)', () => {
   it('fills named parameters', () => {

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { Button } from '../components/Button';
-import { AppShell } from './AppShell';
+import { AppShell, PersonaChip } from './AppShell';
 import type { Grant } from './screens';
 import type { ShellSession } from './session';
 
@@ -53,6 +53,11 @@ describe('AppShell (design-language 6 A)', () => {
 
   it('shows the personas held as chips with their IDs (design-language 10.18)', () => {
     expect(text(render({ state: 'active', user, grants }))).toContain('P-ADM Admin');
+  });
+
+  it('never breaks a persona ID across lines, however long the name (visual review finding 2)', () => {
+    const html = renderToStaticMarkup(<PersonaChip persona="P-CHA" />);
+    expect(html).toMatch(/<span class="[^"]*whitespace-nowrap[^"]*">P-CHA<\/span>/);
   });
 
   it('PRD-ACS-017 covers a locked page with the lock overlay and keeps the page and its input underneath', () => {

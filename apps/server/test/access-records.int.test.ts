@@ -20,6 +20,7 @@ import {
   type SyntheticUser,
 } from './support/access.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
+import { writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 
 // S1-F01-T16: the reads behind the access setup screens (access-and-approvals 2.1, 4, 5, 9.5, 14; RR-326; spec
@@ -206,6 +207,21 @@ describe('the role assignment list (access-and-approvals 4.3, 5.1)', () => {
         .filter((each) => each.actor.kind === 'user' && each.actor.userId === admin.id)
         .map((each) => each.state),
     ).toContain('In force');
+  });
+});
+
+describe('PRD-SEC-018 no screen lists a service identity (access-and-approvals 2.3, 14; RR-343)', () => {
+  it('leaves a service identity’s role and its assignment out of the role and assignment lists', async () => {
+    const identity = await writeSyntheticServiceIdentity(database, `syn-worker-${String(randomInt(1_000_000))}`);
+    const { roleId, assignmentId } = await grantSynthetic(database, { kind: 'service-identity', id: identity }, [
+      { recordType: 'access.role', action: 'view' },
+    ]);
+    const roles = roleListSchema.parse((await get('/api/access/roles')).body);
+    expect(roles.roles.map((each) => each.id)).not.toContain(roleId);
+    expect(roles.roles.length).toBeGreaterThan(0);
+    const assignments = assignmentListSchema.parse((await get('/api/access/role-assignments')).body);
+    expect(assignments.assignments.map((each) => each.id)).not.toContain(assignmentId);
+    expect(assignments.assignments.every((each) => each.actor.kind === 'user')).toBe(true);
   });
 });
 

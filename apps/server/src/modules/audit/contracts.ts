@@ -151,6 +151,11 @@ export interface AccessHistoryEntry {
   readonly networkAddress: string | null;
   readonly identityVerification: string | null;
   readonly auditRecordId: string | null;
+  /**
+   * For a permission change, what its audit record changed: the record's module and type and the operation, only
+   * where the reader's row-level security admits that audit record (numbering-and-audit 4.5, 5.1); otherwise null.
+   */
+  readonly change: { readonly module: string; readonly type: string; readonly operation: string } | null;
   readonly record: AuditedRecord | null;
   readonly fieldClass: string | null;
   readonly exposure: 'shown' | 'exported' | null;

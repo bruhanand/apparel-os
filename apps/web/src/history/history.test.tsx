@@ -65,7 +65,9 @@ describe('HistoryTimeline (numbering-and-audit 4.1, 4.3; PRD-ACS-013)', () => {
     expect(text(html)).toContain('SYNTHETIC Meera');
     expect(text(html)).toContain('Approved a role assignment');
     expect(text(html)).toContain('Reason SYNTHETIC reason');
-    expect(text(html)).toContain('Version 0199b3c4-5d6e-7f80-91a2-b3c4d5e6f740');
+    // A version is shortened to its last six characters, the whole identifier kept as its title (finding 5).
+    expect(text(html)).toContain('Version …E6F740');
+    expect(html).toContain('title="0199b3c4-5d6e-7f80-91a2-b3c4d5e6f740"');
   });
 
   it('names a job by its identity and the person it acted for, and an operation it has no words for by its code', () => {
@@ -109,12 +111,78 @@ describe('HistoryTimeline (numbering-and-audit 4.1, 4.3; PRD-ACS-013)', () => {
       />,
     );
     const shown = text(html);
-    expect(shown).toContain('name empty → SYNTHETIC role');
+    expect(shown).toContain('Name empty → SYNTHETIC role');
     expect(shown).toContain('cost 🔒 Restricted');
     expect(html).toContain('aria-label="cost: Restricted"');
     expect(shown).toContain('margin 1 → 2');
     expect(shown).toContain('bank Changed. The value is kept encrypted and is never shown here.');
-    expect(shown).toContain('password Changed. Only the fact of the change is kept.');
+    expect(shown).toContain('Password Changed. Only the fact of the change is kept.');
+  });
+
+  it('code-house-rules 12.13 names each field from the catalogue and writes each value as the screens do (visual review finding 5)', () => {
+    const ROLE = '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f7d1';
+    const OTHER_ROLE = '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f7d2';
+    const version = { id: '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f7a1', validFrom: '2026-10-07', state: 'In force' as const };
+    const html = renderToStaticMarkup(
+      <HistoryTimeline
+        entries={[
+          entry({
+            changes: [
+              { kind: 'value', field: 'displayName', before: null, after: 'SYNTHETIC History reader' },
+              { kind: 'value', field: 'personas', before: null, after: ['P-AUD'] },
+              { kind: 'value', field: 'actor', before: null, after: { kind: 'user', userId: USER } },
+              { kind: 'value', field: 'roleId', before: OTHER_ROLE, after: ROLE },
+              {
+                kind: 'value',
+                field: 'scope',
+                before: null,
+                after: {
+                  kind: 'dimensions',
+                  legalEntity: { kind: 'all' },
+                  place: { kind: 'all' },
+                  brand: { kind: 'all' },
+                },
+              },
+              { kind: 'value', field: 'validFrom', before: null, after: '2026-10-07' },
+              { kind: 'value', field: 'validTo', before: null, after: null },
+            ],
+          }),
+        ]}
+        timeZone="UTC"
+        lists={{
+          users: {
+            asOf: '2026-10-07T10:00:00.000Z',
+            users: [
+              {
+                id: USER,
+                login: 'syn-meera',
+                versions: [{ ...version, displayName: 'SYNTHETIC Meera', personas: [], userState: 'Active' }],
+              },
+            ],
+          },
+          roles: {
+            asOf: '2026-10-07T10:00:00.000Z',
+            roles: [
+              {
+                id: ROLE,
+                code: 'SYN-AUDIT',
+                selfService: false,
+                versions: [{ ...version, name: 'SYNTHETIC auditor', permissions: [] }],
+              },
+            ],
+          },
+        }}
+      />,
+    );
+    const shown = text(html);
+    expect(shown).toContain('Display name empty → SYNTHETIC History reader');
+    expect(shown).toContain('Personas held empty → P-AUD Auditor');
+    expect(shown).toContain('Person empty → SYNTHETIC Meera');
+    expect(shown).toContain('Role a role you may not view → SYN-AUDIT · SYNTHETIC auditor');
+    expect(shown).toContain('Scope empty → Legal entity: All members · Place: All members · Brand: All members');
+    expect(shown).toContain('Valid from empty → 07 Oct 2026');
+    expect(shown).toContain('Valid to no end → no end');
+    for (const code of ['displayName', 'roleId', 'validFrom', '"kind"', '[', USER]) expect(shown).not.toContain(code);
   });
 });
 
@@ -132,6 +200,7 @@ describe('AccessRecordTable (numbering-and-audit 5.2)', () => {
         networkAddress: '10.9.9.18',
         identityVerification: null,
         auditRecordId: null,
+        change: null,
         record: null,
         fieldClass: null,
         exposure: null,
@@ -140,6 +209,48 @@ describe('AccessRecordTable (numbering-and-audit 5.2)', () => {
     ];
     const shown = text(renderToStaticMarkup(<AccessRecordTable entries={rows} timeZone="UTC" />));
     expect(shown).toContain('23 Sep 2026, 10:42 Sign-in Refused No user matched 10.9.9.18');
+    // Every row's Detail says something: here, that it came from no registered device (finding 8).
+    expect(shown).toContain('10.9.9.18 Not a registered device');
+  });
+
+  it('labels a permission change plainly: whose access, what changed, or where to read it (visual review finding 8)', () => {
+    const base: AccessHistoryEntry = {
+      id: '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f751',
+      recordedAt: '2026-09-23T10:42:00.000Z',
+      occurredAt: '2026-09-23T10:42:00.000Z',
+      kind: 'permission-changed',
+      outcome: 'succeeded',
+      user: null,
+      deviceId: null,
+      networkAddress: null,
+      identityVerification: null,
+      auditRecordId: '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f770',
+      change: { recordType: 'access.role', operation: 'approve-role-version' },
+      record: null,
+      fieldClass: null,
+      exposure: null,
+      correlationId: '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f761',
+    };
+    const shown = text(
+      renderToStaticMarkup(
+        <AccessRecordTable
+          entries={[
+            base,
+            {
+              ...base,
+              id: '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f752',
+              change: null,
+              user: { kind: 'user', id: USER, name: 'SYNTHETIC Meera' },
+            },
+          ]}
+          timeZone="UTC"
+        />,
+      ),
+    );
+    expect(shown).toContain('Permission changed Succeeded Not one user Role · Approved a role version');
+    expect(shown).toContain('Permission changed Succeeded SYNTHETIC Meera');
+    expect(shown).toContain('What changed is in Changes, where your role assignments cover the record.');
+    expect(shown).not.toContain('No user matched');
   });
 });
 

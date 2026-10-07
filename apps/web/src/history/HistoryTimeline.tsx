@@ -1,6 +1,8 @@
 import type { AuditHistoryEntry, HistoryActor, HistoryChange } from '@apparel-os/schemas';
+import type { SubjectLists } from '../approvals/subject';
 import { isMessageId, t } from '../messages/catalogue';
 import { formatDateTime } from './format';
+import { fieldLabel, shortId, valueText } from './values';
 
 /** A person or service identity by name; one no longer found is Unknown (design-language 8). */
 export function actorName(actor: HistoryActor): string {
@@ -18,25 +20,24 @@ function sourceText(kind: string): string {
   return isMessageId(id) ? t(id) : kind;
 }
 
-/** A recorded value as text: empty for none, a string as it is, anything else as JSON. */
-function valueText(value: unknown): string {
-  if (value === null || value === undefined) return t('history.empty-value');
-  return typeof value === 'string' ? value : JSON.stringify(value);
-}
-
 /**
- * One changed field (numbering-and-audit 4.3; design-language 10.6). A masked value arrives without its values and
- * shows the Restricted chip; an encrypted field and a secret show only that they changed.
+ * One changed field (numbering-and-audit 4.3; design-language 10.6), by its label, with its values in words
+ * (values.ts). A masked value arrives without its values and shows the Restricted chip; an encrypted field and a
+ * secret show only that they changed.
  */
-function Change({ change }: { change: HistoryChange }) {
+function Change({ change, lists }: { change: HistoryChange; lists: SubjectLists }) {
+  const label = fieldLabel(change.field);
   let detail: React.ReactNode;
   if (change.kind === 'value' || change.kind === 'restricted') {
-    detail = t('history.changed-from-to', { before: valueText(change.before), after: valueText(change.after) });
+    detail = t('history.changed-from-to', {
+      before: valueText(change.field, change.before, lists),
+      after: valueText(change.field, change.after, lists),
+    });
   } else if (change.kind === 'masked') {
     detail = (
       <span
         title={t('history.restricted.help')}
-        aria-label={`${change.field}: ${t('history.restricted')}`}
+        aria-label={`${label}: ${t('history.restricted')}`}
         className="inline-flex h-6 items-center gap-1 rounded-chip bg-sunken px-2 text-caption font-semibold text-text-2"
       >
         <span aria-hidden="true">🔒</span>
@@ -49,8 +50,8 @@ function Change({ change }: { change: HistoryChange }) {
     detail = t('history.secret');
   }
   return (
-    <li className="flex flex-wrap items-center gap-2 text-body-sm">
-      <span className="font-mono text-text-2">{change.field}</span>
+    <li className="flex flex-wrap items-baseline gap-x-2 text-body-sm">
+      <span className="font-semibold text-text-2">{label}</span>
       <span>{detail}</span>
     </li>
   );
@@ -58,9 +59,18 @@ function Change({ change }: { change: HistoryChange }) {
 
 /**
  * The history of a record or of an actor as a timeline, oldest first (numbering-and-audit 4.1, 4.5; PRD-ACS-013):
- * when, who (and for whom, for a job), what, the reason, the version, the changed fields and the source.
+ * when, who (and for whom, for a job), what, the reason, the version, the changed fields and the source. `lists`
+ * names roles and users in the values where the reader may view them.
  */
-export function HistoryTimeline({ entries, timeZone }: { entries: readonly AuditHistoryEntry[]; timeZone: string }) {
+export function HistoryTimeline({
+  entries,
+  timeZone,
+  lists = {},
+}: {
+  entries: readonly AuditHistoryEntry[];
+  timeZone: string;
+  lists?: SubjectLists;
+}) {
   return (
     <ol className="flex flex-col gap-3">
       {entries.map((entry) => (
@@ -85,7 +95,9 @@ export function HistoryTimeline({ entries, timeZone }: { entries: readonly Audit
             {entry.versionId !== null && (
               <>
                 <dt className="text-text-2">{t('history.version')}</dt>
-                <dd className="font-mono">{entry.versionId}</dd>
+                <dd className="font-mono" title={entry.versionId}>
+                  {shortId(entry.versionId)}
+                </dd>
               </>
             )}
             <dt className="text-text-2">{t('history.source')}</dt>
@@ -96,7 +108,7 @@ export function HistoryTimeline({ entries, timeZone }: { entries: readonly Audit
           ) : (
             <ul aria-label={t('history.changes')} className="flex flex-col gap-1">
               {entry.changes.map((change) => (
-                <Change key={change.field} change={change} />
+                <Change key={change.field} change={change} lists={lists} />
               ))}
             </ul>
           )}

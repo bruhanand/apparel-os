@@ -22,6 +22,15 @@ export type SubmissionState =
   | { readonly kind: 'refused'; readonly refusal: ErrorBody | null };
 
 /**
+ * The state a refusal leaves: none shown on the screen when it only says the session is locked or over, since the
+ * lock overlay or sign-in says that and a lock is not an error (access-and-approvals 3.3; design-language 10.12);
+ * otherwise the refusal with its envelope.
+ */
+export function stateAfterRefusal(refusal: ErrorBody): SubmissionState {
+  return sessionRefusal(refusal) === null ? { kind: 'refused', refusal } : { kind: 'ready' };
+}
+
+/**
  * Submits a command under an idempotency key kept until the outcome is known: after a lost answer, `timed-out`,
  * `kernel.outcome-unknown` or `kernel.request-in-progress` the next press resends the same key, so the command never
  * takes effect twice (code-house-rules 12.4; PRD-INT-002); any other answer ends the submission. A session the server
@@ -54,7 +63,7 @@ export function useSubmission<K extends CommandName>(name: K, invalidates: reado
     if (refused !== null && session.state !== 'signed-out') {
       setSession(refused === 'locked' ? { ...session, state: 'locked' } : { state: 'signed-out' });
     }
-    setState({ kind: 'refused', refusal: result.error });
+    setState(stateAfterRefusal(result.error));
     return undefined;
   };
   return {

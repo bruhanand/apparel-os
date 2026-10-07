@@ -326,6 +326,32 @@ describe('the access history report (numbering-and-audit 5; access-and-approvals
     expect(own.entries.every((entry) => entry.user?.id === user.id)).toBe(true);
   });
 
+  it('numbering-and-audit 5.1 names what a permission change changed, only where the reader may read its audit record', async () => {
+    const roleId = uuidv7();
+    await asWriter(async (context) => {
+      const auditRecord = await audit.record(context, change('role', roleId, { operation: 'approve-role-version' }));
+      await audit.recordAccess(context, { kind: 'permission-changed', outcome: 'succeeded', auditRecord });
+    });
+    const permissionChange = (entries: { kind: string; auditRecordId: string | null }[], id: string | undefined) =>
+      entries.find((entry) => entry.kind === 'permission-changed' && entry.auditRecordId === id);
+    const full = await signedIn('CHANGEREADER', [VIEW_ACCESS_RECORDS, VIEW_HISTORY, VIEW_ROLES]);
+    const shown = accessHistoryPageSchema.parse(
+      await (await get('/api/access/history/access-records', {}, full.cookie)).json(),
+    );
+    const row = shown.entries.find((entry) => entry.change?.operation === 'approve-role-version');
+    expect(row).toMatchObject({
+      kind: 'permission-changed',
+      user: null,
+      change: { recordType: 'access.role', operation: 'approve-role-version' },
+    });
+    // PRD-SEC-005: a reader who may not read that audit record sees the permission change, but not what it changed.
+    const bare = await signedIn('BAREREADER', [VIEW_ACCESS_RECORDS]);
+    const hidden = accessHistoryPageSchema.parse(
+      await (await get('/api/access/history/access-records', {}, bare.cookie)).json(),
+    );
+    expect(permissionChange(hidden.entries, row?.auditRecordId ?? undefined)).toMatchObject({ change: null });
+  });
+
   it('PRD-UXP-003 refuses a reader with no view on access records, and sensitive access apart, naming each missing permission', async () => {
     const { cookie } = await signedIn('NOACCESS', [VIEW_HISTORY]);
     const refused = await get('/api/access/history/access-records', {}, cookie);

@@ -10,6 +10,7 @@ import { AccessRecordTable } from './AccessRecordTable';
 import { AsOf } from './AsOf';
 import { useTimeZone } from '../shell/session';
 import { HistoryTimeline } from './HistoryTimeline';
+import { useSubjectLists } from '../approvals/use-subjects';
 
 // The history reads on screen (numbering-and-audit 4.5, 5; code-house-rules 12.1 "Reads"; design-language 10.4,
 // 10.13). Each reads page by page with the server's cursor, shows the time the rows were read (PRD-PRF-004), and a
@@ -88,6 +89,7 @@ function Paged<P extends Page>({
 
 /** The history of one record, oldest first (numbering-and-audit 4.5). */
 export function RecordHistory({ recordType, recordId }: { recordType: string; recordId: string }) {
+  const lists = useSubjectLists();
   const query = usePages(['readRecordHistory', recordType, recordId], async (after) =>
     pageOrThrow(
       await api.call('readRecordHistory', {
@@ -98,20 +100,25 @@ export function RecordHistory({ recordType, recordId }: { recordType: string; re
   return (
     <Paged
       query={query}
-      render={(pages, timeZone) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} />}
+      render={(pages, timeZone) => (
+        <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} lists={lists} />
+      )}
     />
   );
 }
 
 /** What one person or service identity changed, oldest first (numbering-and-audit 4.5). */
 export function ActorHistory({ actorId }: { actorId: string }) {
+  const lists = useSubjectLists();
   const query = usePages(['readActorHistory', actorId], async (after) =>
     pageOrThrow(await api.call('readActorHistory', { query: { actorId, ...(after === undefined ? {} : { after }) } })),
   );
   return (
     <Paged
       query={query}
-      render={(pages, timeZone) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} />}
+      render={(pages, timeZone) => (
+        <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} lists={lists} />
+      )}
     />
   );
 }

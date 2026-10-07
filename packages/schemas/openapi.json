@@ -5810,6 +5810,29 @@
                               }
                             ]
                           },
+                          "change": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "recordType": {
+                                    "type": "string"
+                                  },
+                                  "operation": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "recordType",
+                                  "operation"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "record": {
                             "anyOf": [
                               {
@@ -5872,6 +5895,7 @@
                           "networkAddress",
                           "identityVerification",
                           "auditRecordId",
+                          "change",
                           "record",
                           "fieldClass",
                           "exposure",
@@ -7932,6 +7956,29 @@
                               }
                             ]
                           },
+                          "change": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "recordType": {
+                                    "type": "string"
+                                  },
+                                  "operation": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "recordType",
+                                  "operation"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "record": {
                             "anyOf": [
                               {
@@ -7994,6 +8041,7 @@
                           "networkAddress",
                           "identityVerification",
                           "auditRecordId",
+                          "change",
                           "record",
                           "fieldClass",
                           "exposure",

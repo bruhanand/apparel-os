@@ -77,6 +77,9 @@ async function approveListed(drawer: Locator, app: Authenticator, approverName: 
   await drawer.getByLabel(/^Authenticator code/).fill(await app.nextCode());
   await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(drawer.getByText(`Approved by ${approverName}`)).toBeVisible();
+  // Visual review finding 4: the drawer's header shows the decision too, not the state from before it.
+  await expect(drawer.getByTestId('drawer-header')).toContainText('Approved');
+  await expect(drawer.getByTestId('drawer-header')).not.toContainText('Awaiting approval');
 }
 
 test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My work, the third person reads the history', async ({
@@ -190,8 +193,14 @@ test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My 
 
     await test.step('DEC-116: the assignment waits for its user, and the panel names what is missing', async () => {
       await myWorkHolds(approver, 3);
+      // Visual review finding 3: each row says what it is for and who prepared it.
+      await expect(approver.getByRole('listitem').filter({ hasText: 'Role assignment change' })).toContainText(
+        `Prepared by ${world.admin.displayName}`,
+      );
       const drawer = await openItem(approver, 'Role assignment change');
-      await expect(drawer.getByText('The user this is for must be approved first.')).toBeVisible();
+      await expect(
+        drawer.getByText('The user this role assignment is for is not approved yet. Decide the user first.'),
+      ).toBeVisible();
       await approver.keyboard.press('Escape');
     });
 
@@ -255,8 +264,9 @@ test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My 
       await expect(approved).toContainText(APPROVE_REASON.text);
       // The versions: the one prepared is the one approved (PRD-ACS-007); an assignment is its own version
       // (code-house-rules 7.3), so both entries name the same one.
+      // A version shows its last six characters, the whole identifier as its title (design-language 10.15).
       const versionOf = async (entry: typeof prepared) =>
-        /Version\s+([0-9a-f-]{36})/.exec(await entry.innerText())?.[1];
+        (await entry.locator('dd[title]').first().getAttribute('title')) ?? undefined;
       const preparedVersion = await versionOf(prepared);
       expect(preparedVersion).toMatch(/^[0-9a-f-]{36}$/);
       expect(await versionOf(approved)).toBe(preparedVersion);

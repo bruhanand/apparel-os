@@ -158,6 +158,10 @@ export class History {
       networkAddress: row.networkAddress,
       identityVerification: row.identityVerification,
       auditRecordId: row.auditRecordId,
+      change:
+        row.change === null
+          ? null
+          : { recordType: `${row.change.module}.${row.change.type}`, operation: row.change.operation },
       record:
         row.record === null ? null : { recordType: `${row.record.module}.${row.record.type}`, recordId: row.record.id },
       fieldClass: row.fieldClass,

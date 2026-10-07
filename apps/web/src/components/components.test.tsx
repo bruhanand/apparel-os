@@ -17,13 +17,25 @@ describe('StatusBadge (design-language 7, 10.2)', () => {
     expect(text(html)).toBe('◔ Awaiting approval');
     expect(html).toContain('bg-i-bg');
   });
+
+  it('hugs its text, even inside a column that stretches its children (visual review finding 4)', () => {
+    expect(renderToStaticMarkup(<StatusBadge state="in-force" />)).toMatch(/class="[^"]*\bw-fit\b[^"]*\bself-start\b/);
+  });
 });
 
 describe('the standard states (design-language 10.13)', () => {
   it('empty: says why the list is empty and what to do next', () => {
     expect(text(renderToStaticMarkup(<EmptyState title="screen.not-built.title" body="screen.not-built.body" />))).toBe(
-      'This screen is not built yet It arrives with a later piece of stage 1 work. Nothing here can change a record.',
+      '0 This screen is not built yet It arrives with a later piece of stage 1 work. Nothing here can change a record.',
     );
+  });
+
+  it('empty: the neutral mark of design-system 3.7, a bordered sunken circle with its glyph, not a plain disc', () => {
+    const html = renderToStaticMarkup(<EmptyState title="screen.not-built.title" body="screen.not-built.body" />);
+    const mark = /<span aria-hidden="true"[^>]*>([^<]*)<\/span>/.exec(html);
+    expect(mark?.[0]).toContain('border-border');
+    expect(mark?.[0]).toContain('bg-sunken');
+    expect(mark?.[1]).toBe('0');
   });
 
   it('loading: skeleton rows marked busy', () => {
@@ -80,6 +92,17 @@ describe('UnavailableState (design-language 10.17; PRD-UXP-003)', () => {
     );
     expect(text(html)).toContain('Needs View on Role.');
     expect(text(html)).toContain('Needs Approve on User.');
+  });
+
+  it('a missing permission is not a policy gate: its own title, who to ask, and no Policy readiness link (visual review finding 6)', () => {
+    const html = renderToStaticMarkup(
+      <UnavailableState missing={[{ kind: 'action', action: 'view', recordType: 'access.role' }]} />,
+    );
+    expect(text(html)).toBe(
+      '! Not available to you Needs View on Role. Ask an Admin for a role assignment that grants it.',
+    );
+    expect(text(html)).not.toContain('Live action unavailable');
+    expect(text(html)).not.toContain('Policy readiness');
   });
 
   it('names an item of a kind it has no text for as something missing, never nothing', () => {

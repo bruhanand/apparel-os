@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
+import { approvalRead, useApprovalSubjects } from '../approvals/use-subjects';
 import { Button } from '../components/Button';
 import { t } from '../messages/catalogue';
 import { ListRead, Toolbar } from '../setup/parts';
@@ -23,6 +24,7 @@ export function MyWorkScreen() {
   const query = useQuery(myWorkRead());
   const timeZone = useTimeZone();
   const [open, setOpen] = useState<WorkItem | null>(null);
+  const subjects = useApprovalSubjects(query.data?.items ?? []);
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -35,20 +37,40 @@ export function MyWorkScreen() {
         />
       </Toolbar>
       <ListRead query={query} what="my-work.what">
-        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} />}
+        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} subjects={subjects} />}
       </ListRead>
       {open !== null && (
-        <RecordDrawer
-          title={t(`my-work.kind.${open.kind}`)}
-          state={open.state}
+        <ApprovalDrawer
+          item={open}
+          title={subjects.get(open.id)?.name ?? t(`my-work.kind.${open.kind}`)}
           onClose={() => {
             setOpen(null);
             void query.refetch();
           }}
-          details={<ApprovalPanel requestId={open.owner.recordId} />}
         />
       )}
     </div>
+  );
+}
+
+/** The state a drawer's header shows: the request's own, as last read, over the item's from when the list was read. */
+export function drawerState(item: WorkItem, request: { readonly state: string } | undefined): string {
+  return request?.state ?? item.state;
+}
+
+/**
+ * The drawer of one approval: its header names the record and shows the request's state from the same read as the
+ * panel, so it changes with the decision (design-language 10.15; visual review finding 4).
+ */
+function ApprovalDrawer({ item, title, onClose }: { item: WorkItem; title: string; onClose: () => void }) {
+  const request = useQuery(approvalRead(item.owner.recordId));
+  return (
+    <RecordDrawer
+      title={title}
+      state={drawerState(item, request.data)}
+      onClose={onClose}
+      details={<ApprovalPanel requestId={item.owner.recordId} />}
+    />
   );
 }
 

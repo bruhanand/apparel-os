@@ -2,6 +2,7 @@ import type { MyWork, WorkItem } from '@apparel-os/schemas';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { myWorkCount, MyWorkCounter, MyWorkList } from './MyWork';
+import { drawerState } from './MyWorkScreen';
 
 // S1-F01-T16: My work and its counter (access-and-approvals 11.2; design-language 10.5, 10.13; PRD-ACS-009,
 // PRD-UXP-003, PRD-PRF-004). Every value here is SYNTHETIC.
@@ -76,6 +77,42 @@ describe('the My work list (access-and-approvals 11.2; PRD-ACS-009, PRD-UXP-003)
     expect(rows[0]).toContain('Open and decide');
     expect(rows[1]).toContain('Value not known yet');
     expect(text(html)).toContain('as of');
+  });
+
+  it('PRD-UXP-003 says what each approval is for: the action, the record by name, who prepared it and when (visual review finding 3)', () => {
+    const first = item(1);
+    const html = renderToStaticMarkup(
+      <MyWorkList
+        work={work([first, item(2)])}
+        onOpen={() => undefined}
+        timeZone="UTC"
+        subjects={
+          new Map([
+            [
+              first.id,
+              {
+                title: 'Role change',
+                name: 'SYN-AUDIT · SYNTHETIC auditor',
+                preparedBy: 'SYNTHETIC Admin',
+                requestedAt: '2026-10-07T09:00:00.000Z',
+              },
+            ],
+          ])
+        }
+      />,
+    );
+    const rows = [...html.matchAll(/<li[^>]*>(.*?)<\/li>/gs)].map((match) => text(match[1] ?? ''));
+    expect(rows[0]).toContain('Role change');
+    expect(rows[0]).toContain('SYN-AUDIT · SYNTHETIC auditor');
+    expect(rows[0]).toContain('Prepared by SYNTHETIC Admin · requested 07 Oct 2026, 09:00');
+    expect(rows[0]).not.toMatch(/^Approval /);
+    // An item whose request is not read yet, or may not be, still shows its kind.
+    expect(rows[1]).toContain('Approval');
+  });
+
+  it('the drawer header shows the request state as last read, so it changes with the decision (visual review finding 4)', () => {
+    expect(drawerState(item(1), { state: 'Approved' })).toBe('Approved');
+    expect(drawerState(item(1), undefined)).toBe('Awaiting approval');
   });
 
   it('explains an empty list', () => {

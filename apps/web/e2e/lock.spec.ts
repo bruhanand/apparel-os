@@ -44,6 +44,26 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
   });
 
   const drawer = await openNewUser(page);
+  await test.step('design-language 5, 6 A: the page fits the window, and the drawer starts under the banner and top bar', async () => {
+    const layout = await page.evaluate(() => {
+      const bottom = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().bottom ?? -1;
+      const top = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().top ?? -1;
+      return {
+        overflow: document.documentElement.scrollHeight - window.innerHeight,
+        banner: bottom('[data-testid="environment-banner"]'),
+        header: bottom('[data-testid="top-bar"]'),
+        headerTop: top('[data-testid="top-bar"]'),
+        scrim: top('[data-testid="drawer-scrim"]'),
+        drawer: top('[role="dialog"]'),
+      };
+    });
+    // Visual review finding 1: no blank band below the page, and no overlay over part of the top bar.
+    expect(layout.overflow).toBeLessThanOrEqual(0);
+    expect(layout.headerTop).toBe(layout.banner);
+    expect(layout.scrim).toBe(layout.banner);
+    expect(layout.drawer).toBe(layout.header);
+  });
+
   await test.step('half fill a new user, then go idle past the synthetic limit', async () => {
     await drawer.getByLabel(/^Login/).fill(firstLogin);
     await drawer.getByLabel(/^Display name/).fill('SYNTHETIC locked draft');
@@ -59,6 +79,18 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
     await expect(drawer.getByLabel(/^Display name/)).toHaveValue('SYNTHETIC locked draft');
     await expect(drawer.getByLabel(/^Temporary password/)).toHaveValue('');
     await expect(lock.getByRole('button', { name: 'Sign out instead' })).toBeVisible();
+  });
+
+  await test.step('visual review finding 2: the lock covers the open drawer, which shows no error for the lock', async () => {
+    const box = await drawer.boundingBox();
+    expect(box).not.toBeNull();
+    const covered = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x ?? 0, y ?? 0)?.closest('[data-testid="lock-overlay"]') !== null,
+      [(box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + 24],
+    );
+    expect(covered).toBe(true);
+    await expect(drawer.getByRole('alert')).toHaveCount(0);
+    await expect(drawer.getByText('Your session is locked')).toHaveCount(0);
   });
 
   await test.step('access-and-approvals 3.1: a wrong password gets the one refusal and is not kept', async () => {

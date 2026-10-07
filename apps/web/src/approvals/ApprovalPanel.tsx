@@ -21,6 +21,8 @@ import { stateIdOf } from '../setup/states';
 import { useSession, useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { DocumentFacts } from './DocumentFacts';
+import { actionTitle } from './subject';
+import { approvalRead } from './use-subjects';
 
 // The approval panel (design-language 10.14; access-and-approvals 9.3, 9.5, 9.6; spec section 6 "Approval panel"):
 // the request bound to one version (PRD-ACS-007), its preparers, its value on its basis (PRD-ACS-015), and the
@@ -35,6 +37,12 @@ interface Reason {
   readonly text: string;
 }
 
+/**
+ * The missing items a decision's unavailable code already says in its own words (visual review finding 7): the panel
+ * does not repeat them. A missing permission or scope is still listed, since the code does not name which.
+ */
+const saidByCode: ReadonlySet<string> = new Set(['approval', 'preparer', 'person', 'user-state', 'reason-list']);
+
 /** What the panel shows (spec section 6): the decision form, why it is unavailable, the decision, or the end. */
 export type PanelCase = 'decide' | 'unavailable' | 'decided' | 'superseded' | 'closed';
 
@@ -48,11 +56,6 @@ export function panelCase(view: ApprovalRequestView): PanelCase {
 function codeMessage(code: string): MessageId {
   const id = `error.${code}`;
   return isMessageId(id) ? id : 'error.unknown-code';
-}
-
-function actionTitle(actionType: string): string {
-  const id = `approval.action.${actionType}`;
-  return isMessageId(id) ? t(id) : actionType;
 }
 
 function nameOf(id: string, names: ReadonlyMap<string, string>): string {
@@ -280,11 +283,13 @@ export function ApprovalPanelView({
             role="status"
             message={codeMessage(view.decidable.code)}
           >
-            {view.decidable.missing.length > 0 && (
+            {view.decidable.missing.some((item) => !saidByCode.has(item.kind)) && (
               <ul className="list-none p-0">
-                {view.decidable.missing.map((item, index) => (
-                  <li key={index}>{missingText(item)}</li>
-                ))}
+                {view.decidable.missing
+                  .filter((item) => !saidByCode.has(item.kind))
+                  .map((item, index) => (
+                    <li key={index}>{missingText(item)}</li>
+                  ))}
               </ul>
             )}
           </Banner>
@@ -341,7 +346,7 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
   const { session } = useSession();
   const timeZone = useTimeZone();
   const granted = session.state === 'signed-out' ? [] : session.grants;
-  const request = useQuery(readQuery(api, 'readApprovalRequest', { params: { requestId } }));
+  const request = useQuery(approvalRead(requestId));
   const reasons = useQuery({
     ...readQuery(api, 'listApprovalReasons', {}),
     enabled: grants('access.approval_reason', granted),

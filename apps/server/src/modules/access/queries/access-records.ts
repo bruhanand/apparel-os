@@ -9,7 +9,7 @@ import type {
   RoleList,
   UserList,
 } from '@apparel-os/schemas';
-import { asc, desc, inArray, sql, type AnyColumn } from 'drizzle-orm';
+import { asc, desc, inArray, isNull, sql, type AnyColumn } from 'drizzle-orm';
 import { businessDateIn, CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import {
   appUser,
@@ -23,7 +23,6 @@ import {
   roleAssignmentWithdrawal,
   roleAssignmentWithdrawalVersion,
   roleVersion,
-  serviceIdentity,
 } from '../db/schema.js';
 import { recordState } from '../domain/record-state.js';
 import { permissionsOf, scopesOf } from './assignments.js';
@@ -154,7 +153,15 @@ export async function listUsers(context: TransactionContext, today: string): Pro
 
 /** Every role, by code, each version with its explicit permissions, newest first (access-and-approvals 4.1, 4.2). */
 export async function listRoles(context: TransactionContext, today: string): Promise<RoleList> {
-  const roles = await context.tx.select().from(role).orderBy(asc(role.code));
+  // A service identity's role, which the setup step writes for the worker, is not listed: no screen lists service
+  // identities (PRD-SEC-018; access-and-approvals 2.3, 14; RR-343).
+  const roles = await context.tx
+    .select()
+    .from(role)
+    .where(
+      sql`not exists (select 1 from ${roleAssignment} where ${roleAssignment.roleId} = ${role.id} and ${roleAssignment.serviceIdentityId} is not null)`,
+    )
+    .orderBy(asc(role.code));
   const versions = await context.tx
     .select({
       id: roleVersion.id,
@@ -201,15 +208,15 @@ export async function listRoles(context: TransactionContext, today: string): Pro
 }
 
 /**
- * Every role assignment, newest first, with its actor's name (the display name of the user's latest version, or the
- * service identity's code), its role's code, its scope and its withdrawal (access-and-approvals 4.3, 5.1).
+ * Every role assignment of a user, newest first, with the user's name (the display name of their latest version), its
+ * role's code, its scope and its withdrawal (access-and-approvals 4.3, 5.1). A service identity's assignment is not
+ * listed: no screen lists service identities (PRD-SEC-018; access-and-approvals 2.3, 14; RR-343).
  */
 export async function listAssignments(context: TransactionContext, today: string): Promise<AssignmentList> {
   const rows = await context.tx
     .select({
       id: roleAssignment.id,
       userId: roleAssignment.appUserId,
-      serviceIdentityId: roleAssignment.serviceIdentityId,
       roleId: roleAssignment.roleId,
       roleCode: role.code,
       decision: roleAssignment.decision,
@@ -219,15 +226,11 @@ export async function listAssignments(context: TransactionContext, today: string
     })
     .from(roleAssignment)
     .innerJoin(role, sql`${role.id} = ${roleAssignment.roleId}`)
+    .where(isNull(roleAssignment.serviceIdentityId))
     .orderBy(desc(roleAssignment.recordedAt), desc(roleAssignment.id));
   const ids = rows.map((row) => row.id);
   const scopes = await scopesOf(context, ids);
   const names = await userNames(context);
-  const identities = new Map(
-    (await context.tx.select({ id: serviceIdentity.id, code: serviceIdentity.code }).from(serviceIdentity)).map(
-      (row) => [row.id, row.code],
-    ),
-  );
   const withdrawals =
     ids.length === 0
       ? []
@@ -253,15 +256,12 @@ export async function listAssignments(context: TransactionContext, today: string
       const scope = scopes.get(row.id);
       if (scope === undefined) throw new CommandDefect(`Role assignment ${row.id} has no scope`);
       const withdrawal = withdrawals.find((each) => each.assignmentId === row.id);
-      let actor: AssignmentRecord['actor'];
-      if (row.userId !== null) actor = { kind: 'user', userId: row.userId, name: names.get(row.userId) ?? null };
-      else if (row.serviceIdentityId !== null) {
-        actor = {
-          kind: 'service-identity',
-          serviceIdentityId: row.serviceIdentityId,
-          code: identities.get(row.serviceIdentityId) ?? row.serviceIdentityId,
-        };
-      } else throw new CommandDefect(`Role assignment ${row.id} has no actor`);
+      if (row.userId === null) throw new CommandDefect(`Role assignment ${row.id} has no user`);
+      const actor: AssignmentRecord['actor'] = {
+        kind: 'user',
+        userId: row.userId,
+        name: names.get(row.userId) ?? null,
+      };
       const withdrawalRequest = withdrawal === undefined ? undefined : requests.get(withdrawal.versionId);
       return {
         ...versionView(row, today, requests, row.decision === 'Approved' && row.withdrawalId !== null),

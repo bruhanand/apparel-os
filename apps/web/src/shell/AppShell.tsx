@@ -1,6 +1,6 @@
 import type { PersonaId } from '@apparel-os/schemas';
 import { cn } from '@apparel-os/ui';
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Banner } from '../components/Banner';
 import { EmptyState } from '../components/StandardStates';
 import { LockOverlay } from '../lock/LockOverlay';
@@ -21,14 +21,40 @@ const anchor: RenderLink = (id, className, children) => (
   </a>
 );
 
-/** A persona chip: mono ID and name in Neutral (design-language 10.18). */
+/**
+ * A persona chip: mono ID and name in Neutral (design-language 10.18). The ID never breaks across lines; a long name
+ * may wrap beside it, and the chip then grows from its 24 px height.
+ */
 export function PersonaChip({ persona }: { persona: PersonaId }) {
   return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-full bg-n-bg px-2 text-caption text-n-fg">
-      <span className="font-mono">{persona}</span>
+    <span className="inline-flex min-h-6 w-fit items-center gap-1 rounded-[12px] bg-n-bg px-2 py-0.5 text-caption text-n-fg">
+      <span className="shrink-0 whitespace-nowrap font-mono">{persona}</span>
       <span>{t(`persona.${persona}`)}</span>
     </span>
   );
+}
+
+/**
+ * Keeps the CSS variable `--banner-h` on <html> equal to the environment banner's height, so the sticky top bar sits
+ * under the banner and every overlay (drawer, dialog, lock) starts at the banner's lower edge, the banner staying
+ * visible above it (design-language 5, 6 A "As built").
+ */
+function useBannerHeight() {
+  const banner = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = banner.current;
+    if (element === null) return undefined;
+    const set = () => {
+      document.documentElement.style.setProperty('--banner-h', `${String(element.offsetHeight)}px`);
+    };
+    set();
+    const observer = new ResizeObserver(set);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return banner;
 }
 
 /**
@@ -64,28 +90,34 @@ export function AppShell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const bannerRef = useBannerHeight();
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="flex min-h-screen flex-col bg-bg text-text">
       <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
         {t('shell.skip-to-content')}
       </a>
-      <Banner tone={banner.tone} message={banner.message} />
+      <div ref={bannerRef} className="sticky top-0 z-30" data-testid="environment-banner">
+        <Banner tone={banner.tone} message={banner.message} />
+      </div>
       {session.state === 'signed-out' ? (
-        <main id="content" className="p-4 sm:p-8">
+        <main id="content" className="flex-1 p-4 sm:p-8">
           {signIn ?? <EmptyState title="session.signed-out.title" body="session.signed-out.body" />}
         </main>
       ) : landingScreen(session.user.roleAssignmentInForce, session.user.personasHeld, session.grants) ===
         'no-access-assigned' ? (
         <>
-          <main id="content" className="p-4 sm:p-8" inert={session.state === 'locked'}>
+          <main id="content" className="flex-1 p-4 sm:p-8" inert={session.state === 'locked'}>
             <NoAccessAssigned signOut={signOut} />
           </main>
           {session.state === 'locked' && <LockOverlay>{unlock}</LockOverlay>}
         </>
       ) : (
         <>
-          <div inert={session.state === 'locked'}>
-            <header className="glass sticky top-0 z-30 flex h-14 items-center gap-4 border-b px-4">
+          <div className="flex flex-1 flex-col" inert={session.state === 'locked'}>
+            <header
+              data-testid="top-bar"
+              className="glass sticky top-[var(--banner-h)] z-30 flex h-14 items-center gap-4 border-b px-4"
+            >
               <button
                 type="button"
                 className="h-9 rounded-control px-2 text-accent lg:hidden"
@@ -117,12 +149,14 @@ export function AppShell({
                 </div>
               </details>
             </header>
-            <div className="flex">
+            <div className="flex flex-1">
               <aside
                 className={cn(
-                  'min-h-[calc(100vh-56px)] border-r border-border bg-surface',
+                  'border-r border-border bg-surface',
                   collapsed ? 'lg:w-16' : 'lg:w-[232px]',
-                  menuOpen ? 'glass fixed inset-y-14 left-0 z-20 block w-[300px]' : 'hidden lg:block',
+                  menuOpen
+                    ? 'glass fixed bottom-0 left-0 top-[calc(var(--banner-h)+56px)] z-20 block w-[300px]'
+                    : 'hidden lg:block',
                 )}
               >
                 <nav

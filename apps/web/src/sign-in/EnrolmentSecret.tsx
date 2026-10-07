@@ -1,5 +1,6 @@
 import type { Secret } from '@apparel-os/schemas';
 import { QRCodeSVG } from 'qrcode.react';
+import { Fragment } from 'react';
 import { Banner } from '../components/Banner';
 import { t } from '../messages/catalogue';
 
@@ -36,11 +37,19 @@ export function EnrolmentSecret({ secret, otpauthUri }: { secret: Secret; otpaut
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-body-sm font-semibold">{t('enrolment.key')}</span>
+          {/* Each group of four stays on one line; a line breaks only between groups (design-language 10.20). */}
           <code
             data-testid="enrolment-key"
-            className="rounded-control bg-sunken px-3 py-2 font-mono text-h3 tracking-wider break-all select-all"
+            className="rounded-control bg-sunken px-3 py-2 font-mono text-h3 tracking-wider select-all"
           >
-            {groupedKey(secret.reveal())}
+            {groupedKey(secret.reveal())
+              .split(' ')
+              .map((group, index) => (
+                <Fragment key={index}>
+                  {index > 0 && ' '}
+                  <span className="whitespace-nowrap">{group}</span>
+                </Fragment>
+              ))}
           </code>
         </div>
       </div>
