@@ -92,7 +92,7 @@ export class CredentialResets {
         if (reset.reset !== 'authenticator') {
           // The schema refuses a password reset without a temporary password; the command refuses it too.
           if (password === undefined) return refusal('refused', 'access.password-refused', true);
-          const rules = await readSetting(context, 'access.password-rules', today.date);
+          const rules = await readSetting(context, 'access.password-rules');
           if (rules.kind === 'not-set') {
             return refusal('unavailable', 'access.password-rules-not-set', false, [
               { kind: 'setting', setting: 'access.password-rules' },

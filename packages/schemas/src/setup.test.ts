@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Secret, secretRegistry } from './secret.js';
 import {
+  missingSetupSettings,
   setupFingerprintFieldsSchema,
   setupOutcomeSchema,
   setupRequestFileSchema,
@@ -90,16 +91,30 @@ describe('setup request (PRD-ACS-023, DEC-112; access-and-approvals 9.11)', () =
 });
 
 describe('setup settings (code-house-rules 12.14; AGENTS.md "Never invent a value")', () => {
-  it('needs the origin, the timezone and the password rules, and gives none a default', () => {
-    for (const name of ['origin', 'timezone', 'passwordRules'] as const) {
+  it('needs the origin and every required security setting, and gives none a default (PRD-SEC-017; DEC-118)', () => {
+    for (const name of ['origin', 'timezone', 'passwordRules', 'signInThrottling', 'officeSessionLimits'] as const) {
       const settings = without(syntheticSettings(), name);
       expect(setupSettingsSchema.safeParse(settings).success).toBe(false);
     }
   });
 
-  it('leaves an absent throttling or session limit absent: not set, never a default', () => {
-    const least = without(without(syntheticSettings(), 'signInThrottling'), 'officeSessionLimits');
-    expect(setupSettingsSchema.parse(least)).toEqual(least);
+  it('test 19j names each required security setting a request leaves out (DEC-118)', () => {
+    const request = syntheticRequest();
+    expect(missingSetupSettings(request)).toEqual([]);
+    const least = without(without(request.settings, 'signInThrottling'), 'officeSessionLimits');
+    expect(missingSetupSettings({ ...request, settings: least })).toEqual([
+      'settings.signInThrottling',
+      'settings.officeSessionLimits',
+    ]);
+    expect(missingSetupSettings({ ...request, settings: without(request.settings, 'timezone') })).toEqual([
+      'settings.timezone',
+    ]);
+    expect(missingSetupSettings({ ...request, settings: undefined })).toEqual([
+      'settings.timezone',
+      'settings.passwordRules',
+      'settings.signInThrottling',
+      'settings.officeSessionLimits',
+    ]);
   });
 
   it('refuses an unknown timezone, an unknown origin and a value of the wrong shape', () => {

@@ -146,19 +146,20 @@ export class SignIn {
   }
 
   private async look(context: TransactionContext, attempt: SignInAttempt): Promise<Looked> {
+    // Sign-in stays unavailable while any required security setting is not set, naming every one missing; nothing
+    // falls back to a value (access-and-approvals 3.1; code-house-rules 12.14; PRD-SEC-017; DEC-118). The office
+    // session limits too: with none set, no session can be kept, so none starts (3.3).
     const today = await context.businessDate();
-    if (today.kind === 'not-set') {
-      return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'configuration.timezone' }] };
-    }
-    const throttling = await readSetting(context, 'access.sign-in-throttling', today.date);
-    if (throttling.kind === 'not-set') {
-      return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.sign-in-throttling' }] };
-    }
-    // A session needs its limits: with none set, no session can be kept, so none starts (3.3; code-house-rules 12.14).
-    const limits = await readSetting(context, 'access.office-session-limits', today.date);
-    if (limits.kind === 'not-set') {
-      return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.office-session-limits' }] };
-    }
+    const throttling = await readSetting(context, 'access.sign-in-throttling');
+    const rules = await readSetting(context, 'access.password-rules');
+    const limits = await readSetting(context, 'access.office-session-limits');
+    const missing: MissingItem[] = [
+      ...(today.kind === 'not-set' ? ['configuration.timezone'] : []),
+      ...(throttling.kind === 'not-set' ? ['access.sign-in-throttling'] : []),
+      ...(rules.kind === 'not-set' ? ['access.password-rules'] : []),
+      ...(limits.kind === 'not-set' ? ['access.office-session-limits'] : []),
+    ].map((setting) => ({ kind: 'setting', setting }));
+    if (missing.length > 0 || throttling.kind === 'not-set') return { kind: 'unavailable', missing };
     const loginDigest = this.dependencies.keys.digest(
       attempt.organisation.organisationCode,
       'sign-in-throttling',

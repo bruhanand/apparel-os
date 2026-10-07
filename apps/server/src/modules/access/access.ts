@@ -15,6 +15,8 @@ import {
   type RoleDraft,
   type RoleVersionDraft,
   type Secret,
+  type SecuritySettings,
+  type SecuritySettingVersionDraft,
   type UserVersionDraft,
 } from '@apparel-os/schemas';
 import { CommandDefect, type CommandRefusal, type LockTarget, type TransactionContext } from '../../kernel/index.js';
@@ -28,6 +30,7 @@ import {
 } from './commands/access-changes.js';
 import { ApprovalSettingsChanges } from './commands/approval-settings.js';
 import { holdAuthority, type AuthorityActor } from './commands/authority.js';
+import { SecuritySettingsChanges } from './commands/security-settings.js';
 import {
   Approvals,
   type Decidable,
@@ -157,6 +160,18 @@ export interface AccessInterface {
     draft: ApprovalRuleSettingVersionDraft,
   ): Promise<Prepared<{ settingId: string; versionId: string; requestId: string }>>;
   /**
+   * Prepares a new version of an essential security setting (access-and-approvals 3.3; POL-02.06, POL-02.07;
+   * DEC-118): the throttling, the password rules or the office session limits, for a different authorised person to
+   * approve with a fresh code.
+   */
+  prepareSecuritySettingVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: SecuritySettingVersionDraft,
+  ): Promise<Prepared<{ settingId: string; versionId: string; requestId: string }>>;
+  /** The essential security settings, each with its versions and the one in force now (design-language 10.19). */
+  securitySettings(context: TransactionContext): Promise<SecuritySettings>;
+  /**
    * Decide an approval request (access-and-approvals 9.3, 9.5; module-map 6.2 flow A): a protected action asking a
    * fresh code (3.3); never by a service identity or a preparer (PRD-ACS-006, PRD-SEC-018).
    */
@@ -255,6 +270,7 @@ export class Access implements AccessInterface {
   private readonly changes: AccessChanges;
   private readonly users: UserChanges;
   private readonly settings: ApprovalSettingsChanges;
+  private readonly securitySettingChanges: SecuritySettingsChanges;
   private readonly approvals: Approvals;
 
   constructor(private readonly dependencies: AccessDependencies) {
@@ -262,12 +278,14 @@ export class Access implements AccessInterface {
     this.changes = new AccessChanges(dependencies.audit, this.registry);
     this.users = new UserChanges(dependencies.audit);
     this.settings = new ApprovalSettingsChanges(dependencies.audit);
+    this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit);
     this.approvals = new Approvals({
       audit: dependencies.audit,
       registry: this.registry,
       changes: this.changes,
       users: this.users,
       settings: this.settings,
+      securitySettings: this.securitySettingChanges,
       keys: dependencies.keys,
     });
   }
@@ -373,6 +391,14 @@ export class Access implements AccessInterface {
     draft: ApprovalRuleSettingVersionDraft,
   ) {
     return this.settings.prepareRuleSettingVersion(context, preparer, settingId, draft);
+  }
+
+  prepareSecuritySettingVersion(context: TransactionContext, preparer: Preparer, draft: SecuritySettingVersionDraft) {
+    return this.securitySettingChanges.prepare(context, preparer, draft);
+  }
+
+  securitySettings(context: TransactionContext) {
+    return this.securitySettingChanges.list(context);
   }
 
   decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput) {

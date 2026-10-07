@@ -121,15 +121,28 @@ export const setting = access.table('setting', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A setting's effective-dated versions, with the origin of each (code-house-rules 7.3, 12.14). */
+/**
+ * A setting's effective-dated versions, with the origin of each (code-house-rules 7.3, 12.14), dated by instants so a
+ * change may take effect at its decision (access-and-approvals 3.3; DEC-118). `startsOn`: null to take effect at the
+ * decision, or the business day from whose start it takes effect.
+ */
 export const settingVersion = access.table('setting_version', {
   id: uuid('id').primaryKey(),
   settingId: uuid('setting_id').notNull(),
   valueFormat: text('value_format').notNull(),
   value: jsonb('value').notNull(),
   origin: text('origin').notNull(),
-  validDuring: daterange('valid_during').notNull(),
+  validDuring: tstzrange('valid_during').notNull(),
   decision: text('decision').notNull(),
+  startsOn: date('starts_on', { mode: 'string' }),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a setting version: its preparers (access-and-approvals 9.1). */
+export const settingVersionChange = access.table('setting_version_change', {
+  id: uuid('id').primaryKey(),
+  settingVersionId: uuid('setting_version_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

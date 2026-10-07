@@ -140,7 +140,7 @@ export class Sessions {
     const looked = await this.dependencies.runner.read(request.request, async (context) => {
       const today = await context.businessDate();
       if (today.kind === 'not-set') return { kind: 'unavailable' as const, setting: 'configuration.timezone' };
-      const throttling = await readSetting(context, 'access.sign-in-throttling', today.date);
+      const throttling = await readSetting(context, 'access.sign-in-throttling');
       if (throttling.kind === 'not-set') {
         return { kind: 'unavailable' as const, setting: 'access.sign-in-throttling' };
       }

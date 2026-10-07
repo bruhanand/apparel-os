@@ -20,7 +20,13 @@ function request(change: (input: SetupRequestInput) => void = () => undefined) {
       personas: [],
       temporaryPassword: 'SYNTHETIC-approver-1',
     },
-    settings: { origin: 'synthetic', timezone: 'Asia/Kolkata', passwordRules: { minimumLength: 12 } },
+    settings: {
+      origin: 'synthetic',
+      timezone: 'Asia/Kolkata',
+      passwordRules: { minimumLength: 12 },
+      signInThrottling: { failureLimit: 5, windowSeconds: 600 },
+      officeSessionLimits: { idleLockSeconds: 1800, absoluteSeconds: 28_800 },
+    },
   };
   change(input);
   return setupRequestSchema.parse(input);
@@ -43,7 +49,13 @@ describe('setup fingerprint (access-and-approvals 9.11; RR-211)', () => {
   it('does not depend on the order of keys', () => {
     const reordered = request();
     const shuffled = setupRequestSchema.parse({
-      settings: { passwordRules: { minimumLength: 12 }, timezone: 'Asia/Kolkata', origin: 'synthetic' },
+      settings: {
+        officeSessionLimits: { absoluteSeconds: 28_800, idleLockSeconds: 1800 },
+        signInThrottling: { windowSeconds: 600, failureLimit: 5 },
+        passwordRules: { minimumLength: 12 },
+        timezone: 'Asia/Kolkata',
+        origin: 'synthetic',
+      },
       firstApprover: {
         temporaryPassword: 'SYNTHETIC-approver-1',
         personas: [],
@@ -68,7 +80,8 @@ describe('setup fingerprint (access-and-approvals 9.11; RR-211)', () => {
       (input) => (input.firstAdmin.login = 'Synthetic.Admin'),
       (input) => (input.firstAdmin.personas = ['P-AUD', 'P-ADM']),
       (input) => (input.settings.passwordRules = { minimumLength: 13 }),
-      (input) => (input.settings.signInThrottling = { failureLimit: 5, windowSeconds: 600 }),
+      (input) => (input.settings.signInThrottling = { failureLimit: 6, windowSeconds: 600 }),
+      (input) => (input.settings.officeSessionLimits = { idleLockSeconds: 1800, absoluteSeconds: 28_801 }),
       (input) => (input.settings.origin = 'test-setup'),
       (input) => (input.databaseName = 'syn_org_a2'),
       (input) => (input.firstApprover.displayName = 'SYNTHETIC Approver 2'),

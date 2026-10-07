@@ -1,5 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
+  missingSetupSettings,
   permissionRegistry,
   registryByCode,
   type RecordTypeDeclaration,
@@ -48,8 +49,8 @@ export interface SetupStepOptions {
 }
 
 /**
- * The request cannot be set up as given, before anything is read or written: a temporary password the password rules
- * refuse, or a service identity list the step cannot write. Its message names no value supplied (PRD-SEC-014).
+ * The request cannot be set up as given, before anything is read or written: a required security setting left out
+ * (DEC-118), a temporary password the password rules refuse, or a service identity list the step cannot write. Its message names no value supplied (PRD-SEC-014).
  */
 export class SetupRequestRefused extends Error {}
 
@@ -170,8 +171,15 @@ function checkPasswords(request: SetupRequest): void {
   }
 }
 
-/** Checks the request before anything is read: the identities to write. */
+/**
+ * Checks the request before anything is read: every required security setting is there, each one left out named
+ * (access-and-approvals 3.1, 9.11; PRD-SEC-017; DEC-118), and the identities to write.
+ */
 function checkRequest(options: SetupStepOptions, registry: ReadonlyMap<string, RecordTypeDeclaration>): void {
+  const missing = missingSetupSettings(options.request);
+  if (missing.length > 0) {
+    throw new SetupRequestRefused(`The request leaves out required security settings: ${missing.join(', ')}`);
+  }
   const codes = options.serviceIdentities.map((identity) => identity.code);
   if (codes.includes(SETUP_IDENTITY) || new Set(codes).size !== codes.length) {
     throw new SetupRequestRefused('Each service identity is written once, and `setup` only by the step itself');

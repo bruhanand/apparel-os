@@ -79,12 +79,11 @@ const ALL_MEMBERS: AssignmentScope = {
 
 /** The access settings the request carries, by key (access-and-approvals 3.1, 3.2, 3.3). */
 function accessSettingsOf(settings: SetupSettings): [AccessSettingKey, unknown][] {
-  const written: [AccessSettingKey, unknown][] = [['access.password-rules', settings.passwordRules]];
-  if (settings.signInThrottling !== undefined) written.push(['access.sign-in-throttling', settings.signInThrottling]);
-  if (settings.officeSessionLimits !== undefined) {
-    written.push(['access.office-session-limits', settings.officeSessionLimits]);
-  }
-  return written;
+  return [
+    ['access.password-rules', settings.passwordRules],
+    ['access.sign-in-throttling', settings.signInThrottling],
+    ['access.office-session-limits', settings.officeSessionLimits],
+  ];
 }
 
 /**
@@ -133,8 +132,10 @@ export async function writeSetup(
       valueFormat: SETTING_FORMATS[key],
       value: parsed,
       origin: write.settings.origin,
-      validDuring: from,
+      // Setting versions are dated by instants (access-and-approvals 3.3; DEC-118): from the setup step's start.
+      validDuring: `[${context.startedAt.toISOString()},)`,
       decision: 'Approved',
+      startsOn: null,
     });
     await record({
       record: { module: 'access', type: 'setting', id: settingId, versionId },

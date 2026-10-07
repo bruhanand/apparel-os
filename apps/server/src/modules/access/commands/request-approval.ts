@@ -12,6 +12,7 @@ import {
   roleAssignmentChange,
   roleAssignmentWithdrawalChange,
   roleVersionChange,
+  settingVersionChange,
 } from '../db/schema.js';
 import { accessApprovalRules } from '../domain/approval-rules.js';
 import { approvalDecided, approvalRequested } from '../events.js';
@@ -64,6 +65,11 @@ export async function preparersOf(
           .select({ userId: approvalRuleSettingVersionChange.changedByUserId })
           .from(approvalRuleSettingVersionChange)
           .where(eq(approvalRuleSettingVersionChange.approvalRuleSettingVersionId, versionId));
+      case 'access.setting.change':
+        return context.tx
+          .select({ userId: settingVersionChange.changedByUserId })
+          .from(settingVersionChange)
+          .where(eq(settingVersionChange.settingVersionId, versionId));
       default:
         throw new CommandDefect(`No approval rule for action type ${actionType}`);
     }
