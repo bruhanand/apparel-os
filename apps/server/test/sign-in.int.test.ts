@@ -143,6 +143,8 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
       // So the shell shows "No access assigned" (DEC-118; RR-260), and times in the synthetic timezone (RR-310).
       roleAssignmentInForce: false,
       timezone: 'Etc/UTC',
+      // The idle-lock limit in force, from which the screen shows its lock without polling (S1-F01-T30).
+      idleLockSeconds: SYNTHETIC_SESSION_LIMITS.idleLockSeconds,
     });
 
     const records = await rows<{ outcome: string; user_id: string }>(

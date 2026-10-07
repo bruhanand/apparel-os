@@ -23,6 +23,7 @@ const user = {
   personasHeld: ['P-ADM'],
   roleAssignmentInForce: true,
   timeZone: 'UTC',
+  idleLockSeconds: 900,
 } as const;
 const banner = { environment: 'dev', message: 'environment.dev', tone: 'info' } as const;
 

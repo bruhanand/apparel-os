@@ -22,6 +22,7 @@ const locked: ShellSession = {
     personasHeld: ['P-ADM'],
     roleAssignmentInForce: true,
     timeZone: 'UTC',
+    idleLockSeconds: 900,
   },
   grants: [],
 };

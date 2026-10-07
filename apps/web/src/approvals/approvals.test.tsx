@@ -26,6 +26,7 @@ const session: ShellSession = {
     personasHeld: [],
     roleAssignmentInForce: true,
     timeZone: 'UTC',
+    idleLockSeconds: 900,
   },
   grants: [],
 };
