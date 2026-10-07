@@ -38,7 +38,7 @@ import {
   Toolbar,
   useGranted,
 } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
 import { useBusinessToday } from './business-date';
@@ -163,6 +163,7 @@ function NewAssignmentForm() {
   );
   return (
     <form
+      id="assignment-new-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -230,14 +231,7 @@ function NewAssignmentForm() {
           {...form.register('validTo')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="assignment-new-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
@@ -249,6 +243,7 @@ function WithdrawalForm({ assignment }: { assignment: AssignmentRecord }) {
   const errors = form.formState.errors;
   return (
     <form
+      id="assignment-withdrawal-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -267,14 +262,12 @@ function WithdrawalForm({ assignment }: { assignment: AssignmentRecord }) {
           {...form.register('reason')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="destructive"
-          label="setup.assignments.withdraw"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions
+        form="assignment-withdrawal-form"
+        variant="destructive"
+        label="setup.assignments.withdraw"
+        pending={submission.state.kind === 'pending'}
+      />
     </form>
   );
 }

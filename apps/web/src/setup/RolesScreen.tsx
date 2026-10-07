@@ -26,7 +26,7 @@ import {
   permissionsOfGrid,
   withAllActions,
 } from './permission-grid';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
 import { useBusinessToday } from './business-date';
@@ -140,7 +140,7 @@ function StartFrom({ roles, onPick }: { roles: readonly RoleRecord[]; onPick: (c
 }
 
 /** A new role: code, name, start and permissions (access-and-approvals 4.2). */
-function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
+export function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
   const today = useBusinessToday();
   const form = useRouteForm(routes.prepareRole, { permissions: [], validFrom: today }, [
     { path: 'validFrom', earliest: today },
@@ -155,6 +155,7 @@ function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
   };
   return (
     <form
+      id="role-new-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -202,14 +203,7 @@ function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
       </FormField>
       <StartFrom roles={roles} onPick={choose} />
       <PermissionGrid selection={selection} onChange={choose} />
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="role-new-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
@@ -234,6 +228,7 @@ function RoleVersionForm({ role }: { role: RoleRecord }) {
   };
   return (
     <form
+      id="role-version-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -278,14 +273,7 @@ function RoleVersionForm({ role }: { role: RoleRecord }) {
         />
       </FormField>
       <PermissionGrid selection={selection} onChange={choose} />
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="role-version-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }

@@ -676,6 +676,7 @@ Each entry covers anatomy, states and usage rules.
   - Scrolling body of **solid** cards and fields.
   - Footer: secondary + one primary.
 - **Widths:** 420 px (640 px for a PT preview); full screen on mobile.
+- **Form actions, as built** (S1-F01-T33): a form inside the drawer draws its actions into the footer, outside the scrolling body: Cancel (closes the drawer) and the one primary button, which submits the form by its `form` attribute. The decision form of the approval panel is the exception: Approve and Reject stay in the panel beside what the approver reads (1 rule 5). **Design choice.**
 - **Behaviour:**
   - Esc closes, and focus returns to the opener.
   - Opening never loses the list position.

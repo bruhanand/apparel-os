@@ -79,7 +79,7 @@ test('POL-02.07 DEC-118 the Admin prepares a session-limit change and the approv
       await starts.blur();
       await expect(drawer.getByText('The start date is in the past. Choose today or a later date.')).toBeVisible();
       await drawer.getByLabel(/^Takes effect/).selectOption({ label: 'When approved' });
-      await drawer.getByRole('button', { name: 'Request approval' }).click();
+      await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' }).click();
       await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
       await admin.keyboard.press('Escape');
     });

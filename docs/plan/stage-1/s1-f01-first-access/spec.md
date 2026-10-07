@@ -192,7 +192,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T30 The screen locks itself when the idle limit passes](tickets/T30-idle-lock-on-screen.md) | ready-for-agent | — (test report F2) |
 | [S1-F01-T31 A refused password names the rule it failed](tickets/T31-password-rule-named.md) | ready-for-agent | — (test report F1) |
 | [S1-F01-T32 Phone-width top bar as designed](tickets/T32-phone-top-bar.md) | done | — (test report F5) |
-| [S1-F01-T33 Form actions in the drawer footer](tickets/T33-drawer-footer-actions.md) | ready-for-agent | — (test report F7) |
+| [S1-F01-T33 Form actions in the drawer footer](tickets/T33-drawer-footer-actions.md) | done | — (test report F7) |
 | [S1-F01-T34 A start date before today says so](tickets/T34-date-before-today-message.md) | done | — (test report F8) |
 | [S1-F01-T35 Operator commands keep answers piped in at once](tickets/T35-operator-prompt-piped-input.md) | ready-for-agent | — (test report F6) |
 

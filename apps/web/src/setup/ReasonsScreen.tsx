@@ -16,7 +16,7 @@ import { KeptDraftBanner } from '../lock/KeptDraftBanner';
 import { t } from '../messages/catalogue';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
 import { useBusinessToday } from './business-date';
@@ -39,6 +39,7 @@ function NewReasonForm() {
   const errors = form.formState.errors;
   return (
     <form
+      id="reason-new-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -96,14 +97,7 @@ function NewReasonForm() {
           {...form.register('validFrom')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="reason-new-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
@@ -121,6 +115,7 @@ function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
   const errors = form.formState.errors;
   return (
     <form
+      id="reason-version-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -156,14 +151,7 @@ function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
           {...form.register('validFrom')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="reason-version-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }

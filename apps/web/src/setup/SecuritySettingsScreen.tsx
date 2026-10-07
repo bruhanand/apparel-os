@@ -16,7 +16,7 @@ import { useTimeZone } from '../shell/session';
 import { businessDayAfter, useBusinessToday } from './business-date';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Toolbar } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 
 // Setup › Security settings (design-language 10.19; access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118,
@@ -95,6 +95,7 @@ function ChangeForm({ view }: { view: SettingView }) {
   const id = (field: string) => `security-${view.setting.replace('access.', '')}-${field}`;
   return (
     <form
+      id="security-change-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -161,14 +162,7 @@ function ChangeForm({ view }: { view: SettingView }) {
           />
         </FormField>
       )}
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="security-change-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
