@@ -26,6 +26,19 @@ describe('record type names (code-house-rules 12.13; visual review finding 9)', 
   });
 });
 
+describe('operation names (code-house-rules 12.13; visual review)', () => {
+  it('has words for every operation the server records, so no history shows a code such as set-up-organisation', () => {
+    const SERVER = join(SRC, '../../server/src');
+    const operations = new Set(
+      sourceFiles(SERVER).flatMap((file) =>
+        [...readFileSync(file, 'utf8').matchAll(/operation: '([a-z-]+)'/g)].map((match) => match[1] ?? ''),
+      ),
+    );
+    expect(operations.size).toBeGreaterThan(10);
+    expect([...operations].filter((operation) => !isMessageId(`history.operation.${operation}`))).toEqual([]);
+  });
+});
+
 describe('t (code-house-rules 12.13)', () => {
   it('fills named parameters', () => {
     expect(t('error-state.title', { what: 'users' })).toBe('Couldn’t load users');

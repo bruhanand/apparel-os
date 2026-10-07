@@ -29,10 +29,12 @@ function Change({ change, lists }: { change: HistoryChange; lists: SubjectLists 
   const label = fieldLabel(change.field);
   let detail: React.ReactNode;
   if (change.kind === 'value' || change.kind === 'restricted') {
-    detail = t('history.changed-from-to', {
-      before: valueText(change.field, change.before, lists),
-      after: valueText(change.field, change.after, lists),
-    });
+    const after = valueText(change.field, change.after, lists);
+    // Recorded with the same value before and after (such as an end left open): the value once, with no arrow.
+    detail =
+      JSON.stringify(change.before ?? null) === JSON.stringify(change.after ?? null)
+        ? after
+        : t('history.changed-from-to', { before: valueText(change.field, change.before, lists), after });
   } else if (change.kind === 'masked') {
     detail = (
       <span

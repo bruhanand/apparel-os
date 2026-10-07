@@ -38,6 +38,16 @@ export function useSubjectLists(): SubjectLists {
   };
 }
 
+/** The reads a subject is named from, for a refresh to read again. */
+export const subjectReads = [
+  'readApprovalRequest',
+  'listUsers',
+  'listRoles',
+  'listRoleAssignments',
+  'listApprovalReasonRecords',
+  'listSecuritySettings',
+] as const;
+
 /** The request read of one approval, shared with its panel. */
 export function approvalRead(requestId: string) {
   return readQuery(api, 'readApprovalRequest', { params: { requestId } });

@@ -180,8 +180,11 @@ describe('HistoryTimeline (numbering-and-audit 4.1, 4.3; PRD-ACS-013)', () => {
     expect(shown).toContain('Person empty → SYNTHETIC Meera');
     expect(shown).toContain('Role a role you may not view → SYN-AUDIT · SYNTHETIC auditor');
     expect(shown).toContain('Scope empty → Legal entity: All members · Place: All members · Brand: All members');
-    expect(shown).toContain('Valid from empty → 07 Oct 2026');
-    expect(shown).toContain('Valid to no end → no end');
+    // Labelled as the assignment editor labels them.
+    expect(shown).toContain('Starts on empty → 07 Oct 2026');
+    // A field recorded with the same value before and after shows the value once.
+    expect(shown).toContain('Ends before no end');
+    expect(shown).not.toContain('no end → no end');
     for (const code of ['displayName', 'roleId', 'validFrom', '"kind"', '[', USER]) expect(shown).not.toContain(code);
   });
 });
