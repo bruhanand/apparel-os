@@ -139,6 +139,11 @@ export const englishIndia = {
   'missing.field-class': 'This needs a permission to see a restricted field.',
   'missing.policy': 'The policy it depends on is not signed, or its values are not configured.',
   'missing.setting': 'A setting it needs is not set.',
+  // The rule a refused password failed, with the setting's value (access-and-approvals 3.2; S1-F01-T31).
+  'missing.password-rule.minimum-length': {
+    one: 'The password needs at least {count} character.',
+    other: 'The password needs at least {count} characters.',
+  },
   'missing.capability': 'This capability is switched off.',
   'missing.activity': 'This activity is not granted here.',
   'missing.other': 'Something it needs is missing.',

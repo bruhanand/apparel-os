@@ -1,6 +1,6 @@
 # S1-F01-T31 — A refused password names the rule it failed
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
@@ -19,3 +19,4 @@ Feature: [S1-F01 First access](../spec.md)
 ## Notes
 
 - Found in the hands-on test, [test-report.md](../test-report.md) F1.
+- Built: `checkPasswordRules` in `apps/server/src/modules/access/domain/sign-in-rules.ts` returns `{ ok: true }` or the rule failed with the setting's value (`meetsPasswordRules` stays as the boolean for the setup step). `access.password-refused` carries it as a `missing` item `{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '<n>' }` on own password, credential reset and new user; operator recovery prints `passwordRule` on its refused answer. `missingText` in `apps/web/src/components/UnavailableState.tsx` shows "The password needs at least {count} characters." under the existing banner text; with no item the plain text stays. Design: access-and-approvals 3.2, design-language 13.

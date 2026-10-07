@@ -6,6 +6,7 @@ import {
   passwordRulesSchema,
   sessionLimitsSchema,
   signInThrottlingSchema,
+  type MissingItem,
   type PasswordRules,
   type Secret,
   type SessionLimits,
@@ -53,9 +54,31 @@ export function sessionLimitReached(
   return 'none';
 }
 
-/** Whether a new password meets the password rules, its length counted in characters (code points), not code units. */
-export function meetsPasswordRules(rules: PasswordRules, password: Secret): boolean {
+/** The first password rule a new password failed, with the setting's value (access-and-approvals 3.2; S1-F01-T31). */
+export type PasswordRuleCheck =
+  { readonly ok: true } | { readonly ok: false; readonly rule: 'minimum-length'; readonly minimumLength: number };
+
+/**
+ * Which password rule a new password fails, its length counted in characters (code points), not code units. The
+ * answer holds the setting's value only, never the password (code-house-rules 12.3).
+ */
+export function checkPasswordRules(rules: PasswordRules, password: Secret): PasswordRuleCheck {
   let characters = 0;
   for (const character of password.reveal()) if (character !== '') characters += 1;
-  return characters >= rules.minimumLength;
+  return characters >= rules.minimumLength
+    ? { ok: true }
+    : { ok: false, rule: 'minimum-length', minimumLength: rules.minimumLength };
+}
+
+/** Whether a new password meets the password rules. */
+export function meetsPasswordRules(rules: PasswordRules, password: Secret): boolean {
+  return checkPasswordRules(rules, password).ok;
+}
+
+/**
+ * The `missing` item of an `access.password-refused` answer: the rule failed and the setting's value, as strings
+ * (code-house-rules 12.3 "What is missing"; S1-F01-T31).
+ */
+export function passwordRuleMissing(failed: Extract<PasswordRuleCheck, { ok: false }>): MissingItem {
+  return { kind: 'password-rule', rule: failed.rule, minimumLength: String(failed.minimumLength) };
 }

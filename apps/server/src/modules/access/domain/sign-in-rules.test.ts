@@ -2,8 +2,10 @@ import { Secret } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { hashPassword, verifyPassword } from './password-hash.js';
 import {
+  checkPasswordRules,
   isSlowed,
   meetsPasswordRules,
+  passwordRuleMissing,
   passwordRulesSchema,
   sessionLimitReached,
   SETTING_FORMATS,
@@ -37,6 +39,17 @@ describe('the password rules (access-and-approvals 3.2; GC3-5)', () => {
     expect(meetsPasswordRules(rules, new Secret('abcd'))).toBe(true);
     expect(meetsPasswordRules(rules, new Secret('ab😀'))).toBe(false);
     expect(passwordRulesSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('S1-F01-T31 names the rule a password fails, with the setting’s value and never the password', () => {
+    const rules = passwordRulesSchema.parse({ minimumLength: 4 });
+    expect(checkPasswordRules(rules, new Secret('abcd'))).toEqual({ ok: true });
+    const failed = checkPasswordRules(rules, new Secret('abc'));
+    expect(failed).toEqual({ ok: false, rule: 'minimum-length', minimumLength: 4 });
+    if (failed.ok) throw new Error('The password should have failed');
+    const item = passwordRuleMissing(failed);
+    expect(item).toEqual({ kind: 'password-rule', rule: 'minimum-length', minimumLength: '4' });
+    expect(JSON.stringify([failed, item])).not.toContain('abc"');
   });
 });
 

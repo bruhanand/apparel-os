@@ -19,7 +19,7 @@ import { revokeSessions } from '../commands/sessions.js';
 import { appUser, setupRecord } from '../db/schema.js';
 import { SETUP_IDENTITY } from '../domain/first-roles.js';
 import { hashPassword } from '../domain/password-hash.js';
-import { meetsPasswordRules } from '../domain/sign-in-rules.js';
+import { checkPasswordRules, type PasswordRuleCheck } from '../domain/sign-in-rules.js';
 import { assignmentsInForce } from '../queries/assignments.js';
 import { authenticateInternalIdentity } from '../queries/service-identities.js';
 import { readSetting } from '../queries/settings.js';
@@ -58,10 +58,18 @@ export type RecoveryOutcome =
       readonly userId: string;
       readonly revokedSessionIds: readonly string[];
     }
-  | { readonly outcome: 'refused'; readonly reason: RecoveryRefusal };
+  | {
+      readonly outcome: 'refused';
+      readonly reason: RecoveryRefusal;
+      /** For `password-refused` on a password that failed a rule: the rule and the setting's value, never the password (S1-F01-T31). */
+      readonly passwordRule?: Extract<PasswordRuleCheck, { ok: false }>;
+    };
 
 class Refused extends Error {
-  constructor(readonly reason: RecoveryRefusal) {
+  constructor(
+    readonly reason: RecoveryRefusal,
+    readonly passwordRule?: Extract<PasswordRuleCheck, { ok: false }>,
+  ) {
     super(reason);
   }
 }
@@ -101,7 +109,11 @@ export async function runRecovery(options: RecoveryOptions): Promise<RecoveryOut
       'The recovery command was refused; nothing was written',
       CONTEXT,
     );
-    return { outcome: 'refused', reason: error.reason };
+    return {
+      outcome: 'refused',
+      reason: error.reason,
+      ...(error.passwordRule === undefined ? {} : { passwordRule: error.passwordRule }),
+    };
   }
 }
 
@@ -183,7 +195,8 @@ async function recoverIn(
   if (options.temporaryPassword !== undefined && passwordHash !== undefined) {
     const rules = await readSetting(context, 'access.password-rules');
     if (rules.kind === 'not-set') throw new Refused('password-rules-not-set');
-    if (!meetsPasswordRules(rules.value, options.temporaryPassword)) throw new Refused('password-refused');
+    const passwordRule = checkPasswordRules(rules.value, options.temporaryPassword);
+    if (!passwordRule.ok) throw new Refused('password-refused', passwordRule);
   }
 
   const { changes } = await replaceCredentials(context, user.id, {
