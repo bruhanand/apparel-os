@@ -1231,3 +1231,18 @@
   - **History upkeep (RR-240).** The audit partitions are kept up by a job of the existing worker on a schedule, independent of deployments. Its failures are visible; upkeep never deletes history.
 - **Why.** Same-day disabling and the Organisation's timezone close gaps the PRD left; a missing setting blocks rather than guesses (`AGENTS.md` "Never invent a value", `PRD-SEC-017`); a QR code in the app helps KDPS staff enrol without sending the secret to anyone else; self-hosted fonts keep the one origin; the retry default lets the worker run on `dev` without making a KDPS value; and the setup step, the lock order and the worker are reused rather than adding new paths.
 - **Changed.** `prd.md`: new `PRD-SEC-019` and `PRD-MOD-017`; the Stack's Authentication row. `AGENTS.md` Stack table. access-and-approvals 2.1, 3.1, 3.2, 3.3, 9.5, 9.11, 15 and 16; personas.md section 2; design-language 3, 8 and 10.20; code-house-rules 3.2, 5.1, 8.2, 9, 11.2, 12.9, 12.14, CH-5 and CH-10; numbering-and-audit 4.4; deployment.md section 2. `plan/open-items.md`; tickets `S1-F01-T22` to `S1-F01-T25`; `STATUS.md`. No policy text changes.
+
+## DEC-119 — Worker timings for synthetic and test work
+
+- **Date:** 7 Oct 2026 · **Decided by:** product owner · **Report item:** RR-270 (the part `DEC-118` left OPEN) and the upkeep job of RR-240; 7 Oct 2026
+- **Question.** Which interval and limit values the worker uses for synthetic and test work, beyond the five attempts `DEC-118` approved.
+- **Options.** The values proposed in RR-270, or others.
+- **Choice.**
+  - Seal closed audit blocks every 15 minutes; verify the seals hourly.
+  - Check the audit partition coverage hourly, creating partitions ahead of need through the worker's upkeep job (`DEC-118`, RR-240).
+  - Poll for jobs every 5 seconds.
+  - First retry after 10 seconds, then increasing delays with jitter; five attempts in all (`DEC-118`).
+  - A limit of five minutes per attempt for ordinary jobs. Import and restore jobs get their own, longer limits, set with those jobs (`S1-F06`, `S1-F13`, `S1-F14`). A timeout never makes a committed action run twice: every job step keeps its idempotency (`PRD-INT-002`, `PRD-INT-008`).
+  - As with `DEC-118`, these are provisional values for synthetic and test work only, labelled synthetic, never KDPS values and never defaults in code.
+- **Why.** They let the worker run on `dev` and in tests now, as proposed, while the values of `kdps-test` and production stay with their own decisions.
+- **Changed.** Applied by `S1-F01-T24`: code-house-rules 12.9 and CH-10, the synthetic worker settings, `plan/open-items.md` RR-270.
