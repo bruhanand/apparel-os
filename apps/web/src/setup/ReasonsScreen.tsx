@@ -18,6 +18,7 @@ import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from './parts';
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
+import { useTimeZone } from '../shell/session';
 
 // Setup › Reason codes (access-and-approvals 9.5, 14; POL-02.23, DEC-104): every approve and reject reason with each
 // version. The list itself is KDPS's (KDPS Owner question 45); on dev every reason is SYNTHETIC. A change to the list
@@ -220,6 +221,7 @@ function ReasonDrawer({ reason, onClose }: { reason: ReasonRecord; onClose: () =
 
 /** Setup › Reason codes. */
 export function ReasonsScreen() {
+  const timeZone = useTimeZone();
   const query = useQuery(readQuery(api, 'listApprovalReasonRecords', {}));
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -248,7 +250,7 @@ export function ReasonsScreen() {
           return (
             <div className="flex flex-col gap-3">
               <div className="flex justify-end">
-                <AsOf asOf={list.asOf} />
+                <AsOf asOf={list.asOf} timeZone={timeZone} />
               </div>
               {list.reasons.length === 0 ? (
                 <EmptyState title="setup.reasons.empty.title" body="setup.reasons.empty.body" />

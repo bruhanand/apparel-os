@@ -11,6 +11,7 @@ import {
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
   Worker,
+  type JobRegistry,
 } from '../src/kernel/index.js';
 import { approvalDecided, approvalRequested } from '../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
@@ -32,6 +33,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 
 // S1-F01-T13: the approval journey through the API, with My work fed by the worker (access-and-approvals 9.1, 9.5,
 // 11, 15 test 20; module-map 4.8, 6.2 flow A; PRD-ACS-009, PRD-INT-002, PRD-INT-008). The Admin prepares, the
@@ -41,7 +43,12 @@ import { connect, databaseUrl } from './support/postgres.js';
 const SYNTHETIC_THROTTLING = { failureLimit: 50, windowSeconds: 600 };
 const SYNTHETIC_PASSWORD_RULES = { minimumLength: 12 };
 const SYNTHETIC_LIMITS = { idleLockSeconds: 3600, absoluteSeconds: 7200 };
-const retry = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
+/** The inbox's consumers, with SYNTHETIC worker settings (DEC-118, DEC-119; CH-10). */
+const inboxRegistry: JobRegistry = {
+  events: [approvalRequested, approvalDecided],
+  consumers: inboxConsumers,
+  jobKinds: [],
+};
 
 type Enrolled = SyntheticUser & { factorSecret: Buffer };
 
@@ -106,12 +113,8 @@ beforeAll(async () => {
     }),
     identities: jobIdentities(),
     logger: log.logger,
-    registry: { events: [approvalRequested, approvalDecided], consumers: inboxConsumers, jobKinds: [] },
-    settings: {
-      pollSeconds: 0.5,
-      consumers: Object.fromEntries(inboxConsumers.map((consumer) => [consumer.name, retry])),
-      jobKinds: {},
-    },
+    registry: inboxRegistry,
+    settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
   });
   // A consumer receives only events recorded after it is first registered, so the worker starts first.
   await worker.start();

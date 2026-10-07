@@ -62,6 +62,17 @@ export const sessionViewSchema = z.strictObject({
    * still authorised on its own (7.1 step 3).
    */
   grants: z.array(grantSchema),
+  /**
+   * Whether the user holds at least one role assignment in force today. With none, the shell shows only "No access
+   * assigned" with sign-out (personas.md section 2; DEC-118; RR-260; PRD-ACS-002).
+   */
+  roleAssignmentInForce: z.boolean(),
+  /**
+   * The Organisation's timezone in force, an IANA name: screens show every time in it, whatever the device's
+   * (PRD-MOD-017; DEC-118; RR-310; code-house-rules 9). With none in force no session authenticates, and sign-in is
+   * unavailable and names it (code-house-rules 12.14), so a screen never falls back to the device's timezone.
+   */
+  timezone: z.string().min(1),
 });
 export type SessionView = z.infer<typeof sessionViewSchema>;
 

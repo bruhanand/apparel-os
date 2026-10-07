@@ -7,6 +7,7 @@ import {
   CommandTimedOut,
   defineConsumer,
   defineEvent,
+  defineJobKind,
   IdempotencyHelper,
   newCorrelationId,
   OrganisationRouter,
@@ -23,6 +24,7 @@ import {
 } from '../src/kernel/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../src/modules/access/queries/job-identities.js';
+import { SYNTHETIC_RETRY, SYNTHETIC_TEST_SPEED } from './fixtures/worker-settings.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -50,8 +52,11 @@ const recordEchoed = defineEvent({
 });
 
 /** What the synthetic consumer does with a record, by its identifier: echo it, or fail in a chosen way. */
-const behaviour = new Map<string, 'echo' | 'refuse' | 'defect' | 'transient-once'>();
+type Mode = 'echo' | 'refuse' | 'defect' | 'transient-once' | 'transient-always';
+const behaviour = new Map<string, Mode>();
 const failedOnce = new Set<string>();
+/** When each attempt of a record failed transiently, in milliseconds since the epoch. */
+const failedAt = new Map<string, number[]>();
 
 const echo: ConsumerDefinition = defineConsumer({
   name: 'kernel.synthetic-echo',
@@ -65,6 +70,10 @@ const echo: ConsumerDefinition = defineConsumer({
       return { kind: 'refused', refusal: { kind: 'refused', code: 'kernel.synthetic-state-changed', missing: [] } };
     }
     if (mode === 'defect') throw new CommandDefect('SYNTHETIC defect in a consumer');
+    if (mode === 'transient-always') {
+      failedAt.set(recordId, [...(failedAt.get(recordId) ?? []), Date.now()]);
+      throw new CommandTimedOut('statement', '57014', context.correlationId);
+    }
     if (mode === 'transient-once' && !failedOnce.has(recordId)) {
       failedOnce.add(recordId);
       throw new CommandTimedOut('statement', '57014', context.correlationId);
@@ -78,7 +87,11 @@ const echo: ConsumerDefinition = defineConsumer({
 });
 
 const registry: JobRegistry = { events: [recordChanged, recordEchoed], consumers: [echo], jobKinds: [] };
-const echoRetry = { retries: 2, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
+/**
+ * SYNTHETIC: five attempts in all with growing, jittered delays (DEC-118, DEC-119), the first delay shortened so the
+ * test waits seconds, not minutes.
+ */
+const echoRetry = { ...SYNTHETIC_RETRY, retryDelaySeconds: SYNTHETIC_TEST_SPEED.retryDelaySeconds };
 const settings: WorkerSettings = {
   pollSeconds: 0.5,
   consumers: { 'kernel.synthetic-echo': echoRetry },
@@ -154,7 +167,7 @@ function worker(
 }
 
 /** Publishes one recordChanged event for a new record, as a committed command of a synthetic user. */
-async function publishChange(mode: 'echo' | 'refuse' | 'defect' | 'transient-once' = 'echo'): Promise<string> {
+async function publishChange(mode: Mode = 'echo'): Promise<string> {
   const recordId = uuidv7();
   behaviour.set(recordId, mode);
   await runner().run(
@@ -259,6 +272,47 @@ describe('delivery (code-house-rules 12.8 "One effect", 12.9)', () => {
     expect(await echoes(recordId)).toHaveLength(1);
   });
 
+  it('DEC-118 DEC-119 attempts a transient failure five times in all, with growing, jittered delays, then keeps it failed and listed', async () => {
+    const recordId = await publishChange('transient-always');
+    await worker().start();
+    await eventually(async () => (await dispatches(recordId)).length === 1);
+    const [dispatch] = await dispatches(recordId);
+    const jobId = dispatch?.job_id ?? '';
+    // Each failed attempt sets when the next may start; read it while the job waits in retry (pg-boss 12.35.1).
+    const nextStart = new Map<number, number>();
+    await eventually(async () => {
+      const [row] = await query<{ state: string; retry_count: number; start_after: Date }>(
+        'select state::text as state, retry_count, start_after from pgboss.job where id = $1',
+        [jobId],
+      );
+      if (row?.state === 'retry') nextStart.set(row.retry_count, row.start_after.getTime());
+      return row?.state === 'failed';
+    }, 90_000);
+    const failures = failedAt.get(recordId) ?? [];
+    expect(failures).toHaveLength(5);
+    expect(await job(jobId)).toMatchObject({ state: 'failed', retry_count: 4 });
+    // The delay after each failed attempt but the last: from the failure to when the next attempt may start.
+    const delays = [0, 1, 2, 3].map((attempt) => {
+      // After the attempt numbered `attempt` (from 0) fails, the job waits in retry with that retry count.
+      return (nextStart.get(attempt) ?? Number.NaN) - (failures[attempt] ?? Number.NaN);
+    });
+    for (const delay of delays) expect(Number.isFinite(delay)).toBe(true);
+    // Growing: each delay is longer than the one before it.
+    for (let index = 1; index < delays.length; index += 1) {
+      expect(delays[index] ?? 0).toBeGreaterThan(delays[index - 1] ?? 0);
+    }
+    // Jittered: not the exact doubling of the first delay (1 s, 2 s, 4 s, 8 s) that a backoff without jitter gives.
+    const exact = [1000, 2000, 4000, 8000];
+    expect(delays.every((delay, index) => Math.abs(delay - (exact[index] ?? 0)) < 50)).toBe(false);
+    // Failed and listed: the job stays, with its output, and nothing deleted it (CH-9; PRD-SEC-013).
+    const [listed] = await query<{ count: string }>(
+      "select count(*)::text as count from pgboss.job where id = $1 and state = 'failed'",
+      [jobId],
+    );
+    expect(listed).toEqual({ count: '1' });
+    expect(await echoes(recordId)).toEqual([]);
+  }, 120_000);
+
   it('code-house-rules 12.9 never retries a defect: the job fails at once and stays failed', async () => {
     const recordId = await publishChange('defect');
     await worker().start();
@@ -305,6 +359,58 @@ describe('delivery (code-house-rules 12.8 "One effect", 12.9)', () => {
       output: { outcome: 'refused', code: 'access.not-authorised' },
     });
     expect(await echoes(recordId)).toEqual([]);
+  });
+});
+
+describe('a job step and its time limit (code-house-rules 12.4, 12.9; DEC-119)', () => {
+  const effected = defineEvent({
+    type: 'kernel.synthetic-job-effect',
+    version: 1,
+    payload: z.object({ recordId: z.uuid() }),
+  });
+  const effectKind = defineJobKind({
+    name: 'kernel.synthetic-effect',
+    serviceIdentity: CONSUMER_IDENTITY,
+    authorises: echo.authorises,
+    run: async (context) => {
+      const recordId = uuidv7();
+      await context.publish(effected, {
+        subject: { module: 'kernel', recordType: 'kernel.synthetic_record', recordId },
+        payload: { recordId },
+      });
+      return { recordId };
+    },
+  });
+
+  it('PRD-INT-002 PRD-INT-008 a step whose commit landed before its attempt timed out runs again as a replay, with one effect', async () => {
+    // The synthetic queue, created as the migration role, as a migration creates a real one (code-house-rules 3.2).
+    for (const each of world.organisations) {
+      const owner = await connect(each.database, 'migration');
+      try {
+        await owner.query(
+          `select pgboss.create_queue('kernel.synthetic-effect', '{"policy":"standard","deleteAfterSeconds":0}'::jsonb)`,
+        );
+      } finally {
+        await owner.end();
+      }
+    }
+    const running = worker(
+      router,
+      { ...settings, jobKinds: { 'kernel.synthetic-effect': { ...echoRetry, everySeconds: 3600 } } },
+      { ...registry, jobKinds: [effectKind] },
+    );
+    await running.start();
+    const effects = () =>
+      query<{ id: string }>("select id from kernel.outbox_event where event_type = 'kernel.synthetic-job-effect'");
+    await eventually(async () => (await effects()).length === 1);
+    const [sent] = await query<{ id: string }>(
+      "select id from pgboss.job where name = 'kernel.synthetic-effect' and state = 'completed'",
+    );
+    // pg-boss counted the attempt failed after its time limit, as when the worker stopped after the commit and before
+    // recording the job done (activeLimitSeconds): the same job runs again under the same key.
+    const again = await running.runJobKind(world.organisations[0].code, effectKind, sent?.id ?? '');
+    expect(again).toEqual({ status: 'completed', output: { outcome: 'done', replayed: true } });
+    expect(await effects()).toHaveLength(1);
   });
 });
 

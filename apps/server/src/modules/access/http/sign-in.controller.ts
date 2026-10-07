@@ -93,12 +93,18 @@ export class SignInController {
       },
       (context) => this.access.ownAccess(context, user.userId),
     );
+    // Screens show times in the Organisation's timezone only (PRD-MOD-017; DEC-118). With none in force no session
+    // authenticates (authenticate-session.ts), so this answers as the guard does if it ended since; nothing falls back
+    // to the device's timezone (code-house-rules 12.14).
+    if (own.timezone === null) throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.not-signed-in' });
     return {
       organisationCode: user.organisation.organisationCode,
       userId: user.userId,
       displayName: user.displayName,
       personasHeld: own.personasHeld,
       grants: own.grants,
+      roleAssignmentInForce: own.roleAssignmentInForce,
+      timezone: own.timezone,
     };
   }
 

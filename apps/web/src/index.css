@@ -1,6 +1,94 @@
 @import 'tailwindcss';
 
 /*
+ * The fonts of design-language 3, self-hosted from the app's own origin (public/fonts), each beside its licence
+ * file (SIL Open Font Licence 1.1); no package and no font service (DEC-118; RR-262; code-house-rules 12.1).
+ */
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/source-sans-3/SourceSans3-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/source-sans-3/SourceSans3-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/source-sans-3/SourceSans3-Semibold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/source-sans-3/SourceSans3-Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/source-code-pro/SourceCodePro-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/source-code-pro/SourceCodePro-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/noto-sans-devanagari/NotoSansDevanagari-Regular.woff2') format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+25CC, U+A830-A839, U+A8E0-A8FF;
+}
+
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/noto-sans-devanagari/NotoSansDevanagari-Medium.woff2') format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+25CC, U+A830-A839, U+A8E0-A8FF;
+}
+
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/noto-sans-devanagari/NotoSansDevanagari-SemiBold.woff2') format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+25CC, U+A830-A839, U+A8E0-A8FF;
+}
+
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/noto-sans-devanagari/NotoSansDevanagari-Bold.woff2') format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+25CC, U+A830-A839, U+A8E0-A8FF;
+}
+
+/*
  * Tokens of design-language sections 2 to 5 and 7 (Sand & Navy). The theme follows the device unless the user's
  * choice sets data-theme on <html> (design-language 2 "Theme"); the CSS alone applies it before first paint.
  */
@@ -168,7 +256,7 @@
   --shadow-e1: var(--sh1);
   --shadow-e2: var(--sh2);
   --shadow-e3: var(--sh3);
-  /* Source Sans 3 and Source Code Pro are named first; their font files are not bundled yet (RR-262). */
+  /* Source Sans 3 and Source Code Pro first; Noto Sans Devanagari for Devanagari text (design-language 3). */
   --font-sans: 'Source Sans 3', 'Noto Sans Devanagari', system-ui, sans-serif;
   --font-mono: 'Source Code Pro', ui-monospace, monospace;
   --text-title: 28px;

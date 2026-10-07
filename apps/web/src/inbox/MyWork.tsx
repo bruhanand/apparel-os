@@ -50,8 +50,10 @@ export function MyWorkCounter({ count }: { count: MyWorkCount }) {
   );
 }
 
-function dueText(item: WorkItem): string {
-  return item.due.kind === 'none' ? t('my-work.no-due') : t('my-work.due', { time: formatDateTime(item.due.at) });
+function dueText(item: WorkItem, timeZone: string): string {
+  return item.due.kind === 'none'
+    ? t('my-work.no-due')
+    : t('my-work.due', { time: formatDateTime(item.due.at, timeZone) });
 }
 
 function exposureText(item: WorkItem): string {
@@ -66,11 +68,20 @@ function exposureText(item: WorkItem): string {
 }
 
 /** The list: each item's kind, state, due time, exposure and next action (PRD-UXP-003), or why it is empty. */
-export function MyWorkList({ work, onOpen }: { work: MyWork; onOpen: (item: WorkItem) => void }) {
+export function MyWorkList({
+  work,
+  onOpen,
+  timeZone,
+}: {
+  work: MyWork;
+  onOpen: (item: WorkItem) => void;
+  /** The Organisation's timezone (PRD-MOD-017; DEC-118). */
+  timeZone: string;
+}) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-end">
-        <AsOf asOf={work.asOf} />
+        <AsOf asOf={work.asOf} timeZone={timeZone} />
       </div>
       {work.items.length === 0 ? (
         <EmptyState title="my-work.empty.title" body="my-work.empty.body" />
@@ -83,7 +94,7 @@ export function MyWorkList({ work, onOpen }: { work: MyWork; onOpen: (item: Work
             >
               <span className="font-semibold">{t(`my-work.kind.${item.kind}`)}</span>
               <StatusBadge state={stateIdOf(item.state)} />
-              <span className="text-body-sm text-text-2">{dueText(item)}</span>
+              <span className="text-body-sm text-text-2">{dueText(item, timeZone)}</span>
               <span className="text-body-sm tabular-nums text-text-2">{exposureText(item)}</span>
               <span className="flex-1" />
               {item.nextAction === 'access.decide-approval' && (

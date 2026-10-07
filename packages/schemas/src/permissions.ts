@@ -75,7 +75,7 @@ const accessRecordTypes = [
  * covering the row's facts, so history never reaches past the records the reader may see (RR-242). The access
  * records carry the facts of the place where they happened; a sign-in has none, so only all-members scope reads it
  * (the Organisation-wide view of 9.11). Sensitive-access and device records are types apart, which neither first role
- * holds (9.11). The seal and partition types are for the audit jobs (RR-273).
+ * holds (9.11). The seal and partition types are for the audit jobs (RR-273); create on partitions is the scheduled upkeep's (DEC-118).
  */
 const auditRecordTypes = [
   declare('audit.audit_record', ['view'], NONE),
@@ -83,7 +83,7 @@ const auditRecordTypes = [
   declare('audit.sensitive_access_record', ['view'], ALL),
   declare('audit.device_access_record', ['view'], ALL),
   declare('audit.audit_seal', ['view', 'create'], NONE),
-  declare('audit.audit_partition', ['view'], NONE),
+  declare('audit.audit_partition', ['view', 'create'], NONE),
 ] as const;
 
 /** `kernel`: the outbox, which the outbox processor dispatches (code-house-rules 12.8; RR-273). */

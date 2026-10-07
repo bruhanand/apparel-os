@@ -10,6 +10,10 @@ export interface ShellUser {
   readonly displayName: string;
   /** In the person's chosen order: the first sets the landing screen (design-language 10.18). */
   readonly personasHeld: readonly PersonaId[];
+  /** Whether a role assignment is in force: with none, only "No access assigned" shows (DEC-118; RR-260). */
+  readonly roleAssignmentInForce: boolean;
+  /** The Organisation's timezone, in which every time on a screen is shown (PRD-MOD-017; DEC-118; RR-310). */
+  readonly timeZone: string;
 }
 
 /**
@@ -32,4 +36,14 @@ export function useSession(): SessionControl {
   const control = useContext(SessionContext);
   if (control === null) throw new Error('useSession is used outside the SessionContext provider');
   return control;
+}
+
+/**
+ * The Organisation's timezone of the signed-in session, for formatting times (PRD-MOD-017; design-language 8;
+ * code-house-rules 9). Screens that show times are reached only signed in; never the device's timezone.
+ */
+export function useTimeZone(): string {
+  const { session } = useSession();
+  if (session.state === 'signed-out') throw new Error('useTimeZone is used while signed out');
+  return session.user.timeZone;
 }

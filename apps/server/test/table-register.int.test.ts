@@ -36,12 +36,14 @@ const CHECKED_MARKS: readonly string[] = ['append-only', 'partitioned', 'version
 /** The functions a design names for the runtime role to execute, by set (code-house-rules 5.2). */
 const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
   directory: [],
-  // numbering-and-audit 4.4 and 4.6: sealing, the seal check and the retention function, each SECURITY DEFINER.
+  // numbering-and-audit 4.4 and 4.6: sealing, the seal check, the scheduled partition upkeep (DEC-118) and the
+  // retention function, each SECURITY DEFINER.
   organisation: [
     'access.row_visible',
     'access.scope_key_of',
     'audit.check_seals',
     'audit.delete_after_retention',
+    'audit.ensure_partitions',
     'audit.seal_block',
   ],
 };

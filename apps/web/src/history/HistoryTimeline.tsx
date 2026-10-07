@@ -60,7 +60,7 @@ function Change({ change }: { change: HistoryChange }) {
  * The history of a record or of an actor as a timeline, oldest first (numbering-and-audit 4.1, 4.5; PRD-ACS-013):
  * when, who (and for whom, for a job), what, the reason, the version, the changed fields and the source.
  */
-export function HistoryTimeline({ entries, timeZone }: { entries: readonly AuditHistoryEntry[]; timeZone?: string }) {
+export function HistoryTimeline({ entries, timeZone }: { entries: readonly AuditHistoryEntry[]; timeZone: string }) {
   return (
     <ol className="flex flex-col gap-3">
       {entries.map((entry) => (

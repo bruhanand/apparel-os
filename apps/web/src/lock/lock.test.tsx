@@ -20,6 +20,8 @@ const locked: ShellSession = {
     userId: '01900000-0000-7000-8000-0000000000a1',
     displayName: 'SYNTHETIC Admin',
     personasHeld: ['P-ADM'],
+    roleAssignmentInForce: true,
+    timeZone: 'UTC',
   },
   grants: [],
 };

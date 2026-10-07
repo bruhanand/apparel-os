@@ -36,7 +36,14 @@ function render(node: ReactNode, grants: Grant[], seed: (client: QueryClient) =>
   seed(client);
   const session: ShellSession = {
     state: 'active',
-    user: { organisationCode: 'SYN-ORG-A', userId: ADMIN, displayName: 'SYNTHETIC Admin', personasHeld: ['P-ADM'] },
+    user: {
+      organisationCode: 'SYN-ORG-A',
+      userId: ADMIN,
+      displayName: 'SYNTHETIC Admin',
+      personasHeld: ['P-ADM'],
+      roleAssignmentInForce: true,
+      timeZone: 'UTC',
+    },
     grants,
   };
   return renderToStaticMarkup(

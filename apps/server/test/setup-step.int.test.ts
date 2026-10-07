@@ -269,7 +269,12 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
     );
     expect(identities).toEqual([
       { code: 'access-jobs', permissions: 'access.effective_grant edit' },
-      { code: 'audit-jobs', permissions: 'audit.audit_partition view,audit.audit_seal create,audit.audit_seal view' },
+      // Create on partitions is the scheduled partition upkeep's (DEC-118, S1-F01-T24).
+      {
+        code: 'audit-jobs',
+        permissions:
+          'audit.audit_partition create,audit.audit_partition view,audit.audit_seal create,audit.audit_seal view',
+      },
       // The inbox's consumers of access events (S1-F01-T13).
       { code: 'inbox', permissions: 'inbox.work_item edit' },
       { code: 'outbox', permissions: 'kernel.outbox_event edit' },

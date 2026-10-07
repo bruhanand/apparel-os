@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { Button } from '../components/Button';
 import { AppShell } from './AppShell';
 import type { Grant } from './screens';
 import type { ShellSession } from './session';
@@ -20,6 +21,8 @@ const user = {
   userId: '01900000-0000-7000-8000-0000000000a1',
   displayName: 'SYNTHETIC Admin',
   personasHeld: ['P-ADM'],
+  roleAssignmentInForce: true,
+  timeZone: 'UTC',
 } as const;
 const banner = { environment: 'dev', message: 'environment.dev', tone: 'info' } as const;
 
@@ -57,6 +60,26 @@ describe('AppShell (design-language 6 A)', () => {
     expect(html).toContain('role="dialog"');
     expect(text(html)).toContain('Session locked');
     expect(html).toMatch(/<div[^>]*inert=""[^>]*>.*value="kept"/s);
+  });
+
+  it('PRD-ACS-002 shows only "No access assigned" and Sign out, with no menu, to a person with no role assignment in force (DEC-118; RR-260)', () => {
+    const html = renderToStaticMarkup(
+      <AppShell
+        session={{ state: 'active', user: { ...user, roleAssignmentInForce: false }, grants: [] }}
+        banner={banner}
+        current="my-work"
+        signOut={<Button label="shell.sign-out" />}
+      >
+        <form>
+          <input name="typed" defaultValue="screen" />
+        </form>
+      </AppShell>,
+    );
+    expect(html).not.toContain('<nav');
+    expect(html).not.toContain('value="screen"');
+    expect(text(html)).toContain('No access assigned');
+    expect(text(html)).toContain('An Admin must assign you a role');
+    expect(text(html)).toContain('Sign out');
   });
 
   it('shows no screen and no menu while signed out', () => {

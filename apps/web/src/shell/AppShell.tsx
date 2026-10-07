@@ -6,6 +6,8 @@ import { EmptyState } from '../components/StandardStates';
 import { LockOverlay } from '../lock/LockOverlay';
 import { t } from '../messages/catalogue';
 import type { EnvironmentBanner } from './environment';
+import { landingScreen } from './landing';
+import { NoAccessAssigned } from './NoAccessAssigned';
 import { openScreens, screens, sections, type ScreenId } from './screens';
 import type { ShellSession } from './session';
 import { ThemeSwitch } from './ThemeSwitch';
@@ -72,6 +74,14 @@ export function AppShell({
         <main id="content" className="p-4 sm:p-8">
           {signIn ?? <EmptyState title="session.signed-out.title" body="session.signed-out.body" />}
         </main>
+      ) : landingScreen(session.user.roleAssignmentInForce, session.user.personasHeld, session.grants) ===
+        'no-access-assigned' ? (
+        <>
+          <main id="content" className="p-4 sm:p-8" inert={session.state === 'locked'}>
+            <NoAccessAssigned signOut={signOut} />
+          </main>
+          {session.state === 'locked' && <LockOverlay>{unlock}</LockOverlay>}
+        </>
       ) : (
         <>
           <div inert={session.state === 'locked'}>

@@ -18,7 +18,7 @@ import { formatDateTime } from '../history/format';
 import { isMessageId, t, type MessageId } from '../messages/catalogue';
 import { formatPaise } from '../setup/format';
 import { stateIdOf } from '../setup/states';
-import { useSession } from '../shell/session';
+import { useSession, useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { DocumentFacts } from './DocumentFacts';
 
@@ -239,7 +239,8 @@ export function ApprovalPanelView({
   submission: SubmissionState;
   onDecide: (body: DecisionRequest) => void;
   facts?: ReactNode;
-  timeZone?: string;
+  /** The Organisation's timezone (PRD-MOD-017; DEC-118). */
+  timeZone: string;
 }) {
   const shown = panelCase(view);
   return (
@@ -254,7 +255,7 @@ export function ApprovalPanelView({
           </h2>
           <StatusBadge state={stateIdOf(view.state)} />
           <span className="flex-1" />
-          <AsOf asOf={view.asOf} {...(timeZone === undefined ? {} : { timeZone })} />
+          <AsOf asOf={view.asOf} timeZone={timeZone} />
         </div>
         <p className="text-body-sm text-text-2">
           {t('approval.prepared-by', {
@@ -338,6 +339,7 @@ function grants(recordType: string, list: readonly { recordType: string; action:
  */
 export function ApprovalPanel({ requestId }: { requestId: string }) {
   const { session } = useSession();
+  const timeZone = useTimeZone();
   const granted = session.state === 'signed-out' ? [] : session.grants;
   const request = useQuery(readQuery(api, 'readApprovalRequest', { params: { requestId } }));
   const reasons = useQuery({
@@ -380,6 +382,7 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
       reasons={reasons.data?.reasons ?? []}
       submission={submission.state}
       facts={<DocumentFacts view={request.data} />}
+      timeZone={timeZone}
       onDecide={(body) => {
         void submission.submit({ params: { requestId }, body }).then(() => request.refetch());
       }}
