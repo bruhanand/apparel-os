@@ -92,7 +92,7 @@ Unit tests in Vitest beside the code; the golden cases and the tests of 12.5 und
 
 ## 8. Acceptance evidence
 
-- A CI run with the Vitest server run (`S1-F11-AT01` to `S1-F11-AT05`) and the Playwright counter run (`S1-F11-AT06`) green in the same run, with the case list and the IDs each case covers (stage 1 exit check 2).
+- (Recorded in [evidence.md](evidence.md).) A CI run with the Vitest server run (`S1-F11-AT01` to `S1-F11-AT05`) and the Playwright counter run (`S1-F11-AT06`) green in the same run, with the case list and the IDs each case covers (stage 1 exit check 2).
 - The bundle check (`S1-F11-AT11`) green, and red on a deliberate costing import.
 - The synthetic rule data used, each value labelled synthetic (12.3).
 - The independent review of `AGENTS.md` "How we work", its findings and their triage.
