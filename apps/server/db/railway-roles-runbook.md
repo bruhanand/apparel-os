@@ -1,6 +1,6 @@
 # Runbook: database roles and the directory database on Railway
 
-Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Nothing here has been run yet, and no Railway service was changed by `S0-T05`, `S1-F01-T02` or `S1-F01-T03`.
+Steps the product owner runs once per Railway environment (`dev`, later `kdps-test`), before the first deploy that migrates. It follows [code-house-rules.md](../../../docs/design/platform/code-house-rules.md) sections 4.3 and 5 and [deployment.md](../../../docs/design/platform/deployment.md) section 4. It decides nothing; those documents win. Steps 1 to 6 were run on `dev` on 7 Oct 2026, with the product owner's authorisation; see "Done on `dev`" below. Step 7's first run and step 8 wait for the first deploy, which the merge of `s1/f01-first-access` into `main` makes. Nothing has been run on `kdps-test`, which does not exist yet.
 
 ## What it sets up
 
@@ -10,7 +10,9 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 | Runtime role | `aos_runtime` | Used by `app` and `worker`. Owns nothing, does not bypass row-level security. On `dev` only, it carries the starting time limits for synthetic work (CH-3) |
 | Directory database | `aos_directory` | Holds only each Organisation's code and the name of its database on the same server (DEC-093), in `kernel.directory_entry` |
 | Pre-deploy variable | `AOS_MIGRATION_DATABASE_URL` | The directory database as `aos_migration`. Never logged |
-| Runtime variables | `AOS_RUNTIME_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` | The directory database as `aos_runtime`, and the most connections each database pool opens. `app` refuses to start without either. The URL is never logged |
+| Runtime variables | `AOS_RUNTIME_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` | The directory database as `aos_runtime`, and the most connections each database pool opens. `app` and `worker` refuse to start without either. The URL is never logged |
+| Other `app` variables | `AOS_ENVIRONMENT`, `AOS_PUBLIC_ORIGIN`, `AOS_TRUSTED_PROXY_HOPS`, `AOS_ORGANISATION_KEYS` | The environment's name (also read when the web app is built), the app's own origin, the proxies in front of it, and a key per Organisation (deployment.md sections 1, 3, 9; RR-254). `app` refuses to start without the last three |
+| `worker` variables | `AOS_WORKER_SETTINGS` | Besides the two runtime variables: the retry and interval settings of every consumer and job kind in the worker's registry (code-house-rules 12.9; DEC-118, DEC-119; RR-276, RR-322). The worker refuses to start without it or with a consumer or job kind missing |
 
 ## Steps
 
@@ -27,6 +29,27 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
      - **On `kdps-test`:** OPEN (D-7, RR-216), set only after measurement.
 7. **Wire the pre-deploy command** when `S1-F01` is first deployed to `dev` (RR-187): `pnpm migrate`. It migrates the directory database, then every Organisation database the directory lists, in code order, each on the same server as the directory and by the name the directory keeps. It stops at the first database that fails and exits non-zero, so the deploy stops and the old version keeps running. It also refuses, before changing anything, a connection string that is not a `postgresql://` URL with a host, a connection that is not `aos_migration` (a superuser included), or a database `aos_migration` does not own.
 8. **Check.** Run `pnpm migrate` once by hand, or read the first deploy's log: it prints one line per applied file, naming the directory or the Organisation, then `Migrated the directory database and <n> Organisation database(s): <codes>`. Before the setup step (`S1-F01-T10`) has registered an Organisation, `n` is 0 and the line ends `none listed`. A second run prints only that last line. On `dev`, also connect as `aos_runtime` and run `show lock_timeout;` and `show statement_timeout;`: they answer `1s` and `5s`. On `kdps-test` both answer `0`, which means no limit.
+
+## Done on `dev` (7 Oct 2026)
+
+Authorised by the product owner on 7 Oct 2026. No application code was deployed and no GitHub source is connected.
+
+- **Project** `apparel-os`, one environment `dev` (Railway's default environment, renamed). No `kdps-test`.
+- **Region:** Asia Southeast (Singapore, `asia-southeast1-eqsg3a`) for every service and the database volume; the bucket in `sin` (deployment.md section 8).
+- **`Postgres`:** Railway's PostgreSQL template on the image `ghcr.io/railwayapp-templates/postgres-ssl:17`; step 1 answered `17.11`, so CH-2's match with the tests holds. Private network only (`postgres.railway.internal`), no public TCP proxy. `max_connections` is 500.
+- **Steps 1 to 6** were run through `railway ssh` into the `Postgres` service, as its superuser: `roles.sql`, `runtime-limits-synthetic.sql`, both passwords (generated locally with a CSPRNG and sent only as SCRAM verifiers), and `aos_directory` owned by `aos_migration`. Checked: `aos_runtime` signs in and answers `1s` and `5s`; `aos_migration` signs in. The plain passwords exist only inside the Railway variables.
+- **`app`:** empty service (no source yet). Build `pnpm build`; start `pnpm --filter @apparel-os/server start`; pre-deploy `pnpm migrate` (step 7); health check `/api/health`; public domain `app-dev-53bf.up.railway.app`. Variables: `AOS_RUNTIME_DATABASE_URL`, `AOS_MIGRATION_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` (`5`), `AOS_ENVIRONMENT` (`dev`), `AOS_PUBLIC_ORIGIN` (`https://` and that domain), `AOS_TRUSTED_PROXY_HOPS` (`1`, Railway's one edge proxy; check it against the access record at the first deploy), `AOS_ORGANISATION_KEYS` (a 32-byte key for each of the two synthetic Organisations, `SYN-ORG-A` and `SYN-ORG-B`). The database URLs reach the host through `${{Postgres.RAILWAY_PRIVATE_DOMAIN}}`.
+- **`worker`:** empty service, no public domain. Build `pnpm build`; start `pnpm --filter @apparel-os/server start:worker`. Variables: `AOS_RUNTIME_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` (`5`), `AOS_ENVIRONMENT` (`dev`), `AOS_WORKER_SETTINGS`: the SYNTHETIC values of `apps/server/test/fixtures/SYNTHETIC-worker-settings.local.json` (DEC-118, DEC-119), with retry settings for `inbox.publish-approval` and `inbox.close-approval` (RR-322). The grants rebuild's hourly interval is the labelled synthetic value, not an approved one (RR-390). The worker holds neither the migration URL nor the Organisation keys: it reads neither.
+- **Bucket** `files` (D-2, `DEC-105`). Not yet wired to `app` or `worker`: no code reads file storage settings yet, so no variable names are set for it.
+- **Connection budget (step 6):** directory plus two Organisation pools, 5 each, for one `app` and one `worker` is 30, plus the migration and operator connections, against 500. It fits.
+
+### At the merge of `s1/f01-first-access` into `main`
+
+1. Connect the GitHub repository to `app` and to `worker`, branch `main`, with automatic deploys on. Connecting it deploys both.
+2. Watch the `app` deploy: the pre-deploy `pnpm migrate` prints `Migrated the directory database and 0 Organisation database(s): none listed` (step 8). A failure stops the deploy.
+3. Set up the two synthetic Organisations: `pnpm seed` from a shell in `app` (`railway ssh --service app`); it refuses unless both `AOS_ENVIRONMENT` and the Railway environment are `dev`. Then the setup step (`setup-organisation`) for each, as AGENTS.md "Code workspace" says.
+4. Read the `worker` log for `The worker is running`; it starts serving each Organisation the directory newly lists on its next pass, with no restart.
+5. Check step 8's role limits again and `GET /api/health` on the public domain.
 
 ## A local PostgreSQL
 
