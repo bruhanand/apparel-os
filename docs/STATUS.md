@@ -12,16 +12,15 @@ Updated 7 Oct 2026.
   - **T26 and T27 are built and reviewed.** From your answers (`DEC-120`): the starting Admin can now prepare a security settings change and the starting approver can approve it, never both (T26); and the dates on a role assignment are checked at every request, so an expired one stops working at once, without waiting for a background job (T26). The server now serves the screens and the API at one address, as the `dev` setup needs (T27); the counter's address waits for the counter app.
   - **Railway `dev` is running the code.** Since 7 Oct 2026 every push to `main` deploys `app` and `worker` there. The web app is at https://app-dev-53bf.up.railway.app/ with the `dev` banner, the database is set up, and the two test companies (`SYN-ORG-A`, `SYN-ORG-B`) exist, each with its own first Admin and first approver. Their temporary sign-in details are only on your machine, in `SYNTHETIC-dev-first-users.secrets.json` (never committed).
   - All its tickets are done, Demo 0 on `dev` (T14) included. You approved the screens from their screenshots on 7 Oct 2026, and CI is green (run 37603828723, browser journeys included). T20 closed with your acceptance on 7 Oct 2026.
-  - **Shared calculations (`S1-F11`):** the server half is done; 38 test cases pass. The counter half is built: the counter build, its guard against the costing code, and a browser run of the same cases in Chromium (`pnpm test:counter`, in CI). Left for the product owner: review and acceptance of that half (`S1-F11-T10` stays in progress).
+  - **Shared calculations (`S1-F11`):** done and accepted on 8 Oct 2026: 38 test cases pass on the server and in Chromium on the counter build, the counter build refuses costing code, and CI is green (`S1-F11-T10`; evidence in the feature folder).
   - **Moved to stage 2:** the sample layouts, the other file readers and the 10,000-line PT test, now `S2-F13` (`DEC-115`).
 - **How we work.** Building runs through the skills (`/implement`, `/implement-spec`, `/tdd`, `/code-review`); see "How we work" in `AGENTS.md`.
 
 ## What's next
 
-1. Review and acceptance of the counter run of shared calculations (`S1-F11-T10`, built).
-2. Stored files and evidence attachments (`S1-F06-T05`).
-3. Stock ledger part 1, stock quantities and movements (`S1-F10`).
-4. Then organisation structure (`S1-F02`) and the rest, in the order of the [stage spec](plan/stage-1/spec.md).
+1. Stored files and evidence attachments (`S1-F06-T05`).
+2. Stock ledger part 1, stock quantities and movements (`S1-F10`).
+3. Then organisation structure (`S1-F02`) and the rest, in the order of the [stage spec](plan/stage-1/spec.md).
 
 ## Waiting on you
 

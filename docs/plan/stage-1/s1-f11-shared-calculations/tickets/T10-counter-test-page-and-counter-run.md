@@ -1,7 +1,7 @@
 # S1-F11-T10 — Counter test page, counter run and bundle exclusion
 
-Status: in-progress
-Blocked by: none (S1-F01-T15 and T07 done). Remaining: the independent review, the evidence of spec section 8 and the product owner's acceptance
+Status: done
+Blocked by: none (S1-F01-T15 and T07 done)
 Feature: [S1-F11 Shared calculations](../spec.md)
 
 ## Build
@@ -29,3 +29,7 @@ Counter test page; Playwright test; CI job; build check; review record; evidence
 ## Scope notes
 
 - In scope: module-check rule 5 for `apps/counter` (`tools/module-check/check.mts`) and the lint and ignore plumbing for the new package, because the counter cannot be built and checked without them.
+
+## Closed
+
+- Accepted by the product owner on 8 Oct 2026. CI run 37679034974 (commit `S1-F11-T10: acceptance evidence`): `check`, `counter-run` and `browser-journeys` green. The review (`/code-review`, standards and spec) found issues fixed in `101cc42`; the evidence is in [evidence.md](../evidence.md).
