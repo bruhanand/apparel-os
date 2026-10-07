@@ -19,6 +19,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { describedBy, FormField } from '../forms/FormField';
+import { withStartDateChecks } from '../forms/start-date';
 import { useKeptDraft } from '../forms/use-kept-draft';
 import { useRouteForm } from '../forms/use-route-form';
 import { AsOf } from '../history/AsOf';
@@ -123,7 +124,7 @@ function NewAssignmentForm() {
   const roles = useQuery({ ...readQuery(api, 'listRoles', {}), enabled: useGranted('access.role', 'view') });
   const today = useBusinessToday();
   const form = useForm<AssignmentForm>({
-    resolver: zodResolver(assignmentFormSchema),
+    resolver: withStartDateChecks(zodResolver(assignmentFormSchema), [{ path: 'validFrom', earliest: today }]),
     mode: 'onBlur',
     defaultValues: {
       userId: '',

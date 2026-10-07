@@ -142,7 +142,9 @@ function StartFrom({ roles, onPick }: { roles: readonly RoleRecord[]; onPick: (c
 /** A new role: code, name, start and permissions (access-and-approvals 4.2). */
 function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareRole, { permissions: [], validFrom: today });
+  const form = useRouteForm(routes.prepareRole, { permissions: [], validFrom: today }, [
+    { path: 'validFrom', earliest: today },
+  ]);
   const kept = useKeptDraft(routes.prepareRole, form, 'setup.new-role');
   const submission = useSubmission('prepareRole', LIST_READS);
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -217,11 +219,11 @@ function RoleVersionForm({ role }: { role: RoleRecord }) {
   const latest = role.versions[0];
   const start = gridOfPermissions(latest?.permissions ?? []);
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareRoleVersion, {
-    name: latest?.name ?? '',
-    permissions: permissionsOfGrid(start),
-    validFrom: today,
-  });
+  const form = useRouteForm(
+    routes.prepareRoleVersion,
+    { name: latest?.name ?? '', permissions: permissionsOfGrid(start), validFrom: today },
+    [{ path: 'validFrom', earliest: today }],
+  );
   const kept = useKeptDraft(routes.prepareRoleVersion, form, `setup.role-version.${role.id}`);
   const submission = useSubmission('prepareRoleVersion', LIST_READS);
   const [selection, setSelection] = useState<Set<string>>(start);

@@ -31,7 +31,9 @@ const LIST_READS = ['listApprovalReasonRecords', 'listApprovalReasons', 'listMyW
 /** A new reason: its code and kind, which stay fixed, its text and start. */
 function NewReasonForm() {
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve', validFrom: today });
+  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve', validFrom: today }, [
+    { path: 'validFrom', earliest: today },
+  ]);
   const kept = useKeptDraft(routes.prepareApprovalReason, form, 'setup.new-reason');
   const submission = useSubmission('prepareApprovalReason', LIST_READS);
   const errors = form.formState.errors;
@@ -109,10 +111,11 @@ function NewReasonForm() {
 /** A new version of a reason: its text and start. */
 function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareApprovalReasonVersion, {
-    text: reason.versions[0]?.text ?? '',
-    validFrom: today,
-  });
+  const form = useRouteForm(
+    routes.prepareApprovalReasonVersion,
+    { text: reason.versions[0]?.text ?? '', validFrom: today },
+    [{ path: 'validFrom', earliest: today }],
+  );
   const kept = useKeptDraft(routes.prepareApprovalReasonVersion, form, `setup.reason-version.${reason.id}`);
   const submission = useSubmission('prepareApprovalReasonVersion', LIST_READS);
   const errors = form.formState.errors;

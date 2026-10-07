@@ -72,10 +72,21 @@ function whenText(version: Version, timeZone: string): string {
 function ChangeForm({ view }: { view: SettingView }) {
   const today = useBusinessToday();
   const inForce = view.versions.find((version) => version.id === view.inForceVersionId);
-  const form = useRouteForm(routes.prepareSecuritySettingVersion, {
-    setting: view.setting,
-    ...(inForce === undefined ? {} : { value: inForce.value }),
-  } as never);
+  // The server refuses a setting that starts today or before (`access.starts-in-past`), so its earliest day is the next.
+  const form = useRouteForm(
+    routes.prepareSecuritySettingVersion,
+    {
+      setting: view.setting,
+      ...(inForce === undefined ? {} : { value: inForce.value }),
+    } as never,
+    [
+      {
+        path: 'takesEffect.date',
+        earliest: businessDayAfter(today),
+        when: (values) => (values as { takesEffect?: { kind?: string } }).takesEffect?.kind === 'from-date',
+      },
+    ],
+  );
   const submission = useSubmission('prepareSecuritySettingVersion', LIST_READS);
   const errors = form.formState.errors as Record<string, unknown>;
   const valueErrors = (errors.value ?? {}) as Record<string, { type?: string } | undefined>;
@@ -145,7 +156,8 @@ function ChangeForm({ view }: { view: SettingView }) {
             min={businessDayAfter(today)}
             className={inputClass}
             {...describedBy(id('date'), { invalid: takesEffectErrors.date !== undefined, help: false })}
-            {...form.register('takesEffect.date' as Path<never>)}
+            // The date goes, with its error, when the setting no longer takes effect from a date: the route refuses a date beside "when approved".
+            {...form.register('takesEffect.date' as Path<never>, { shouldUnregister: true })}
           />
         </FormField>
       )}

@@ -72,6 +72,12 @@ test('POL-02.07 DEC-118 the Admin prepares a session-limit change and the approv
       await expect(drawer).toBeVisible();
       await drawer.getByLabel(/^Idle lock \(seconds\)/).fill('1200');
       await drawer.getByLabel(/^Where the values come from/).selectOption({ label: 'Synthetic' });
+      // design-language 8, 10.7 (S1-F01-T34): a start before the Organisation's today says so below the field, on blur.
+      await drawer.getByLabel(/^Takes effect/).selectOption({ label: 'From a later day' });
+      const starts = drawer.getByLabel(/^Starts on/);
+      await starts.fill('2020-01-01');
+      await starts.blur();
+      await expect(drawer.getByText('The start date is in the past. Choose today or a later date.')).toBeVisible();
       await drawer.getByLabel(/^Takes effect/).selectOption({ label: 'When approved' });
       await drawer.getByRole('button', { name: 'Request approval' }).click();
       await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
