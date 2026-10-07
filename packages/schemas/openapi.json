@@ -7777,6 +7777,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "roleAssignmentInForce": {
+                      "type": "boolean"
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1
                     }
                   },
                   "required": [
@@ -7784,7 +7791,9 @@
                     "userId",
                     "displayName",
                     "personasHeld",
-                    "grants"
+                    "grants",
+                    "roleAssignmentInForce",
+                    "timezone"
                   ],
                   "additionalProperties": false
                 }

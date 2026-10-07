@@ -9,6 +9,8 @@ const view = {
   displayName: 'SYNTHETIC User',
   personasHeld: ['P-AUD' as const],
   grants: [{ recordType: 'audit.audit_record', action: 'view' as const }],
+  roleAssignmentInForce: true,
+  timezone: 'UTC',
 };
 const refusal = (code: string, kind: ErrorBody['kind'], missing?: { kind: string; step: string }[]) => ({
   ok: false as const,

@@ -140,6 +140,9 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
       // A user written with no persona and no role assignment: nothing to land on, nothing granted (RR-281).
       personasHeld: [],
       grants: [],
+      // So the shell shows "No access assigned" (DEC-118; RR-260), and times in the synthetic timezone (RR-310).
+      roleAssignmentInForce: false,
+      timezone: 'Etc/UTC',
     });
 
     const records = await rows<{ outcome: string; user_id: string }>(
@@ -511,6 +514,65 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
       expect(errorEnvelopeSchema.parse(await change.json()).error).toMatchObject({
         code: 'access.password-rules-not-set',
         missing: [{ kind: 'setting', setting: 'access.password-rules' }],
+      });
+    } finally {
+      await app.close();
+      await second.reset();
+    }
+  });
+});
+
+describe("the session read and the Organisation's timezone (PRD-MOD-017; DEC-118, RR-310)", () => {
+  it('code-house-rules 12.14 gives no session read once no timezone is in force, so no screen falls back to the device’s', async () => {
+    // A timezone source that answers "set" for sign-in, then "not set", as if its version had ended since.
+    let inForce = true;
+    const second = await createSyntheticOrganisations('sign_in_zone');
+    const secondKeys = syntheticKeysEnvironment(second);
+    const app = await startAccessApp(second, secondKeys, {
+      timezone: {
+        read: () =>
+          Promise.resolve(
+            inForce
+              ? { kind: 'set', timezone: 'Etc/UTC', versionId: '01900000-0000-7000-8000-00000000c0df' }
+              : { kind: 'not-set' },
+          ),
+      },
+    });
+    try {
+      const [org] = second.organisations;
+      await writeSyntheticSetting(org.database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
+      await writeSyntheticSetting(org.database, 'access.office-session-limits', SYNTHETIC_SESSION_LIMITS);
+      const user = await writeSyntheticUser(org.database, org.code, secondKeys, { label: 'ZONE', enrolled: true });
+      const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN },
+        body: JSON.stringify({
+          organisationCode: org.code,
+          login: user.login,
+          password: user.password,
+          totpCode: codeFor(user.factorSecret ?? Buffer.alloc(20)),
+        }),
+      });
+      expect(await signedIn.json()).toEqual({ outcome: 'signed-in' });
+      const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+      inForce = false;
+      const read = await fetch(`${app.baseUrl}/api/access/session`, { headers: { cookie } });
+      expect(read.status).toBe(401);
+      expect(errorEnvelopeSchema.parse(await read.json()).error).toMatchObject({ code: 'access.not-signed-in' });
+      // And a new sign-in is unavailable, naming the timezone (DEC-118).
+      const again = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN },
+        body: JSON.stringify({
+          organisationCode: org.code,
+          login: user.login,
+          password: user.password,
+          totpCode: codeFor(user.factorSecret ?? Buffer.alloc(20), 1),
+        }),
+      });
+      expect(errorEnvelopeSchema.parse(await again.json()).error).toMatchObject({
+        code: 'access.sign-in-unavailable',
+        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
       });
     } finally {
       await app.close();

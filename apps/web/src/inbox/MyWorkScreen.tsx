@@ -8,7 +8,7 @@ import { Button } from '../components/Button';
 import { t } from '../messages/catalogue';
 import { ListRead, Toolbar } from '../setup/parts';
 import { RecordDrawer } from '../setup/RecordDrawer';
-import { useSession } from '../shell/session';
+import { useSession, useTimeZone } from '../shell/session';
 import { myWorkCount, MyWorkCounter, MyWorkList } from './MyWork';
 
 /** The read of My work, shared by the screen and the counter, so a refresh updates both. */
@@ -21,6 +21,7 @@ const myWorkRead = () => readQuery(api, 'listMyWork', {});
  */
 export function MyWorkScreen() {
   const query = useQuery(myWorkRead());
+  const timeZone = useTimeZone();
   const [open, setOpen] = useState<WorkItem | null>(null);
   return (
     <div className="flex flex-col gap-4">
@@ -34,7 +35,7 @@ export function MyWorkScreen() {
         />
       </Toolbar>
       <ListRead query={query} what="my-work.what">
-        {(work) => <MyWorkList work={work} onOpen={setOpen} />}
+        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} />}
       </ListRead>
       {open !== null && (
         <RecordDrawer

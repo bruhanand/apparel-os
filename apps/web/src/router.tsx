@@ -60,7 +60,10 @@ function Root() {
 function Landing() {
   const { session } = useSession();
   if (session.state === 'signed-out') return null;
-  return <Navigate to={screens[landingScreen(session.user.personasHeld, session.grants)].path} replace />;
+  const landing = landingScreen(session.user.roleAssignmentInForce, session.user.personasHeld, session.grants);
+  // "No access assigned" is the shell's own page, whatever the address (AppShell; DEC-118, RR-260).
+  if (landing === 'no-access-assigned') return null;
+  return <Navigate to={screens[landing].path} replace />;
 }
 
 /**

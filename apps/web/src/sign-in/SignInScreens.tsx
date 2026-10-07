@@ -66,6 +66,8 @@ export function SignInScreens({ initial = { stage: 'read-session' } }: { initial
           userId: stage.view.userId,
           displayName: stage.view.displayName,
           personasHeld: stage.view.personasHeld,
+          roleAssignmentInForce: stage.view.roleAssignmentInForce,
+          timeZone: stage.view.timezone,
         },
         grants: stage.view.grants,
       });

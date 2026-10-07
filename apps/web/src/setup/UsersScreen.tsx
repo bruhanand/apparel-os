@@ -19,6 +19,7 @@ import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from './parts';
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
+import { useTimeZone } from '../shell/session';
 
 // Setup › Users (access-and-approvals 2.1, 3.2, 9.11, 14; DEC-112; spec section 6): every user with the personas held
 // and the state of the version in force (RR-214), the latest version's own state, and in the drawer every version,
@@ -253,6 +254,7 @@ function UserDrawer({ user, onClose }: { user: UserRecord; onClose: () => void }
 
 /** Setup › Users. */
 export function UsersScreen() {
+  const timeZone = useTimeZone();
   const query = useQuery(readQuery(api, 'listUsers', {}));
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -279,7 +281,7 @@ export function UsersScreen() {
         {(list) => (
           <div className="flex flex-col gap-3">
             <div className="flex justify-end">
-              <AsOf asOf={list.asOf} />
+              <AsOf asOf={list.asOf} timeZone={timeZone} />
             </div>
             {list.users.length === 0 ? (
               <EmptyState title="setup.users.empty.title" body="setup.users.empty.body" />

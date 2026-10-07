@@ -19,7 +19,14 @@ const VERSION = '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f7a1';
 const REASON = '0199b3c4-5d6e-7f80-91a2-b3c4d5e6f7b1';
 const session: ShellSession = {
   state: 'active',
-  user: { organisationCode: 'SYN-ORG-A', userId: APPROVER, displayName: 'SYNTHETIC Approver', personasHeld: [] },
+  user: {
+    organisationCode: 'SYN-ORG-A',
+    userId: APPROVER,
+    displayName: 'SYNTHETIC Approver',
+    personasHeld: [],
+    roleAssignmentInForce: true,
+    timeZone: 'UTC',
+  },
   grants: [],
 };
 

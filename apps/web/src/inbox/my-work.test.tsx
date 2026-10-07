@@ -61,7 +61,11 @@ describe('the My work counter (design-language 10.5)', () => {
 describe('the My work list (access-and-approvals 11.2; PRD-ACS-009, PRD-UXP-003)', () => {
   it('keeps the order the server gives and shows each item’s state, due time, exposure and next action', () => {
     const html = renderToStaticMarkup(
-      <MyWorkList work={work([item(1), item(2, { exposure: { kind: 'unknown' } })])} onOpen={() => undefined} />,
+      <MyWorkList
+        work={work([item(1), item(2, { exposure: { kind: 'unknown' } })])}
+        onOpen={() => undefined}
+        timeZone="UTC"
+      />,
     );
     const rows = [...html.matchAll(/<li[^>]*>(.*?)<\/li>/gs)].map((match) => text(match[1] ?? ''));
     expect(rows).toHaveLength(2);
@@ -75,7 +79,7 @@ describe('the My work list (access-and-approvals 11.2; PRD-ACS-009, PRD-UXP-003)
   });
 
   it('explains an empty list', () => {
-    const html = renderToStaticMarkup(<MyWorkList work={work([])} onOpen={() => undefined} />);
+    const html = renderToStaticMarkup(<MyWorkList work={work([])} onOpen={() => undefined} timeZone="UTC" />);
     expect(text(html)).toContain('Nothing waiting for you');
   });
 });
