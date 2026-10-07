@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { SessionContext } from '../shell/session';
 import { EnrolmentSecret, groupedKey } from './EnrolmentSecret';
 import { keyToResend } from './resend';
+import { RefusalBanner } from './RefusalBanner';
 import { SignInScreens } from './SignInScreens';
 import type { SignInStage } from './flow';
 
@@ -24,6 +25,35 @@ function render(initial: SignInStage) {
 // SYNTHETIC values only (code-house-rules 11.1).
 const reference = '01900000-0000-7000-8000-0000000000aa';
 const refusal = (body: Omit<ErrorBody, 'reference'>): ErrorBody => ({ ...body, reference });
+
+describe('a refused password (access-and-approvals 3.2; S1-F01-T31)', () => {
+  const banner = (missing: ErrorBody['missing']) =>
+    text(
+      renderToStaticMarkup(
+        <RefusalBanner
+          refusal={refusal({
+            kind: 'refused',
+            code: 'access.password-refused',
+            ...(missing === undefined ? {} : { missing }),
+          })}
+        />,
+      ),
+    );
+
+  it('names the rule it failed and what to do next, from the setting value the server gave', () => {
+    const shown = banner([{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '12' }]);
+    expect(shown).toContain('This password does not meet the password rules. Choose another.');
+    expect(shown).toContain('The password needs at least 12 characters.');
+  });
+
+  it('keeps the plain text when the server names no rule, or one this screen does not know', () => {
+    expect(banner(undefined)).not.toContain('needs at least');
+    expect(banner([{ kind: 'password-rule', rule: 'unknown-rule' }])).toContain('Something it needs is missing.');
+    expect(banner([{ kind: 'password-rule', rule: 'minimum-length', minimumLength: 'x' }])).not.toContain(
+      'needs at least',
+    );
+  });
+});
 
 describe('the sign-in form (access-and-approvals 3.1)', () => {
   it('PRD-SEC-001 asks for the Organisation code, login, password and authenticator code, with one primary action', () => {

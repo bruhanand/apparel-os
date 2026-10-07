@@ -543,7 +543,10 @@ describe('users (access-and-approvals 2.1, 3.2, 4.3; tests 19f, 19g; DEC-112, DE
     );
     expect(short).toMatchObject({
       kind: 'refusal',
-      refusal: { code: 'access.password-refused' },
+      refusal: {
+        code: 'access.password-refused',
+        missing: [{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '12' }],
+      },
       causedBySecret: true,
     });
     const taken = await as(admin.id, (c) =>

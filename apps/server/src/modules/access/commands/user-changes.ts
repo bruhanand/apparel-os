@@ -5,7 +5,7 @@ import { lockTable, type LockTarget, type TransactionContext } from '../../../ke
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { appUser, appUserVersion, appUserVersionChange, passwordCredential, personaHeld } from '../db/schema.js';
 import { hashPassword } from '../domain/password-hash.js';
-import { meetsPasswordRules } from '../domain/sign-in-rules.js';
+import { checkPasswordRules, passwordRuleMissing } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { findUser, findUserByLogin } from '../queries/users.js';
 import {
@@ -72,10 +72,11 @@ export class UserChanges {
         causedBySecret: false,
       };
     }
-    if (!meetsPasswordRules(rules.value, user.temporaryPassword)) {
+    const passwordRule = checkPasswordRules(rules.value, user.temporaryPassword);
+    if (!passwordRule.ok) {
       return {
         kind: 'refusal',
-        refusal: { kind: 'refused', code: 'access.password-refused', missing: [] },
+        refusal: { kind: 'refused', code: 'access.password-refused', missing: [passwordRuleMissing(passwordRule)] },
         causedBySecret: true,
       };
     }

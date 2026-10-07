@@ -1,6 +1,6 @@
 # S1-F01-T29 — Service-only permissions never given to people
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [S1-F01 First access](../spec.md)
 
@@ -21,3 +21,4 @@ Feature: [S1-F01 First access](../spec.md)
 
 - Found in the hands-on test, [test-report.md](../test-report.md) F3.
 - Product owner, 7 Oct 2026: people may never hold the background system's permissions; hide and refuse.
+- Built: `serviceOnly` on the record type declaration in `packages/schemas/src/permissions.ts` (set by `declareServiceOnly` on the five types, with `isServiceOnly`); `permissionGrid()` in `apps/web/src/setup/permission-grid.ts` leaves them out; `AccessChanges` (`access-changes.ts`) refuses a role or role version holding one with `access.service-only-permission` (kind refused, `missing` names each permission; message in `en-IN.ts`; added to the two prepare routes' codes and `openapi.json`). The setup step writes service identities' roles through its own path, so their authorities are untouched; the integration test in `roles-and-assignments.int.test.ts` shows a service identity holding `audit.audit_seal` still authorised through the job identities. Design: access-and-approvals 2.3.

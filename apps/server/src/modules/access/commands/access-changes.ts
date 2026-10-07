@@ -146,6 +146,25 @@ export class AccessChanges {
     return missing.length === 0 ? undefined : { kind: 'refused', code: 'access.permission-not-declared', missing };
   }
 
+  /**
+   * Refuses a role that holds a permission on a record type only service identities hold (access-and-approvals 2.3;
+   * PRD-SEC-018; S1-F01-T29). A person never holds it, whoever prepares the role; a service identity's authorities
+   * come from the setup step, not from here.
+   */
+  private serviceOnly(permissions: readonly Permission[]): CommandRefusal | undefined {
+    const missing = permissions.flatMap((permission) =>
+      permission.kind === 'action' && this.registry.get(permission.recordType)?.serviceOnly === true
+        ? [{ kind: 'permission', recordType: permission.recordType, action: permission.action }]
+        : [],
+    );
+    return missing.length === 0 ? undefined : { kind: 'refused', code: 'access.service-only-permission', missing };
+  }
+
+  /** The refusal of a role's permissions against the registry: undeclared, then service-only (4.1, 5.4, 2.3). */
+  private refusedPermissions(permissions: readonly Permission[]): CommandRefusal | undefined {
+    return this.undeclared(permissions) ?? this.serviceOnly(permissions);
+  }
+
   private async writeRoleVersion(
     context: TransactionContext,
     preparer: Preparer,
@@ -222,8 +241,8 @@ export class AccessChanges {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
-    const undeclared = this.undeclared(draft.permissions);
-    if (undeclared !== undefined) return { kind: 'refusal', refusal: undeclared };
+    const refused = this.refusedPermissions(draft.permissions);
+    if (refused !== undefined) return { kind: 'refusal', refusal: refused };
     const taken = await context.tx.select({ id: role.id }).from(role).where(eq(role.code, draft.code));
     if (taken.length > 0) return refusal('refused', 'access.role-code-taken');
     const selfService = draft.permissions.some((permission) => permission.selfService);
@@ -252,8 +271,8 @@ export class AccessChanges {
     const [found] = await context.tx.select().from(role).where(eq(role.id, roleId));
     if (found === undefined) return refusal('not-found', 'access.role-not-found');
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
-    const undeclared = this.undeclared(draft.permissions);
-    if (undeclared !== undefined) return { kind: 'refusal', refusal: undeclared };
+    const refused = this.refusedPermissions(draft.permissions);
+    if (refused !== undefined) return { kind: 'refusal', refusal: refused };
     if (draft.permissions.some((permission) => permission.selfService !== found.selfService)) {
       return refusal('refused', 'access.self-service-scope');
     }

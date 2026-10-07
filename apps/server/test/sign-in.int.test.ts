@@ -403,7 +403,12 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
       { newPassword: 'SYN-short', totpCode: codeFor(secretBytes, 1) },
       { cookie, key: changeKey },
     );
-    expect(errorOf(short).code).toBe('access.password-refused');
+    // S1-F01-T31: the refusal names the rule and the setting's value, never the password.
+    expect(errorOf(short)).toMatchObject({
+      code: 'access.password-refused',
+      missing: [{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '12' }],
+    });
+    expect(JSON.stringify(short.body)).not.toContain('SYN-short');
     const newPassword = 'SYNTHETIC-new-password-1';
     const changed = await post(
       '/api/access/password/change',

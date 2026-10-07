@@ -188,9 +188,9 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T26 First roles change the security settings; assignment validity checked at once](tickets/T26-first-roles-settings-and-assignment-validity.md) | done | T24, T25 (done) (`DEC-120`; RR-402, RR-390) |
 | [S1-F01-T27 The `app` service serves the web app](tickets/T27-serve-web-app.md) | done | — (deployment.md section 3; found in the Railway `dev` setup); `/counter/` waits for RR-420 |
 | [S1-F01-T28 Test sign-in buttons on the development environments](tickets/T28-demo-sign-in.md) | done | — |
-| [S1-F01-T29 Service-only permissions never given to people](tickets/T29-service-only-permissions.md) | ready-for-agent | — (test report F3) |
+| [S1-F01-T29 Service-only permissions never given to people](tickets/T29-service-only-permissions.md) | done | — (test report F3) |
 | [S1-F01-T30 The screen locks itself when the idle limit passes](tickets/T30-idle-lock-on-screen.md) | ready-for-agent | — (test report F2) |
-| [S1-F01-T31 A refused password names the rule it failed](tickets/T31-password-rule-named.md) | ready-for-agent | — (test report F1) |
+| [S1-F01-T31 A refused password names the rule it failed](tickets/T31-password-rule-named.md) | done | — (test report F1) |
 | [S1-F01-T32 Phone-width top bar as designed](tickets/T32-phone-top-bar.md) | ready-for-agent | — (test report F5) |
 | [S1-F01-T33 Form actions in the drawer footer](tickets/T33-drawer-footer-actions.md) | ready-for-agent | — (test report F7) |
 | [S1-F01-T34 A start date before today says so](tickets/T34-date-before-today-message.md) | ready-for-agent | — (test report F8) |

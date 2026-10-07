@@ -9,7 +9,7 @@ import {
   roleVersionDraftSchema,
   scopeGrantsNothing,
 } from './roles.js';
-import { permissionRegistry, registryByCode } from './permissions.js';
+import { isServiceOnly, permissionRegistry, registryByCode } from './permissions.js';
 
 describe('the permission registry (access-and-approvals 4.1, 9.11)', () => {
   it('declares each record type once, with explicit actions, including those the first two roles need', () => {
@@ -30,6 +30,20 @@ describe('the permission registry (access-and-approvals 4.1, 9.11)', () => {
     for (const declaration of permissionRegistry) {
       for (const action of declaration.actions) expect(permissionActionSchema.safeParse(action).success).toBe(true);
     }
+  });
+
+  it('PRD-SEC-018 marks exactly the record types only service identities hold as service-only', () => {
+    const serviceOnly = permissionRegistry.filter((declaration) => declaration.serviceOnly).map((each) => each.code);
+    expect(serviceOnly.sort()).toEqual([
+      'access.effective_grant',
+      'audit.audit_partition',
+      'audit.audit_seal',
+      'inbox.work_item',
+      'kernel.outbox_event',
+    ]);
+    expect(isServiceOnly('audit.audit_seal')).toBe(true);
+    expect(isServiceOnly('access.role')).toBe(false);
+    expect(isServiceOnly('syn.not_declared')).toBe(false);
   });
 
   it('refuses a registry that declares a record type twice', () => {

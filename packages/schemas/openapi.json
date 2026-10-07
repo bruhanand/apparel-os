@@ -3077,6 +3077,7 @@
             "x-error-codes": [
               "access.permission-not-declared",
               "access.role-code-taken",
+              "access.service-only-permission",
               "access.starts-in-past"
             ]
           },
@@ -5138,6 +5139,7 @@
             },
             "x-error-codes": [
               "access.permission-not-declared",
+              "access.service-only-permission",
               "access.starts-in-past"
             ]
           },

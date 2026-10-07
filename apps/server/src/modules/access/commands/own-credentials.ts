@@ -5,6 +5,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import {
   CommandDefect,
   type CommandOutcome,
+  type CommandRefusal,
   type CommandRequest,
   type CommandRunner,
   type IdempotencyHelper,
@@ -18,7 +19,7 @@ import { passwordCredential, secondFactor } from '../db/schema.js';
 import { openFactorSecret, sealFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { hashPassword } from '../domain/password-hash.js';
-import { meetsPasswordRules } from '../domain/sign-in-rules.js';
+import { checkPasswordRules, passwordRuleMissing } from '../domain/sign-in-rules.js';
 import { matchingStep, otpauthUri, TOTP_SECRET_BYTES, base32 } from '../domain/totp.js';
 import { readSetting } from '../queries/settings.js';
 import { credentialState, factorBeingSetUp, findUser } from '../queries/users.js';
@@ -181,8 +182,9 @@ export class OwnCredentials {
         const secret = openFactorSecret(this.dependencies.keys, own.request.organisation.organisationCode, factor);
         const step = matchingStep(secret, body.totpCode, context.startedAt, factor.lastUsedStep);
         if (step === undefined) return codeRefused();
-        if (!meetsPasswordRules(rules.value, body.newPassword)) {
-          return refusal('refused', 'access.password-refused', true);
+        const passwordRule = checkPasswordRules(rules.value, body.newPassword);
+        if (!passwordRule.ok) {
+          return refusal('refused', 'access.password-refused', true, [passwordRuleMissing(passwordRule)]);
         }
         if (!(await takeStep(context, factor.id, step))) return codeRefused();
         const hash = await hashPassword(body.newPassword);
@@ -240,8 +242,9 @@ function refusal(
   kind: 'refused' | 'not-authorised',
   code: string,
   causedBySecret: boolean,
-): { kind: 'refusal'; refusal: { kind: typeof kind; code: string; missing: [] }; causedBySecret: boolean } {
-  return { kind: 'refusal', refusal: { kind, code, missing: [] }, causedBySecret };
+  missing: CommandRefusal['missing'] = [],
+): { kind: 'refusal'; refusal: CommandRefusal; causedBySecret: boolean } {
+  return { kind: 'refusal', refusal: { kind, code, missing }, causedBySecret };
 }
 
 /** A wrong or used code: `not-authorised`, never kept under the key (code-house-rules 12.3, 12.5). */
