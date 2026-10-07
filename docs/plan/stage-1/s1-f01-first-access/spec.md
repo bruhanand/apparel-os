@@ -182,7 +182,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 (done); RR-350 (CI on a pushed branch, the product owner's acceptance, Demo 1) |
 | [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
 | [S1-F01-T22 Same-day disabling and role locking](tickets/T22-same-day-disabling-and-role-locking.md) | done | — (`DEC-118`; RR-321, RR-360) |
-| [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | ready-for-agent | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |
+| [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | done | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |
 | [S1-F01-T24 Worker retries, history upkeep and the test Organisations](tickets/T24-worker-retries-history-upkeep-and-test-organisations.md) | done | — (`DEC-118`; RR-270 part, RR-240, RR-330); the intervals stay OPEN (RR-270) |
 | [S1-F01-T25 Changing essential security settings](tickets/T25-changing-essential-security-settings.md) | ready-for-agent | T22 (done) (`DEC-118`; RR-334) |
 
