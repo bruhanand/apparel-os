@@ -423,6 +423,29 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "access-and-approvals 9.11, 13.1; code-house-rules 6.3; DEC-112",
       "why": "Read by the setup step and the recovery command, operator commands that act before any scope applies (code-house-rules 6.3); it holds a fingerprint and two user identifiers, never a secret, and only access code reads it"
+    },
+    {
+      "table": "files_imports.stored_file",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 3.1, 11, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3",
+      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11)"
+    },
+    {
+      "table": "files_imports.file_receipt",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 3.1, 15.1; code-house-rules 6.3",
+      "why": "Every receipt of a stored file (uploader, time, source system, claimed reference, original name); written with the file before it is attached to any record, so it has no scope facts yet"
+    },
+    {
+      "table": "files_imports.attachment",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 11, 13.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
     }
   ]
 }

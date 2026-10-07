@@ -180,15 +180,25 @@ async function writeAssignment(
     ],
   );
   if (scope.kind === 'dimensions') {
-    for (const [dimension, kind] of [
-      ['legal-entity', scope.legalEntity.kind],
-      ['place', scope.place.kind],
-      ['brand', scope.brand.kind],
+    for (const [dimension, dimensionScope] of [
+      ['legal-entity', scope.legalEntity],
+      ['place', scope.place],
+      ['brand', scope.brand],
     ] as const) {
+      const scopeId = uuidv7();
       await owner.query(
         'insert into access.assignment_scope (id, role_assignment_id, dimension, kind) values ($1, $2, $3, $4)',
-        [uuidv7(), assignmentId, dimension, kind],
+        [scopeId, assignmentId, dimension, dimensionScope.kind],
       );
+      if (dimensionScope.kind !== 'selected') continue;
+      // The selected members (access-and-approvals 5.1): a legal entity or a brand by identifier, a place by type.
+      for (const member of dimensionScope.members as readonly (string | { type: string; id: string })[]) {
+        const [memberType, memberId] = typeof member === 'string' ? [dimension, member] : [member.type, member.id];
+        await owner.query(
+          'insert into access.assignment_scope_member (id, assignment_scope_id, member_type, member_id) values ($1, $2, $3, $4)',
+          [uuidv7(), scopeId, memberType, memberId],
+        );
+      }
     }
   }
   await owner.query(`update access.role_assignment set decision = 'Approved' where id = $1`, [assignmentId]);

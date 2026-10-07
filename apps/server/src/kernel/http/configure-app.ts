@@ -1,3 +1,4 @@
+import { routes, type Route } from '@apparel-os/schemas';
 import type { INestApplication } from '@nestjs/common';
 import { correlationIdMiddleware, correlationIdOf } from '../command-runner/correlation.js';
 import { LOGGER } from '../logging/logging.module.js';
@@ -7,6 +8,7 @@ import { systemClock } from '../time/clock.js';
 import { ERROR_CODE_LOCAL } from './error-envelope.filter.js';
 import type { HttpSettings } from './http-settings.js';
 import type { HttpRequest, HttpResponse } from './http-types.js';
+import { largeJsonBody, mountPatternOf } from './large-body.js';
 import { HTTP_SETTINGS } from './origin-check.guard.js';
 
 /**
@@ -46,6 +48,12 @@ export function configureApp(app: INestApplication, clock: Clock = systemClock):
     next();
   });
   app.use(requestLog(app.get<StructuredLogger>(LOGGER), clock));
+  // A route that takes more than the ordinary body limit, such as storing a file, names its own (route table).
+  for (const route of Object.values(routes) as readonly Route[]) {
+    if (route.command && route.bodyLimitBytes !== undefined) {
+      app.use(mountPatternOf(route), largeJsonBody(route.bodyLimitBytes));
+    }
+  }
 }
 
 /**

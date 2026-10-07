@@ -1,13 +1,19 @@
 import type { LoggerService, OnApplicationShutdown } from '@nestjs/common';
 import { connectionToDatabase } from '../db/connection.js';
 import { createDb, type Database, type DatabaseHandle } from '../db/create-db.js';
-import { findDatabaseName, listDirectory } from '../db/directory.js';
+import { findOrganisationEntry, listDirectory } from '../db/directory.js';
 import type { OrganisationRoutingConfig } from './routing-config.js';
 import { decodeSessionCookieValue } from './session-cookie.js';
 
 /** An Organisation found in the directory, bound to its own database through that database's pool. */
 export interface RoutedOrganisation {
   readonly organisationCode: string;
+  /**
+   * The Organisation's identifier, the directory row's UUIDv7, which starts every object key in the file store
+   * (backup-and-restore 2.1; GC9-10). Left out where the Organisation was not found through the directory, as in the
+   * setup step's own context; a command that needs it refuses without it.
+   */
+  readonly organisationId?: string;
   readonly databaseName: string;
   /** The Organisation's database, as the runtime role. Nothing here reaches any other Organisation's. */
   readonly db: Database;
@@ -126,9 +132,14 @@ export class OrganisationRouter implements OnApplicationShutdown {
     // A code PostgreSQL text cannot hold, one with U+0000, is in no directory: it is unknown, like any other
     // unknown code, and never reaches the query, where it would fail (access-and-approvals 3.1, 3.3).
     if (organisationCode === '' || organisationCode.includes('\u0000')) return undefined;
-    const databaseName = await findDatabaseName(this.directory.db, organisationCode);
-    if (databaseName === undefined) return undefined;
-    return { organisationCode, databaseName, db: this.poolFor(databaseName).db };
+    const entry = await findOrganisationEntry(this.directory.db, organisationCode);
+    if (entry === undefined) return undefined;
+    return {
+      organisationCode,
+      organisationId: entry.organisationId,
+      databaseName: entry.databaseName,
+      db: this.poolFor(entry.databaseName).db,
+    };
   }
 
   private refuseIfClosed(): void {

@@ -53,6 +53,7 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
+import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
   securitySettingPreparedSchema,
   securitySettingsSchema,
@@ -104,7 +105,13 @@ export type RouteAccess =
    * command authorises approve on the record type of the request it decides, with its facts, once it has read the
    * request (S1-F01-T13). A stand-in grant arrives with S1-F05.
    */
-  | { readonly kind: 'decision' };
+  | { readonly kind: 'decision' }
+  /**
+   * Reading a file through the record it is attached to (imports-and-opening-data 11, 13.1; S1-F06-T05): the guard
+   * Authenticates only, and the command authorises view on the attached record's own type with its scope facts and
+   * every restricted class the attachment carries, once it has read the attachment. Out of scope reads as not found.
+   */
+  | { readonly kind: 'attached-record' };
 
 /**
  * A step of first sign-in, or of sign-in after a reset (access-and-approvals 3.2, 7.1 step 1). Until each is done, a
@@ -169,6 +176,11 @@ export interface CommandRoute extends RouteBase {
   readonly secretFields: readonly SecretFieldDeclaration[];
   readonly restrictedFields: readonly RestrictedFieldDeclaration[];
   readonly shows: 'nothing' | 'secret' | 'restricted-value';
+  /**
+   * The most the request body may hold in bytes, where the body parser's ordinary limit is too small, as for a file
+   * (imports-and-opening-data 9.3). Left out, the ordinary limit holds.
+   */
+  readonly bodyLimitBytes?: number;
 }
 
 export type Route = ReadRoute | CommandRoute;
@@ -815,6 +827,60 @@ export const routes = {
     command: false,
     response: myWorkSchema,
     codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
+  }),
+  // Stored files and evidence (imports-and-opening-data 3.1, 9.3, 11, 13.1; PRD-IMP-002, PRD-SEC-005, PRD-SEC-006;
+  // S1-F06-T05). The file travels as base64 in the JSON body. Storing needs create on the stored file; reading goes
+  // through the attached record, authorised in the command.
+  storeFile: defineRoute({
+    method: 'POST',
+    path: '/api/files-imports/files',
+    access: { kind: 'action', action: 'create', recordType: 'files_imports.stored_file' },
+    command: true,
+    body: storeFileRequestSchema,
+    bodyLimitBytes: STORE_FILE_BODY_LIMIT_BYTES,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: storedFileSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'files-imports.type-not-allowed',
+      'files-imports.file-too-large',
+      'files-imports.active-content',
+      'files-imports.pdf-not-inspectable',
+      'files-imports.file-store-not-configured',
+    ],
+  }),
+  readAttachedFile: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/attachments/{attachmentId}/file',
+    params: z.strictObject({ attachmentId: idSchema }),
+    access: { kind: 'attached-record' },
+    command: false,
+    response: attachedFileSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.not-authorised',
+      'access.business-date-not-set',
+      'files-imports.attachment-not-found',
+      'files-imports.restricted-file-is-an-export',
+      'files-imports.file-store-not-configured',
+    ],
+  }),
+  downloadAttachedFile: defineRoute({
+    method: 'POST',
+    path: '/api/files-imports/attachments/{attachmentId}/download',
+    params: z.strictObject({ attachmentId: idSchema }),
+    access: { kind: 'attached-record' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: attachedFileSchema,
+    codes: [...PREPARE_CODES, 'files-imports.attachment-not-found', 'files-imports.file-store-not-configured'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

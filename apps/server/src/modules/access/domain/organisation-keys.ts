@@ -12,7 +12,7 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
 export const ORGANISATION_KEYS_VARIABLE = 'AOS_ORGANISATION_KEYS';
 
 /** What a subkey is for. Each gets its own subkey. */
-export type KeyPurpose = 'authenticator-secret' | 'restricted-value' | 'sign-in-throttling';
+export type KeyPurpose = 'authenticator-secret' | 'restricted-value' | 'sign-in-throttling' | 'stored-file';
 
 /** A value encrypted under an Organisation's key. The scheme names the algorithm and its version. */
 export interface SealedValue {

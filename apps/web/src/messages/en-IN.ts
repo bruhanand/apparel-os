@@ -213,6 +213,16 @@ export const englishIndia = {
   'error.access.assignment-not-found': 'This role assignment was not found.',
   'error.access.not-withdrawable':
     'Only an approved role assignment that has not started yet can be withdrawn. End a started one early instead.',
+  'error.files-imports.type-not-allowed': 'This file is not a PDF, JPEG or PNG, so it was not stored.',
+  'error.files-imports.file-too-large': 'This file is over the size limit, so it was not stored.',
+  'error.files-imports.active-content':
+    'This PDF holds scripts, embedded files or launch actions, so it was not stored. Send a plain copy.',
+  'error.files-imports.pdf-not-inspectable':
+    'This PDF is encrypted or cannot be checked, so it was not stored. Send an unprotected copy.',
+  'error.files-imports.file-store-not-configured': 'File storage is not set up here yet, so files cannot be kept.',
+  'error.files-imports.attachment-not-found': 'This file was not found, or you may not see it.',
+  'error.files-imports.restricted-file-is-an-export':
+    'This file holds restricted information. Download it instead; the download is recorded.',
   'error.access.session-locked': 'Your session is locked. Enter your password to unlock it.',
   'error.access.own-credential-reset': 'You cannot reset your own password or authenticator. Ask another person.',
   'error.access.user-not-found': 'This user was not found.',
@@ -403,6 +413,7 @@ export const englishIndia = {
   'history.detail.device': 'Registered device',
   'history.exposure.shown': 'Shown',
   'history.exposure.exported': 'Exported',
+  'history.operation.attach-file': 'Attached a file as evidence',
   'history.operation.prepare-role': 'Prepared a role',
   'history.operation.prepare-role-version': 'Prepared a role version',
   'history.operation.approve-role-version': 'Approved a role version',
@@ -464,6 +475,7 @@ export const englishIndia = {
   'record-type.access.session': 'Session of another user',
   'record-type.access.user_credential': 'Credentials of another user',
   'record-type.inbox.work_item': 'Work item',
+  'record-type.files_imports.stored_file': 'Stored file',
   'record-type.audit.audit_record': 'Audit record',
   'record-type.audit.access_record': 'Access record',
   'record-type.audit.sensitive_access_record': 'Sensitive access record',
