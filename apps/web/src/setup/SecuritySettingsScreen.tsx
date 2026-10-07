@@ -8,6 +8,7 @@ import { readQuery } from '../api/query';
 import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { describedBy, FormField } from '../forms/FormField';
+import { STARTS_BEFORE_TOMORROW } from '../forms/start-date';
 import { useRouteForm } from '../forms/use-route-form';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
@@ -72,7 +73,8 @@ function whenText(version: Version, timeZone: string): string {
 function ChangeForm({ view }: { view: SettingView }) {
   const today = useBusinessToday();
   const inForce = view.versions.find((version) => version.id === view.inForceVersionId);
-  // The server refuses a setting that starts today or before (`access.starts-in-past`), so its earliest day is the next.
+  // The server refuses a setting that starts today or before (`access.starts-in-past`), so its earliest day is the
+  // next, and a day before it says so in words of its own (`STARTS_BEFORE_TOMORROW`).
   const form = useRouteForm(
     routes.prepareSecuritySettingVersion,
     {
@@ -83,6 +85,7 @@ function ChangeForm({ view }: { view: SettingView }) {
       {
         path: 'takesEffect.date',
         earliest: businessDayAfter(today),
+        code: STARTS_BEFORE_TOMORROW,
         when: (values) => (values as { takesEffect?: { kind?: string } }).takesEffect?.kind === 'from-date',
       },
     ],

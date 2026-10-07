@@ -10,6 +10,9 @@ import type { ApiClient, RouteTable } from '@apparel-os/schemas';
 
 let lastRequest = 0;
 
+/** The longest delay a browser timer holds, in milliseconds (2^31 - 1); a longer one fires at once. */
+const MAX_TIMER_DELAY = 2 ** 31 - 1;
+
 /** Notes a request of the session, at the instant it is sent: the server's last activity is the request's start. */
 export function noteRequest(at: number = Date.now()): void {
   lastRequest = at;
@@ -54,7 +57,9 @@ export function startIdleLock({ idleLockSeconds, onIdle }: IdleLockOptions): Idl
   let stopped = false;
   const idleSince = () => Math.max(lastRequest, startedAt);
   const arm = () => {
-    timer = setTimeout(fire, Math.max(0, idleSince() + limit - Date.now()));
+    // A timer's delay is a 32-bit number: a longer one fires at once, and the re-arm would spin until the deadline.
+    // So each timer waits at most that long, and `fire` re-arms for what is left.
+    timer = setTimeout(fire, Math.min(MAX_TIMER_DELAY, Math.max(0, idleSince() + limit - Date.now())));
   };
   const fire = () => {
     timer = undefined;

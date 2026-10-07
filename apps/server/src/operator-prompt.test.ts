@@ -72,4 +72,18 @@ describe('the operator prompt', () => {
     expect(text).toContain('First password: ');
     expect(text).not.toContain('SYNTHETIC');
   });
+
+  it('never echoes a hidden answer pasted after a newline in one chunk on a terminal', async () => {
+    const { input, output, written } = streams();
+    const pending = askWithSecrets(['Verified how'], ['Password'], { input, output, terminal: true });
+    // One paste: the visible answer, then both entries of the hidden one, all echoed by readline as they are keyed.
+    input.write('answer\nSYNTHETIC-pasted\nSYNTHETIC-pasted\n');
+    const typed = await pending;
+    expect(typed.visible).toEqual(['answer']);
+    expect(typed.secrets[0]?.reveal()).toBe('SYNTHETIC-pasted');
+    const text = written.join('');
+    expect(text).toContain('answer');
+    expect(text).not.toContain('SYNTHETIC');
+    expect(text).not.toContain('pasted');
+  });
 });

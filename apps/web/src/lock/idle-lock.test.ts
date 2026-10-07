@@ -113,3 +113,31 @@ describe('what counts as a request of the session', () => {
     expect(lastRequestAt()).toBe(Date.now());
   });
 });
+
+describe('a very large idle limit', () => {
+  // A browser timer holds its delay in 32 bits: a longer one fires at once, and the re-arm would then spin.
+  const MAX_DELAY = 2 ** 31 - 1;
+
+  it('never asks for a timer longer than the browser holds, and locks only at the limit', () => {
+    const delays: number[] = [];
+    const real = globalThis.setTimeout;
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((handler: () => void, delay?: number) => {
+      delays.push(delay ?? 0);
+      return real(handler, Math.min(delay ?? 0, MAX_DELAY));
+    });
+    const onIdle = vi.fn();
+    const limitSeconds = 3_000_000; // SYNTHETIC: 3 000 000 000 ms, past the 32-bit limit of a timer
+    startIdleLock({ idleLockSeconds: limitSeconds, onIdle });
+    expect(delays).toEqual([MAX_DELAY]);
+    vi.advanceTimersByTime(MAX_DELAY);
+    expect(onIdle).not.toHaveBeenCalled();
+    expect(delays).toHaveLength(2);
+    expect(delays[1]).toBe(limitSeconds * SECOND - MAX_DELAY);
+    vi.advanceTimersByTime(limitSeconds * SECOND - MAX_DELAY - 1);
+    expect(onIdle).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+    expect(delays.every((each) => each <= MAX_DELAY)).toBe(true);
+    spy.mockRestore();
+  });
+});

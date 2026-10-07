@@ -448,6 +448,7 @@ export const routes = {
       'access.assignment-overlaps',
       'access.self-service-scope',
       'access.scope-members-not-available',
+      'access.service-only-permission',
       'access.role-not-found',
       'access.actor-not-found',
     ],

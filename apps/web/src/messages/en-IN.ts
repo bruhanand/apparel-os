@@ -160,6 +160,7 @@ export const englishIndia = {
   'issue.invalid_key': 'This holds a name that is not allowed.',
   'issue.invalid_element': 'One of these entries is not allowed.',
   'issue.invalid_value': 'Choose one of the allowed values.',
+  'issue.access.starts-before-tomorrow': 'The change must start tomorrow or later.',
   'issue.custom': 'This is not allowed here.',
 
   // Refusal codes (code-house-rules 12.3). The screen shows the code's text, then what is missing and the next action.

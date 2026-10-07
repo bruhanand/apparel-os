@@ -496,6 +496,34 @@ describe('service-only permissions (access-and-approvals 2.3; PRD-SEC-018; S1-F0
     const need = { action: 'view', recordType: 'audit.audit_seal' } as const;
     expect(await as(identityId, (c) => jobIdentities().authorise(c, identityId, need))).toEqual({ kind: 'allowed' });
   });
+
+  it('PRD-SEC-018 refuses to assign a service identity’s role to a person, and still assigns it to the identity', async () => {
+    const identityId = await writeSyntheticServiceIdentity(database, `syn-role-holder-${String(randomInt(1_000_000))}`);
+    const { roleId } = await grantSynthetic(database, { kind: 'service-identity', id: identityId }, [
+      { recordType: 'audit.audit_seal', action: 'view' },
+    ]);
+    const user = await newUser('SVCROLE');
+    expect(await prepareAssignment(assignmentDraft(user.id, roleId))).toEqual({
+      kind: 'refusal',
+      refusal: {
+        kind: 'refused',
+        code: 'access.service-only-permission',
+        missing: [{ kind: 'permission', recordType: 'audit.audit_seal', action: 'view' }],
+      },
+    });
+    const other = await writeSyntheticServiceIdentity(database, `syn-role-other-${String(randomInt(1_000_000))}`);
+    const p = await preparer();
+    expect(
+      await as(admin.id, (c) =>
+        access.prepareAssignment(c, p, {
+          actor: { kind: 'service-identity', serviceIdentityId: other },
+          roleId,
+          scope: EVERYWHERE,
+          validFrom: dateIn(0),
+        }),
+      ),
+    ).toMatchObject({ kind: 'success' });
+  });
 });
 
 describe('row-level security over history (access-and-approvals 7.2; numbering-and-audit 4.5; RR-242; test 11)', () => {

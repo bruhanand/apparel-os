@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { FormField, issueMessage } from './FormField';
-import { startsInPast, STARTS_IN_PAST, withStartDateChecks } from './start-date';
+import { startsInPast, STARTS_BEFORE_TOMORROW, STARTS_IN_PAST, withStartDateChecks } from './start-date';
 import { routeResolver } from './use-route-form';
 
 const text = (html: string) =>
@@ -120,5 +120,21 @@ describe('the start-date check (S1-F01-T34; access.starts-in-past)', () => {
     expect(today.errors.takesEffect?.date?.type).toBe(STARTS_IN_PAST);
     const unused = await nested({ takesEffect: { kind: 'at-decision', date: '2026-10-01' } }, undefined, options);
     expect(unused.errors).toEqual({});
+  });
+
+  it('code-house-rules 7.3 says a security setting must start tomorrow or later, since the server refuses today too', async () => {
+    const security = withStartDateChecks(routeResolver({ body: z.strictObject({ date: z.string().min(1) }) }), [
+      { path: 'date', earliest: '2026-10-08', code: STARTS_BEFORE_TOMORROW },
+    ]);
+    const today = await security({ date: '2026-10-07' }, undefined, options);
+    expect(today.errors.date?.type).toBe(STARTS_BEFORE_TOMORROW);
+    const html = renderToStaticMarkup(
+      <FormField id="from" label="setup.valid-from" error={today.errors.date}>
+        <input id="from" />
+      </FormField>,
+    );
+    expect(text(html)).toContain('! The change must start tomorrow or later.');
+    expect(text(html)).not.toContain('past');
+    expect((await security({ date: '2026-10-08' }, undefined, options)).errors).toEqual({});
   });
 });

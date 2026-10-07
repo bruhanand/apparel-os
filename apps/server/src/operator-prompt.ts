@@ -19,7 +19,8 @@ function terminalStreams(): PromptStreams {
 }
 
 /**
- * Asks each question in turn on the operator's terminal and answers what was typed. Hidden ones are not echoed.
+ * Asks each question in turn on the operator's terminal and answers what was typed. Hidden ones are not echoed, even
+ * when they are pasted in one chunk after the line before (S1-F01-T35).
  * Every line comes from one iterator over the input, created before anything is read, so lines that arrive in one
  * chunk are kept for the questions that follow; a question the input ended before is answered with an empty line.
  */
@@ -27,7 +28,9 @@ export async function ask(
   questions: readonly { readonly text: string; readonly hidden: boolean }[],
   streams: PromptStreams = terminalStreams(),
 ): Promise<string[]> {
-  let muted = false;
+  // The terminal echoes each key as readline reads it, so a chunk that holds several lines (a paste) is echoed in one
+  // synchronous run. The mute must follow the line just read, in this listener, and never after an await resumes.
+  let muted = questions[0]?.hidden ?? false;
   const output = new Writable({
     write(chunk: Buffer, _encoding, done) {
       if (!muted) streams.output.write(chunk);
@@ -35,15 +38,18 @@ export async function ask(
     },
   });
   const lines = createInterface({ input: streams.input, output, terminal: streams.terminal });
+  let read = 0;
+  lines.on('line', () => {
+    read += 1;
+    muted = questions[read]?.hidden ?? false;
+  });
   const queue = lines[Symbol.asyncIterator]();
   try {
     const answers: string[] = [];
     for (const question of questions) {
       streams.output.write(question.text);
-      muted = question.hidden;
       const next = await queue.next();
       answers.push(next.done === true ? '' : next.value);
-      muted = false;
       if (question.hidden && streams.terminal) streams.output.write('\n');
     }
     return answers;

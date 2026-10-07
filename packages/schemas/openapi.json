@@ -2354,6 +2354,7 @@
             "x-error-codes": [
               "access.assignment-overlaps",
               "access.self-service-scope",
+              "access.service-only-permission",
               "access.starts-in-past"
             ]
           },
