@@ -49,6 +49,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
   - An internal identity, under which the worker runs a job or delivers the outbox (module-map section 10).
   - An outside caller with its own credential, such as an authenticated adapter callback (`PRD-INT-007`). The local helper and the Tally local gateway are this kind too: they call the server over HTTPS with a service-identity credential, and nothing calls into a Store or office (DEC-105; [deployment.md](../platform/deployment.md) section 6, D-6). The secret is shown once, stored only as an Argon2 hash, revocable and never logged (`PRD-SEC-014`).
 - It gets access only through role assignments, scoped as narrowly as its work needs (`PRD-SEC-018`).
+- Some record types are service-only: `access.effective_grant`, `audit.audit_seal`, `audit.audit_partition`, `kernel.outbox_event` and `inbox.work_item` are held by service identities only, never by a person's role. The registry marks them; the role editor leaves them out and a role change that holds one is refused (`access.service-only-permission`; `PRD-SEC-018`; `S1-F01-T29`). **Design choice** (product owner, 7 Oct 2026).
 - It never decides an approval: an approver is an authorised person (`PRD-ACS-006`).
 - When a job carries out a person's decision, the audit record names the service identity as the actor and the person on whose behalf it acts (section 9.8). **Design choice.**
 

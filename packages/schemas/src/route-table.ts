@@ -408,7 +408,12 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: rolePreparedSchema,
-    codes: [...PREPARE_CODES, 'access.permission-not-declared', 'access.role-code-taken'],
+    codes: [
+      ...PREPARE_CODES,
+      'access.permission-not-declared',
+      'access.service-only-permission',
+      'access.role-code-taken',
+    ],
   }),
   prepareRoleVersion: defineRoute({
     method: 'POST',
@@ -421,7 +426,12 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: rolePreparedSchema,
-    codes: [...PREPARE_CODES, 'access.permission-not-declared', 'access.role-not-found'],
+    codes: [
+      ...PREPARE_CODES,
+      'access.permission-not-declared',
+      'access.service-only-permission',
+      'access.role-not-found',
+    ],
   }),
   prepareRoleAssignment: defineRoute({
     method: 'POST',

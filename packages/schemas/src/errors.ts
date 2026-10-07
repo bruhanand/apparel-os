@@ -154,6 +154,8 @@ export const accessCodes = declareCodes({
  *   is (PRD-ACS-022, DEC-100).
  * - `access.permission-not-declared`: a permission on a record type or action the registry does not declare, or a
  *   self-service permission on a type with no subject person (4.1, 5.4).
+ * - `access.service-only-permission`: a role holds a permission on a record type only service identities hold, never
+ *   a person's role; `missing` names each (access-and-approvals 2.3; PRD-SEC-018; S1-F01-T29).
  * - `access.scope-members-not-available`: selected members, which need the scope contract of `organisation` and
  *   `merchandise` (S1-F02, S1-F03; 5.1).
  * - `access.role-code-taken`, `access.role-not-found`, `access.actor-not-found`, `access.assignment-not-found`.
@@ -167,6 +169,7 @@ export const accessRoleCodes = declareCodes({
   'access.version-overlaps': 'refused',
   'access.self-service-scope': 'refused',
   'access.permission-not-declared': 'refused',
+  'access.service-only-permission': 'refused',
   'access.scope-members-not-available': 'unavailable',
   'access.role-code-taken': 'refused',
   'access.role-not-found': 'not-found',

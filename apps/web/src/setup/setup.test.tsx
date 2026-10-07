@@ -132,6 +132,21 @@ describe('the role editor (access-and-approvals 4.1, 4.2; POL-02.01, POL-02.03)'
     expect(grid.find((row) => row.recordType === 'access.approval_request')?.actions).toEqual(['view']);
   });
 
+  it('PRD-SEC-018 S1-F01-T29 leaves out the record types only service identities hold', () => {
+    const recordTypes = permissionGrid().map((row) => row.recordType);
+    for (const serviceOnly of [
+      'access.effective_grant',
+      'audit.audit_seal',
+      'audit.audit_partition',
+      'kernel.outbox_event',
+      'inbox.work_item',
+    ]) {
+      expect(recordTypes).not.toContain(serviceOnly);
+    }
+    expect(recordTypes).toContain('audit.audit_record');
+    expect(recordTypes).toContain('access.session');
+  });
+
   it('POL-02.03 expands All actions into the explicit actions and saves only explicit permissions', () => {
     const selection = withAllActions(new Set<string>(), 'access.role');
     expect(permissionsOfGrid(selection)).toEqual(
