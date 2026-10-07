@@ -255,7 +255,7 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
     }
   });
 
-  it('PRD-SEC-017 is unavailable, naming the setting, where no throttling is set (code-house-rules 12.14)', async () => {
+  it('PRD-SEC-017 DEC-118 is unavailable, naming every setting, where none is set (code-house-rules 12.14)', async () => {
     const user = await writeSyntheticUser(orgB.database, orgB.code, keys, { label: 'NO-SETTINGS', enrolled: true });
     const call = await signIn({
       organisationCode: orgB.code,
@@ -267,7 +267,11 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
     expect(errorOf(call)).toMatchObject({
       kind: 'unavailable',
       code: 'access.sign-in-unavailable',
-      missing: [{ kind: 'setting', setting: 'access.sign-in-throttling' }],
+      missing: [
+        { kind: 'setting', setting: 'access.sign-in-throttling' },
+        { kind: 'setting', setting: 'access.password-rules' },
+        { kind: 'setting', setting: 'access.office-session-limits' },
+      ],
     });
   });
 });
@@ -478,8 +482,8 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
     expect(conflicts).not.toContain('SYNTHETIC-other-password-1');
   });
 
-  it('GC3-5 sets no password while no password rules are in force (code-house-rules 12.14)', async () => {
-    // Organisation B has no settings; its throttling is set here so sign-in is available, but not its password rules.
+  it('GC3-5 DEC-118 lets no one sign in to set a password while no password rules are in force (code-house-rules 12.14)', async () => {
+    // A second Organisation with every required security setting but the password rules: sign-in names them.
     const second = await createSyntheticOrganisations('sign_in_rules');
     const secondKeys = syntheticKeysEnvironment(second);
     const app = await startAccessApp(second, secondKeys);
@@ -503,16 +507,9 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
           totpCode: codeFor(secretBytes),
         }),
       });
-      expect(await signedIn.json()).toEqual({ outcome: 'password-change-required' });
-      const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-      const change = await fetch(`${app.baseUrl}/api/access/password/change`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, cookie, 'idempotency-key': uuidv7() },
-        body: JSON.stringify({ newPassword: 'SYNTHETIC-new-password-1', totpCode: codeFor(secretBytes, 1) }),
-      });
-      expect(change.status).toBe(403);
-      expect(errorEnvelopeSchema.parse(await change.json()).error).toMatchObject({
-        code: 'access.password-rules-not-set',
+      expect(signedIn.status).toBe(403);
+      expect(errorEnvelopeSchema.parse(await signedIn.json()).error).toMatchObject({
+        code: 'access.sign-in-unavailable',
         missing: [{ kind: 'setting', setting: 'access.password-rules' }],
       });
     } finally {
@@ -542,6 +539,7 @@ describe("the session read and the Organisation's timezone (PRD-MOD-017; DEC-118
       const [org] = second.organisations;
       await writeSyntheticSetting(org.database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
       await writeSyntheticSetting(org.database, 'access.office-session-limits', SYNTHETIC_SESSION_LIMITS);
+      await writeSyntheticSetting(org.database, 'access.password-rules', SYNTHETIC_PASSWORD_RULES);
       const user = await writeSyntheticUser(org.database, org.code, secondKeys, { label: 'ZONE', enrolled: true });
       const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
         method: 'POST',

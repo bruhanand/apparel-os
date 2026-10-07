@@ -57,6 +57,9 @@ const accessRecordTypes = [
   declare('access.role_assignment', PREPARED, NONE),
   declare('access.approval_rule_setting', PREPARED, NONE),
   declare('access.approval_reason', PREPARED, NONE),
+  // The essential security settings: edit prepares a new version, approve decides it; no setting is created or
+  // removed through a permission, since a required setting is never left unset (3.3; DEC-118, RR-334; S1-F01-T25).
+  declare('access.setting', ['view', 'edit', 'approve'], NONE),
   declare('access.approval_request', ['view'], NONE),
   declare('access.approval_decision', ['view'], NONE),
   declare('access.effective_grant', ['edit'], NONE),

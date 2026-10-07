@@ -708,7 +708,7 @@ Decided by the product owner, 6 Oct 2026. Both use only the components above; th
 
 - **Setup › Exception rules** gets a tab for the due times and escalation of approvals and tasks, per action type and Site (access-and-approvals 9.4, 11.3).
 - **Failed jobs** is a simple list in the operations view (`PRD-SEC-013`; module-map 4.1).
-- **Security settings** (product owner, 7 Oct 2026, DEC-118): a small form to prepare a new version of the sign-in throttling, the password rules or the office session limits, each shown with its version in force and origin, decided from My work with the approval panel (access-and-approvals 3.3). The general settings screen stays with `S1-F04`.
+- **Security settings** (product owner, 7 Oct 2026, DEC-118): a small form to prepare a new version of the sign-in throttling, the password rules or the office session limits, each shown with its version in force and origin, decided from My work with the approval panel (access-and-approvals 3.3). The general settings screen stays with `S1-F04`. As built (`S1-F01-T25`): Setup › Security settings, granted by view on `access.setting`; one solid card per setting with its values in mono, an In force badge, its origin and since when, its other versions under a disclosure, and **Prepare a new version** (needs edit) opening a drawer with the values, the origin and when it takes effect (when approved, or from a later day), each with no default, and **Request approval**. The approval panel shows the proposed values as read-only facts.
 
 ### 10.20 Sign-in screens (back office)
 

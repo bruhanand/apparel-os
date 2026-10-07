@@ -19,6 +19,7 @@ import { identityTarget, reliedAuthority } from './authority.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
+import type { SecuritySettingsChanges } from './security-settings.js';
 import { checkFreshCode } from './fresh-code.js';
 import { preparersOf, storedPreparers } from './request-approval.js';
 import type { UserChanges } from './user-changes.js';
@@ -103,10 +104,11 @@ export class Approvals {
       readonly changes: AccessChanges;
       readonly users: UserChanges;
       readonly settings: ApprovalSettingsChanges;
+      readonly securitySettings: SecuritySettingsChanges;
       readonly keys?: OrganisationKeys | undefined;
     },
   ) {
-    const { changes, users, settings } = dependencies;
+    const { changes, users, settings, securitySettings } = dependencies;
     this.handlers = new Map<AccessActionType, DocumentHandler>([
       [
         'access.role.change',
@@ -163,6 +165,15 @@ export class Approvals {
           targets: (_c, v) => Promise.resolve(settings.ruleSettingVersionTargets(v)),
           approve: (c, d, v) => settings.approveRuleSettingVersion(c, d, v, HELD),
           reject: (c, d, v) => settings.rejectRuleSettingVersion(c, d, v, HELD),
+        },
+      ],
+      [
+        'access.setting.change',
+        {
+          // The setting with the version at step 1, so two decisions on one setting never pass each other (8.2).
+          targets: (c, v) => securitySettings.versionTargets(c, v),
+          approve: (c, d, v) => securitySettings.approve(c, d, v, HELD),
+          reject: (c, d, v) => securitySettings.reject(c, d, v, HELD),
         },
       ],
       [

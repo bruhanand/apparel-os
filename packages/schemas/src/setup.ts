@@ -31,22 +31,39 @@ function isTimeZone(name: string): boolean {
 
 /**
  * The Organisation's settings the step writes, every value supplied by the operator (synthetic on `dev`, labelled so
- * by `origin`); none has a default (AGENTS.md "Never invent a value"; code-house-rules 12.14).
- *
- * - `timezone` (configuration's setting, code-house-rules 9) and `passwordRules` (access-and-approvals 3.2) are
- *   required: the step dates every version it writes under the timezone, and checks both temporary passwords against
- *   the rules, without which no password can be set.
- * - `signInThrottling` (3.1) and `officeSessionLimits` (3.3) may be left out: an absent one stays not set, and sign-in
- *   is unavailable, naming it, until a later change sets it.
+ * by `origin`); none has a default (AGENTS.md "Never invent a value"; code-house-rules 12.14). Every required security
+ * setting is required here: the timezone (configuration's setting, code-house-rules 9), the password rules
+ * (access-and-approvals 3.2), the sign-in throttling (3.1) and the office session limits (3.3). A request that leaves
+ * any out is refused, naming it, before anything is created (3.1, 9.11; PRD-SEC-017; DEC-118).
  */
 export const setupSettingsSchema = z.strictObject({
   origin: settingOriginSchema,
   timezone: z.string().min(1).refine(isTimeZone, { message: 'Not a time zone this runtime knows' }),
   passwordRules: passwordRulesSchema,
-  signInThrottling: signInThrottlingSchema.optional(),
-  officeSessionLimits: sessionLimitsSchema.optional(),
+  signInThrottling: signInThrottlingSchema,
+  officeSessionLimits: sessionLimitsSchema,
 });
 export type SetupSettings = z.output<typeof setupSettingsSchema>;
+
+/** The required security settings of a setup request, by their field (access-and-approvals 3.1; DEC-118). */
+export const requiredSetupSettings = ['timezone', 'passwordRules', 'signInThrottling', 'officeSessionLimits'] as const;
+
+/**
+ * The required security settings a setup request, or its request file, leaves out, as `settings.<field>`, in the
+ * order of `requiredSetupSettings`; none when every one is there (access-and-approvals 3.1, 9.11; PRD-SEC-017,
+ * DEC-118). It reads only which fields are present, never a value, so the refusal it names echoes nothing.
+ */
+export function missingSetupSettings(request: unknown): string[] {
+  const settings =
+    typeof request === 'object' && request !== null ? (request as { settings?: unknown }).settings : undefined;
+  const present = (name: string): boolean =>
+    typeof settings === 'object' &&
+    settings !== null &&
+    name in settings &&
+    (settings as Record<string, unknown>)[name] !== undefined &&
+    (settings as Record<string, unknown>)[name] !== null;
+  return requiredSetupSettings.filter((name) => !present(name)).map((name) => `settings.${name}`);
+}
 
 /**
  * The name of the Organisation's database on the directory's server (deployment.md section 4): letters, digits and

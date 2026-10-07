@@ -93,6 +93,19 @@ export class ApprovalsController {
     return view;
   }
 
+  @ApiRoute(routes.listSecuritySettings)
+  async listSecuritySettings(@SignedIn() user: SignedInUser) {
+    return this.runner.read(
+      {
+        commandName: 'access.list-security-settings',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      (context) => this.access.securitySettings(context),
+    );
+  }
+
   @ApiRoute(routes.listApprovalReasons)
   async listReasons(@SignedIn() user: SignedInUser) {
     return this.runner.read(

@@ -11,11 +11,15 @@ import type { z } from 'zod';
 export type SettingRead<T> =
   { readonly kind: 'set'; readonly value: T; readonly versionId: string } | { readonly kind: 'not-set' };
 
-/** Reads a setting of access in force on a business date. A value its format's schema refuses is a defect. */
+/**
+ * Reads a setting of access in force at an instant, by default the command's start: setting versions are dated by
+ * instants, so a change approved now applies to the next sign-in, request or password set (access-and-approvals 3.3;
+ * DEC-118). A value its format's schema refuses is a defect.
+ */
 export async function readSetting<K extends AccessSettingKey>(
   context: TransactionContext,
   key: K,
-  businessDate: string,
+  at: Date = context.startedAt,
 ): Promise<SettingRead<z.output<(typeof SETTING_SCHEMAS)[K]>>> {
   const rows = await context.tx
     .select({ id: settingVersion.id, value: settingVersion.value, valueFormat: settingVersion.valueFormat })
@@ -25,7 +29,7 @@ export async function readSetting<K extends AccessSettingKey>(
       and(
         eq(setting.settingKey, key),
         eq(settingVersion.decision, 'Approved'),
-        sql`${settingVersion.validDuring} @> ${businessDate}::date`,
+        sql`${settingVersion.validDuring} @> ${at.toISOString()}::timestamptz`,
       ),
     );
   const row = rows[0];

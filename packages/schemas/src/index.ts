@@ -20,6 +20,8 @@ export type { PersonaId, RecordVersionRef } from './common.js';
 
 export {
   databaseNameSchema,
+  missingSetupSettings,
+  requiredSetupSettings,
   setupFingerprintFieldsSchema,
   setupOutcomeSchema,
   setupRequestFileSchema,
@@ -131,6 +133,20 @@ export type {
   DecisionRequest,
   UserVersionDraft,
 } from './approvals.js';
+
+export {
+  securitySettingKeySchema,
+  securitySettingPreparedSchema,
+  securitySettingsSchema,
+  securitySettingVersionDraftSchema,
+  settingTakesEffectSchema,
+} from './security-settings.js';
+export type {
+  SecuritySettingKey,
+  SecuritySettings,
+  SecuritySettingVersionDraft,
+  SettingTakesEffect,
+} from './security-settings.js';
 
 export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-item.js';
 export type { Exposure, MyWork, WorkItem } from './work-item.js';

@@ -209,7 +209,8 @@ export const accessSessionCodes = declareCodes({
  * - `access.login-taken`: another user has that login, compared without regard to letter case (2.1).
  * - `access.reason-code-taken`, `access.rule-setting-exists`: the code or action type has its record already.
  * - `access.action-type-not-declared`: a rule setting for an action type with no approval rule in code (8).
- * - `access.approval-request-not-found`, `access.reason-not-found`, `access.rule-setting-not-found`.
+ * - `access.approval-request-not-found`, `access.reason-not-found`, `access.rule-setting-not-found`,
+ *   `access.setting-not-found` (a security setting version, access-and-approvals 3.3; S1-F01-T25).
  */
 export const accessApprovalCodes = declareCodes({
   'access.no-reason-list-in-force': 'unavailable',
@@ -228,6 +229,7 @@ export const accessApprovalCodes = declareCodes({
   'access.approval-request-not-found': 'not-found',
   'access.reason-not-found': 'not-found',
   'access.rule-setting-not-found': 'not-found',
+  'access.setting-not-found': 'not-found',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

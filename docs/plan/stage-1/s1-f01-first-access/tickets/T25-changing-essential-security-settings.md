@@ -1,6 +1,6 @@
 # S1-F01-T25 — Changing essential security settings
 
-Status: ready-for-agent
+Status: done
 Blocked by: T22 (done; both change `access` versions and Decide)
 Feature: [S1-F01 First access](../spec.md)
 
@@ -22,3 +22,11 @@ Feature: [S1-F01 First access](../spec.md)
 - An integration test: a new throttling or session-limit version approved now applies to the next sign-in or request; a password-rules version applies to the next password set.
 - A browser journey: the Admin prepares a session-limit change, the approver approves it from My work.
 - The full check set and the browser journeys pass.
+
+## Notes
+
+- Built on branch `s1/f01-t25` (commit subject `S1-F01-T25: changing essential security settings`). Setup refuses a request leaving out the timezone, the password rules, the throttling or the session limits, naming each (`missingSetupSettings`); sign-in names every required setting not set, the password rules included.
+- Record type `access.setting` (view, edit, approve); routes `listSecuritySettings`, `prepareSecuritySettingVersion`; action type `access.setting.change` decided through the ordinary Decide route. Migration `0020__access__setting_changes.sql`: setting versions dated by instants, `starts_on`, `setting_version_change`, `UPDATE (id)` on `access.setting` for the step-1 lock. Setup › Security settings screen and the approval panel's facts.
+- Tests: `apps/server/test/security-settings.int.test.ts` (19j sign-in, 19k, the next sign-in, request and password set), `setup-step.int.test.ts` (19j setup), `apps/web/e2e/security-settings.spec.ts`.
+- Follow-ups: RR-400 (migration 0020 and the version running on `dev`), RR-401 (origin checked against the environment), RR-402 (whether the first roles should hold the setting permissions).
+

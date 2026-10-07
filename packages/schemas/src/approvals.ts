@@ -25,6 +25,7 @@ export const accessActionTypeSchema = z.enum([
   'access.role_assignment.withdrawal',
   'access.approval_reason.change',
   'access.approval_rule_setting.change',
+  'access.setting.change',
 ]);
 export type AccessActionType = z.infer<typeof accessActionTypeSchema>;
 

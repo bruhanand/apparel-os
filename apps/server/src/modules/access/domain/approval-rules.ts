@@ -31,5 +31,7 @@ export const accessApprovalRules: ReadonlyMap<string, ApprovalRule> = new Map(
     rule('access.role_assignment.withdrawal', 'access.role_assignment'),
     rule('access.approval_reason.change', 'access.approval_reason', true),
     rule('access.approval_rule_setting.change', 'access.approval_rule_setting'),
+    // The essential security settings (3.3; POL-02.06, POL-02.07; DEC-118, RR-334).
+    rule('access.setting.change', 'access.setting'),
   ].map((each) => [each.actionType, each]),
 );

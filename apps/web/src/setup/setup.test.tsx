@@ -1,4 +1,4 @@
-import type { AssignmentList, ReasonList, RoleList, UserList } from '@apparel-os/schemas';
+import type { AssignmentList, ReasonList, RoleList, SecuritySettings, UserList } from '@apparel-os/schemas';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -11,6 +11,7 @@ import { permissionGrid, permissionsOfGrid, withAllActions } from './permission-
 import { RecordDrawer } from './RecordDrawer';
 import { ReasonsScreen } from './ReasonsScreen';
 import { RolesScreen } from './RolesScreen';
+import { SecuritySettingsScreen } from './SecuritySettingsScreen';
 import { UsersScreen } from './UsersScreen';
 
 // S1-F01-T16: the access setup screens (access-and-approvals 2.1, 4, 5, 9.5, 14; design-language 10.3, 10.7, 10.9,
@@ -263,5 +264,81 @@ describe('the record drawer (design-language 10.15; RR-312)', () => {
     expect(text(html)).toContain('Details');
     expect(text(html)).toContain('History');
     expect(html).toContain('aria-label="Close"');
+  });
+});
+
+const securitySettings: SecuritySettings = {
+  asOf: AS_OF,
+  settings: [
+    {
+      setting: 'access.sign-in-throttling',
+      settingId: id(40),
+      inForceVersionId: id(41),
+      versions: [
+        {
+          id: id(41),
+          value: { failureLimit: 5, windowSeconds: 600 },
+          origin: 'synthetic',
+          decision: 'Approved',
+          takesEffect: { kind: 'at-decision' },
+          validFrom: '2026-10-01T04:30:00.000Z',
+        },
+      ],
+    },
+    { setting: 'access.password-rules', settingId: null, inForceVersionId: null, versions: [] },
+    {
+      setting: 'access.office-session-limits',
+      settingId: id(50),
+      inForceVersionId: id(51),
+      versions: [
+        {
+          id: id(52),
+          value: { idleLockSeconds: 600, absoluteSeconds: 28_800 },
+          origin: 'synthetic',
+          decision: 'Awaiting approval',
+          takesEffect: { kind: 'from-date', date: '2026-10-09' },
+        },
+        {
+          id: id(51),
+          value: { idleLockSeconds: 1800, absoluteSeconds: 28_800 },
+          origin: 'synthetic',
+          decision: 'Approved',
+          takesEffect: { kind: 'at-decision' },
+          validFrom: '2026-10-01T04:30:00.000Z',
+        },
+      ],
+    },
+  ],
+};
+
+describe('Setup › Security settings (design-language 10.19; access-and-approvals 3.3; DEC-118)', () => {
+  it('shows each setting with its version in force and origin, a setting not set, and a waiting version', () => {
+    const html = text(
+      render(
+        <SecuritySettingsScreen />,
+        [view('access.setting'), { recordType: 'access.setting', action: 'edit' }],
+        (client) => {
+          client.setQueryData(['listSecuritySettings', {}], securitySettings);
+        },
+      ),
+    );
+    expect(html).toContain('Sign-in throttling');
+    expect(html).toContain('Failed sign-ins before slowing 5');
+    expect(html).toContain('Synthetic');
+    expect(html).toContain('Password rules Not set. Sign-in stays unavailable until it is.');
+    expect(html).toContain('Idle lock (seconds) 1800');
+    expect(html).toContain('Awaiting approval');
+    expect(html).toContain('From 09 Oct 2026');
+    expect(html).not.toContain('Needs');
+  });
+
+  it('PRD-UXP-003 without edit, preparing a new version is disabled and names the missing permission', () => {
+    const html = text(
+      render(<SecuritySettingsScreen />, [view('access.setting')], (client) => {
+        client.setQueryData(['listSecuritySettings', {}], securitySettings);
+      }),
+    );
+    expect(html).toContain('Prepare a new version');
+    expect(html).toContain('Needs Edit on Security setting');
   });
 });

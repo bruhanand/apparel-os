@@ -177,6 +177,22 @@ export class AccessChangesController {
     );
   }
 
+  @ApiRoute(routes.prepareSecuritySettingVersion)
+  async prepareSecuritySettingVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareSecuritySettingVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareSecuritySettingVersion, input);
+    return this.run(
+      routes.prepareSecuritySettingVersion,
+      'access.prepare-security-setting-version',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareSecuritySettingVersion(c, p, input.body),
+    );
+  }
+
   private async run<Answer extends Record<string, string>>(
     route: Route,
     commandName: string,

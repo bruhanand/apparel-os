@@ -1,5 +1,5 @@
 import { setupFingerprintFieldsSchema, type SetupRequest } from '@apparel-os/schemas';
-import { canonicalJson, sha256Hex, type JsonValue } from '../../../kernel/index.js';
+import { canonicalJson, sha256Hex } from '../../../kernel/index.js';
 
 /**
  * The version of the setup fingerprint's canonical form (access-and-approvals 9.11, 13.1; RR-211). A rerun whose
@@ -17,9 +17,9 @@ export const SETUP_FINGERPRINT_VERSION = 'setup-fingerprint/1';
  *   exactly; each login exactly, its letter case kept, since the step writes the login as given (a request that
  *   differs only in a login's case is another request, and conflicts);
  * - personas in the order given, since their order is kept and the first sets the landing screen (personas.md 2);
- * - settings as parsed: an absent optional setting is absent, never null or a default; numbers as JSON numbers.
+ * - settings as parsed, every required one present (DEC-118), none null or a default; numbers as JSON numbers.
  */
 export function setupFingerprint(request: SetupRequest): string {
   const fields = setupFingerprintFieldsSchema.parse(request);
-  return sha256Hex(canonicalJson(fields as unknown as JsonValue));
+  return sha256Hex(canonicalJson(fields));
 }

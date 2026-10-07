@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { setupRequestFileSchema, setupRequestSchema } from '@apparel-os/schemas';
+import { missingSetupSettings, setupRequestFileSchema, setupRequestSchema } from '@apparel-os/schemas';
 import { OUTBOX_AUTHORITY, OUTBOX_PROCESSOR_IDENTITY, PinoLoggerService, type JobRegistry } from './kernel/index.js';
 import { runSetupStep, SetupRequestRefused, type ServiceIdentityGrant } from './modules/access/index.js';
 import { askWithSecrets } from './operator-prompt.js';
@@ -54,7 +54,18 @@ async function main(): Promise<number> {
     logger.error('Setup refused, nothing changed: give the request file as the one argument', 'Setup');
     return 1;
   }
-  const parsedFile = setupRequestFileSchema.safeParse(JSON.parse(readFileSync(file, 'utf8')));
+  const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  // Every required security setting is named when left out, before anything else (access-and-approvals 3.1, 9.11;
+  // PRD-SEC-017; DEC-118).
+  const missing = missingSetupSettings(raw);
+  if (missing.length > 0) {
+    logger.error(
+      `Setup refused, nothing changed: the request leaves out required security settings: ${missing.join(', ')}`,
+      'Setup',
+    );
+    return 1;
+  }
+  const parsedFile = setupRequestFileSchema.safeParse(raw);
   if (!parsedFile.success) {
     // The issues name fields and rules, never a value: the file holds no secret, and no value is echoed.
     logger.error(

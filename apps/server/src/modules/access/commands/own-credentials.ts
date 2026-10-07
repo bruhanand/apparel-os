@@ -163,8 +163,7 @@ export class OwnCredentials {
       authoriseReplay: allowed,
       work: async (context): Promise<CommandOutcome<{ outcome: 'password-changed' }>> => {
         const today = await context.businessDate();
-        const rules =
-          today.kind === 'set' ? await readSetting(context, 'access.password-rules', today.date) : undefined;
+        const rules = today.kind === 'set' ? await readSetting(context, 'access.password-rules') : undefined;
         if (rules?.kind !== 'set') {
           return {
             kind: 'refusal',

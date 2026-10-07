@@ -54,11 +54,6 @@ export function syntheticKeysEnvironment(world: SyntheticWorld): Record<string, 
   };
 }
 
-/** Yesterday as a business date in the synthetic timezone: the start of every synthetic version. */
-function yesterday(): string {
-  return dayAgo().slice(0, 10);
-}
-
 function dayAgo(): string {
   return new Date(Date.now() - 86_400_000).toISOString();
 }
@@ -138,7 +133,7 @@ export async function writeSyntheticUser(
   }
 }
 
-/** Writes a SYNTHETIC setting of access, Approved, in force from yesterday, labelled synthetic (12.14; 11.1). */
+/** Writes a SYNTHETIC setting of access, Approved, in force from a day before now, labelled synthetic (12.14; 11.1). */
 export async function writeSyntheticSetting(
   database: string,
   key: 'access.sign-in-throttling' | 'access.password-rules' | 'access.office-session-limits',
@@ -150,9 +145,34 @@ export async function writeSyntheticSetting(
     await owner.query('insert into access.setting (id, setting_key) values ($1, $2)', [settingId, key]);
     await owner.query(
       `insert into access.setting_version (id, setting_id, value_format, value, origin, valid_during, decision)
-       values ($1, $2, $3, $4, 'synthetic', daterange($5::date, null), 'Approved')`,
-      [uuidv7(), settingId, `${key}/1`, JSON.stringify(value), yesterday()],
+       values ($1, $2, $3, $4, 'synthetic', tstzrange($5::timestamptz, null), 'Approved')`,
+      // Setting versions are dated by instants (access-and-approvals 3.3; DEC-118): from a day before now.
+      [uuidv7(), settingId, `${key}/1`, JSON.stringify(value), dayAgo()],
     );
+  } finally {
+    await owner.end();
+  }
+}
+
+/**
+ * Writes a SYNTHETIC approve or reject reason, Approved and in force from a day before now (access-and-approvals 9.5),
+ * so a test can decide without first deciding a reason list. Returns the reason's identifier.
+ */
+export async function writeSyntheticReason(database: string, kind: 'approve' | 'reject'): Promise<string> {
+  const owner = await connect(database, 'migration');
+  try {
+    const reasonId = uuidv7();
+    await owner.query('insert into access.approval_reason (id, code, kind) values ($1, $2, $3)', [
+      reasonId,
+      syntheticCode(`REASON-${kind.toUpperCase()}-${reasonId.slice(-6).toUpperCase()}`),
+      kind,
+    ]);
+    await owner.query(
+      `insert into access.approval_reason_version (id, approval_reason_id, text, valid_during, decision)
+       values ($1, $2, $3, daterange($4::date, null), 'Approved')`,
+      [uuidv7(), reasonId, `SYNTHETIC ${kind} reason`, dayAgo().slice(0, 10)],
+    );
+    return reasonId;
   } finally {
     await owner.end();
   }

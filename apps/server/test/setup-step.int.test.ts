@@ -547,6 +547,26 @@ describe('the request itself (access-and-approvals 3.2, 9.11)', () => {
     expect(await listed(organisation.code)).toEqual([]);
   });
 
+  it('test 19j PRD-SEC-017 DEC-118 refuses a request that leaves out a required security setting, naming it, before anything is created', async () => {
+    for (const name of ['timezone', 'passwordRules', 'signInThrottling', 'officeSessionLimits'] as const) {
+      const organisation = freshOrganisation();
+      const parsed = request(organisation);
+      const settings = Object.fromEntries(Object.entries(parsed.settings).filter(([key]) => key !== name));
+      // A request built in code past the schema, as the operator command's own check would see it.
+      const leftOut = { ...parsed, settings } as unknown as typeof parsed;
+      const refused = run(leftOut);
+      await expect(refused).rejects.toBeInstanceOf(SetupRequestRefused);
+      await expect(refused).rejects.toThrow(`settings.${name}`);
+      const exists = await rows<{ count: string }>(
+        directory,
+        'select count(*)::text as count from pg_catalog.pg_database where datname = $1',
+        [organisation.databaseName],
+      );
+      expect(exists).toEqual([{ count: '0' }]);
+      expect(await listed(organisation.code)).toEqual([]);
+    }
+  });
+
   it('refuses a service identity the permission registry cannot grant', async () => {
     const organisation = freshOrganisation();
     await expect(

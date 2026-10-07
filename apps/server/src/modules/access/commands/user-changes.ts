@@ -59,7 +59,7 @@ export class UserChanges {
   ): Promise<PreparedWithCredential<{ userId: string; versionId: string; requestId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date, causedBySecret: false };
-    const rules = await readSetting(context, 'access.password-rules', date);
+    const rules = await readSetting(context, 'access.password-rules');
     if (rules.kind === 'not-set') {
       return {
         kind: 'refusal',

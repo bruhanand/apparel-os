@@ -15,6 +15,7 @@ import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
 import { ReasonsScreen } from './setup/ReasonsScreen';
 import { RolesScreen } from './setup/RolesScreen';
+import { SecuritySettingsScreen } from './setup/SecuritySettingsScreen';
 import { UsersScreen } from './setup/UsersScreen';
 import { AppShell, type RenderLink } from './shell/AppShell';
 import { landingScreen } from './shell/landing';
@@ -90,6 +91,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <AssignmentsScreen />;
     case 'setup.reason-codes':
       return <ReasonsScreen />;
+    case 'setup.security-settings':
+      return <SecuritySettingsScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

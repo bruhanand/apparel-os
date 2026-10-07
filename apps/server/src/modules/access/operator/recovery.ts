@@ -181,7 +181,7 @@ async function recoverIn(
   }
   if (await aUserHoldsTheResetPermission(context, today.date)) throw new Refused('reset-permission-held');
   if (options.temporaryPassword !== undefined && passwordHash !== undefined) {
-    const rules = await readSetting(context, 'access.password-rules', today.date);
+    const rules = await readSetting(context, 'access.password-rules');
     if (rules.kind === 'not-set') throw new Refused('password-rules-not-set');
     if (!meetsPasswordRules(rules.value, options.temporaryPassword)) throw new Refused('password-refused');
   }

@@ -20,6 +20,14 @@ export interface FirstSignInUser {
   readonly temporaryPassword: string;
 }
 
+/** A user already enrolled: the password and the authenticator secret, hex, as an app holding it would. */
+export interface EnrolledUser {
+  readonly login: string;
+  readonly displayName: string;
+  readonly password: string;
+  readonly factorSecretHex: string;
+}
+
 export interface SyntheticWorld {
   readonly organisationCode: string;
   readonly login: string;
@@ -37,6 +45,15 @@ export interface SyntheticWorld {
     /** The authenticator secret, hex, as an app holding it would. */
     readonly factorSecretHex: string;
     readonly idleLockSeconds: number;
+  };
+  /**
+   * The security settings journey's Organisation, made by the setup step, with an enrolled Admin who may prepare a
+   * setting change and an enrolled approver who may approve it (S1-F01-T25).
+   */
+  readonly settings: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    readonly approver: EnrolledUser;
   };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {

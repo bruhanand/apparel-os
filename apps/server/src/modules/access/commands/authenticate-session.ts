@@ -82,7 +82,7 @@ export async function authenticateSession(
     .where(and(eq(session.id, candidate.id), inArray(session.state, OPEN_STATES)));
   if (found === undefined) return NOT_SIGNED_IN;
   if (found.kind !== 'office') return NOT_SIGNED_IN;
-  const limits = await readSetting(context, 'access.office-session-limits', today.date);
+  const limits = await readSetting(context, 'access.office-session-limits');
   if (limits.kind === 'not-set') return NOT_SIGNED_IN;
   const now = context.startedAt;
   const reached = sessionLimitReached(limits.value, found, now);

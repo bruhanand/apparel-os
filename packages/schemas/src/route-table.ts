@@ -51,6 +51,11 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
+import {
+  securitySettingPreparedSchema,
+  securitySettingsSchema,
+  securitySettingVersionDraftSchema,
+} from './security-settings.js';
 import { assignmentListSchema, reasonListSchema, roleListSchema, userListSchema } from './access-records.js';
 import {
   accessHistoryPageSchema,
@@ -657,6 +662,28 @@ export const routes = {
     response: approvalRuleSettingPreparedSchema,
     codes: [...PREPARE_CODES, 'access.rule-setting-not-found'],
   }),
+  // The essential security settings (access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118, RR-334): each
+  // with its versions and the one in force, and a new version prepared for a different authorised person to approve.
+  listSecuritySettings: defineRoute({
+    method: 'GET',
+    path: '/api/access/security-settings',
+    access: { kind: 'action', action: 'view', recordType: 'access.setting' },
+    command: false,
+    response: securitySettingsSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareSecuritySettingVersion: defineRoute({
+    method: 'POST',
+    path: '/api/access/security-settings/versions',
+    access: { kind: 'action', action: 'edit', recordType: 'access.setting' },
+    command: true,
+    body: securitySettingVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: securitySettingPreparedSchema,
+    codes: PREPARE_CODES,
+  }),
   // The approval panel (access-and-approvals 9.3, 9.5; PRD-UXP-003): the request, its preparers, its decision, and
   // whether the reader may decide it now, naming what is missing.
   readApprovalRequest: defineRoute({
@@ -699,6 +726,7 @@ export const routes = {
       'access.approval-not-open',
       'access.approval-superseded',
       'access.user-not-approved',
+      'access.setting-not-found',
       'access.starts-in-past',
       'access.assignment-overlaps',
       'access.version-overlaps',
