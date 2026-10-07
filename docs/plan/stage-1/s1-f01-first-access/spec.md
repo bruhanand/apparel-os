@@ -168,7 +168,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T06 Outbox and worker](tickets/T06-outbox-and-worker.md) | done | T04, T08 (its internal service identity) |
 | [S1-F01-T07 Audit and access records](tickets/T07-audit-and-access-records.md) | done | T03 (done) |
 | [S1-F01-T08 Sign-in and enrolment (API)](tickets/T08-sign-in-and-enrolment.md) | done | T04 (done), T07 (done) |
-| [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | ready-for-human | T11 (done), T15 (done) |
+| [S1-F01-T09 Sessions, protected actions and the lock screen](tickets/T09-sessions-and-protected-actions.md) | done | T11 (done), T15 (done) |
 | [S1-F01-T10 Setup step](tickets/T10-setup-step.md) | done | T01 (done), T07, T08, T09 (session revocation and the credential reset the recovery command uses), T11 (roles and assignments) |
 | [S1-F01-T11 Roles, assignments and scope](tickets/T11-roles-assignments-and-scope.md) | done | T06 (done), T08 (done) |
 | [S1-F01-T12 Inbox and My work](tickets/T12-inbox-and-my-work.md) | merged | → T13 |
@@ -179,7 +179,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
 | [S1-F01-T18 History screens](tickets/T18-history-screens.md) | done | T07, T11, T14 |
 | [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | merged | → T15, T20 |
-| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 (done); RR-350 (CI on a pushed branch, the product owner's acceptance, Demo 1) |
+| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 (done); RR-350 (the merge, the deploy and Demo 1) |
 | [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
 | [S1-F01-T22 Same-day disabling and role locking](tickets/T22-same-day-disabling-and-role-locking.md) | done | — (`DEC-118`; RR-321, RR-360) |
 | [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | done | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |

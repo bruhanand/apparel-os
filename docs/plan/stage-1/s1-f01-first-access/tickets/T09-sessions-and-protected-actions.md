@@ -1,6 +1,6 @@
 # S1-F01-T09 — Sessions, protected actions and the lock screen
 
-Status: ready-for-human
+Status: done
 Blocked by: T11 (done), T15 (done)
 Feature: [S1-F01 First access](../spec.md)
 
@@ -26,3 +26,4 @@ Feature: [S1-F01 First access](../spec.md)
 - Disabling a user: the session side is built (`AccessInterface.revokeSessions`, called by the decision's transaction; Authenticate refuses a user not Active). Preparing and deciding user changes is in no ticket yet (RR-300, product owner).
 - Follow-ups: RR-300 to RR-304. RR-264 closed.
 - S1-F01 review fixes (branch `s1/f01-review-fixes`): Authenticate locks the session row through the lock helper at step 1 (`access.session` marked `locked`) and moved to `commands/authenticate-session.ts`.
+- Done 7 Oct 2026: the product owner reviewed the screenshots of the S1-F01 screens, the lock screen among them, and approved them ("Looks fine to me"); RR-304 closed.
