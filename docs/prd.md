@@ -793,7 +793,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 | Counter | Chrome/Edge PWA; Dexie/IndexedDB; Workbox |
 | Hardware | Keyboard-input scanners; ESC/POS receipt printing, cash drawer and label printing via a local helper on any PC that has the printer; Tauri only for an unmet hardware requirement |
 | Phone | React Native and Expo, sharing domain logic and schemas |
-| Authentication | PostgreSQL server sessions, secure cookies, Argon2, OTP and TOTP |
+| Authentication | PostgreSQL server sessions, secure cookies, Argon2, OTP and TOTP; a maintained QR code library that draws the authenticator enrolment code inside the application, never through an external QR service |
 | Files | S3-compatible document/photo interface; MinIO for local development |
 | Documents | ExcelJS for supported Excel operations, format-specific import adapters, PDF extraction and HTML-to-PDF |
 | Search | PostgreSQL full-text and trigram search |
@@ -822,6 +822,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-MOD-014` Store INR amounts in integer paise; other enabled currencies use their configured integer minor units. Use decimal arithmetic for intermediate calculations and explicit rounding rules; never use binary floating-point money calculations.
 - `PRD-MOD-015` Preserve explicit currency, units and rounding rules. Unknown values remain distinct from zero.
 - `PRD-MOD-016` Resolve the exact-cash UI shorthand into its declared cash amount before persistence; it is not the general meaning of a missing monetary value.
+- `PRD-MOD-017` Show times on screens, and work out business dates, in the Organisation's configured timezone, whatever the device's time zone; store timestamps in UTC.
 
 ### Transaction and integration integrity
 
@@ -881,6 +882,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-SEC-016` Type checks, lint, calculation tests, database/concurrency tests and persona-specific browser journeys must pass for affected changes.
 - `PRD-SEC-017` Use per-Organisation capability controls; switching on a feature cannot bypass missing policy or stock/accounting invariants.
 - `PRD-SEC-018` Service identities are non-human actors with their own audit identity, scoped credentials and least-privilege access; they have no operator screens.
+- `PRD-SEC-019` Disabling or ending a user takes effect as soon as it is approved: revoke every session of the user and refuse any new sign-in from that moment, not from the next business day.
 
 ### Performance
 

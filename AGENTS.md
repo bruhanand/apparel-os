@@ -168,7 +168,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Counter         | Chrome/Edge PWA with Dexie/IndexedDB and Workbox                                                                        |
 | Hardware        | Keyboard-input scanners; ESC/POS receipt printing, cash drawer and label printing through a local helper on any PC that has the printer; Tauri only for an unmet hardware need |
 | Phone           | React Native and Expo, sharing domain logic and schemas (not yet placed in a stage)                                     |
-| Authentication  | PostgreSQL server sessions, secure cookies, Argon2, OTP and TOTP                                                        |
+| Authentication  | PostgreSQL server sessions, secure cookies, Argon2, OTP and TOTP; a maintained QR code library for the authenticator enrolment code, drawn in the app, never through an external QR service |
 | Files           | S3-compatible storage; MinIO for local development                                                                      |
 | Documents       | ExcelJS, format-specific import adapters, PDF extraction, HTML-to-PDF                                                   |
 | Search          | PostgreSQL full-text and trigram search                                                                                 |

@@ -6,7 +6,7 @@ Status: **Current.** Aligned to [prd.md](../../prd.md) and [kdps-policies.md](..
 
 Implements these PRD sections: Operator experience; People, access and approvals; Merchandise and identifiers; Receiving and price tickets (delivery record, PT workbench); Transfers and physical movement; Damage, quarantine and disposal; Counter sales and payments; HRMS and payroll; Exceptions, reports and planning; Opening, closure, migration and export; Technical platform (Offline counter; AI, security and operational reliability); Required policy configuration. Policies: 2 (scope, approval limits), 3 (PT costing), 4 (piece IDs), 6 and 7 (returns, refunds, tenders), 10 (bill number), 16 (offline), 17 (held goods), 19 (offers and promotions).
 
-Requirement IDs applied: `PRD-ACS-001`–`PRD-ACS-004`, `PRD-ACS-021`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-EXC-013`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-004`, `PRD-OFF-015`, `PRD-OFF-016`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-FRN-007`, `PRD-TAX-004`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-10.11`, `POL-16.01` to `POL-16.03`, `POL-16.07`, `POL-17.05`.
+Requirement IDs applied: `PRD-ACS-001`–`PRD-ACS-004`, `PRD-ACS-021`, `PRD-ORG-001`, `PRD-ORG-005`, `PRD-ACS-009`, `PRD-ACS-010`, `PRD-ACS-015`, `PRD-EXC-013`, `PRD-UXP-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-REC-006`, `PRD-REC-020` to `PRD-REC-022`, `PRD-PTW-011`, `PRD-PTW-013`, `PRD-POS-005`, `PRD-POS-007`, `PRD-POS-020`, `PRD-POS-022`, `PRD-MOD-015`, `PRD-MOD-016`, `PRD-MOD-017`, `PRD-OFF-001`, `PRD-OFF-003`, `PRD-OFF-004`, `PRD-OFF-015`, `PRD-OFF-016`, `PRD-OFF-017`, `PRD-OFF-019`, `PRD-TRF-011`, `PRD-TRF-013`, `PRD-DMG-011`, `PRD-HRM-004`, `PRD-HRM-006`, `PRD-HRM-007`, `PRD-SEC-008`, `PRD-FRN-007`, `PRD-TAX-004`, `PRD-LIF-014`, `PRD-LIF-026`. Policy IDs applied: `POL-02.07` to `POL-02.10`, `POL-03.07`, `POL-04.06`, `POL-07.09`, `POL-10.07`, `POL-10.11`, `POL-16.01` to `POL-16.03`, `POL-16.07`, `POL-17.05`.
 
 People are described by the 14 PRD personas in [personas.md](../access/personas.md). Live visual version: [design-system.html](design-system.html).
 
@@ -96,6 +96,8 @@ Glass surfaces use `backdrop-filter: blur(16px) saturate(1.2)` (drawers: `blur(1
 | till-total | 40 / 44 | 700 | Till “To pay” |
 
 Till and portal body text is 15 / 22.
+
+**Font files** (product owner, 7 Oct 2026, DEC-118; RR-262). The font files of Source Sans 3, Source Code Pro and Noto Sans Devanagari, in the weights above, are self-hosted: committed with the web app in WOFF2, each with its licence file beside it as the licence requires (all three are under the SIL Open Font Licence 1.1), and served from the app's own origin, never from a font service (code-house-rules 12.1). No package is added for them.
 
 ---
 
@@ -332,7 +334,7 @@ These formats are the **INR default** for screens built so far. Stock units in q
 | Zero | 0 / 0.00 | 0 | Known zero (counted, nothing there) |
 | Unknown | **blank cell** in tables; the word “Unknown” (○) in fields and records | | Screen readers say “unknown”. Never a dash for numbers. Totals exclude blanks and a trust chip says so (`PRD-MOD-015`). **Exception:** the till's Cash received field. Left empty it means exact cash, resolved to the declared cash amount before it is saved (`PRD-POS-007`, `PRD-MOD-016`); it is not an unknown. 0 still means zero. |
 | Date | DD MMM YYYY | 23 Sep 2026 | Input also accepts 23/9, 23-09-26. Examples use 2026 sample dates (synthetic) |
-| Date and time | DD MMM YYYY, HH:mm (24-hour) | 23 Sep 2026, 10:42 | |
+| Date and time | DD MMM YYYY, HH:mm (24-hour) | 23 Sep 2026, 10:42 | In the Organisation's configured timezone, whatever the device's; a business date is the Organisation's too (`PRD-MOD-017`, DEC-118) |
 | Range | shared parts not repeated | 1–25 Sep 2026 | en dash |
 | Percent | integer or 1 decimal | 96% · 50.0% | Changes are shown in pp: −2.4 pp. Ticket MARGIN always shows 2 decimals (`PRD-PTW-011`) |
 | Bill no. | mono; length limit and allowed characters **not confirmed** | B01C1/2627/04381 (synthetic layout) | Store B01, billing device C1, FY 2026–27, then the sequence. Each billing device has its own series per tax registration and financial year (`PRD-POS-020`). The format is set per Organisation within the statutory limit, which the CA has not confirmed (`POL-10.07`). **OPEN:** length limit and allowed characters; owner Accounts and the CA; blocks stage 4 |
@@ -706,6 +708,7 @@ Decided by the product owner, 6 Oct 2026. Both use only the components above; th
 
 - **Setup › Exception rules** gets a tab for the due times and escalation of approvals and tasks, per action type and Site (access-and-approvals 9.4, 11.3).
 - **Failed jobs** is a simple list in the operations view (`PRD-SEC-013`; module-map 4.1).
+- **Security settings** (product owner, 7 Oct 2026, DEC-118): a small form to prepare a new version of the sign-in throttling, the password rules or the office session limits, each shown with its version in force and origin, decided from My work with the approval panel (access-and-approvals 3.3). The general settings screen stays with `S1-F04`.
 
 ### 10.20 Sign-in screens (back office)
 
@@ -713,7 +716,8 @@ Built with `S1-F01-T15` from the parts above; they follow [access-and-approvals.
 
 - **Layout:** while no session is in force, the back-office shell shows only the environment banner and one solid card (e1, 448 px wide at most) in the content area: no top bar, no sidebar, no screen.
 - **Sign in:** Organisation code (mono), Login, Password, Authenticator code (mono, numeric keyboard, optional, with help saying to leave it empty only before an app is set up), and **Sign in** as the one primary action. A refusal is a Danger banner at the top of the card with the code's text and the reference; an unavailable sign-in is an Attention banner that also names what is missing. The one refusal never says which part was wrong. The password and the code are cleared after a refused attempt (`PRD-SEC-006`).
-- **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. No QR code yet (RR-280).
+- **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. A QR code of the setup link sits beside the key, drawn in the browser by the QR code library of the PRD Stack, never by an outside service; its text alternative says to type the key instead (product owner, 7 Oct 2026, DEC-118; RR-280; access-and-approvals 3.2).
+- **No access assigned:** a signed-in person who holds no role assignment in force sees one solid card with the title "No access assigned", a line saying that an Admin must assign a role, and **Sign out** as the one action; no sidebar menu (personas.md section 2; DEC-118, RR-260).
 - **Choose your own password:** New password, New password again (checked on the screen only, never sent), a fresh authenticator code, and **Change password**.
 - After each step the screens ask the server what is still to do, so a reload returns to the same step; when nothing is left, the shell opens on the landing screen (`DEC-116`). Focus moves to each step's title.
 
