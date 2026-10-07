@@ -35,7 +35,7 @@ export { SESSION_COOKIE_NAME } from './http/session-cookie.js';
 // The signed-in user of a request, for the routes of modules that use access, such as My work (module-map 4.8).
 export { SignedIn } from './http/authenticate.guard.js';
 export type { SignedInUser } from './http/authenticate.guard.js';
-export { runSetupStep, SetupRequestRefused } from './operator/setup-step.js';
+export { missingSettingsRefusal, runSetupStep, SetupRequestRefused } from './operator/setup-step.js';
 export type { SetupStepOptions } from './operator/setup-step.js';
 export { runRecovery } from './operator/recovery.js';
 export type { RecoveryOptions, RecoveryOutcome, RecoveryRefusal } from './operator/recovery.js';

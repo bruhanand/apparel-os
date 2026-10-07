@@ -105,6 +105,14 @@ export function rangeOf(validFrom: string, validTo: string | undefined): string 
   return `[${validFrom},${validTo ?? ''})`;
 }
 
+/**
+ * A half-open range of instants from the one given, with no end, in PostgreSQL's text form (code-house-rules 7.3): a
+ * version dated by instants (DEC-118).
+ */
+export function instantsFrom(start: Date | string): string {
+  return `[${typeof start === 'string' ? start : start.toISOString()},)`;
+}
+
 /** The locks of an effect run on its own: authority rows at step 0, record rows at step 1 (code-house-rules 8.2). */
 export async function lockUnlessHeld(
   context: TransactionContext,

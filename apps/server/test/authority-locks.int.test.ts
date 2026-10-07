@@ -12,6 +12,8 @@ import {
 import { Access, type DecisionInput, type Preparer } from '../src/modules/access/index.js';
 // The access module's own key reader, so the fresh-code check opens the synthetic factor secrets (11.2).
 import { OrganisationKeys } from '../src/modules/access/domain/organisation-keys.js';
+// The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { Audit } from '../src/modules/audit/index.js';
 import {
   codeFor,
@@ -21,7 +23,7 @@ import {
   type SyntheticUser,
 } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
-import { capturingLogger } from './support/jobs.js';
+import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
 import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
@@ -352,5 +354,88 @@ describe('a role version taking effect and a command relying on that role (code-
     deciding.commit();
     expect(await deciding.outcome).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
     expect(await relying).toEqual({ kind: 'conflict', code: 'kernel.stale-version', missing: [] });
+  });
+});
+
+describe('two first preparations of one security setting (code-house-rules 8.1; S1-F01-T25)', () => {
+  it('PRD-INT-003 the second waits for the first to write the setting’s row, then prepares its own version, with no defect', async () => {
+    const draft = {
+      setting: 'access.office-session-limits',
+      // SYNTHETIC values, never a default.
+      value: { idleLockSeconds: 1800, absoluteSeconds: 28_800 },
+      origin: 'synthetic',
+      takesEffect: { kind: 'at-decision' },
+    } as const;
+    const prepare = (context: TransactionContext) =>
+      access.prepareSecuritySettingVersion(context, adminPreparer, draft);
+    const first = heldOpen(admin.id, prepare);
+    const firstPid = await first.pid;
+    const second = as(admin.id, prepare);
+    // The second waits at the setting's unique key for the first's row.
+    await waitUntilAnyWaitingForLock(database, [firstPid]);
+    first.commit();
+    const [firstAnswer, secondAnswer] = await Promise.all([first.outcome, second]);
+    expect(firstAnswer).toMatchObject({ kind: 'success' });
+    expect(secondAnswer).toMatchObject({ kind: 'success' });
+    if (firstAnswer.kind !== 'success' || secondAnswer.kind !== 'success') throw new Error('not prepared');
+    expect(secondAnswer.answer.settingId).toBe(firstAnswer.answer.settingId);
+  });
+});
+
+describe('a role version taking effect and a job step relying on that role (code-house-rules 8.2, 12.9; DEC-118; RR-360)', () => {
+  const need = { action: 'create' as const, recordType: 'access.approval_reason' };
+  const identities = jobIdentities();
+
+  /** A service identity holding a role since yesterday that grants `need`, and a version of it from today without. */
+  async function roleOfIdentityBeingChanged(label: string) {
+    const identityId = await writeSyntheticServiceIdentity(database, `syn-${label}-${String(randomInt(1_000_000))}`);
+    const held = await grantSynthetic(database, { kind: 'service-identity', id: identityId }, [need]);
+    const prepared = await as(admin.id, (c) =>
+      access.prepareRoleVersion(c, adminPreparer, held.roleId, {
+        name: 'SYNTHETIC role, narrowed',
+        permissions: [{ kind: 'action', recordType: 'access.role', action: 'view', selfService: false }],
+        validFrom: today(),
+      }),
+    );
+    if (prepared.kind !== 'success') throw new Error(`role version not prepared: ${prepared.refusal.code}`);
+    const step = (context: TransactionContext) => identities.hold(context, identityId, need);
+    const decision = (context: TransactionContext) =>
+      decideIn(context, disabler, {
+        requestId: prepared.answer.requestId,
+        versionId: prepared.answer.versionId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId },
+      });
+    return { identityId, step, decision };
+  }
+
+  it('PRD-INT-003 PRD-SEC-018 the role version waits for a job step already relying on the role, then takes effect after it', async () => {
+    const { identityId, step, decision } = await roleOfIdentityBeingChanged('job-first');
+    const relying = heldOpen(identityId, step);
+    const relyingPid = await relying.pid;
+    const deciding = as(disabler.id, decision);
+    // The decision waits for the step's shared lock on the role.
+    await waitUntilAnyWaitingForLock(database, [relyingPid]);
+    relying.commit();
+    expect(await relying.outcome).toEqual({ kind: 'held' });
+    expect(await deciding).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
+    // No step succeeds on the version replaced.
+    expect(await as(identityId, step)).toMatchObject({
+      kind: 'refused',
+      refusal: { kind: 'not-authorised', code: 'access.not-authorised' },
+    });
+  });
+
+  it('PRD-INT-003 PRD-SEC-018 a job step relying on the role waits while a version of it takes effect, then is stale', async () => {
+    const { identityId, step, decision } = await roleOfIdentityBeingChanged('job-second');
+    const deciding = heldOpen(disabler.id, decision);
+    const decidingPid = await deciding.pid;
+    const relying = as(identityId, step);
+    // The step waits for the decision's exclusive lock on the role.
+    await waitUntilAnyWaitingForLock(database, [decidingPid]);
+    deciding.commit();
+    expect(await deciding.outcome).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
+    // Stale: the worker throws StaleAuthority, which the retry rule retries by the step's setting (12.9).
+    expect(await relying).toEqual({ kind: 'stale' });
   });
 });

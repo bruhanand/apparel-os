@@ -10,13 +10,14 @@ import {
   Worker,
   type JobRegistry,
 } from '../src/kernel/index.js';
-import { jobIdentities } from '../src/modules/access/queries/job-identities.js';
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { AUDIT_JOBS_IDENTITY, auditJobKinds } from '../src/modules/audit/index.js';
 import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F01-T24: the scheduled upkeep of the audit partitions between deploys (numbering-and-audit 4.4; code-house-rules
 // 3.2, 5.2, 12.9; DEC-118, RR-240; PRD-SEC-007, PRD-SEC-013, PRD-MOD-011). The worker runs `audit.ensure-partitions`
@@ -187,5 +188,33 @@ describe('the scheduled partition upkeep (numbering-and-audit 4.4; DEC-118)', ()
       await asOwner('select audit.ensure_partitions()');
     }
     expect(await partitions()).toContain(missing);
+  });
+
+  it('code-house-rules 8.1 two runs at once never race to create a partition: the second waits, then finds it', async () => {
+    const missing = await dropThirdMonth('access_record');
+    const first = await connect(database(), 'runtime');
+    const second = await connect(database(), 'runtime');
+    try {
+      await first.query('begin');
+      await first.query('select audit.ensure_partitions()');
+      const [pid] = (await first.query<{ pid: number }>('select pg_catalog.pg_backend_pid() as pid')).rows;
+      const running = second.query('select audit.ensure_partitions()');
+      await waitUntilAnyWaitingForLock(database(), [pid?.pid ?? 0]);
+      await first.query('commit');
+      await expect(running).resolves.toBeDefined();
+    } finally {
+      await first.end();
+      await second.end();
+    }
+    expect(await partitions()).toContain(missing);
+  });
+
+  it('code-house-rules 5.2 runs with the owner’s rights under a search path of pg_catalog and pg_temp only', async () => {
+    const [row] = await asOwner<{ definer: boolean; config: string[] }>(
+      `select prosecdef as definer, proconfig as config from pg_catalog.pg_proc
+       where oid = 'audit.ensure_partitions()'::regprocedure`,
+    );
+    expect(row?.definer).toBe(true);
+    expect(row?.config).toContain('search_path=pg_catalog, pg_temp');
   });
 });

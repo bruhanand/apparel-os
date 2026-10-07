@@ -42,6 +42,7 @@ import { UserChanges, type NewUser, type PreparedWithCredential } from './comman
 import type { OrganisationKeys } from './domain/organisation-keys.js';
 import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
 import { ownAccess, type OwnAccess } from './queries/own-access.js';
+import { securitySettings } from './queries/security-settings.js';
 import {
   authenticateInternalIdentity,
   authenticateServiceCredential,
@@ -396,7 +397,7 @@ export class Access implements AccessInterface {
   }
 
   securitySettings(context: TransactionContext) {
-    return this.securitySettingChanges.list(context);
+    return securitySettings(context);
   }
 
   decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput) {

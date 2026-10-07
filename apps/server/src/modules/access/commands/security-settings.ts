@@ -1,11 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
-import type { SecuritySettingKey, SecuritySettings, SecuritySettingVersionDraft } from '@apparel-os/schemas';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import type { SecuritySettingVersionDraft } from '@apparel-os/schemas';
+import { eq, sql } from 'drizzle-orm';
 import { CommandDefect, lockTable, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { setting, settingVersion, settingVersionChange } from '../db/schema.js';
-import { SETTING_FORMATS, SETTING_SCHEMAS } from '../domain/sign-in-rules.js';
+import { SETTING_FORMATS, SETTING_SCHEMAS, type AccessSettingKey } from '../domain/sign-in-rules.js';
+import { INSTANT_TEXT } from '../queries/security-settings.js';
 import {
+  instantsFrom,
   lockUnlessHeld,
   refusal,
   type Decider,
@@ -26,13 +28,6 @@ import { requestApproval } from './request-approval.js';
 const SETTING = lockTable('access', 'setting');
 const SETTING_VERSION = lockTable('access', 'setting_version');
 
-/** The essential security settings, in the order the form shows them (design-language 10.19). */
-const KEYS: readonly SecuritySettingKey[] = [
-  'access.sign-in-throttling',
-  'access.password-rules',
-  'access.office-session-limits',
-];
-
 function auditActor(decider: Decider) {
   return {
     actor: decider.actor,
@@ -40,6 +35,18 @@ function auditActor(decider: Decider) {
     ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),
     ...(decider.reason === undefined ? {} : { reason: decider.reason }),
   };
+}
+
+/** A stored value read through its setting's schema (code-house-rules 12.14); a value it refuses is a defect. */
+function settingValue(key: string, value: unknown) {
+  if (!isSettingKey(key)) throw new CommandDefect(`Setting ${key} is not an essential security setting`);
+  const parsed = SETTING_SCHEMAS[key].safeParse(value);
+  if (!parsed.success) throw new CommandDefect(`Setting ${key} holds a value its format's schema refuses`);
+  return parsed.data;
+}
+
+function isSettingKey(key: string): key is AccessSettingKey {
+  return Object.hasOwn(SETTING_SCHEMAS, key);
 }
 
 export class SecuritySettingsChanges {
@@ -65,13 +72,16 @@ export class SecuritySettingsChanges {
     const startsOn = draft.takesEffect.kind === 'from-date' ? draft.takesEffect.date : null;
     if (startsOn !== null && startsOn <= date.date) return refusal('refused', 'access.starts-in-past');
     const value = SETTING_SCHEMAS[draft.setting].parse(draft.value);
-    let settingId = (
+    // A second first preparation waits here at the setting's unique key for the first, then finds its row: the
+    // insert does nothing and the read below, a statement of its own, sees the row committed (code-house-rules 8.1).
+    await context.tx
+      .insert(setting)
+      .values({ id: uuidv7(), settingKey: draft.setting })
+      .onConflictDoNothing({ target: setting.settingKey });
+    const settingId = (
       await context.tx.select({ id: setting.id }).from(setting).where(eq(setting.settingKey, draft.setting))
     )[0]?.id;
-    if (settingId === undefined) {
-      settingId = uuidv7();
-      await context.tx.insert(setting).values({ id: settingId, settingKey: draft.setting });
-    }
+    if (settingId === undefined) throw new CommandDefect(`Setting ${draft.setting} has no row after it was written`);
     const versionId = uuidv7();
     // An at-decision version is written from the preparation's instant and started again at its decision (9.5).
     const start =
@@ -82,7 +92,7 @@ export class SecuritySettingsChanges {
       valueFormat: SETTING_FORMATS[draft.setting],
       value,
       origin: draft.origin,
-      validDuring: `[${start},)`,
+      validDuring: instantsFrom(start),
       decision: 'Awaiting approval',
       startsOn,
     });
@@ -113,8 +123,8 @@ export class SecuritySettingsChanges {
   /** The instant a business day starts under the Organisation's timezone (code-house-rules 9), as ISO text. */
   private async startOfDay(context: TransactionContext, day: string, timezone: string): Promise<string> {
     const result = await context.tx.execute<{ start: string }>(
-      sql`select to_char((${day}::date::timestamp at time zone ${timezone}) at time zone 'UTC',
-                         'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as start`,
+      sql`select to_char((${day}::date::timestamp at time zone ${timezone}) at time zone 'UTC', ${sql.raw(INSTANT_TEXT)})
+          as start`,
     );
     const start = result.rows[0]?.start;
     if (start === undefined) throw new CommandDefect('No start of the business day');
@@ -135,6 +145,8 @@ export class SecuritySettingsChanges {
    * of one setting never pass each other, and the version.
    */
   async versionTargets(context: TransactionContext, versionId: string): Promise<LockTarget[]> {
+    // Read before the locks: safe, since a version's setting_id is fixed once written. No command updates it, and
+    // once the version is decided the guard_version_change trigger (migrations 0005, 0006) refuses any change to it.
     const settingId = await this.settingOf(context, versionId);
     return [
       ...(settingId === undefined ? [] : [{ table: SETTING, id: settingId, mode: 'exclusive' as const }]),
@@ -156,8 +168,13 @@ export class SecuritySettingsChanges {
     options: EffectOptions = {},
   ): Promise<Prepared<{ settingId: string }>> {
     await lockUnlessHeld(context, options, { document: await this.versionTargets(context, versionId) });
-    const [version] = await context.tx.select().from(settingVersion).where(eq(settingVersion.id, versionId));
-    if (version === undefined) return refusal('not-found', 'access.setting-not-found');
+    const [found] = await context.tx
+      .select({ version: settingVersion, key: setting.settingKey })
+      .from(settingVersion)
+      .innerJoin(setting, eq(setting.id, settingVersion.settingId))
+      .where(eq(settingVersion.id, versionId));
+    if (found === undefined) return refusal('not-found', 'access.setting-not-found');
+    const { version, key } = found;
     if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
     const date = await context.businessDate();
     if (date.kind === 'not-set') {
@@ -176,7 +193,7 @@ export class SecuritySettingsChanges {
     );
     if (later.rows.length > 0) return refusal('refused', 'access.version-overlaps');
     const [before] = (
-      await context.tx.execute<{ id: string; value: Record<string, number> }>(
+      await context.tx.execute<{ id: string; value: unknown }>(
         sql`select id, value from access.setting_version where setting_id = ${version.settingId}::uuid
             and decision = 'Approved' and valid_during @> ${start}::timestamptz`,
       )
@@ -189,7 +206,7 @@ export class SecuritySettingsChanges {
     }
     await context.tx
       .update(settingVersion)
-      .set({ decision: 'Approved', validDuring: `[${start},)` })
+      .set({ decision: 'Approved', validDuring: instantsFrom(start) })
       .where(eq(settingVersion.id, versionId));
     const auditRecord = await this.audit.record(context, {
       ...auditActor(decider),
@@ -200,8 +217,8 @@ export class SecuritySettingsChanges {
         {
           kind: 'value',
           field: 'value',
-          before: before?.value ?? null,
-          after: version.value as Record<string, number>,
+          before: before === undefined ? null : settingValue(key, before.value),
+          after: settingValue(key, version.value),
         },
         { kind: 'value', field: 'validFrom', before: null, after: start },
       ],
@@ -231,53 +248,5 @@ export class SecuritySettingsChanges {
       source: { kind: 'screen' },
     });
     return { kind: 'success', answer: { settingId: version.settingId } };
-  }
-
-  /** Every essential security setting with its versions, newest first, and the one in force now (10.19). */
-  async list(context: TransactionContext): Promise<SecuritySettings> {
-    const now = context.startedAt.toISOString();
-    const rows = await context.tx
-      .select({
-        settingId: setting.id,
-        key: setting.settingKey,
-        id: settingVersion.id,
-        value: settingVersion.value,
-        valueFormat: settingVersion.valueFormat,
-        origin: settingVersion.origin,
-        decision: settingVersion.decision,
-        startsOn: settingVersion.startsOn,
-        validFrom: sql<string>`to_char(lower(${settingVersion.validDuring}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-        validTo: sql<
-          string | null
-        >`to_char(upper(${settingVersion.validDuring}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-        inForce: sql<boolean>`${settingVersion.decision} = 'Approved' and ${settingVersion.validDuring} @> ${now}::timestamptz`,
-      })
-      .from(settingVersion)
-      .innerJoin(setting, eq(setting.id, settingVersion.settingId))
-      .orderBy(asc(setting.settingKey), desc(settingVersion.recordedAt), desc(settingVersion.id));
-    const settings = KEYS.map((key) => {
-      const own = rows.filter((row) => row.key === key);
-      return {
-        setting: key,
-        settingId: own[0]?.settingId ?? null,
-        inForceVersionId: own.find((row) => row.inForce)?.id ?? null,
-        versions: own.map((row) => {
-          if (row.valueFormat !== SETTING_FORMATS[key]) {
-            throw new CommandDefect(`Setting ${key} holds a value of a format this server does not read`);
-          }
-          const approved = row.decision === 'Approved';
-          return {
-            id: row.id,
-            value: SETTING_SCHEMAS[key].parse(row.value),
-            origin: row.origin,
-            decision: row.decision,
-            takesEffect: row.startsOn === null ? { kind: 'at-decision' } : { kind: 'from-date', date: row.startsOn },
-            ...(approved ? { validFrom: row.validFrom } : {}),
-            ...(approved && row.validTo !== null ? { validTo: row.validTo } : {}),
-          };
-        }),
-      };
-    });
-    return { asOf: now, settings } as SecuritySettings;
   }
 }

@@ -10,7 +10,7 @@ import type { JsonValue, RequestContent } from '../idempotency/canonical-form.js
 import type { CommandOutcome, IdempotencyHelper, IdempotentAnswer } from '../idempotency/idempotency-helper.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import type { OrganisationRouter, RoutedOrganisation } from '../routing/organisation-router.js';
-import type { JobAuthority, JobIdentities } from './contracts.js';
+import { StaleAuthority, type JobAuthority, type JobIdentities } from './contracts.js';
 import { KEEP_EVERY_JOB, startJobQueue } from './job-queue.js';
 import {
   checkRegistry,
@@ -194,17 +194,21 @@ export class Worker {
   }
 
   /**
-   * Authorise for a step (access-and-approvals 7.1 step 3; RR-273): undefined when one role assignment of the step's
-   * identity grants its action, otherwise the refusal, kept under the step's key and never retried (12.9).
+   * Authorise for a step and hold its authority (access-and-approvals 7.1 steps 3 and 4; RR-273; code-house-rules
+   * 8.2; DEC-118, RR-360): the step's first act in its transaction. Undefined when one role assignment of the step's
+   * identity grants its action and still does under the step-0 locks of the identity, the assignment and its role;
+   * otherwise the refusal, kept under the step's key and never retried (12.9). A role version that took effect while
+   * the locks were taken throws StaleAuthority, which the retry rule retries.
    */
   private async unauthorised(
     context: TransactionContext,
     actorId: string,
     need: JobAuthority,
   ): Promise<CommandOutcome<JsonValue> | undefined> {
-    const access = await this.dependencies.identities.authorise(context, actorId, need);
-    if (access.kind === 'allowed') return undefined;
-    return refusal({ kind: 'not-authorised', code: access.refusal.code, missing: access.refusal.missing });
+    const held = await this.dependencies.identities.hold(context, actorId, need);
+    if (held.kind === 'held') return undefined;
+    if (held.kind === 'stale') throw new StaleAuthority();
+    return refusal({ kind: 'not-authorised', code: held.refusal.code, missing: held.refusal.missing });
   }
 
   /**
@@ -280,6 +284,8 @@ export class Worker {
     if (!(await this.processorAuthorised(organisation, actorId))) return undefined;
     const { consumers } = this.dependencies.registry;
     return this.dependencies.runner.run(this.request(organisation, 'kernel.register-consumers', actorId), async (c) => {
+      // The registration relies on the processor's authority: hold it at step 0 (8.2; DEC-118, RR-360).
+      if ((await this.dependencies.identities.hold(c, actorId, OUTBOX_AUTHORITY)).kind !== 'held') return undefined;
       if (consumers.length > 0) {
         await c.tx
           .insert(outboxConsumer)
@@ -325,9 +331,25 @@ export class Worker {
           (context) => pendingEvents(context, consumer, consumerId),
         );
         for (const eventId of pending) {
-          await this.dependencies.runner.run(this.request(organisation, 'kernel.dispatch-event', actorId), (context) =>
-            dispatchOne(context, served.boss, { eventId, consumer, consumerId, retry }),
+          const dispatched = await this.dependencies.runner.run(
+            this.request(organisation, 'kernel.dispatch-event', actorId),
+            async (context) => {
+              // Each dispatch relies on the processor's authority: hold it at step 0 (8.2; DEC-118, RR-360).
+              if ((await this.dependencies.identities.hold(context, actorId, OUTBOX_AUTHORITY)).kind !== 'held') {
+                return false;
+              }
+              await dispatchOne(context, served.boss, { eventId, consumer, consumerId, retry });
+              return true;
+            },
           );
+          if (!dispatched) {
+            this.log(
+              'warn',
+              { organisationCode: organisation.organisationCode, serviceIdentity: OUTBOX_PROCESSOR_IDENTITY },
+              'The outbox processor’s authority changed during the pass; the rest is dispatched at the next pass',
+            );
+            return;
+          }
         }
         if (pending.length < DISPATCH_BATCH) break;
       }

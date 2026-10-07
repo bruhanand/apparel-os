@@ -15,7 +15,7 @@ import {
 } from '../src/kernel/index.js';
 import { approvalDecided, approvalRequested } from '../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
-import { jobIdentities } from '../src/modules/access/queries/job-identities.js';
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { INBOX_IDENTITY, inboxConsumers } from '../src/modules/inbox/index.js';
 import {
   codeFor,

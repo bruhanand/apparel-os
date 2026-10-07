@@ -40,6 +40,7 @@ import {
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
+import { useBusinessToday } from './business-date';
 
 // Setup › Role assignments (access-and-approvals 4.3, 5.1, 5.2, 9.11, 14; PRD-ACS-001 to PRD-ACS-005, PRD-ACS-021):
 // every assignment, and the assignment editor: the person, the role, the scope per dimension and the dates. Each
@@ -120,6 +121,7 @@ type AssignmentForm = z.input<typeof assignmentFormSchema>;
 function NewAssignmentForm() {
   const users = useQuery({ ...readQuery(api, 'listUsers', {}), enabled: useGranted('access.user', 'view') });
   const roles = useQuery({ ...readQuery(api, 'listRoles', {}), enabled: useGranted('access.role', 'view') });
+  const today = useBusinessToday();
   const form = useForm<AssignmentForm>({
     resolver: zodResolver(assignmentFormSchema),
     mode: 'onBlur',
@@ -129,7 +131,7 @@ function NewAssignmentForm() {
       legalEntity: 'all',
       place: 'all',
       brand: 'all',
-      validFrom: '',
+      validFrom: today,
       validTo: '',
     },
   });
@@ -211,6 +213,7 @@ function NewAssignmentForm() {
         <input
           id="assignment-from"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('assignment-from', { invalid: errors.validFrom !== undefined, help: true })}
           {...form.register('validFrom')}
@@ -220,6 +223,7 @@ function NewAssignmentForm() {
         <input
           id="assignment-to"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('assignment-to', { invalid: errors.validTo !== undefined, help: true })}
           {...form.register('validTo')}

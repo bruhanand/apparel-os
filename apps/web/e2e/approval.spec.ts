@@ -108,6 +108,9 @@ test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My 
           await drawer.getByLabel(/^Code/).fill(reason.code);
           await drawer.getByLabel(/^Kind/).selectOption({ label: kind });
           await drawer.getByLabel(/^Text/).fill(reason.text);
+          // RR-381 DEC-118: the field opens on the Organisation's today, its earliest day.
+          await expect(drawer.getByLabel(/^Starts on/)).toHaveValue(today);
+          await expect(drawer.getByLabel(/^Starts on/)).toHaveAttribute('min', today);
           await drawer.getByLabel(/^Starts on/).fill(today);
         });
       }
