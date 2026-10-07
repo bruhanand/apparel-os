@@ -1,18 +1,20 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { RecordTypeDeclaration } from '@apparel-os/schemas';
-import { inArray } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { effectiveGrant } from '../db/schema.js';
 import { grantRowsOf } from '../domain/scope.js';
 import { assignmentChanged } from '../events.js';
-import { actorsWithAssignments, assignmentsInForce } from '../queries/assignments.js';
+import { actorsWithAssignments, assignmentsInForceOrLater } from '../queries/assignments.js';
 
 /**
  * Rebuilds the effective grants of the actors named, or of every actor that has an Approved assignment or a grant
- * now (access-and-approvals 7.2): deletes their rows and writes those of their assignments in force today under the
- * Organisation's timezone, so a start or end date that passed takes effect and a withdrawn or ended assignment grants
- * nothing (PRD-ACS-005; code-house-rules 7.3). Returns how many rows it wrote.
+ * now (access-and-approvals 7.2): deletes their rows and writes, for each of their assignments with each Approved
+ * version of its role, the grants and the business days both hold, for those still holding today or later under the
+ * Organisation's timezone. A withdrawn assignment grants nothing (code-house-rules 7.3). The rows are a cache of the
+ * assignments: row-level security checks their dates against today when it reads them, so a start or end date takes
+ * effect on its day whether or not this has run since (PRD-ACS-005; DEC-120). Returns how many rows it wrote.
  */
 export async function rebuildGrants(
   context: TransactionContext,
@@ -24,17 +26,26 @@ export async function rebuildGrants(
   const actors = actorIds === undefined ? await actorsWithAssignments(context) : [...new Set(actorIds)];
   if (actors.length === 0) return 0;
   await context.tx.delete(effectiveGrant).where(inArray(effectiveGrant.actorId, actors));
-  const inForce = (await assignmentsInForce(context, date.date)).filter((assignment) =>
+  const dated = (await assignmentsInForceOrLater(context, date.date)).filter((assignment) =>
     actors.includes(assignment.actorId),
   );
-  const rows = inForce.flatMap((assignment) => grantRowsOf(assignment, registry));
+  const rows = dated.flatMap((assignment) =>
+    grantRowsOf(assignment, registry).map((row) => ({
+      ...row,
+      roleVersionId: assignment.roleVersionId,
+      validDuring: assignment.validDuring,
+    })),
+  );
   if (rows.length > 0) {
     await context.tx.insert(effectiveGrant).values(rows.map((row) => ({ ...row, id: uuidv7(), asOf: date.date })));
   }
   return rows.length;
 }
 
-/** The grants of each assignment as comparable text: record type and actions, sorted (access-and-approvals 7.2). */
+/**
+ * The grants of each assignment in force on the day its rows were last rebuilt (`as_of`), as comparable text: record
+ * type and actions, sorted (access-and-approvals 7.2; DEC-120).
+ */
 async function grantsByAssignment(
   context: TransactionContext,
 ): Promise<Map<string, { actorId: string; grants: string[] }>> {
@@ -45,7 +56,8 @@ async function grantsByAssignment(
       recordType: effectiveGrant.recordType,
       actions: effectiveGrant.actions,
     })
-    .from(effectiveGrant);
+    .from(effectiveGrant)
+    .where(sql`${effectiveGrant.validDuring} @> ${effectiveGrant.asOf}`);
   const byAssignment = new Map<string, { actorId: string; grants: string[] }>();
   for (const row of rows) {
     const entry = byAssignment.get(row.roleAssignmentId) ?? { actorId: row.actorId, grants: [] };
@@ -58,8 +70,10 @@ async function grantsByAssignment(
 
 /**
  * The scheduled rebuild as dates pass (access-and-approvals 7.2; spec section 9, "Date passes for a start or end";
- * PRD-ACS-005): rebuilds every actor's effective grants, then, for each role assignment whose grants changed, because
- * its own start or end date or its role version's passed, writes an audit record under the job's service identity
+ * PRD-ACS-005): a refresh of the cache and a notice, never what decides access, which Authorise and row-level
+ * security check against today themselves (DEC-120). It rebuilds every actor's effective grants, then, for each role
+ * assignment whose grants in force differ from those of the last rebuild, because its own start or end date or its
+ * role version's passed, writes an audit record under the job's service identity
  * and an `access.assignment-changed` outbox row naming its actor (module-map section 8; PRD-MOD-006), in the same
  * transaction. A run that changes nothing writes nothing else. Returns the rows written and the assignments changed.
  */

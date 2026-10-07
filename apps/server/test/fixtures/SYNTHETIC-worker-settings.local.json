@@ -43,7 +43,7 @@
       "retryDelaySeconds": 10,
       "retryBackoff": true,
       "activeLimitSeconds": 300,
-      "everySeconds": 3600
+      "everySeconds": 60
     }
   }
 }

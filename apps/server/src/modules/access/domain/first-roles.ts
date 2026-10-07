@@ -4,7 +4,9 @@ import type { PermissionAction, RecordTypeCode } from '@apparel-os/schemas';
 // V-01). Each is a list of explicit actions on record types of the permission registry (POL-02.03): no broad label,
 // no field class (so every restricted field stays masked to both, 6), no own-record scope and no self-service
 // permission (5.4). Cancel, export and override are never granted; approve never to the first Admin; create and edit
-// never to the first approver, so the first approver can never be a preparer (PRD-ACS-006, POL-02.08).
+// never to the first approver, so the first approver can never be a preparer (PRD-ACS-006, POL-02.08). The essential
+// security settings (access-and-approvals 3.3) are prepared (edit) by the first Admin and approved by the first approver
+// (DEC-120, RR-402).
 
 /** One permission: an action on a declared record type. */
 export interface FirstRolePermission {
@@ -37,15 +39,23 @@ function each(types: readonly RecordTypeCode[], actions: readonly PermissionActi
   return types.flatMap((recordType) => actions.map((action) => ({ recordType, action })));
 }
 
-/** The first Admin: view, create and edit on the records of access changes; view of their requests and history. */
+/**
+ * The first Admin: view, create and edit on the records of access changes; view and edit (prepare) on the essential
+ * security settings, which are never created (DEC-120); view of their requests and history.
+ */
 export const FIRST_ADMIN_PERMISSIONS: readonly FirstRolePermission[] = [
   ...each(PREPARED_TYPES, ['view', 'create', 'edit']),
+  ...each(['access.setting'], ['view', 'edit']),
   ...each(VIEWED_TYPES, ['view']),
 ];
 
-/** The first approver: view and approve on exactly what the first Admin prepares; view of requests and history. */
+/**
+ * The first approver: view and approve on exactly what the first Admin prepares, the essential security settings
+ * included (DEC-120); view of requests and history.
+ */
 export const FIRST_APPROVER_PERMISSIONS: readonly FirstRolePermission[] = [
   ...each(PREPARED_TYPES, ['view', 'approve']),
+  ...each(['access.setting'], ['view', 'approve']),
   ...each(VIEWED_TYPES, ['view']),
 ];
 

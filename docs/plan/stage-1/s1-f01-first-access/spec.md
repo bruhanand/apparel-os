@@ -106,7 +106,7 @@ Not written in this feature: `assignment_scope_member` for places, legal entitie
 | Revoke sessions | The session states | `access.session-revoked` | Audit; access record |
 | Decide a user change (creating, disabling, ending) | As Decide; a disabling also revokes every session of the user in the same transaction (access-and-approvals 2.1, 4.3) | `access.approval-decided`, `access.session-revoked` | Audit; access record |
 | Outbox delivery (worker) | The consumer's own effect (work item published, updated or closed) and its receipt for the event identity | — | — |
-| Date passes for a start or end | A scheduled job rebuilds effective grants | `access.assignment-changed` | Audit |
+| Date passes for a start or end | Takes effect at once: Authorise and row-level security check the dates against today (DEC-120); a scheduled job refreshes the effective grants and publishes what changed | `access.assignment-changed` | Audit |
 
 No outside system is called inside any of these transactions (`PRD-INT-006`).
 
@@ -185,6 +185,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | done | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |
 | [S1-F01-T24 Worker retries, history upkeep and the test Organisations](tickets/T24-worker-retries-history-upkeep-and-test-organisations.md) | done | — (`DEC-118`; RR-270 part, RR-240, RR-330); the intervals stay OPEN (RR-270) |
 | [S1-F01-T25 Changing essential security settings](tickets/T25-changing-essential-security-settings.md) | done | T22 (done) (`DEC-118`; RR-334) |
+| [S1-F01-T26 First roles change the security settings; assignment validity checked at once](tickets/T26-first-roles-settings-and-assignment-validity.md) | done | T24, T25 (done) (`DEC-120`; RR-402, RR-390) |
 
 
 ## 14. Tests

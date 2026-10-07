@@ -116,7 +116,9 @@ export class GuardedConnection {
       // it for the session. So it is cleared before the connection goes back to the pool; a connection where that
       // fails is destroyed, never pooled again (PRD-SEC-005).
       try {
-        await this.raw.query("select pg_catalog.set_config('aos.actor_id', '', false)");
+        await this.raw.query(
+          "select pg_catalog.set_config('aos.actor_id', '', false), pg_catalog.set_config('aos.business_date', '', false)",
+        );
       } catch {
         this.broken = true;
       }
