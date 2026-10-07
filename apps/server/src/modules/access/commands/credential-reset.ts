@@ -102,7 +102,7 @@ export class CredentialResets {
         }
         if (!(await code.take())) return refusal('not-authorised', 'access.authenticator-code-refused', true);
 
-        const { changes, credentialIds } = await replaceCredentials(context, reset.userId, today.date, {
+        const { changes, credentialIds } = await replaceCredentials(context, reset.userId, {
           passwordHash: password === undefined ? undefined : await hashPassword(password),
           authenticator: reset.reset !== 'password',
         });
@@ -158,7 +158,6 @@ export class CredentialResets {
 export async function replaceCredentials(
   context: TransactionContext,
   userId: string,
-  businessDate: string,
   replace: { readonly passwordHash: string | undefined; readonly authenticator: boolean },
 ): Promise<{ changes: AuditChange[]; credentialIds: string[] }> {
   const changes: AuditChange[] = [];
@@ -169,7 +168,7 @@ export async function replaceCredentials(
       .set({ replacedAt: context.startedAt, passwordHash: null })
       .where(and(eq(passwordCredential.appUserId, userId), isNull(passwordCredential.replacedAt)));
     const id = uuidv7();
-    const version = await userInForce(context, userId, businessDate);
+    const version = await userInForce(context, userId);
     await context.tx.insert(passwordCredential).values({
       id,
       appUserId: userId,
