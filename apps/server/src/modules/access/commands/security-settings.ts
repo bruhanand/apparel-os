@@ -271,8 +271,7 @@ export class SecuritySettingsChanges {
             value: SETTING_SCHEMAS[key].parse(row.value),
             origin: row.origin,
             decision: row.decision,
-            takesEffect:
-              row.startsOn === null ? { kind: 'at-decision' } : { kind: 'from-date', date: row.startsOn },
+            takesEffect: row.startsOn === null ? { kind: 'at-decision' } : { kind: 'from-date', date: row.startsOn },
             ...(approved ? { validFrom: row.validFrom } : {}),
             ...(approved && row.validTo !== null ? { validTo: row.validTo } : {}),
           };

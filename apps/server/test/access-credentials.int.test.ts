@@ -170,6 +170,12 @@ describe('sign-in with no timezone (code-house-rules 9, 12.14)', () => {
     try {
       const [org] = second.organisations;
       await writeSyntheticSetting(org.database, 'access.sign-in-throttling', { failureLimit: 3, windowSeconds: 600 });
+      // Every other required security setting is set, so the timezone alone is named (DEC-118).
+      await writeSyntheticSetting(org.database, 'access.password-rules', { minimumLength: 12 });
+      await writeSyntheticSetting(org.database, 'access.office-session-limits', {
+        idleLockSeconds: 1800,
+        absoluteSeconds: 28_800,
+      });
       const user = await writeSyntheticUser(org.database, org.code, secondKeys, {
         label: 'NO-TIMEZONE',
         enrolled: true,

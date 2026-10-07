@@ -28,6 +28,7 @@ import {
   startAccessApp,
   syntheticKeysEnvironment,
   syntheticTimezone,
+  writeSyntheticReason,
   writeSyntheticSetting,
   writeSyntheticUser,
 } from '../support/access.js';
@@ -44,7 +45,9 @@ import { startPostgresServer } from '../support/postgres-server.js';
 //   user with no role assignment (no-access.spec.ts);
 // - the second, with a user already enrolled whose session locks after a short synthetic idle limit (lock.spec.ts);
 // - a third, made by the real setup step (access-and-approvals 9.11; PRD-ACS-023), whose first Admin and first
-//   approver walk the approval journey (approval.spec.ts; S1-F01-AT18).
+//   approver walk the approval journey (approval.spec.ts; S1-F01-AT18);
+// - a fourth, also made by the setup step, with an enrolled Admin who may prepare security setting changes and an
+//   enrolled approver who may approve them, and an approve reason in force (security-settings.spec.ts; S1-F01-T25).
 // It is built apart from the application (tsconfig.browser.json), so nothing here reaches dist. Every value is
 // SYNTHETIC.
 //
@@ -134,9 +137,36 @@ const setup = await runSetupStep({
 });
 if (setup.outcome !== 'created') throw new Error(`The journey's setup step did not create: ${setup.outcome}`);
 
+// The security settings journey's Organisation, made by the setup step like the one above, so its worker
+// identities exist and My work is fed (S1-F01-T25).
+const settingsCode = syntheticCode('ORG-SETTINGS');
+const settingsDatabase = `syn_browser_settings_${randomBytes(3).toString('hex')}`;
+const settingsSetup = await runSetupStep({
+  migrationConnectionString: databaseUrl(world.directory, 'migration'),
+  runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
+  request: setupRequestSchema.parse({
+    ...journeyRequest,
+    organisationCode: settingsCode,
+    databaseName: settingsDatabase,
+    firstAdmin: {
+      ...journeyRequest.firstAdmin,
+      temporaryPassword: journeyRequest.firstAdmin.temporaryPassword.reveal(),
+    },
+    firstApprover: {
+      ...journeyRequest.firstApprover,
+      temporaryPassword: journeyRequest.firstApprover.temporaryPassword.reveal(),
+    },
+  }),
+  serviceIdentities: serviceIdentitiesOf(jobRegistry),
+  logger: setupLog.logger,
+});
+if (settingsSetup.outcome !== 'created')
+  throw new Error(`The settings setup step did not create: ${settingsSetup.outcome}`);
+
 const keys = syntheticKeysEnvironment(world);
 const keyring = JSON.parse(keys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
 keyring[journeyCode] = randomBytes(32).toString('base64url');
+keyring[settingsCode] = randomBytes(32).toString('base64url');
 keys[ORGANISATION_KEYS_VARIABLE] = JSON.stringify(keyring);
 
 const firstSignIn = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
@@ -159,6 +189,31 @@ await grantSynthetic(orgB.database, { kind: 'user', id: lockUser.id }, [
   { recordType: 'access.user', action: 'view' },
   { recordType: 'access.user', action: 'create' },
 ]);
+
+// The security settings journey: two enrolled users, SYNTHETIC grants standing in for approved role assignments, and an
+// approve reason in force (access-and-approvals 3.3, 9.5; DEC-118).
+const settingsAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-SETTINGS-ADMIN',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+const settingsApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-SETTINGS-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: settingsAdmin.id }, [
+  { recordType: 'access.setting', action: 'view' },
+  { recordType: 'access.setting', action: 'edit' },
+]);
+await grantSynthetic(settingsDatabase, { kind: 'user', id: settingsApprover.id }, [
+  { recordType: 'access.setting', action: 'view' },
+  { recordType: 'access.setting', action: 'approve' },
+  // The approval panel reads the request and the reasons in force (access-and-approvals 9.3, 9.5).
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+await writeSyntheticReason(settingsDatabase, 'approve');
 
 const app = await startAccessApp(world, keys, { origin, port });
 
@@ -217,6 +272,21 @@ writeFileSync(
       factorSecretHex: lockUser.factorSecret?.toString('hex') ?? '',
       idleLockSeconds: SYNTHETIC_SHORT_IDLE_LIMITS.idleLockSeconds,
     },
+    settings: {
+      organisationCode: settingsCode,
+      admin: {
+        login: settingsAdmin.login,
+        displayName: settingsAdmin.displayName,
+        password: settingsAdmin.password,
+        factorSecretHex: settingsAdmin.factorSecret?.toString('hex') ?? '',
+      },
+      approver: {
+        login: settingsApprover.login,
+        displayName: settingsApprover.displayName,
+        password: settingsApprover.password,
+        factorSecretHex: settingsApprover.factorSecret?.toString('hex') ?? '',
+      },
+    },
     journey: {
       organisationCode: journeyCode,
       admin: {
@@ -248,6 +318,7 @@ async function stop(): Promise<void> {
     // The log sample is evidence, not a result: a failure to write it fails no journey.
   }
   await dropDatabase(journeyDatabase).catch(() => undefined);
+  await dropDatabase(settingsDatabase).catch(() => undefined);
   await world.reset().catch(() => undefined);
   await postgres.stop().catch(() => undefined);
   process.exit(0);

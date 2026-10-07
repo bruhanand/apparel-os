@@ -130,6 +130,31 @@ function ReasonFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/** A security setting version: the setting, its values, origin and when it takes effect (S1-F01-T25; DEC-118). */
+function SettingFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({ ...readQuery(api, 'listSecuritySettings', {}), enabled: useViewable('access.setting') });
+  const setting = query.data?.settings.find((each) => each.settingId === view.document.recordId);
+  const version = setting?.versions.find((each) => each.id === view.document.versionId);
+  if (setting === undefined || version === undefined) return null;
+  const values = version.value as Record<string, number>;
+  return (
+    <Facts>
+      <Fact label="security.setting">{t(`security.setting.${setting.setting}`)}</Fact>
+      {Object.keys(values).map((field) => (
+        <Fact key={field} label={`security.field.${field}` as MessageId}>
+          <span className="font-mono">{String(values[field])}</span>
+        </Fact>
+      ))}
+      <Fact label="security.origin">{t(`security.origin.${version.origin}`)}</Fact>
+      <Fact label="security.takes-effect">
+        {version.takesEffect.kind === 'at-decision'
+          ? t('security.takes-effect.at-decision')
+          : t('security.from', { from: formatDate(version.takesEffect.date) })}
+      </Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -143,6 +168,8 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <AssignmentFacts view={view} withdrawal />;
     case 'access.approval_reason.change':
       return <ReasonFacts view={view} />;
+    case 'access.setting.change':
+      return <SettingFacts view={view} />;
     default:
       return null;
   }

@@ -41,6 +41,12 @@ export const screens = {
     need: view('access.role_assignment'),
   },
   'setup.reason-codes': { section: 'setup', path: '/setup/reason-codes', need: view('access.approval_reason') },
+  // The essential security settings (design-language 10.19; DEC-118, RR-334; S1-F01-T25).
+  'setup.security-settings': {
+    section: 'setup',
+    path: '/setup/security-settings',
+    need: view('access.setting'),
+  },
   'setup.audit-log': { section: 'setup', path: '/setup/audit-log', need: view('audit.audit_record') },
   'setup.policy-readiness': {
     section: 'setup',
@@ -66,6 +72,7 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.roles',
       'setup.role-assignments',
       'setup.reason-codes',
+      'setup.security-settings',
       'setup.policy-readiness',
     ],
   },

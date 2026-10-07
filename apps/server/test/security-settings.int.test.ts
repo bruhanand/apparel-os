@@ -326,35 +326,6 @@ describe('changing a security setting after setup (access-and-approvals 3.3; tes
     });
   });
 
-  it('code-house-rules 7.3 never starts a version in the past, today included, and schedules a later day', async () => {
-    for (const date of [dayFromNow(-1), dayFromNow(0)]) {
-      const answer = await prepare(admin, {
-        setting: 'access.password-rules',
-        value: { minimumLength: 13 },
-        origin: 'synthetic',
-        takesEffect: { kind: 'from-date', date },
-      });
-      expect(errorOf(answer).code).toBe('access.starts-in-past');
-    }
-    const inForce = (await settingOf('access.password-rules')).inForceVersionId;
-    const tomorrow = dayFromNow(1);
-    const scheduled = await prepared({
-      setting: 'access.password-rules',
-      value: { minimumLength: 13 },
-      origin: 'synthetic',
-      takesEffect: { kind: 'from-date', date: tomorrow },
-    });
-    await approved(scheduled);
-    const after = await settingOf('access.password-rules');
-    expect(after.inForceVersionId).toBe(inForce);
-    expect(after.versions.find((version) => version.id === scheduled.versionId)).toMatchObject({
-      decision: 'Approved',
-      takesEffect: { kind: 'from-date', date: tomorrow },
-      validFrom: `${tomorrow}T00:00:00.000Z`,
-    });
-    expect(after.versions.find((version) => version.id === inForce)?.validTo).toBe(`${tomorrow}T00:00:00.000Z`);
-  });
-
   it('POL-02.23 a rejected version never takes effect, and the version in force stays', async () => {
     const inForce = (await settingOf('access.sign-in-throttling')).inForceVersionId;
     const change = await prepared({
@@ -430,5 +401,44 @@ describe('an approved version applies at once (access-and-approvals 3.3; DEC-118
     // Idle longer than the new limit, far shorter than the earlier one: the session locks.
     const next = await call('GET', '/api/access/session', { cookie });
     expect(errorOf(next).code).toBe('access.session-locked');
+  });
+});
+
+describe('a version from a later day (access-and-approvals 3.3; code-house-rules 7.3)', () => {
+  it('code-house-rules 7.3 never starts a version in the past, today included, and schedules a later day', async () => {
+    for (const date of [dayFromNow(-1), dayFromNow(0)]) {
+      const answer = await prepare(admin, {
+        setting: 'access.password-rules',
+        value: { minimumLength: 13 },
+        origin: 'synthetic',
+        takesEffect: { kind: 'from-date', date },
+      });
+      expect(errorOf(answer).code).toBe('access.starts-in-past');
+    }
+    const inForce = (await settingOf('access.password-rules')).inForceVersionId;
+    const tomorrow = dayFromNow(1);
+    const scheduled = await prepared({
+      setting: 'access.password-rules',
+      value: { minimumLength: 13 },
+      origin: 'synthetic',
+      takesEffect: { kind: 'from-date', date: tomorrow },
+    });
+    await approved(scheduled);
+    const after = await settingOf('access.password-rules');
+    expect(after.inForceVersionId).toBe(inForce);
+    expect(after.versions.find((version) => version.id === scheduled.versionId)).toMatchObject({
+      decision: 'Approved',
+      takesEffect: { kind: 'from-date', date: tomorrow },
+      validFrom: `${tomorrow}T00:00:00.000Z`,
+    });
+    expect(after.versions.find((version) => version.id === inForce)?.validTo).toBe(`${tomorrow}T00:00:00.000Z`);
+    // A version taking effect at its decision cannot pass one already scheduled after it.
+    const now = await prepared({
+      setting: 'access.password-rules',
+      value: { minimumLength: 14 },
+      origin: 'synthetic',
+      takesEffect: atDecision,
+    });
+    expect(errorOf(await decide(approver, now)).code).toBe('access.version-overlaps');
   });
 });

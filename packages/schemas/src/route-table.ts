@@ -726,6 +726,7 @@ export const routes = {
       'access.approval-not-open',
       'access.approval-superseded',
       'access.user-not-approved',
+      'access.setting-not-found',
       'access.starts-in-past',
       'access.assignment-overlaps',
       'access.version-overlaps',
