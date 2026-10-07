@@ -38,6 +38,8 @@ One Railway project with two environments. Each has its own services, databases,
 
 Services talk to each other over Railway's private network (`*.railway.internal`), which is scoped to one environment. So `dev` can never reach `kdps-test`.
 
+**What exists (7 Oct 2026).** The Railway project `apparel-os` with the `dev` environment only: `Postgres` (PostgreSQL 17.11, private only), `app` and `worker` (configured, no source connected, nothing deployed) and the bucket `files`, all in Asia Southeast. The services, settings and variable names, and the steps left for the first deploy, are in [railway-roles-runbook.md](../../../apps/server/db/railway-roles-runbook.md) "Done on `dev`". `kdps-test` is not created.
+
 ## 3. One address for the browser
 
 The `app` service serves the API, the web app and the counter PWA from **one origin**: `/` is the web app, `/counter/` is the counter PWA, built from `apps/counter` (approved by the product owner on 6 Oct 2026; [offline-counter.md](../pos/offline-counter.md) 5.2), and `/api/` is the API ([code-house-rules.md](code-house-rules.md) 12.1).
