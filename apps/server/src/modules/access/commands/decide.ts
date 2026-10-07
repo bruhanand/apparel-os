@@ -15,7 +15,7 @@ import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { approvalDecided } from '../events.js';
 import { authorise } from '../queries/authorise.js';
-import { identityTarget, reliedAuthorityTargets } from './authority.js';
+import { identityTarget, reliedAuthority } from './authority.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
@@ -111,6 +111,9 @@ export class Approvals {
       [
         'access.role.change',
         {
+          // The role, exclusively at step 0: its version takes effect, and commands relying on it lock it shared
+          // (code-house-rules 8.2; DEC-118, RR-360).
+          authorityTargets: (c, v) => changes.roleVersionAuthorityTargets(c, v),
           targets: (_c, v) => Promise.resolve(changes.roleVersionTargets(v)),
           approve: (c, d, v) => changes.approveRoleVersion(c, d, v, HELD),
           reject: (c, d, v) => changes.rejectRoleVersion(c, d, v, HELD),
@@ -306,7 +309,7 @@ export class Approvals {
         },
       };
     }
-    if ((await userInForce(context, actor.id, date.date))?.state !== 'Active') {
+    if ((await userInForce(context, actor.id))?.state !== 'Active') {
       return {
         kind: 'refused',
         refusal: { kind: 'not-authorised', code: 'access.not-eligible', missing: [{ kind: 'user-state' }] },
@@ -466,7 +469,8 @@ export class Approvals {
 
   /**
    * Decide (access-and-approvals 9.5; module-map 6.2 flow A). Reads the request, locks the authority rows at step 0
-   * (the approver's user row and assignment, shared; the user or assignment the decision changes, exclusive), then
+   * (the approver's user row, assignment and its role, shared; the user, assignment or role the decision changes,
+   * exclusive; DEC-118), then
    * the request with the document's rows at step 1, each step in one call (code-house-rules 8.2; RR-325), then
    * rechecks under the locks: the request is still open and not
    * superseded (9.6), the version reviewed is its version (PRD-ACS-007), the decider is eligible (9.3), the reason
@@ -486,12 +490,14 @@ export class Approvals {
     if (actor.kind !== 'user') return refused('not-authorised', 'access.not-eligible', [{ kind: 'person' }]);
     const rule = this.ruleOf(found.actionType);
     const handler = this.handlerOf(found.actionType);
-    // Step 0: the approver's user row and the assignment they rely on, shared, with the authority rows the decision
-    // changes, exclusive (code-house-rules 8.2 "Authority first"; RR-325). The assignment is the one Authorise finds
+    // Step 0: the approver's user row, the assignment they rely on and its role, shared, with the authority rows the
+    // decision changes, exclusive (code-house-rules 8.2 "Authority first"; RR-325, RR-360). The assignment is the one Authorise finds
     // before the locks; an approver who is not eligible then locks none of theirs and is refused under the locks.
     const relied = await this.eligibility(context, actor, found);
+    const held =
+      relied.kind === 'eligible' ? await reliedAuthority(context, actor, relied.roleAssignmentId) : undefined;
     await context.lock(LOCK_STEP.authority, [
-      ...(relied.kind === 'eligible' ? reliedAuthorityTargets(actor, relied.roleAssignmentId) : []),
+      ...(held?.targets ?? []),
       ...((await handler.authorityTargets?.(context, found.documentVersionId)) ?? []),
     ]);
     await context.lock(LOCK_STEP.document, [
@@ -509,6 +515,8 @@ export class Approvals {
     if (relied.kind !== 'eligible' || relied.roleAssignmentId !== eligible.roleAssignmentId) {
       return refused('conflict', 'kernel.stale-version');
     }
+    // A version of the approver's role took effect while the locks were taken (DEC-118, RR-360).
+    if (held !== undefined && (await held.roleChanged())) return refused('conflict', 'kernel.stale-version');
     const checked = await this.checkReason(context, rule, input);
     if (checked.kind === 'refusal') return { kind: 'refusal', refusal: checked.refusal, causedBySecret: false };
     const reason = checked.reason;

@@ -698,7 +698,7 @@ describe('users (access-and-approvals 2.1, 3.2, 4.3; tests 19f, 19g; DEC-112, DE
     const state = await asOwner((c) =>
       c.query<{ state: string }>(
         `select state from access.app_user_version where app_user_id = $1 and decision = 'Approved'
-         and valid_during @> current_date`,
+         and upper_inf(valid_during)`,
         [target.id],
       ),
     );
@@ -731,7 +731,7 @@ describe('users (access-and-approvals 2.1, 3.2, 4.3; tests 19f, 19g; DEC-112, DE
     const unchanged = await asOwner((c) =>
       c.query<{ state: string; name: string }>(
         `select state, display_name as name from access.app_user_version
-         where app_user_id = $1 and decision = 'Approved' and valid_during @> current_date`,
+         where app_user_id = $1 and decision = 'Approved' and upper_inf(valid_during)`,
         [approver.id],
       ),
     );
@@ -740,7 +740,7 @@ describe('users (access-and-approvals 2.1, 3.2, 4.3; tests 19f, 19g; DEC-112, DE
     const changed = await asOwner((c) =>
       c.query<{ state: string; name: string }>(
         `select state, display_name as name from access.app_user_version
-         where app_user_id = $1 and decision = 'Approved' and valid_during @> current_date`,
+         where app_user_id = $1 and decision = 'Approved' and upper_inf(valid_during)`,
         [approver.id],
       ),
     );

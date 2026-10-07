@@ -73,10 +73,11 @@ export interface AccessInterface {
   /** Authorise: the one assignment that grants the action, or what is missing (7.1 step 3). */
   authorise(context: TransactionContext, request: AuthoriseRequest): Promise<Authorisation>;
   /**
-   * Holds the authority a command relies on (code-house-rules 8.2 "Authority first"; 7.1 step 4; RR-325): locks the
-   * actor and the assignment Authorise returned in shared mode at step 0, with any authority rows the command changes,
-   * then rechecks under the locks that the actor is Active and the same assignment still grants the action. Answers
-   * the refusal, or undefined while the authority holds. Called first in the command's transaction.
+   * Holds the authority a command relies on (code-house-rules 8.2 "Authority first"; 7.1 step 4; RR-325, RR-360):
+   * locks the actor, the assignment Authorise returned and the role it grants in shared mode at step 0, with any
+   * authority rows the command changes, then rechecks under the locks that the actor is Active, that no version of
+   * the role took effect meanwhile (`kernel.stale-version`; DEC-118) and that the same assignment still grants the
+   * action. Answers the refusal, or undefined while the authority holds. Called first in the command's transaction.
    */
   holdAuthority(
     context: TransactionContext,

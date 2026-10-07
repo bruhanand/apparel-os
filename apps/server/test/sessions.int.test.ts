@@ -393,17 +393,17 @@ describe('signing out and revoking (access-and-approvals 3.3, 4.3; test 5)', () 
   it('PRD-SEC-008 refuses the next request of a user who is no longer Active (access-and-approvals 2.1, 7.1 step 1)', async () => {
     const user = await enrolledUser('DISABLED');
     const cookie = await signedIn(user);
-    const today = clock.now().toISOString().slice(0, 10);
+    const now = clock.now().toISOString();
     const owner = await connect(orgA.database, 'migration');
     try {
       await owner.query(
-        `update access.app_user_version set valid_during = daterange(lower(valid_during), $2::date) where id = $1`,
-        [user.versionId, today],
+        `update access.app_user_version set valid_during = tstzrange(lower(valid_during), $2::timestamptz) where id = $1`,
+        [user.versionId, now],
       );
       await owner.query(
         `insert into access.app_user_version (id, app_user_id, display_name, state, valid_during, decision)
-         values ($1, $2, $3, 'Disabled', daterange($4::date, null), 'Approved')`,
-        [uuidv7(), user.id, user.displayName, today],
+         values ($1, $2, $3, 'Disabled', tstzrange($4::timestamptz, null), 'Approved')`,
+        [uuidv7(), user.id, user.displayName, now],
       );
     } finally {
       await owner.end();

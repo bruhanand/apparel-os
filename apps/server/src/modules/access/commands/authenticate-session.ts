@@ -93,7 +93,7 @@ export async function authenticateSession(
     await record('session-ended');
     return NOT_SIGNED_IN;
   }
-  const inForce = await userInForce(context, found.userId, today.date);
+  const inForce = await userInForce(context, found.userId);
   if (inForce?.state !== 'Active') return NOT_SIGNED_IN;
   const authenticated: AuthenticatedSession = {
     sessionId: found.id,

@@ -300,3 +300,57 @@ describe('a preparing command holds its preparer’s authority (code-house-rules
     });
   });
 });
+
+describe('a role version taking effect and a command relying on that role (code-house-rules 8.2; test 19i; RR-360)', () => {
+  const need = { action: 'create' as const, recordType: 'access.approval_reason' };
+
+  /** A user holding a role since yesterday that grants `need`, and a version of the role from today without it. */
+  async function roleBeingChanged(label: string) {
+    const holder = await writeSyntheticUser(database, routed.organisationCode, keysEnvironment, { label });
+    const held = await grantSynthetic(database, { kind: 'user', id: holder.id }, [need]);
+    const prepared = await as(admin.id, (c) =>
+      access.prepareRoleVersion(c, adminPreparer, held.roleId, {
+        name: 'SYNTHETIC role, narrowed',
+        permissions: [{ kind: 'action', recordType: 'access.role', action: 'view', selfService: false }],
+        validFrom: today(),
+      }),
+    );
+    if (prepared.kind !== 'success') throw new Error(`role version not prepared: ${prepared.refusal.code}`);
+    const hold = (context: TransactionContext) =>
+      access.holdAuthority(context, { kind: 'user', id: holder.id }, held.assignmentId, need);
+    const decision = (context: TransactionContext) =>
+      decideIn(context, disabler, {
+        requestId: prepared.answer.requestId,
+        versionId: prepared.answer.versionId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId },
+      });
+    return { holder, hold, decision };
+  }
+
+  it('PRD-INT-003 the role version waits for a command already relying on the role, then takes effect after it', async () => {
+    const { holder, hold, decision } = await roleBeingChanged('ROLE-HOLDER-FIRST');
+    const relying = heldOpen(holder.id, hold);
+    const relyingPid = await relying.pid;
+    const deciding = as(disabler.id, decision);
+    // The decision waits for the command's shared lock on the role.
+    await waitUntilAnyWaitingForLock(database, [relyingPid]);
+    relying.commit();
+    expect(await relying.outcome).toBeUndefined();
+    expect(await deciding).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
+    // No command succeeds on the version replaced.
+    expect(await as(holder.id, hold)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+  });
+
+  it('PRD-INT-003 a command relying on the role waits while a version of it takes effect, then is refused as stale', async () => {
+    const { holder, hold, decision } = await roleBeingChanged('ROLE-HOLDER-SECOND');
+    const deciding = heldOpen(disabler.id, decision);
+    const decidingPid = await deciding.pid;
+    const relying = as(holder.id, hold);
+    // The command waits for the decision's exclusive lock on the role.
+    await waitUntilAnyWaitingForLock(database, [decidingPid]);
+    deciding.commit();
+    expect(await deciding.outcome).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
+    expect(await relying).toEqual({ kind: 'conflict', code: 'kernel.stale-version', missing: [] });
+  });
+});

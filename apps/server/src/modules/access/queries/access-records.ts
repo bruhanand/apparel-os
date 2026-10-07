@@ -10,7 +10,7 @@ import type {
   UserList,
 } from '@apparel-os/schemas';
 import { asc, desc, inArray, sql, type AnyColumn } from 'drizzle-orm';
-import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { businessDateIn, CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import {
   appUser,
   appUserVersion,
@@ -79,21 +79,43 @@ function versionView(
   };
 }
 
-/** Every user, by login, each with every version, newest first (access-and-approvals 2.1; RR-214). */
+/** The instants of a row dated by instants, as ISO 8601 in UTC, which compare as text (code-house-rules 7.3, 9). */
+const instantOf = (bound: 'lower' | 'upper', range: AnyColumn) =>
+  sql<string | null>`to_char(${sql.raw(bound)}(${range}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
+/**
+ * Every user, by login, each with every version, newest first (access-and-approvals 2.1; RR-214). User versions are
+ * dated by instants (9.5; DEC-118): each version's state is worked out at the instant of the read, and its dates are
+ * the business days of its instants under the Organisation's timezone, so a version approved and replaced the same
+ * day shows that day as both (code-house-rules 9; PRD-MOD-017).
+ */
 export async function listUsers(context: TransactionContext, today: string): Promise<UserList> {
+  const date = await context.businessDate();
+  if (date.kind === 'not-set') throw new CommandDefect('Users are listed only once today is known');
+  const dayOf = (instant: string) => businessDateIn(new Date(instant), date.timezone);
   const users = await context.tx.select().from(appUser).orderBy(asc(appUser.login));
-  const versions = await context.tx
+  const rows = await context.tx
     .select({
       id: appUserVersion.id,
       userId: appUserVersion.appUserId,
       displayName: appUserVersion.displayName,
       state: appUserVersion.state,
       decision: appUserVersion.decision,
-      start: startOf(appUserVersion.validDuring),
-      end: endOf(appUserVersion.validDuring),
+      startsAt: instantOf('lower', appUserVersion.validDuring),
+      endsAt: instantOf('upper', appUserVersion.validDuring),
     })
     .from(appUserVersion)
     .orderBy(desc(appUserVersion.recordedAt), desc(appUserVersion.id));
+  const now = context.startedAt.toISOString();
+  const versions = rows.map((row) => {
+    if (row.startsAt === null) throw new CommandDefect('A user version has no start (code-house-rules 7.3)');
+    return {
+      ...row,
+      startsAt: row.startsAt,
+      start: dayOf(row.startsAt),
+      end: row.endsAt === null ? null : dayOf(row.endsAt),
+    };
+  });
   const versionIds = versions.map((version) => version.id);
   const personas =
     versionIds.length === 0
@@ -113,6 +135,13 @@ export async function listUsers(context: TransactionContext, today: string): Pro
         .filter((version) => version.userId === user.id)
         .map((version) => ({
           ...versionView(version, today, requests),
+          state: recordState({
+            decision: version.decision,
+            start: version.startsAt,
+            end: version.endsAt ?? undefined,
+            today: now,
+            requestState: requests.get(version.id)?.state,
+          }),
           displayName: version.displayName,
           personas: personas
             .filter((each) => each.appUserVersionId === version.id)
