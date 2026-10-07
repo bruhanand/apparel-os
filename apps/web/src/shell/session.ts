@@ -14,6 +14,11 @@ export interface ShellUser {
   readonly roleAssignmentInForce: boolean;
   /** The Organisation's timezone, in which every time on a screen is shown (PRD-MOD-017; DEC-118; RR-310). */
   readonly timeZone: string;
+  /**
+   * The idle-lock limit in force, in seconds, from the session read: the screen shows its lock once that long has passed
+   * with no request of the session (access-and-approvals 3.3; PRD-ACS-017; S1-F01-T30).
+   */
+  readonly idleLockSeconds: number;
 }
 
 /**

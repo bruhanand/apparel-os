@@ -535,7 +535,10 @@ describe('resetting another user credential (access-and-approvals 3.2, 3.3; test
       temporaryPassword: 'SYN-short',
       totpCode: freshCode(admin),
     });
-    expect(errorOf(short).code).toBe('access.password-refused');
+    expect(errorOf(short)).toMatchObject({
+      code: 'access.password-refused',
+      missing: [{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '12' }],
+    });
     const none = await reset(target.id, cookie, { reset: 'password', totpCode: freshCode(admin) });
     expect(errorOf(none).code).toBe('kernel.invalid-request');
     expect(JSON.stringify(short.body)).not.toContain('SYN-short');

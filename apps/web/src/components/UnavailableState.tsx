@@ -15,6 +15,11 @@ export function missingText(item: MissingItem): string {
       recordType: isMessageId(recordType) ? t(recordType) : item.recordType,
     });
   }
+  // The rule a refused password failed, with the setting's value, never the password (S1-F01-T31).
+  if (item.kind === 'password-rule' && item.rule === 'minimum-length') {
+    const least = Number(item.minimumLength);
+    if (Number.isInteger(least) && least >= 0) return t('missing.password-rule.minimum-length', { count: least });
+  }
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
 }

@@ -13,7 +13,7 @@ import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { passwordCredential, secondFactor } from '../db/schema.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { hashPassword } from '../domain/password-hash.js';
-import { meetsPasswordRules } from '../domain/sign-in-rules.js';
+import { checkPasswordRules, passwordRuleMissing } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { findUser, userInForce } from '../queries/users.js';
 import { checkFreshCode } from './fresh-code.js';
@@ -98,7 +98,10 @@ export class CredentialResets {
               { kind: 'setting', setting: 'access.password-rules' },
             ]);
           }
-          if (!meetsPasswordRules(rules.value, password)) return refusal('refused', 'access.password-refused', true);
+          const passwordRule = checkPasswordRules(rules.value, password);
+          if (!passwordRule.ok) {
+            return refusal('refused', 'access.password-refused', true, [passwordRuleMissing(passwordRule)]);
+          }
         }
         if (!(await code.take())) return refusal('not-authorised', 'access.authenticator-code-refused', true);
 

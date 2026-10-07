@@ -109,7 +109,11 @@ export class SignInController {
     // Screens show times in the Organisation's timezone only (PRD-MOD-017; DEC-118). With none in force no session
     // authenticates (authenticate-session.ts), so this answers as the guard does if it ended since; nothing falls back
     // to the device's timezone (code-house-rules 12.14).
-    if (own.timezone === null) throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.not-signed-in' });
+    // The same for the office session limits: Authenticate ends a session without them, so the idle limit is in force
+    // whenever this answers (S1-F01-T30).
+    if (own.timezone === null || own.idleLockSeconds === null) {
+      throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.not-signed-in' });
+    }
     return {
       organisationCode: user.organisation.organisationCode,
       userId: user.userId,
@@ -118,6 +122,7 @@ export class SignInController {
       grants: own.grants,
       roleAssignmentInForce: own.roleAssignmentInForce,
       timezone: own.timezone,
+      idleLockSeconds: own.idleLockSeconds,
     };
   }
 

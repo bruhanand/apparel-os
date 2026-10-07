@@ -51,6 +51,7 @@ const SELF_RECORD: RecordTypeDeclaration = {
   scopeFacts: { legalEntity: false, place: false, brand: false },
   subject: true,
   fieldClasses: [],
+  serviceOnly: false,
 };
 const REGISTRY = [...permissionRegistry, SELF_RECORD];
 
@@ -318,6 +319,7 @@ describe('personas and empty scope grant nothing (access-and-approvals 2.1, 5.1;
       grants: [],
       roleAssignmentInForce: false,
       timezone: 'Etc/UTC',
+      idleLockSeconds: null, // this block writes no office session limits
     });
   });
 
@@ -437,6 +439,90 @@ describe('the self-service role (access-and-approvals 4.2, 5.4; test 10)', () =>
         }),
       ),
     ).toMatchObject({ kind: 'refused', refusal: { missing: [{ kind: 'scope', dimension: 'own-records' }] } });
+  });
+});
+
+describe('service-only permissions (access-and-approvals 2.3; PRD-SEC-018; S1-F01-T29)', () => {
+  const SERVICE_ONLY = [
+    { recordType: 'access.effective_grant', action: 'edit' },
+    { recordType: 'audit.audit_seal', action: 'view' },
+    { recordType: 'audit.audit_partition', action: 'create' },
+    { recordType: 'kernel.outbox_event', action: 'edit' },
+    { recordType: 'inbox.work_item', action: 'edit' },
+  ] as const;
+
+  it('PRD-SEC-018 refuses a new role, and a new version of a role, that holds a record type only services hold', async () => {
+    const p = await preparer();
+    for (const each of SERVICE_ONLY) {
+      const refused = await as(admin.id, (c) =>
+        access.prepareRole(c, p, {
+          code: `SYN-SERVICE-ONLY-${String(randomInt(1_000_000_000))}`,
+          name: 'SYNTHETIC service-only',
+          validFrom: dateIn(0),
+          permissions: [
+            { kind: 'action', recordType: 'access.role', action: 'view', selfService: false },
+            { kind: 'action', recordType: each.recordType, action: each.action, selfService: false },
+          ],
+        }),
+      );
+      expect(refused).toEqual({
+        kind: 'refusal',
+        refusal: {
+          kind: 'refused',
+          code: 'access.service-only-permission',
+          missing: [{ kind: 'permission', recordType: each.recordType, action: each.action }],
+        },
+      });
+    }
+    const roleId = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
+    const version = await as(admin.id, (c) =>
+      access.prepareRoleVersion(c, p, roleId, {
+        name: 'SYNTHETIC service-only version',
+        validFrom: dateIn(1),
+        permissions: [{ kind: 'action', recordType: 'audit.audit_seal', action: 'view', selfService: false }],
+      }),
+    );
+    expect(version).toMatchObject({ kind: 'refusal', refusal: { code: 'access.service-only-permission' } });
+  });
+
+  it('PRD-SEC-018 leaves a service identity holding them, through the setup step’s own path', async () => {
+    const identityId = await writeSyntheticServiceIdentity(
+      database,
+      `syn-service-only-${String(randomInt(1_000_000))}`,
+    );
+    await grantSynthetic(database, { kind: 'service-identity', id: identityId }, [
+      { recordType: 'audit.audit_seal', action: 'view' },
+    ]);
+    const need = { action: 'view', recordType: 'audit.audit_seal' } as const;
+    expect(await as(identityId, (c) => jobIdentities().authorise(c, identityId, need))).toEqual({ kind: 'allowed' });
+  });
+
+  it('PRD-SEC-018 refuses to assign a service identity’s role to a person, and still assigns it to the identity', async () => {
+    const identityId = await writeSyntheticServiceIdentity(database, `syn-role-holder-${String(randomInt(1_000_000))}`);
+    const { roleId } = await grantSynthetic(database, { kind: 'service-identity', id: identityId }, [
+      { recordType: 'audit.audit_seal', action: 'view' },
+    ]);
+    const user = await newUser('SVCROLE');
+    expect(await prepareAssignment(assignmentDraft(user.id, roleId))).toEqual({
+      kind: 'refusal',
+      refusal: {
+        kind: 'refused',
+        code: 'access.service-only-permission',
+        missing: [{ kind: 'permission', recordType: 'audit.audit_seal', action: 'view' }],
+      },
+    });
+    const other = await writeSyntheticServiceIdentity(database, `syn-role-other-${String(randomInt(1_000_000))}`);
+    const p = await preparer();
+    expect(
+      await as(admin.id, (c) =>
+        access.prepareAssignment(c, p, {
+          actor: { kind: 'service-identity', serviceIdentityId: other },
+          roleId,
+          scope: EVERYWHERE,
+          validFrom: dateIn(0),
+        }),
+      ),
+    ).toMatchObject({ kind: 'success' });
   });
 });
 
@@ -891,6 +977,13 @@ describe('the routes (access-and-approvals 7.1; code-house-rules 12.1; RR-261, R
     const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
     // The test application's SYNTHETIC timezone (test/support/access.ts).
     expect(await response.json()).toMatchObject({ timezone: 'Etc/UTC' });
+  });
+
+  it("PRD-ACS-017 the session read carries the idle-lock limit in force, for the screen's own lock (S1-F01-T30)", async () => {
+    const { cookie } = await signedIn('IDLELIMIT');
+    const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
+    // The test application's SYNTHETIC office session limits (written in this block's beforeAll).
+    expect(await response.json()).toMatchObject({ idleLockSeconds: 1800 });
   });
 
   it('PRD-ACS-002 the session read says when the user holds no role assignment in force (DEC-118; RR-260)', async () => {

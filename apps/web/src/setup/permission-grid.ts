@@ -18,12 +18,17 @@ export interface GridRow {
   readonly actions: readonly PermissionAction[];
 }
 
-/** The rows of the grid, in the registry's order. */
+/**
+ * The rows of the grid, in the registry's order. A service-only record type is left out: only the background
+ * system's service identities hold it, never a person's role (access-and-approvals 2.3; PRD-SEC-018; S1-F01-T29).
+ */
 export function permissionGrid(): GridRow[] {
-  return permissionRegistry.map((declaration) => ({
-    recordType: declaration.code,
-    actions: declaration.actions,
-  }));
+  return permissionRegistry
+    .filter((declaration) => !declaration.serviceOnly)
+    .map((declaration) => ({
+      recordType: declaration.code,
+      actions: declaration.actions,
+    }));
 }
 
 /** The restricted field classes (PRD-ACS-008, PRD-SEC-010). */

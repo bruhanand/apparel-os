@@ -143,6 +143,8 @@ describe('sign-in (access-and-approvals 3.1; tests 3 and 3c)', () => {
       // So the shell shows "No access assigned" (DEC-118; RR-260), and times in the synthetic timezone (RR-310).
       roleAssignmentInForce: false,
       timezone: 'Etc/UTC',
+      // The idle-lock limit in force, from which the screen shows its lock without polling (S1-F01-T30).
+      idleLockSeconds: SYNTHETIC_SESSION_LIMITS.idleLockSeconds,
     });
 
     const records = await rows<{ outcome: string; user_id: string }>(
@@ -403,7 +405,12 @@ describe('first sign-in: enrolment, then the password change (test 3e; access-an
       { newPassword: 'SYN-short', totpCode: codeFor(secretBytes, 1) },
       { cookie, key: changeKey },
     );
-    expect(errorOf(short).code).toBe('access.password-refused');
+    // S1-F01-T31: the refusal names the rule and the setting's value, never the password.
+    expect(errorOf(short)).toMatchObject({
+      code: 'access.password-refused',
+      missing: [{ kind: 'password-rule', rule: 'minimum-length', minimumLength: '12' }],
+    });
+    expect(JSON.stringify(short.body)).not.toContain('SYN-short');
     const newPassword = 'SYNTHETIC-new-password-1';
     const changed = await post(
       '/api/access/password/change',

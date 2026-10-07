@@ -16,7 +16,7 @@ import { KeptDraftBanner } from '../lock/KeptDraftBanner';
 import { t } from '../messages/catalogue';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from './parts';
-import { RecordDrawer } from './RecordDrawer';
+import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
 import { useBusinessToday } from './business-date';
@@ -31,12 +31,15 @@ const LIST_READS = ['listApprovalReasonRecords', 'listApprovalReasons', 'listMyW
 /** A new reason: its code and kind, which stay fixed, its text and start. */
 function NewReasonForm() {
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve', validFrom: today });
+  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve', validFrom: today }, [
+    { path: 'validFrom', earliest: today },
+  ]);
   const kept = useKeptDraft(routes.prepareApprovalReason, form, 'setup.new-reason');
   const submission = useSubmission('prepareApprovalReason', LIST_READS);
   const errors = form.formState.errors;
   return (
     <form
+      id="reason-new-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -94,14 +97,7 @@ function NewReasonForm() {
           {...form.register('validFrom')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="reason-new-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }
@@ -109,15 +105,17 @@ function NewReasonForm() {
 /** A new version of a reason: its text and start. */
 function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
   const today = useBusinessToday();
-  const form = useRouteForm(routes.prepareApprovalReasonVersion, {
-    text: reason.versions[0]?.text ?? '',
-    validFrom: today,
-  });
+  const form = useRouteForm(
+    routes.prepareApprovalReasonVersion,
+    { text: reason.versions[0]?.text ?? '', validFrom: today },
+    [{ path: 'validFrom', earliest: today }],
+  );
   const kept = useKeptDraft(routes.prepareApprovalReasonVersion, form, `setup.reason-version.${reason.id}`);
   const submission = useSubmission('prepareApprovalReasonVersion', LIST_READS);
   const errors = form.formState.errors;
   return (
     <form
+      id="reason-version-form"
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -153,14 +151,7 @@ function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
           {...form.register('validFrom')}
         />
       </FormField>
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          variant="primary"
-          label="setup.request-approval"
-          disabled={submission.state.kind === 'pending'}
-        />
-      </div>
+      <FormActions form="reason-version-form" pending={submission.state.kind === 'pending'} />
     </form>
   );
 }

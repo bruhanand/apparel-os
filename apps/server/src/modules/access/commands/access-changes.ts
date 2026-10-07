@@ -8,7 +8,7 @@ import type {
   RoleDraft,
   RoleVersionDraft,
 } from '@apparel-os/schemas';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   LOCK_STEP,
   lockTable,
@@ -146,6 +146,57 @@ export class AccessChanges {
     return missing.length === 0 ? undefined : { kind: 'refused', code: 'access.permission-not-declared', missing };
   }
 
+  /**
+   * Refuses a role that holds a permission on a record type only service identities hold (access-and-approvals 2.3;
+   * PRD-SEC-018; S1-F01-T29). A person never holds it, whoever prepares the role; a service identity's authorities
+   * come from the setup step, not from here.
+   */
+  private serviceOnly(permissions: readonly Permission[]): CommandRefusal | undefined {
+    const missing = permissions.flatMap((permission) =>
+      permission.kind === 'action' && this.registry.get(permission.recordType)?.serviceOnly === true
+        ? [{ kind: 'permission', recordType: permission.recordType, action: permission.action }]
+        : [],
+    );
+    return missing.length === 0 ? undefined : { kind: 'refused', code: 'access.service-only-permission', missing };
+  }
+
+  /**
+   * A role, in any of its versions, that holds a permission on a service-only record type is a service identity's, the
+   * setup step's `service-identity:<code>` role among them, and is never assigned to a person (access-and-approvals
+   * 2.3; PRD-SEC-018; S1-F01-T29). A role id is visible in audit records, so the assignment is checked, not only the
+   * role editor.
+   */
+  private async serviceOnlyRole(context: TransactionContext, roleId: string): Promise<CommandRefusal | undefined> {
+    const types = [...this.registry.values()].filter((each) => each.serviceOnly).map((each) => each.code);
+    if (types.length === 0) return undefined;
+    const held = await context.tx
+      .selectDistinct({ recordType: rolePermission.recordType, action: rolePermission.action })
+      .from(rolePermission)
+      .innerJoin(roleVersion, eq(roleVersion.id, rolePermission.roleVersionId))
+      .where(
+        and(
+          eq(roleVersion.roleId, roleId),
+          eq(rolePermission.kind, 'action'),
+          inArray(rolePermission.recordType, types),
+        ),
+      );
+    if (held.length === 0) return undefined;
+    return {
+      kind: 'refused',
+      code: 'access.service-only-permission',
+      missing: held.flatMap((each) =>
+        each.recordType === null || each.action === null
+          ? []
+          : [{ kind: 'permission', recordType: each.recordType, action: each.action }],
+      ),
+    };
+  }
+
+  /** The refusal of a role's permissions against the registry: undeclared, then service-only (4.1, 5.4, 2.3). */
+  private refusedPermissions(permissions: readonly Permission[]): CommandRefusal | undefined {
+    return this.undeclared(permissions) ?? this.serviceOnly(permissions);
+  }
+
   private async writeRoleVersion(
     context: TransactionContext,
     preparer: Preparer,
@@ -222,8 +273,8 @@ export class AccessChanges {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
-    const undeclared = this.undeclared(draft.permissions);
-    if (undeclared !== undefined) return { kind: 'refusal', refusal: undeclared };
+    const refused = this.refusedPermissions(draft.permissions);
+    if (refused !== undefined) return { kind: 'refusal', refusal: refused };
     const taken = await context.tx.select({ id: role.id }).from(role).where(eq(role.code, draft.code));
     if (taken.length > 0) return refusal('refused', 'access.role-code-taken');
     const selfService = draft.permissions.some((permission) => permission.selfService);
@@ -252,8 +303,8 @@ export class AccessChanges {
     const [found] = await context.tx.select().from(role).where(eq(role.id, roleId));
     if (found === undefined) return refusal('not-found', 'access.role-not-found');
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
-    const undeclared = this.undeclared(draft.permissions);
-    if (undeclared !== undefined) return { kind: 'refusal', refusal: undeclared };
+    const refused = this.refusedPermissions(draft.permissions);
+    if (refused !== undefined) return { kind: 'refusal', refusal: refused };
     if (draft.permissions.some((permission) => permission.selfService !== found.selfService)) {
       return refusal('refused', 'access.self-service-scope');
     }
@@ -266,7 +317,8 @@ export class AccessChanges {
    * user or service identity, a role, a scope and dates. Refused when it starts before today (GC2-7, DEC-105); when
    * own-record scope meets a role that is not self-service, or other scope a self-service role (PRD-ACS-022); when a
    * dimension selects members, which need the scope contract of S1-F02 and S1-F03 (5.1); or when an Approved, not
-   * withdrawn assignment of the same actor, role and exact scope overlaps it (DEC-112, CH-7). An empty dimension is
+   * withdrawn assignment of the same actor, role and exact scope overlaps it (DEC-112, CH-7); or when a person's role
+   * holds a service-only permission (2.3, PRD-SEC-018). An empty dimension is
    * allowed and grants nothing (PRD-ACS-005). A new user's assignment may wait with the user's first version (DEC-116).
    */
   async prepareAssignment(
@@ -287,6 +339,10 @@ export class AccessChanges {
             .from(serviceIdentity)
             .where(eq(serviceIdentity.id, draft.actor.serviceIdentityId));
     if (actorFound.length === 0) return refusal('not-found', 'access.actor-not-found');
+    if (draft.actor.kind === 'user') {
+      const refusedRole = await this.serviceOnlyRole(context, draft.roleId);
+      if (refusedRole !== undefined) return { kind: 'refusal', refusal: refusedRole };
+    }
     const ownRecords = draft.scope.kind === 'own-records';
     if (ownRecords !== foundRole.selfService || (ownRecords && draft.actor.kind !== 'user')) {
       return refusal('refused', 'access.self-service-scope');

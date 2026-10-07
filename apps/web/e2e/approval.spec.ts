@@ -41,7 +41,10 @@ async function prepare(page: Page, button: string, fill: (drawer: Locator) => Pr
   const drawer = page.getByRole('dialog', { name: button });
   await expect(drawer).toBeVisible();
   await fill(drawer);
-  await drawer.getByRole('button', { name: 'Request approval' }).click();
+  // design-language 10.15 (S1-F01-T33): the actions are in the drawer's fixed footer, in view whatever the form's length.
+  const request = drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' });
+  await expect(request).toBeInViewport();
+  await request.click();
   await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);

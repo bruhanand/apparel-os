@@ -30,6 +30,11 @@ export interface RecordTypeDeclaration {
   readonly subject: boolean;
   /** The restricted field classes its fields belong to (access-and-approvals 4.1, 6). */
   readonly fieldClasses: readonly FieldClass[];
+  /**
+   * Whether only a service identity holds permissions on the type, never a person's role (access-and-approvals 2.3;
+   * PRD-SEC-018; S1-F01-T29). The role editor does not offer it and a role change that holds it is refused.
+   */
+  readonly serviceOnly: boolean;
 }
 
 const NONE: ScopeFactsDeclared = { legalEntity: false, place: false, brand: false };
@@ -41,7 +46,16 @@ function declare<const Code extends string>(
   actions: readonly PermissionAction[],
   scopeFacts: ScopeFactsDeclared,
 ): RecordTypeDeclaration & { readonly code: Code } {
-  return { code, actions, scopeFacts, subject: false, fieldClasses: [] };
+  return { code, actions, scopeFacts, subject: false, fieldClasses: [], serviceOnly: false };
+}
+
+/** A record type only a service identity holds permissions on (access-and-approvals 2.3; S1-F01-T29). */
+function declareServiceOnly<const Code extends string>(
+  code: Code,
+  actions: readonly PermissionAction[],
+  scopeFacts: ScopeFactsDeclared,
+): RecordTypeDeclaration & { readonly code: Code } {
+  return { ...declare(code, actions, scopeFacts), serviceOnly: true };
 }
 
 /**
@@ -62,7 +76,7 @@ const accessRecordTypes = [
   declare('access.setting', ['view', 'edit', 'approve'], NONE),
   declare('access.approval_request', ['view'], NONE),
   declare('access.approval_decision', ['view'], NONE),
-  declare('access.effective_grant', ['edit'], NONE),
+  declareServiceOnly('access.effective_grant', ['edit'], NONE),
   // Another user's sessions: edit revokes them (3.3). A user's own sessions need no permission (3.2; S1-F01-T09).
   declare('access.session', ['view', 'edit'], NONE),
   // Another user's credentials: edit resets them (3.2; GC3-4). Nobody resets their own (S1-F01-T09).
@@ -75,26 +89,26 @@ const accessRecordTypes = [
  * covering the row's facts, so history never reaches past the records the reader may see (RR-242). The access
  * records carry the facts of the place where they happened; a sign-in has none, so only all-members scope reads it
  * (the Organisation-wide view of 9.11). Sensitive-access and device records are types apart, which neither first role
- * holds (9.11). The seal and partition types are for the audit jobs (RR-273); create on partitions is the scheduled upkeep's (DEC-118).
+ * holds (9.11). The seal and partition types are for the audit jobs (RR-273), so they are service-only; create on partitions is the scheduled upkeep's (DEC-118).
  */
 const auditRecordTypes = [
   declare('audit.audit_record', ['view'], NONE),
   declare('audit.access_record', ['view'], ALL),
   declare('audit.sensitive_access_record', ['view'], ALL),
   declare('audit.device_access_record', ['view'], ALL),
-  declare('audit.audit_seal', ['view', 'create'], NONE),
-  declare('audit.audit_partition', ['view', 'create'], NONE),
+  declareServiceOnly('audit.audit_seal', ['view', 'create'], NONE),
+  declareServiceOnly('audit.audit_partition', ['view', 'create'], NONE),
 ] as const;
 
 /** `kernel`: the outbox, which the outbox processor dispatches (code-house-rules 12.8; RR-273). */
-const kernelRecordTypes = [declare('kernel.outbox_event', ['view', 'edit'], NONE)] as const;
+const kernelRecordTypes = [declareServiceOnly('kernel.outbox_event', ['view', 'edit'], NONE)] as const;
 
 /**
  * `inbox` (access-and-approvals 11; module-map 4.8). My work needs no permission (11.2, 9.11); `inbox.work_item`
  * edit is what the inbox's consumers hold, under their service identity, to publish, update and close work items
  * from the owners' events (RR-273; S1-F01-T13).
  */
-const inboxRecordTypes = [declare('inbox.work_item', ['edit'], NONE)] as const;
+const inboxRecordTypes = [declareServiceOnly('inbox.work_item', ['edit'], NONE)] as const;
 
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
@@ -110,6 +124,14 @@ export type RecordTypeCode =
   | (typeof auditRecordTypes)[number]['code']
   | (typeof kernelRecordTypes)[number]['code']
   | (typeof inboxRecordTypes)[number]['code'];
+
+/** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
+export function isServiceOnly(
+  recordType: string,
+  registry: readonly RecordTypeDeclaration[] = permissionRegistry,
+): boolean {
+  return registry.some((declaration) => declaration.code === recordType && declaration.serviceOnly);
+}
 
 /** A registry, as `access` reads it: the declarations by code. */
 export function registryByCode(

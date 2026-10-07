@@ -196,10 +196,14 @@ describe('the recovery command (access-and-approvals 3.2; test 3f; DEC-116)', ()
       'select count(*)::text as count from access.password_credential where app_user_id = $1',
       [admin],
     );
-    expect(await recover({ temporaryPassword: new Secret('SYN-short') })).toEqual({
+    // S1-F01-T31: the refusal names the rule and the setting's value, and nothing of the password.
+    const refused = await recover({ temporaryPassword: new Secret('SYN-short') });
+    expect(refused).toEqual({
       outcome: 'refused',
       reason: 'password-refused',
+      passwordRule: { ok: false, rule: 'minimum-length', minimumLength: 12 },
     });
+    expect(JSON.stringify(refused)).not.toContain('SYN-short');
     expect(await recover({ identityVerification: '  ' })).toEqual({
       outcome: 'refused',
       reason: 'identity-verification-missing',

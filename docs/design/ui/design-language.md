@@ -207,6 +207,7 @@ Rules:
 - The same web routes in a phone browser. The separate phone client in the PRD stack is parked and not yet in a stage.
 - Glass top bar with menu (44 px), logo slot and My work.
 - The sidebar becomes a glass drawer from the left: 300 px wide, scope chip at the top, 44 px rows, profile at the bottom.
+  - **As built** (S1-F01-T32): below 640 px the top bar holds only the menu, the logo slot and My work; the theme switch, the person's name and the profile menu are hidden there, and the open drawer ends with the profile (name, personas held, theme, Sign out). From 640 px up the top bar holds them as on desktop. **Design choice.**
 - **Scan to receive:**
   - Scan field: handheld or Bluetooth scanner (PRD Hardware). Camera scanning is built for phones in the browser, for lookup, receiving and counts, and is switched off by default (`DEC-105`).
   - Condition segmented control: Good · Damaged · Wrong · Unidentified (48 px). It stays selected until changed.
@@ -675,6 +676,7 @@ Each entry covers anatomy, states and usage rules.
   - Scrolling body of **solid** cards and fields.
   - Footer: secondary + one primary.
 - **Widths:** 420 px (640 px for a PT preview); full screen on mobile.
+- **Form actions, as built** (S1-F01-T33): a form inside the drawer draws its actions into the footer, outside the scrolling body: Cancel (closes the drawer) and the one primary button, which submits the form by its `form` attribute. The decision form of the approval panel is the exception: Approve and Reject stay in the panel beside what the approver reads (1 rule 5). **Design choice.**
 - **Behaviour:**
   - Esc closes, and focus returns to the opener.
   - Opening never loses the list position.
@@ -725,7 +727,7 @@ Built with `S1-F01-T15` from the parts above; they follow [access-and-approvals.
 - **Sign in:** Organisation code (mono), Login, Password, Authenticator code (mono, numeric keyboard, optional, with help saying to leave it empty only before an app is set up), and **Sign in** as the one primary action. A refusal is a Danger banner at the top of the card with the code's text and the reference; an unavailable sign-in is an Attention banner that also names what is missing. The one refusal never says which part was wrong. The password and the code are cleared after a refused attempt (`PRD-SEC-006`).
 - **Set up your authenticator app:** **Show the setup key** (primary) reveals the key once, in groups of four in mono, each group unbroken, a line breaking only between groups, beside an Attention banner saying it is shown only now, and the setup link for the phone; then the code field and **Confirm the app**. A QR code of the setup link sits beside the key, drawn in the browser by the QR code library of the PRD Stack, never by an outside service; its text alternative says to type the key instead (product owner, 7 Oct 2026, DEC-118; RR-280; access-and-approvals 3.2). **As built** (`S1-F01-T23`): inline SVG from `qrcode.react`, 168 px with the four-module quiet zone the QR specification requires, error correction M, dark modules on a white ground in both themes so phones can read it. **Design choice.**
 - **No access assigned:** a signed-in person who holds no role assignment in force sees one solid card with the title "No access assigned", a line saying that an Admin must assign a role, and **Sign out** as the one action; no sidebar menu (personas.md section 2; DEC-118, RR-260). **As built** (`S1-F01-T23`): the shell shows it, with the environment banner and no top bar, at whatever address the person opens, from `roleAssignmentInForce` in the session read (access-and-approvals 3.3); a locked session covers it with the lock overlay like any page. **Design choice.**
-- **Choose your own password:** New password, New password again (checked on the screen only, never sent), a fresh authenticator code, and **Change password**.
+- **Choose your own password:** New password, New password again (checked on the screen only, never sent), a fresh authenticator code, and **Change password**. A refused password says the rule it failed, such as the least number of characters, beside the Danger banner's text (`S1-F01-T31`).
 - After each step the screens ask the server what is still to do, so a reload returns to the same step; when nothing is left, the shell opens on the landing screen (`DEC-116`). Focus moves to each step's title.
 
 ---

@@ -139,6 +139,11 @@ export const englishIndia = {
   'missing.field-class': 'This needs a permission to see a restricted field.',
   'missing.policy': 'The policy it depends on is not signed, or its values are not configured.',
   'missing.setting': 'A setting it needs is not set.',
+  // The rule a refused password failed, with the setting's value (access-and-approvals 3.2; S1-F01-T31).
+  'missing.password-rule.minimum-length': {
+    one: 'The password needs at least {count} character.',
+    other: 'The password needs at least {count} characters.',
+  },
   'missing.capability': 'This capability is switched off.',
   'missing.activity': 'This activity is not granted here.',
   'missing.other': 'Something it needs is missing.',
@@ -155,6 +160,7 @@ export const englishIndia = {
   'issue.invalid_key': 'This holds a name that is not allowed.',
   'issue.invalid_element': 'One of these entries is not allowed.',
   'issue.invalid_value': 'Choose one of the allowed values.',
+  'issue.access.starts-before-tomorrow': 'The change must start tomorrow or later.',
   'issue.custom': 'This is not allowed here.',
 
   // Refusal codes (code-house-rules 12.3). The screen shows the code's text, then what is missing and the next action.
@@ -197,6 +203,8 @@ export const englishIndia = {
   'error.access.self-service-scope':
     'A self-service role holds only self-service permissions, and only with own-record scope.',
   'error.access.permission-not-declared': 'One of these permissions does not exist for that kind of record.',
+  'error.access.service-only-permission':
+    'One of these permissions belongs to the background system only. A role for people cannot hold it.',
   'error.access.scope-members-not-available':
     'Choosing particular legal entities, places or brands is not available yet. Use all members or none.',
   'error.access.role-code-taken': 'Another role already has this code.',

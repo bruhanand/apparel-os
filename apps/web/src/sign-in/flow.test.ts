@@ -11,6 +11,7 @@ const view = {
   grants: [{ recordType: 'audit.audit_record', action: 'view' as const }],
   roleAssignmentInForce: true,
   timezone: 'UTC',
+  idleLockSeconds: 900,
 };
 const refusal = (code: string, kind: ErrorBody['kind'], missing?: { kind: string; step: string }[]) => ({
   ok: false as const,

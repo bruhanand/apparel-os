@@ -5,10 +5,11 @@ import { readWorld } from './support/world';
 
 // S1-F01-T20: a locked session keeps unfinished work (spec sections 6 and 10; S1-F01-AT18, S1-F01-AT05 in the browser;
 // access-and-approvals 3.3; design-language 10.7, 10.12; RR-304). An enrolled user, in an Organisation whose synthetic
-// idle limit is short, half fills a new user and goes idle: the next request finds the session locked, the lock screen
-// asks for the password, a wrong one is refused, the right one unlocks, and the form still holds what was typed but
-// the temporary password, which is a secret and is entered again (PRD-SEC-006). Then the same with a reload while
-// locked: the page shows sign-in (RR-304), and after the next sign-in the input kept on the device is offered back,
+// idle limit is short, half fills a new user and goes idle: with no click, the screen shows the lock on its own timer
+// (S1-F01-T30; the server would lock at the next request), the lock screen asks for the password, a wrong one is
+// refused, the right one unlocks, and the form still holds what was typed but the temporary password, which is a
+// secret and is entered again (PRD-SEC-006). Then the same with a reload while locked: the page shows sign-in (RR-304),
+// and after the next sign-in the input kept on the device is offered back,
 // again without the secret. Every value is SYNTHETIC.
 
 /** SYNTHETIC: the temporary password typed into the new user. */
@@ -68,8 +69,8 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
     await drawer.getByLabel(/^Login/).fill(firstLogin);
     await drawer.getByLabel(/^Display name/).fill('SYNTHETIC locked draft');
     await drawer.getByLabel(/^Temporary password/).fill(TEMPORARY_PASSWORD);
+    // S1-F01-T30: no click and no request: the screen shows the lock on its own timer, from the limit in the session read.
     await page.waitForTimeout(idleMs);
-    await drawer.getByRole('button', { name: 'Request approval' }).click();
   });
 
   const lock = page.getByRole('dialog', { name: 'Session locked' });
@@ -118,7 +119,6 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
     await drawer.getByLabel(/^Display name/).fill('SYNTHETIC kept draft');
     await drawer.getByLabel(/^Temporary password/).fill(TEMPORARY_PASSWORD);
     await page.waitForTimeout(idleMs);
-    await drawer.getByRole('button', { name: 'Request approval' }).click();
     await expect(lock).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();

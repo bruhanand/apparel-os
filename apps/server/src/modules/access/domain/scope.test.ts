@@ -30,6 +30,7 @@ const scoped: RecordTypeDeclaration = {
   scopeFacts: { legalEntity: true, place: true, brand: true },
   subject: true,
   fieldClasses: [],
+  serviceOnly: false,
 };
 
 describe('the canonical scope key (code-house-rules 7.3; DEC-112, CH-7)', () => {
