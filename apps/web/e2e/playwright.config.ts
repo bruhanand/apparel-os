@@ -1,12 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 import { join } from 'node:path';
-import { SERVER_PORT, WEB_ORIGIN, WEB_PORT, WORLD_FILE } from './support/world';
+import { SERVER_PORT, WEB_ORIGIN, WORLD_FILE } from './support/world';
 
 // The browser journeys (code-house-rules 10.1; PRD-SEC-016; S1-F01-T15), in Chromium: Chrome and Edge both run on it
-// (PRD Stack: Verification). Two servers start first: the server of the journeys, a test composition of the whole
-// application on its own PostgreSQL container with synthetic data (apps/server/test/browser/serve.ts, built by
-// `build:browser`), and the built web app under `vite preview`, which sends /api to it (vite.config.ts), so the pages
-// and the API share one origin (code-house-rules 12.1). Run `pnpm test:e2e` from the root; it builds both first.
+// (PRD Stack: Verification). The server of the journeys starts first: a test composition of the whole application on
+// its own PostgreSQL container with synthetic data (apps/server/test/browser/serve.ts, built by `build:browser`), which
+// serves the built web app and the API from one origin, as the `app` service does (deployment.md section 3;
+// code-house-rules 12.1; S1-F01-T27). Run `pnpm test:e2e` from the root; it builds both first.
 // A failed test is never retried (code-house-rules 10.1). Every run keeps its trace in apps/web/test-results, which CI
 // keeps as an artefact (S1-F01-T15 "Done when").
 export default defineConfig({
@@ -42,12 +42,6 @@ export default defineConfig({
       // its databases and stop its container.
       gracefulShutdown: { signal: 'SIGTERM', timeout: 20_000 },
       stdout: 'pipe',
-    },
-    {
-      command: `pnpm exec vite preview --port ${String(WEB_PORT)} --strictPort`,
-      cwd: '..',
-      url: WEB_ORIGIN,
-      reuseExistingServer: false,
     },
   ],
 });

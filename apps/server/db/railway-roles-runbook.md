@@ -50,6 +50,7 @@ Authorised by the product owner on 7 Oct 2026. No application code was deployed 
 3. Set up the two synthetic Organisations: `pnpm seed` from a shell in `app` (`railway ssh --service app`); it refuses unless both `AOS_ENVIRONMENT` and the Railway environment are `dev`. Then the setup step (`setup-organisation`) for each, as AGENTS.md "Code workspace" says.
 4. Read the `worker` log for `The worker is running`; it starts serving each Organisation the directory newly lists on its next pass, with no restart.
 5. Check step 8's role limits again and `GET /api/health` on the public domain.
+6. Open the public domain at `/`: the web app's sign-in page, with the `dev` banner. The server serves the web app from `apps/web/dist`, which `pnpm build` makes with `AOS_ENVIRONMENT` from the service's variables (deployment.md section 3; `S1-F01-T27`).
 
 ## A local PostgreSQL
 

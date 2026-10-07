@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setupRequestSchema } from '@apparel-os/schemas';
 import {
   CommandRunner,
@@ -59,8 +60,8 @@ import { startPostgresServer } from '../support/postgres-server.js';
 // code. The app reads one synthetic timezone for every Organisation (Etc/UTC, test/support), and the setup request
 // names the same one, so the journeys' dates are UTC dates.
 //
-// AOS_E2E_ORIGIN: the origin the journey's pages are served from (AOS_PUBLIC_ORIGIN of this server).
-// AOS_E2E_PORT: the port to listen on, where the web app's preview sends /api.
+// AOS_E2E_ORIGIN: the origin the journey's pages and API are served from (AOS_PUBLIC_ORIGIN of this server).
+// AOS_E2E_PORT: the port to listen on; this server serves the built web app and the API from one origin.
 // AOS_E2E_WORLD_FILE: where to write the synthetic users' sign-in details for the journeys to read.
 // AOS_E2E_LOG_FILE: where to write the service log when the server stops, kept with the traces as the log sample of
 // the journeys (spec section 15: correlation identifiers, and no secret).
@@ -211,7 +212,10 @@ await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsAdmin.id
 await assignSyntheticRole(settingsDatabase, { kind: 'user', id: settingsApprover.id }, FIRST_APPROVER_ROLE.code);
 await writeSyntheticReason(settingsDatabase, 'approve');
 
-const app = await startAccessApp(world, keys, { origin, port });
+// The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
+// S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
+const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
+const app = await startAccessApp(world, keys, { origin, port, webApp });
 
 // The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A). It serves every
 // Organisation whose outbox identity the setup step wrote: here, the journey's.
