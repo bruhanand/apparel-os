@@ -36,8 +36,35 @@ test('POL-02.07 DEC-118 the Admin prepares a session-limit change and the approv
   const admin = await adminContext.newPage();
   const approver = await approverContext.newPage();
   try {
-    await test.step('the Admin prepares a new version of the office session limits', async () => {
+    await test.step('design-language 6 D (S1-F01-T32): at 375 px the top bar holds the menu, the logo slot and My work, and the profile is at the bottom of the drawer', async () => {
       await signedIn(admin, world.organisationCode, world.admin);
+      await admin.setViewportSize({ width: 375, height: 812 });
+      const topBar = admin.getByTestId('top-bar');
+      await expect(topBar.getByRole('button', { name: 'Open menu' })).toBeVisible();
+      await expect(topBar.getByRole('link', { name: /^My work/ })).toBeVisible();
+      await expect(topBar.getByText(world.admin.displayName)).toBeHidden();
+      const fits = await admin.evaluate(() => {
+        const bar = document.querySelector('[data-testid="top-bar"]');
+        return {
+          sideways: document.documentElement.scrollWidth - window.innerWidth,
+          overflow: bar === null ? -1 : bar.scrollWidth - bar.clientWidth,
+          height: bar?.getBoundingClientRect().height ?? -1,
+        };
+      });
+      expect(fits).toEqual({ sideways: 0, overflow: 0, height: 56 });
+      await topBar.getByRole('button', { name: 'Open menu' }).click();
+      const profile = admin.getByTestId('drawer-profile');
+      await expect(profile.getByText(world.admin.displayName)).toBeVisible();
+      await expect(profile.getByRole('button', { name: 'Sign out' })).toBeVisible();
+      const drawerBox = await admin.getByRole('navigation', { name: 'Main menu' }).boundingBox();
+      const profileBox = await profile.boundingBox();
+      expect((profileBox?.y ?? 0) > (drawerBox?.y ?? 0)).toBe(true);
+      await topBar.getByRole('button', { name: 'Close menu' }).click();
+      await admin.setViewportSize({ width: 1280, height: 720 });
+      await expect(admin.getByLabel('Profile')).toHaveText(world.admin.displayName);
+    });
+
+    await test.step('the Admin prepares a new version of the office session limits', async () => {
       await openSecuritySettings(admin);
       await expect(sessionLimits(admin).getByText('1800', { exact: true })).toBeVisible();
       await sessionLimits(admin).getByRole('button', { name: 'Prepare a new version' }).click();

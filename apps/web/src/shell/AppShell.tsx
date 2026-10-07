@@ -35,6 +35,35 @@ export function PersonaChip({ persona }: { persona: PersonaId }) {
 }
 
 /**
+ * The person's profile as the bottom of the left drawer at phone width (design-language 6 D): name, personas held, the
+ * theme switch and Sign out, open in the drawer, not behind a menu. From 640 px up the top bar holds the name and its
+ * profile menu instead, so this is hidden there (S1-F01-T32).
+ */
+function DrawerProfile({
+  displayName,
+  personas,
+  signOut,
+}: {
+  displayName: string;
+  personas: readonly PersonaId[];
+  signOut: ReactNode;
+}) {
+  return (
+    <div data-testid="drawer-profile" className="mt-auto border-t border-border p-3 sm:hidden">
+      <section aria-label={t('shell.profile')} className="flex flex-col gap-2">
+        <span className="text-body font-semibold">{displayName}</span>
+        <span className="text-label font-semibold text-text-2">{t('shell.personas-held')}</span>
+        {personas.map((persona) => (
+          <PersonaChip key={persona} persona={persona} />
+        ))}
+        <ThemeSwitch />
+        {signOut}
+      </section>
+    </div>
+  );
+}
+
+/**
  * Keeps the CSS variable `--banner-h` on <html> equal to the environment banner's height, so the sticky top bar sits
  * under the banner and every overlay (drawer, dialog, lock) starts at the banner's lower edge, the banner staying
  * visible above it (design-language 5, 6 A "As built").
@@ -73,6 +102,7 @@ export function AppShell({
   signIn,
   signOut,
   myWork,
+  defaultMenuOpen = false,
 }: {
   session: ShellSession;
   banner: EnvironmentBanner;
@@ -87,8 +117,10 @@ export function AppShell({
   signOut?: ReactNode;
   /** The My work counter of the top bar (design-language 10.5; S1-F01-T16); the plain label without it. */
   myWork?: ReactNode;
+  /** Whether the left drawer starts open below 1024 px; closed unless given (a static render has no click to open it). */
+  defaultMenuOpen?: boolean;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
   const [collapsed, setCollapsed] = useState(false);
   const bannerRef = useBannerHeight();
   return (
@@ -116,11 +148,11 @@ export function AppShell({
           <div className="flex flex-1 flex-col" inert={session.state === 'locked'}>
             <header
               data-testid="top-bar"
-              className="glass sticky top-[var(--banner-h)] z-30 flex h-14 items-center gap-4 border-b px-4"
+              className="glass sticky top-[var(--banner-h)] z-30 flex h-14 items-center gap-2 border-b px-4 sm:gap-4"
             >
               <button
                 type="button"
-                className="h-9 rounded-control px-2 text-accent lg:hidden"
+                className="h-9 shrink-0 rounded-control px-2 text-accent max-sm:h-11 max-sm:min-w-11 lg:hidden"
                 aria-expanded={menuOpen}
                 onClick={() => {
                   setMenuOpen(!menuOpen);
@@ -128,26 +160,33 @@ export function AppShell({
               >
                 {t(menuOpen ? 'shell.close-menu' : 'shell.open-menu')}
               </button>
-              <span role="img" aria-label={t('shell.logo')} className="h-8 w-[200px] max-w-[30vw]" />
+              <span role="img" aria-label={t('shell.logo')} className="h-8 w-[200px] min-w-0 max-w-[30vw]" />
               <span className="flex-1" />
               {renderLink(
                 'my-work',
-                'text-body-sm font-medium text-text hover:text-accent',
+                'shrink-0 text-body-sm font-medium text-text hover:text-accent',
                 myWork ?? t('my-work.label'),
               )}
-              <ThemeSwitch />
-              <details className="relative">
-                <summary className="cursor-pointer list-none text-body-sm font-medium" aria-label={t('shell.profile')}>
-                  {session.user.displayName}
-                </summary>
-                <div className="absolute right-0 mt-2 flex w-64 flex-col gap-2 rounded-card border border-border bg-raised p-3 shadow-e2">
-                  <span className="text-label font-semibold text-text-2">{t('shell.personas-held')}</span>
-                  {session.user.personasHeld.map((persona) => (
-                    <PersonaChip key={persona} persona={persona} />
-                  ))}
-                  {signOut}
-                </div>
-              </details>
+              {/* From 640 px up. On a phone the top bar holds only the menu, the logo slot and My work: the name,
+                  the theme and the profile menu are at the bottom of the left drawer (design-language 6 D). */}
+              <div data-testid="top-bar-account" className="flex items-center gap-4 max-sm:hidden">
+                <ThemeSwitch />
+                <details className="relative">
+                  <summary
+                    className="cursor-pointer list-none text-body-sm font-medium"
+                    aria-label={t('shell.profile')}
+                  >
+                    {session.user.displayName}
+                  </summary>
+                  <div className="absolute right-0 mt-2 flex w-64 flex-col gap-2 rounded-card border border-border bg-raised p-3 shadow-e2">
+                    <span className="text-label font-semibold text-text-2">{t('shell.personas-held')}</span>
+                    {session.user.personasHeld.map((persona) => (
+                      <PersonaChip key={persona} persona={persona} />
+                    ))}
+                    {signOut}
+                  </div>
+                </details>
+              </div>
             </header>
             <div className="flex flex-1">
               <aside
@@ -155,7 +194,7 @@ export function AppShell({
                   'border-r border-border bg-surface',
                   collapsed ? 'lg:w-16' : 'lg:w-[232px]',
                   menuOpen
-                    ? 'glass fixed bottom-0 left-0 top-[calc(var(--banner-h)+56px)] z-20 block w-[300px]'
+                    ? 'glass fixed bottom-0 left-0 top-[calc(var(--banner-h)+56px)] z-20 flex w-[300px] flex-col overflow-y-auto lg:static lg:z-auto lg:block lg:overflow-visible'
                     : 'hidden lg:block',
                 )}
               >
@@ -194,6 +233,13 @@ export function AppShell({
                 >
                   {t(collapsed ? 'shell.expand-menu' : 'shell.collapse-menu')}
                 </button>
+                {menuOpen && (
+                  <DrawerProfile
+                    displayName={session.user.displayName}
+                    personas={session.user.personasHeld}
+                    signOut={signOut}
+                  />
+                )}
               </aside>
               <main id="content" className="min-w-0 flex-1 p-8">
                 {current !== null && (

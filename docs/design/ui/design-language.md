@@ -207,6 +207,7 @@ Rules:
 - The same web routes in a phone browser. The separate phone client in the PRD stack is parked and not yet in a stage.
 - Glass top bar with menu (44 px), logo slot and My work.
 - The sidebar becomes a glass drawer from the left: 300 px wide, scope chip at the top, 44 px rows, profile at the bottom.
+  - **As built** (S1-F01-T32): below 640 px the top bar holds only the menu, the logo slot and My work; the theme switch, the person's name and the profile menu are hidden there, and the open drawer ends with the profile (name, personas held, theme, Sign out). From 640 px up the top bar holds them as on desktop. **Design choice.**
 - **Scan to receive:**
   - Scan field: handheld or Bluetooth scanner (PRD Hardware). Camera scanning is built for phones in the browser, for lookup, receiving and counts, and is switched off by default (`DEC-105`).
   - Condition segmented control: Good · Damaged · Wrong · Unidentified (48 px). It stays selected until changed.
