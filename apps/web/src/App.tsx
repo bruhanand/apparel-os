@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useCallback, useMemo, useState } from 'react';
 import { createQueryClient } from './api/query';
+import { useIdleLock } from './lock/use-idle-lock';
 import { router } from './router';
 import { SessionContext, type ShellSession } from './shell/session';
 
@@ -30,6 +31,11 @@ export function App() {
     },
     [queryClient],
   );
+  // The screen locks itself when the idle limit passes, as when the server says so (S1-F01-T30).
+  const lockScreen = useCallback(() => {
+    setSessionState((current) => (current.state === 'active' ? { ...current, state: 'locked' } : current));
+  }, []);
+  useIdleLock(session, lockScreen);
   const control = useMemo(() => ({ session, setSession }), [session, setSession]);
   return (
     <QueryClientProvider client={queryClient}>

@@ -318,6 +318,7 @@ describe('personas and empty scope grant nothing (access-and-approvals 2.1, 5.1;
       grants: [],
       roleAssignmentInForce: false,
       timezone: 'Etc/UTC',
+      idleLockSeconds: null, // this block writes no office session limits
     });
   });
 
@@ -891,6 +892,13 @@ describe('the routes (access-and-approvals 7.1; code-house-rules 12.1; RR-261, R
     const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
     // The test application's SYNTHETIC timezone (test/support/access.ts).
     expect(await response.json()).toMatchObject({ timezone: 'Etc/UTC' });
+  });
+
+  it("PRD-ACS-017 the session read carries the idle-lock limit in force, for the screen's own lock (S1-F01-T30)", async () => {
+    const { cookie } = await signedIn('IDLELIMIT');
+    const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
+    // The test application's SYNTHETIC office session limits (written in this block's beforeAll).
+    expect(await response.json()).toMatchObject({ idleLockSeconds: 1800 });
   });
 
   it('PRD-ACS-002 the session read says when the user holds no role assignment in force (DEC-118; RR-260)', async () => {

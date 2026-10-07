@@ -44,6 +44,7 @@ function render(node: ReactNode, grants: Grant[], seed: (client: QueryClient) =>
       personasHeld: ['P-ADM'],
       roleAssignmentInForce: true,
       timeZone: 'UTC',
+      idleLockSeconds: 900,
     },
     grants,
   };

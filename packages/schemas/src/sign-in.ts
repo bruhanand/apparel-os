@@ -93,6 +93,12 @@ export const sessionViewSchema = z.strictObject({
    * unavailable and names it (code-house-rules 12.14), so a screen never falls back to the device's timezone.
    */
   timezone: z.string().min(1),
+  /**
+   * The idle-lock limit in force for the session, in seconds (`access.office-session-limits`; access-and-approvals 3.3;
+   * PRD-ACS-017; S1-F01-T30). A setting value, never a secret. The screen shows its lock from it once that long has
+   * passed with no request of the session, without polling; the server stays the check, locking at the next request.
+   */
+  idleLockSeconds: z.int().positive(),
 });
 export type SessionView = z.infer<typeof sessionViewSchema>;
 
