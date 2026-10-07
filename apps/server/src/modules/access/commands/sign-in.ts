@@ -171,7 +171,7 @@ export class SignIn {
 
     const user = await findUserByLogin(context, attempt.login);
     if (user === undefined) return { kind: 'looked', slowed, loginDigest, userId: undefined, signable: undefined };
-    const inForce = await userInForce(context, user.id, today.date);
+    const inForce = await userInForce(context, user.id);
     const credentials = await credentialState(context, user.id);
     const signable = inForce?.state === 'Active' && credentials.password !== undefined ? credentials : undefined;
     return { kind: 'looked', slowed, loginDigest, userId: user.id, signable };

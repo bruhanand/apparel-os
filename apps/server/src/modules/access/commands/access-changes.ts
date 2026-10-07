@@ -35,7 +35,7 @@ import {
 } from '../db/schema.js';
 import { scopeKeyOf } from '../domain/scope.js';
 import { assignmentChanged } from '../events.js';
-import { assignmentTarget } from './authority.js';
+import { assignmentTarget, roleTarget } from './authority.js';
 import { rebuildGrants } from './rebuild-grants.js';
 import { requestApproval } from './request-approval.js';
 
@@ -445,6 +445,18 @@ export class AccessChanges {
   }
 
   /**
+   * The authority row a decision on a role version locks at step 0: the role, exclusively, since a version of it may
+   * take effect and every command relying on the role locks it shared (code-house-rules 8.2; DEC-118, RR-360).
+   */
+  async roleVersionAuthorityTargets(context: TransactionContext, versionId: string): Promise<LockTarget[]> {
+    const [row] = await context.tx
+      .select({ roleId: roleVersion.roleId })
+      .from(roleVersion)
+      .where(eq(roleVersion.id, versionId));
+    return row === undefined ? [] : [roleTarget(row.roleId, 'exclusive')];
+  }
+
+  /**
    * The rows a decision on an assignment locks: the assignment, an authority row, exclusively at step 0
    * (code-house-rules 8.2 "Authority first"; RR-325).
    */
@@ -464,7 +476,8 @@ export class AccessChanges {
   }
 
   /**
-   * Makes an approved role version take effect (access-and-approvals 4.2; module-map 6.2 flow A): locks it, rechecks
+   * Makes an approved role version take effect (access-and-approvals 4.2; module-map 6.2 flow A): locks the role at
+   * step 0, exclusively (DEC-118, RR-360), and the version at step 1, rechecks
    * that it is Awaiting approval and starts today or later, ends the Approved version it follows on its start, records
    * the decision and rebuilds the effective grants of every actor holding the role (7.2). Refused when an Approved
    * version starts on or after its start, which only a new version can follow.
@@ -477,7 +490,12 @@ export class AccessChanges {
   ): Promise<Prepared<{ roleId: string }>> {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    await lockUnlessHeld(context, options, { document: this.roleVersionTargets(versionId) });
+    if (options.locksHeld !== true) {
+      await lockUnlessHeld(context, options, {
+        authority: await this.roleVersionAuthorityTargets(context, versionId),
+        document: this.roleVersionTargets(versionId),
+      });
+    }
     const [version] = await context.tx
       .select({
         roleId: roleVersion.roleId,

@@ -9,7 +9,11 @@ export interface FoundUser {
   readonly login: string;
 }
 
-/** The user's version in force on a date: Approved, its dates covering the date (access-and-approvals 2.1). */
+/**
+ * The user's version in force: the Approved version whose instants have no end (access-and-approvals 2.1, 9.5). A
+ * user version takes effect at the instant it is approved and ends at the instant the next one is approved, so the
+ * one with no end is in force from the moment its decision commits (PRD-SEC-019; DEC-118).
+ */
 export interface UserInForce {
   readonly versionId: string;
   readonly state: 'Active' | 'Disabled' | 'Ended';
@@ -48,15 +52,13 @@ export async function findUser(context: TransactionContext, userId: string): Pro
 }
 
 /**
- * The user's state in force on a business date (access-and-approvals 2.1, 7.1 step 1). Undefined when no Approved
- * version covers the date, as for a user whose first version still waits: such a user has no state in force and
- * cannot sign in (DEC-112).
+ * The user's state in force (access-and-approvals 2.1, 7.1 step 1). Undefined when no Approved version is in force,
+ * as for a user whose first version still waits: such a user has no state in force and cannot sign in (DEC-112).
+ * Read as the version with no end rather than at the command's start, so a command that waited at step 0 for a
+ * disabling to commit sees it (code-house-rules 8.2; PRD-SEC-019, DEC-118): user versions never start later than
+ * their decision, so the version with no end is the latest committed one.
  */
-export async function userInForce(
-  context: TransactionContext,
-  userId: string,
-  businessDate: string,
-): Promise<UserInForce | undefined> {
+export async function userInForce(context: TransactionContext, userId: string): Promise<UserInForce | undefined> {
   const rows = await context.tx
     .select({ versionId: appUserVersion.id, state: appUserVersion.state, displayName: appUserVersion.displayName })
     .from(appUserVersion)
@@ -64,7 +66,7 @@ export async function userInForce(
       and(
         eq(appUserVersion.appUserId, userId),
         eq(appUserVersion.decision, 'Approved'),
-        sql`${appUserVersion.validDuring} @> ${businessDate}::date`,
+        sql`upper_inf(${appUserVersion.validDuring})`,
       ),
     );
   const row = rows[0];

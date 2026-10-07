@@ -16,7 +16,7 @@ export async function ownAccess(
 ): Promise<{ personasHeld: PersonaId[]; grants: GrantView[] }> {
   const today = await context.businessDate();
   if (today.kind === 'not-set') return { personasHeld: [], grants: [] };
-  const version = await userInForce(context, userId, today.date);
+  const version = await userInForce(context, userId);
   const personas =
     version === undefined
       ? []

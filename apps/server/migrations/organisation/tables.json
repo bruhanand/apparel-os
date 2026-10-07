@@ -195,9 +195,9 @@
     {
       "table": "access.role",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "access-and-approvals 4.2, 13.1; code-house-rules 6.3",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "access-and-approvals 4.2, 9.5, 13.1; code-house-rules 6.3, 7.1, 8.2",
       "why": "Read by Authorise and the effective-grant rebuild, and by the session read (code-house-rules 6.3); only access code reads it"
     },
     {
