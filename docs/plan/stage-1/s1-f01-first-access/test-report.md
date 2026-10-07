@@ -45,16 +45,18 @@ Run on 7 Oct 2026 by hand through the real screens, on a local copy of the `main
 
 ## 2. Findings
 
-| # | Finding | Severity | Suggested owner |
+| # | Finding | Severity | Ticket |
 | --- | --- | --- | --- |
-| F1 | A refused new password does not say which rule failed (for example the least number of characters) | Low, usability | Builders, with the next sign-in screen change |
-| F2 | The idle lock shows only at the next click, not while the screen sits idle (as designed, RR-301: screens do not poll); a person may think the screen is still open | Low, design question | Product owner |
-| F3 | The role editor lists the background system's record types (Effective grant, Audit seal, Audit partition, Outbox event, Work item) to people; ticking them could give a person the worker's powers | Medium | Product owner decides whether people may hold them; builders hide them if not |
-| F4 | Sign out from the profile menu sometimes needed a second press | Low, to confirm by hand (may be the test tool) | Builders |
-| F5 | At phone width the top bar is crowded; the person's name wraps to three lines | Low | Builders |
-| F6 | The operator recovery command loses answers piped to it all at once (found on `dev`) | Medium, operator tool | Builders |
-| F7 | On the long role form the Request approval button is far below the permission grid | Low | Builders |
-| F8 | A past date typed into a date field is ignored without a message | Low | Builders |
+| F1 | A refused new password does not say which rule failed (for example the least number of characters) | Low, usability | [S1-F01-T31](tickets/T31-password-rule-named.md) |
+| F2 | The idle lock shows only at the next click, not while the screen sits idle (as designed, RR-301: screens do not poll); a person may think the screen is still open | Low, design question | [S1-F01-T30](tickets/T30-idle-lock-on-screen.md) |
+| F3 | The role editor lists the background system's record types (Effective grant, Audit seal, Audit partition, Outbox event, Work item) to people; ticking them could give a person the worker's powers | Medium | [S1-F01-T29](tickets/T29-service-only-permissions.md) |
+| F4 | Sign out from the profile menu sometimes needed a second press | Low, to confirm by hand (may be the test tool) | Not a defect: the product owner confirmed sign-out works |
+| F5 | At phone width the top bar is crowded; the person's name wraps to three lines | Low | [S1-F01-T32](tickets/T32-phone-top-bar.md) |
+| F6 | The operator recovery command loses answers piped to it all at once (found on `dev`) | Medium, operator tool | [S1-F01-T35](tickets/T35-operator-prompt-piped-input.md) |
+| F7 | On the long role form the Request approval button is far below the permission grid | Low | [S1-F01-T33](tickets/T33-drawer-footer-actions.md) |
+| F8 | A past date typed into a date field is ignored without a message | Low | [S1-F01-T34](tickets/T34-date-before-today-message.md) |
+
+On 7 Oct 2026 the product owner decided F3 (people never hold the background system's permissions: hide and refuse) and F2 (the screen locks itself on a timer, still without polling). No finding was already planned, so each became a ticket.
 
 ## 3. On Railway `dev`
 
