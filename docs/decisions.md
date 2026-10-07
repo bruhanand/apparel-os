@@ -1246,3 +1246,15 @@
   - As with `DEC-118`, these are provisional values for synthetic and test work only, labelled synthetic, never KDPS values and never defaults in code.
 - **Why.** They let the worker run on `dev` and in tests now, as proposed, while the values of `kdps-test` and production stay with their own decisions.
 - **Changed.** Applied by `S1-F01-T24`: code-house-rules 12.9 and CH-10, the synthetic worker settings, `plan/open-items.md` RR-270.
+
+## DEC-120 — First roles and settings, planned interruptions on `dev`, assignment validity
+
+- **Date:** 7 Oct 2026 · **Decided by:** product owner · **Report item:** RR-402, RR-370, RR-400 and RR-390, left by `S1-F01-T22`, `S1-F01-T24` and `S1-F01-T25`; 7 Oct 2026
+- **Question.** Whether the two roles the setup step creates may change the essential security settings; whether a migration that briefly breaks the running version may be deployed to `dev`; and how often the grants rebuild runs, and whether it decides who may act.
+- **Options.** Keep the 9.11 matrix, or give the first Admin edit and the first approver approve on the settings; accept the short window, or add-then-remove migrations over two deploys; a synthetic interval for the rebuild, with or without the rebuild deciding access validity.
+- **Choice.**
+  - **First roles and security settings (RR-402).** "Give the starting roles their intended security-settings permissions, keeping proposer and approver separate." The first Admin may prepare and edit the essential security settings, the first approver may approve them; neither holds both (`PRD-ACS-006`, `POL-02.07`).
+  - **Planned interruption on `dev` (RR-370, RR-400).** "Allow a planned brief interruption on the sample-data test server." A migration not compatible with the running version may be deployed to `dev`, which holds only synthetic data, as a planned brief interruption; `kdps-test` and production keep the add-then-remove rule.
+  - **Assignment validity (RR-390).** "Use a one-minute assignment recheck for testing. Expired assignments must stop authorising actions immediately; the sweep must not determine access validity." The grants rebuild runs every 60 seconds in synthetic and test work only, labelled synthetic, never a KDPS value or a default in code. An assignment, and the role version it grants through, authorise only while their dates hold today, checked when authorising and by row-level security when reading; the rebuild only refreshes the effective grants and publishes what changed.
+- **Why.** The first two roles can then run a settings change through independent approval without another role; the test setup can take the planned migrations without a second deploy; and access never waits for a job.
+- **Changed.** No PRD or policy text changes. access-and-approvals 7.1, 7.2, 9.11 and 13.1; code-house-rules 4.2, 6.2, 12.9 and CH-10; the synthetic worker settings; `plan/open-items.md` RR-402, RR-370, RR-400, RR-390; ticket `S1-F01-T26`.

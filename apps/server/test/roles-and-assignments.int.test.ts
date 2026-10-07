@@ -19,6 +19,8 @@ import {
   type TransactionContext,
 } from '../src/kernel/index.js';
 import { Access, accessJobKinds, type Decider, type Preparer } from '../src/modules/access/index.js';
+// The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { Audit } from '../src/modules/audit/index.js';
 import {
   codeFor,
@@ -645,6 +647,93 @@ describe('effective grants follow the dates (access-and-approvals 7.2)', () => {
     expect((await authorise(user.id, 'view', 'access.role')).kind).toBe('allowed');
     expect((await authorise(user.id, 'view', 'access.role', 1)).kind).toBe('refused');
     expect((await authorise(user.id, 'view', 'access.user', 1)).kind).toBe('allowed');
+  });
+});
+
+describe('validity is checked when authorising, never left to the sweep (access-and-approvals 7.1, 7.2; DEC-120, RR-390)', () => {
+  /** The self rows of the user that row-level security shows them, on a clock `days` ahead. */
+  const selfRows = (userId: string, days: number) =>
+    as(userId, async (c) => (await c.tx.execute<{ id: string }>(sql`select id from syn.self_record`)).rows, days);
+
+  async function selfRow(userId: string): Promise<string> {
+    const id = uuidv7();
+    await asOwner((c) => c.query('insert into syn.self_record (id, subject_id) values ($1, $2)', [id, userId]));
+    return id;
+  }
+
+  it('PRD-ACS-005 DEC-120 an assignment whose end passed authorises nothing in the very next request, without the sweep', async () => {
+    const user = await newUser('ENDING');
+    const workRole = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
+    const selfRole = await approvedRole([{ recordType: 'syn.self_record', action: 'view', selfService: true }]);
+    await approvedAssignment(assignmentDraft(user.id, workRole, { validTo: dateIn(1) }));
+    await approvedAssignment(
+      assignmentDraft(user.id, selfRole, { scope: { kind: 'own-records' }, validTo: dateIn(1) }),
+    );
+    const mine = await selfRow(user.id);
+    expect((await authorise(user.id, 'view', 'access.role')).kind).toBe('allowed');
+    expect(await selfRows(user.id, 0)).toEqual([{ id: mine }]);
+    // The next day, with no rebuild run in between: Authorise, row-level security and the shell's grants all agree.
+    expect((await authorise(user.id, 'view', 'access.role', 1)).kind).toBe('refused');
+    expect(await selfRows(user.id, 1)).toEqual([]);
+    expect(await as(user.id, (c) => access.ownAccess(c, user.id), 1)).toMatchObject({
+      grants: [],
+      roleAssignmentInForce: false,
+    });
+  });
+
+  it('PRD-ACS-005 DEC-120 a Scheduled assignment authorises nothing before its start and authorises at its start, without the sweep', async () => {
+    const user = await newUser('STARTING');
+    const workRole = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
+    const selfRole = await approvedRole([{ recordType: 'syn.self_record', action: 'view', selfService: true }]);
+    await approvedAssignment(assignmentDraft(user.id, workRole, { validFrom: dateIn(1) }));
+    await approvedAssignment(
+      assignmentDraft(user.id, selfRole, { scope: { kind: 'own-records' }, validFrom: dateIn(1) }),
+    );
+    const mine = await selfRow(user.id);
+    expect((await authorise(user.id, 'view', 'access.role')).kind).toBe('refused');
+    expect(await selfRows(user.id, 0)).toEqual([]);
+    expect((await as(user.id, (c) => access.ownAccess(c, user.id))).grants).toEqual([]);
+    expect((await authorise(user.id, 'view', 'access.role', 1)).kind).toBe('allowed');
+    expect(await selfRows(user.id, 1)).toEqual([{ id: mine }]);
+    expect((await as(user.id, (c) => access.ownAccess(c, user.id), 1)).grants).toEqual([
+      { recordType: 'access.role', action: 'view' },
+      { recordType: 'syn.self_record', action: 'view' },
+    ]);
+  });
+
+  it('POL-02.01 DEC-120 row-level security follows a role version from its start, without the sweep', async () => {
+    const user = await newUser('SELFVERSION');
+    const selfRole = await approvedRole([{ recordType: 'syn.self_record', action: 'view', selfService: true }]);
+    await approvedAssignment(assignmentDraft(user.id, selfRole, { scope: { kind: 'own-records' } }));
+    const p = await preparer();
+    const next = await as(admin.id, (c) =>
+      access.prepareRoleVersion(c, p, selfRole, {
+        name: 'SYNTHETIC self role, nothing granted',
+        validFrom: dateIn(1),
+        permissions: [],
+      }),
+    );
+    if (next.kind !== 'success') throw new Error('version not prepared');
+    await as(approver.id, (c) => access.approveRoleVersion(c, decider(), next.answer.versionId));
+    const mine = await selfRow(user.id);
+    expect(await selfRows(user.id, 0)).toEqual([{ id: mine }]);
+    expect(await selfRows(user.id, 1)).toEqual([]);
+  });
+
+  it('PRD-SEC-018 DEC-120 a job step holds no authority from an assignment whose end passed, without the sweep', async () => {
+    const identityId = await writeSyntheticServiceIdentity(database, `syn-ending-jobs-${String(randomInt(1_000_000))}`);
+    const roleId = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
+    await approvedAssignment({
+      actor: { kind: 'service-identity', serviceIdentityId: identityId },
+      roleId,
+      scope: EVERYWHERE,
+      validFrom: dateIn(0),
+      validTo: dateIn(1),
+    });
+    const identities = jobIdentities();
+    const need = { action: 'view', recordType: 'access.role' } as const;
+    expect(await as(identityId, (c) => identities.hold(c, identityId, need))).toEqual({ kind: 'held' });
+    expect(await as(identityId, (c) => identities.hold(c, identityId, need), 1)).toMatchObject({ kind: 'refused' });
   });
 });
 

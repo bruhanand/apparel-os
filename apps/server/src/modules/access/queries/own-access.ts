@@ -1,5 +1,5 @@
 import type { GrantView, PermissionAction, PersonaId } from '@apparel-os/schemas';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { effectiveGrant, personaHeld } from '../db/schema.js';
 import { assignmentsInForce } from './assignments.js';
@@ -36,7 +36,8 @@ export async function ownAccess(context: TransactionContext, userId: string): Pr
   const rows = await context.tx
     .select({ recordType: effectiveGrant.recordType, actions: effectiveGrant.actions })
     .from(effectiveGrant)
-    .where(eq(effectiveGrant.actorId, userId));
+    // Only the grants whose dates hold today, whether or not the rebuild has run since (DEC-120).
+    .where(and(eq(effectiveGrant.actorId, userId), sql`${effectiveGrant.validDuring} @> ${today.date}::date`));
   const grants = new Map<string, GrantView>();
   for (const row of rows) {
     for (const action of row.actions) {

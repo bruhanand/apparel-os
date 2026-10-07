@@ -1,5 +1,5 @@
 import type { AssignmentScope } from '@apparel-os/schemas';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import { assignmentScope, assignmentScopeMember, roleAssignment, rolePermission, roleVersion } from '../db/schema.js';
 import type { AssignmentInForce, StoredPermission } from '../domain/scope.js';
@@ -86,44 +86,81 @@ export async function permissionsOf(
 }
 
 /**
- * The assignments in force on a business date (access-and-approvals 4.3, 7.2): Approved, not withdrawn, the date in
- * their dates, with their role's Approved version in force on the date and its permissions. A withdrawn assignment is
- * never in force (code-house-rules 7.3). Of one actor, or of every actor when `actorId` is left out.
+ * The assignments in force on a business date (access-and-approvals 4.3, 7.1 step 3, 7.2): Approved, not withdrawn,
+ * the date in their dates, with their role's Approved version in force on the date and its permissions. A withdrawn
+ * assignment is never in force (code-house-rules 7.3). Of one actor, or of every actor when `actorId` is left out.
+ * Read from the assignments and role versions themselves, never from the effective grants, so validity never waits for
+ * the grants rebuild (DEC-120).
  */
 export async function assignmentsInForce(
   context: TransactionContext,
   businessDate: string,
   actorId?: string,
 ): Promise<AssignmentInForce[]> {
+  const dated = await datedAssignments(context, {
+    version: sql`${roleVersion.validDuring} @> ${businessDate}::date`,
+    assignment: sql`${roleAssignment.validDuring} @> ${businessDate}::date`,
+    actorId,
+  });
+  return dated.map(({ assignmentId, actorId: actor, scope, permissions }) => ({
+    assignmentId,
+    actorId: actor,
+    scope,
+    permissions,
+  }));
+}
+
+/** An assignment with one Approved version of its role, and the business days both hold (access-and-approvals 7.2). */
+export interface DatedAssignment extends AssignmentInForce {
+  readonly roleVersionId: string;
+  /** The intersection of the assignment's and the role version's dates, `[start, end)` in PostgreSQL's text form. */
+  readonly validDuring: string;
+}
+
+/**
+ * Every assignment with each Approved version of its role whose dates meet the assignment's and still hold on the
+ * business date or later (access-and-approvals 7.2; DEC-120): what the effective grants keep, so that row-level
+ * security checks the dates against today when it reads them. Approved and not withdrawn (code-house-rules 7.3).
+ */
+export async function assignmentsInForceOrLater(
+  context: TransactionContext,
+  businessDate: string,
+): Promise<DatedAssignment[]> {
+  const both = sql`(${roleAssignment.validDuring} * ${roleVersion.validDuring})`;
+  return datedAssignments(context, {
+    version: sql`${roleVersion.validDuring} && ${roleAssignment.validDuring}`,
+    assignment: sql`(upper_inf(${both}) or upper(${both}) > ${businessDate}::date)`,
+  });
+}
+
+async function datedAssignments(
+  context: TransactionContext,
+  where: { readonly version: SQL; readonly assignment: SQL; readonly actorId?: string | undefined },
+): Promise<DatedAssignment[]> {
   const actor = sql<string>`coalesce(${roleAssignment.appUserId}, ${roleAssignment.serviceIdentityId})`;
   const rows = await context.tx
-    .select({ id: roleAssignment.id, actorId: actor, roleVersionId: roleVersion.id })
+    .select({
+      id: roleAssignment.id,
+      actorId: actor,
+      roleVersionId: roleVersion.id,
+      validDuring: sql<string>`(${roleAssignment.validDuring} * ${roleVersion.validDuring})::text`,
+    })
     .from(roleAssignment)
     .innerJoin(
       roleVersion,
-      and(
-        eq(roleVersion.roleId, roleAssignment.roleId),
-        eq(roleVersion.decision, 'Approved'),
-        sql`${roleVersion.validDuring} @> ${businessDate}::date`,
-      ),
+      and(eq(roleVersion.roleId, roleAssignment.roleId), eq(roleVersion.decision, 'Approved'), where.version),
     )
     .where(
       and(
         eq(roleAssignment.decision, 'Approved'),
         sql`${roleAssignment.withdrawalId} is null`,
-        sql`${roleAssignment.validDuring} @> ${businessDate}::date`,
-        actorId === undefined ? undefined : sql`${actor} = ${actorId}::uuid`,
+        where.assignment,
+        where.actorId === undefined ? undefined : sql`${actor} = ${where.actorId}::uuid`,
       ),
     )
-    .orderBy(asc(roleAssignment.id));
-  const scopes = await scopesOf(
-    context,
-    rows.map((row) => row.id),
-  );
-  const permissions = await permissionsOf(
-    context,
-    rows.map((row) => row.roleVersionId),
-  );
+    .orderBy(asc(roleAssignment.id), asc(roleVersion.id));
+  const scopes = await scopesOf(context, [...new Set(rows.map((row) => row.id))]);
+  const permissions = await permissionsOf(context, [...new Set(rows.map((row) => row.roleVersionId))]);
   return rows.map((row) => {
     const scope = scopes.get(row.id);
     if (scope === undefined) throw new CommandDefect(`Role assignment ${row.id} has no scope`);
@@ -132,6 +169,8 @@ export async function assignmentsInForce(
       actorId: row.actorId,
       scope,
       permissions: permissions.get(row.roleVersionId) ?? [],
+      roleVersionId: row.roleVersionId,
+      validDuring: row.validDuring,
     };
   });
 }

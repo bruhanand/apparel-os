@@ -1274,10 +1274,28 @@ describe('the business date (code-house-rules 9)', () => {
       timezoneVersionId: SYNTHETIC_TIMEZONE_VERSION,
     });
     expect(dates.earlier).toMatchObject({ kind: 'set', date: '2026-10-05' });
+    // The first read is the runner's own, setting the business date beside the actor (DEC-120).
     expect(reads).toEqual([
+      { txid: dates.txid, at: '2026-10-05T19:00:00.000Z' },
       { txid: dates.txid, at: '2026-10-05T19:00:00.000Z' },
       { txid: dates.txid, at: '2026-10-05T18:29:59.000Z' },
     ]);
+  });
+
+  it("PRD-SEC-005 DEC-120 sets the business date of the command's instant beside the actor, for the transaction only", async () => {
+    const synthetic: OrganisationTimezoneSource = {
+      read: () => Promise.resolve({ kind: 'set', timezone: SYNTHETIC_TIMEZONE, versionId: SYNTHETIC_TIMEZONE_VERSION }),
+    };
+    const setting = (context: TransactionContext) =>
+      context.tx
+        .execute<{ day: string }>(sql`select pg_catalog.current_setting('aos.business_date', true) as day`)
+        .then((result) => result.rows[0]?.day ?? '');
+    const run = runner({ clock: fixedClock('2026-10-05T19:00:00Z'), timezones: synthetic });
+    expect(await run.read(request(routedA), setting)).toBe('2026-10-06');
+    // With no timezone in force there is no today, so row-level security admits no grant (PRD-SEC-017).
+    expect(await runner({ timezones: timezoneNotConfigured }).read(request(routedA), setting)).toBe('');
+    // With no actor, nothing is set.
+    expect(await run.read(request(routedA, NO_ACTOR), setting)).toBe('');
   });
 
   it('PRD-SEC-017 answers "not set" while the Organisation has no timezone, and invents none', async () => {

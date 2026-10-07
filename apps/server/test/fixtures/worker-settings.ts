@@ -23,15 +23,16 @@ export const SYNTHETIC_POLL_SECONDS = 5;
 
 /**
  * SYNTHETIC intervals of the job kinds on an interval (DEC-119): seal every 15 minutes, check the seals hourly, check
- * the partition coverage hourly, and create the partitions ahead of need hourly with it. The interval of the grants
- * rebuild is no approved value: a SYNTHETIC hour for local work, the builders' proposal (RR-390).
+ * the partition coverage hourly, and create the partitions ahead of need hourly with it. The grants rebuild every
+ * minute (DEC-120, RR-390): it only refreshes the cache and publishes what changed, since Authorise and row-level
+ * security check every assignment's dates against today themselves.
  */
 export const SYNTHETIC_EVERY_SECONDS: Readonly<Record<string, number>> = {
   'audit.seal-closed-block': 900,
   'audit.check-seals': 3600,
   'audit.check-partition-coverage': 3600,
   'audit.ensure-partitions': 3600,
-  'access.rebuild-grants': 3600,
+  'access.rebuild-grants': 60,
 };
 
 /**
