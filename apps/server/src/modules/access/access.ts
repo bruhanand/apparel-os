@@ -7,9 +7,7 @@ import {
   type ApprovalRuleSettingVersionDraft,
   type AssignmentWithdrawalDraft,
   type FieldClass,
-  type GrantView,
   type PermissionAction,
-  type PersonaId,
   type RecordTypeDeclaration,
   type RoleAssignmentDraft,
   type RoleDraft,
@@ -40,7 +38,7 @@ import { revokeSessions, type Revoker, type RevocationTarget } from './commands/
 import { UserChanges, type NewUser, type PreparedWithCredential } from './commands/user-changes.js';
 import type { OrganisationKeys } from './domain/organisation-keys.js';
 import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
-import { ownAccess } from './queries/own-access.js';
+import { ownAccess, type OwnAccess } from './queries/own-access.js';
 import {
   authenticateInternalIdentity,
   authenticateServiceCredential,
@@ -96,11 +94,11 @@ export interface AccessInterface {
     },
     use: 'view' | 'edit',
   ): Promise<{ readonly granted: FieldClass[]; readonly masked: FieldClass[] }>;
-  /** The personas a user holds today and their effective grants, for the shell (RR-261, RR-281). */
-  ownAccess(
-    context: TransactionContext,
-    userId: string,
-  ): Promise<{ readonly personasHeld: PersonaId[]; readonly grants: GrantView[] }>;
+  /**
+   * The personas a user holds today, their effective grants, whether any role assignment is in force and the
+   * Organisation's timezone, for the shell (RR-261, RR-281; DEC-118, RR-260, RR-310).
+   */
+  ownAccess(context: TransactionContext, userId: string): Promise<OwnAccess>;
   prepareUser(
     context: TransactionContext,
     preparer: Preparer,

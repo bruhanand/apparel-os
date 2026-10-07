@@ -314,6 +314,8 @@ describe('personas and empty scope grant nothing (access-and-approvals 2.1, 5.1;
     expect(await as(user.id, (c) => access.ownAccess(c, user.id))).toEqual({
       personasHeld: ['P-ADM', 'P-AUD'],
       grants: [],
+      roleAssignmentInForce: false,
+      timezone: 'Etc/UTC',
     });
   });
 
@@ -787,10 +789,25 @@ describe('the routes (access-and-approvals 7.1; code-house-rules 12.1; RR-261, R
     expect(await response.json()).toMatchObject({
       userId: user.id,
       personasHeld: ['P-AUD', 'P-ADM'],
+      roleAssignmentInForce: true,
       grants: [
         { recordType: 'access.role', action: 'view' },
         { recordType: 'audit.audit_record', action: 'view' },
       ],
     });
+  });
+
+  it("PRD-MOD-017 the session read carries the Organisation's timezone, for screens to show times in (DEC-118; RR-310)", async () => {
+    const { cookie } = await signedIn('ZONE');
+    const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
+    // The test application's SYNTHETIC timezone (test/support/access.ts).
+    expect(await response.json()).toMatchObject({ timezone: 'Etc/UTC' });
+  });
+
+  it('PRD-ACS-002 the session read says when the user holds no role assignment in force (DEC-118; RR-260)', async () => {
+    const { cookie } = await signedIn('NOACCESS', ['P-ADM']);
+    const response = await fetch(`${api.baseUrl}/api/access/session`, { headers: { cookie } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ personasHeld: ['P-ADM'], roleAssignmentInForce: false, grants: [] });
   });
 });

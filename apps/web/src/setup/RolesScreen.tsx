@@ -28,6 +28,7 @@ import {
 } from './permission-grid';
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
+import { useTimeZone } from '../shell/session';
 
 // Setup › Roles (access-and-approvals 4.1, 4.2, 9.11, 14; POL-02.01, POL-02.03): every role with each version, and the
 // role editor. A role is a named set of explicit permissions; it can start from an existing role's permissions. The
@@ -349,6 +350,7 @@ function RoleDrawer({ role, onClose }: { role: RoleRecord; onClose: () => void }
 
 /** Setup › Roles. */
 export function RolesScreen() {
+  const timeZone = useTimeZone();
   const query = useQuery(readQuery(api, 'listRoles', {}));
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -377,7 +379,7 @@ export function RolesScreen() {
           return (
             <div className="flex flex-col gap-3">
               <div className="flex justify-end">
-                <AsOf asOf={list.asOf} />
+                <AsOf asOf={list.asOf} timeZone={timeZone} />
               </div>
               {list.roles.length === 0 ? (
                 <EmptyState title="setup.roles.empty.title" body="setup.roles.empty.body" />

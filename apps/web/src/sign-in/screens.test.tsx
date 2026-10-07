@@ -80,6 +80,23 @@ describe('enrolment and the password change (access-and-approvals 3.2)', () => {
     expect(groupedKey('ABCDEFGHI')).toBe('ABCD EFGH I');
   });
 
+  it('PRD-SEC-001 draws the setup link as a QR code in the page, with a text alternative to type the key (DEC-118; RR-280)', () => {
+    const html = renderToStaticMarkup(
+      <EnrolmentSecret
+        secret={new Secret('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')}
+        otpauthUri={new Secret('otpauth://totp/SYNTHETIC?secret=ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')}
+      />,
+    );
+    const qr = /<svg[^>]*data-testid="enrolment-qr"[^>]*>.*?<\/svg>/s.exec(html)?.[0] ?? '';
+    // An inline drawing: modules as a path, no image fetched from any address (PRD-SEC-014).
+    expect(qr).toMatch(/<path[^>]* d="M/);
+    expect(qr).not.toMatch(/href|src=|https?:/);
+    expect(qr).toContain('role="img"');
+    expect(qr).toContain('aria-label="QR code of the setup link. If you cannot scan it, type the setup key instead."');
+    // The manual fallback stays beside it.
+    expect(text(html)).toContain('ABCD EFGH IJKL MNOP QRST UVWX YZ23 4567');
+  });
+
   it('the password change asks for the new password twice and a fresh authenticator code', () => {
     const html = render({ stage: 'password-change' });
     expect(text(html)).toContain('Choose your own password');

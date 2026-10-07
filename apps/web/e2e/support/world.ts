@@ -26,6 +26,8 @@ export interface SyntheticWorld {
   readonly displayName: string;
   /** The temporary password the user signs in with the first time (access-and-approvals 3.2). */
   readonly temporaryPassword: string;
+  /** In the same Organisation, a user whose first sign-in is still to come and who holds no role assignment (RR-260). */
+  readonly noAccess: FirstSignInUser;
   /** The lock journey's user: enrolled already, in an Organisation with a short synthetic idle limit (RR-304). */
   readonly lock: {
     readonly organisationCode: string;

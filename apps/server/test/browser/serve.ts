@@ -40,7 +40,8 @@ import { startPostgresServer } from '../support/postgres-server.js';
 // The server of the browser journeys (S1-F01-T15, S1-F01-T20; code-house-rules 10.1, 11.2): a test composition of the
 // whole application, and of the worker that feeds My work, on a PostgreSQL container of its own. It holds three
 // synthetic Organisations:
-// - the first of the two synthetic Organisations, with the user of the first sign-in journey (sign-in.spec.ts);
+// - the first of the two synthetic Organisations, with the user of the first sign-in journey (sign-in.spec.ts) and a
+//   user with no role assignment (no-access.spec.ts);
 // - the second, with a user already enrolled whose session locks after a short synthetic idle limit (lock.spec.ts);
 // - a third, made by the real setup step (access-and-approvals 9.11; PRD-ACS-023), whose first Admin and first
 //   approver walk the approval journey (approval.spec.ts; S1-F01-AT18).
@@ -139,6 +140,16 @@ keyring[journeyCode] = randomBytes(32).toString('base64url');
 keys[ORGANISATION_KEYS_VARIABLE] = JSON.stringify(keyring);
 
 const firstSignIn = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
+// A role assignment in force, so the first sign-in journey lands on My work (DEC-118; RR-260).
+await grantSynthetic(orgA.database, { kind: 'user', id: firstSignIn.id }, [
+  { recordType: 'access.user', action: 'view' },
+]);
+// The no-access journey (no-access.spec.ts): a first sign-in like the one above, but no role assignment at all, so
+// the shell shows only "No access assigned" (DEC-118; RR-260; PRD-ACS-002).
+const noAccess = await writeSyntheticUser(orgA.database, orgA.code, keys, {
+  label: 'BROWSER-NOACCESS',
+  temporary: true,
+});
 const lockUser = await writeSyntheticUser(orgB.database, orgB.code, keys, {
   label: 'BROWSER-LOCK',
   enrolled: true,
@@ -193,6 +204,11 @@ writeFileSync(
     login: firstSignIn.login,
     displayName: firstSignIn.displayName,
     temporaryPassword: firstSignIn.password,
+    noAccess: {
+      login: noAccess.login,
+      displayName: noAccess.displayName,
+      temporaryPassword: noAccess.password,
+    },
     lock: {
       organisationCode: orgB.code,
       login: lockUser.login,

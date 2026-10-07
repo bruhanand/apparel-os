@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/StandardStat
 import { UnavailableState } from '../components/UnavailableState';
 import { AccessRecordTable } from './AccessRecordTable';
 import { AsOf } from './AsOf';
+import { useTimeZone } from '../shell/session';
 import { HistoryTimeline } from './HistoryTimeline';
 
 // The history reads on screen (numbering-and-audit 4.5, 5; code-house-rules 12.1 "Reads"; design-language 10.4,
@@ -39,8 +40,10 @@ function Paged<P extends Page>({
   render,
 }: {
   query: ReturnType<typeof usePages<P>>;
-  render: (pages: readonly P[]) => ReactNode;
+  /** Draws the rows, with the Organisation's timezone to show their times in (PRD-MOD-017; DEC-118). */
+  render: (pages: readonly P[], timeZone: string) => ReactNode;
 }) {
+  const timeZone = useTimeZone();
   if (query.isPending) return <LoadingState rows={3} />;
   if (query.isError) {
     const body = failureBody(query.error);
@@ -65,9 +68,9 @@ function Paged<P extends Page>({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex justify-end">
-        <AsOf asOf={latest.asOf} />
+        <AsOf asOf={latest.asOf} timeZone={timeZone} />
       </div>
-      {render(pages)}
+      {render(pages, timeZone)}
       {query.hasNextPage && (
         <div>
           <Button
@@ -92,7 +95,12 @@ export function RecordHistory({ recordType, recordId }: { recordType: string; re
       }),
     ),
   );
-  return <Paged query={query} render={(pages) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} />} />;
+  return (
+    <Paged
+      query={query}
+      render={(pages, timeZone) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} />}
+    />
+  );
 }
 
 /** What one person or service identity changed, oldest first (numbering-and-audit 4.5). */
@@ -100,7 +108,12 @@ export function ActorHistory({ actorId }: { actorId: string }) {
   const query = usePages(['readActorHistory', actorId], async (after) =>
     pageOrThrow(await api.call('readActorHistory', { query: { actorId, ...(after === undefined ? {} : { after }) } })),
   );
-  return <Paged query={query} render={(pages) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} />} />;
+  return (
+    <Paged
+      query={query}
+      render={(pages, timeZone) => <HistoryTimeline entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} />}
+    />
+  );
 }
 
 /** The access history report, newest first: sign-ins and the like, or sensitive access (numbering-and-audit 5). */
@@ -113,5 +126,10 @@ export function AccessHistory({ group, userId }: { group: 'access' | 'sensitive-
       }),
     ),
   );
-  return <Paged query={query} render={(pages) => <AccessRecordTable entries={pages.flatMap((p) => p.entries)} />} />;
+  return (
+    <Paged
+      query={query}
+      render={(pages, timeZone) => <AccessRecordTable entries={pages.flatMap((p) => p.entries)} timeZone={timeZone} />}
+    />
+  );
 }

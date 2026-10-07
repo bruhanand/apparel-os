@@ -28,13 +28,7 @@ function detailOf(entry: AccessHistoryEntry): string {
  * kind of event, its outcome, the user (none for a failed sign-in whose login matched no user, PRD-SEC-014) and the
  * network address.
  */
-export function AccessRecordTable({
-  entries,
-  timeZone,
-}: {
-  entries: readonly AccessHistoryEntry[];
-  timeZone?: string;
-}) {
+export function AccessRecordTable({ entries, timeZone }: { entries: readonly AccessHistoryEntry[]; timeZone: string }) {
   return (
     <div className="overflow-x-auto rounded-control border border-border">
       <table className="w-full border-collapse text-body-sm">

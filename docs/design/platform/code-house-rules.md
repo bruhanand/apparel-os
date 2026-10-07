@@ -310,7 +310,7 @@ After migrating an Organisation database and a directory database, one test read
 ### 10.6 Dependencies
 
 - A dependency is added only when it implements a row of the PRD Stack, and its pull request names that row (`AGENTS.md`, "Stack"). Anything else needs a PRD change first.
-- The QR code library of the PRD Stack's Authentication row (DEC-118) is the one dependency for the enrolment QR code: maintained, pinned by the lockfile, run only in the browser, and making no network call. Font files are committed, not installed (design-language 3).
+- The QR code library of the PRD Stack's Authentication row (DEC-118) is the one dependency for the enrolment QR code: maintained, pinned by the lockfile, run only in the browser, and making no network call. **As built** (`S1-F01-T23`): `qrcode.react` (ISC licence, no dependencies), in `apps/web` only; it draws the code as inline SVG from the string it is given. Font files are committed, not installed (design-language 3).
 - `pnpm-lock.yaml` is committed, and every install in CI uses `pnpm install --frozen-lockfile`, so a build installs exactly what the lockfile pins (`PRD-SEC-015`). The pnpm version is the one `package.json` names, activated through corepack.
 - Versions shared by several packages come from the workspace catalogue in `pnpm-workspace.yaml`.
 - The PostgreSQL image of the tests is pinned to major version 17 (DEC-112, CH-2), and the pg-boss version by the lockfile (3.2). Railway's major version is verified to match before the first deploy of a migration to `dev`.

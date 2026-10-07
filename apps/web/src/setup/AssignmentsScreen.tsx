@@ -39,6 +39,7 @@ import {
 } from './parts';
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
+import { useTimeZone } from '../shell/session';
 
 // Setup › Role assignments (access-and-approvals 4.3, 5.1, 5.2, 9.11, 14; PRD-ACS-001 to PRD-ACS-005, PRD-ACS-021):
 // every assignment, and the assignment editor: the person, the role, the scope per dimension and the dates. Each
@@ -368,6 +369,7 @@ function AssignmentDrawer({ assignment, onClose }: { assignment: AssignmentRecor
 
 /** Setup › Role assignments. */
 export function AssignmentsScreen() {
+  const timeZone = useTimeZone();
   const query = useQuery(readQuery(api, 'listRoleAssignments', {}));
   const [open, setOpen] = useState<string | null>(null);
   return (
@@ -396,7 +398,7 @@ export function AssignmentsScreen() {
           return (
             <div className="flex flex-col gap-3">
               <div className="flex justify-end">
-                <AsOf asOf={list.asOf} />
+                <AsOf asOf={list.asOf} timeZone={timeZone} />
               </div>
               {list.assignments.length === 0 ? (
                 <EmptyState title="setup.assignments.empty.title" body="setup.assignments.empty.body" />
