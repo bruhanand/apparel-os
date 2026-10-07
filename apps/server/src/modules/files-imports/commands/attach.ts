@@ -104,10 +104,7 @@ export async function attach(
     return { attachmentId: found.id, alreadyAttached: true };
   }
   await audit.record(context, {
-    actor:
-      request.attachedBy.kind === 'user'
-        ? { kind: 'user', id: request.attachedBy.id }
-        : { kind: 'service-identity', id: request.attachedBy.id },
+    actor: request.attachedBy,
     ...(request.roleAssignmentId === undefined ? {} : { roleAssignmentId: request.roleAssignmentId }),
     scope: request.scope,
     record: {

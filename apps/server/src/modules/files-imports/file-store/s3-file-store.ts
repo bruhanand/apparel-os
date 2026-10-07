@@ -74,7 +74,9 @@ export class S3FileStore implements FileStore {
       return 'written';
     } catch (error) {
       const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
-      if (status === 412 || status === 409) return 'already-there';
+      // Only 412 (precondition failed) says the object is there. 409 (ConditionalRequestConflict) is another write of
+      // the same key still in progress: nothing is known to be stored yet, so it fails and the caller retries.
+      if (status === 412) return 'already-there';
       throw error;
     }
   }

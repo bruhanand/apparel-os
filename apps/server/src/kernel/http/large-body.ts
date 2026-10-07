@@ -8,25 +8,45 @@ import type { HttpRequest, HttpResponse } from './http-types.js';
 
 type Next = (error?: unknown) => void;
 
+/** The token of the session probe (`access` provides it; read at the first large request). */
+export const SESSION_PROBE = 'kernel.SessionProbe';
+
+/**
+ * Whether a request carries a cookie that names a session that exists and is open, read-only: it moves no activity
+ * and ends nothing. Authenticate (access-and-approvals 7.1 step 1) still runs in full before the route does; this
+ * only decides whether a larger body may be held.
+ */
+export type SessionProbe = (cookieHeader: string | undefined, correlationId: string) => Promise<boolean>;
+
 function bodyError(type: 'entity.too.large' | 'entity.parse.failed', status: number): Error {
   return Object.assign(new Error(type), { type, status });
 }
 
 /** Reads and parses a JSON body of at most `limitBytes`, leaving it where the ordinary parser leaves it. */
-export function largeJsonBody(limitBytes: number) {
+export function largeJsonBody(limitBytes: number, admit: (request: HttpRequest) => Promise<boolean>) {
   return (request: HttpRequest, _response: HttpResponse, next: Next): void => {
     const type = request.headers['content-type'];
-    // Only a request that carries a cookie may hold the larger body; every route here needs a session, so a request
-    // with none is left to the ordinary limit and is refused at Authenticate (access-and-approvals 7.1 step 1).
-    if (
-      request.method !== 'POST' ||
-      typeof type !== 'string' ||
-      !/^application\/json\b/i.test(type) ||
-      request.headers.cookie === undefined
-    ) {
+    if (request.method !== 'POST' || typeof type !== 'string' || !/^application\/json\b/i.test(type)) {
       next();
       return;
     }
+    // Only a request whose cookie names an open session may hold the larger body, so someone not signed in cannot make
+    // the server hold one. The body is not read until that is known (the stream stays paused); any other request is
+    // left to the ordinary limit and refused at Authenticate (access-and-approvals 7.1 step 1).
+    admit(request).then(
+      (admitted) => {
+        if (admitted) readBody(request, limitBytes, next);
+        else next();
+      },
+      () => {
+        next();
+      },
+    );
+  };
+}
+
+function readBody(request: HttpRequest, limitBytes: number, next: Next): void {
+  {
     const chunks: Buffer[] = [];
     let size = 0;
     let refused = false;
@@ -54,7 +74,7 @@ export function largeJsonBody(limitBytes: number) {
     request.on('error', (error: Error) => {
       if (!refused) next(error);
     });
-  };
+  }
 }
 
 /** The pattern an Express mount uses for a route's path: each `{parameter}` is one path segment. */

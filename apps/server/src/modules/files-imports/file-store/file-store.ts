@@ -1,3 +1,5 @@
+import { ApiRefusal } from '../../../kernel/index.js';
+
 /** The token of the file store (the S3-compatible adapter of files-imports; code-house-rules 12.10). */
 export const FILE_STORE = 'files-imports.FileStore';
 /** The token of the variables the file store settings are read from: the process's, unless a test gives others. */
@@ -15,7 +17,9 @@ export const FILE_STORE_ENVIRONMENT = 'files-imports.FileStoreEnvironment';
 export interface FileStore {
   /**
    * Writes an object under a key that holds none. When the key is taken, writes nothing and answers
-   * `already-there`: the key names content, so what is there is the same bytes.
+   * `already-there`. The key names the content, but what is there may have been sealed by an earlier attempt, so the
+   * caller reads it back and checks it before it records anything about it (store-file.ts). A write of the same key
+   * still in progress is not `already-there`: it fails, and the caller retries.
    */
   putOnce(key: string, bytes: Buffer): Promise<'written' | 'already-there'>;
   /** Reads an object whole. */
@@ -25,3 +29,12 @@ export interface FileStore {
 /** The file store of an environment, or the fact that none is set. Nothing is on by default (AGENTS.md). */
 export type FileStoreHandle =
   { readonly kind: 'configured'; readonly store: FileStore } | { readonly kind: 'not-configured' };
+
+/** The refusal for a request that needs file storage in an environment that has none (nothing is on by default). */
+export function fileStoreNotConfigured(): ApiRefusal {
+  return new ApiRefusal({
+    kind: 'unavailable',
+    code: 'files-imports.file-store-not-configured',
+    missing: [{ kind: 'setting', setting: 'files-imports.file-store' }],
+  });
+}

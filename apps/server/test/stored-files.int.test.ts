@@ -10,7 +10,7 @@ import {
   type FieldClass,
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
-import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CommandDefect,
@@ -442,6 +442,88 @@ describe('storing a file (imports-and-opening-data 3.1 step 2, 11; PRD-IMP-002, 
     expect(() =>
       openFile(keyring.keys, world.organisations[1].code, a.contentHash, 'aes-256-gcm/hkdf-sha256/1', objectA),
     ).toThrow();
+  });
+});
+
+describe('an object already in the bucket (imports-and-opening-data 3.1 step 2, 15.1; backup-and-restore 3.3)', () => {
+  const keyOf = (hash: string) => `${organisationIds[world.organisations[0].code] ?? ''}/files/${hash}`;
+
+  it('records an object left by an earlier attempt that fully matches, and writes no second object', async () => {
+    const bytes = pdfBytes('orphan-good');
+    const hash = sha256(bytes);
+    const keyring = new OrganisationKeys_(keysEnvironment);
+    const sealed = keyring.keys.encrypt(
+      world.organisations[0].code,
+      'stored-file',
+      bytes,
+      `files_imports.stored_file:${hash}`,
+    );
+    await minio.client.send(
+      new PutObjectCommand({
+        Bucket: minio.bucket,
+        Key: keyOf(hash),
+        Body: Buffer.from(sealed.ciphertext, 'base64url'),
+      }),
+    );
+    const answer = await store(uploader.cookie, bytes);
+    expect(answer.status).toBe(200);
+    const row = (
+      await rows<{ encryption_scheme: string }>(
+        0,
+        'select encryption_scheme from files_imports.stored_file where content_hash = $1',
+        [hash],
+      )
+    )[0];
+    expect(row?.encryption_scheme).toBe(sealed.scheme);
+    // The object is the earlier attempt's, untouched, and it reads back.
+    expect(await objectBytes(keyOf(hash))).toEqual(Buffer.from(sealed.ciphertext, 'base64url'));
+  });
+
+  it('refuses, and records nothing, when the object there does not open to the file (it is never taken for the file)', async () => {
+    const bytes = pdfBytes('orphan-bad');
+    const hash = sha256(bytes);
+    await minio.client.send(
+      new PutObjectCommand({
+        Bucket: minio.bucket,
+        Key: keyOf(hash),
+        Body: Buffer.from('SYNTHETIC not a sealed file'),
+      }),
+    );
+    const answer = await store(uploader.cookie, bytes);
+    expect(answer.status).toBeGreaterThanOrEqual(500);
+    expect(await rows(0, 'select 1 from files_imports.stored_file where content_hash = $1', [hash])).toHaveLength(0);
+    expect(
+      await rows(
+        0,
+        'select 1 from files_imports.file_receipt r join files_imports.stored_file f on f.id = r.stored_file_id where f.content_hash = $1',
+        [hash],
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+describe('the larger body (imports-and-opening-data 9.3; code-house-rules 12.2)', () => {
+  it('holds no more than the ordinary limit for a cookie that names no session', async () => {
+    const big = JSON.stringify({ pad: 'x'.repeat(1_000_000) });
+    const cookie = `__Host-aos-session=${Buffer.from(world.organisations[0].code).toString('base64url')}.${'A'.repeat(43)}`;
+    const response = await fetch(`${api.baseUrl}/api/files-imports/files`, {
+      method: 'POST',
+      headers: { cookie, origin: SYNTHETIC_ORIGIN, 'content-type': 'application/json', 'idempotency-key': uuidv7() },
+      body: big,
+    });
+    // The ordinary parser refuses it as an invalid request; it was not read to the end and refused as not signed in.
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('what is logged for a file that was not recorded', () => {
+  it('does not say a file was handed in when the command then refuses (an idempotency key used for other content)', async () => {
+    const key = uuidv7();
+    await store(uploader.cookie, pdfBytes('key-first'), {}, key);
+    const second = pdfBytes('key-second-never-recorded');
+    const answer = await store(uploader.cookie, second, {}, key);
+    expect(answer.status).toBeGreaterThanOrEqual(400);
+    expect(api.logText()).not.toContain(sha256(second));
   });
 });
 

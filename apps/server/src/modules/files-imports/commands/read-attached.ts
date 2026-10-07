@@ -19,7 +19,7 @@ import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { attachment, storedFile } from '../db/schema.js';
 import { contentHashOf, openFile } from '../domain/file-seal.js';
-import type { FileStoreHandle } from '../file-store/file-store.js';
+import { fileStoreNotConfigured, type FileStoreHandle } from '../file-store/file-store.js';
 
 export interface ReadAttachedDependencies {
   readonly runner: CommandRunner;
@@ -144,17 +144,9 @@ function refuse(refusal: CommandRefusal<string>): never {
   });
 }
 
-function notConfigured(): never {
-  throw new ApiRefusal({
-    kind: 'unavailable',
-    code: 'files-imports.file-store-not-configured',
-    missing: [{ kind: 'setting', setting: 'files-imports.file-store' }],
-  });
-}
-
 /** Fetches the object, outside any transaction, decrypts it and checks it against the hash taken at intake. */
 async function content(deps: ReadAttachedDependencies, reader: Reader, found: Found): Promise<AttachedFile> {
-  if (deps.fileStore.kind === 'not-configured') return notConfigured();
+  if (deps.fileStore.kind === 'not-configured') throw fileStoreNotConfigured();
   const { organisationCode } = reader.organisation;
   const sealed = await deps.fileStore.store.get(found.objectKey);
   const bytes = openFile(deps.keys, organisationCode, found.contentHash, found.scheme, sealed);
@@ -259,12 +251,7 @@ export async function downloadAttachedFile(
           context,
           { kind: 'user', id: reader.userId },
           looked.roleAssignmentId,
-          {
-            action: 'view',
-            recordType: found.recordType,
-            facts: found.facts,
-            fieldClasses: found.classes.map((fieldClass) => ({ fieldClass, use: 'view' as const })),
-          },
+          needOf(found, reader.userId),
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
         for (const fieldClass of found.classes) {

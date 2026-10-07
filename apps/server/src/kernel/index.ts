@@ -71,6 +71,8 @@ export {
   TRUSTED_PROXY_HOPS_VARIABLE,
 } from './http/http-settings.js';
 export type { HttpSettings } from './http/http-settings.js';
+export { SESSION_PROBE } from './http/large-body.js';
+export type { SessionProbe } from './http/large-body.js';
 export { HTTP_ENVIRONMENT, HTTP_SETTINGS } from './http/origin-check.guard.js';
 export {
   canonicalJson,

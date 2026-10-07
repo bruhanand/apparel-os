@@ -17,9 +17,9 @@ import {
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { fileReceipt, storedFile } from '../db/schema.js';
-import { contentHashOf, objectKeyOf, sealFile } from '../domain/file-seal.js';
+import { contentHashOf, objectKeyOf, openFile, sealFile } from '../domain/file-seal.js';
 import { checkEvidenceFile } from '../domain/intake-checks.js';
-import type { FileStoreHandle } from '../file-store/file-store.js';
+import { fileStoreNotConfigured, type FileStore, type FileStoreHandle } from '../file-store/file-store.js';
 
 export interface StoreFileDependencies {
   readonly helper: IdempotencyHelper;
@@ -58,11 +58,7 @@ export async function storeFile(
   input: StoreFileInput,
 ): Promise<IdempotentAnswer<JsonValue>> {
   if (deps.fileStore.kind === 'not-configured') {
-    throw new ApiRefusal({
-      kind: 'unavailable',
-      code: 'files-imports.file-store-not-configured',
-      missing: [{ kind: 'setting', setting: 'files-imports.file-store' }],
-    });
+    throw fileStoreNotConfigured();
   }
   const { organisationId } = input.organisation;
   if (organisationId === undefined) throw new CommandDefect('The Organisation was routed without its identifier');
@@ -78,14 +74,15 @@ export async function storeFile(
   const contentHash = contentHashOf(bytes);
   const sealed = sealFile(deps.keys, input.organisation.organisationCode, contentHash, bytes);
   const objectKey = objectKeyOf(organisationId, contentHash);
-  await deps.fileStore.store.putOnce(objectKey, sealed.bytes);
-  // The file's hash and size only, never its content (imports-and-opening-data 9.3; PRD-SEC-014).
-  deps.logger.structured(
-    'info',
-    { correlationId: input.correlationId, contentHash, sizeBytes: bytes.length },
-    'A file was handed in',
-    'FilesImports',
-  );
+  const written = await deps.fileStore.store.putOnce(objectKey, sealed.bytes);
+  // An object that was there already is what an earlier attempt left. The record must describe the object that is in
+  // the bucket, not this attempt's seal, so it is read back and must open to this file before it is recorded.
+  if (written === 'already-there') {
+    await checkExisting(deps.fileStore.store, deps.keys, input.organisation.organisationCode, objectKey, {
+      contentHash,
+      scheme: sealed.scheme,
+    });
+  }
 
   const authoriseReplay: ReplayAuthorisation = async (context) => {
     const authorised = await deps.access.authorise(context, { actorId: input.userId, ...NEED });
@@ -128,7 +125,38 @@ export async function storeFile(
       },
     },
   );
+  // Said after the transaction ended, and only when this request recorded the file (not a replay, not a refusal). The
+  // file's hash and size only, never its content (imports-and-opening-data 9.3; PRD-SEC-014).
+  if (answer.kind === 'success' && !answer.replayed) {
+    deps.logger.structured(
+      'info',
+      { correlationId: input.correlationId, contentHash, sizeBytes: bytes.length },
+      'A file was handed in',
+      'FilesImports',
+    );
+  }
   return answer;
+}
+
+async function checkExisting(
+  store: FileStore,
+  keys: OrganisationKeys,
+  organisationCode: string,
+  objectKey: string,
+  expected: { readonly contentHash: string; readonly scheme: string },
+): Promise<void> {
+  const existing = await store.get(objectKey);
+  let opened: Buffer | undefined;
+  try {
+    opened = openFile(keys, organisationCode, expected.contentHash, expected.scheme, existing);
+  } catch {
+    opened = undefined;
+  }
+  if (opened === undefined || contentHashOf(opened) !== expected.contentHash) {
+    // The store never overwrites (backup-and-restore 3.3), so an object that is not this file under this key is
+    // restored from backup or repaired by the operator; nothing is recorded for it.
+    throw new CommandDefect('An object under a content key does not open to that content');
+  }
 }
 
 async function record(

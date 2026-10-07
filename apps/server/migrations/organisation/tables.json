@@ -430,7 +430,7 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "imports-and-opening-data 3.1, 11, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3",
-      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11)"
+      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does"
     },
     {
       "table": "files_imports.file_receipt",
@@ -438,7 +438,7 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "imports-and-opening-data 3.1, 15.1; code-house-rules 6.3",
-      "why": "Every receipt of a stored file (uploader, time, source system, claimed reference, original name); written with the file before it is attached to any record, so it has no scope facts yet"
+      "why": "Every receipt of a stored file (uploader, time, source system, claimed reference, original name); written with the file before it is attached to any record, so it has no scope facts yet. The original names and claimed references are readable by any session of the runtime role, since no row-level security can apply before there is a record; no route reads them, and only the files-imports module's own code does"
     },
     {
       "table": "files_imports.attachment",
