@@ -6,6 +6,7 @@ import {
   CommandTimedOut,
 } from '../command-runner/command-errors.js';
 import { IdempotencyConflict } from '../idempotency/idempotency-errors.js';
+import { StaleAuthority } from './contracts.js';
 import { retryRuleOf } from './retry-rule.js';
 
 // S1-F01-T06: the retry rule goes by what failed (code-house-rules 12.9 "The retry rule").
@@ -26,6 +27,7 @@ describe('the retry rule (code-house-rules 12.9)', () => {
     ['the server shutting down', databaseError('57P01')],
     ['a connection reset', Object.assign(new Error('SYNTHETIC reset'), { code: 'ECONNRESET' })],
     ['a connection ended', new Error('Connection terminated unexpectedly')],
+    ['DEC-118 an authority gone stale under the step-0 locks', new StaleAuthority()],
   ])('retries something transient: %s', (_what, error) => {
     expect(retryRuleOf(error)).toBe('retry');
   });

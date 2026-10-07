@@ -19,6 +19,7 @@ import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
+import { useBusinessToday } from './business-date';
 
 // Setup › Reason codes (access-and-approvals 9.5, 14; POL-02.23, DEC-104): every approve and reject reason with each
 // version. The list itself is KDPS's (KDPS Owner question 45); on dev every reason is SYNTHETIC. A change to the list
@@ -29,7 +30,8 @@ const LIST_READS = ['listApprovalReasonRecords', 'listApprovalReasons', 'listMyW
 
 /** A new reason: its code and kind, which stay fixed, its text and start. */
 function NewReasonForm() {
-  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve' });
+  const today = useBusinessToday();
+  const form = useRouteForm(routes.prepareApprovalReason, { kind: 'approve', validFrom: today });
   const kept = useKeptDraft(routes.prepareApprovalReason, form, 'setup.new-reason');
   const submission = useSubmission('prepareApprovalReason', LIST_READS);
   const errors = form.formState.errors;
@@ -42,7 +44,7 @@ function NewReasonForm() {
           const done = await submission.submit({ body: values });
           if (done !== undefined) {
             kept.forget();
-            form.reset({ kind: values.kind });
+            form.reset({ kind: values.kind, validFrom: today });
           }
         })(event);
       }}
@@ -86,6 +88,7 @@ function NewReasonForm() {
         <input
           id="reason-from"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('reason-from', { invalid: errors.validFrom !== undefined, help: true })}
           {...form.register('validFrom')}
@@ -105,7 +108,11 @@ function NewReasonForm() {
 
 /** A new version of a reason: its text and start. */
 function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
-  const form = useRouteForm(routes.prepareApprovalReasonVersion, { text: reason.versions[0]?.text ?? '' });
+  const today = useBusinessToday();
+  const form = useRouteForm(routes.prepareApprovalReasonVersion, {
+    text: reason.versions[0]?.text ?? '',
+    validFrom: today,
+  });
   const kept = useKeptDraft(routes.prepareApprovalReasonVersion, form, `setup.reason-version.${reason.id}`);
   const submission = useSubmission('prepareApprovalReasonVersion', LIST_READS);
   const errors = form.formState.errors;
@@ -140,6 +147,7 @@ function ReasonVersionForm({ reason }: { reason: ReasonRecord }) {
         <input
           id="reason-version-from"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('reason-version-from', { invalid: errors.validFrom !== undefined, help: true })}
           {...form.register('validFrom')}

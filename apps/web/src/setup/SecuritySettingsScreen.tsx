@@ -13,6 +13,7 @@ import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t, type MessageId } from '../messages/catalogue';
 import { useTimeZone } from '../shell/session';
+import { businessDayAfter, useBusinessToday } from './business-date';
 import { formatDate } from './format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Toolbar } from './parts';
 import { RecordDrawer } from './RecordDrawer';
@@ -69,6 +70,7 @@ function whenText(version: Version, timeZone: string): string {
 
 /** A new version of one setting: its values, its origin and when it takes effect. */
 function ChangeForm({ view }: { view: SettingView }) {
+  const today = useBusinessToday();
   const inForce = view.versions.find((version) => version.id === view.inForceVersionId);
   const form = useRouteForm(routes.prepareSecuritySettingVersion, {
     setting: view.setting,
@@ -140,6 +142,7 @@ function ChangeForm({ view }: { view: SettingView }) {
           <input
             id={id('date')}
             type="date"
+            min={businessDayAfter(today)}
             className={inputClass}
             {...describedBy(id('date'), { invalid: takesEffectErrors.date !== undefined, help: false })}
             {...form.register('takesEffect.date' as Path<never>)}

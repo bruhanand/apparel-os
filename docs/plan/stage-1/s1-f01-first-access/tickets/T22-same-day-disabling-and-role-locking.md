@@ -26,4 +26,4 @@ A reviewed `access` migration; changes to `access` versions, Decide and `holdAut
 - The user version in force is the Approved one with no end, so a command that waited at step 0 for a disabling sees it. A decision whose recording time is earlier than the start of the version in force is refused as stale (access-and-approvals 9.5 "As built").
 - Tests: 19h in `test/same-day-disabling.int.test.ts` (through the API); 19i in `test/authority-locks.int.test.ts`. `userInForce(context, userId)` lost its date argument; `replaceCredentials` lost its business date.
 - Follow-up: RR-370 (migration 0018 is not compatible with the version running for the first `dev` deploy after it; product owner).
-
+- Second S1-F01 review fixes (branch `s1/f01-review-fixes-2`): job steps now take the same step-0 locks and role recheck through `JobIdentities.hold` (`access/commands/job-identities.ts`, moved from `queries/`); a stale role throws `StaleAuthority`, which the retry rule retries. Tests: the last two describes of `test/authority-locks.int.test.ts`.

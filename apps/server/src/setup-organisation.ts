@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
-import { missingSetupSettings, setupRequestFileSchema, setupRequestSchema } from '@apparel-os/schemas';
+import { setupRequestFileSchema, setupRequestSchema } from '@apparel-os/schemas';
 import { OUTBOX_AUTHORITY, OUTBOX_PROCESSOR_IDENTITY, PinoLoggerService, type JobRegistry } from './kernel/index.js';
-import { runSetupStep, SetupRequestRefused, type ServiceIdentityGrant } from './modules/access/index.js';
+import {
+  missingSettingsRefusal,
+  runSetupStep,
+  SetupRequestRefused,
+  type ServiceIdentityGrant,
+} from './modules/access/index.js';
 import { askWithSecrets } from './operator-prompt.js';
 import { jobRegistry } from './worker.module.js';
 
@@ -55,18 +60,15 @@ async function main(): Promise<number> {
     return 1;
   }
   const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
-  // Every required security setting is named when left out, before anything else (access-and-approvals 3.1, 9.11;
-  // PRD-SEC-017; DEC-118).
-  const missing = missingSetupSettings(raw);
-  if (missing.length > 0) {
-    logger.error(
-      `Setup refused, nothing changed: the request leaves out required security settings: ${missing.join(', ')}`,
-      'Setup',
-    );
-    return 1;
-  }
   const parsedFile = setupRequestFileSchema.safeParse(raw);
   if (!parsedFile.success) {
+    // Every required security setting left out is named first (access-and-approvals 3.1, 9.11; PRD-SEC-017;
+    // DEC-118); the file's schema requires them all, so a file it accepts leaves none out.
+    const missing = missingSettingsRefusal(raw);
+    if (missing !== undefined) {
+      logger.error(`Setup refused, nothing changed: ${missing}`, 'Setup');
+      return 1;
+    }
     // The issues name fields and rules, never a value: the file holds no secret, and no value is echoed.
     logger.error(
       `Setup refused, nothing changed: the request file is not valid: ${parsedFile.error.issues.map((issue) => `${issue.path.join('.')} ${issue.code}`).join('; ')}`,

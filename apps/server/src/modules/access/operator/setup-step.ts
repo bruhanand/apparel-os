@@ -172,14 +172,22 @@ function checkPasswords(request: SetupRequest): void {
 }
 
 /**
+ * The refusal of a request, or of its request file, that leaves out required security settings, naming each one, or
+ * undefined when none is left out (access-and-approvals 3.1, 9.11; PRD-SEC-017; DEC-118). It names fields, never a
+ * value. The step checks it first; the operator command words a request file's refusal with it.
+ */
+export function missingSettingsRefusal(request: unknown): string | undefined {
+  const missing = missingSetupSettings(request);
+  return missing.length === 0 ? undefined : `The request leaves out required security settings: ${missing.join(', ')}`;
+}
+
+/**
  * Checks the request before anything is read: every required security setting is there, each one left out named
  * (access-and-approvals 3.1, 9.11; PRD-SEC-017; DEC-118), and the identities to write.
  */
 function checkRequest(options: SetupStepOptions, registry: ReadonlyMap<string, RecordTypeDeclaration>): void {
-  const missing = missingSetupSettings(options.request);
-  if (missing.length > 0) {
-    throw new SetupRequestRefused(`The request leaves out required security settings: ${missing.join(', ')}`);
-  }
+  const missing = missingSettingsRefusal(options.request);
+  if (missing !== undefined) throw new SetupRequestRefused(missing);
   const codes = options.serviceIdentities.map((identity) => identity.code);
   if (codes.includes(SETUP_IDENTITY) || new Set(codes).size !== codes.length) {
     throw new SetupRequestRefused('Each service identity is written once, and `setup` only by the step itself');

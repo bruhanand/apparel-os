@@ -5,6 +5,7 @@ import {
   sqlStateOf,
 } from '../command-runner/command-errors.js';
 import { IdempotencyConflict } from '../idempotency/idempotency-errors.js';
+import { StaleAuthority } from './contracts.js';
 
 /**
  * What the job runner does with a step that threw (code-house-rules 12.9 "The retry rule"). A refusal under the locks
@@ -13,7 +14,8 @@ import { IdempotencyConflict } from '../idempotency/idempotency-errors.js';
  *
  * - `retry`: something transient, retried up to the job kind's setting with its delays: a time limit of 5.1, a
  *   cancelled statement, a lost connection or a server shutting down, an outcome not known (the key is kept, so the
- *   retry is a replay if the first commit landed; 12.4), or the first delivery of the same event still running.
+ *   retry is a replay if the first commit landed; 12.4), the first delivery of the same event still running, or a
+ *   step's authority gone stale under its step-0 locks (DEC-118).
  * - `defect`: never retried and logged as a defect: a deadlock (8.1), an `AO` error (7.1), a schema mismatch, a key
  *   reused with other content, or anything unexpected.
  */
@@ -27,7 +29,7 @@ const ENDED_CONNECTION = /^Connection terminated|^Client has encountered a conne
 
 export function retryRuleOf(error: unknown): RetryRule {
   if (error instanceof CommandTimedOut || error instanceof CommandCancelled) return 'retry';
-  if (error instanceof CommandOutcomeUnknown) return 'retry';
+  if (error instanceof CommandOutcomeUnknown || error instanceof StaleAuthority) return 'retry';
   if (error instanceof IdempotencyConflict) return error.code === 'kernel.request-in-progress' ? 'retry' : 'defect';
   const sqlState = sqlStateOf(error);
   if (sqlState !== undefined && TRANSIENT_SQLSTATE.test(sqlState)) return 'retry';

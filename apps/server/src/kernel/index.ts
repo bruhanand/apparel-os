@@ -114,8 +114,8 @@ export { KernelModule } from './kernel.module.js';
 export { LOGGER, LoggingModule } from './logging/logging.module.js';
 export { PinoLoggerService } from './logging/pino-logger.service.js';
 export type { LogLevel, StructuredLogger } from './logging/pino-logger.service.js';
-export { JOB_IDENTITIES } from './jobs/contracts.js';
-export type { JobAuthority, JobIdentities } from './jobs/contracts.js';
+export { JOB_IDENTITIES, StaleAuthority } from './jobs/contracts.js';
+export type { JobAuthority, JobAuthorityHeld, JobIdentities } from './jobs/contracts.js';
 export { JOB_SCHEMA, KEEP_EVERY_JOB, startJobQueue } from './jobs/job-queue.js';
 export { checkRegistry, defineConsumer, defineJobKind } from './jobs/registry.js';
 export type {

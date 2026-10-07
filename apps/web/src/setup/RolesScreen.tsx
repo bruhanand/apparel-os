@@ -29,6 +29,7 @@ import {
 import { RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 import { useTimeZone } from '../shell/session';
+import { useBusinessToday } from './business-date';
 
 // Setup › Roles (access-and-approvals 4.1, 4.2, 9.11, 14; POL-02.01, POL-02.03): every role with each version, and the
 // role editor. A role is a named set of explicit permissions; it can start from an existing role's permissions. The
@@ -140,7 +141,8 @@ function StartFrom({ roles, onPick }: { roles: readonly RoleRecord[]; onPick: (c
 
 /** A new role: code, name, start and permissions (access-and-approvals 4.2). */
 function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
-  const form = useRouteForm(routes.prepareRole, { permissions: [] });
+  const today = useBusinessToday();
+  const form = useRouteForm(routes.prepareRole, { permissions: [], validFrom: today });
   const kept = useKeptDraft(routes.prepareRole, form, 'setup.new-role');
   const submission = useSubmission('prepareRole', LIST_READS);
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -190,6 +192,7 @@ function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
         <input
           id="role-from"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('role-from', { invalid: errors.validFrom !== undefined, help: true })}
           {...form.register('validFrom')}
@@ -213,9 +216,11 @@ function NewRoleForm({ roles }: { roles: readonly RoleRecord[] }) {
 function RoleVersionForm({ role }: { role: RoleRecord }) {
   const latest = role.versions[0];
   const start = gridOfPermissions(latest?.permissions ?? []);
+  const today = useBusinessToday();
   const form = useRouteForm(routes.prepareRoleVersion, {
     name: latest?.name ?? '',
     permissions: permissionsOfGrid(start),
+    validFrom: today,
   });
   const kept = useKeptDraft(routes.prepareRoleVersion, form, `setup.role-version.${role.id}`);
   const submission = useSubmission('prepareRoleVersion', LIST_READS);
@@ -264,6 +269,7 @@ function RoleVersionForm({ role }: { role: RoleRecord }) {
         <input
           id="role-version-from"
           type="date"
+          min={today}
           className={inputClass}
           {...describedBy('role-version-from', { invalid: errors.validFrom !== undefined, help: true })}
           {...form.register('validFrom')}

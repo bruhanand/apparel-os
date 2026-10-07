@@ -25,7 +25,7 @@ import { AccessRecordsController } from './http/access-records.controller.js';
 import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
 import { History } from './queries/history.js';
-import { jobIdentities } from './queries/job-identities.js';
+import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';

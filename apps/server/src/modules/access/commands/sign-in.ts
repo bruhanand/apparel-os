@@ -79,6 +79,21 @@ const SESSION_IDENTIFIER_BYTES = 32;
  * Every wrong part gets the same refusal, and a login that exists and one that does not get the same refusal and the
  * same slowing (access-and-approvals 3.1; DEC-116).
  */
+/** The settings sign-in requires, in the order a refusal names them, as `look` reads them (3.1; DEC-118). */
+const REQUIRED_SETTINGS = [
+  'configuration.timezone',
+  'access.sign-in-throttling',
+  'access.password-rules',
+  'access.office-session-limits',
+] as const;
+
+/** Whether every read is set, narrowing each one (code-house-rules 12.14). */
+function everySet<const T extends readonly { readonly kind: 'set' | 'not-set' }[]>(
+  reads: T,
+): reads is { readonly [K in keyof T]: Extract<T[K], { readonly kind: 'set' }> } {
+  return reads.every((read) => read.kind === 'set');
+}
+
 export class SignIn {
   constructor(private readonly dependencies: SignInDependencies) {}
 
@@ -149,17 +164,19 @@ export class SignIn {
     // Sign-in stays unavailable while any required security setting is not set, naming every one missing; nothing
     // falls back to a value (access-and-approvals 3.1; code-house-rules 12.14; PRD-SEC-017; DEC-118). The office
     // session limits too: with none set, no session can be kept, so none starts (3.3).
-    const today = await context.businessDate();
-    const throttling = await readSetting(context, 'access.sign-in-throttling');
-    const rules = await readSetting(context, 'access.password-rules');
-    const limits = await readSetting(context, 'access.office-session-limits');
-    const missing: MissingItem[] = [
-      ...(today.kind === 'not-set' ? ['configuration.timezone'] : []),
-      ...(throttling.kind === 'not-set' ? ['access.sign-in-throttling'] : []),
-      ...(rules.kind === 'not-set' ? ['access.password-rules'] : []),
-      ...(limits.kind === 'not-set' ? ['access.office-session-limits'] : []),
-    ].map((setting) => ({ kind: 'setting', setting }));
-    if (missing.length > 0 || throttling.kind === 'not-set') return { kind: 'unavailable', missing };
+    const reads = [
+      await context.businessDate(),
+      await readSetting(context, 'access.sign-in-throttling'),
+      await readSetting(context, 'access.password-rules'),
+      await readSetting(context, 'access.office-session-limits'),
+    ] as const;
+    if (!everySet(reads)) {
+      const missing: MissingItem[] = REQUIRED_SETTINGS.filter((_, index) => reads[index]?.kind === 'not-set').map(
+        (setting) => ({ kind: 'setting', setting }),
+      );
+      return { kind: 'unavailable', missing };
+    }
+    const [, throttling] = reads;
     const loginDigest = this.dependencies.keys.digest(
       attempt.organisation.organisationCode,
       'sign-in-throttling',

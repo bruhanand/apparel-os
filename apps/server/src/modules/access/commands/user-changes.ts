@@ -9,6 +9,7 @@ import { meetsPasswordRules } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { findUser, findUserByLogin } from '../queries/users.js';
 import {
+  instantsFrom,
   lockUnlessHeld,
   refusal,
   today,
@@ -338,11 +339,6 @@ export class UserChanges {
     });
     return { kind: 'success', answer: { userId: version.appUserId, firstVersionRejected } };
   }
-}
-
-/** A half-open range of instants from the one given, with no end, in PostgreSQL's text form (code-house-rules 7.3). */
-function instantsFrom(start: Date): string {
-  return `[${start.toISOString()},)`;
 }
 
 function versionChanges(draft: UserVersionDraft): AuditChange[] {

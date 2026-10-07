@@ -35,6 +35,7 @@ import {
 } from '../domain/first-roles.js';
 import { scopeKeyOf } from '../domain/scope.js';
 import { SETTING_FORMATS, SETTING_SCHEMAS, type AccessSettingKey } from '../domain/sign-in-rules.js';
+import { instantsFrom } from './access-changes.js';
 import { rebuildGrants } from './rebuild-grants.js';
 
 /** One action on one record type, as a job step declares it and a service identity's role grants it. */
@@ -133,7 +134,7 @@ export async function writeSetup(
       value: parsed,
       origin: write.settings.origin,
       // Setting versions are dated by instants (access-and-approvals 3.3; DEC-118): from the setup step's start.
-      validDuring: `[${context.startedAt.toISOString()},)`,
+      validDuring: instantsFrom(context.startedAt),
       decision: 'Approved',
       startsOn: null,
     });
@@ -158,7 +159,7 @@ export async function writeSetup(
       displayName: user.displayName,
       state: 'Active',
       // User versions are dated by instants (access-and-approvals 9.5; DEC-118): from the setup step's start.
-      validDuring: `[${context.startedAt.toISOString()},)`,
+      validDuring: instantsFrom(context.startedAt),
       decision: 'Approved',
     });
     if (user.personas.length > 0) {

@@ -23,7 +23,7 @@ import {
   type WorkerSettings,
 } from '../src/kernel/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
-import { jobIdentities } from '../src/modules/access/queries/job-identities.js';
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { SYNTHETIC_RETRY, SYNTHETIC_TEST_SPEED } from './fixtures/worker-settings.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
