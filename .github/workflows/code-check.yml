@@ -44,3 +44,26 @@ jobs:
           path: |
             apps/web/test-results/
             apps/web/playwright-report/
+
+  # The counter run of the shared golden cases in Chromium (shared-calculations 12.2; offline-counter.md 5.5;
+  # PRD-ACP-018, PRD-SEC-016; S1-F11-T10). It sits beside the server run of the same cases, which `pnpm test` in the
+  # check job makes: both must pass for stage 1 exit check 2.
+  counter-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @apparel-os/counter exec playwright install --with-deps chromium
+      - run: pnpm test:counter
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: counter-run-traces
+          path: |
+            apps/counter/test-results/
+            apps/counter/playwright-report/

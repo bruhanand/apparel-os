@@ -6,6 +6,8 @@ dist-browser
 # Playwright's traces and report, and the browser journeys' synthetic world (S1-F01-T15).
 test-results
 playwright-report
+# The counter build guard's list of bundled modules (S1-F11-T10).
+.build-report
 apps/web/e2e/.synthetic
 .turbo
 coverage

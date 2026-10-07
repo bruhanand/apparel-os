@@ -52,7 +52,8 @@ const SELLING = [
   'splitRefund',
   'round',
 ];
-const COSTING = ['costLine', 'ticketMargin'];
+/** The functions of the costing entry point, which the counter never gets (2.3). */
+export const COSTING = ['costLine', 'ticketMargin'];
 const ID = /^(PRD-[A-Z]{3}-\d{3}|POL-\d{2}\.\d{2}|DEC-\d{3})$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

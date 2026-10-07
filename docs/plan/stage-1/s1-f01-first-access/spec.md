@@ -179,7 +179,7 @@ One file per task in [tickets/](tickets/). Each ticket leaves the full check set
 | [S1-F01-T17 My work and the approval panel](tickets/T17-my-work-and-the-approval-panel.md) | merged | → T16 |
 | [S1-F01-T18 History screens](tickets/T18-history-screens.md) | done | T07, T11, T14 |
 | [S1-F01-T19 Browser journeys](tickets/T19-browser-journeys.md) | merged | → T15, T20 |
-| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | T10, T16, T18 (done); RR-350 (the merge, the deploy and Demo 1) |
+| [S1-F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](tickets/T20-concurrency-isolation-and-leak-suite.md) | done | T10, T16, T18 (done); RR-350 (closed 7 Oct 2026: accepted) |
 | [S1-F01-T21 Acceptance run and records](tickets/T21-acceptance-run-and-records.md) | merged | → T20 |
 | [S1-F01-T22 Same-day disabling and role locking](tickets/T22-same-day-disabling-and-role-locking.md) | done | — (`DEC-118`; RR-321, RR-360) |
 | [S1-F01-T23 Screens: no-access landing, Organisation time zone, enrolment QR code and fonts](tickets/T23-screens-landing-time-zone-qr-and-fonts.md) | done | — (`DEC-118`; RR-260, RR-310, RR-280, RR-262) |

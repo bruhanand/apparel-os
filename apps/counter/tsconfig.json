@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "golden",
+    "test",
+    "e2e",
+    "build-guard.ts",
+    "costing-module.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

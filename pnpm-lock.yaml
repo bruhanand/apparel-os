@@ -164,12 +164,18 @@ settings:
 
 catalogs:
   default:
+    '@playwright/test':
+      specifier: ^1.63.0
+      version: 1.63.0
     '@types/node':
       specifier: ^22.20.5
       version: 22.20.5
     typescript:
       specifier: ~6.0.3
       version: 6.0.3
+    vite:
+      specifier: ^8.3.2
+      version: 8.3.2
     vitest:
       specifier: ^5.0.3
       version: 5.0.3
@@ -202,6 +208,25 @@ importers:
       typescript-eslint:
         specifier: ^8.71.0
         version: 8.71.0(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
+
+  apps/counter:
+    dependencies:
+      '@apparel-os/calculations':
+        specifier: workspace:*
+        version: link:../../packages/calculations
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.63.0
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.5
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.2(@types/node@22.20.5)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@22.20.5)(vite@8.3.2(@types/node@22.20.5)(jiti@2.7.0))
 
   apps/server:
     dependencies:
@@ -298,7 +323,7 @@ importers:
         version: 4.6.5
     devDependencies:
       '@playwright/test':
-        specifier: ^1.63.0
+        specifier: 'catalog:'
         version: 1.63.0
       '@tailwindcss/vite':
         specifier: ^4.3.3
@@ -319,7 +344,7 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
       vite:
-        specifier: ^8.3.2
+        specifier: 'catalog:'
         version: 8.3.2(@types/node@22.20.5)(jiti@2.7.0)(yaml@2.9.1)
       vitest:
         specifier: 'catalog:'

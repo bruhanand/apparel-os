@@ -1,6 +1,6 @@
 # S1-F01-T20 — Acceptance: journeys, concurrency, isolation and leak suite
 
-Status: ready-for-human
+Status: done
 Blocked by: T10, T16, T18 (done); RR-350 (CI on a pushed branch, the product owner's acceptance, Demo 1)
 Feature: [S1-F01 First access](../spec.md)
 
@@ -59,3 +59,4 @@ Server tests are in `apps/server/test/` (integration, real PostgreSQL under the 
 - Local runs, 7 Oct 2026: lint, typecheck, unit tests, integration tests (29 files, 388 tests, 18 s, so RR-196 needs nothing yet), module check, link check, format check, and the three journeys (`pnpm test:e2e`, about 2.2 min: the approval journey waits for a later authenticator step before each of the approver's seven codes).
 - Outstanding (RR-350, product owner): CI on a pushed branch with the Playwright job and its artefacts, the review of the design edits and acceptance (section 15), Demo 1 on `dev`. Left to the orchestrator: AGENTS.md "Current state" and STATUS.md. RR-190 closed; RR-200 stays open until the `dev` measurement; RR-304's journey part is done, its hand check stays with T09. New follow-ups RR-351, RR-352.
 - 7 Oct 2026: GitHub Actions "Code check" green on the pushed branch `s1/f01-first-access` (run 37603828723), including the browser journeys; the product owner reviewed the screenshots of the S1-F01 screens and approved them, with the design edits of the visual fixes (RR-304, RR-430 closed). Stays ready-for-human until Demo 1 on Railway `dev` after the merge (RR-350).
+- 7 Oct 2026: the hands-on test passed 32 of 32 cases; its findings were fixed as T29 to T35, merged into `main` and deployed to `dev` (CI run 37660230714 green). Demo 1 shown on `dev` the same day, with the product owner typing the authenticator codes, and S1-F01 accepted by the product owner. RR-350 closed. Evidence: [test-report.md](../test-report.md) section 3
