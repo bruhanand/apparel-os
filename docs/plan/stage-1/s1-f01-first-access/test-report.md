@@ -61,3 +61,23 @@ On 7 Oct 2026 the product owner decided F3 (people never hold the background sys
 ## 3. On Railway `dev`
 
 Checked so far: the test sign-in buttons appear below Sign in and sign in (case 7); the approver's My work lists the requests prepared by the Admin with what each is for (cases 8, 16); the approval panel opens with the version, details and "You didn't prepare this, so you can decide it" (case 10). Decisions on `dev` need the product owner's authenticator codes.
+
+### Demo 1, 7 Oct 2026 (after the fixes T29 to T35 were deployed)
+
+Driven through the screens with the test sign-in buttons; the product owner typed every authenticator code and the new person's passwords. SYN-ORG-A, every value SYNTHETIC.
+
+| Step | Result |
+| --- | --- |
+| Sign-in of the first Admin and first approver with password and code | Pass (product owner, earlier the same day) |
+| Admin prepares a person (`syn-viewer-a`, P-AUD), and the assignment of role SYN-HISTORY-READER, all members | Pass: each "Awaiting approval" |
+| Admin opens the approval of their own preparation | Pass: "You can't decide this request… Needs Approve on Role assignment." |
+| Approver decides the first approve and reject reasons in own words | Pass: approved, with approver, time and reason shown |
+| Assignment opened before its person is approved | Pass: "The user this role assignment is for is not approved yet. Decide the user first." |
+| Person, role and assignment approved with a reason from the list and a fresh code each | Pass: the picker offered only the approve reason in force |
+| The new person's first sign-in, enrolment and own password | Pass (product owner) |
+| The new person's menu and a screen not granted | Pass: only Users, Role assignments and Audit log; Roles answers "Not available to you. Needs View on Role."; New role assignment greyed "Needs Create on Role assignment" |
+| The assignment's history read by the new person | Pass: preparer and time, approver, reason, version, decision; the role shows as "a role you may not view" |
+
+Note (low, no ticket): right after the Admin sent requests, the approver's My work listed the three newest as a bare "Approval" for a few seconds, until the worker filled in what each is for.
+
+**The product owner accepted S1-F01 on 7 Oct 2026.**
