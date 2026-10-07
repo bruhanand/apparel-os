@@ -1,5 +1,5 @@
 import { defineJobKind, type JobKindDefinition } from '../../../kernel/index.js';
-import { checkPartitionCoverage } from './partition-coverage.js';
+import { checkPartitionCoverage, ensurePartitions } from './partition-coverage.js';
 import { checkSeals, sealClosedBlock } from './seals.js';
 
 /**
@@ -10,8 +10,9 @@ export const AUDIT_JOBS_IDENTITY = 'audit-jobs';
 
 /**
  * The audit job kinds the worker sends for each Organisation at the interval of its worker setting (numbering-and-
- * audit 4.4; RR-241; code-house-rules 12.9): the sealing job, the seal check, and the partition coverage check,
- * which logs the alert `audit-partitions-short`. A failed seal check logs the alert `audit-seals-differ` naming the
+ * audit 4.4; RR-241; code-house-rules 12.9): the sealing job, the seal check, the partition coverage check,
+ * which logs the alert `audit-partitions-short`, and the scheduled partition upkeep, which creates the partitions of
+ * the coming months between deploys and logs `audit-partitions-upkeep-failed` when it fails (DEC-118, RR-240). A failed seal check logs the alert `audit-seals-differ` naming the
  * blocks only. Once `exceptions` exists (S1-F08), both also raise an exception. Each step is authorised for the
  * action it declares on the audit seal or partition record type, through a role assignment of `audit-jobs`
  * (access-and-approvals 7.1; RR-273).
@@ -52,5 +53,11 @@ export const auditJobKinds: readonly JobKindDefinition[] = [
     run: async (context, { logger }) => ({
       coversNextMonth: (await checkPartitionCoverage(context, logger)).coversNextMonth,
     }),
+  }),
+  defineJobKind({
+    name: 'audit.ensure-partitions',
+    serviceIdentity: AUDIT_JOBS_IDENTITY,
+    authorises: { action: 'create', recordType: 'audit.audit_partition' },
+    run: async (context, { logger }) => ({ partitions: await ensurePartitions(context, logger) }),
   }),
 ];

@@ -13,8 +13,9 @@ import {
 } from '../src/kernel/index.js';
 import { ACCESS_JOBS_IDENTITY, accessJobKinds } from '../src/modules/access/index.js';
 import { AUDIT_JOBS_IDENTITY, auditJobKinds } from '../src/modules/audit/index.js';
-import { INBOX_IDENTITY, inboxConsumers } from '../src/modules/inbox/index.js';
-import { WorkerModule } from '../src/worker.module.js';
+import { INBOX_IDENTITY } from '../src/modules/inbox/index.js';
+import { jobRegistry, WorkerModule } from '../src/worker.module.js';
+import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 import { syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -23,14 +24,15 @@ import { connect, databaseUrl } from './support/postgres.js';
 // S1-F01-T06: the worker's start command as built (deployment.md section 2; code-house-rules 12.9) and the audit job
 // kinds it sends for each Organisation (numbering-and-audit 4.4; RR-241). The settings are SYNTHETIC (CH-10).
 
-const AUDIT_QUEUES = ['audit.seal-closed-block', 'audit.check-seals', 'audit.check-partition-coverage'];
+const AUDIT_QUEUES = [
+  'audit.seal-closed-block',
+  'audit.check-seals',
+  'audit.check-partition-coverage',
+  'audit.ensure-partitions',
+];
 const JOB_QUEUES = [...AUDIT_QUEUES, 'access.rebuild-grants'];
-const retry = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
-const SYNTHETIC_SETTINGS = {
-  pollSeconds: 0.5,
-  consumers: Object.fromEntries(inboxConsumers.map((consumer) => [consumer.name, retry])),
-  jobKinds: Object.fromEntries(JOB_QUEUES.map((name) => [name, { ...retry, everySeconds: 1 }])),
-};
+/** SYNTHETIC (DEC-118, DEC-119), with a test's short waits. */
+const SYNTHETIC_SETTINGS = syntheticWorkerSettings(jobRegistry, { fast: true });
 
 let world: SyntheticWorld;
 const log = capturingLogger();

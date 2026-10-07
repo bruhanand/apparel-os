@@ -9,6 +9,7 @@ import {
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
   Worker,
+  type JobRegistry,
 } from '../../src/kernel/index.js';
 import {
   approvalDecided,
@@ -22,6 +23,7 @@ import { inboxConsumers } from '../../src/modules/inbox/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
+import { syntheticWorkerSettings } from '../fixtures/worker-settings.js';
 import {
   startAccessApp,
   syntheticKeysEnvironment,
@@ -67,8 +69,6 @@ const SYNTHETIC_SESSION_LIMITS = { idleLockSeconds: 1800, absoluteSeconds: 28800
  * (access-and-approvals 3.3; RR-304).
  */
 const SYNTHETIC_SHORT_IDLE_LIMITS = { idleLockSeconds: 15, absoluteSeconds: 28800 };
-/** SYNTHETIC worker settings (CH-10): retry once, at once. */
-const SYNTHETIC_RETRY = { retries: 1, retryDelaySeconds: 0, retryBackoff: false, activeLimitSeconds: 60 };
 
 function required(name: string): string {
   const value = process.env[name];
@@ -163,6 +163,11 @@ const runner = new CommandRunner({
   timezones: syntheticTimezone,
   logger: workerLog.logger,
 });
+const inboxRegistry: JobRegistry = {
+  events: [approvalRequested, approvalDecided],
+  consumers: inboxConsumers,
+  jobKinds: [],
+};
 const worker = new Worker({
   router,
   runner,
@@ -174,12 +179,9 @@ const worker = new Worker({
   }),
   identities: jobIdentities(),
   logger: workerLog.logger,
-  registry: { events: [approvalRequested, approvalDecided], consumers: inboxConsumers, jobKinds: [] },
-  settings: {
-    pollSeconds: 0.5,
-    consumers: Object.fromEntries(inboxConsumers.map((consumer) => [consumer.name, SYNTHETIC_RETRY])),
-    jobKinds: {},
-  },
+  registry: inboxRegistry,
+  // SYNTHETIC worker settings (DEC-118, DEC-119; CH-10), with a test's short waits.
+  settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
 });
 await worker.start();
 
