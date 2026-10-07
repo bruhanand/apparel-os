@@ -25,3 +25,7 @@ Counter test page; Playwright test; CI job; build check; review record; evidence
 - Partly done (from T12): the server half was reviewed in three code-review rounds before `8e71547`. The review and acceptance of the counter half remain.
 - Built (commit subject `S1-F11-T10:`): `apps/counter` (Vite build, base `/counter/`, entries `index.html` and `golden/index.html`, a shared selling chunk), `build-guard.ts` (fails the build on any costing module, writes `.build-report/bundled-modules.json`), `test/build-guard.test.ts` (S1-F11-AT11, fails on a deliberate costing import), `e2e/golden.spec.ts` (S1-F11-AT06: every case file through the page; pending and costing cases reported skipped, never passed; outcome count equals file count; module list has no costing module), module check rule 5 with tests, root script `pnpm test:counter`, the `counter-run` job in the code-check workflow, the `AGENTS.md` "Code workspace" entries.
 - Kept minimal: no React, Dexie, Workbox or PWA yet (they arrive with the first counter screen, `S4-F11`); the counter entry only imports the selling entry point. The rule that the deployed `app` service does not serve `golden/` (offline-counter.md 5.2) is for the deployment ticket to apply to `apps/counter/dist`. code-house-rules 2 and 10.1 were already amended.
+
+## Scope notes
+
+- In scope: module-check rule 5 for `apps/counter` (`tools/module-check/check.mts`) and the lint and ignore plumbing for the new package, because the counter cannot be built and checked without them.

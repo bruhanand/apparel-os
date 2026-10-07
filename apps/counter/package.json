@@ -14,13 +14,12 @@
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
-    "@apparel-os/calculations": "workspace:*",
-    "@apparel-os/domain": "workspace:*"
+    "@apparel-os/calculations": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "catalog:",
     "@types/node": "catalog:",
-    "vite": "^8.3.2",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

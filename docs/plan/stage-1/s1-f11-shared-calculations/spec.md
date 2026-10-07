@@ -22,7 +22,7 @@ Stage 1 exit check 2 ([stage 1 README](../README.md) section 7) needs both runs 
 
 - In: the package, its numbers and refusals; pricing; tenders; returns, exchanges and split refunds; costing and ticket margin; the pure part of the tax-rule records (shapes, the checks of 10.1 and 10.3, the version in force on a date); the golden-case format, runner and cases; the other tests of 12.5 that need no counter; the source-level proof that selling never reaches costing.
 - Out, here: the tax-rule tables, their migrations and the "Read tax rules" query (`finance` · tax rules, `S1-F09`); the callers (`pos`, `offers`, `merchandise` · PT, `hr`); Zod schemas for the shapes that cross the API (`packages/schemas`, with the first API that carries them, 2.1); incentives (section 9, stage 6).
-- Blocked: the counter run and the bundle check on the counter bundle (section 6).
+- The counter run and the bundle check on the counter bundle are built in `T10` (section 6).
 
 ## 4. Business invariants
 

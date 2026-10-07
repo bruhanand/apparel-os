@@ -8,5 +8,14 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "golden", "test", "e2e", "build-guard.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "golden",
+    "test",
+    "e2e",
+    "build-guard.ts",
+    "costing-module.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

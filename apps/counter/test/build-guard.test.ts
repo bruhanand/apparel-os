@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { build } from 'vite';
 import { buildGuard } from '../build-guard.ts';
+import { isCostingModule } from '../costing-module.ts';
 
 const scratchRoot = join(import.meta.dirname, '..', 'node_modules', '.syn-guard-test');
 afterAll(() => {
@@ -35,10 +36,16 @@ describe('the counter build guard (S1-F11-AT11)', () => {
       'selling',
       "import { priceBill } from '@apparel-os/calculations';\nconsole.log(priceBill);\n",
     );
-    const report = JSON.parse(readFileSync(reportFile, 'utf8')) as { chunks: { modules: string[] }[] };
+    const report = JSON.parse(readFileSync(reportFile, 'utf8')) as {
+      costingFolder: string;
+      chunks: { modules: string[] }[];
+    };
     const modules = report.chunks.flatMap((chunk) => chunk.modules);
     expect(modules.length).toBeGreaterThan(10);
-    expect(modules.filter((id) => id.includes('/costing/'))).toEqual([]);
+    expect(modules.filter((id) => isCostingModule(id, report.costingFolder))).toEqual([]);
+    // The guard resolved the costing folder, so a pass is not a silent failure to look in the right place.
+    expect(report.costingFolder).toMatch(/\/costing$/);
+    expect(isCostingModule(`${report.costingFolder}/index.js`, report.costingFolder)).toBe(true);
   });
 
   it('PRD-OFF-004 fails a build with a deliberate import of the costing entry point', async () => {
