@@ -446,6 +446,174 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "imports-and-opening-data 11, 13.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
+    },
+    {
+      "table": "stock.unit_anchor",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.receipt_origin",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.receipt_origin_state",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.movement",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.movement_leg",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.movement_piece",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.sku_balance",
+      "class": "scoped",
+      "marks": ["projection", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.balance",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.piece",
+      "class": "scoped",
+      "marks": ["projection", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.coverage",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.acceptance",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.hold",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.hold_scope",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.hold_claim",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.hold_release",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.reservation",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.reservation_claim",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.reservation_event",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.cost_pool",
+      "class": "scoped",
+      "marks": ["projection", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.cost_layer",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.valuation",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.valuation_layer",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.transit_value",
+      "class": "scoped",
+      "marks": ["projection", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.transit_value_layer",
+      "class": "scoped",
+      "marks": ["projection"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "stock-ledger 14.2, 14.3; code-house-rules 6.2, 7.1"
     }
   ]
 }

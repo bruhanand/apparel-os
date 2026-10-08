@@ -10,6 +10,7 @@ import * as kernelTables from '../src/kernel/db/schema.js';
 import * as accessTables from '../src/modules/access/db/schema.js';
 import * as filesImportsTables from '../src/modules/files-imports/db/schema.js';
 import * as inboxTables from '../src/modules/inbox/db/schema.js';
+import * as stockTables from '../src/modules/stock/ledger/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { organisationTimezoneVersion } from '../src/modules/configuration/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -41,11 +42,15 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
   // retention function, each SECURITY DEFINER.
   organisation: [
     'access.row_visible',
+    // code-house-rules 6.2: the every-brand policy function for rows with a brand set (DEC-117).
+    'access.row_visible_brand_set',
     'access.scope_key_of',
     'audit.check_seals',
     'audit.delete_after_retention',
     'audit.ensure_partitions',
     'audit.seal_block',
+    // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).
+    'stock.book_has_held_stock',
   ],
 };
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
@@ -496,6 +501,12 @@ describe('the Drizzle definitions of files-imports (code-house-rules 3.4, 10.4)'
       await expectDefinitionMatches(world.organisations[0].database, table);
     },
   );
+});
+
+describe('the Drizzle definitions of stock · ledger (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(stockTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
+  });
 });
 
 describe('the Drizzle definitions of the Organisation set (code-house-rules 3.4, 10.4)', () => {

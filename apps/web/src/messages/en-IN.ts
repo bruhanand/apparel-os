@@ -483,6 +483,17 @@ export const englishIndia = {
   'record-type.audit.audit_seal': 'Audit seal',
   'record-type.audit.audit_partition': 'Audit partition',
   'record-type.kernel.outbox_event': 'Outbox event',
+  'record-type.stock.balance': 'Stock balance',
+  'record-type.stock.receipt_origin': 'Receipt origin',
+  'record-type.stock.movement': 'Stock movement',
+  'record-type.stock.piece': 'Piece',
+  'record-type.stock.coverage': 'PT coverage',
+  'record-type.stock.acceptance': 'Stock acceptance',
+  'record-type.stock.hold': 'Hold',
+  'record-type.stock.reservation': 'Reservation',
+  'record-type.stock.cost_pool': 'Cost pool',
+  'record-type.stock.valuation': 'Stock valuation',
+  'record-type.stock.transit_value': 'Value in transit',
 
   // Date and time (design-language 8): DD MMM YYYY, HH:mm (24-hour).
   'date.month.1': 'Jan',

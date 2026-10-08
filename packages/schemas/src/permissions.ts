@@ -118,6 +118,37 @@ const inboxRecordTypes = [declareServiceOnly('inbox.work_item', ['edit'], NONE)]
  */
 const filesImportsRecordTypes = [declare('files_imports.stored_file', ['view', 'create'], NONE)] as const;
 
+/** A record type whose fields include restricted field classes (access-and-approvals 4.1, 6). */
+function declareWithFields<const Code extends string>(
+  code: Code,
+  actions: readonly PermissionAction[],
+  scopeFacts: ScopeFactsDeclared,
+  fieldClasses: readonly FieldClass[],
+): RecordTypeDeclaration & { readonly code: Code } {
+  return { ...declare(code, actions, scopeFacts), fieldClasses };
+}
+
+/**
+ * `stock` · ledger (stock-ledger 13.6, 14.1, 14.3; S1-F10-T01). Each type covers the tables of one ledger record: its
+ * rows carry the legal entity, the place and the brand as 14.1 sets them, and row-level security reads them under the
+ * type (code-house-rules 6.2). Only view is declared: a business action is authorised on its own document's type by
+ * the module that posts it (13.2), and the policy admits a write only where its actor could read the row. Cost and
+ * value are the restricted field class cost, masked rather than filtered (13.6; access-and-approvals 6).
+ */
+const stockRecordTypes = [
+  declare('stock.balance', ['view'], ALL),
+  declareWithFields('stock.receipt_origin', ['view'], ALL, ['cost']),
+  declare('stock.movement', ['view'], ALL),
+  declare('stock.piece', ['view'], ALL),
+  declare('stock.coverage', ['view'], ALL),
+  declare('stock.acceptance', ['view'], ALL),
+  declare('stock.hold', ['view'], ALL),
+  declare('stock.reservation', ['view'], ALL),
+  declareWithFields('stock.cost_pool', ['view'], ALL, ['cost']),
+  declareWithFields('stock.valuation', ['view'], ALL, ['cost']),
+  declareWithFields('stock.transit_value', ['view'], ALL, ['cost']),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -125,6 +156,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...kernelRecordTypes,
   ...inboxRecordTypes,
   ...filesImportsRecordTypes,
+  ...stockRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -133,7 +165,8 @@ export type RecordTypeCode =
   | (typeof auditRecordTypes)[number]['code']
   | (typeof kernelRecordTypes)[number]['code']
   | (typeof inboxRecordTypes)[number]['code']
-  | (typeof filesImportsRecordTypes)[number]['code'];
+  | (typeof filesImportsRecordTypes)[number]['code']
+  | (typeof stockRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

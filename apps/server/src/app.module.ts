@@ -8,6 +8,7 @@ import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
 import { OrganisationModule } from './modules/organisation/index.js';
+import { StockLedgerModule } from './modules/stock/ledger/index.js';
 
 // House rule: every constructor injection names its token with @Inject(...), so nothing depends on decorator metadata.
 @Module({
@@ -26,6 +27,7 @@ import { OrganisationModule } from './modules/organisation/index.js';
     FilesImportsModule,
     CatalogueModule,
     PartiesModule,
+    StockLedgerModule,
   ],
 })
 export class AppModule {}
