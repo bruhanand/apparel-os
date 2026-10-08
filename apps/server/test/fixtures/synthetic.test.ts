@@ -9,6 +9,7 @@ import {
   syntheticCode,
   syntheticDatabaseName,
   syntheticFileName,
+  syntheticIdentifier,
   syntheticName,
 } from './synthetic.js';
 
@@ -20,6 +21,11 @@ describe('synthetic labels (code-house-rules 11.1)', () => {
     expect(syntheticName('Organisation A')).toBe('SYNTHETIC Organisation A');
     expect(syntheticFileName('opening-stock', 'xlsx')).toBe('SYNTHETIC-opening-stock.xlsx');
     expect(syntheticDatabaseName('SYN-ORG-A')).toBe('syn_org_a');
+    expect(syntheticIdentifier('stock-ledger')).toBe('test-syn-stock-ledger');
+  });
+
+  it.each(['', 'Stock', 'stock ledger', 'syn-stock'])('refuses the identifier part "%s"', (name) => {
+    expect(() => syntheticIdentifier(name)).toThrow();
   });
 
   it.each(['', 'org-a', 'ORG A', 'SYN-ORG', 'ORG-SYN'])('refuses the code part "%s"', (code) => {

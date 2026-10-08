@@ -1,7 +1,8 @@
 -- The stock ledger's tables: unit anchors, receipt origins and their state, movements with their legs and pieces,
 -- balances, pieces, coverage, acceptance, holds, reservations, cost pools and layers, valuations and transit values
 -- (stock-ledger 14.1 to 14.3, SL-24, SL-25; code-house-rules 3 to 7; PRD-MOD-002, PRD-MOD-008, PRD-MOD-011,
--- PRD-MOD-012, PRD-MOD-014, PRD-MOD-015, PRD-SEC-005; DEC-116, DEC-117; S1-F10-T01). Runs as aos_migration, which
+-- PRD-MOD-012, PRD-MOD-014, PRD-MOD-015, PRD-SEC-005; DEC-116, DEC-117; S1-F10-T01, S1-F10-T02), with the
+-- narrowly authorised functions the quantity operations need (13.6, 13.9). Runs as aos_migration, which
 -- owns everything it creates (code-house-rules 5.1). Compatible with the version running: it only adds
 -- (code-house-rules 4.2).
 --
@@ -140,7 +141,9 @@ create index movement_legal_entity on stock.movement (legal_entity_id);
 create index movement_brand_ids on stock.movement using gin (brand_ids);
 
 -- One side of a movement at one place. Its book is the book of the unit's mapping the leg used (PRD-ORG-005), kept so
--- that "has this book held stock?" is answered from the ledger's own rows (13.7).
+-- that "has this book held stock?" is answered from the ledger's own rows (13.7). It keeps how many of its units were
+-- accepted, so a balance's accepted quantity is rebuilt from the acceptance records and the legs that carried
+-- acceptance with the goods (13.4 "Location move"; 13.9; S1-F10-T02).
 create table stock.movement_leg (
   id uuid primary key,
   movement_id uuid not null references stock.movement (id),
@@ -148,6 +151,7 @@ create table stock.movement_leg (
   receipt_origin_id uuid not null references stock.receipt_origin (id),
   sku_id uuid,
   quantity integer not null,
+  accepted_quantity integer not null,
   location_id uuid,
   condition text not null,
   held_as text not null,
@@ -164,6 +168,7 @@ create table stock.movement_leg (
   recorded_at timestamptz not null default now(),
   constraint movement_leg_direction check (direction in ('out', 'in')),
   constraint movement_leg_quantity check (quantity > 0),
+  constraint movement_leg_accepted check (accepted_quantity >= 0 and accepted_quantity <= quantity),
   constraint movement_leg_condition check (condition in ('good', 'damaged', 'wrong', 'unidentified')),
   constraint movement_leg_held_as check (held_as in ('custody', 'in-transit', 'billed-retained')),
   constraint movement_leg_transit check (
@@ -407,12 +412,16 @@ create index coverage_business_unit on stock.coverage (business_unit_id);
 create index coverage_legal_entity on stock.coverage (legal_entity_id);
 create index coverage_brand on stock.coverage (brand_id);
 
--- Acceptance records: barcode verified and physically accepted at a Site (PRD-REC-021, PRD-REC-022).
+-- Acceptance records: barcode verified and physically accepted at a Site (PRD-REC-021, PRD-REC-022). Each keeps the
+-- location and condition of the balance it accepted units at, so the balance's accepted quantity is rebuilt from it
+-- (14.2; 13.9; S1-F10-T02).
 create table stock.acceptance (
   id uuid primary key,
   receipt_origin_id uuid not null references stock.receipt_origin (id),
   piece_id uuid references stock.piece (id),
   quantity integer not null,
+  location_id uuid not null,
+  condition text not null,
   source_module text not null,
   source_record_type text not null,
   source_record_id uuid not null,
@@ -431,6 +440,7 @@ create table stock.acceptance (
   business_unit_id uuid not null,
   legal_entity_id uuid not null,
   brand_id uuid,
+  constraint acceptance_condition check (condition in ('good', 'damaged', 'wrong', 'unidentified')),
   constraint acceptance_quantity check (quantity > 0 and (piece_id is null or quantity = 1)),
   constraint acceptance_import_kind check (
     source_import_kind in ('none', 'create', 'update', 'opening-balance', 'transaction')),
@@ -439,6 +449,7 @@ create table stock.acceptance (
 );
 create index acceptance_receipt_origin on stock.acceptance (receipt_origin_id);
 create index acceptance_piece on stock.acceptance (piece_id);
+create index acceptance_location on stock.acceptance (location_id);
 create index acceptance_source on stock.acceptance (source_module, source_record_type, source_record_id);
 create index acceptance_site on stock.acceptance (site_id);
 create index acceptance_store on stock.acceptance (store_id);
@@ -556,13 +567,16 @@ create index hold_scope_business_unit on stock.hold_scope (business_unit_id);
 create index hold_scope_legal_entity on stock.hold_scope (legal_entity_id);
 create index hold_scope_brand_ids on stock.hold_scope using gin (brand_ids);
 
--- What a hold covers now, changed only under the hold's lock (14.3): a piece, or a quantity at a balance key.
+-- What a hold covers now, changed only under the hold's lock (14.3): a piece, or a quantity at a balance key. A claim
+-- keeps the quantity it claimed when its hold was placed, never changed, so Rebuild and compare finds what it holds now:
+-- what it claimed less its releases (2.1, 14.2; PRD-MOD-012; S1-F10-T02). So does a reservation's claim.
 create table stock.hold_claim (
   id uuid primary key,
   hold_id uuid not null references stock.hold (id),
   piece_id uuid references stock.piece (id),
   balance_id uuid references stock.balance (id),
   quantity integer not null,
+  claimed_quantity integer not null,
   site_id uuid not null,
   store_id uuid,
   business_unit_id uuid not null,
@@ -570,7 +584,8 @@ create table stock.hold_claim (
   brand_id uuid,
   recorded_at timestamptz not null default now(),
   constraint hold_claim_one check (num_nonnulls(piece_id, balance_id) = 1),
-  constraint hold_claim_quantity check (quantity >= 0 and (piece_id is null or quantity <= 1))
+  constraint hold_claim_quantity check (quantity >= 0 and (piece_id is null or quantity <= 1)),
+  constraint hold_claim_claimed check (claimed_quantity >= quantity and (piece_id is null or claimed_quantity = 1))
 );
 create index hold_claim_hold on stock.hold_claim (hold_id);
 create index hold_claim_piece on stock.hold_claim (piece_id);
@@ -581,14 +596,17 @@ create index hold_claim_business_unit on stock.hold_claim (business_unit_id);
 create index hold_claim_legal_entity on stock.hold_claim (legal_entity_id);
 create index hold_claim_brand on stock.hold_claim (brand_id);
 
--- The release of one claim, by an event that is the hold kind's own (6.1, 6.2; PRD-DMG-003).
+-- The release of one claim, by an event that is the hold kind's own (6.1, 6.2; PRD-DMG-003). A count freeze claims
+-- everything in its scope through its scope rows, not through claims (6.2, 8.1), so its release names no claim and no
+-- quantity: one release row, by `count-closed`, ends the whole freeze, once (13.5 "End count freeze"; 13.9;
+-- S1-F10-T01 Notes, S1-F10-T02).
 create table stock.hold_release (
   id uuid primary key,
   hold_id uuid not null,
   hold_kind text not null,
-  hold_claim_id uuid not null references stock.hold_claim (id),
+  hold_claim_id uuid references stock.hold_claim (id),
   release_event text not null,
-  quantity integer not null,
+  quantity integer,
   piece_id uuid references stock.piece (id),
   source_module text not null,
   source_record_type text not null,
@@ -620,7 +638,9 @@ create table stock.hold_release (
     when 'inspection' then release_event in ('inspected')
     when 'write-off' then release_event in ('disposal', 'write-off-reversed')
     else false end),
-  constraint hold_release_quantity check (quantity > 0 and (piece_id is null or quantity = 1)),
+  constraint hold_release_claim check (case
+    when hold_kind = 'count-freeze' then hold_claim_id is null and quantity is null and piece_id is null
+    else hold_claim_id is not null and quantity > 0 and (piece_id is null or quantity = 1) end),
   constraint hold_release_import_kind check (
     source_import_kind in ('none', 'create', 'update', 'opening-balance', 'transaction')),
   constraint hold_release_actor check ((actor_user_id is null) <> (actor_service_identity_id is null)),
@@ -628,6 +648,7 @@ create table stock.hold_release (
 );
 create index hold_release_hold on stock.hold_release (hold_id, hold_kind);
 create index hold_release_claim on stock.hold_release (hold_claim_id);
+create unique index hold_release_freeze_once on stock.hold_release (hold_id) where hold_kind = 'count-freeze';
 create index hold_release_piece on stock.hold_release (piece_id);
 create index hold_release_source on stock.hold_release (source_module, source_record_type, source_record_id);
 create index hold_release_site on stock.hold_release (site_id);
@@ -643,6 +664,7 @@ create table stock.reservation_claim (
   piece_id uuid references stock.piece (id),
   balance_id uuid references stock.balance (id),
   quantity integer not null,
+  claimed_quantity integer not null,
   site_id uuid not null,
   store_id uuid,
   business_unit_id uuid not null,
@@ -650,7 +672,8 @@ create table stock.reservation_claim (
   brand_id uuid,
   recorded_at timestamptz not null default now(),
   constraint reservation_claim_one check (num_nonnulls(piece_id, balance_id) = 1),
-  constraint reservation_claim_quantity check (quantity >= 0 and (piece_id is null or quantity <= 1))
+  constraint reservation_claim_quantity check (quantity >= 0 and (piece_id is null or quantity <= 1)),
+  constraint reservation_claim_claimed check (claimed_quantity >= quantity and (piece_id is null or claimed_quantity = 1))
 );
 create index reservation_claim_reservation on stock.reservation_claim (reservation_id);
 create index reservation_claim_piece on stock.reservation_claim (piece_id);
@@ -662,7 +685,9 @@ create index reservation_claim_legal_entity on stock.reservation_claim (legal_en
 create index reservation_claim_brand on stock.reservation_claim (brand_id);
 
 -- The end of one claim: consumed by the movement that consumed it, or cancelled, withdrawn or released, each only for
--- the kinds 6.1 gives it; never by time (PRD-TRF-022, PRD-OFR-016, PRD-OFF-011).
+-- the kinds 6.1 gives it; never by time (PRD-TRF-022, PRD-OFR-016, PRD-OFF-011). Or `moved`, of any kind, by the
+-- location move that carried its reserved units to another balance at the same unit, where a new claim of the same
+-- reservation holds them, so the reservation itself never ends by it (13.9; product owner, 8 Oct 2026).
 create table stock.reservation_event (
   id uuid primary key,
   reservation_id uuid not null,
@@ -692,13 +717,13 @@ create table stock.reservation_event (
   brand_id uuid,
   constraint reservation_event_of_reservation foreign key (reservation_id, reservation_kind)
     references stock.reservation (id, kind),
-  constraint reservation_event_event check (case reservation_kind
+  constraint reservation_event_event check (event = 'moved' or case reservation_kind
     when 'transfer' then event in ('consumed', 'cancelled')
     when 'supplier-return' then event in ('consumed', 'withdrawn')
     when 'held-goods' then event in ('consumed', 'cancelled')
     when 'offline-protected' then event in ('consumed', 'released')
     else false end),
-  constraint reservation_event_movement check ((event = 'consumed') = (movement_id is not null)),
+  constraint reservation_event_movement check ((event in ('consumed', 'moved')) = (movement_id is not null)),
   constraint reservation_event_quantity check (quantity > 0 and (piece_id is null or quantity = 1)),
   constraint reservation_event_import_kind check (
     source_import_kind in ('none', 'create', 'update', 'opening-balance', 'transaction')),
@@ -1142,6 +1167,175 @@ as $$
 $$;
 revoke execute on function stock.book_has_held_stock(uuid) from public;
 grant execute on function stock.book_has_held_stock(uuid) to aos_runtime;
+
+-- The narrowly authorised recheck of what the actor cannot see (14.1, 14.3; code-house-rules 6.2; DEC-117;
+-- S1-F10-T02). A command's rechecks under the locks must respect holds, reservations and count freezes whose rows
+-- row-level security hides from its actor, such as a hold or freeze recording a brand the actor is not scoped to. The
+-- command asks once for the whole request, naming each item by its ordinal in the request ("line"), so a refusal
+-- names the item's line (13.8). The function sees every such row and answers only, per line:
+--   - ('count-freeze', id) for each count freeze not yet ended at a touched Site and unit whose scope covers a location,
+--     SKU or brand the line touches and whose header the actor can see, so the command names it
+--     (13.8 `count-freeze-active`); ('hidden', null) for such a freeze the actor cannot see;
+--   - ('hidden', null) when claims the command did not count, of holds outside reservations and of reservations, take
+--     a piece the line takes, or more units of a balance than the spare the line left on it after the command's own
+--     arithmetic (6.2); and when reservations of a receipt origin the command did not count, with uncounted holds at
+--     the balance a reservation takes from, take more of the origin's covered quantity than the spare the line left
+--     of it (6.2: reservations never exceed the stock that is covered).
+-- The command counts a claim when the claim and its header are rows it can see and, for an origin's coverage, when
+-- the claim's balance is one it loaded, named in `counted_balances`. Holds at one balance count once: a quantity claim
+-- names no unit, so a hold is taken to fall on units no other hold holds, as far as the units outside reservations go
+-- (6.2 "holds that overlap on the same units count once"; 13.9). The spare the command passes is what that arithmetic
+-- leaves, so the claims it did not count block exactly when they exceed it.
+-- It never answers a hidden row's identifier, kind, brand or quantity: the command refuses generically (13.8
+-- `blocked`). It reads under the locks the command holds: freezes start and end only under the unit anchor held
+-- exclusively, and claims change only under their balance's lock (14.3). SECURITY DEFINER, owned by the migration
+-- role, with a fixed search path, executable only by the runtime role (code-house-rules 5.2).
+create function stock.recheck_hidden(
+  touch_lines integer[], touch_sites uuid[], touch_units uuid[], touch_kinds text[], touch_ids uuid[],
+  take_lines integer[], take_balances uuid[], take_spares integer[],
+  piece_lines integer[], piece_ids uuid[],
+  origin_lines integer[], origin_ids uuid[], origin_balances uuid[], origin_spares integer[],
+  counted_balances uuid[]
+) returns table (line integer, blocker text, hold_id uuid)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $$
+  with touch as (
+    select t.line, t.site_id, t.business_unit_id, t.kind, t.member_id
+    from unnest(recheck_hidden.touch_lines, recheck_hidden.touch_sites, recheck_hidden.touch_units,
+                recheck_hidden.touch_kinds, recheck_hidden.touch_ids)
+      as t (line, site_id, business_unit_id, kind, member_id)
+  ),
+  open_freeze as (
+    select distinct t.line, h.id,
+           access.row_visible_brand_set('stock.hold', h.site_id, h.store_id, h.business_unit_id, h.legal_entity_id,
+             h.brand_ids, null) as visible
+    from touch t
+    join stock.hold h on h.kind = 'count-freeze' and h.site_id = t.site_id and h.business_unit_id = t.business_unit_id
+    where not exists (select 1 from stock.hold_release r where r.hold_id = h.id)
+      and exists (
+        select 1 from stock.hold_scope s
+        where s.hold_id = h.id
+          and ((t.kind = 'location' and s.location_id = t.member_id)
+               or (t.kind = 'sku' and s.sku_id = t.member_id)
+               or (t.kind = 'brand' and s.scope_brand_id = t.member_id)))
+  ),
+  uncounted_claim as (
+    select c.balance_id, c.piece_id, c.quantity
+    from stock.hold_claim c
+    join stock.hold h on h.id = c.hold_id
+    where c.quantity > 0
+      and h.within_reservation_id is null
+      and (c.balance_id = any (recheck_hidden.take_balances) or c.piece_id = any (recheck_hidden.piece_ids))
+      and not (access.row_visible('stock.hold', c.site_id, c.store_id, c.business_unit_id, c.legal_entity_id,
+                 c.brand_id, null)
+               and access.row_visible_brand_set('stock.hold', h.site_id, h.store_id, h.business_unit_id,
+                 h.legal_entity_id, h.brand_ids, null))
+    union all
+    select c.balance_id, c.piece_id, c.quantity
+    from stock.reservation_claim c
+    join stock.reservation v on v.id = c.reservation_id
+    where c.quantity > 0
+      and (c.balance_id = any (recheck_hidden.take_balances) or c.piece_id = any (recheck_hidden.piece_ids))
+      and not (access.row_visible('stock.reservation', c.site_id, c.store_id, c.business_unit_id,
+                 c.legal_entity_id, c.brand_id, null)
+               and access.row_visible_brand_set('stock.reservation', v.site_id, v.store_id, v.business_unit_id,
+                 v.legal_entity_id, v.brand_ids, null))
+  ),
+  uncounted_hold as (
+    select c.balance_id, c.piece_id, c.quantity
+    from stock.hold_claim c
+    join stock.hold h on h.id = c.hold_id
+    where c.quantity > 0
+      and h.within_reservation_id is null
+      and c.balance_id = any (recheck_hidden.origin_balances)
+      and not (access.row_visible('stock.hold', c.site_id, c.store_id, c.business_unit_id, c.legal_entity_id,
+                 c.brand_id, null)
+               and access.row_visible_brand_set('stock.hold', h.site_id, h.store_id, h.business_unit_id,
+                 h.legal_entity_id, h.brand_ids, null))
+  ),
+  uncounted_on_balance as (
+    select c.balance_id, sum(c.quantity) as quantity
+    from uncounted_claim c where c.balance_id is not null group by c.balance_id
+  ),
+  uncounted_on_origin as (
+    select b.receipt_origin_id, sum(c.quantity) as quantity
+    from stock.reservation_claim c
+    join stock.reservation v on v.id = c.reservation_id
+    join stock.balance b on b.id = c.balance_id
+    where c.quantity > 0
+      and b.receipt_origin_id = any (recheck_hidden.origin_ids)
+      and not (b.id = any (recheck_hidden.counted_balances)
+               and access.row_visible('stock.reservation', c.site_id, c.store_id, c.business_unit_id,
+                 c.legal_entity_id, c.brand_id, null)
+               and access.row_visible_brand_set('stock.reservation', v.site_id, v.store_id, v.business_unit_id,
+                 v.legal_entity_id, v.brand_ids, null))
+    group by b.receipt_origin_id
+  )
+  select f.line, 'count-freeze'::text, f.id from open_freeze f where f.visible
+  union
+  select f.line, 'hidden'::text, null::uuid from open_freeze f where not f.visible
+  union
+  select t.line, 'hidden'::text, null::uuid
+  from unnest(recheck_hidden.take_lines, recheck_hidden.take_balances, recheck_hidden.take_spares)
+    as t (line, balance_id, spare)
+  join uncounted_on_balance u on u.balance_id = t.balance_id
+  where u.quantity > t.spare
+  union
+  select p.line, 'hidden'::text, null::uuid
+  from unnest(recheck_hidden.piece_lines, recheck_hidden.piece_ids) as p (line, piece_id)
+  where exists (select 1 from uncounted_claim c where c.piece_id = p.piece_id)
+  union
+  select o.line, 'hidden'::text, null::uuid
+  from unnest(recheck_hidden.origin_lines, recheck_hidden.origin_ids, recheck_hidden.origin_balances,
+              recheck_hidden.origin_spares)
+    as o (line, receipt_origin_id, balance_id, spare)
+  where coalesce((select u.quantity from uncounted_on_origin u where u.receipt_origin_id = o.receipt_origin_id), 0)
+      + coalesce((select sum(h.quantity) from uncounted_hold h where h.balance_id = o.balance_id), 0) > o.spare
+$$;
+revoke execute on function stock.recheck_hidden(integer[], uuid[], uuid[], text[], uuid[], integer[], uuid[],
+  integer[], integer[], uuid[], integer[], uuid[], uuid[], integer[], uuid[]) from public;
+grant execute on function stock.recheck_hidden(integer[], uuid[], uuid[], text[], uuid[], integer[], uuid[],
+  integer[], integer[], uuid[], integer[], uuid[], uuid[], integer[], uuid[]) to aos_runtime;
+
+-- Whether Rebuild and compare, run under its reader's actor, saw only part of what it rebuilds (13.6 "says when it is
+-- partial"; PRD-MOD-003; S1-F10-T02): true when any row of the tables it reads is one the actor cannot see. It answers
+-- only that, never a row or a count, so it tells the reader nothing of the rows it cannot see (DEC-117). SECURITY
+-- DEFINER, owned by the migration role, with a fixed search path, executable only by the runtime role
+-- (code-house-rules 5.2).
+create function stock.rebuild_partial() returns boolean
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $$
+  select exists (select 1 from stock.sku_balance t where not access.row_visible('stock.balance', t.site_id,
+           t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.balance t where not access.row_visible('stock.balance', t.site_id, t.store_id,
+           t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.movement_leg t where not access.row_visible('stock.movement', t.site_id,
+           t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.acceptance t where not access.row_visible('stock.acceptance', t.site_id,
+           t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.coverage t where not access.row_visible('stock.coverage', t.site_id,
+           t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.receipt_origin_state t where not access.row_visible('stock.receipt_origin',
+           t.site_id, t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.piece t where not access.row_visible('stock.piece', t.site_id, t.store_id,
+           t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.hold_claim t where not access.row_visible('stock.hold', t.site_id, t.store_id,
+           t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.hold_release t where not access.row_visible('stock.hold', t.site_id,
+           t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.reservation_claim t where not access.row_visible('stock.reservation',
+           t.site_id, t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+      or exists (select 1 from stock.reservation_event t where not access.row_visible('stock.reservation',
+           t.site_id, t.store_id, t.business_unit_id, t.legal_entity_id, t.brand_id, null))
+$$;
+revoke execute on function stock.rebuild_partial() from public;
+grant execute on function stock.rebuild_partial() to aos_runtime;
 
 -- Runtime grants (code-house-rules 5.2): append-only tables SELECT and INSERT, and UPDATE (id) where locked;
 -- projections SELECT, INSERT and UPDATE; no DELETE anywhere.

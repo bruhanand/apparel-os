@@ -34,7 +34,7 @@ export class CallerRegistry {
 
   constructor(registrations: readonly CallerRegistration[], composition: Composition) {
     for (const registration of registrations) {
-      if (registration.synthetic && composition !== 'test') {
+      if (registration.synthetic && composition.kind !== 'test') {
         throw new Error(`Synthetic stock caller ${registration.module} outside a test composition`);
       }
       for (const recordType of registration.recordTypes) {

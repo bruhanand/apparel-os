@@ -7,7 +7,10 @@
 -- It answers as access.row_visible (0022) does, with the brand set in place of the one brand, and checks every
 -- dimension inside the same effective grant, so one assignment covers the place, the legal entity and every brand of
 -- the set together (PRD-ACS-004; access-and-approvals 7.2). Two calls, one to row_visible for the place and one for
--- the brands, could each be met by a different assignment, which is why the set is a parameter here.
+-- the brands, could each be met by a different assignment, which is why the set is a parameter here. Its body repeats
+-- row_visible's on purpose: sharing it would mean redefining access.row_visible, the policy function of every scoped
+-- table already deployed, or adding a nested function call per row to every policy check; a change to one is made to
+-- both (S1-F10 review).
 --
 -- The brand set: a null element is a brand that is Unknown, such as the brand of goods of Unknown SKU, covered only by
 -- all-members brand scope (access-and-approvals 5.3; PRD-MOD-015); a brand-limited grant covers the row only when it

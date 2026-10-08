@@ -2,12 +2,15 @@ import { uuidv7 } from '@apparel-os/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type LedgerItem } from '../src/modules/stock/ledger/index.js';
 import { addSyntheticSku, at, StockWorld, written } from './support/stock-ledger.js';
+import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F10-T02: the measurement of contention on the unit anchor (stock-ledger 10.3, 14.3; SL-24, RR-227). Every item
 // takes its unit's anchor in shared mode; a count freeze takes it exclusively to start or end. The test measures, on
 // real PostgreSQL in the test container, how much the shared anchor costs items of different SKUs at one unit, and how
-// long a freeze start waits for items in flight and holds new ones. Numbers are printed and recorded in the ticket's
-// Notes; the test asserts only that nothing fails, deadlocks or reaches the synthetic lock limit (1 s). SYNTHETIC data.
+// long a freeze start waits for items in flight and holds new ones. The numbers are recorded in the ticket's Notes and
+// in stock-ledger 14.3; they are printed only when AOS_STOCK_ANCHOR_REPORT is 1, and the test asserts only that nothing
+// fails, deadlocks or reaches the synthetic lock limit (1 s). The two concurrency tests of 14.3 order their
+// transactions by what PostgreSQL reports, never by a sleep (code-house-rules 10.3). SYNTHETIC data.
 
 const world = new StockWorld();
 const WORKERS = 8;
@@ -111,8 +114,75 @@ describe('unit anchor contention (stock-ledger 14.3; SL-24)', () => {
       summary(`${String(WORKERS)} workers with 5 freeze starts and ends at the same unit`, withFreeze),
       `slowest freeze start ${freezeMs.toFixed(1)} ms, slowest freeze end ${endMs.toFixed(1)} ms`,
     ];
-    console.log(`stock-ledger 14.3 anchor measurement\n${lines.join('\n')}`);
+    if (process.env.AOS_STOCK_ANCHOR_REPORT === '1') {
+      console.log(`stock-ledger 14.3 anchor measurement\n${lines.join('\n')}`);
+    }
     expect(many.latencies).toHaveLength(WORKERS * PER_WORKER);
     expect(withFreeze.latencies).toHaveLength(WORKERS * PER_WORKER);
+  });
+});
+
+function startFreeze(): LedgerItem {
+  return {
+    kind: 'start-count-freeze',
+    lineId: uuidv7(),
+    siteId: at('bin').siteId,
+    businessUnitId: at('bin').businessUnitId,
+    reason: 'SYNTHETIC cycle count',
+    scope: [{ locationId: at('bin').locationId }],
+  };
+}
+
+describe('the unit anchor orders items and count freezes (stock-ledger 14.3, 11.9; code-house-rules 10.3)', () => {
+  it('PRD-STK-008 a freeze start waits for an item holding the anchor shared, then counts what it posted', async () => {
+    const sku = addSyntheticSku();
+    const held = gate();
+    const release = gate();
+    let itemPid = 0;
+    const item = world.post(world.poster, [receipt(sku.skuId, at('bin'))], {
+      hold: async (context) => {
+        itemPid = await backendPid(context);
+        held.open();
+        await release.wait;
+      },
+    });
+    await held.wait;
+    const freeze = world.post(world.poster, [startFreeze()]);
+    await waitUntilAnyWaitingForLock(world.database, [itemPid]);
+    release.open();
+    written(await item);
+    const started = written(await freeze);
+    expect(started.expected).toContainEqual(expect.objectContaining({ skuId: sku.skuId, quantity: 1 }));
+    written(
+      await world.post(world.poster, [
+        { kind: 'end-count-freeze', lineId: uuidv7(), holdId: started.holdIds[0] ?? '' },
+      ]),
+    );
+  });
+
+  it('PRD-STK-009 an item that locks after a freeze start sees the freeze', async () => {
+    const sku = addSyntheticSku();
+    const held = gate();
+    const release = gate();
+    let freezePid = 0;
+    const freeze = world.post(world.poster, [startFreeze()], {
+      hold: async (context) => {
+        freezePid = await backendPid(context);
+        held.open();
+        await release.wait;
+      },
+    });
+    await held.wait;
+    const item = world.post(world.poster, [receipt(sku.skuId, at('bin'))]);
+    await waitUntilAnyWaitingForLock(world.database, [freezePid]);
+    release.open();
+    const started = written(await freeze);
+    const refused = await item;
+    expect(refused.kind === 'refused' && refused.refusal.code).toBe('stock.count-freeze-active');
+    written(
+      await world.post(world.poster, [
+        { kind: 'end-count-freeze', lineId: uuidv7(), holdId: started.holdIds[0] ?? '' },
+      ]),
+    );
   });
 });

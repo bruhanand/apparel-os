@@ -1,4 +1,4 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { uuidv7, type Paise } from '@apparel-os/domain';
 import type { AccessActionType } from '@apparel-os/schemas';
 import { and, eq, ne } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
@@ -77,9 +77,12 @@ export async function preparersOf(
   return [...new Set(rows.map((row) => row.userId))].sort();
 }
 
-/** The value a request binds to, on its rule's basis (access-and-approvals 9.1; PRD-ACS-015, PRD-ACS-016). */
+/**
+ * The value a request binds to, on its rule's basis (access-and-approvals 9.1; PRD-ACS-015, PRD-ACS-016): none, Unknown
+ * (never zero; PRD-MOD-015), or a known amount in whole paise, never below zero (PRD-MOD-014).
+ */
 export type RequestValue =
-  { readonly kind: 'none' } | { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: number };
+  { readonly kind: 'none' } | { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: Paise };
 
 /**
  * Request approval (access-and-approvals 9.1, 9.6; PRD-ACS-007; module-map section 3, rule 6), in the preparing
@@ -145,6 +148,9 @@ export async function requestModuleApproval(
   }
   if ((rule.value === 'none') !== (request.value.kind === 'none')) {
     throw new CommandDefect(`Approval rule ${rule.actionType} has value basis ${rule.value}`);
+  }
+  if (request.value.kind === 'known' && request.value.amountPaise < 0) {
+    throw new CommandDefect(`A value on ${rule.actionType}'s basis is never below zero (PRD-MOD-014)`);
   }
   return openRequest(context, audit, {
     actionType: rule.actionType,

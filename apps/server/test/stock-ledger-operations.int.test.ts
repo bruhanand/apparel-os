@@ -8,9 +8,25 @@ import {
   type Goods,
   type LedgerItem,
 } from '../src/modules/stock/ledger/index.js';
+import { lockTable } from '../src/kernel/index.js';
+import { UNREGISTERED_MODULE } from './fixtures/stock-ledger.js';
 import { syntheticCode } from './fixtures/synthetic.js';
-import { connect } from './support/postgres.js';
-import { at, PLACES, SKUS, StockWorld, written, type Actor } from './support/stock-ledger.js';
+import { connect, sqlState } from './support/postgres.js';
+import {
+  addSyntheticSku,
+  APPROVE_DOCUMENT,
+  APPROVE_ON_COST,
+  at,
+  BRAND_A,
+  BRAND_B,
+  PLACES,
+  SKUS,
+  StockWorld,
+  SYNTHETIC_DOCUMENT_TYPE,
+  SYNTHETIC_MODULE,
+  written,
+  type Actor,
+} from './support/stock-ledger.js';
 
 // S1-F10-T02: the ledger's unvalued operations (stock-ledger 13.1 to 13.6, 13.8; 10.3, 10.4), posted by a synthetic
 // caller through the real command runner, access and row-level security on real PostgreSQL (DEC-112, H1 to H6). Every
@@ -70,7 +86,7 @@ async function custodyOf(skuId: string) {
 }
 
 async function rebuild() {
-  return world.run(world.poster.user.id, (context) => rebuildAndCompare(context));
+  return (await world.run(world.poster.user.id, (context) => rebuildAndCompare(context))).differences;
 }
 
 const toBin = { businessUnitId: at('bin').businessUnitId, locationId: at('bin').locationId };
@@ -169,7 +185,11 @@ describe('receipt count (stock-ledger 13.4)', () => {
       code: 'stock.invalid-item',
       missing: [{ kind: 'line', lineId }, { kind: 'batch' }],
     });
-    written(await world.post(world.poster, [{ ...item, batch: { code: 'SYN-BATCH-1', expiryDate: '2099-01-31' } }]));
+    written(
+      await world.post(world.poster, [
+        { ...item, batch: { code: syntheticCode('BATCH-1'), expiryDate: '2099-01-31' } },
+      ]),
+    );
   });
 
   it('stock-ledger 13.8 place-invalid: a location that is not of the Site and unit named', async () => {
@@ -198,7 +218,9 @@ describe('receipt count (stock-ledger 13.4)', () => {
       condition: 'good',
       owner: { kind: 'unknown' },
     };
-    const other = await world.post(world.poster, [item], { source: { ...world.source(), module: 'test-other' } });
+    const other = await world.post(world.poster, [item], {
+      source: { ...world.source(), module: UNREGISTERED_MODULE },
+    });
     expect(other.kind === 'refused' && other.refusal.code).toBe('stock.caller-not-registered');
     const history = await world.post(world.poster, [item], {
       source: { ...world.source(), importKind: 'historical-reference' },
@@ -491,7 +513,7 @@ describe('reservations (stock-ledger 13.5; 6.2, 6.3)', () => {
     const one = { ...goods, quantity: 1, pieceCodes: [pieceCodes[0] ?? ''] };
     const made = written(await world.post(world.poster, [reserve(one)]));
     expect((await refusal(world.poster, [reserve(one)])).code).toBe('stock.reservation-overlap');
-    // A reserved piece stays where its reservation names it (6.2).
+    // A reserved piece never leaves its unit by a location move (13.9; product owner, 8 Oct 2026).
     expect(
       (
         await refusal(world.poster, [
@@ -499,7 +521,7 @@ describe('reservations (stock-ledger 13.5; 6.2, 6.3)', () => {
             kind: 'location-move',
             lineId: line(),
             from: at('floor'),
-            to: { businessUnitId: at('back').businessUnitId, locationId: at('back').locationId },
+            to: { businessUnitId: at('floor2').businessUnitId, locationId: at('floor2').locationId },
             condition: 'good',
             goods: one,
           },
@@ -537,12 +559,8 @@ describe('reservations (stock-ledger 13.5; 6.2, 6.3)', () => {
           skuId: sku.skuId,
         }),
       )
-    ).rows.filter((row) => row.locationId === at('floor').locationId);
-    const total = rows.reduce((sum, row) => sum + row.available, 0);
-    const quantity = rows.reduce((sum, row) => sum + row.quantity, 0);
-    const reserved = rows.reduce((sum, row) => sum + row.reserved, 0);
-    const held = rows.reduce((sum, row) => sum + row.heldOutsideReservations, 0);
-    expect(total).toBe(Math.max(0, quantity - reserved - held));
+    ).rows.filter((row) => row.receiptOriginId === goods.receiptOriginId);
+    expect(rows).toMatchObject([{ quantity: 4, reserved: 2, heldOutsideReservations: 1, available: 1 }]);
   });
 });
 
@@ -713,7 +731,7 @@ describe('approval use (access-and-approvals 9.7, 9.8; stock-ledger 10.4, 13.1; 
     const document = { recordId: uuidv7(), versionId: uuidv7() };
     const { decision } = await world.approve(world.poster, document);
     if (decision.kind !== 'success') throw new Error(decision.refusal.code);
-    const approval = { decisionId: decision.answer.decisionId, actionType: 'test-stock-ledger.approve-document' };
+    const approval = { decisionId: decision.answer.decisionId, actionType: APPROVE_DOCUMENT };
     const source = world.source(document.recordId, document.versionId);
     const posted = written(await world.post(world.poster, [damage()], { source, approval }));
     // The use is the approval evidence, and the movement keeps it (13.3; PRD-INT-004), read as the owner.
@@ -739,7 +757,7 @@ describe('approval use (access-and-approvals 9.7, 9.8; stock-ledger 10.4, 13.1; 
     if (decision.kind !== 'success') throw new Error(decision.refusal.code);
     const changed = await world.post(world.poster, [damage()], {
       source: world.source(document.recordId, uuidv7()),
-      approval: { decisionId: decision.answer.decisionId, actionType: 'test-stock-ledger.approve-document' },
+      approval: { decisionId: decision.answer.decisionId, actionType: APPROVE_DOCUMENT },
     });
     expect(changed.kind === 'refused' && changed.refusal.code).toBe('access.approval-version-changed');
   });
@@ -752,7 +770,7 @@ describe('approval use (access-and-approvals 9.7, 9.8; stock-ledger 10.4, 13.1; 
       source: world.source(document.recordId, document.versionId),
       approval: {
         decisionId: decision.answer.decisionId,
-        actionType: 'test-stock-ledger.approve-document',
+        actionType: APPROVE_DOCUMENT,
         preparers: [world.poster.user.id, world.approver.user.id],
       },
     });
@@ -763,7 +781,7 @@ describe('approval use (access-and-approvals 9.7, 9.8; stock-ledger 10.4, 13.1; 
     const { decision } = await world.approve(
       world.poster,
       { recordId: uuidv7(), versionId: uuidv7() },
-      'test-stock-ledger.approve-on-cost',
+      APPROVE_ON_COST,
     );
     expect(decision.kind === 'refusal' && decision.refusal.code).toBe('access.no-approval-limit');
   });
@@ -783,7 +801,7 @@ describe('plan staleness (stock-ledger 13.1)', () => {
       owner: { kind: 'unknown' },
       batch: { code, expiryDate: '2099-06-30' },
     });
-    written(await world.post(world.poster, [receipt('SYN-BATCH-2')]));
+    written(await world.post(world.poster, [receipt(syntheticCode('BATCH-2'))]));
     let planned!: () => void;
     const afterPlan = new Promise<void>((resolve) => (planned = resolve));
     let proceed!: () => void;
@@ -810,7 +828,7 @@ describe('plan staleness (stock-ledger 13.1)', () => {
       return world.ledger.recheck(context, await world.ledger.lock(context, plan.value));
     });
     await afterPlan;
-    written(await world.post(world.poster, [receipt('SYN-BATCH-3')]));
+    written(await world.post(world.poster, [receipt(syntheticCode('BATCH-3'))]));
     proceed();
     const checked = await stale;
     expect(checked.kind === 'refused' && checked.refusal).toEqual({
@@ -818,5 +836,387 @@ describe('plan staleness (stock-ledger 13.1)', () => {
       code: 'stock.plan-stale',
       missing: [{ kind: 'line', lineId }],
     });
+  });
+});
+
+// S1-F10 review fixes: each correctness finding first as a failing test (S1 to S10, T7).
+
+/** Places a fresh SYNTHETIC SKU's goods at the floor, covered and accepted as given (6.3). */
+async function onFloor(options: { quantity: number; covered: number; accepted: number }) {
+  const sku = addSyntheticSku();
+  const origin = await receive(sku, options.quantity, at('floor'));
+  const items: LedgerItem[] = [];
+  if (options.covered > 0) {
+    items.push({
+      kind: 'record-coverage',
+      lineId: line(),
+      ptRevisionId: uuidv7(),
+      receiptOriginId: origin,
+      quantity: options.covered,
+    });
+  }
+  if (options.accepted > 0) {
+    items.push({
+      kind: 'record-acceptance',
+      lineId: line(),
+      at: at('floor'),
+      goods: { skuId: sku.skuId, quantity: options.accepted, receiptOriginId: origin },
+    });
+  }
+  if (items.length > 0) written(await world.post(world.poster, items));
+  return { sku, origin };
+}
+
+async function availableAt(skuId: string, place = at('floor')) {
+  return (
+    await world.run(world.poster.user.id, (context) =>
+      availability(context, { siteId: place.siteId, businessUnitId: place.businessUnitId, skuId }),
+    )
+  ).rows;
+}
+
+describe('review fixes: reservations never exceed covered stock (stock-ledger 6.2, 13.9; S1)', () => {
+  it('PRD-TRF-006 PRD-INT-005 an origin split across two units reserves at most its covered quantity in all', async () => {
+    const { sku, origin } = await onFloor({ quantity: 5, covered: 3, accepted: 5 });
+    const goods = (quantity: number) => ({ skuId: sku.skuId, quantity, receiptOriginId: origin });
+    // Two of its units move to the other unit of the Site, with their acceptance (13.4).
+    written(
+      await world.post(world.poster, [
+        {
+          kind: 'location-move',
+          lineId: line(),
+          from: at('floor'),
+          to: { businessUnitId: at('floor2').businessUnitId, locationId: at('floor2').locationId },
+          condition: 'good',
+          goods: goods(2),
+        },
+      ]),
+    );
+    written(await world.post(world.poster, [reserve(goods(3))]));
+    const elsewhere: LedgerItem = {
+      kind: 'reserve',
+      lineId: line(),
+      reservationKind: 'transfer',
+      at: at('floor2'),
+      goods: [goods(1)],
+    };
+    expect((await refusal(world.poster, [elsewhere])).code).toBe('stock.not-covered');
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-TRF-006 within one unit too: a second location of the origin finds its coverage taken', async () => {
+    const { sku, origin } = await onFloor({ quantity: 4, covered: 2, accepted: 4 });
+    const goods = (quantity: number) => ({ skuId: sku.skuId, quantity, receiptOriginId: origin });
+    written(
+      await world.post(world.poster, [
+        {
+          kind: 'location-move',
+          lineId: line(),
+          from: at('floor'),
+          to: { businessUnitId: at('back').businessUnitId, locationId: at('back').locationId },
+          condition: 'good',
+          goods: goods(2),
+        },
+      ]),
+    );
+    written(await world.post(world.poster, [reserve(goods(2))]));
+    const atBack: LedgerItem = {
+      kind: 'reserve',
+      lineId: line(),
+      reservationKind: 'transfer',
+      at: at('back'),
+      goods: [goods(1)],
+    };
+    expect((await refusal(world.poster, [atBack])).code).toBe('stock.not-covered');
+  });
+});
+
+describe('review fixes: overlapping holds count once (stock-ledger 6.2; S2)', () => {
+  it('PRD-REC-006 two holds on the same units count once; releasing one leaves the other', async () => {
+    const { sku, origin } = await onFloor({ quantity: 2, covered: 2, accepted: 2 });
+    const goods = (quantity: number) => ({ skuId: sku.skuId, quantity, receiptOriginId: origin });
+    const ordinary = written(await world.post(world.poster, [placeHold([goods(2)], 'ordinary')]));
+    written(await world.post(world.poster, [placeHold([goods(1)])]));
+    expect((await availableAt(sku.skuId))[0]).toMatchObject({ quantity: 2, heldOutsideReservations: 2, available: 0 });
+    written(
+      await world.post(world.poster, [
+        { kind: 'release-hold', lineId: line(), holdId: ordinary.holdIds[0] ?? '', event: 'released' },
+      ]),
+    );
+    expect((await availableAt(sku.skuId))[0]).toMatchObject({ quantity: 2, heldOutsideReservations: 1, available: 1 });
+    expect((await refusal(world.poster, [reserve(goods(2))])).code).toBe('stock.held');
+    written(await world.post(world.poster, [reserve(goods(1))]));
+    expect(await rebuild()).toEqual([]);
+  });
+});
+
+describe('review fixes: blocked names the item it blocks (stock-ledger 13.8; S3)', () => {
+  it('DEC-117 a hidden claim on the second item is refused naming that item, not the first', async () => {
+    const free = await onFloor({ quantity: 1, covered: 1, accepted: 1 });
+    const held = await onFloor({ quantity: 2, covered: 2, accepted: 2 });
+    const other = addSyntheticSku(BRAND_B);
+    await receive(other, 1, at('floor'));
+    written(
+      await world.post(world.poster, [
+        placeHold(
+          [
+            { skuId: held.sku.skuId, quantity: 2, receiptOriginId: held.origin },
+            { skuId: other.skuId, quantity: 1 },
+          ],
+          'ordinary',
+        ),
+      ]),
+    );
+    const first = reserve({ skuId: free.sku.skuId, quantity: 1, receiptOriginId: free.origin });
+    const second = reserve({ skuId: held.sku.skuId, quantity: 1, receiptOriginId: held.origin });
+    expect(await refusal(world.brandLimited, [first, second])).toEqual({
+      kind: 'refused',
+      code: 'stock.blocked',
+      missing: [{ kind: 'line', lineId: second.lineId }],
+    });
+  });
+});
+
+describe('review fixes: Rebuild and compare (stock-ledger 2.1, 13.6; S4)', () => {
+  it('PRD-MOD-012 a balance or SKU balance missing for its legs is a difference', async () => {
+    const sku = addSyntheticSku();
+    await receive(sku, 3, at('bin'));
+    const owner = await connect(world.database, 'migration');
+    try {
+      // As the owner, outside every command: take the projection rows away, as a fault would.
+      await owner.query('begin');
+      await owner.query(
+        'create temp table kept_balance on commit drop as select * from stock.balance where sku_id = $1',
+        [sku.skuId],
+      );
+      await owner.query(
+        'create temp table kept_total on commit drop as select * from stock.sku_balance where sku_id = $1',
+        [sku.skuId],
+      );
+      await owner.query('delete from stock.balance where sku_id = $1', [sku.skuId]);
+      await owner.query('delete from stock.sku_balance where sku_id = $1', [sku.skuId]);
+      await owner.query('commit');
+      expect(await rebuild()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ table: 'balance', id: null, column: 'quantity', stored: null, rebuilt: 3 }),
+          expect.objectContaining({ table: 'sku_balance', id: null, column: 'quantity', stored: null, rebuilt: 3 }),
+        ]),
+      );
+      // Put the projection back as the entries give it, so the other tests' checks hold.
+      const total = uuidv7();
+      const place = at('bin');
+      await owner.query(
+        `insert into stock.sku_balance (id, site_id, business_unit_id, sku_id, stock_unit, quantity, store_id,
+           legal_entity_id, brand_id)
+         values ($1, $2, $3, $4, 'piece', 3, null, $5, $6)`,
+        [total, place.siteId, place.businessUnitId, sku.skuId, PLACES.legalEntity, BRAND_A],
+      );
+      await owner.query(
+        `insert into stock.balance (id, sku_balance_id, site_id, business_unit_id, location_id, condition, held_as,
+           sku_id, receipt_origin_id, count_date, quantity, accepted_quantity, store_id, legal_entity_id, brand_id)
+         select $1, $2, l.site_id, l.business_unit_id, l.location_id, l.condition, l.held_as, l.sku_id,
+                l.receipt_origin_id, o.count_date, l.quantity, 0, l.store_id, l.legal_entity_id, l.brand_id
+         from stock.movement_leg l join stock.receipt_origin o on o.id = l.receipt_origin_id where l.sku_id = $3`,
+        [uuidv7(), total, sku.skuId],
+      );
+    } finally {
+      await owner.end();
+    }
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-MOD-003 says when it is partial: a reader who cannot see every row is told so', async () => {
+    await receive(addSyntheticSku(BRAND_B), 1, at('bin'));
+    const whole = await world.run(world.poster.user.id, (context) => rebuildAndCompare(context));
+    expect(whole.partial).toBe(false);
+    const part = await world.run(world.brandLimited.user.id, (context) => rebuildAndCompare(context));
+    expect(part.partial).toBe(true);
+    expect(typeof part.asOf).toBe('string');
+  });
+});
+
+describe('review fixes: named pieces lock their receipt origins (stock-ledger 10.3 step 2; S6)', () => {
+  it('SL-24 a move of named pieces holds their origin shared until it commits', async () => {
+    const pieceCodes = codes(1);
+    const origin = await receive(SKUS.pieceA, 1, at('rack'), pieceCodes);
+    let state: string | undefined;
+    written(
+      await world.post(world.poster, [move(SKUS.pieceA, 1, { pieceCodes })], {
+        hold: async () => {
+          const other = await connect(world.database, 'migration');
+          try {
+            await other.query('begin');
+            state = await sqlState(
+              other.query('select 1 from stock.receipt_origin where id = $1 for update nowait', [origin]),
+            );
+          } finally {
+            await other.query('rollback');
+            await other.end();
+          }
+        },
+      }),
+    );
+    expect(state).toBe('55P03');
+  });
+});
+
+describe('review fixes: condition change only from good (stock-ledger 2.3, 13.4; S7)', () => {
+  it('PRD-DMG-010 POL-17.02 damaged goods never become wrong or unidentified by a condition change', async () => {
+    const sku = addSyntheticSku();
+    await receive(sku, 1, at('back'));
+    const change = (from: 'good' | 'damaged', to: 'damaged' | 'wrong'): LedgerItem => ({
+      kind: 'condition-change',
+      lineId: line(),
+      at: at('back'),
+      from,
+      to,
+      goods: { skuId: sku.skuId, quantity: 1 },
+    });
+    written(await world.post(world.poster, [change('good', 'damaged')]));
+    expect((await refusal(world.poster, [change('damaged', 'wrong')])).code).toBe('stock.condition-route');
+  });
+});
+
+describe('review fixes: a unit anchor not locked is refused (stock-ledger 14.3; S9)', () => {
+  it('stock-ledger 10.3 a missing unit anchor never skips the count-freeze interlock', async () => {
+    const sku = addSyntheticSku();
+    await receive(sku, 1, at('rack'));
+    const checked = await world.run(world.poster.user.id, async (context) => {
+      const plan = await world.ledger.plan(context, {
+        source: world.source(),
+        actor: { kind: 'user', userId: world.poster.user.id, roleAssignmentId: world.poster.roleAssignmentId },
+        items: [move(sku, 1)],
+      });
+      if (plan.kind !== 'done') throw new Error(plan.refusal.code);
+      const locked = await world.ledger.lock(context, plan.value);
+      const anchor = { table: lockTable('stock', 'unit_anchor'), id: uuidv7(), mode: 'shared' as const };
+      return world.ledger.recheck(context, { ...locked, missing: [anchor] });
+    });
+    expect(checked.kind === 'refused' && checked.refusal.code).toBe('stock.invalid-item');
+  });
+});
+
+describe('review fixes: Availability given coverage and acceptance (stock-ledger 13.6; S10)', () => {
+  it('PRD-TRF-006 units not covered or not accepted are not available', async () => {
+    const { sku, origin } = await onFloor({ quantity: 3, covered: 0, accepted: 0 });
+    expect((await availableAt(sku.skuId))[0]).toMatchObject({ quantity: 3, available: 0 });
+    written(
+      await world.post(world.poster, [
+        { kind: 'record-coverage', lineId: line(), ptRevisionId: uuidv7(), receiptOriginId: origin, quantity: 2 },
+      ]),
+    );
+    expect((await availableAt(sku.skuId))[0]).toMatchObject({ available: 0 });
+    written(
+      await world.post(world.poster, [
+        {
+          kind: 'record-acceptance',
+          lineId: line(),
+          at: at('floor'),
+          goods: { skuId: sku.skuId, quantity: 3, receiptOriginId: origin },
+        },
+      ]),
+    );
+    expect((await availableAt(sku.skuId))[0]).toMatchObject({ coveredQuantity: 2, acceptedQuantity: 3, available: 2 });
+  });
+});
+
+describe('review fixes: Record use rechecks what Verify under lock checks (access-and-approvals 9.8; T7)', () => {
+  it('DEC-097 a use for another document or action type is refused as not for the document', async () => {
+    const document = { recordId: uuidv7(), versionId: uuidv7() };
+    const { decision } = await world.approve(world.poster, document);
+    if (decision.kind !== 'success') throw new Error(decision.refusal.code);
+    const use = (recordId: string, actionType: string) =>
+      world.run(world.poster.user.id, (context) =>
+        world.access.recordUse(context, {
+          useId: uuidv7(),
+          decisionId: decision.answer.decisionId,
+          actionType,
+          document: {
+            module: SYNTHETIC_MODULE,
+            recordType: SYNTHETIC_DOCUMENT_TYPE,
+            recordId,
+            versionId: document.versionId,
+          },
+          preparers: [world.poster.user.id],
+          value: { kind: 'none' },
+          actor: { kind: 'user', id: world.poster.user.id },
+        }),
+      );
+    expect((await use(uuidv7(), APPROVE_DOCUMENT))?.code).toBe('access.approval-not-for-document');
+    expect((await use(document.recordId, APPROVE_ON_COST))?.code).toBe('access.approval-not-for-document');
+    expect(await use(document.recordId, APPROVE_DOCUMENT)).toBeUndefined();
+  });
+});
+
+describe('a location move carries reserved units inside one unit (stock-ledger 13.9; product owner, 8 Oct 2026)', () => {
+  const toBack = { businessUnitId: at('back').businessUnitId, locationId: at('back').locationId };
+
+  it('POL-17.01 PRD-TRF-022 reserved units move with their claim inside the unit; the reservation is not broken', async () => {
+    const { sku, origin } = await onFloor({ quantity: 3, covered: 3, accepted: 3 });
+    const goods = (quantity: number) => ({ skuId: sku.skuId, quantity, receiptOriginId: origin });
+    const made = written(await world.post(world.poster, [reserve(goods(2))]));
+    // Between two units the reserved units stay: a location move never takes them out of their unit.
+    const leaving: LedgerItem = {
+      kind: 'location-move',
+      lineId: line(),
+      from: at('floor'),
+      to: { businessUnitId: at('floor2').businessUnitId, locationId: at('floor2').locationId },
+      condition: 'good',
+      goods: goods(3),
+    };
+    expect((await refusal(world.poster, [leaving])).code).toBe('stock.reserved');
+    written(
+      await world.post(world.poster, [
+        { kind: 'location-move', lineId: line(), from: at('floor'), to: toBack, condition: 'good', goods: goods(3) },
+      ]),
+    );
+    expect(await availableAt(sku.skuId)).toMatchObject([
+      { locationId: at('back').locationId, quantity: 3, reserved: 2, available: 1 },
+    ]);
+    expect(await rebuild()).toEqual([]);
+    // The reservation still holds its units where they now are, and ends by its own event, once.
+    const [reservationId] = made.reservationIds;
+    const end: LedgerItem = {
+      kind: 'end-reservation',
+      lineId: line(),
+      reservationId: reservationId ?? '',
+      event: 'cancelled',
+    };
+    written(await world.post(world.poster, [end]));
+    expect((await availableAt(sku.skuId, at('back')))[0]).toMatchObject({ reserved: 0, available: 3 });
+    expect((await refusal(world.poster, [{ ...end, lineId: line() }])).code).toBe('stock.exceeds-source');
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('POL-17.01 a reserved piece moves inside its unit and stays reserved; held goods are still refused', async () => {
+    const pieceCodes = codes(2);
+    const { goods } = await reservable(SKUS.pieceB, 2, pieceCodes);
+    const first = { ...goods, quantity: 1, pieceCodes: [pieceCodes[0] ?? ''] };
+    const second = { ...goods, quantity: 1, pieceCodes: [pieceCodes[1] ?? ''] };
+    written(await world.post(world.poster, [reserve(first)]));
+    written(
+      await world.post(world.poster, [
+        { kind: 'location-move', lineId: line(), from: at('floor'), to: toBack, condition: 'good', goods: first },
+      ]),
+    );
+    const moved = await world.run(world.poster.user.id, (context) => pieceByCode(context, pieceCodes[0] ?? ''));
+    expect(moved?.locationId).toBe(at('back').locationId);
+    const again: LedgerItem = {
+      kind: 'reserve',
+      lineId: line(),
+      reservationKind: 'transfer',
+      at: at('back'),
+      goods: [first],
+    };
+    expect((await refusal(world.poster, [again])).code).toBe('stock.reservation-overlap');
+    written(await world.post(world.poster, [placeHold([second], 'ordinary')]));
+    expect(
+      (
+        await refusal(world.poster, [
+          { kind: 'location-move', lineId: line(), from: at('floor'), to: toBack, condition: 'good', goods: second },
+        ])
+      ).code,
+    ).toBe('stock.held');
+    expect(await rebuild()).toEqual([]);
   });
 });

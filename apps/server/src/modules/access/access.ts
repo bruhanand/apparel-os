@@ -19,6 +19,7 @@ import {
 } from '@apparel-os/schemas';
 import {
   CommandDefect,
+  PRODUCTION_COMPOSITION,
   type CommandRefusal,
   type Composition,
   type LockTarget,
@@ -310,7 +311,7 @@ export class Access implements AccessInterface {
     this.registry = registryByCode(dependencies.registry ?? permissionRegistry);
     this.rules = approvalRulesOf(
       dependencies.approvalRules ?? [],
-      dependencies.composition ?? 'production',
+      dependencies.composition ?? PRODUCTION_COMPOSITION,
       this.registry,
     );
     this.changes = new AccessChanges(dependencies.audit, this.registry);
@@ -453,7 +454,7 @@ export class Access implements AccessInterface {
   }
 
   recordUse(context: TransactionContext, use: ApprovalUseRecord) {
-    return recordUse(context, use);
+    return recordUse(context, this.rules, use);
   }
 
   decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput) {

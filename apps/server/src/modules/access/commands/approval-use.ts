@@ -1,3 +1,4 @@
+import { paise } from '@apparel-os/domain';
 import { eq } from 'drizzle-orm';
 import {
   CommandDefect,
@@ -35,12 +36,13 @@ export type PostingActor =
   | { readonly kind: 'user'; readonly id: string }
   | { readonly kind: 'service-identity'; readonly id: string; readonly onBehalfOfUserId?: string };
 
-/** What Record use writes (access-and-approvals 9.8 step 2). */
-export interface ApprovalUseRecord {
+/**
+ * What Record use writes (access-and-approvals 9.8 step 2): the check Verify under lock passed, which Record use makes
+ * again, with the use's identifier and who posts.
+ */
+export interface ApprovalUseRecord extends ApprovalCheck {
   /** The use's identifier, a UUIDv7 the posting module made, which its own records keep (stock-ledger 13.3). */
   readonly useId: string;
-  readonly decisionId: string;
-  readonly document: PostedDocument;
   readonly actor: PostingActor;
 }
 
@@ -124,35 +126,33 @@ export async function verifyUnderLock(
   }
   if (check.value.kind === 'none') throw new CommandDefect(`Approval rule ${rule.actionType} has a value basis`);
   const exceeded = refusal('refused', 'access.approval-value-exceeded', named);
-  if (decision.valueKind === 'known') {
-    if (check.value.kind !== 'known') return exceeded;
-    if (decision.valueAmount === null || check.value.amountPaise > decision.valueAmount) return exceeded;
-    return undefined;
+  if (check.value.kind === 'known' && check.value.amountPaise < 0) {
+    throw new CommandDefect(`A value on ${rule.actionType}'s basis is never below zero (PRD-MOD-014)`);
   }
+  if (decision.valueKind === 'known') {
+    if (check.value.kind !== 'known' || decision.valueAmount === null) return exceeded;
+    // The amount decided, read back as whole paise (PRD-MOD-014); no tolerance above it (DEC-105).
+    return check.value.amountPaise > paise(decision.valueAmount) ? exceeded : undefined;
+  }
+  // Authority over an Unknown value does not cover a value now known: it needs a fresh approval (product owner,
+  // 8 Oct 2026; access-and-approvals 9.8a).
   return check.value.kind === 'unknown' ? undefined : exceeded;
 }
 
 /**
  * Record use (access-and-approvals 9.8 step 2; module-map 4.3): inside the posting transaction, that this decision
  * authorised this posting, under the identifier the posting module made. It commits with the stock and money records
- * and is the approval evidence of PRD-INT-004 (DEC-097). Refuses, as Verify under lock does, a decision that is not
- * Approved, already used, or of another version; the unique key on the decision is the last guard (PRD-INT-002).
+ * and is the approval evidence of PRD-INT-004 (DEC-097). It first makes every check of Verify under lock again, with
+ * the same codes: a decision of another action type or document, not Approved, already used, of another version, by
+ * one of the preparers or below the value is refused; the unique key on the decision is the last guard (PRD-INT-002).
  */
 export async function recordUse(
   context: TransactionContext,
+  rules: ReadonlyMap<string, ApprovalRule>,
   use: ApprovalUseRecord,
 ): Promise<CommandRefusal | undefined> {
-  const found = await decisionWithRequest(context, use.decisionId);
-  const named = [{ kind: 'approval', recordId: use.document.recordId }];
-  if (found === undefined) return refusal('not-found', 'access.approval-decision-not-found', named);
-  if (found.decision.outcome !== 'Approved') return refusal('refused', 'access.approval-not-approved', named);
-  if (await isUsed(context, use.decisionId)) return refusal('refused', 'access.approval-used', named);
-  if (
-    found.decision.documentVersionId !== use.document.versionId ||
-    found.request.documentRecordId !== use.document.recordId
-  ) {
-    return refusal('refused', 'access.approval-version-changed', named);
-  }
+  const refused = await verifyUnderLock(context, rules, use);
+  if (refused !== undefined) return refused;
   await context.tx.insert(approvalUse).values({
     id: use.useId,
     approvalDecisionId: use.decisionId,

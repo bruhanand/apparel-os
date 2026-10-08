@@ -1,6 +1,14 @@
-import { uuidv7 } from '@apparel-os/domain';
 import type { MissingItem } from '../../../../kernel/index.js';
 import type { SkuFacts, UnitFacts } from '../ports.js';
+import {
+  acceptedFreeUnits,
+  coveredFreeUnits,
+  freeUnits,
+  heldOnce,
+  reservableUnits,
+  type BalanceClaims,
+} from './availability.js';
+import { compareCodeUnits, skuKey, unitKey } from './keys.js';
 import {
   refuse,
   type Condition,
@@ -15,9 +23,9 @@ import {
 // The working state of one ledger request (stock-ledger 13.1 "Recheck and value", 13.4, 13.5; S1-F10-T02): the rows
 // the command locked and read after its locks, held in memory, which each item checks and changes in order, so that a
 // later item sees what an earlier one did and the request stays all or nothing (PRD-INT-004, PRD-IMP-012). Pure: no
-// database, no clock (code-house-rules 2). What it decides is written by Write; what it cannot see, the holds,
-// reservations and freezes hidden from the actor, the command asks the narrowly authorised function about (DEC-117),
-// with what this state collects for it.
+// database, no clock, and the identifiers of new rows come from the caller (code-house-rules 2). What it decides is
+// written by Write; what it cannot see, the holds, reservations and freezes hidden from the actor, the command asks the
+// narrowly authorised function about (DEC-117), with what this state collects for it.
 
 export interface Scope {
   readonly siteId: string;
@@ -152,7 +160,7 @@ export interface MovementEntry {
   readonly brandIds: (string | null)[];
   readonly legs: LegEntry[];
   readonly pieceIds: string[];
-  readonly owner?: Owner;
+  owner?: Owner;
 }
 
 export interface LegEntry {
@@ -237,15 +245,33 @@ export interface ReservationEventEntry {
   readonly event: string;
   readonly quantity: number;
   readonly pieceId: string | null;
+  /** The movement that consumed the claim, or moved its units to another balance at the unit (13.9). */
+  readonly movementId: string | null;
   readonly scope: Scope;
 }
 
-/** What one unit needs of the hidden-row recheck (DEC-117): the free units the request left, per balance and piece. */
-export interface HiddenCheck {
+/**
+ * What the request asks the narrowly authorised function (DEC-117), each naming the item by its ordinal ("line"):
+ * the free units each take left on a balance, the pieces taken, and what each reservation left of an origin's covered
+ * quantity, with the balance it took from (13.9).
+ */
+export interface HiddenChecks {
+  readonly takes: { readonly line: number; readonly balanceId: string; readonly spare: number }[];
+  readonly pieces: { readonly line: number; readonly pieceId: string }[];
+  readonly origins: {
+    readonly line: number;
+    readonly originId: string;
+    readonly balanceId: string | null;
+    readonly spare: number;
+  }[];
+}
+
+/** One member a request item touches at a unit, for the count-freeze check (8.1; 13.5). */
+export interface Touch {
   readonly siteId: string;
   readonly businessUnitId: string;
-  readonly spares: Map<string, number>;
-  readonly pieceIds: Set<string>;
+  readonly kind: 'location' | 'sku' | 'brand';
+  readonly id: string;
 }
 
 /** A count freeze's expected quantities: the balances in its scope under its locks (8.1, 13.5). */
@@ -278,7 +304,8 @@ const RESERVATION_EVENTS: Readonly<Record<string, readonly string[]>> = {
   'offline-protected': ['released'],
 };
 
-const key = (...parts: (string | null)[]) => parts.map((part) => part ?? '-').join('|');
+/** Conditions goods may change to by a condition change, always from good (2.3; PRD-DMG-010, POL-17.02). */
+const CHANGED_CONDITIONS: readonly Condition[] = ['damaged', 'wrong', 'unidentified'];
 
 /** What the state needs that Plan read before the locks (13.1). */
 export interface WorkingInputs {
@@ -292,11 +319,25 @@ export interface WorkingInputs {
   readonly claims: readonly ClaimState[];
   readonly headers: readonly HeaderState[];
   readonly coverage: readonly CoverageState[];
-  /** Per Site and unit, the origins Plan found with stock, for the staleness check (13.1). */
+  /** Per SKU at a Site and unit, the origins Plan found with stock, for the staleness check (13.1). */
   readonly originsSeen: ReadonlyMap<string, ReadonlySet<string>>;
   /** Codes of pieces already written anywhere the actor can see (13.4 "Piece codes unused"). */
   readonly usedCodes: ReadonlySet<string>;
+  /** The reservations the command locked at step 5, whose claims it may change (14.3). */
+  readonly lockedReservations: ReadonlySet<string>;
+  /** A new row's identifier, a UUIDv7 the caller makes (PRD-MOD-008). */
+  readonly newId: () => string;
 }
+
+/** What one take found at a balance: free units, reserved units moved with their claims, and pieces. */
+interface Taken {
+  readonly balance: BalanceState;
+  quantity: number;
+  reserved: number;
+  readonly pieces: PieceState[];
+}
+
+type ItemOf<K extends LedgerItem['kind']> = Extract<LedgerItem, { kind: K }>;
 
 export class Working {
   readonly entries: Entries = {
@@ -315,11 +356,14 @@ export class Working {
   readonly pieces = new Map<string, PieceState>();
   readonly piecesByCode = new Map<string, PieceState>();
   readonly claims: ClaimState[] = [];
-  readonly hidden = new Map<string, HiddenCheck>();
+  readonly hidden: HiddenChecks = { takes: [], pieces: [], origins: [] };
   readonly expected: ExpectedQuantity[] = [];
   private readonly headers = new Map<string, HeaderState>();
   private readonly coverage = new Map<string, CoverageState>();
   private readonly usedCodes: Set<string>;
+  private readonly newId: () => string;
+  /** The ordinal of the item being applied, which the hidden checks name (13.8). */
+  private line = -1;
 
   constructor(private readonly inputs: WorkingInputs) {
     for (const row of inputs.skuBalances) this.skuBalances.set(row.id, row);
@@ -333,10 +377,12 @@ export class Working {
     for (const row of inputs.headers) this.headers.set(row.id, row);
     for (const row of inputs.coverage) this.coverage.set(row.id, row);
     this.usedCodes = new Set(inputs.usedCodes);
+    this.newId = inputs.newId;
   }
 
-  /** Applies one item, refusing with the first failed check (13.8); answers its value on its approval basis. */
-  apply(item: LedgerItem): ItemValue {
+  /** Applies item `line` of the request, refusing with the first failed check (13.8); answers its value (13.1). */
+  apply(item: LedgerItem, line: number): ItemValue {
+    this.line = line;
     switch (item.kind) {
       case 'receipt-count':
         return this.receiptCount(item);
@@ -365,10 +411,77 @@ export class Working {
     }
   }
 
+  /**
+   * The locations, SKUs and brands an item touches at each unit, for the count-freeze check (8.1; 13.4, 13.5). Holds,
+   * releases, coverage and acceptance change no quantity at a place, so a freeze does not stop them (13.9; confirmed by
+   * the product owner, 8 Oct 2026).
+   */
+  touches(item: LedgerItem): Touch[] {
+    const at = (siteId: string, businessUnitId: string, locations: string[], skuIds: string[], brands: string[]) => [
+      ...locations.map((id): Touch => ({ siteId, businessUnitId, kind: 'location', id })),
+      ...skuIds.map((id): Touch => ({ siteId, businessUnitId, kind: 'sku', id })),
+      ...brands.map((id): Touch => ({ siteId, businessUnitId, kind: 'brand', id })),
+    ];
+    const brands = (skuIds: readonly string[]) => skuIds.map((skuId) => this.sku(skuId).brandId);
+    switch (item.kind) {
+      case 'receipt-count':
+        return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
+      case 'location-move': {
+        const skuIds = [item.goods.skuId];
+        if (item.to.businessUnitId === item.from.businessUnitId) {
+          return at(
+            item.from.siteId,
+            item.from.businessUnitId,
+            [item.from.locationId, item.to.locationId],
+            skuIds,
+            brands(skuIds),
+          );
+        }
+        return [
+          ...at(item.from.siteId, item.from.businessUnitId, [item.from.locationId], skuIds, brands(skuIds)),
+          ...at(item.from.siteId, item.to.businessUnitId, [item.to.locationId], skuIds, brands(skuIds)),
+        ];
+      }
+      case 'condition-change':
+        return at(
+          item.at.siteId,
+          item.at.businessUnitId,
+          [item.at.locationId],
+          [item.goods.skuId],
+          brands([item.goods.skuId]),
+        );
+      case 'reserve': {
+        const skuIds = item.goods.map((goods) => goods.skuId);
+        return at(item.at.siteId, item.at.businessUnitId, [item.at.locationId], skuIds, brands(skuIds));
+      }
+      case 'start-count-freeze': {
+        const inScope = this.freezeBalances(item.siteId, item.businessUnitId, item.scope);
+        const scopeSkus = item.scope.flatMap((member) => ('skuId' in member ? [member.skuId] : []));
+        const unique = (ids: string[]) => [...new Set(ids)];
+        return at(
+          item.siteId,
+          item.businessUnitId,
+          unique([
+            ...item.scope.flatMap((member) => ('locationId' in member ? [member.locationId] : [])),
+            ...inScope.map((row) => row.locationId),
+          ]),
+          unique([...scopeSkus, ...inScope.flatMap((row) => (row.skuId === null ? [] : [row.skuId]))]),
+          unique([
+            ...item.scope.flatMap((member) => ('brandId' in member ? [member.brandId] : [])),
+            ...brands(scopeSkus),
+            ...inScope.flatMap((row) => (row.scope.brandId === null ? [] : [row.scope.brandId])),
+          ]),
+        );
+      }
+      default:
+        return [];
+    }
+  }
+
   // --- reading the state ---------------------------------------------------------------------------------------
 
   unit(siteId: string, businessUnitId: string): UnitFacts {
-    const unit = this.inputs.units.get(key(siteId, businessUnitId));
+    const unit = this.inputs.units.get(unitKey(siteId, businessUnitId));
     if (unit === undefined) throw new Error(`No unit facts for ${siteId} ${businessUnitId}`);
     return unit;
   }
@@ -391,51 +504,54 @@ export class Working {
   }
 
   private skuBalanceOf(siteId: string, businessUnitId: string, skuId: string | null): SkuBalanceState {
+    const wanted = skuKey(siteId, businessUnitId, skuId);
     for (const row of this.skuBalances.values()) {
-      if (row.siteId === siteId && row.businessUnitId === businessUnitId && row.skuId === skuId) return row;
+      if (skuKey(row.siteId, row.businessUnitId, row.skuId) === wanted) return row;
     }
-    throw new Error(`SKU balance not locked: ${siteId} ${businessUnitId} ${String(skuId)}`);
+    throw new Error(`SKU balance not locked: ${wanted}`);
   }
 
   private activeClaims(filter: (claim: ClaimState) => boolean): ClaimState[] {
     return this.claims.filter((claim) => claim.quantity > 0 && filter(claim));
   }
 
-  /** Units of a balance reserved, and held outside reservations, by claims the actor can see (6.2). */
-  private claimedOn(balance: BalanceState): { reserved: number; held: number; holds: ClaimState[] } {
+  /** What is claimed on a balance by claims the actor can see (6.2). */
+  private claimsOn(balance: BalanceState): BalanceClaims & { readonly holds: ClaimState[] } {
     const on = this.activeClaims((claim) => claim.balanceId === balance.id);
-    const reserved = on.filter((claim) => claim.owner === 'reservation').reduce((sum, c) => sum + c.quantity, 0);
     const holds = on.filter((claim) => claim.owner === 'hold' && claim.withinReservationId === null);
-    const held = holds.reduce((sum, c) => sum + c.quantity, 0);
-    return { reserved, held, holds };
+    return {
+      quantity: balance.quantity,
+      accepted: balance.accepted,
+      reserved: on.filter((claim) => claim.owner === 'reservation').reduce((sum, c) => sum + c.quantity, 0),
+      holdClaims: holds.reduce((sum, c) => sum + c.quantity, 0),
+      holds,
+    };
   }
 
-  /** available = custody − reserved − held outside reservations, never below zero (6.2). */
-  private freeOn(balance: BalanceState): number {
-    const { reserved, held } = this.claimedOn(balance);
-    return Math.max(0, balance.quantity - reserved - held);
+  /** Units of an origin reserved anywhere the request loaded, at every balance of the origin (6.2; 13.9). */
+  private reservedOfOrigin(originId: string): number {
+    return this.activeClaims(
+      (claim) =>
+        claim.owner === 'reservation' &&
+        claim.balanceId !== null &&
+        this.balances.get(claim.balanceId)?.receiptOriginId === originId,
+    ).reduce((sum, claim) => sum + claim.quantity, 0);
+  }
+
+  private coverOf(balance: BalanceState): { covered: number; reservedEverywhere: number } {
+    return {
+      covered: this.origins.get(balance.receiptOriginId)?.coveredQuantity ?? 0,
+      reservedEverywhere: this.reservedOfOrigin(balance.receiptOriginId),
+    };
   }
 
   private pieceClaims(piece: PieceState): ClaimState[] {
-    return this.activeClaims(
-      (claim) => claim.pieceId === piece.id && !(claim.owner === 'hold' && claim.withinReservationId !== null),
-    );
-  }
-
-  private hiddenAt(siteId: string, businessUnitId: string): HiddenCheck {
-    const at = key(siteId, businessUnitId);
-    let check = this.hidden.get(at);
-    if (check === undefined) {
-      check = { siteId, businessUnitId, spares: new Map(), pieceIds: new Set() };
-      this.hidden.set(at, check);
-    }
-    return check;
+    return this.activeClaims((claim) => claim.pieceId === piece.id);
   }
 
   /** Records the free units a take left on a balance, for the hidden-row recheck (DEC-117). */
   private leaveSpare(balance: BalanceState, spare: number): void {
-    const check = this.hiddenAt(balance.siteId, balance.businessUnitId);
-    check.spares.set(balance.id, Math.min(check.spares.get(balance.id) ?? spare, spare));
+    this.hidden.takes.push({ line: this.line, balanceId: balance.id, spare });
   }
 
   /** The balances of a SKU at a place, in one condition, oldest first: soonest expiry, then count date (PRD-STK-013). */
@@ -452,16 +568,16 @@ export class Working {
       )
       .sort(
         (a, b) =>
-          (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') ||
-          a.countDate.localeCompare(b.countDate) ||
-          a.id.localeCompare(b.id),
+          compareCodeUnits(a.expiryDate ?? '9999-12-31', b.expiryDate ?? '9999-12-31') ||
+          compareCodeUnits(a.countDate, b.countDate) ||
+          compareCodeUnits(a.id, b.id),
       );
   }
 
   /** Plan staleness (13.1): every origin with stock here was one Plan found and locked. */
   private checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
     if (goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
-    const seen = this.inputs.originsSeen.get(key(place.siteId, place.businessUnitId, goods.skuId));
+    const seen = this.inputs.originsSeen.get(skuKey(place.siteId, place.businessUnitId, goods.skuId));
     if (candidates.some((row) => row.quantity > 0 && seen?.has(row.receiptOriginId) !== true)) {
       refuse('plan-stale', lineId);
     }
@@ -488,7 +604,7 @@ export class Working {
       }
     }
     const created: BalanceState = {
-      id: uuidv7(),
+      id: this.newId(),
       isNew: true,
       skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId).id,
       siteId,
@@ -542,10 +658,10 @@ export class Working {
     let held = 0;
     const holds: MissingItem[] = [];
     for (const row of candidates) {
-      const on = this.claimedOn(row);
+      const on = this.claimsOn(row);
       quantity += row.quantity;
       reserved += on.reserved;
-      held += on.held;
+      held += heldOnce(on);
       holds.push(...on.holds.map((claim) => ({ kind: 'hold', holdKind: claim.headerKind, holdId: claim.headerId })));
     }
     if (wanted <= quantity - reserved && held > 0) refuse('held', lineId, holds);
@@ -555,20 +671,26 @@ export class Working {
   }
 
   /**
-   * Takes free units of goods at a place for a movement or a reservation (6.2, 6.3): the pieces named, or a quantity
-   * oldest first. Answers the balances and pieces taken. Refuses `piece-not-at-place`, `held`, `reserved` or
-   * `insufficient-available`; a reservation names `reservation-overlap` for reserved units.
+   * Takes units of goods at a place for a movement or a reservation (6.2, 6.3): the pieces named, or a quantity
+   * oldest first. Free units only, unless `moveReserved`: a location move inside one unit may then take reserved units
+   * too, whose claims move with them (13.9; product owner, 8 Oct 2026). Held units are never taken. Refuses
+   * `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names `reservation-overlap` for
+   * reserved units.
    */
-  private takeFree(
+  private take(
     lineId: string,
     place: Place,
     condition: Condition,
     goods: Goods,
-    options: { readonly reservation?: boolean; readonly fits?: (balance: BalanceState, free: number) => number } = {},
-  ): { balance: BalanceState; quantity: number; pieces: PieceState[] }[] {
+    options: {
+      readonly reservation?: boolean;
+      readonly moveReserved?: boolean;
+      readonly fits?: (balance: BalanceState) => number;
+    } = {},
+  ): Taken[] {
     const sku = this.sku(goods.skuId);
     if (sku.pieceTracked) {
-      const taken = new Map<string, { balance: BalanceState; quantity: number; pieces: PieceState[] }>();
+      const taken = new Map<string, Taken>();
       for (const code of goods.pieceCodes ?? []) {
         const piece = this.piece(lineId, code);
         if (
@@ -586,7 +708,10 @@ export class Working {
         const hold = claims.find((claim) => claim.owner === 'hold');
         if (hold !== undefined)
           refuse('held', lineId, [{ kind: 'hold', holdKind: hold.headerKind, holdId: hold.headerId }]);
-        if (claims.length > 0) refuse(options.reservation === true ? 'reservation-overlap' : 'reserved', lineId);
+        // A reserved piece moves with its claim, which names the piece, not a place (13.9).
+        if (claims.length > 0 && options.moveReserved !== true) {
+          refuse(options.reservation === true ? 'reservation-overlap' : 'reserved', lineId);
+        }
         const balance = this.balanceFor(
           place.siteId,
           place.businessUnitId,
@@ -594,30 +719,76 @@ export class Working {
           condition,
           this.origin(lineId, piece.receiptOriginId),
         );
-        const entry = taken.get(balance.id) ?? { balance, quantity: 0, pieces: [] };
+        const entry = taken.get(balance.id) ?? { balance, quantity: 0, reserved: 0, pieces: [] };
         entry.quantity += 1;
         entry.pieces.push(piece);
         taken.set(balance.id, entry);
-        this.hiddenAt(place.siteId, place.businessUnitId).pieceIds.add(piece.id);
+        this.hidden.pieces.push({ line: this.line, pieceId: piece.id });
       }
       return [...taken.values()];
     }
     const candidates = this.balancesAt(place, condition, goods);
     this.checkNotStale(lineId, place, goods, candidates);
     let left = goods.quantity;
-    const taken: { balance: BalanceState; quantity: number; pieces: PieceState[] }[] = [];
+    const taken: Taken[] = [];
     for (const balance of candidates) {
       if (left === 0) break;
-      const free = this.freeOn(balance);
-      const usable = options.fits === undefined ? free : options.fits(balance, free);
+      const usable = options.fits === undefined ? freeUnits(this.claimsOn(balance)) : options.fits(balance);
       const take = Math.min(left, usable);
       if (take <= 0) continue;
-      taken.push({ balance, quantity: take, pieces: [] });
+      taken.push({ balance, quantity: take, reserved: 0, pieces: [] });
       left -= take;
     }
+    if (left > 0 && options.moveReserved === true) {
+      // A reservation that appeared after Plan is not locked, so its claim cannot move (13.1 "Plan staleness").
+      const unlocked = this.activeClaims(
+        (claim) =>
+          claim.owner === 'reservation' &&
+          candidates.some((row) => row.id === claim.balanceId) &&
+          !this.inputs.lockedReservations.has(claim.headerId),
+      );
+      if (unlocked.length > 0) refuse('plan-stale', lineId);
+      for (const balance of candidates) {
+        if (left === 0) break;
+        const take = Math.min(left, this.movableReserved(balance));
+        if (take <= 0) continue;
+        const entry = taken.find((each) => each.balance === balance);
+        if (entry === undefined) taken.push({ balance, quantity: take, reserved: take, pieces: [] });
+        else {
+          entry.quantity += take;
+          entry.reserved += take;
+        }
+        left -= take;
+      }
+    }
     if (left > 0) this.shortfall(lineId, candidates, goods.quantity, options.reservation);
-    for (const each of taken) this.leaveSpare(each.balance, this.freeOn(each.balance) - each.quantity);
+    for (const each of taken) {
+      this.leaveSpare(each.balance, freeUnits(this.claimsOn(each.balance)) - (each.quantity - each.reserved));
+    }
     return taken;
+  }
+
+  /**
+   * Reserved units at a balance a move may carry with their claims: those of reservations no hold sits inside there,
+   * since held goods move only under their own authority (6.2).
+   */
+  private movableReserved(balance: BalanceState): number {
+    return this.activeClaims(
+      (claim) => claim.owner === 'reservation' && claim.balanceId === balance.id && !this.heldInside(claim),
+    ).reduce((sum, claim) => sum + claim.quantity, 0);
+  }
+
+  /** Whether a hold sits inside this reservation on the same balance or piece (6.2). */
+  private heldInside(claim: ClaimState): boolean {
+    return (
+      this.activeClaims(
+        (hold) =>
+          hold.owner === 'hold' &&
+          hold.withinReservationId === claim.headerId &&
+          hold.balanceId === claim.balanceId &&
+          hold.pieceId === claim.pieceId,
+      ).length > 0
+    );
   }
 
   private checkGoodsShape(lineId: string, goods: Goods): void {
@@ -638,12 +809,11 @@ export class Working {
     businessUnitId: string,
     skuIds: readonly (string | null)[],
   ): MovementEntry {
-    const scope = this.headerScopeAt(siteId, businessUnitId);
     const movement: MovementEntry = {
-      id: uuidv7(),
+      id: this.newId(),
       kind,
       lineId,
-      scope,
+      scope: this.headerScopeAt(siteId, businessUnitId),
       brandIds: [...new Set(skuIds.map((skuId) => this.brandOf(skuId)))],
       legs: [],
       pieceIds: [],
@@ -654,7 +824,7 @@ export class Working {
 
   private leg(direction: 'out' | 'in', balance: BalanceState, quantity: number, accepted: number): LegEntry {
     return {
-      id: uuidv7(),
+      id: this.newId(),
       direction,
       receiptOriginId: balance.receiptOriginId,
       skuId: balance.skuId,
@@ -672,7 +842,7 @@ export class Working {
   // --- movement items (13.4) -----------------------------------------------------------------------------------
 
   /** Receipt count (13.4; PRD-REC-008, PRD-MER-015, PRD-ORG-019): a new receipt origin, its custody and pieces. */
-  private receiptCount(item: Extract<LedgerItem, { kind: 'receipt-count' }>): ItemValue {
+  private receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
     const sku = this.sku(item.skuId);
     const codes = item.pieceCodes ?? [];
     for (const code of codes) {
@@ -680,12 +850,12 @@ export class Working {
       this.usedCodes.add(code);
     }
     const unit = this.unit(item.to.siteId, item.to.businessUnitId);
-    const scope = this.scopeAt(item.to.siteId, item.to.businessUnitId, sku.brandId);
     const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
     ]);
+    movement.owner = item.owner;
     const origin: OriginState = {
-      id: uuidv7(),
+      id: this.newId(),
       isNew: true,
       skuId: item.skuId,
       pieceTracked: sku.pieceTracked,
@@ -693,8 +863,8 @@ export class Working {
       expiryDate: item.batch?.expiryDate ?? null,
       countDate: this.inputs.businessDate,
       quantity: item.quantity,
-      scope,
-      stateId: uuidv7(),
+      scope: this.scopeAt(item.to.siteId, item.to.businessUnitId, sku.brandId),
+      stateId: this.newId(),
       valueKnown: false,
       ptRevisionId: null,
       coveredQuantity: 0,
@@ -703,13 +873,12 @@ export class Working {
     };
     this.origins.set(origin.id, origin);
     this.entries.origins.push(origin);
-    (movement as { owner?: Owner }).owner = item.owner;
     const balance = this.balanceFor(item.to.siteId, item.to.businessUnitId, item.to.locationId, item.condition, origin);
     this.addTo(balance, item.quantity, 0);
     movement.legs.push(this.leg('in', balance, item.quantity, 0));
     for (const code of codes) {
       const piece: PieceState = {
-        id: uuidv7(),
+        id: this.newId(),
         isNew: true,
         code,
         skuId: item.skuId,
@@ -736,15 +905,18 @@ export class Working {
   }
 
   /**
-   * Moves free units between two balance keys at one Site in one movement: an out leg and an in leg per origin.
-   * Acceptance moves with the goods, accepted units first (13.4 "Keeps condition and acceptance"; S1-F10-T02).
+   * Moves units between two balance keys at one Site in one movement: an out leg and an in leg per origin.
+   * Acceptance moves with the goods, accepted units first (13.4 "Keeps condition and acceptance"; S1-F10-T02), and so
+   * do the claims of reserved units it carries, by a `moved` event on the claim it leaves and a new claim of the same
+   * reservation where the units arrive (13.9; product owner, 8 Oct 2026).
    */
   private moveUnits(
+    lineId: string,
     movement: MovementEntry,
-    taken: readonly { balance: BalanceState; quantity: number; pieces: PieceState[] }[],
+    taken: readonly Taken[],
     to: { readonly businessUnitId: string; readonly locationId: string; readonly condition: Condition },
   ): void {
-    for (const { balance, quantity, pieces } of taken) {
+    for (const { balance, quantity, reserved, pieces } of taken) {
       const origin = this.origins.get(balance.receiptOriginId);
       if (origin === undefined) throw new Error('origin not loaded');
       const target = this.balanceFor(balance.siteId, to.businessUnitId, to.locationId, to.condition, origin);
@@ -755,6 +927,7 @@ export class Working {
       this.addTo(balance, -quantity, -accepted);
       this.addTo(target, quantity, accepted);
       movement.legs.push(this.leg('out', balance, quantity, accepted), this.leg('in', target, quantity, accepted));
+      if (reserved > 0) this.moveClaims(lineId, movement, balance, target, reserved);
       const unit = this.unit(balance.siteId, to.businessUnitId);
       for (const piece of pieces) {
         piece.businessUnitId = to.businessUnitId;
@@ -768,12 +941,49 @@ export class Working {
     }
   }
 
+  /** Moves `quantity` reserved units' claims from one balance to another at the same unit (13.9). */
+  private moveClaims(
+    lineId: string,
+    movement: MovementEntry,
+    from: BalanceState,
+    to: BalanceState,
+    quantity: number,
+  ): void {
+    let left = quantity;
+    const claims = this.activeClaims(
+      (claim) => claim.owner === 'reservation' && claim.balanceId === from.id && !this.heldInside(claim),
+    ).sort((a, b) => compareCodeUnits(a.id, b.id));
+    for (const claim of claims) {
+      if (left === 0) break;
+      const moved = Math.min(left, claim.quantity);
+      claim.quantity -= moved;
+      claim.changed = true;
+      this.entries.reservationEvents.push({
+        id: this.newId(),
+        lineId,
+        reservationId: claim.headerId,
+        reservationKind: claim.headerKind,
+        claimId: claim.id,
+        event: 'moved',
+        quantity: moved,
+        pieceId: null,
+        movementId: movement.id,
+        scope: claim.scope,
+      });
+      this.newClaim('reservation', claim.headerId, claim.headerKind, null, to.id, null, moved, to.scope);
+      left -= moved;
+    }
+    if (left > 0) throw new Error('Reserved units to move without their claims');
+  }
+
   /**
    * Location move (13.4; PRD-STK-005): inside one Site; between two units only when book, legal entity and tax
-   * registration are unchanged (7.1, DEC-066; MM-13). Takes only free units: held goods move only under their own
-   * authority, and reserved units stay where their reservation names them (6.2).
+   * registration are unchanged (7.1, DEC-066; MM-13). Held goods move only under their own authority, so they are
+   * refused (6.2). Inside one unit a move may carry reserved units with their claims, so it never breaks a reservation
+   * (product owner, 8 Oct 2026); between two units it takes free units only, since reserved units never leave their unit
+   * by a location move.
    */
-  private locationMove(item: Extract<LedgerItem, { kind: 'location-move' }>): ItemValue {
+  private locationMove(item: ItemOf<'location-move'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     const from = this.unit(item.from.siteId, item.from.businessUnitId);
     const to = this.unit(item.from.siteId, item.to.businessUnitId);
@@ -784,32 +994,35 @@ export class Working {
     ) {
       refuse('route-not-allowed', item.lineId, [{ kind: 'route', route: 'between-books-or-registrations' }]);
     }
-    if (item.from.businessUnitId === item.to.businessUnitId && item.from.locationId === item.to.locationId) {
+    const sameUnit = item.from.businessUnitId === item.to.businessUnitId;
+    if (sameUnit && item.from.locationId === item.to.locationId) {
       refuse('invalid-item', item.lineId, [{ kind: 'same-place' }]);
     }
-    const taken = this.takeFree(item.lineId, item.from, item.condition, item.goods);
+    const taken = this.take(item.lineId, item.from, item.condition, item.goods, { moveReserved: sameUnit });
     const movement = this.newMovement('location-move', item.lineId, item.from.siteId, item.from.businessUnitId, [
       item.goods.skuId,
     ]);
-    this.moveUnits(movement, taken, { ...item.to, condition: item.condition });
+    this.moveUnits(item.lineId, movement, taken, { ...item.to, condition: item.condition });
     return { kind: 'unknown' };
   }
 
   /**
-   * Condition change (13.4; PRD-DMG-003, PRD-DMG-010, POL-17.02): never to good, since damaged goods never become good
-   * and wrong or unidentified goods do so only through the identity route (`condition-route`). Takes free units; the
-   * hold the new condition raises is its own item in the same request (13.5).
+   * Condition change (2.3, 13.4; PRD-DMG-003, PRD-DMG-010, POL-17.02): only good to damaged, wrong or unidentified.
+   * Damaged goods never become good, and wrong or unidentified goods return to good only through the identity route, so
+   * every change from another condition is `condition-route`. Takes free units; the hold the new condition raises is
+   * its own item in the same request (13.5).
    */
-  private conditionChange(item: Extract<LedgerItem, { kind: 'condition-change' }>): ItemValue {
+  private conditionChange(item: ItemOf<'condition-change'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
-    if (item.to === 'good')
-      refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
     if (item.from === item.to) refuse('invalid-item', item.lineId, [{ kind: 'same-condition' }]);
-    const taken = this.takeFree(item.lineId, item.at, item.from, item.goods);
+    if (item.from !== 'good' || !CHANGED_CONDITIONS.includes(item.to)) {
+      refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
+    }
+    const taken = this.take(item.lineId, item.at, item.from, item.goods);
     const movement = this.newMovement('condition-change', item.lineId, item.at.siteId, item.at.businessUnitId, [
       item.goods.skuId,
     ]);
-    this.moveUnits(movement, taken, {
+    this.moveUnits(item.lineId, movement, taken, {
       businessUnitId: item.at.businessUnitId,
       locationId: item.at.locationId,
       condition: item.to,
@@ -823,7 +1036,7 @@ export class Working {
    * Record coverage (13.5; PRD-REC-015, PRD-REC-017, PRD-ACP-002, PRD-INT-005): no unit covered by two approved
    * revisions. One origin is covered by one revision; a split goes through its own origins (section 4).
    */
-  private recordCoverage(item: Extract<LedgerItem, { kind: 'record-coverage' }>): ItemValue {
+  private recordCoverage(item: ItemOf<'record-coverage'>): ItemValue {
     const origin = this.origin(item.lineId, item.receiptOriginId);
     if (origin.ptRevisionId !== null && origin.ptRevisionId !== item.ptRevisionId) {
       refuse('coverage-overlap', item.lineId, [{ kind: 'coverage', ptRevisionId: origin.ptRevisionId }]);
@@ -846,7 +1059,7 @@ export class Working {
     origin.stateChanged = true;
     const cover = (piece: PieceState | null, units: number) =>
       this.entries.coverage.push({
-        id: uuidv7(),
+        id: this.newId(),
         lineId: item.lineId,
         ptRevisionId: item.ptRevisionId,
         receiptOriginId: origin.id,
@@ -871,9 +1084,10 @@ export class Working {
 
   /**
    * Remove coverage (13.5; PRD-REC-019): only while no reservation relies on the units it covers. A reservation of
-   * covered units is the dependent quantity the ledger keeps; later dependents add their own checks.
+   * covered units is the dependent quantity the ledger keeps, at every balance of the origin; later dependents add
+   * their own checks.
    */
-  private removeCoverage(item: Extract<LedgerItem, { kind: 'remove-coverage' }>): ItemValue {
+  private removeCoverage(item: ItemOf<'remove-coverage'>): ItemValue {
     const record = this.coverage.get(item.coverageId);
     if (record?.action !== 'cover')
       refuse('invalid-item', item.lineId, [{ kind: 'coverage', coverageId: item.coverageId }]);
@@ -887,23 +1101,18 @@ export class Working {
       }
       piece.ptRevisionId = null;
       piece.changed = true;
+      this.hidden.pieces.push({ line: this.line, pieceId: piece.id });
     } else {
-      const reserved = this.activeClaims(
-        (claim) =>
-          claim.owner === 'reservation' &&
-          claim.balanceId !== null &&
-          this.balances.get(claim.balanceId)?.receiptOriginId === origin.id,
-      ).reduce((sum, claim) => sum + claim.quantity, 0);
-      if (origin.coveredQuantity - record.quantity < reserved) {
-        refuse('exceeds-source', item.lineId, [{ kind: 'coverage', coverageId: record.id }]);
-      }
+      const spare = origin.coveredQuantity - record.quantity - this.reservedOfOrigin(origin.id);
+      if (spare < 0) refuse('exceeds-source', item.lineId, [{ kind: 'coverage', coverageId: record.id }]);
+      this.hidden.origins.push({ line: this.line, originId: origin.id, balanceId: null, spare });
     }
     origin.coveredQuantity -= record.quantity;
     if (origin.coveredQuantity === 0) origin.ptRevisionId = null;
     origin.stateChanged = true;
     this.coverage.set(record.id, { ...record, removed: true });
     this.entries.coverage.push({
-      id: uuidv7(),
+      id: this.newId(),
       lineId: item.lineId,
       ptRevisionId: record.ptRevisionId,
       receiptOriginId: origin.id,
@@ -922,7 +1131,7 @@ export class Working {
    * Site, of units in custody there and not yet accepted: a piece elsewhere is `piece-not-at-place`; more units than
    * are unaccepted there is `exceeds-source`.
    */
-  private recordAcceptance(item: Extract<LedgerItem, { kind: 'record-acceptance' }>): ItemValue {
+  private recordAcceptance(item: ItemOf<'record-acceptance'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     const sku = this.sku(item.goods.skuId);
     if (sku.pieceTracked) {
@@ -962,7 +1171,7 @@ export class Working {
           row.skuId === item.goods.skuId &&
           (item.goods.receiptOriginId === undefined || row.receiptOriginId === item.goods.receiptOriginId),
       )
-      .sort((a, b) => a.countDate.localeCompare(b.countDate) || a.id.localeCompare(b.id));
+      .sort((a, b) => compareCodeUnits(a.countDate, b.countDate) || compareCodeUnits(a.id, b.id));
     for (const balance of candidates) {
       const take = Math.min(left, balance.quantity - balance.accepted);
       if (take <= 0) continue;
@@ -978,7 +1187,7 @@ export class Working {
 
   private acceptance(lineId: string, balance: BalanceState, piece: PieceState | null, quantity: number): void {
     this.entries.acceptances.push({
-      id: uuidv7(),
+      id: this.newId(),
       lineId,
       locationId: balance.locationId,
       condition: balance.condition,
@@ -994,7 +1203,7 @@ export class Working {
    * reserved or already held, since holds coexist; units not there are `not-in-custody`. A quantity claims balances
    * oldest first, each hold its own units (6.2).
    */
-  private placeHold(item: Extract<LedgerItem, { kind: 'place-hold' }>): ItemValue {
+  private placeHold(item: ItemOf<'place-hold'>): ItemValue {
     if (item.reason.trim() === '' || item.goods.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'hold' }]);
     if (item.withinReservationId !== undefined) {
       const inside = this.claims.some(
@@ -1003,15 +1212,14 @@ export class Working {
       if (!inside)
         refuse('invalid-item', item.lineId, [{ kind: 'reservation', reservationId: item.withinReservationId }]);
     }
-    const scope = this.headerScopeAt(item.at.siteId, item.at.businessUnitId);
     const hold: HoldEntry = {
-      id: uuidv7(),
+      id: this.newId(),
       lineId: item.lineId,
       kind: item.holdKind,
       reason: item.reason,
       evidenceFileId: item.evidenceFileId ?? null,
       withinReservationId: item.withinReservationId ?? null,
-      scope,
+      scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
       brandIds: [...new Set(item.goods.map((goods) => this.brandOf(goods.skuId)))],
       freezeScope: [],
       claims: [],
@@ -1091,7 +1299,7 @@ export class Working {
     scope: Scope,
   ): ClaimState {
     const claim: ClaimState = {
-      id: uuidv7(),
+      id: this.newId(),
       isNew: true,
       owner,
       headerId,
@@ -1116,9 +1324,11 @@ export class Working {
 
   /**
    * Release hold (13.5; 6.2; PRD-DMG-003, PRD-REC-013, POL-08.05): by the release event of its own kind, ending every
-   * claim it still holds; it releases no other hold (`wrong-release-event`). A count freeze ends by its own item.
+   * claim it still holds; it releases no other hold (`wrong-release-event`). A count freeze ends by its own item. The
+   * authority a release needs, such as an excess hold's PT route or its link to a recorded loss, is the calling
+   * module's own check (13.9).
    */
-  private releaseHold(item: Extract<LedgerItem, { kind: 'release-hold' }>): ItemValue {
+  private releaseHold(item: ItemOf<'release-hold'>): ItemValue {
     const hold = this.header(item.lineId, item.holdId, 'hold');
     if (hold.kind === 'count-freeze') refuse('invalid-item', item.lineId, [{ kind: 'count-freeze', holdId: hold.id }]);
     if (!(RELEASE_EVENTS[hold.kind] ?? []).includes(item.event)) {
@@ -1128,7 +1338,7 @@ export class Working {
     if (claims.length === 0) refuse('exceeds-source', item.lineId, [{ kind: 'hold', holdId: hold.id }]);
     for (const claim of claims) {
       this.entries.holdReleases.push({
-        id: uuidv7(),
+        id: this.newId(),
         lineId: item.lineId,
         holdId: hold.id,
         holdKind: hold.kind,
@@ -1150,7 +1360,7 @@ export class Working {
    * `reserved` while offline protected quantity is in the scope (8.1); another freeze over the same units is found by
    * the command's freeze check, as for any item (`count-freeze-active`).
    */
-  private startFreeze(item: Extract<LedgerItem, { kind: 'start-count-freeze' }>): ItemValue {
+  private startFreeze(item: ItemOf<'start-count-freeze'>): ItemValue {
     if (item.reason.trim() === '' || item.scope.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'scope' }]);
     const inScope = this.freezeBalances(item.siteId, item.businessUnitId, item.scope);
     const protectedQuantity = this.activeClaims(
@@ -1163,20 +1373,19 @@ export class Working {
     );
     if (protectedQuantity.length > 0)
       refuse('reserved', item.lineId, [{ kind: 'reservation', reservationKind: 'offline-protected' }]);
-    const scope = this.headerScopeAt(item.siteId, item.businessUnitId);
     const brands = new Set<string | null>(inScope.map((row) => row.scope.brandId));
     for (const member of item.scope) {
       if ('brandId' in member) brands.add(member.brandId);
       if ('skuId' in member) brands.add(this.brandOf(member.skuId));
     }
     const hold: HoldEntry = {
-      id: uuidv7(),
+      id: this.newId(),
       lineId: item.lineId,
       kind: 'count-freeze',
       reason: item.reason,
       evidenceFileId: null,
       withinReservationId: null,
-      scope,
+      scope: this.headerScopeAt(item.siteId, item.businessUnitId),
       brandIds: [...brands],
       freezeScope: [...item.scope],
       claims: [],
@@ -1213,13 +1422,13 @@ export class Working {
   }
 
   /** End count freeze (13.5): the count's closure, `count-closed`, once; under the anchor held exclusively. */
-  private endFreeze(item: Extract<LedgerItem, { kind: 'end-count-freeze' }>): ItemValue {
+  private endFreeze(item: ItemOf<'end-count-freeze'>): ItemValue {
     const hold = this.header(item.lineId, item.holdId, 'hold');
     if (hold.kind !== 'count-freeze')
       refuse('wrong-release-event', item.lineId, [{ kind: 'hold', holdKind: hold.kind, event: 'count-closed' }]);
     if (hold.ended) refuse('exceeds-source', item.lineId, [{ kind: 'count-freeze', holdId: hold.id }]);
     this.entries.holdReleases.push({
-      id: uuidv7(),
+      id: this.newId(),
       lineId: item.lineId,
       holdId: hold.id,
       holdKind: hold.kind,
@@ -1236,20 +1445,18 @@ export class Working {
   /**
    * Reserve (13.5; 6.2; PRD-TRF-006 to PRD-TRF-009, PRD-OFF-006, PRD-INT-005): goods in good condition, in custody,
    * covered and accepted at the Site and not held; reservations never overlap. For quantity-tracked goods an origin's
-   * covered quantity is counted against each of its balances, which is exact while an origin is wholly covered or at
-   * one place, and never reserves an uncovered unit (S1-F10-T02). Held-goods reservations reserve held goods under
-   * their own authority and arrive with the routes that make them (stage 2 and 3).
+   * covered quantity is drawn on once by every reservation of its units, wherever they are (13.9). Held-goods
+   * reservations reserve held goods under their own authority and arrive with the routes that make them (stage 2 and 3).
    */
-  private reserve(item: Extract<LedgerItem, { kind: 'reserve' }>): ItemValue {
+  private reserve(item: ItemOf<'reserve'>): ItemValue {
     if (item.goods.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'goods' }]);
     if (item.reservationKind === 'held-goods')
       refuse('invalid-item', item.lineId, [{ kind: 'reservation-kind', reservationKind: item.reservationKind }]);
-    const scope = this.headerScopeAt(item.at.siteId, item.at.businessUnitId);
     const reservation: ReservationEntry = {
-      id: uuidv7(),
+      id: this.newId(),
       lineId: item.lineId,
       kind: item.reservationKind,
-      scope,
+      scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
       brandIds: [...new Set(item.goods.map((goods) => this.brandOf(goods.skuId)))],
       claims: [],
     };
@@ -1261,7 +1468,7 @@ export class Working {
           if (piece.ptRevisionId === null) refuse('not-covered', item.lineId, [{ kind: 'piece', code }]);
           if (piece.acceptedSiteId !== item.at.siteId) refuse('not-accepted', item.lineId, [{ kind: 'piece', code }]);
         }
-        for (const taken of this.takeFree(item.lineId, item.at, 'good', goods, { reservation: true })) {
+        for (const taken of this.take(item.lineId, item.at, 'good', goods, { reservation: true })) {
           for (const piece of taken.pieces) {
             reservation.claims.push(
               this.newClaim(
@@ -1280,16 +1487,18 @@ export class Working {
         continue;
       }
       const candidates = this.balancesAt(item.at, 'good', goods);
-      const covered = candidates.reduce((sum, row) => sum + this.coveredFree(row), 0);
-      const accepted = candidates.reduce((sum, row) => sum + this.acceptedFree(row), 0);
-      const free = candidates.reduce((sum, row) => sum + this.freeOn(row), 0);
-      if (goods.quantity <= free && goods.quantity > covered)
+      const sum = (units: (row: BalanceState) => number) => candidates.reduce((total, row) => total + units(row), 0);
+      const free = sum((row) => freeUnits(this.claimsOn(row)));
+      if (
+        goods.quantity <= free &&
+        goods.quantity > sum((row) => coveredFreeUnits(this.claimsOn(row), this.coverOf(row)))
+      )
         refuse('not-covered', item.lineId, [{ kind: 'quantity', skuId: goods.skuId }]);
-      if (goods.quantity <= free && goods.quantity > accepted)
+      if (goods.quantity <= free && goods.quantity > sum((row) => acceptedFreeUnits(this.claimsOn(row))))
         refuse('not-accepted', item.lineId, [{ kind: 'quantity', skuId: goods.skuId }]);
-      const taken = this.takeFree(item.lineId, item.at, 'good', goods, {
+      const taken = this.take(item.lineId, item.at, 'good', goods, {
         reservation: true,
-        fits: (row, rowFree) => Math.min(rowFree, this.coveredFree(row), this.acceptedFree(row)),
+        fits: (row) => reservableUnits(this.claimsOn(row), this.coverOf(row)),
       });
       for (const each of taken) {
         reservation.claims.push(
@@ -1304,23 +1513,18 @@ export class Working {
             each.balance.scope,
           ),
         );
+        // What this reservation left of the origin's covered quantity, for claims the actor cannot see (DEC-117).
+        const cover = this.coverOf(each.balance);
+        this.hidden.origins.push({
+          line: this.line,
+          originId: each.balance.receiptOriginId,
+          balanceId: each.balance.id,
+          spare: cover.covered - cover.reservedEverywhere - this.claimsOn(each.balance).holdClaims,
+        });
       }
     }
     this.entries.reservations.push(reservation);
     return { kind: 'unknown' };
-  }
-
-  /** Units of a balance that are covered and not reserved or held (6.2, 6.3), bounded by the origin's coverage. */
-  private coveredFree(balance: BalanceState): number {
-    const origin = this.origins.get(balance.receiptOriginId);
-    const { reserved, held } = this.claimedOn(balance);
-    return Math.max(0, Math.min(balance.quantity, origin?.coveredQuantity ?? 0) - reserved - held);
-  }
-
-  /** Units of a balance that are accepted and not reserved or held (6.3). */
-  private acceptedFree(balance: BalanceState): number {
-    const { reserved, held } = this.claimedOn(balance);
-    return Math.max(0, balance.accepted - reserved - held);
   }
 
   /**
@@ -1328,7 +1532,7 @@ export class Working {
    * it still holds. Consumption is made by the movement that consumes it (dispatch, departure, an offline sale), which
    * arrives with those movements.
    */
-  private endReservation(item: Extract<LedgerItem, { kind: 'end-reservation' }>): ItemValue {
+  private endReservation(item: ItemOf<'end-reservation'>): ItemValue {
     const reservation = this.header(item.lineId, item.reservationId, 'reservation');
     if (!(RESERVATION_EVENTS[reservation.kind] ?? []).includes(item.event)) {
       refuse('wrong-release-event', item.lineId, [
@@ -1340,7 +1544,7 @@ export class Working {
       refuse('exceeds-source', item.lineId, [{ kind: 'reservation', reservationId: reservation.id }]);
     for (const claim of claims) {
       this.entries.reservationEvents.push({
-        id: uuidv7(),
+        id: this.newId(),
         lineId: item.lineId,
         reservationId: reservation.id,
         reservationKind: reservation.kind,
@@ -1348,6 +1552,7 @@ export class Working {
         event: item.event,
         quantity: claim.quantity,
         pieceId: claim.pieceId,
+        movementId: null,
         scope: claim.scope,
       });
       claim.quantity = 0;
@@ -1356,5 +1561,3 @@ export class Working {
     return { kind: 'none' };
   }
 }
-
-export { key as workingKey };

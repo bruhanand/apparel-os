@@ -51,6 +51,8 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'audit.seal_block',
     // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).
     'stock.book_has_held_stock',
+    // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).
+    'stock.rebuild_partial',
     // stock-ledger 14.1, 14.3: the recheck of holds and freezes the actor cannot see, SECURITY DEFINER (DEC-117).
     'stock.recheck_hidden',
   ],

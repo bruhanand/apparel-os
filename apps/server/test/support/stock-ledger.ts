@@ -32,6 +32,14 @@ import {
   writeSyntheticUser,
   type SyntheticUser,
 } from './access.js';
+import {
+  APPROVE_DOCUMENT,
+  APPROVE_ON_COST,
+  SYNTHETIC_DOCUMENT_TYPE,
+  SYNTHETIC_MODULE,
+  SYNTHETIC_RECORD_TYPE,
+} from '../fixtures/stock-ledger.js';
+import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic } from './grants.js';
 import { capturingLogger } from './jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './organisations.js';
@@ -42,11 +50,13 @@ import { databaseUrl } from './postgres.js';
 // `merchandise` reads built to the shape the ledger declares (ports.ts; product owner, 6 Oct 2026). Every place, SKU,
 // brand, book and document here is SYNTHETIC: identifiers made for the test, never a KDPS value.
 
-/** The synthetic caller's module and record type (13.2). */
-export const SYNTHETIC_MODULE = 'test-stock-ledger';
-export const SYNTHETIC_RECORD_TYPE = 'document';
-/** The synthetic document's record type in the permission registry: no scope fact, like the harness's (15.2). */
-export const SYNTHETIC_DOCUMENT_TYPE = 'test-stock-ledger.document';
+export {
+  APPROVE_DOCUMENT,
+  APPROVE_ON_COST,
+  SYNTHETIC_DOCUMENT_TYPE,
+  SYNTHETIC_MODULE,
+  SYNTHETIC_RECORD_TYPE,
+} from '../fixtures/stock-ledger.js';
 
 export const syntheticDocumentType: RecordTypeDeclaration = {
   code: SYNTHETIC_DOCUMENT_TYPE,
@@ -59,8 +69,6 @@ export const syntheticDocumentType: RecordTypeDeclaration = {
 export const testRegistry: readonly RecordTypeDeclaration[] = [...permissionRegistry, syntheticDocumentType];
 
 /** Synthetic approval rules (15.3): independent, one with no value basis, one with cost as its basis. */
-export const APPROVE_DOCUMENT = 'test-stock-ledger.approve-document';
-export const APPROVE_ON_COST = 'test-stock-ledger.approve-on-cost';
 export const syntheticRules: readonly ApprovalRule[] = [
   {
     actionType: APPROVE_DOCUMENT,
@@ -182,9 +190,9 @@ export const syntheticPlaces: LedgerPlaces = {
 };
 const moreSkus: SkuFacts[] = [];
 
-/** A further SYNTHETIC quantity-tracked SKU of brand A, for tests that need many. */
-export function addSyntheticSku(): SkuFacts {
-  const made = sku(BRAND_A, false);
+/** A further SYNTHETIC quantity-tracked SKU, of brand A unless another is given, for tests that need many. */
+export function addSyntheticSku(brandId = BRAND_A): SkuFacts {
+  const made = sku(brandId, false);
   moreSkus.push(made);
   return made;
 }
@@ -245,14 +253,14 @@ export class StockWorld {
       keys: OrganisationKeys.fromEnvironment(this.keysEnvironment),
       registry: testRegistry,
       approvalRules: syntheticRules,
-      composition: 'test',
+      composition: TEST_COMPOSITION,
     });
     this.ledger = new StockLedger({
       audit,
       places: syntheticPlaces,
       skus: syntheticSkus,
       registrations: [syntheticCaller],
-      composition: 'test',
+      composition: TEST_COMPOSITION,
     });
     this.poster = await this.actor('POSTER');
     this.brandLimited = await this.actor('BRAND-A', {
@@ -295,7 +303,7 @@ export class StockWorld {
   run<T>(
     actorId: string,
     work: (context: TransactionContext) => Promise<T>,
-    commandName = 'test-stock-ledger.post',
+    commandName = `${SYNTHETIC_MODULE}.post`,
   ): Promise<T> {
     const runner = new CommandRunner({
       clock: { now: () => this.now() },
@@ -373,7 +381,7 @@ export class StockWorld {
             recordId: source.recordId,
             versionId: source.versionId,
           };
-          const verified = await this.access.verifyUnderLock(context, {
+          const check = {
             decisionId: options.approval.decisionId,
             actionType: options.approval.actionType,
             document,
@@ -381,14 +389,14 @@ export class StockWorld {
             // The value on the rule's basis: none for a rule without one; the ledger's cost value otherwise (13.1).
             value:
               options.approval.actionType === APPROVE_DOCUMENT || checked.value.value.kind === 'none'
-                ? { kind: 'none' }
-                : { kind: 'unknown' },
-          });
+                ? ({ kind: 'none' } as const)
+                : ({ kind: 'unknown' } as const),
+          };
+          const verified = await this.access.verifyUnderLock(context, check);
           if (verified !== undefined) throw new Refused(verified);
           const used = await this.access.recordUse(context, {
+            ...check,
             useId,
-            decisionId: options.approval.decisionId,
-            document,
             actor: { kind: 'user', id: actor.user.id },
           });
           if (used !== undefined) throw new Refused(used);

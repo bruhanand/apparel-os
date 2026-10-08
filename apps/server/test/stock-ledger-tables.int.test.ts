@@ -4,6 +4,7 @@ import type { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CommandRunner, newCorrelationId, OrganisationRouter, type RoutedOrganisation } from '../src/kernel/index.js';
 import { BookStockHistory } from '../src/modules/stock/ledger/index.js';
+import { SYNTHETIC_MODULE } from './fixtures/stock-ledger.js';
 import { syntheticCode } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment, syntheticTimezone, writeSyntheticUser } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
@@ -63,7 +64,7 @@ async function insert(client: Client, table: string, row: Row): Promise<string> 
 
 function source(): Row {
   return {
-    source_module: 'test-stock-harness',
+    source_module: SYNTHETIC_MODULE,
     source_record_type: 'document',
     source_record_id: uuidv7(),
     source_version_id: uuidv7(),

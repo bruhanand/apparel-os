@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PRODUCTION_COMPOSITION } from '../../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../../audit/index.js';
 import { BookStockHistory } from './contracts/book-stock-history.js';
 import { StockLedger } from './ledger.js';
@@ -27,7 +28,7 @@ export const STOCK_LEDGER = 'stock.ledger.StockLedger';
           places: placesNotBuilt,
           skus: skusNotBuilt,
           registrations: [],
-          composition: 'production',
+          composition: PRODUCTION_COMPOSITION,
         }),
       inject: [AUDIT],
     },

@@ -85,7 +85,7 @@ export function approvalRulesOf(
         `Approval rule ${each.actionType}: only a synthetic rule's action type begins ${SYNTHETIC_PREFIX}`,
       );
     }
-    if (each.synthetic && composition !== 'test') {
+    if (each.synthetic && composition.kind !== 'test') {
       throw new Error(`Synthetic approval rule ${each.actionType} outside a test composition`);
     }
     const declaration = registry.get(each.recordType);

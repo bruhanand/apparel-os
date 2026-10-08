@@ -14,6 +14,15 @@ export function uuidArray(ids: Iterable<string | null>): SQL {
   return sql`${`{${values.join(',')}}`}::uuid[]`;
 }
 
+const WORD = /^[a-z][a-z-]*$/;
+
+/** A `text[]` parameter of lower-case words, checked, so the array's text form needs no quoting. */
+export function textArray(words: Iterable<string>): SQL {
+  const all = [...words];
+  if (all.some((word) => !WORD.test(word))) throw new Error('not a word');
+  return sql`${`{${all.join(',')}}`}::text[]`;
+}
+
 /** An `integer[]` parameter. */
 export function integerArray(values: Iterable<number>): SQL {
   const all = [...values];

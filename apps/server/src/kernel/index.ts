@@ -166,4 +166,5 @@ export { systemClock } from './time/clock.js';
 export type { Clock } from './time/clock.js';
 export { timezoneNotConfigured } from './time/organisation-timezone.js';
 export type { OrganisationTimezoneSource, TimezoneSetting } from './time/organisation-timezone.js';
+export { PRODUCTION_COMPOSITION } from './composition.js';
 export type { Composition } from './composition.js';

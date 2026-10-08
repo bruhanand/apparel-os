@@ -268,7 +268,7 @@ export const englishIndia = {
   'error.stock.count-freeze-active': 'A count is open over these goods. Wait until it closes.',
   'error.stock.held': 'A hold covers these goods.',
   'error.stock.reserved': 'A reservation covers these goods.',
-  'error.stock.blocked': 'These goods are held, reserved or being counted under a record you cannot see.',
+  'error.stock.blocked': 'These goods cannot be used for this now.',
   'error.stock.not-covered': 'These goods have no approved price ticket coverage.',
   'error.stock.not-accepted': 'These goods have not been accepted at this Site.',
   'error.stock.coverage-overlap': 'These goods are already covered by another price ticket.',

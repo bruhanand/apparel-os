@@ -19,6 +19,21 @@ export function syntheticCode(code: string): string {
   return `${SYNTHETIC_CODE_MARKER}-${code}`;
 }
 
+const IDENTIFIER_PART = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/**
+ * A synthetic identifier in lower case, such as a test-only module, record type or action type: `stock-ledger` becomes
+ * `test-syn-stock-ledger`. It begins `test-`, as access requires of a synthetic approval rule's action type
+ * (stock-ledger 15.3), and carries the synthetic marker in lower case (code-house-rules 11.1).
+ */
+export function syntheticIdentifier(name: string): string {
+  if (!IDENTIFIER_PART.test(name)) throw new Error(`Synthetic identifier part ${name} must be lower-case words`);
+  if (name.split('-').includes(SYNTHETIC_CODE_MARKER.toLowerCase())) {
+    throw new Error(`Identifier ${name} already carries the marker`);
+  }
+  return `test-${SYNTHETIC_CODE_MARKER.toLowerCase()}-${name}`;
+}
+
 /** A synthetic name: `Organisation A` becomes `SYNTHETIC Organisation A`. */
 export function syntheticName(name: string): string {
   if (name.trim() === '' || name !== name.trim()) throw new Error(`Synthetic name "${name}" is empty or padded`);

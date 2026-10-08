@@ -64,6 +64,26 @@ export default defineConfig(
           selector: 'ImportExpression[source.value=/(^|\\/)(test|e2e|fixtures|seed)(\\/|$)/]',
           message: 'Application code never imports tests, fixtures or the seed (code-house-rules 11.2).',
         },
+        {
+          // Only the test application factories make a test composition (stock-ledger 13.2; DEC-112, H2).
+          selector:
+            ':matches(TSAsExpression, TSTypeAssertion, TSSatisfiesExpression)[typeAnnotation.typeName.name="Composition"]',
+          message:
+            'Application code names only PRODUCTION_COMPOSITION; a test composition comes from apps/server/test (stock-ledger 13.2).',
+        },
+      ],
+    },
+  },
+  {
+    // The one place a Composition value is made (stock-ledger 13.2). It keeps the fixture rule of the block above.
+    files: ['apps/server/src/kernel/composition.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/(^|\\/)(test|e2e|fixtures|seed)(\\/|$)/]',
+          message: 'Application code never imports tests, fixtures or the seed (code-house-rules 11.2).',
+        },
       ],
     },
   },
