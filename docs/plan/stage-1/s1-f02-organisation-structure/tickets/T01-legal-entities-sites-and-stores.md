@@ -1,7 +1,7 @@
 # S1-F02-T01 — Legal entities, Sites and Stores
 
-Status: blocked
-Blocked by: S1-F01-T13, S1-F01-T16
+Status: done
+Blocked by: S1-F01-T13 (done), S1-F01-T16 (done)
 Feature: [S1-F02 Organisation structure and verified mappings](../../spec.md)
 
 ## Build
@@ -42,3 +42,4 @@ The `organisation` module with its first migration: every record a business unit
 - Design details settled in the design with this change: every table of this ticket is `unscoped` and its record types declare no scope fact (structure-and-masters 6.1); the Store's Site link is a column of its versions, not a `store_site` table; grouping members belong to a grouping version; a version keeps its preparer on the row and is open-ended from its start; approval refuses a version while a record it names is not in force on its start; a decision's effect on another module's master is a contract `access` defines (access-and-approvals 9.8b).
 - Left open: withdrawal of a Scheduled master version (RR-439); classifications, other grouping kinds and the Organisation's own row (RR-440).
 - Review fixes (8 Oct 2026, branch `s1/f02-t01-review-fixes`): a version may start before an approved Scheduled one and ends where it starts, with a warning in the editor, and versions are approved in any order (P3); a draft whose start has passed is re-dated by preparing it again, which supersedes it (GC2-7); the `organisation.master_list` permission is gone (P2); Site and Store place scope moves to `S1-F02-T03` (P1); lists are paged by cursor, each master has a one-record read and the structure as of a date reads no histories; the version guard admits only the decision on a version awaiting it, and rows frozen with a decided version are refused; a code taken in a race is refused, not failed; `MODULE_APPROVALS` is required at start; the redundant indexes of `0028` are dropped. Store partner associations are RR-441.
+- Closed 8 Oct 2026: commits `7753689` and `c7c7716` (review fixes), reviewed with `/code-review`, no blocking finding left; merged into `main` and deployed to `dev` on the product owner's go-ahead. Follow-ups: RR-438 (registration verification), RR-439 (withdrawal), RR-440 (classifications and grouping kinds), RR-441 (Store partner associations); place scope of Sites and Stores in S1-F02-T03.

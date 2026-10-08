@@ -1,7 +1,7 @@
 # S1-F02-T02 — Business units, verified mappings and locations
 
 Status: blocked
-Blocked by: S1-F02-T01, S1-F06-T05 (stored files, for verification evidence)
+Blocked by: S1-F02-T01 (done), S1-F06-T05 (done) (stored files, for verification evidence)
 Feature: [S1-F02 Organisation structure and verified mappings](../../spec.md)
 
 ## Build
