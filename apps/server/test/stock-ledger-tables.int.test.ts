@@ -139,6 +139,7 @@ function legRow(movementId: string, originId: string, overrides: Row = {}): Row 
     receipt_origin_id: originId,
     sku_id: uuidv7(),
     quantity: 5,
+    accepted_quantity: 0,
     location_id: uuidv7(),
     condition: 'good',
     held_as: 'custody',
@@ -655,6 +656,7 @@ describe('coverage, holds and reservations (stock-ledger 6, 14.2)', () => {
       piece_id: null,
       balance_id: balance,
       quantity: 2,
+      claimed_quantity: 2,
       ...scope(AT_STORE_1),
     });
     const release = (event: string): Row => ({
@@ -672,8 +674,19 @@ describe('coverage, holds and reservations (stock-ledger 6, 14.2)', () => {
     });
     expect(await sqlState(insert(owner, 'hold_release', release('count-closed')))).toBe('23514');
     await insert(owner, 'hold_release', release('report-rejected'));
+    // A count freeze's one release names no claim and no quantity (S1-F10-T02); its kind is its hold's.
     expect(
       await sqlState(insert(owner, 'hold_release', { ...release('count-closed'), hold_kind: 'count-freeze' })),
+    ).toBe('23514');
+    expect(
+      await sqlState(
+        insert(owner, 'hold_release', {
+          ...release('count-closed'),
+          hold_kind: 'count-freeze',
+          hold_claim_id: null,
+          quantity: null,
+        }),
+      ),
     ).toBe('23503');
 
     const scopeRow = (holdId: string, kind: string, overrides: Row = {}): Row => ({
@@ -706,6 +719,7 @@ describe('coverage, holds and reservations (stock-ledger 6, 14.2)', () => {
       piece_id: null,
       balance_id: balance,
       quantity: 2,
+      claimed_quantity: 2,
       ...scope(AT_STORE_1),
     });
     const event = (name: string, movementId: string | null): Row => ({

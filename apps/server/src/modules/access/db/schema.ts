@@ -401,6 +401,23 @@ export const approvalDecision = access.table('approval_decision', {
 });
 
 /**
+ * The use of an approval decision by a posting: one per decision, written in the posting transaction (access-and-approvals
+ * 9.8, 13.1; DEC-097). An entry, never edited.
+ */
+export const approvalUse = access.table('approval_use', {
+  id: uuid('id').primaryKey(),
+  approvalDecisionId: uuid('approval_decision_id').notNull().unique(),
+  postingModule: text('posting_module').notNull(),
+  postingRecordType: text('posting_record_type').notNull(),
+  postingRecordId: uuid('posting_record_id').notNull(),
+  postingVersionId: uuid('posting_version_id').notNull(),
+  actorUserId: uuid('actor_user_id'),
+  actorServiceIdentityId: uuid('actor_service_identity_id'),
+  onBehalfOfUserId: uuid('on_behalf_of_user_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
  * The setup record (access-and-approvals 9.11, 13.1): the fingerprint of the setup request's non-secret fields, the
  * version of its canonical form, and the two first users. At most one row; append-only. Never a password.
  */

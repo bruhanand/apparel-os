@@ -303,6 +303,17 @@ A large document is approved by a click and posted later by a job, one at a time
 4. **A failed job.** Nothing is posted. The decision stays Approved and unused, and the document shows the failure (stock-ledger 10.6). A job that still fails after its retries raises an unfinished-operation exception (`PRD-EXC-001`), routed under `POL-02.16`. **Design choice.**
 5. **A retry.** Started by an authorised person, or by the job runner under its retry rule (the code house rules; **Design choice**). It uses the same decision only while the document version is unchanged and the value under the lock is within the decision's limit and the approved amount; otherwise the document returns for renewed approval (`PRD-ACS-007`, DEC-066).
 
+### 9.8a As built for other modules' documents (S1-F10-T02)
+
+**Design choice** throughout; no value is chosen. S1-F01 spec section 16 deferred approval use by a posting to S1-F10 (`DEC-097`).
+
+- **Rules of other modules.** Access takes, at start, the approval rules other modules declare for their documents (8): action type, owning module, the record type approve is held on, independence, value basis (none or cost so far) and whether a free-text reason is given. A rule that takes an access action type or module, a record type not declared with approve, or a record type that declares a scope fact fails the start: a request does not yet keep the document's scope facts that 9.3 checks, so a scoped document's rule arrives with them. A synthetic rule, declared by test code with an action type beginning `test-`, is accepted only in a test composition, as the ledger's synthetic callers are (stock-ledger 13.2, 15.3); a rule that is not synthetic never begins `test-`.
+- **Request approval** for such a document takes the preparers from the owning module, which keeps their change rows, and the value on the rule's basis or Unknown; it supersedes an open request on an earlier version as for an access change (9.1, 9.6).
+- **Decide** records the decision and changes nothing of the document: the owning module posts it in its own command (module-map 6.2). Until approval limits exist (S1-F05), nobody is eligible for a request whose rule has a value basis, since a missing limit grants nothing (9.2, 9.3; `POL-02.09`): Decide refuses `access.no-approval-limit`.
+- **Approval lock targets.** The posting command locks the decision's request exclusively at step 1 (stock-ledger 10.3), as Decide does, so two postings of one decision, or a decision and a posting, never pass each other.
+- **Verify under lock** (9.7) refuses, after that lock: a decision not found (`access.approval-decision-not-found`); of another action type or document (`access.approval-not-for-document`); not Approved (`access.approval-not-approved`); already used (`access.approval-used`); of another version than the one posted (`access.approval-version-changed`); an approver among the preparers the posting module names now or the request froze (`access.self-preparation`); and a value under the lock above the approved amount, or known where Unknown was decided, since no limit can be checked yet (`access.approval-value-exceeded`). A version the decision carried to (`approval_carry`) arrives with the first document whose later step posts it; the limit the decision relied on arrives with S1-F05.
+- **Record use** writes `approval_use` with the identifier the posting module made, naming the decision, the posting module, record type, record and version, and who posted (the user, or the service identity and the person it acts for). One use per decision, by a unique key; it rechecks that the decision is Approved, unused and of that version. The use is the approval evidence the posting's own records keep (stock-ledger 13.3).
+
 ### 9.9 Bulk approval
 
 - Only for action types on the configured allowlist (`PRD-ACS-011`, `POL-02.19`). The allowlist is OPEN (alignment report B-9; KDPS Owner, Admin).
@@ -454,7 +465,7 @@ Every table has a UUIDv7 primary key. "+ versions" means a companion table of ef
 | `approval_request` | document, version and action type, for open requests | value on its basis or Unknown; its preparers frozen in `approval_request_preparer` (9.1); its state recorded once, from Awaiting approval: Approved, Rejected, Superseded (9.6) or Withdrawn (DEC-117) |
 | `approval_decision` | request | append-only; names the assignment and limit version, or the stand-in grant, it relied on |
 | `approval_carry` | decision and version | only to a version with no material change |
-| `approval_use` | decision | one use per decision; written in the posting transaction |
+| `approval_use` | decision | one use per decision; written in the posting transaction, with the identifier the posting module made, the posting document's module, record type, record and version, and who posted; append-only (9.8a; `S1-F10-T02`) |
 | `bulk_decision_batch` | — | links its decisions |
 
 ### 13.2 Schema `inbox`

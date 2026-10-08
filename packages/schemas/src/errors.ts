@@ -233,6 +233,15 @@ export const accessApprovalCodes = declareCodes({
   'access.reason-not-found': 'not-found',
   'access.rule-setting-not-found': 'not-found',
   'access.setting-not-found': 'not-found',
+  // A request with a value basis needs an approver whose limit covers it; limits arrive with S1-F05 (9.2, 9.3).
+  'access.no-approval-limit': 'not-authorised',
+  // Verify under lock and Record use (access-and-approvals 9.7, 9.8; DEC-066, DEC-097; S1-F10-T02).
+  'access.approval-decision-not-found': 'not-found',
+  'access.approval-not-for-document': 'refused',
+  'access.approval-not-approved': 'refused',
+  'access.approval-used': 'refused',
+  'access.approval-version-changed': 'refused',
+  'access.approval-value-exceeded': 'refused',
 });
 
 /**
@@ -260,6 +269,37 @@ export const filesImportsCodes = declareCodes({
   'files-imports.restricted-file-is-an-export': 'refused',
 });
 
+/**
+ * The codes of `stock` · ledger (stock-ledger 13.8; S1-F10-T02). Each refusal names the item and what failed, so the
+ * caller can show the reason (PRD-UXP-003). `stock.blocked` is the one generic refusal of a recheck that a hold, a
+ * reservation or a count freeze the actor cannot see covers the units: it names nothing of that record (DEC-117).
+ */
+export const stockLedgerCodes = declareCodes({
+  'stock.caller-not-registered': 'refused',
+  'stock.item-not-registered': 'refused',
+  'stock.historical-reference-source': 'refused',
+  'stock.business-date-not-set': 'unavailable',
+  'stock.invalid-item': 'refused',
+  'stock.place-invalid': 'refused',
+  'stock.route-not-allowed': 'refused',
+  'stock.plan-stale': 'conflict',
+  'stock.insufficient-available': 'refused',
+  'stock.not-in-custody': 'refused',
+  'stock.piece-not-at-place': 'refused',
+  'stock.count-freeze-active': 'refused',
+  'stock.held': 'refused',
+  'stock.reserved': 'refused',
+  'stock.blocked': 'refused',
+  'stock.not-covered': 'refused',
+  'stock.not-accepted': 'refused',
+  'stock.coverage-overlap': 'refused',
+  'stock.reservation-overlap': 'refused',
+  'stock.exceeds-source': 'refused',
+  'stock.wrong-release-event': 'refused',
+  'stock.condition-route': 'refused',
+  'stock.rule-not-set': 'unavailable',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -268,6 +308,7 @@ export const errorCodes = {
   ...accessSessionCodes,
   ...accessApprovalCodes,
   ...filesImportsCodes,
+  ...stockLedgerCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

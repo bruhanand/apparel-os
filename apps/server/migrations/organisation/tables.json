@@ -377,6 +377,14 @@
       "why": "Read with its request by access; an access change carries no scope fact (access-and-approvals 9.11); only access code reads it"
     },
     {
+      "table": "access.approval_use",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.7, 9.8, 13.1; stock-ledger 10.4, 13.1; DEC-097",
+      "why": "One use per decision, written and read by access's Verify under lock and Record use inside the posting module's command; the decision it names is unscoped and the posting module keeps the use's identifier on its own scoped rows; only access code reads it"
+    },
+    {
       "table": "inbox.work_item",
       "class": "unscoped",
       "marks": [],

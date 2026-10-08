@@ -82,6 +82,8 @@ export const movementLeg = stock.table('movement_leg', {
   receiptOriginId: uuid('receipt_origin_id').notNull(),
   skuId: uuid('sku_id'),
   quantity: integer('quantity').notNull(),
+  // How many of its units were accepted (0028; stock-ledger 2.1, 13.4).
+  acceptedQuantity: integer('accepted_quantity').notNull(),
   locationId: uuid('location_id'),
   condition: text('condition').notNull(),
   heldAs: text('held_as').notNull(),
@@ -225,6 +227,9 @@ export const acceptance = stock.table('acceptance', {
   receiptOriginId: uuid('receipt_origin_id').notNull(),
   pieceId: uuid('piece_id'),
   quantity: integer('quantity').notNull(),
+  // The location and condition of the balance it accepted units at (0028; stock-ledger 2.1).
+  locationId: uuid('location_id').notNull(),
+  condition: text('condition').notNull(),
   sourceModule: text('source_module').notNull(),
   sourceRecordType: text('source_record_type').notNull(),
   sourceRecordId: uuid('source_record_id').notNull(),
@@ -315,6 +320,8 @@ export const holdClaim = stock.table('hold_claim', {
   pieceId: uuid('piece_id'),
   balanceId: uuid('balance_id'),
   quantity: integer('quantity').notNull(),
+  // What it claimed when its hold was placed, never changed (0028; stock-ledger 2.1).
+  claimedQuantity: integer('claimed_quantity').notNull(),
   siteId: uuid('site_id').notNull(),
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id').notNull(),
@@ -327,9 +334,10 @@ export const holdRelease = stock.table('hold_release', {
   id: uuid('id').primaryKey(),
   holdId: uuid('hold_id').notNull(),
   holdKind: text('hold_kind').notNull(),
-  holdClaimId: uuid('hold_claim_id').notNull(),
+  // A count freeze's one release names no claim and no quantity (0028; stock-ledger 13.5).
+  holdClaimId: uuid('hold_claim_id'),
   releaseEvent: text('release_event').notNull(),
-  quantity: integer('quantity').notNull(),
+  quantity: integer('quantity'),
   pieceId: uuid('piece_id'),
   sourceModule: text('source_module').notNull(),
   sourceRecordType: text('source_record_type').notNull(),
@@ -357,6 +365,8 @@ export const reservationClaim = stock.table('reservation_claim', {
   pieceId: uuid('piece_id'),
   balanceId: uuid('balance_id'),
   quantity: integer('quantity').notNull(),
+  // What it claimed when its reservation was made, never changed (0028; stock-ledger 2.1).
+  claimedQuantity: integer('claimed_quantity').notNull(),
   siteId: uuid('site_id').notNull(),
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id').notNull(),

@@ -17,7 +17,13 @@ import {
   type SecuritySettingVersionDraft,
   type UserVersionDraft,
 } from '@apparel-os/schemas';
-import { CommandDefect, type CommandRefusal, type LockTarget, type TransactionContext } from '../../kernel/index.js';
+import {
+  CommandDefect,
+  type CommandRefusal,
+  type Composition,
+  type LockTarget,
+  type TransactionContext,
+} from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import {
   AccessChanges,
@@ -27,6 +33,15 @@ import {
   type Preparer,
 } from './commands/access-changes.js';
 import { ApprovalSettingsChanges } from './commands/approval-settings.js';
+import {
+  approvalLockTargets,
+  recordUse,
+  verifyUnderLock,
+  type ApprovalCheck,
+  type ApprovalUseRecord,
+} from './commands/approval-use.js';
+import { requestModuleApproval, type ModuleApprovalRequest } from './commands/request-approval.js';
+import { approvalRulesOf, type ApprovalRule } from './domain/approval-rules.js';
 import { holdAuthority, type AuthorityActor } from './commands/authority.js';
 import { SecuritySettingsChanges } from './commands/security-settings.js';
 import {
@@ -171,6 +186,20 @@ export interface AccessInterface {
   /** The essential security settings, each with its versions and the one in force now (design-language 10.19). */
   securitySettings(context: TransactionContext): Promise<SecuritySettings>;
   /**
+   * Request approval of another module's document under the rule it declares (access-and-approvals 8, 9.1; module-map
+   * 4.3), in the preparing command's transaction. Returns the request's identifier.
+   */
+  requestApproval(context: TransactionContext, request: ModuleApprovalRequest): Promise<string>;
+  /** The rows a posting locks with its document at step 1: the decision's request (stock-ledger 10.3; 9.7). */
+  approvalLockTargets(context: TransactionContext, decisionId: string): Promise<LockTarget[]>;
+  /**
+   * Verify under lock (access-and-approvals 9.7; stock-ledger 10.4; DEC-097): the decision is Approved, unused, of the
+   * version posted, by none of its preparers, and within the approved amount. Answers the refusal, or undefined.
+   */
+  verifyUnderLock(context: TransactionContext, check: ApprovalCheck): Promise<CommandRefusal | undefined>;
+  /** Record use (9.8; DEC-097): this decision authorised this posting, in the posting transaction. */
+  recordUse(context: TransactionContext, use: ApprovalUseRecord): Promise<CommandRefusal | undefined>;
+  /**
    * Decide an approval request (access-and-approvals 9.3, 9.5; module-map 6.2 flow A): a protected action asking a
    * fresh code (3.3); never by a service identity or a preparer (PRD-ACS-006, PRD-SEC-018).
    */
@@ -256,6 +285,10 @@ export interface AccessDependencies {
   readonly registry?: readonly RecordTypeDeclaration[];
   /** The Organisation keys, which open authenticator secrets for the fresh-code check (access-and-approvals 6). */
   readonly keys?: OrganisationKeys;
+  /** The approval rules other modules declare for their documents (access-and-approvals 8). None by default. */
+  readonly approvalRules?: readonly ApprovalRule[];
+  /** How the application was composed; a synthetic rule needs a test composition (stock-ledger 15.3). */
+  readonly composition?: Composition;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -271,9 +304,15 @@ export class Access implements AccessInterface {
   private readonly settings: ApprovalSettingsChanges;
   private readonly securitySettingChanges: SecuritySettingsChanges;
   private readonly approvals: Approvals;
+  private readonly rules: ReadonlyMap<string, ApprovalRule>;
 
   constructor(private readonly dependencies: AccessDependencies) {
     this.registry = registryByCode(dependencies.registry ?? permissionRegistry);
+    this.rules = approvalRulesOf(
+      dependencies.approvalRules ?? [],
+      dependencies.composition ?? 'production',
+      this.registry,
+    );
     this.changes = new AccessChanges(dependencies.audit, this.registry);
     this.users = new UserChanges(dependencies.audit);
     this.settings = new ApprovalSettingsChanges(dependencies.audit);
@@ -286,6 +325,7 @@ export class Access implements AccessInterface {
       settings: this.settings,
       securitySettings: this.securitySettingChanges,
       keys: dependencies.keys,
+      rules: this.rules,
     });
   }
 
@@ -398,6 +438,22 @@ export class Access implements AccessInterface {
 
   securitySettings(context: TransactionContext) {
     return securitySettings(context);
+  }
+
+  requestApproval(context: TransactionContext, request: ModuleApprovalRequest) {
+    return requestModuleApproval(context, this.dependencies.audit, this.rules, request);
+  }
+
+  approvalLockTargets(context: TransactionContext, decisionId: string) {
+    return approvalLockTargets(context, decisionId);
+  }
+
+  verifyUnderLock(context: TransactionContext, check: ApprovalCheck) {
+    return verifyUnderLock(context, this.rules, check);
+  }
+
+  recordUse(context: TransactionContext, use: ApprovalUseRecord) {
+    return recordUse(context, use);
   }
 
   decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput) {

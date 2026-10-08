@@ -14,7 +14,7 @@ import {
   roleVersionChange,
   settingVersionChange,
 } from '../db/schema.js';
-import { accessApprovalRules } from '../domain/approval-rules.js';
+import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules.js';
 import { approvalDecided, approvalRequested } from '../events.js';
 
 /** The document a request binds to: its record and exact version (access-and-approvals 9.1; PRD-ACS-007). */
@@ -77,6 +77,10 @@ export async function preparersOf(
   return [...new Set(rows.map((row) => row.userId))].sort();
 }
 
+/** The value a request binds to, on its rule's basis (access-and-approvals 9.1; PRD-ACS-015, PRD-ACS-016). */
+export type RequestValue =
+  { readonly kind: 'none' } | { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: number };
+
 /**
  * Request approval (access-and-approvals 9.1, 9.6; PRD-ACS-007; module-map section 3, rule 6), in the preparing
  * command's transaction: the request binds to the document's exact version, with the preparers read from its change
@@ -97,6 +101,76 @@ export async function requestApproval(
     throw new CommandDefect(`No approval rule for action type ${request.actionType}`);
   }
   const preparers = await preparersOf(context, request.actionType, request.document.versionId);
+  return openRequest(context, audit, {
+    actionType: request.actionType,
+    module: 'access',
+    document: request.document,
+    preparers,
+    value: { kind: 'none' },
+    valueBasis: null,
+    requestedBy: request.preparer,
+  });
+}
+
+/** What the owning module asks of Request approval (access-and-approvals 9.1). */
+export interface ModuleApprovalRequest {
+  readonly actionType: string;
+  readonly document: ApprovalDocument & { readonly module: string };
+  readonly value: RequestValue;
+  /** Every user who recorded a change in the version under approval (9.1; GC3-1). */
+  readonly preparers: readonly string[];
+  /** The user submitting it, and the assignment Authorise used (7.1 step 3). */
+  readonly requestedBy: { readonly userId: string; readonly roleAssignmentId: string };
+}
+
+/**
+ * Request approval of another module's document (access-and-approvals 9.1; module-map 4.3 "Request approval"): the
+ * owning module names the action type its rule declares (8), the document and its exact version, the value on the
+ * rule's basis or Unknown, never zero (PRD-ACS-015, PRD-ACS-016, PRD-MOD-015), and the preparers, every user who
+ * recorded a change in that version (GC3-1, DEC-105), whose change rows only it keeps. Otherwise as for an access
+ * change: one open request per document version and action type, an earlier version's request Superseded (9.6).
+ */
+export async function requestModuleApproval(
+  context: TransactionContext,
+  audit: AuditInterface,
+  rules: ReadonlyMap<string, ApprovalRule>,
+  request: ModuleApprovalRequest,
+): Promise<string> {
+  const rule = rules.get(request.actionType);
+  if (rule === undefined || rule.module === 'access') {
+    throw new CommandDefect(`No module approval rule for action type ${request.actionType}`);
+  }
+  if (rule.module !== request.document.module || rule.recordType !== request.document.recordType) {
+    throw new CommandDefect(`Approval rule ${rule.actionType} does not bind to ${request.document.recordType}`);
+  }
+  if ((rule.value === 'none') !== (request.value.kind === 'none')) {
+    throw new CommandDefect(`Approval rule ${rule.actionType} has value basis ${rule.value}`);
+  }
+  return openRequest(context, audit, {
+    actionType: rule.actionType,
+    module: rule.module,
+    document: request.document,
+    preparers: [...new Set(request.preparers)].sort(),
+    value: request.value,
+    valueBasis: rule.value === 'none' ? null : rule.value,
+    requestedBy: request.requestedBy,
+  });
+}
+
+async function openRequest(
+  context: TransactionContext,
+  audit: AuditInterface,
+  request: {
+    readonly actionType: string;
+    readonly module: string;
+    readonly document: ApprovalDocument;
+    readonly preparers: readonly string[];
+    readonly value: RequestValue;
+    readonly valueBasis: string | null;
+    readonly requestedBy: { readonly userId: string; readonly roleAssignmentId: string };
+  },
+): Promise<string> {
+  const preparers = request.preparers;
   if (preparers.length === 0) throw new CommandDefect('A request needs at least one preparer (9.1)');
   const earlier = await context.tx
     .select()
@@ -115,8 +189,8 @@ export async function requestApproval(
       .set({ state: 'Superseded' })
       .where(and(eq(approvalRequest.id, superseded.id), eq(approvalRequest.state, 'Awaiting approval')));
     await audit.record(context, {
-      actor: { kind: 'user', id: request.preparer.userId },
-      roleAssignmentId: request.preparer.roleAssignmentId,
+      actor: { kind: 'user', id: request.requestedBy.userId },
+      roleAssignmentId: request.requestedBy.roleAssignmentId,
       record: {
         module: 'access',
         type: 'approval_request',
@@ -151,27 +225,27 @@ export async function requestApproval(
   await context.tx.insert(approvalRequest).values({
     id: requestId,
     actionType: request.actionType,
-    documentModule: 'access',
+    documentModule: request.module,
     documentRecordType: request.document.recordType,
     documentRecordId: request.document.recordId,
     documentVersionId: request.document.versionId,
-    valueKind: 'none',
-    valueBasis: null,
-    valueAmount: null,
+    valueKind: request.value.kind,
+    valueBasis: request.valueBasis,
+    valueAmount: request.value.kind === 'known' ? request.value.amountPaise : null,
     state: 'Awaiting approval',
   });
   await context.tx
     .insert(approvalRequestPreparer)
     .values(preparers.map((userId) => ({ id: uuidv7(), approvalRequestId: requestId, userId })));
   await audit.record(context, {
-    actor: { kind: 'user', id: request.preparer.userId },
-    roleAssignmentId: request.preparer.roleAssignmentId,
+    actor: { kind: 'user', id: request.requestedBy.userId },
+    roleAssignmentId: request.requestedBy.roleAssignmentId,
     record: { module: 'access', type: 'approval_request', id: requestId, versionId: request.document.versionId },
     operation: 'request-approval',
     changes: [
       { kind: 'value', field: 'actionType', before: null, after: request.actionType },
       { kind: 'value', field: 'document', before: null, after: { ...request.document } },
-      { kind: 'value', field: 'preparers', before: null, after: preparers },
+      { kind: 'value', field: 'preparers', before: null, after: [...preparers] },
     ],
     source: { kind: 'screen' },
   });

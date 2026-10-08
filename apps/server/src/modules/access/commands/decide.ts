@@ -11,7 +11,7 @@ import {
 } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
-import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules.js';
+import type { ApprovalRule } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { approvalDecided } from '../events.js';
 import { authorise } from '../queries/authorise.js';
@@ -94,6 +94,13 @@ function refused(kind: CommandRefusal['kind'], code: string, missing: MissingIte
 
 const HELD = { locksHeld: true } as const;
 
+/** Another module's document: Decide changes nothing of it (module-map 6.2; access-and-approvals 9.5, 9.8). */
+const MODULE_DOCUMENT: DocumentHandler = {
+  targets: () => Promise.resolve([]),
+  approve: () => Promise.resolve({ kind: 'success', answer: {} }),
+  reject: () => Promise.resolve({ kind: 'success', answer: {} }),
+};
+
 export class Approvals {
   private readonly handlers: ReadonlyMap<AccessActionType, DocumentHandler>;
 
@@ -106,6 +113,8 @@ export class Approvals {
       readonly settings: ApprovalSettingsChanges;
       readonly securitySettings: SecuritySettingsChanges;
       readonly keys?: OrganisationKeys | undefined;
+      /** Every approval rule of the composition: access's own and the modules' (access-and-approvals 8). */
+      readonly rules: ReadonlyMap<string, ApprovalRule>;
     },
   ) {
     const { changes, users, settings, securitySettings } = dependencies;
@@ -217,12 +226,15 @@ export class Approvals {
   }
 
   private ruleOf(actionType: string): ApprovalRule {
-    const rule = accessApprovalRules.get(actionType);
+    const rule = this.dependencies.rules.get(actionType);
     if (rule === undefined) throw new CommandDefect(`No approval rule for action type ${actionType}`);
     return rule;
   }
 
   private handlerOf(actionType: string): DocumentHandler {
+    // Another module's document: the decision is recorded and nothing else happens in Decide; the owning module posts
+    // it in its own command, verifying the decision under its locks and recording its use there (9.7, 9.8; DEC-097).
+    if (this.ruleOf(actionType).module !== 'access') return MODULE_DOCUMENT;
     const handler = this.handlers.get(actionType as AccessActionType);
     if (handler === undefined) throw new CommandDefect(`No document handler for action type ${actionType}`);
     return handler;
@@ -344,7 +356,8 @@ export class Approvals {
     }
     const preparers = new Set([
       ...(await storedPreparers(context, request.id)),
-      ...(await preparersOf(context, request.actionType, request.documentVersionId)),
+      // An access change's preparers are read again from its change rows; another module's are those it named (9.1).
+      ...(rule.module === 'access' ? await preparersOf(context, request.actionType, request.documentVersionId) : []),
     ]);
     if (preparers.has(actor.id)) {
       return {
@@ -353,6 +366,19 @@ export class Approvals {
           kind: 'refused',
           code: 'access.self-preparation',
           missing: [{ kind: 'preparer', userId: actor.id }],
+        },
+      };
+    }
+    // A value on a basis needs a limit of the approver's that covers it, or explicit authority over Unknown value;
+    // a missing limit grants nothing (9.2, 9.3; POL-02.09, POL-02.15, PRD-ACS-016). Approval limits arrive with S1-F05,
+    // so until then no approver is eligible for a request with a value basis.
+    if (rule.value !== 'none') {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'not-authorised',
+          code: 'access.no-approval-limit',
+          missing: [{ kind: 'approval-limit', actionType: rule.actionType, basis: rule.value }],
         },
       };
     }
