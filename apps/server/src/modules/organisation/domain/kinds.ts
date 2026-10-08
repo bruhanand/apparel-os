@@ -1,0 +1,72 @@
+import type { RecordState } from '@apparel-os/schemas';
+import type { ApprovalRule } from '../../access/index.js';
+
+// The masters of the organisation structure built so far (structure-and-masters 3.1, 6.1; S1-F02-T01), each an
+// identity table and a version table of the schema `organisation`.
+
+export const masterKinds = [
+  'country',
+  'state',
+  'city',
+  'area',
+  'legal_entity',
+  'tax_registration',
+  'accounting_book',
+  'site',
+  'store',
+  'grouping',
+] as const;
+export type MasterKind = (typeof masterKinds)[number];
+
+/** The record type a master is authorised, audited and approved on (access-and-approvals 4.1). */
+export const recordTypeOf = (kind: MasterKind) => `organisation.${kind}` as const;
+
+/** The action type of a change to a master: one approval rule each (access-and-approvals 8). */
+export const actionTypeOf = (kind: MasterKind) => `organisation.${kind}.change` as const;
+
+/** The kind whose action type this is, or undefined. */
+export function kindOfActionType(actionType: string): MasterKind | undefined {
+  return masterKinds.find((kind) => actionTypeOf(kind) === actionType);
+}
+
+/**
+ * The approval rule of each master change (access-and-approvals 8; structure-and-masters 2.3): approve on the master's
+ * record type, by a different authorised person from its preparer, which can never be switched off (GC2-2, DEC-105;
+ * PRD-ACS-006), with no value (DM-8) and a reason from the configured list (POL-02.23). Its configured parts have no
+ * default.
+ */
+export const organisationApprovalRules: readonly ApprovalRule[] = masterKinds.map((kind) => ({
+  actionType: actionTypeOf(kind),
+  module: 'organisation',
+  recordType: recordTypeOf(kind),
+  independent: true,
+  value: 'none',
+  freeTextReason: false,
+  synthetic: false,
+}));
+
+/** What decides the state a version shows (design-language 7; DM-4, DEC-105; code-house-rules 7.3). */
+export interface VersionFacts {
+  readonly decision: string;
+  /** The first day, and the day after the last, YYYY-MM-DD; no end while open-ended. */
+  readonly start: string;
+  readonly end?: string | undefined;
+  /** Today under the Organisation's timezone (PRD-MOD-009). */
+  readonly today: string;
+  /** The state of the version's latest approval request: Superseded when a later version replaced it (9.6). */
+  readonly requestState?: string | undefined;
+}
+
+/** The state a screen shows for a version. Business dates as YYYY-MM-DD compare as text. */
+export function versionState(version: VersionFacts): RecordState {
+  switch (version.decision) {
+    case 'Rejected':
+      return 'Rejected';
+    case 'Approved':
+      if (version.start > version.today) return 'Scheduled';
+      if (version.end !== undefined && version.end <= version.today) return 'Ended';
+      return 'In force';
+    default:
+      return version.requestState === 'Superseded' ? 'Superseded' : 'Awaiting approval';
+  }
+}

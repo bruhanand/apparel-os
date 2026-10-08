@@ -8,6 +8,7 @@ import { PersonaChip } from '../shell/AppShell';
 import { useSession } from '../shell/session';
 import { permissionText, scopeText } from '../setup/describe';
 import { formatDate } from '../setup/format';
+import { MasterFacts } from '../organisation/MasterFacts';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
 // section 5 step 6), read through the same lists the access setup screens use, where the reader's role assignments
@@ -171,6 +172,7 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     case 'access.setting.change':
       return <SettingFacts view={view} />;
     default:
-      return null;
+      // A master of the organisation structure (S1-F02-T01), or nothing.
+      return <MasterFacts view={view} />;
   }
 }

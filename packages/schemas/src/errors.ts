@@ -300,6 +300,26 @@ export const stockLedgerCodes = declareCodes({
   'stock.rule-not-set': 'unavailable',
 });
 
+/**
+ * The codes of `organisation` (structure-and-masters 2.1, 2.2, 3.8; S1-F02-T01). A refusal names what blocks it
+ * (PRD-UXP-003).
+ *
+ * - `organisation.code-taken`: the code is already a record's in its scope; a code is never reused (2.1).
+ * - `organisation.record-not-found`: a record the change names, or the record it versions, does not exist.
+ * - `organisation.starts-in-past`: a version never starts on a past date (2.2; GC2-7, DEC-105).
+ * - `organisation.version-overlaps`: another approved version, a Scheduled one included, starts on or after this one's
+ *   start (2.2; code-house-rules 7.3).
+ * - `organisation.reference-not-in-force`: a record the version refers to, such as a Site's Area or a Store's Site, has
+ *   no approved version in force on the version's start; `missing` names it.
+ */
+export const organisationCodes = declareCodes({
+  'organisation.code-taken': 'refused',
+  'organisation.record-not-found': 'not-found',
+  'organisation.starts-in-past': 'refused',
+  'organisation.version-overlaps': 'refused',
+  'organisation.reference-not-in-force': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -309,6 +329,7 @@ export const errorCodes = {
   ...accessApprovalCodes,
   ...filesImportsCodes,
   ...stockLedgerCodes,
+  ...organisationCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

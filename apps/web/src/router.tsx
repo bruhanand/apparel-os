@@ -11,6 +11,7 @@ import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
+import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
 import { ReasonsScreen } from './setup/ReasonsScreen';
@@ -93,6 +94,10 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <ReasonsScreen />;
     case 'setup.security-settings':
       return <SecuritySettingsScreen />;
+    case 'setup.organisation-structure':
+      return <OrganisationStructureScreen />;
+    case 'setup.geography':
+      return <GeographyScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

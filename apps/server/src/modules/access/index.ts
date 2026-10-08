@@ -5,6 +5,7 @@ export {
   AccessContractsModule,
   AccessJobIdentitiesModule,
   AccessModule,
+  MODULE_APPROVALS,
   ORGANISATION_KEYS,
 } from './access.module.js';
 export { Access } from './access.js';
@@ -26,7 +27,15 @@ export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
 export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked } from './events.js';
 export { accessApprovalRules } from './domain/approval-rules.js';
-export type { ApprovalRule, ValueBasis } from './domain/approval-rules.js';
+export type {
+  ApprovalRule,
+  DocumentEffect,
+  EffectDecider,
+  EffectOutcome,
+  ModuleApprovals,
+  ValueBasis,
+} from './domain/approval-rules.js';
+export type { LatestRequest } from './queries/access-records.js';
 export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } from './commands/approval-use.js';
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';

@@ -37,6 +37,8 @@ import {
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic } from '../support/grants.js';
 import { capturingLogger } from '../support/jobs.js';
+import { approvedGeography, structureSetup } from '../support/organisation.js';
+import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
@@ -222,6 +224,46 @@ const demoUser = await writeSyntheticUser(settingsDatabase, settingsCode, keys, 
 await assignSyntheticRole(settingsDatabase, { kind: 'user', id: demoUser.id }, FIRST_ADMIN_ROLE.code);
 const demoLabel = 'SYNTHETIC Demo Admin';
 
+// The organisation structure journey (organisation-structure.spec.ts; S1-F02-T01), in the security settings
+// Organisation: an approved SYNTHETIC geography built through the real commands by two fixture people
+// (code-house-rules 11.2), so a Site has an Area to sit in; an enrolled Admin who may prepare every organisation master
+// and read the master lists; and an enrolled approver who may approve them and open the approval request.
+const structureFixture = await structureSetup({
+  directory: world.directory,
+  database: settingsDatabase,
+  organisationCode: settingsCode,
+  keysEnvironment: keys,
+  label: 'BROWSER-GEO',
+});
+const structureGeography = await approvedGeography(structureFixture, 'JOURNEY');
+await structureFixture.close();
+const organisationTypes = masterKinds.map(organisationRecordType);
+const structureAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-STRUCTURE-ADMIN',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAdmin.id }, [
+  ...organisationTypes.flatMap((recordType) =>
+    (['view', 'create', 'edit'] as const).map((action) => ({ recordType, action })),
+  ),
+  { recordType: 'organisation.master_list', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const structureApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-STRUCTURE-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: structureApprover.id }, [
+  ...organisationTypes.flatMap((recordType) =>
+    (['view', 'approve'] as const).map((action) => ({ recordType, action })),
+  ),
+  { recordType: 'access.approval_request', action: 'view' },
+  // The reasons in force, which the approval panel offers (access-and-approvals 9.5).
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
@@ -291,6 +333,24 @@ writeFileSync(
       idleLockSeconds: SYNTHETIC_SHORT_IDLE_LIMITS.idleLockSeconds,
     },
     demo: { label: demoLabel, displayName: demoUser.displayName },
+    structure: {
+      organisationCode: settingsCode,
+      areaId: structureGeography.area.recordId,
+      // How the Site form names the Area: its code and name (approvedGeography).
+      areaOption: `${syntheticCode('JOURNEY-AR')} · ${syntheticName('JOURNEY Area')}`,
+      admin: {
+        login: structureAdmin.login,
+        displayName: structureAdmin.displayName,
+        password: structureAdmin.password,
+        factorSecretHex: structureAdmin.factorSecret?.toString('hex') ?? '',
+      },
+      approver: {
+        login: structureApprover.login,
+        displayName: structureApprover.displayName,
+        password: structureApprover.password,
+        factorSecretHex: structureApprover.factorSecret?.toString('hex') ?? '',
+      },
+    },
     settings: {
       organisationCode: settingsCode,
       admin: {

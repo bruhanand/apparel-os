@@ -42,7 +42,8 @@ import {
   type ApprovalUseRecord,
 } from './commands/approval-use.js';
 import { requestModuleApproval, type ModuleApprovalRequest } from './commands/request-approval.js';
-import { approvalRulesOf, type ApprovalRule } from './domain/approval-rules.js';
+import { approvalRulesOf, effectsOf, type ApprovalRule, type DocumentEffect } from './domain/approval-rules.js';
+import { latestRequests, type LatestRequest } from './queries/access-records.js';
 import { holdAuthority, type AuthorityActor } from './commands/authority.js';
 import { SecuritySettingsChanges } from './commands/security-settings.js';
 import {
@@ -198,6 +199,15 @@ export interface AccessInterface {
    * version posted, by none of its preparers, and within the approved amount. Answers the refusal, or undefined.
    */
   verifyUnderLock(context: TransactionContext, check: ApprovalCheck): Promise<CommandRefusal | undefined>;
+  /**
+   * The latest approval request of each document version named, for an owning module's version history: its
+   * identifier, for the approval panel, and its state, which says Superseded for a version a later one replaced
+   * (access-and-approvals 9.1, 9.6).
+   */
+  approvalRequestsOf(
+    context: TransactionContext,
+    versionIds: readonly string[],
+  ): Promise<ReadonlyMap<string, LatestRequest>>;
   /** Record use (9.8; DEC-097): this decision authorised this posting, in the posting transaction. */
   recordUse(context: TransactionContext, use: ApprovalUseRecord): Promise<CommandRefusal | undefined>;
   /**
@@ -290,6 +300,8 @@ export interface AccessDependencies {
   readonly approvalRules?: readonly ApprovalRule[];
   /** How the application was composed; a synthetic rule needs a test composition (stock-ledger 15.3). */
   readonly composition?: Composition;
+  /** The effects of decisions on modules' master versions, by action type (9.8b; module-map 6.2 flow A). */
+  readonly documentEffects?: ReadonlyMap<string, DocumentEffect>;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -327,6 +339,7 @@ export class Access implements AccessInterface {
       securitySettings: this.securitySettingChanges,
       keys: dependencies.keys,
       rules: this.rules,
+      effects: effectsOf(dependencies.documentEffects ?? new Map(), this.rules),
     });
   }
 
@@ -447,6 +460,10 @@ export class Access implements AccessInterface {
 
   approvalLockTargets(context: TransactionContext, decisionId: string) {
     return approvalLockTargets(context, decisionId);
+  }
+
+  approvalRequestsOf(context: TransactionContext, versionIds: readonly string[]) {
+    return latestRequests(context, versionIds);
   }
 
   verifyUnderLock(context: TransactionContext, check: ApprovalCheck) {

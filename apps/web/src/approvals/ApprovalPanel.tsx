@@ -21,6 +21,7 @@ import { stateIdOf } from '../setup/states';
 import { useSession, useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { DocumentFacts } from './DocumentFacts';
+import { ORGANISATION_READS } from '../organisation/kinds';
 import { actionTitle } from './subject';
 import { approvalRead } from './use-subjects';
 
@@ -360,6 +361,7 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
     'listRoleAssignments',
     'listApprovalReasonRecords',
     'listApprovalReasons',
+    ...ORGANISATION_READS,
   ]);
   if (request.isPending) return <LoadingState rows={4} />;
   if (request.isError) {

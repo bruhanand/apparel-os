@@ -1,5 +1,5 @@
 import type { AccessActionType, RecordTypeDeclaration } from '@apparel-os/schemas';
-import type { Composition } from '../../../kernel/index.js';
+import type { CommandRefusal, Composition, LockTarget, TransactionContext } from '../../../kernel/index.js';
 
 /**
  * The value basis of an approval rule (access-and-approvals 8, 9.2; PRD-ACS-015; DM-8, DEC-105): none, as for an
@@ -55,6 +55,44 @@ export const accessApprovalRules: ReadonlyMap<string, ApprovalRule> = new Map(
   ].map((each) => [each.actionType, each]),
 );
 
+/**
+ * The approval rules a module declares for its documents, and, for a master change, the effect of a decision on the
+ * document (access-and-approvals 8, 9.8b; module-map 6.2 flow A, section 3 rule 6): `access` defines this contract
+ * and the owning module implements it, so Decide makes the decided version take effect in its own transaction
+ * without `access` depending on the owner. A rule with no effect is a document the owner posts in its own command
+ * (9.8a). The composition root hands every module's declarations to `access` at start.
+ */
+export interface ModuleApprovals {
+  readonly rules: readonly ApprovalRule[];
+  /** The effect of a decision, by action type; each names a rule of `rules`. */
+  readonly effects: ReadonlyMap<string, DocumentEffect>;
+}
+
+/**
+ * What a decision does to a module's document version (module-map 6.2 flow A step 3): the rows Decide locks with the
+ * request at step 1 (code-house-rules 8.2), and the version taking effect or being rejected, with its own rechecks
+ * under those locks, its audit record and its outbox rows. Approve may still refuse, and then nothing of the
+ * decision is written; reject never refuses.
+ */
+export interface DocumentEffect {
+  targets(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
+  approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
+  reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
+}
+
+/** The approver making a decision take effect, the assignment relied on and the decision (access-and-approvals 9.5). */
+export interface EffectDecider {
+  readonly actor: { readonly kind: 'user'; readonly id: string };
+  readonly roleAssignmentId?: string;
+  readonly approvalDecisionId?: string;
+  /** The words of the reason given, for the audit records of the effect (numbering-and-audit 4.2). */
+  readonly reason?: string;
+}
+
+export type EffectOutcome =
+  | { readonly kind: 'success'; readonly answer: unknown }
+  | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
+
 /** The prefix every synthetic action type carries (stock-ledger 15.3; code-house-rules 11.1). */
 const SYNTHETIC_PREFIX = 'test-';
 
@@ -99,4 +137,18 @@ export function approvalRulesOf(
     rules.set(each.actionType, each);
   }
   return rules;
+}
+
+/** Checks, at start, that every effect names a module's rule (code-house-rules 12.14). */
+export function effectsOf(
+  effects: ReadonlyMap<string, DocumentEffect>,
+  rules: ReadonlyMap<string, ApprovalRule>,
+): ReadonlyMap<string, DocumentEffect> {
+  for (const actionType of effects.keys()) {
+    const rule = rules.get(actionType);
+    if (rule === undefined || rule.module === 'access') {
+      throw new Error(`Decision effect ${actionType} names no module's approval rule`);
+    }
+  }
+  return effects;
 }

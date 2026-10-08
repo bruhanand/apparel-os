@@ -47,6 +47,13 @@ export const screens = {
     path: '/setup/security-settings',
     need: view('access.setting'),
   },
+  // The organisation structure (structure-and-masters 8; ui-blueprint Setup; S1-F02-T01).
+  'setup.organisation-structure': {
+    section: 'setup',
+    path: '/setup/organisation-structure',
+    need: view('organisation.site'),
+  },
+  'setup.geography': { section: 'setup', path: '/setup/geography', need: view('organisation.country') },
   'setup.audit-log': { section: 'setup', path: '/setup/audit-log', need: view('audit.audit_record') },
   'setup.policy-readiness': {
     section: 'setup',
@@ -73,6 +80,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.role-assignments',
       'setup.reason-codes',
       'setup.security-settings',
+      'setup.organisation-structure',
+      'setup.geography',
       'setup.policy-readiness',
     ],
   },
@@ -89,7 +98,15 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   'P-HRS': { home: null, menu: [] },
   'P-AUD': {
     home: 'setup.audit-log',
-    menu: ['setup.users', 'setup.roles', 'setup.role-assignments', 'setup.reason-codes', 'setup.audit-log'],
+    menu: [
+      'setup.users',
+      'setup.roles',
+      'setup.role-assignments',
+      'setup.reason-codes',
+      'setup.organisation-structure',
+      'setup.geography',
+      'setup.audit-log',
+    ],
   },
 };
 

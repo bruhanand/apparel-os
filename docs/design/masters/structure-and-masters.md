@@ -73,10 +73,10 @@ Owner: `organisation`. The eight records of `PRD-ORG-001` are kept separate.
 | --- | --- | --- | --- | --- |
 | Organisation | The directory of Organisations (DEC-093) | Its database | Name. Timezone and currencies are Organisation settings in `configuration` | `PRD-ORG-002`, `PRD-ORG-011`, `PRD-ACS-020` |
 | Legal entity | The Organisation | — | Legal name; the statutory identifiers Accounts and the CA name, such as PAN (OPEN, 3.2) | `PRD-ORG-001`, PRD "Words used" |
-| Tax registration | The Organisation | Its legal entity (`PRD-ORG-020`) | Registration number, kept as text; the State it is registered in; validity dates. Its verification (`POL-10.06`) is a separate linked record, apart from each mapping's (3.4) | `PRD-ORG-001`, `PRD-ORG-020` |
+| Tax registration | The Organisation | Its legal entity (`PRD-ORG-020`) | Registration number, kept as text; the State it is registered in; validity dates. Its verification (`POL-10.06`) is a separate linked record, apart from each mapping's (3.4). **Deferred** (product owner, 8 Oct 2026; RR-438): registrations are built without it in `S1-F02-T01`, and it arrives before any live statutory use of a registration (Accounts, CA) | `PRD-ORG-001`, `PRD-ORG-020` |
 | Accounting book | The Organisation | Its legal entity (`PRD-ORG-020`) | Name. The ledger itself is in `finance` · books | `PRD-ORG-001`, `PRD-ORG-020`, `PRD-LED-002` |
 | Site | The Organisation | — | Name, aliases, addresses, Area, physical kind, classifications, opening and closing dates, status | `PRD-ORG-003`, `PRD-ORG-007`–`PRD-ORG-010` |
-| Store | The Organisation | — | Name, aliases, format, operating model, classifications, opening and closing dates, status, partner associations; its Site link (3.3) | `PRD-ORG-003`, `PRD-ORG-008`–`PRD-ORG-010`, `PRD-ORG-021` |
+| Store | The Organisation | — | Name, aliases, format, operating model, classifications, opening and closing dates, status, partner associations; its Site link (3.3), kept on each version (6.1) | `PRD-ORG-003`, `PRD-ORG-008`–`PRD-ORG-010`, `PRD-ORG-021` |
 | Business unit | The Organisation | Its Site (3.3); its kind; its Store, for a Store's unit; the old unit it replaces, for a unit a relocation created (3.3, GC2-4) | Name; its mapping (3.4); its brand coverage, kept by `merchandise` (3.3) | `PRD-ORG-004`–`PRD-ORG-006` |
 | Internal stock location | Its Site | Its Site and business unit (3.5) | Name, kind, parent location, active dates | `PRD-ORG-012` |
 | Country, State, City, Area | Its parent level; Country in the Organisation | Its parent | Name | `PRD-ORG-007`, `PRD-ORG-011` |
@@ -305,18 +305,26 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 | --- | --- | --- |
 | `organisation` + versions | — | one row |
 | `legal_entity` + versions | code | — |
-| `tax_registration` + versions | code | legal entity fixed |
+| `tax_registration` + versions | code | legal entity fixed; its verification record is deferred (3.1; RR-438) |
 | `accounting_book` + versions | code | legal entity fixed |
 | `site` + versions, `site_alias` | code | — |
-| `store` + versions, `store_alias` | code | — |
-| `store_site` (dated link) | — | one link in force per Store |
+| `store` + versions, `store_alias` | code | each version holds the Store's Site link, `site_id`: one link in force per Store on any date, held by the versions' exclusion constraint; a later link is a later version, Scheduled until its date (3.3). **Design choice** as built (`S1-F02-T01`): the dated link `store_site` is this column, not a table of its own |
 | `business_unit` + versions | code | Site, kind and Store fixed; Store set for whole-store and brand-counter, empty otherwise; one whole-store unit per Store at the Store's linked Site; a Store's unit created at the Store's linked Site, checked by a trigger; a unit created by a relocation names the old unit of the same Store that it replaces, fixed at creation (3.3, GC2-4) |
 | `business_unit_mapping` (dated) | — | no gap and no overlap per unit; registration and book belong to the mapped legal entity, and the registration's State is the State of the unit's Site (GC2-1), checked by a trigger on the mapping and on new Site Area and registration State versions |
 | `business_unit_mapping_verification` (append-only) | — | linked to one mapping version; the verifier is not the person who made the mapping, checked by a trigger; the verify permission is checked by the service (GC2-2) |
 | `location` + versions | Site and code | Site and business unit fixed; the unit is at the location's Site |
 | `country`, `state`, `city`, `area` + versions | parent and code | — |
-| `grouping` + versions, `grouping_member` (dated) | code | members are Stores |
+| `grouping` + versions, `grouping_member` | code | members are Stores; each member row belongs to one grouping version, frozen with it, so membership is dated by the version that lists it (3.6) |
 | `store_default_warehouse` (dated) | — | the target is a warehouse unit; one in force per Store. Other routes wait for V-62 |
+
+**Classes and the rows a version freezes, as built** (`S1-F02-T01`; code-house-rules 3.2, 6.1, 7.3). **Design choice** throughout; none sets a business value.
+
+- **Every table built so far is `unscoped`**: geography, legal entities, tax registrations, books, Sites, Stores and groupings, with their versions, aliases and members. The structure belongs to the Organisation as a whole, as the records of access changes do, so these record types declare no scope fact and the permission on the record type decides (access-and-approvals 5.3, 7.1). The place and legal-entity scope of operational records is matched against these records' identifiers, never against these rows (3.9). An approval rule of a scoped document type is not supported yet either (access-and-approvals 9.8a; RR-435). The classes of business units, mappings and locations are set with `S1-F02-T02`.
+- An identity row is append-only and `locked`: a decision locks it exclusively at step 1, so two decisions on versions of one master never pass each other (code-house-rules 8.2); every version of the master changes only under that lock. Aliases and grouping members are append-only rows of their version, written when it is prepared.
+- A version row keeps the user who prepared it, `prepared_by_user_id`, in place of change rows: a version is prepared whole by one person and frozen when prepared, since a separate draft is not built (access-and-approvals 9.5; RR-292). That person is its one preparer (9.1; GC3-1).
+- A version is open-ended from its start. Approving it ends the approved version in force or Scheduled at its start on that day, and is refused while another approved version, a Scheduled one included, starts on or after it (`organisation.version-overlaps`), or when its start has passed (`organisation.starts-in-past`; GC2-7). It is refused too while a record it names (a State's country, a City's State, an Area's City, a registration's legal entity and State, a book's legal entity, a Site's Area, a Store's Site, a grouping's Stores) has no approved version in force on its start (`organisation.reference-not-in-force`); once in force, such a record stays in force, since an approved version ends only where the next starts and none is withdrawn yet.
+- The status of a Site or Store is not prepared: a new one starts Setting up (3.7), and a later version keeps the status of the latest approved one, since the lifecycle events that change it are `site-lifecycle`'s (module-map 4.16). Opening and closing dates are Unknown until given (2.4); a Site's addresses are a list, in the order given.
+- Not built yet: withdrawing a Scheduled version of these masters (RR-202; code-house-rules 7.3), so none can be withdrawn and the guard admits only moving an end earlier (RR-439); classifications of a Site or Store, which no source names, a grouping kind other than region and cluster, which needs the configuration that names it, and the Organisation's own row (RR-440).
 
 ### 6.2 Schema `merchandise`
 

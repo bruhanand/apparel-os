@@ -11,7 +11,7 @@ import {
 } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
-import type { ApprovalRule } from '../domain/approval-rules.js';
+import type { ApprovalRule, DocumentEffect } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { approvalDecided } from '../events.js';
 import { authorise } from '../queries/authorise.js';
@@ -101,6 +101,24 @@ const MODULE_DOCUMENT: DocumentHandler = {
   reject: () => Promise.resolve({ kind: 'success', answer: {} }),
 };
 
+/** A module's decision effect as Decide runs it, with the approver who decides (9.8b). */
+function moduleEffect(effect: DocumentEffect): DocumentHandler {
+  const decider = (d: Decider) => {
+    if (d.actor.kind !== 'user') throw new CommandDefect('Only a person decides (access-and-approvals 9.3)');
+    return {
+      actor: { kind: 'user' as const, id: d.actor.id },
+      ...(d.roleAssignmentId === undefined ? {} : { roleAssignmentId: d.roleAssignmentId }),
+      ...(d.approvalDecisionId === undefined ? {} : { approvalDecisionId: d.approvalDecisionId }),
+      ...(d.reason === undefined ? {} : { reason: d.reason }),
+    };
+  };
+  return {
+    targets: (c, v) => effect.targets(c, v),
+    approve: (c, d, v) => effect.approve(c, decider(d), v),
+    reject: (c, d, v) => effect.reject(c, decider(d), v),
+  };
+}
+
 export class Approvals {
   private readonly handlers: ReadonlyMap<AccessActionType, DocumentHandler>;
 
@@ -115,6 +133,8 @@ export class Approvals {
       readonly keys?: OrganisationKeys | undefined;
       /** Every approval rule of the composition: access's own and the modules' (access-and-approvals 8). */
       readonly rules: ReadonlyMap<string, ApprovalRule>;
+      /** The effects of decisions on modules' master versions, by action type (9.8b; module-map 6.2 flow A). */
+      readonly effects?: ReadonlyMap<string, DocumentEffect>;
     },
   ) {
     const { changes, users, settings, securitySettings } = dependencies;
@@ -232,9 +252,14 @@ export class Approvals {
   }
 
   private handlerOf(actionType: string): DocumentHandler {
-    // Another module's document: the decision is recorded and nothing else happens in Decide; the owning module posts
-    // it in its own command, verifying the decision under its locks and recording its use there (9.7, 9.8; DEC-097).
-    if (this.ruleOf(actionType).module !== 'access') return MODULE_DOCUMENT;
+    // Another module's document. A master version takes effect in the decision's transaction through the effect its
+    // module implements (9.8b; module-map 6.2 flow A). Otherwise the decision is recorded and nothing else happens in
+    // Decide; the owning module posts it in its own command, verifying the decision under its locks and recording its
+    // use there (9.7, 9.8; DEC-097).
+    if (this.ruleOf(actionType).module !== 'access') {
+      const effect = this.dependencies.effects?.get(actionType);
+      return effect === undefined ? MODULE_DOCUMENT : moduleEffect(effect);
+    }
     const handler = this.handlers.get(actionType as AccessActionType);
     if (handler === undefined) throw new CommandDefect(`No document handler for action type ${actionType}`);
     return handler;

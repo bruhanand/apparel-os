@@ -149,6 +149,28 @@ const stockRecordTypes = [
   declareWithFields('stock.transit_value', ['view'], ALL, ['cost']),
 ] as const;
 
+/**
+ * `organisation` (structure-and-masters 3, 6.1; module-map 4.11; S1-F02-T01). The structure belongs to the
+ * Organisation as a whole, as the records of access changes do, so these types carry no scope fact and the permission
+ * on the type decides (5.3): a Site or Store is the place other records are scoped by, not a record scoped by itself.
+ * Each master is prepared (create, edit) and approved by a different authorised person (GC2-2, DEC-105). The master
+ * lists are a read model with a view of their own (module-map section 3, rule 5); each list in them is shown only
+ * where its own type's view is granted too.
+ */
+const organisationRecordTypes = [
+  declare('organisation.country', PREPARED, NONE),
+  declare('organisation.state', PREPARED, NONE),
+  declare('organisation.city', PREPARED, NONE),
+  declare('organisation.area', PREPARED, NONE),
+  declare('organisation.legal_entity', PREPARED, NONE),
+  declare('organisation.tax_registration', PREPARED, NONE),
+  declare('organisation.accounting_book', PREPARED, NONE),
+  declare('organisation.site', PREPARED, NONE),
+  declare('organisation.store', PREPARED, NONE),
+  declare('organisation.grouping', PREPARED, NONE),
+  declare('organisation.master_list', ['view'], NONE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -157,6 +179,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...inboxRecordTypes,
   ...filesImportsRecordTypes,
   ...stockRecordTypes,
+  ...organisationRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -166,7 +189,8 @@ export type RecordTypeCode =
   | (typeof kernelRecordTypes)[number]['code']
   | (typeof inboxRecordTypes)[number]['code']
   | (typeof filesImportsRecordTypes)[number]['code']
-  | (typeof stockRecordTypes)[number]['code'];
+  | (typeof stockRecordTypes)[number]['code']
+  | (typeof organisationRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

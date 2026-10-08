@@ -31,14 +31,15 @@ import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
 import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
-import { ACCESS, DEMO_SIGN_IN } from './tokens.js';
+import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS } from './tokens.js';
+import type { ModuleApprovals } from './domain/approval-rules.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { sessionProbe } from './commands/probe-session.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { CREDENTIAL_RESETS, SESSIONS, SessionsController } from './http/sessions.controller.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
 
-export { ACCESS } from './tokens.js';
+export { ACCESS, MODULE_APPROVALS } from './tokens.js';
 /** The token of the Organisation keys (access-and-approvals 6). */
 export const ORGANISATION_KEYS = 'access.OrganisationKeys';
 /** The variables the Organisation keys are read from: the process's, unless a test gives others. */
@@ -114,9 +115,17 @@ export class AccessJobIdentitiesModule {}
       inject: [ORGANISATION_ROUTER, COMMAND_RUNNER],
     },
     {
+      // With the approval rules and decision effects other modules declare, which the composition root provides
+      // (access-and-approvals 8, 9.8b).
       provide: ACCESS,
-      useFactory: (audit: AuditInterface, keys: OrganisationKeys) => new Access({ audit, keys }),
-      inject: [AUDIT, ORGANISATION_KEYS],
+      useFactory: (audit: AuditInterface, keys: OrganisationKeys, modules?: ModuleApprovals) =>
+        new Access({
+          audit,
+          keys,
+          approvalRules: modules?.rules ?? [],
+          documentEffects: modules?.effects ?? new Map(),
+        }),
+      inject: [AUDIT, ORGANISATION_KEYS, { token: MODULE_APPROVALS, optional: true }],
     },
     {
       // The history reads (numbering-and-audit 4.5): rows through `audit`, Authorise and masking through `access`.

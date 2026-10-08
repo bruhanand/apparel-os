@@ -59,6 +59,18 @@ export interface SyntheticWorld {
     readonly admin: EnrolledUser;
     readonly approver: EnrolledUser;
   };
+  /**
+   * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
+   * Area, an Admin who may prepare the structure and an approver who may approve it.
+   */
+  readonly structure: {
+    readonly organisationCode: string;
+    readonly areaId: string;
+    /** How the Site form names the Area. */
+    readonly areaOption: string;
+    readonly admin: EnrolledUser;
+    readonly approver: EnrolledUser;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

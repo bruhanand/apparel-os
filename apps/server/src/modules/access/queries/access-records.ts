@@ -33,14 +33,22 @@ import { permissionsOf, scopesOf } from './assignments.js';
 // tables (code-house-rules 6.3).
 
 type RequestState = 'Awaiting approval' | 'Approved' | 'Rejected' | 'Superseded' | 'Withdrawn';
-type LatestRequests = ReadonlyMap<string, { id: string; state: RequestState }>;
+/** The latest approval request of a document version: its identifier and state (access-and-approvals 9.1, 9.6). */
+export interface LatestRequest {
+  readonly id: string;
+  readonly state: RequestState;
+}
+type LatestRequests = ReadonlyMap<string, LatestRequest>;
 
 /** The first day of a dated row, and the day after its last, or null while open-ended (code-house-rules 7.3). */
 const startOf = (range: AnyColumn) => sql<string>`lower(${range})::text`;
 const endOf = (range: AnyColumn) => sql<string | null>`upper(${range})::text`;
 
 /** The latest approval request of each document version named (access-and-approvals 9.1, 9.6). */
-async function latestRequests(context: TransactionContext, versionIds: readonly string[]): Promise<LatestRequests> {
+export async function latestRequests(
+  context: TransactionContext,
+  versionIds: readonly string[],
+): Promise<LatestRequests> {
   const latest = new Map<string, { id: string; state: RequestState }>();
   if (versionIds.length === 0) return latest;
   const rows = await context.tx
