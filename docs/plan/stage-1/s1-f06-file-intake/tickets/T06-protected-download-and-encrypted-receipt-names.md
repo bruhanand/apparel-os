@@ -1,6 +1,6 @@
 # S1-F06-T06 — Protected download and encrypted receipt names
 
-Status: ready-for-agent
+Status: done
 Blocked by: S1-F06-T05 (done)
 Feature: [S1-F06 File intake and a synthetic master import](../../spec.md)
 
@@ -24,3 +24,7 @@ Two answers of the product owner of 8 Oct 2026 on the stored files of S1-F06-T05
 - A file with no restricted class is read without a code
 - In the database, a receipt's original name and claimed reference are not the plaintext; served through the app to an authorised reader, they decrypt to what was uploaded
 - Neither appears in any log
+
+## Notes
+
+- Built 8 Oct 2026 on `s1/f06-file-intake`: `3a3d50b`, review fixes `dbb021c`. A restricted download takes a fresh code, checked before the object is fetched and taken in the command's transaction before any access record; every download asks for a new code while the freshness setting stays OPEN (GC3-6). The receipt's name and reference are sealed under their own key purpose. Review fixes: the sealed columns folded into migration 0024 (never applied outside developer machines and CI), so `dev` needs no interruption; each attachment links the receipt it came from, and a reader is served only that receipt, never other uploads of the same bytes; one shared fresh-code refusal in `access`.
