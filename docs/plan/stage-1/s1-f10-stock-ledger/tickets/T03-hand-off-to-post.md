@@ -1,7 +1,7 @@
 # S1-F10-T03 — Valuation and hand-off to Post
 
 Status: blocked
-Blocked by: T02; S1-F09-T02 (books, maps, open periods and Post), S1-F08-T02 (an exception raised after a rollback)
+Blocked by: T02 (done); S1-F09-T02 (books, maps, open periods and Post), S1-F08-T02 (an exception raised after a rollback)
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
 ## Build

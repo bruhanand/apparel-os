@@ -120,8 +120,8 @@ Steps 1 and 2 of the earlier plan are done: the ledger interface and tables are 
 
 | Ticket | Status | Blocked by |
 | --- | --- | --- |
-| [S1-F10-T01 — Stock tables, constraints and row security](tickets/T01-ledger-tables-and-constraints.md) | blocked | S1-F01-T11 (`access.row_visible`) |
-| [S1-F10-T02 — Quantity operations](tickets/T02-ledger-operations-of-the-story.md) | blocked | T01; S1-F01-T13 (approval use: Verify under lock and Record use) |
+| [S1-F10-T01 — Stock tables, constraints and row security](tickets/T01-ledger-tables-and-constraints.md) | done | S1-F01-T11 (`access.row_visible`) |
+| [S1-F10-T02 — Quantity operations](tickets/T02-ledger-operations-of-the-story.md) | done | T01; S1-F01-T13 (approval use: Verify under lock and Record use) |
 | [S1-F10-T03 — Valuation and hand-off to Post](tickets/T03-hand-off-to-post.md) | blocked | T02; S1-F09-T02 (books, maps, open periods and Post), S1-F08-T02 (an exception raised after a rollback) |
 | [S1-F10-T04 — Harness and the story under four combinations](tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | T03; S1-F02-T03, S1-F03-T02, S1-F05-T01, S1-F08-T01, S1-F08-T02 |
 | [S1-F10-T05 — Four-combination matrix](tickets/T05-four-combination-matrix.md) | merged → T04 | — |
