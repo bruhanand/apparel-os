@@ -1,7 +1,7 @@
 # S1-F02-T03 — Scope by place
 
 Status: blocked
-Blocked by: S1-F02-T02, S1-F01-T11
+Blocked by: S1-F02-T02 (done), S1-F01-T11 (done)
 Feature: [S1-F02 Organisation structure and verified mappings](../../spec.md)
 
 ## Build

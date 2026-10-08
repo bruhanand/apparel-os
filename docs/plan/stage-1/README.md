@@ -28,7 +28,7 @@ Updated 7 Oct 2026.
 | `S1-F08` Number series and exceptions | Not started. Gains `S1-F08-T04` (live updates and the failed-jobs view), split from T02 (`DEC-116`) |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
-Next: organisation structure (`S1-F02`) T02, business units and verified mappings. `S1-F02-T01` (legal entities, Sites and Stores) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
+Next: organisation structure (`S1-F02`) T03, scope by place. `S1-F02-T01` (legal entities, Sites and Stores), `S1-F02-T02` (business units, verified mappings and locations) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
 
 ## 3. Scope
 
