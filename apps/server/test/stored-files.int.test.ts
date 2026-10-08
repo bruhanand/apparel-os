@@ -22,6 +22,7 @@ import {
 } from '../src/kernel/index.js';
 import { OrganisationKeys } from '../src/modules/access/domain/organisation-keys.js';
 import { openFile } from '../src/modules/files-imports/domain/file-seal.js';
+import { openReceiptText } from '../src/modules/files-imports/domain/receipt-seal.js';
 import { FILE_STORE, FILES_IMPORTS } from '../src/modules/files-imports/index.js';
 import type { FilesImportsInterface, FileStoreHandle } from '../src/modules/files-imports/index.js';
 import {
@@ -390,11 +391,23 @@ describe('storing a file (imports-and-opening-data 3.1 step 2, 11; PRD-IMP-002, 
     expect(await minio.keys()).toEqual(keysBefore);
     const receipts = await rows<Record<string, unknown>>(
       0,
-      `select received_by_id, source_system, claimed_reference, original_name, received_at from files_imports.file_receipt
-       where stored_file_id = $1 order by recorded_at`,
+      `select id, received_by_id, source_system, claimed_reference_sealed, original_name_sealed, encryption_scheme,
+              received_at from files_imports.file_receipt where stored_file_id = $1 order by recorded_at`,
       [first.storedFileId],
     );
-    expect(receipts.map((r) => [r.source_system, r.claimed_reference, r.original_name])).toEqual([
+    const keys = new OrganisationKeys_(keysEnvironment).keys;
+    const opened = receipts.map((r) => [
+      r.source_system,
+      openReceiptText(keys, world.organisations[0].code, String(r.id), 'claimed-reference', {
+        scheme: String(r.encryption_scheme),
+        ciphertext: String(r.claimed_reference_sealed),
+      }),
+      openReceiptText(keys, world.organisations[0].code, String(r.id), 'original-name', {
+        scheme: String(r.encryption_scheme),
+        ciphertext: String(r.original_name_sealed),
+      }),
+    ]);
+    expect(opened).toEqual([
       ['supplier-email', 'SYN-INV-1', 'SYNTHETIC-a.pdf'],
       ['manual-upload', 'SYN-INV-2', 'SYNTHETIC-b.pdf'],
     ]);
@@ -442,6 +455,50 @@ describe('storing a file (imports-and-opening-data 3.1 step 2, 11; PRD-IMP-002, 
     expect(() =>
       openFile(keyring.keys, world.organisations[1].code, a.contentHash, 'aes-256-gcm/hkdf-sha256/1', objectA),
     ).toThrow();
+  });
+});
+
+describe('the encrypted receipt (imports-and-opening-data 11, 15.1; PRD-SEC-006; S1-F06-T06)', () => {
+  const NAME = 'SYNTHETIC-RECEIPT-NAME-7c2e.pdf';
+  const REFERENCE = 'SYNTHETIC-RECEIPT-REF-91ab';
+
+  it('PRD-SEC-006 keeps no plaintext name or reference in the database', async () => {
+    const stored = storedFileSchema.parse(
+      (await store(uploader.cookie, pdfBytes('receipt-names'), { originalName: NAME, claimedReference: REFERENCE }))
+        .body,
+    );
+    const dump = JSON.stringify(
+      await rows(0, 'select * from files_imports.file_receipt where id = $1', [stored.receiptId]),
+    );
+    expect(dump).not.toContain(NAME);
+    expect(dump).not.toContain(REFERENCE);
+    const row = (
+      await rows<{ claimed_reference_sealed: string | null; original_name_sealed: string }>(
+        0,
+        'select claimed_reference_sealed, original_name_sealed from files_imports.file_receipt where id = $1',
+        [stored.receiptId],
+      )
+    )[0];
+    expect(row?.original_name_sealed).toBeTruthy();
+    expect(row?.claimed_reference_sealed).toBeTruthy();
+  });
+
+  it('keeps "none claimed" as no sealed reference', async () => {
+    const stored = storedFileSchema.parse((await store(uploader.cookie, pdfBytes('receipt-none'))).body);
+    const row = (
+      await rows<{ claimed_reference_sealed: string | null }>(
+        0,
+        'select claimed_reference_sealed from files_imports.file_receipt where id = $1',
+        [stored.receiptId],
+      )
+    )[0];
+    expect(row?.claimed_reference_sealed).toBeNull();
+  });
+
+  it('PRD-SEC-014 never logs the name or the reference', () => {
+    const log = api.logText();
+    expect(log).not.toContain(NAME);
+    expect(log).not.toContain(REFERENCE);
   });
 });
 
@@ -703,20 +760,28 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
   let readerAllA: Signed;
   let readerSiteB: Signed;
   let readerNoClass: Signed;
-  let readerClassA: Signed;
 
   beforeAll(async () => {
     plainBytes = pdfBytes('read-plain');
     restrictedBytes = jpegBytes('read-restricted');
-    const plain = storedFileSchema.parse((await store(uploader.cookie, plainBytes)).body);
-    const restricted = storedFileSchema.parse((await store(uploader.cookie, restrictedBytes)).body);
+    const plain = storedFileSchema.parse(
+      (await store(uploader.cookie, plainBytes, { originalName: 'SYNTHETIC-plain.pdf', claimedReference: 'SYN-P-1' }))
+        .body,
+    );
+    const restricted = storedFileSchema.parse(
+      (
+        await store(uploader.cookie, restrictedBytes, {
+          originalName: 'SYNTHETIC-id-photo.jpg',
+          claimedReference: 'SYN-R-1',
+        })
+      ).body,
+    );
     attachmentPlain = (await attachTo(0, uploader.user.id, plain.storedFileId, { site: SITE_A })).attachmentId;
     attachmentRestricted = (
       await attachTo(0, uploader.user.id, restricted.storedFileId, { site: SITE_A, kind: idEvidence })
     ).attachmentId;
     const view: SyntheticAuthority[] = [{ recordType: TEST_TYPE, action: 'view' }];
     readerAllA = await signedIn(0, 'READERALL', view, { sites: [SITE_A], fieldClasses: ['identity-documents'] });
-    readerClassA = readerAllA;
     readerSiteB = await signedIn(0, 'READERB', view, { sites: [SITE_B], fieldClasses: ['identity-documents'] });
     readerNoClass = await signedIn(0, 'READERNOCLASS', view, { sites: [SITE_A] });
   });
@@ -731,6 +796,10 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
     expect(Buffer.from(file.contentBase64, 'base64').equals(plainBytes)).toBe(true);
     expect(file.contentHash).toBe(sha256(plainBytes));
     expect(file.restrictedClasses).toEqual([]);
+    // The receipt's name and reference are decrypted only for a reader served the file (RR-433).
+    expect(file.receipts.map((r) => [r.originalName, r.claimedReference])).toEqual([
+      ['SYNTHETIC-plain.pdf', 'SYN-P-1'],
+    ]);
   });
 
   it("PRD-SEC-005 refuses a file outside the reader's scope as not found and serves nothing", async () => {
@@ -767,23 +836,45 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
   });
 
   it('PRD-SEC-007 reading a file that holds a restricted class is an export: the plain read refuses it', async () => {
-    const answer = await call('GET', readPath(attachmentRestricted), readerClassA.cookie);
+    const answer = await call('GET', readPath(attachmentRestricted), readerAllA.cookie);
     expect(answer.status).toBe(422);
     expect(errorOf(answer).code).toBe('files-imports.restricted-file-is-an-export');
   });
 
-  it('PRD-SEC-007 downloading a file that holds a restricted class serves it and writes an access record', async () => {
+  /** A reader of the restricted class whose next authenticator code is a fresh one (a step after sign-in). */
+  async function freshReader(label: string): Promise<{ signed: Signed; code: () => string }> {
+    const signed = await signedIn(0, label, [{ recordType: TEST_TYPE, action: 'view' }], {
+      sites: [SITE_A],
+      fieldClasses: ['identity-documents'],
+    });
+    return { signed, code: () => codeFor(signed.user.factorSecret ?? Buffer.alloc(0), 1) };
+  }
+  const accessRecords = (userId: string) =>
+    rows(0, `select 1 from audit.access_record where kind = 'sensitive-access' and user_id = $1`, [userId]);
+
+  it('PRD-SEC-001 PRD-SEC-007 downloading a restricted file with a fresh code serves it and writes an access record', async () => {
+    const reader = await freshReader('DLFRESH');
     const key = uuidv7();
-    const answer = await call('POST', downloadPath(attachmentRestricted), readerClassA.cookie, {}, key);
+    const usedCode = reader.code();
+    const answer = await call(
+      'POST',
+      downloadPath(attachmentRestricted),
+      reader.signed.cookie,
+      { totpCode: usedCode },
+      key,
+    );
     expect(answer.status).toBe(200);
     const file = attachedFileSchema.parse(answer.body);
     expect(Buffer.from(file.contentBase64, 'base64').equals(restrictedBytes)).toBe(true);
     expect(file.restrictedClasses).toEqual(['identity-documents']);
+    expect(file.receipts.map((r) => [r.originalName, r.claimedReference])).toEqual([
+      ['SYNTHETIC-id-photo.jpg', 'SYN-R-1'],
+    ]);
     const written = await rows<Record<string, unknown>>(
       0,
       `select kind, outcome, field_class, exposure, record_type, record_id, user_id from audit.access_record
        where kind = 'sensitive-access' and user_id = $1`,
-      [readerClassA.user.id],
+      [reader.signed.user.id],
     );
     expect(written).toHaveLength(1);
     expect(written[0]).toMatchObject({
@@ -792,8 +883,50 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
       exposure: 'exported',
       record_type: TEST_TYPE,
     });
+    // The same request again carries a code already used, so it is refused and serves nothing.
+    const replay = await call(
+      'POST',
+      downloadPath(attachmentRestricted),
+      reader.signed.cookie,
+      { totpCode: usedCode },
+      key,
+    );
+    expect(replay.status).toBe(403);
+    expect(errorOf(replay).code).toBe('access.authenticator-code-refused');
+    expect(JSON.stringify(replay.body)).not.toContain('contentBase64');
+  });
+
+  it('PRD-SEC-001 refuses a restricted download with no code: serves nothing and writes no access record', async () => {
+    const reader = await freshReader('DLNOCODE');
+    const answer = await call('POST', downloadPath(attachmentRestricted), reader.signed.cookie, {});
+    expect(answer.status).toBe(403);
+    expect(errorOf(answer).code).toBe('access.authenticator-code-refused');
+    expect(JSON.stringify(answer.body)).not.toContain('contentBase64');
+    expect(await accessRecords(reader.signed.user.id)).toHaveLength(0);
+  });
+
+  it('PRD-SEC-001 refuses a wrong code and a code already used, serving nothing and writing no second record', async () => {
+    const reader = await freshReader('DLUSED');
+    const wrong = await call('POST', downloadPath(attachmentRestricted), reader.signed.cookie, { totpCode: '000000' });
+    expect(wrong.status).toBe(403);
+    expect(errorOf(wrong).code).toBe('access.authenticator-code-refused');
+    expect(await accessRecords(reader.signed.user.id)).toHaveLength(0);
+    const code = reader.code();
+    const first = await call('POST', downloadPath(attachmentRestricted), reader.signed.cookie, { totpCode: code });
+    expect(first.status).toBe(200);
+    const again = await call('POST', downloadPath(attachmentRestricted), reader.signed.cookie, { totpCode: code });
+    expect(again.status).toBe(403);
+    expect(errorOf(again).code).toBe('access.authenticator-code-refused');
+    expect(JSON.stringify(again.body)).not.toContain('contentBase64');
+    expect(await accessRecords(reader.signed.user.id)).toHaveLength(1);
+  });
+
+  it('PRD-SEC-001 a code is not asked for a file with no restricted class', async () => {
+    const key = uuidv7();
+    const answer = await call('POST', downloadPath(attachmentPlain), readerAllA.cookie, {}, key);
+    expect(answer.status).toBe(200);
     // The answer is not kept: an identical replay is refused (DEC-114).
-    const replay = await call('POST', downloadPath(attachmentRestricted), readerClassA.cookie, {}, key);
+    const replay = await call('POST', downloadPath(attachmentPlain), readerAllA.cookie, {}, key);
     expect(replay.status).toBe(409);
     expect(errorOf(replay).code).toBe('kernel.answer-not-repeatable');
   });

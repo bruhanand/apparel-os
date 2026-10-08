@@ -15,7 +15,7 @@ import {
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
-import { idSchema } from './common.js';
+import { idSchema, totpCodeSchema } from './common.js';
 import {
   credentialResetRequestSchema,
   credentialResetResponseSchema,
@@ -875,12 +875,20 @@ export const routes = {
     params: z.strictObject({ attachmentId: idSchema }),
     access: { kind: 'attached-record' },
     command: true,
-    body: z.strictObject({}),
-    secretFields: [],
+    // A file that carries a restricted class is an export: a protected action that takes a fresh authenticator code
+    // (access-and-approvals 3.3; PRD-SEC-001; RR-432). A file with no restricted class takes none.
+    body: z.strictObject({ totpCode: totpCodeSchema.optional() }),
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
     restrictedFields: [],
     shows: 'restricted-value',
     response: attachedFileSchema,
-    codes: [...PREPARE_CODES, 'files-imports.attachment-not-found', 'files-imports.file-store-not-configured'],
+    codes: [
+      ...PREPARE_CODES,
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
+      'files-imports.attachment-not-found',
+      'files-imports.file-store-not-configured',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

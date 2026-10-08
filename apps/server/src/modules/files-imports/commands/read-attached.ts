@@ -1,5 +1,5 @@
-import type { AttachedFile, FieldClass } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
+import type { AttachedFile, FieldClass, Receipt } from '@apparel-os/schemas';
+import { asc, eq } from 'drizzle-orm';
 import {
   ApiRefusal,
   CommandDefect,
@@ -17,8 +17,9 @@ import {
 } from '../../../kernel/index.js';
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
-import { attachment, storedFile } from '../db/schema.js';
+import { attachment, fileReceipt, storedFile } from '../db/schema.js';
 import { contentHashOf, openFile } from '../domain/file-seal.js';
+import { openReceiptText } from '../domain/receipt-seal.js';
 import { fileStoreNotConfigured, type FileStoreHandle } from '../file-store/file-store.js';
 
 export interface ReadAttachedDependencies {
@@ -38,6 +39,16 @@ export interface Reader {
   readonly networkAddress: string;
 }
 
+/** A receipt as stored: the name and reference still encrypted (RR-433). */
+interface SealedReceipt {
+  readonly receiptId: string;
+  readonly receivedAt: Date;
+  readonly sourceSystem: string;
+  readonly originalNameSealed: string | null;
+  readonly claimedReferenceSealed: string | null;
+  readonly scheme: string | null;
+}
+
 interface Found {
   readonly attachmentId: string;
   readonly storedFileId: string;
@@ -52,6 +63,7 @@ interface Found {
   readonly format: AttachedFile['format'];
   readonly objectKey: string;
   readonly scheme: string;
+  readonly receipts: readonly SealedReceipt[];
 }
 
 type Looked =
@@ -120,10 +132,24 @@ async function lookUp(
     format: row.format as AttachedFile['format'],
     objectKey: row.objectKey,
     scheme: row.scheme,
+    receipts: [],
   };
   const authorised = await access.authorise(context, needOf(found, userId));
   if (authorised.kind === 'refused') return { kind: 'refused', refusal: authorised.refusal };
-  return { kind: 'found', found, roleAssignmentId: authorised.roleAssignmentId };
+  // Read only after the authority holds; still encrypted, and decrypted only when the file is served.
+  const receipts = await context.tx
+    .select({
+      receiptId: fileReceipt.id,
+      receivedAt: fileReceipt.receivedAt,
+      sourceSystem: fileReceipt.sourceSystem,
+      originalNameSealed: fileReceipt.originalNameSealed,
+      claimedReferenceSealed: fileReceipt.claimedReferenceSealed,
+      scheme: fileReceipt.encryptionScheme,
+    })
+    .from(fileReceipt)
+    .where(eq(fileReceipt.storedFileId, row.storedFileId))
+    .orderBy(asc(fileReceipt.receivedAt), asc(fileReceipt.id));
+  return { kind: 'found', found: { ...found, receipts }, roleAssignmentId: authorised.roleAssignmentId };
 }
 
 function needOf(found: Found, actorId: string) {
@@ -167,7 +193,26 @@ async function content(deps: ReadAttachedDependencies, reader: Reader, found: Fo
     sizeBytes: found.sizeBytes,
     format: found.format,
     restrictedClasses: [...found.classes],
+    receipts: found.receipts.map((receipt) => receiptOf(deps.keys, organisationCode, receipt)),
     contentBase64: bytes.toString('base64'),
+  };
+}
+
+/** Decrypts a receipt's name and reference for a reader already authorised to be served the file (RR-433). */
+function receiptOf(keys: OrganisationKeys, organisationCode: string, receipt: SealedReceipt): Receipt {
+  const open = (sealed: string | null, field: 'original-name' | 'claimed-reference'): string | null =>
+    sealed === null || receipt.scheme === null
+      ? null
+      : openReceiptText(keys, organisationCode, receipt.receiptId, field, {
+          scheme: receipt.scheme,
+          ciphertext: sealed,
+        });
+  return {
+    receiptId: receipt.receiptId,
+    receivedAt: receipt.receivedAt.toISOString(),
+    sourceSystem: receipt.sourceSystem,
+    originalName: open(receipt.originalNameSealed, 'original-name'),
+    claimedReference: open(receipt.claimedReferenceSealed, 'claimed-reference'),
   };
 }
 
@@ -209,6 +254,30 @@ export async function readAttachedFile(
 }
 
 /**
+ * A download that exports a restricted class is a protected action (access-and-approvals 3.3; PRD-SEC-001, RR-432): it
+ * takes a fresh authenticator code, checked as every protected action checks one. A missing, wrong or already used code
+ * is refused. With `take`, the code's step is recorded so it is never accepted again, in the caller's transaction.
+ * How long a code stays fresh is OPEN (GC3-6; KDPS Owner): no duration is chosen here.
+ */
+async function freshCodeRefusal(
+  access: AccessInterface,
+  context: TransactionContext,
+  userId: string,
+  totpCode: string | undefined,
+  take = false,
+): Promise<CommandRefusal<'not-authorised' | 'refused'> | undefined> {
+  const refused = { kind: 'not-authorised', code: 'access.authenticator-code-refused', missing: [] } as const;
+  if (totpCode === undefined) return refused;
+  const checked = await access.checkFreshCode(context, userId, totpCode);
+  if (checked.kind === 'not-enrolled') {
+    return { kind: 'refused', code: 'access.enrolment-not-started', missing: [] };
+  }
+  if (checked.kind === 'refused') return refused;
+  if (take && !(await checked.take())) return refused;
+  return undefined;
+}
+
+/**
  * Download a file (13.1, section 11; numbering-and-audit 5.1; PRD-SEC-007): the same authority as reading it, and,
  * for a file that holds a restricted class, an export that includes a restricted field, so one sensitive-access
  * record for each class is written in the command's own transaction before the bytes are given. The authority is
@@ -221,10 +290,16 @@ export async function downloadAttachedFile(
   attachmentId: string,
   key: string,
   requestContent: RequestContent,
+  totpCode: string | undefined,
 ): Promise<IdempotentAnswer<JsonValue>> {
-  const looked = await read(deps, reader, 'files-imports.authorise-download', (context) =>
-    lookUp(context, deps.access, reader.userId, attachmentId),
-  );
+  const looked = await read(deps, reader, 'files-imports.authorise-download', async (context) => {
+    const found = await lookUp(context, deps.access, reader.userId, attachmentId);
+    if (found.kind === 'refused' || found.found.classes.length === 0) return found;
+    // Nothing is fetched for a restricted file before its code is seen to be fresh. The code is only checked here;
+    // it is taken in the command's own transaction (PRD-SEC-001).
+    const refusal = await freshCodeRefusal(deps.access, context, reader.userId, totpCode);
+    return refusal === undefined ? found : ({ kind: 'refused', refusal } as const);
+  });
   if (looked.kind === 'refused') return refuse(looked.refusal);
   const { found } = looked;
   // The object is fetched before the command's transaction (code-house-rules 8.3) and given only after it commits.
@@ -254,6 +329,10 @@ export async function downloadAttachedFile(
           needOf(found, reader.userId),
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+        if (found.classes.length > 0) {
+          const refusal = await freshCodeRefusal(deps.access, context, reader.userId, totpCode, true);
+          if (refusal !== undefined) return { kind: 'refusal', refusal, causedBySecret: true };
+        }
         for (const fieldClass of found.classes) {
           await deps.audit.recordAccess(context, {
             kind: 'sensitive-access',

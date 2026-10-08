@@ -29,8 +29,11 @@ export const fileReceipt = filesImports.table('file_receipt', {
   receivedById: uuid('received_by_id').notNull(),
   receivedAt: at('received_at').notNull(),
   sourceSystem: text('source_system').notNull(),
-  claimedReference: text('claimed_reference'),
-  originalName: text('original_name').notNull(),
+  /** Encrypted with the Organisation key (RR-433): the base64url of nonce, tag and ciphertext. Null: none claimed. */
+  claimedReferenceSealed: text('claimed_reference_sealed'),
+  /** Encrypted likewise; null only on a receipt written before 0025, whose name is Unknown. */
+  originalNameSealed: text('original_name_sealed'),
+  encryptionScheme: text('encryption_scheme'),
   correlationId: uuid('correlation_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

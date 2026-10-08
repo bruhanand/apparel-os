@@ -18,6 +18,7 @@ import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { fileReceipt, storedFile } from '../db/schema.js';
 import { contentHashOf, objectKeyOf, openFile, sealFile } from '../domain/file-seal.js';
+import { sealReceiptText } from '../domain/receipt-seal.js';
 import { checkEvidenceFile } from '../domain/intake-checks.js';
 import { fileStoreNotConfigured, type FileStore, type FileStoreHandle } from '../file-store/file-store.js';
 
@@ -195,6 +196,13 @@ async function record(
   }
   if (storedFileId === undefined) throw new CommandDefect('A stored file could be neither written nor found');
   const receiptId = uuidv7();
+  // The name and the reference are encrypted before the row is written, and never logged (RR-433; PRD-SEC-006).
+  const code = context.organisationCode;
+  const name = sealReceiptText(deps.keys, code, receiptId, 'original-name', input.body.originalName);
+  const claimed =
+    input.body.claimedReference === undefined
+      ? undefined
+      : sealReceiptText(deps.keys, code, receiptId, 'claimed-reference', input.body.claimedReference);
   await context.tx.insert(fileReceipt).values({
     id: receiptId,
     storedFileId,
@@ -202,8 +210,9 @@ async function record(
     receivedById: input.userId,
     receivedAt: context.startedAt,
     sourceSystem: input.body.sourceSystem,
-    claimedReference: input.body.claimedReference ?? null,
-    originalName: input.body.originalName,
+    claimedReferenceSealed: claimed === undefined ? null : claimed.ciphertext,
+    originalNameSealed: name.ciphertext,
+    encryptionScheme: name.scheme,
     correlationId: context.correlationId,
   });
   await deps.audit.record(context, {

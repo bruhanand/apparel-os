@@ -63,6 +63,7 @@ export class FilesController {
       input.params.attachmentId,
       input.idempotencyKey,
       requestContentOf(routes.downloadAttachedFile, input),
+      input.body.totpCode,
     );
     return commandAnswer(answer);
   }
