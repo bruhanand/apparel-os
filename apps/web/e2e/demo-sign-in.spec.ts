@@ -19,6 +19,7 @@ test('POL-02.17 a listed synthetic person signs in with one press of the test si
   expect(submit !== null && box !== null && box.y > submit.y).toBe(true);
 
   await demo.getByRole('button', { name: world.demo.label }).click();
-  await expect(page.getByText(world.demo.displayName)).toBeVisible();
+  // The name shows in the top bar's profile and in the menu, so check the profile control, as security-settings does.
+  await expect(page.getByLabel('Profile')).toHaveText(world.demo.displayName);
   await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0);
 });
