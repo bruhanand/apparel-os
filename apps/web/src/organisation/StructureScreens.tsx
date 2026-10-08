@@ -10,7 +10,7 @@ import { recordTypeName } from '../setup/describe';
 import { inputClass, ListRead, Th } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
-import { type Kind } from './kinds';
+import { recordTypeOf, type Kind } from './kinds';
 import { MasterTab } from './MasterTab';
 
 // Setup › Organisation structure and Setup › Geography and groupings (structure-and-masters 8; ui-blueprint Setup;
@@ -77,23 +77,23 @@ function MasterLists() {
         {(lists) => {
           const rows = [
             ...lists.legalEntities.map((each) => ({
-              type: 'organisation.legal_entity',
+              type: recordTypeOf('legal_entity'),
               name: each.legalName,
               ...each,
             })),
             ...lists.taxRegistrations.map((each) => ({
-              type: 'organisation.tax_registration',
+              type: recordTypeOf('tax_registration'),
               name: each.registrationNumber,
               ...each,
             })),
-            ...lists.accountingBooks.map((each) => ({ type: 'organisation.accounting_book', ...each })),
-            ...lists.sites.map((each) => ({ type: 'organisation.site', ...each })),
-            ...lists.stores.map((each) => ({ type: 'organisation.store', ...each })),
-            ...lists.countries.map((each) => ({ type: 'organisation.country', ...each })),
-            ...lists.states.map((each) => ({ type: 'organisation.state', ...each })),
-            ...lists.cities.map((each) => ({ type: 'organisation.city', ...each })),
-            ...lists.areas.map((each) => ({ type: 'organisation.area', ...each })),
-            ...lists.groupings.map((each) => ({ type: 'organisation.grouping', ...each })),
+            ...lists.accountingBooks.map((each) => ({ type: recordTypeOf('accounting_book'), ...each })),
+            ...lists.sites.map((each) => ({ type: recordTypeOf('site'), ...each })),
+            ...lists.stores.map((each) => ({ type: recordTypeOf('store'), ...each })),
+            ...lists.countries.map((each) => ({ type: recordTypeOf('country'), ...each })),
+            ...lists.states.map((each) => ({ type: recordTypeOf('state'), ...each })),
+            ...lists.cities.map((each) => ({ type: recordTypeOf('city'), ...each })),
+            ...lists.areas.map((each) => ({ type: recordTypeOf('area'), ...each })),
+            ...lists.groupings.map((each) => ({ type: recordTypeOf('grouping'), ...each })),
           ];
           return (
             <div className="flex flex-col gap-3">

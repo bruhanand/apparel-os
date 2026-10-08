@@ -1,6 +1,13 @@
 import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { masterListsSchema, siteListSchema, storeListSchema, type PermissionAction } from '@apparel-os/schemas';
+import {
+  MASTER_PAGE_CAP,
+  masterListsSchema,
+  siteListSchema,
+  siteReadSchema,
+  storeListSchema,
+  type PermissionAction,
+} from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import {
@@ -142,10 +149,7 @@ beforeAll(async () => {
   approveReason = await writeSyntheticReason(database, 'approve');
   clock = new SyntheticClock();
   api = await startAccessApp(world, keys, { clock });
-  admin = await enrolled('ORG-ADMIN', [
-    ...each(['view', 'create', 'edit']),
-    { recordType: 'organisation.master_list', action: 'view' },
-  ]);
+  admin = await enrolled('ORG-ADMIN', each(['view', 'create', 'edit']));
   approver = await enrolled('ORG-APPROVER', each(['view', 'approve']));
   const country = await approved('/api/organisation/countries', {
     code: code('IN'),
@@ -270,18 +274,54 @@ describe('preparing and deciding (structure-and-masters 2.3; module-map 6.2 flow
 
 describe('reading under the reader’s own authorisation (access-and-approvals 7.1; module-map section 3, rule 5)', () => {
   it('PRD-UXP-003 a list the reader may not view is refused with the permission named, and left out of the master lists', async () => {
-    const reader = await enrolled('ORG-READER', [
-      { recordType: 'organisation.master_list', action: 'view' },
-      { recordType: 'organisation.store', action: 'view' },
-    ]);
+    // The master lists need no permission of their own (product owner, 8 Oct 2026).
+    const reader = await enrolled('ORG-READER', [{ recordType: 'organisation.store', action: 'view' }]);
     const refused = await get(reader, '/api/organisation/sites');
     expect(refused.status).toBe(403);
     expect(refused.body).toMatchObject({
       error: { code: 'access.not-authorised', missing: [{ kind: 'permission', recordType: 'organisation.site' }] },
     });
     const lists = masterListsSchema.parse((await get(reader, `/api/organisation/master-lists?date=${today()}`)).body);
-    expect(lists.notShown).toContain('organisation.site');
-    expect(lists.notShown).not.toContain('organisation.store');
+    expect(lists.notShown).toEqual(TYPES.filter((type) => type !== 'organisation.store'));
     expect(lists.sites).toEqual([]);
+    expect(lists.areas).toEqual([]);
+  });
+});
+
+describe('a list is read a page at a time, and one record on its own (code-house-rules 12.1)', () => {
+  it('PRD-PRF-004 pages follow the cursor in code order; one record reads with every version; an unknown one is named', async () => {
+    const first = await prepare('/api/organisation/sites', siteBody());
+    const second = await prepare('/api/organisation/sites', siteBody());
+    const all = siteListSchema.parse((await get(admin, '/api/organisation/sites')).body);
+    expect(all.next).toBeNull();
+    const ids = all.records.map((record) => record.id);
+    expect(ids).toEqual(expect.arrayContaining([first.recordId, second.recordId]));
+    // Page by page, one record each, the cursor handed back as given.
+    const seen: string[] = [];
+    let after: string | null = null;
+    do {
+      const query: string = after === null ? '?limit=1' : `?limit=1&after=${after}`;
+      const page = siteListSchema.parse((await get(admin, `/api/organisation/sites${query}`)).body);
+      expect(page.records.length).toBeLessThanOrEqual(1);
+      seen.push(...page.records.map((record) => record.id));
+      after = page.next;
+    } while (after !== null);
+    expect(seen).toEqual(ids);
+    // A page is never longer than the cap.
+    expect((await get(admin, `/api/organisation/sites?limit=${String(MASTER_PAGE_CAP + 1)}`)).status).toBe(400);
+    const one = siteReadSchema.parse((await get(admin, `/api/organisation/sites/${first.recordId}`)).body);
+    expect(one.record).toMatchObject({
+      id: first.recordId,
+      versions: [{ id: first.versionId, state: 'Awaiting approval', request: { id: first.requestId } }],
+    });
+    const unknown = uuidv7();
+    const missing = await get(admin, `/api/organisation/sites/${unknown}`);
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({
+      error: {
+        code: 'organisation.record-not-found',
+        missing: [{ kind: 'record', recordType: 'organisation.site', recordId: unknown }],
+      },
+    });
   });
 });

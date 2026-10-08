@@ -71,32 +71,43 @@ import {
 import {
   accountingBookDraftSchema,
   accountingBookListSchema,
+  accountingBookReadSchema,
   areaDraftSchema,
   areaListSchema,
+  areaReadSchema,
   cityDraftSchema,
   cityListSchema,
+  cityReadSchema,
   countryDraftSchema,
   countryListSchema,
+  countryReadSchema,
   groupingDraftSchema,
   groupingListSchema,
+  groupingReadSchema,
   groupingVersionDraftSchema,
   legalEntityDraftSchema,
   legalEntityListSchema,
+  legalEntityReadSchema,
   legalEntityVersionDraftSchema,
   masterListsQuerySchema,
+  masterPageQuerySchema,
   masterListsSchema,
   masterPreparedSchema,
   nameVersionDraftSchema,
   siteDraftSchema,
   siteListSchema,
+  siteReadSchema,
   siteVersionDraftSchema,
   stateDraftSchema,
   stateListSchema,
+  stateReadSchema,
   storeDraftSchema,
   storeListSchema,
+  storeReadSchema,
   storeVersionDraftSchema,
   taxRegistrationDraftSchema,
   taxRegistrationListSchema,
+  taxRegistrationReadSchema,
   taxRegistrationVersionDraftSchema,
 } from './organisation.js';
 
@@ -108,7 +119,9 @@ import {
  * and the health check only, no session. `own`: a signed-in user's own credentials and sessions, Authenticate only.
  * `action`: Authenticate, Available and Authorise for that action on that record type (PRD-INT-001, PRD-SEC-005).
  * `decision`: Authenticate, then Authorise in the command on the decided request's record type (9.3). My work is an
- * `own` read: every signed-in user has it, with no permission (access-and-approvals 9.11, 11.2).
+ * `own` read: every signed-in user has it, with no permission (access-and-approvals 9.11, 11.2). So are the master
+ * lists, which show only the masters the reader may view and name the others (structure-and-masters 3.8; product owner,
+ * 8 Oct 2026).
  */
 export type RouteAccess =
   | { readonly kind: 'public' }
@@ -311,6 +324,12 @@ const HISTORY_CODES = [
   'access.sign-in-incomplete',
   'access.not-authorised',
   'access.business-date-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes a read of one organisation master can answer: the reads' own, and a record that does not exist. */
+const ORGANISATION_READ_CODES = [
+  ...HISTORY_CODES,
+  'organisation.record-not-found',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes every preparation of an organisation master can answer (structure-and-masters 2.1, 2.2, 3.8). */
@@ -940,17 +959,27 @@ export const routes = {
     ],
   }),
   // The organisation structure (structure-and-masters 2.3, 3, 8; module-map 4.11, 6.2 flow A; S1-F02-T01): each master's
-  // list with every version, preparing a new master with its first version, and preparing a later version. Preparing
+  // paged list and one record with every version, preparing a new master with its first version, and preparing a later version. Preparing
   // saves a version Awaiting approval and requests its approval; a different authorised person decides it through the
   // approval panel (decideApproval), which makes it take effect (GC2-2, DEC-105; PRD-ACS-006). The types carry no
   // scope fact, so the permission on the type decides (access-and-approvals 5.3).
   listCountries: defineRoute({
     method: 'GET',
     path: '/api/organisation/countries',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.country' },
     command: false,
     response: countryListSchema,
     codes: HISTORY_CODES,
+  }),
+  readCountry: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/countries/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.country' },
+    command: false,
+    response: countryReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareCountry: defineRoute({
     method: 'POST',
@@ -980,10 +1009,20 @@ export const routes = {
   listStates: defineRoute({
     method: 'GET',
     path: '/api/organisation/states',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.state' },
     command: false,
     response: stateListSchema,
     codes: HISTORY_CODES,
+  }),
+  readState: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/states/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.state' },
+    command: false,
+    response: stateReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareState: defineRoute({
     method: 'POST',
@@ -1013,10 +1052,20 @@ export const routes = {
   listCities: defineRoute({
     method: 'GET',
     path: '/api/organisation/cities',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.city' },
     command: false,
     response: cityListSchema,
     codes: HISTORY_CODES,
+  }),
+  readCity: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/cities/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.city' },
+    command: false,
+    response: cityReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareCity: defineRoute({
     method: 'POST',
@@ -1046,10 +1095,20 @@ export const routes = {
   listAreas: defineRoute({
     method: 'GET',
     path: '/api/organisation/areas',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.area' },
     command: false,
     response: areaListSchema,
     codes: HISTORY_CODES,
+  }),
+  readArea: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/areas/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.area' },
+    command: false,
+    response: areaReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareArea: defineRoute({
     method: 'POST',
@@ -1079,10 +1138,20 @@ export const routes = {
   listLegalEntities: defineRoute({
     method: 'GET',
     path: '/api/organisation/legal-entities',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.legal_entity' },
     command: false,
     response: legalEntityListSchema,
     codes: HISTORY_CODES,
+  }),
+  readLegalEntity: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/legal-entities/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.legal_entity' },
+    command: false,
+    response: legalEntityReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareLegalEntity: defineRoute({
     method: 'POST',
@@ -1112,10 +1181,20 @@ export const routes = {
   listTaxRegistrations: defineRoute({
     method: 'GET',
     path: '/api/organisation/tax-registrations',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.tax_registration' },
     command: false,
     response: taxRegistrationListSchema,
     codes: HISTORY_CODES,
+  }),
+  readTaxRegistration: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/tax-registrations/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.tax_registration' },
+    command: false,
+    response: taxRegistrationReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareTaxRegistration: defineRoute({
     method: 'POST',
@@ -1145,10 +1224,20 @@ export const routes = {
   listAccountingBooks: defineRoute({
     method: 'GET',
     path: '/api/organisation/accounting-books',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.accounting_book' },
     command: false,
     response: accountingBookListSchema,
     codes: HISTORY_CODES,
+  }),
+  readAccountingBook: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/accounting-books/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.accounting_book' },
+    command: false,
+    response: accountingBookReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareAccountingBook: defineRoute({
     method: 'POST',
@@ -1178,10 +1267,20 @@ export const routes = {
   listSites: defineRoute({
     method: 'GET',
     path: '/api/organisation/sites',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.site' },
     command: false,
     response: siteListSchema,
     codes: HISTORY_CODES,
+  }),
+  readSite: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/sites/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.site' },
+    command: false,
+    response: siteReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareSite: defineRoute({
     method: 'POST',
@@ -1211,10 +1310,20 @@ export const routes = {
   listStores: defineRoute({
     method: 'GET',
     path: '/api/organisation/stores',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.store' },
     command: false,
     response: storeListSchema,
     codes: HISTORY_CODES,
+  }),
+  readStore: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/stores/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.store' },
+    command: false,
+    response: storeReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareStore: defineRoute({
     method: 'POST',
@@ -1244,10 +1353,20 @@ export const routes = {
   listGroupings: defineRoute({
     method: 'GET',
     path: '/api/organisation/groupings',
+    query: masterPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'organisation.grouping' },
     command: false,
     response: groupingListSchema,
     codes: HISTORY_CODES,
+  }),
+  readGrouping: defineRoute({
+    method: 'GET',
+    path: '/api/organisation/groupings/{recordId}',
+    params: z.strictObject({ recordId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'organisation.grouping' },
+    command: false,
+    response: groupingReadSchema,
+    codes: ORGANISATION_READ_CODES,
   }),
   prepareGrouping: defineRoute({
     method: 'POST',
@@ -1275,12 +1394,14 @@ export const routes = {
     codes: ORGANISATION_PREPARE_CODES,
   }),
   // The master lists read model (module-map 4.11; phases.md stage 1 reports): each master's version in force on the
-  // date, as of the time read; a list whose own type the reader may not view is left out and named.
+  // date, as of the time read; a list whose own type the reader may not view is left out and named in `notShown`.
   readMasterLists: defineRoute({
     method: 'GET',
     path: '/api/organisation/master-lists',
     query: masterListsQuerySchema,
-    access: { kind: 'action', action: 'view', recordType: 'organisation.master_list' },
+    // Every signed-in user may read it: it shows only the masters the reader may view and names the others
+    // (product owner, 8 Oct 2026).
+    access: { kind: 'own' },
     command: false,
     response: masterListsSchema,
     codes: HISTORY_CODES,

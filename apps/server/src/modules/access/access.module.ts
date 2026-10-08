@@ -116,16 +116,11 @@ export class AccessJobIdentitiesModule {}
     },
     {
       // With the approval rules and decision effects other modules declare, which the composition root provides
-      // (access-and-approvals 8, 9.8b).
+      // (access-and-approvals 8, 9.8b). Required: a composition without them fails at start, never at a request.
       provide: ACCESS,
-      useFactory: (audit: AuditInterface, keys: OrganisationKeys, modules?: ModuleApprovals) =>
-        new Access({
-          audit,
-          keys,
-          approvalRules: modules?.rules ?? [],
-          documentEffects: modules?.effects ?? new Map(),
-        }),
-      inject: [AUDIT, ORGANISATION_KEYS, { token: MODULE_APPROVALS, optional: true }],
+      useFactory: (audit: AuditInterface, keys: OrganisationKeys, modules: ModuleApprovals) =>
+        new Access({ audit, keys, approvalRules: modules.rules, documentEffects: modules.effects }),
+      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS],
     },
     {
       // The history reads (numbering-and-audit 4.5): rows through `audit`, Authorise and masking through `access`.

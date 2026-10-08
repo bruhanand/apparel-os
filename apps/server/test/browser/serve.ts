@@ -247,7 +247,6 @@ await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAdmin.id }, 
   ...organisationTypes.flatMap((recordType) =>
     (['view', 'create', 'edit'] as const).map((action) => ({ recordType, action })),
   ),
-  { recordType: 'organisation.master_list', action: 'view' },
   { recordType: 'access.approval_request', action: 'view' },
 ]);
 const structureApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {

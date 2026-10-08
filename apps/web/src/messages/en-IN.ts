@@ -852,13 +852,13 @@ export const englishIndia = {
   'history.operation.prepare-grouping-version': 'New grouping version prepared',
   'history.operation.approve-grouping-version': 'Grouping version approved',
   'history.operation.reject-grouping-version': 'Grouping version rejected',
-  'record-type.organisation.master_list': 'Master lists',
   'organisation.tab.master-lists': 'Master lists',
   'error.organisation.code-taken': 'This code is already used in its scope. A code is never reused; choose another.',
   'error.organisation.record-not-found': 'A record this change names does not exist.',
-  'error.organisation.starts-in-past': 'The start date is in the past. Choose today or a later date.',
+  'error.organisation.starts-in-past':
+    'The start date is in the past. A version starts today or later; a draft whose start has passed is re-dated: prepare it again from today or later, which replaces it.',
   'error.organisation.version-overlaps':
-    'Another approved version starts on or after this one’s start. Choose a start after it.',
+    'Another approved version starts on the same date as this one. Choose another start date.',
   'error.organisation.reference-not-in-force':
     'A record this version names has no approved version in force on its start. Approve that record first.',
   'organisation.field.code': 'Code',
@@ -905,6 +905,13 @@ export const englishIndia = {
   'organisation.in-force-on': 'Version in force on',
   'organisation.none-in-force': 'No approved version is in force on this date.',
   'organisation.change': 'Prepare a new version',
+  'organisation.redate': 'Re-date',
+  'organisation.redate-help':
+    'This draft’s start date has passed, so it can no longer be approved. Re-date it: prepare it again from today or later, which replaces it.',
+  'organisation.later-version-kept': 'A later version is already approved',
+  'organisation.later-version-kept-body':
+    'This change ends on {date}, where the approved version that starts then takes over. That version keeps its own values: this change is not carried into it.',
+  'organisation.load-more': 'Load more',
   'organisation.empty.title': 'Nothing here yet',
   'organisation.empty.body': 'Records you prepare appear here once saved, awaiting approval.',
   'organisation.master-lists.date': 'In force on',

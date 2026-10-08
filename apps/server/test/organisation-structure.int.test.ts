@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { taxRegistrationVersionDraftSchema, type SiteDraft, type StoreDraft } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { PreparedVersion } from '../src/modules/organisation/index.js';
+import type { MasterKind, PreparedVersion } from '../src/modules/organisation/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
@@ -15,6 +15,7 @@ import {
 } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, sqlState } from './support/postgres.js';
+import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F02-T01: legal entities, tax registrations, books, geography, Sites, Stores and groupings through the organisation
 // module's interface and access's Decide, on real PostgreSQL (structure-and-masters 2, 3.1 to 3.3, 3.6 to 3.8, 9
@@ -97,18 +98,23 @@ const approvedLegalEntity = () =>
   );
 
 function structureOn(date: string, on: StructureSetup = setup) {
-  return on.run(on.preparer.id, (c) => on.organisation.structureOn(c, on.today(), date));
+  return on.run(on.preparer.id, (c) => on.organisation.structureOn(c, date));
 }
 
-function listOf<K extends Parameters<StructureSetup['organisation']['list']>[1]>(kind: K, on: StructureSetup = setup) {
-  return on.run(on.preparer.id, (c) => on.organisation.list(c, kind, on.today()));
+function listOf<K extends MasterKind>(kind: K, on: StructureSetup = setup) {
+  return on.run(on.preparer.id, (c) => on.organisation.list(c, kind, on.today(), {}));
+}
+
+/** One record with every version, read on its own (code-house-rules 12.1). */
+function recordOf<K extends MasterKind>(kind: K, recordId: string, on: StructureSetup = setup) {
+  return on.run(on.preparer.id, (c) => on.organisation.record(c, kind, recordId, on.today()));
 }
 
 describe('a master is prepared and then approved by a different authorised person (structure-and-masters 2.3)', () => {
   it('PRD-ORG-003 PRD-ORG-008 a new Site starts Setting up and is in force once approved, with its history', async () => {
     const draft = siteDraft({ aliases: [syntheticName('Old site name')], openingDate: setup.day(10) });
     const site = prepared(await setup.prepare((c, p) => setup.organisation.prepareSite(c, p, draft)));
-    let record = (await listOf('site')).records.find((each) => each.id === site.recordId);
+    let record = await recordOf('site', site.recordId);
     expect(record?.code).toBe(draft.code);
     expect(record?.versions).toEqual([
       expect.objectContaining({
@@ -129,7 +135,7 @@ describe('a master is prepared and then approved by a different authorised perso
       await setup.run(setup.approver.id, (c) => setup.access.eligibleRequests(c, setup.approver.id, [site.requestId])),
     ).toEqual([site.requestId]);
     decided(await setup.decide(site.requestId, site.versionId));
-    record = (await listOf('site')).records.find((each) => each.id === site.recordId);
+    record = await recordOf('site', site.recordId);
     expect(record?.versions[0]).toMatchObject({ state: 'In force', status: 'Setting up' });
     expect((await structureOn(setup.today())).sites).toContainEqual(
       expect.objectContaining({ id: site.recordId, versionId: site.versionId, name: draft.name, status: 'Setting up' }),
@@ -250,10 +256,10 @@ describe('a master is prepared and then approved by a different authorised perso
     }
   });
 
-  it('a rejected version never takes effect', async () => {
+  it('PRD-ACS-006 PRD-MOD-010 a rejected version never takes effect', async () => {
     const site = prepared(await setup.prepare((c, p) => setup.organisation.prepareSite(c, p, siteDraft())));
     decided(await setup.decide(site.requestId, site.versionId, 'reject'));
-    const record = (await listOf('site')).records.find((each) => each.id === site.recordId);
+    const record = await recordOf('site', site.recordId);
     expect(record?.versions[0]?.state).toBe('Rejected');
     expect((await structureOn(setup.today())).sites.map((each) => each.id)).not.toContain(site.recordId);
   });
@@ -330,7 +336,7 @@ describe('effective-dated versions (structure-and-masters 2.2; code-house-rules 
     });
   });
 
-  it('PRD-MOD-010 a new version ends the one before it on its start; one overlapping an approved version, a Scheduled one included, is refused', async () => {
+  it('PRD-MOD-010 a new version ends the one before it on its start; one starting on an approved version’s start, a Scheduled one included, is refused', async () => {
     const legalEntity = await approvedLegalEntity();
     const version = (validFrom: string) =>
       setup.prepare((c, p) =>
@@ -341,29 +347,23 @@ describe('effective-dated versions (structure-and-masters 2.2; code-house-rules 
       );
     const scheduled = prepared(await version(setup.day(5)));
     decided(await setup.decide(scheduled.requestId, scheduled.versionId));
-    let versions = (await listOf('legal_entity')).records.find((each) => each.id === legalEntity.recordId)?.versions;
+    let versions = (await recordOf('legal_entity', legalEntity.recordId))?.versions;
     expect(versions?.map((each) => [each.state, each.validFrom, each.validTo])).toEqual([
       ['Scheduled', setup.day(5), undefined],
       ['In force', setup.today(), setup.day(5)],
     ]);
-    // Starting before the Scheduled version and open-ended, it would overlap it.
-    const before = prepared(await version(setup.day(2)));
-    expect(await setup.decide(before.requestId, before.versionId)).toMatchObject({
+    const same = prepared(await version(setup.day(5)));
+    expect(await setup.decide(same.requestId, same.versionId)).toMatchObject({
       kind: 'refusal',
       refusal: {
         code: 'organisation.version-overlaps',
         missing: [{ kind: 'version', recordId: legalEntity.recordId, versionId: scheduled.versionId }],
       },
     });
-    const same = prepared(await version(setup.day(5)));
-    expect(await setup.decide(same.requestId, same.versionId)).toMatchObject({
-      kind: 'refusal',
-      refusal: { code: 'organisation.version-overlaps' },
-    });
     // After the Scheduled one, it ends that one on its start.
     const later = prepared(await version(setup.day(8)));
     decided(await setup.decide(later.requestId, later.versionId));
-    versions = (await listOf('legal_entity')).records.find((each) => each.id === legalEntity.recordId)?.versions;
+    versions = (await recordOf('legal_entity', legalEntity.recordId))?.versions;
     expect(versions?.find((each) => each.id === scheduled.versionId)?.validTo).toBe(setup.day(8));
     // The database refuses two approved versions that overlap, whatever the command does.
     const owner = await connect(world.organisations[0].database, 'migration');
@@ -391,7 +391,143 @@ describe('effective-dated versions (structure-and-masters 2.2; code-house-rules 
     }
   });
 
-  it('a version is approved only while every record it names is in force on its start', async () => {
+  it('PRD-MOD-010 a version starting before an approved Scheduled version ends where that one starts; the Scheduled one keeps its own values (product owner, 8 Oct 2026)', async () => {
+    const site = await approvedSite();
+    const draft = siteDraft();
+    const version = (name: string, validFrom: string) =>
+      setup.prepare((c, p) =>
+        setup.organisation.prepareSiteVersion(c, p, site.recordId, { ...draft, name: syntheticName(name), validFrom }),
+      );
+    // The later change is approved first, the earlier one after it: approving out of start order blocks neither.
+    const scheduled = prepared(await version('Later name', setup.day(6)));
+    decided(await setup.decide(scheduled.requestId, scheduled.versionId));
+    const earlier = prepared(await version('Earlier name', setup.day(2)));
+    decided(await setup.decide(earlier.requestId, earlier.versionId));
+    const versions = (await recordOf('site', site.recordId))?.versions;
+    expect(versions?.map((each) => [each.id, each.state, each.validFrom, each.validTo])).toEqual([
+      [scheduled.versionId, 'Scheduled', setup.day(6), undefined],
+      [earlier.versionId, 'Scheduled', setup.day(2), setup.day(6)],
+      [site.versionId, 'In force', setup.today(), setup.day(2)],
+    ]);
+    const nameOn = async (date: string) =>
+      (await structureOn(date)).sites.find((each) => each.id === site.recordId)?.name;
+    expect(await nameOn(setup.day(1))).toBe((await recordOf('site', site.recordId))?.versions[2]?.name);
+    expect(await nameOn(setup.day(1))).not.toBe(syntheticName('Earlier name'));
+    expect(await nameOn(setup.day(2))).toBe(syntheticName('Earlier name'));
+    expect(await nameOn(setup.day(5))).toBe(syntheticName('Earlier name'));
+    // The Scheduled version keeps its own values: the earlier change is not carried into it.
+    expect(await nameOn(setup.day(6))).toBe(syntheticName('Later name'));
+  });
+
+  it('PRD-MOD-010 GC2-7 a draft whose start passes before approval is re-dated: prepared again from today, which supersedes it', async () => {
+    const site = await approvedSite();
+    const draft = { ...siteDraft(), name: syntheticName('Re-dated name') };
+    const stale = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSiteVersion(c, p, site.recordId, { ...draft, validFrom: setup.day(1) }),
+      ),
+    );
+    setup.advanceDays(2);
+    expect(await setup.decide(stale.requestId, stale.versionId)).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'organisation.starts-in-past' },
+    });
+    const redated = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSiteVersion(c, p, site.recordId, { ...draft, validFrom: setup.today() }),
+      ),
+    );
+    const versions = (await recordOf('site', site.recordId))?.versions;
+    expect(versions?.find((each) => each.id === stale.versionId)).toMatchObject({
+      state: 'Superseded',
+      request: { id: stale.requestId, state: 'Superseded' },
+    });
+    expect(await setup.decide(stale.requestId, stale.versionId)).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.approval-superseded' },
+    });
+    decided(await setup.decide(redated.requestId, redated.versionId));
+    expect((await structureOn(setup.today())).sites.find((each) => each.id === site.recordId)?.name).toBe(draft.name);
+  });
+
+  it('code-house-rules 7.3 PRD-MOD-011 the version guard admits only a decision recorded once and an approved end moved earlier', async () => {
+    const awaiting = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSite(c, p, siteDraft({ aliases: [syntheticName('Alias')] })),
+      ),
+    );
+    const rejected = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSite(c, p, siteDraft({ aliases: [syntheticName('Alias')] })),
+      ),
+    );
+    decided(await setup.decide(rejected.requestId, rejected.versionId, 'reject'));
+    const inForce = await approvedSite();
+    const owner = await connect(world.organisations[0].database, 'migration');
+    const refused = (statement: string, values: unknown[]) => sqlState(owner.query(statement, values));
+    try {
+      // A version Awaiting approval is frozen when prepared: only its decision is recorded (T6).
+      expect(
+        await refused(`update organisation.site_version set name = 'SYNTHETIC edited' where id = $1`, [
+          awaiting.versionId,
+        ]),
+      ).toBe('AO003');
+      expect(
+        await refused(
+          `update organisation.site_version set decision = 'Approved', name = 'SYNTHETIC edited' where id = $1`,
+          [awaiting.versionId],
+        ),
+      ).toBe('AO003');
+      expect(
+        await refused(
+          `update organisation.site_version set decision = 'Approved', valid_during = daterange($2::date, null)
+           where id = $1`,
+          [awaiting.versionId, setup.day(1)],
+        ),
+      ).toBe('AO003');
+      // A Rejected version never changes.
+      expect(
+        await refused(`update organisation.site_version set decision = 'Approved' where id = $1`, [rejected.versionId]),
+      ).toBe('AO003');
+      // An approved version keeps its start and decision, and its end only moves earlier.
+      expect(
+        await refused(`update organisation.site_version set valid_during = daterange($2::date, null) where id = $1`, [
+          inForce.versionId,
+          setup.day(1),
+        ]),
+      ).toBe('AO003');
+      expect(
+        await refused(`update organisation.site_version set decision = 'Rejected' where id = $1`, [inForce.versionId]),
+      ).toBe('AO003');
+      expect(
+        await refused(
+          `update organisation.site_version set valid_during = daterange(lower(valid_during), lower(valid_during))
+           where id = $1`,
+          [inForce.versionId],
+        ),
+      ).toBe('AO003');
+      // The rows frozen with a version are written only while it awaits its decision (T6).
+      for (const versionId of [rejected.versionId, inForce.versionId]) {
+        expect(
+          await refused(
+            `insert into organisation.site_alias (id, site_version_id, alias) values ($1, $2, 'SYNTHETIC late')`,
+            [uuidv7(), versionId],
+          ),
+        ).toBe('AO003');
+      }
+      // Moving an approved version's end earlier, to after its start, is admitted.
+      await owner.query('begin');
+      await owner.query(
+        `update organisation.site_version set valid_during = daterange(lower(valid_during), $2::date) where id = $1`,
+        [inForce.versionId, setup.day(3)],
+      );
+      await owner.query('rollback');
+    } finally {
+      await owner.end();
+    }
+  });
+
+  it('PRD-MOD-010 a version is approved only while every record it names is in force on its start', async () => {
     const site = prepared(await setup.prepare((c, p) => setup.organisation.prepareSite(c, p, siteDraft())));
     const store = prepared(
       await setup.prepare((c, p) => setup.organisation.prepareStore(c, p, storeDraft(site.recordId))),
@@ -407,7 +543,7 @@ describe('effective-dated versions (structure-and-masters 2.2; code-house-rules 
     decided(await setup.decide(store.requestId, store.versionId));
   });
 
-  it('a record named in a change must exist', async () => {
+  it('PRD-MOD-002 structure-and-masters 3.8 a record named in a change must exist', async () => {
     const missing = uuidv7();
     expect(
       await setup.prepare((c, p) => setup.organisation.prepareSite(c, p, siteDraft({ areaId: missing }))),
@@ -426,6 +562,84 @@ describe('effective-dated versions (structure-and-masters 2.2; code-house-rules 
         }),
       ),
     ).toMatchObject({ kind: 'refusal', refusal: { code: 'organisation.record-not-found' } });
+  });
+});
+
+describe('commands at once (code-house-rules 8.2, 10.3)', () => {
+  it('PRD-MOD-010 two decisions on versions of one master never pass each other: the second waits for the first, then sees it', async () => {
+    const legalEntity = await approvedLegalEntity();
+    // Two versions prepared at once: neither sees the other's open request, so both await a decision (9.6).
+    const prepareHeld = gate();
+    const prepareRelease = gate();
+    const laterPrepared = setup.run(setup.preparer.id, async (context) => {
+      const answer = await setup.organisation.prepareLegalEntityVersion(
+        context,
+        setup.asPreparer,
+        legalEntity.recordId,
+        {
+          legalName: syntheticName('Later'),
+          validFrom: setup.day(5),
+        },
+      );
+      prepareHeld.open();
+      await prepareRelease.wait;
+      return answer;
+    });
+    await prepareHeld.wait;
+    const earlier = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareLegalEntityVersion(c, p, legalEntity.recordId, {
+          legalName: syntheticName('Earlier'),
+          validFrom: setup.day(2),
+        }),
+      ),
+    );
+    prepareRelease.open();
+    const later = prepared(await laterPrepared);
+    // Two different approvers decide them at once; the first holds its locks until the second waits.
+    const secondApprover = await setup.anotherApprover(next('APPROVER'));
+    const held = gate();
+    const release = gate();
+    let firstPid = 0;
+    const first = setup.decide(later.requestId, later.versionId, 'approve', setup.approver, async (context) => {
+      firstPid = await backendPid(context);
+      held.open();
+      await release.wait;
+    });
+    await held.wait;
+    const second = setup.decide(earlier.requestId, earlier.versionId, 'approve', secondApprover);
+    await waitUntilAnyWaitingForLock(world.organisations[0].database, [firstPid]);
+    release.open();
+    decided(await first);
+    decided(await second);
+    // The second saw the first: it ends where the first starts, never overlapping it.
+    const versions = (await recordOf('legal_entity', legalEntity.recordId))?.versions;
+    expect(versions?.map((each) => [each.id, each.validFrom, each.validTo])).toEqual([
+      [later.versionId, setup.day(5), undefined],
+      [earlier.versionId, setup.day(2), setup.day(5)],
+      [legalEntity.versionId, setup.today(), setup.day(2)],
+    ]);
+  });
+
+  it('PRD-MOD-008 structure-and-masters 2.1 two preparations of one code at once: the second is refused as taken, never failed', async () => {
+    const code = syntheticCode(next('RACE'));
+    const draft = { code, legalName: syntheticName('Race'), validFrom: setup.today() };
+    const held = gate();
+    const release = gate();
+    let firstPid = 0;
+    const first = setup.run(setup.preparer.id, async (context) => {
+      const answer = await setup.organisation.prepareLegalEntity(context, setup.asPreparer, draft);
+      firstPid = await backendPid(context);
+      held.open();
+      await release.wait;
+      return answer;
+    });
+    await held.wait;
+    const second = setup.prepare((c, p) => setup.organisation.prepareLegalEntity(c, p, draft));
+    await waitUntilAnyWaitingForLock(world.organisations[0].database, [firstPid]);
+    release.open();
+    prepared(await first);
+    expect(await second).toMatchObject({ kind: 'refusal', refusal: { code: 'organisation.code-taken' } });
   });
 });
 
@@ -513,7 +727,7 @@ describe('Stores at Sites (structure-and-masters 3.3, 3.8)', () => {
       ),
     );
     decided(await setup.decide(link.requestId, link.versionId));
-    const versions = (await listOf('store')).records.find((each) => each.id === storeB.recordId)?.versions;
+    const versions = (await recordOf('store', storeB.recordId))?.versions;
     expect(versions?.map((each) => [each.state, each.siteId])).toEqual([
       ['Scheduled', second.recordId],
       ['In force', first.recordId],

@@ -154,8 +154,8 @@ const stockRecordTypes = [
  * Organisation as a whole, as the records of access changes do, so these types carry no scope fact and the permission
  * on the type decides (5.3): a Site or Store is the place other records are scoped by, not a record scoped by itself.
  * Each master is prepared (create, edit) and approved by a different authorised person (GC2-2, DEC-105). The master
- * lists are a read model with a view of their own (module-map section 3, rule 5); each list in them is shown only
- * where its own type's view is granted too.
+ * lists have no permission of their own: they show each master whose type the reader may view and name the others
+ * (product owner, 8 Oct 2026; module-map section 3, rule 5).
  */
 const organisationRecordTypes = [
   declare('organisation.country', PREPARED, NONE),
@@ -168,7 +168,6 @@ const organisationRecordTypes = [
   declare('organisation.site', PREPARED, NONE),
   declare('organisation.store', PREPARED, NONE),
   declare('organisation.grouping', PREPARED, NONE),
-  declare('organisation.master_list', ['view'], NONE),
 ] as const;
 
 /** Every record type declared so far. */

@@ -1,68 +1,36 @@
+import { masterActionType, masterKinds, masterRecordType, masterRoutes, type MasterKind } from '@apparel-os/schemas';
 import type { MessageId } from '../messages/catalogue';
 
 // The masters of the organisation structure as the Setup screens show them (structure-and-masters 3.1, 3.6, 8;
 // ui-blueprint Setup › Organisation structure and Geography and groupings; S1-F02-T01): each kind's routes, record
 // type and fields. A field fixed at creation is shown in the new record's form only (3.1).
 
-export const kinds = [
-  'country',
-  'state',
-  'city',
-  'area',
-  'legal_entity',
-  'tax_registration',
-  'accounting_book',
-  'site',
-  'store',
-  'grouping',
-] as const;
-export type Kind = (typeof kinds)[number];
+export const kinds = masterKinds;
+export type Kind = MasterKind;
 
-export const listRead = {
-  country: 'listCountries',
-  state: 'listStates',
-  city: 'listCities',
-  area: 'listAreas',
-  legal_entity: 'listLegalEntities',
-  tax_registration: 'listTaxRegistrations',
-  accounting_book: 'listAccountingBooks',
-  site: 'listSites',
-  store: 'listStores',
-  grouping: 'listGroupings',
-} as const satisfies Record<Kind, string>;
+/** Each kind's routes: its paged list, its one-record read, a new record and a new version. */
+export const kindRoutes = masterRoutes;
 
-export const prepareCommand = {
-  country: 'prepareCountry',
-  state: 'prepareState',
-  city: 'prepareCity',
-  area: 'prepareArea',
-  legal_entity: 'prepareLegalEntity',
-  tax_registration: 'prepareTaxRegistration',
-  accounting_book: 'prepareAccountingBook',
-  site: 'prepareSite',
-  store: 'prepareStore',
-  grouping: 'prepareGrouping',
-} as const satisfies Record<Kind, string>;
-
-export const versionCommand = {
-  country: 'prepareCountryVersion',
-  state: 'prepareStateVersion',
-  city: 'prepareCityVersion',
-  area: 'prepareAreaVersion',
-  legal_entity: 'prepareLegalEntityVersion',
-  tax_registration: 'prepareTaxRegistrationVersion',
-  accounting_book: 'prepareAccountingBookVersion',
-  site: 'prepareSiteVersion',
-  store: 'prepareStoreVersion',
-  grouping: 'prepareGroupingVersion',
-} as const satisfies Record<Kind, string>;
-
-export const recordTypeOf = (kind: Kind) => `organisation.${kind}` as const;
+export const recordTypeOf = masterRecordType;
 
 /** The kind of an approval request's action type, `organisation.<kind>.change`, or undefined. */
 export function kindOfActionType(actionType: string): Kind | undefined {
-  return kinds.find((kind) => `organisation.${kind}.change` === actionType);
+  return kinds.find((kind) => masterActionType(kind) === actionType);
 }
+
+/** The words each kind's screens use, each a catalogue entry (code-house-rules 12.13). */
+export const kindText: Readonly<Record<Kind, { readonly add: MessageId; readonly what: MessageId }>> = {
+  country: { add: 'organisation.new.country', what: 'organisation.what.country' },
+  state: { add: 'organisation.new.state', what: 'organisation.what.state' },
+  city: { add: 'organisation.new.city', what: 'organisation.what.city' },
+  area: { add: 'organisation.new.area', what: 'organisation.what.area' },
+  legal_entity: { add: 'organisation.new.legal_entity', what: 'organisation.what.legal_entity' },
+  tax_registration: { add: 'organisation.new.tax_registration', what: 'organisation.what.tax_registration' },
+  accounting_book: { add: 'organisation.new.accounting_book', what: 'organisation.what.accounting_book' },
+  site: { add: 'organisation.new.site', what: 'organisation.what.site' },
+  store: { add: 'organisation.new.store', what: 'organisation.what.store' },
+  grouping: { add: 'organisation.new.grouping', what: 'organisation.what.grouping' },
+};
 
 export interface Option {
   readonly value: string;
@@ -94,9 +62,6 @@ const closingDate: FieldSpec = {
   optional: true,
 };
 const aliases: FieldSpec = { name: 'aliases', label: 'organisation.field.aliases', kind: 'lines' };
-
-const options = (prefix: string, values: readonly string[]): Option[] =>
-  values.map((value) => ({ value, label: `${prefix}.${value}` as MessageId }));
 
 export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
   country: [code, name],
@@ -148,13 +113,13 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
       name: 'physicalKind',
       label: 'organisation.field.physicalKind',
       kind: 'select',
-      options: options('physical-kind', [
-        'head-office',
-        'regional-office',
-        'central-warehouse',
-        'regional-warehouse',
-        'retail-site',
-      ]),
+      options: [
+        { value: 'head-office', label: 'physical-kind.head-office' },
+        { value: 'regional-office', label: 'physical-kind.regional-office' },
+        { value: 'central-warehouse', label: 'physical-kind.central-warehouse' },
+        { value: 'regional-warehouse', label: 'physical-kind.regional-warehouse' },
+        { value: 'retail-site', label: 'physical-kind.retail-site' },
+      ],
     },
     { name: 'areaId', label: 'organisation.field.areaId', kind: 'reference', target: 'area' },
     { name: 'addresses', label: 'organisation.field.addresses', kind: 'lines' },
@@ -169,13 +134,22 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
       name: 'format',
       label: 'organisation.field.format',
       kind: 'select',
-      options: options('store-format', ['mbo', 'ebo', 'shop-in-shop', 'kiosk']),
+      options: [
+        { value: 'mbo', label: 'store-format.mbo' },
+        { value: 'ebo', label: 'store-format.ebo' },
+        { value: 'shop-in-shop', label: 'store-format.shop-in-shop' },
+        { value: 'kiosk', label: 'store-format.kiosk' },
+      ],
     },
     {
       name: 'operatingModel',
       label: 'organisation.field.operatingModel',
       kind: 'select',
-      options: options('operating-model', ['company-owned', 'franchise-owned', 'franchise-owned-company-operated']),
+      options: [
+        { value: 'company-owned', label: 'operating-model.company-owned' },
+        { value: 'franchise-owned', label: 'operating-model.franchise-owned' },
+        { value: 'franchise-owned-company-operated', label: 'operating-model.franchise-owned-company-operated' },
+      ],
     },
     { name: 'siteId', label: 'organisation.field.siteId', kind: 'reference', target: 'site' },
     aliases,
@@ -188,7 +162,10 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
       name: 'kind',
       label: 'organisation.field.groupingKind',
       kind: 'select',
-      options: options('grouping-kind', ['region', 'cluster']),
+      options: [
+        { value: 'region', label: 'grouping-kind.region' },
+        { value: 'cluster', label: 'grouping-kind.cluster' },
+      ],
       fixed: true,
     },
     name,
@@ -203,18 +180,9 @@ export function labelField(kind: Kind): string {
   return 'name';
 }
 
-/** The reads a change makes stale. */
+/** The reads a change makes stale: every master's list and record, the master lists and My work. */
 export const ORGANISATION_READS = [
-  'listCountries',
-  'listStates',
-  'listCities',
-  'listAreas',
-  'listLegalEntities',
-  'listTaxRegistrations',
-  'listAccountingBooks',
-  'listSites',
-  'listStores',
-  'listGroupings',
+  ...kinds.flatMap((kind) => [kindRoutes[kind].list, kindRoutes[kind].read]),
   'readMasterLists',
   'listMyWork',
 ] as const;

@@ -1,40 +1,43 @@
 import { routes, type RecordState } from '@apparel-os/schemas';
-import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
-import { Controller, type UseFormReturn } from 'react-hook-form';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Controller, type FieldValues, type UseFormReturn } from 'react-hook-form';
+import type { z } from 'zod';
 import { api } from '../api';
-import { useSubmission, type CommandName } from '../api/command';
-import { readQuery } from '../api/query';
+import { useSubmission } from '../api/command';
+import { ApiFailure } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
+import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { describedBy, FormField } from '../forms/FormField';
 import { useRouteForm } from '../forms/use-route-form';
 import { AsOf } from '../history/AsOf';
-import { t, type MessageId } from '../messages/catalogue';
+import { t } from '../messages/catalogue';
 import { useBusinessToday } from '../setup/business-date';
 import { formatDate } from '../setup/format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
+import type { DeclaredFields } from '../lock/kept-input';
 import {
   fields,
+  kindRoutes,
+  kindText,
   labelField,
   ORGANISATION_READS,
-  listRead,
-  prepareCommand,
   recordTypeOf,
-  versionCommand,
   type FieldSpec,
   type Kind,
 } from './kinds';
 
 // One master's tab on Setup › Organisation structure or Geography and groupings (structure-and-masters 2.2, 2.3, 8;
 // design-language 10.9, 10.15; S1-F02-T01): the list, each record's version history and the version in force on a
-// chosen date, a new record or a new version prepared for a different authorised person to approve, and the approval
-// of each version opened from its history. A refusal names what is missing (PRD-UXP-003).
+// chosen date, a new record or a new version prepared for a different authorised person to approve, a draft whose
+// start has passed re-dated (GC2-7), and the approval of each version opened from its history. The list is read a page
+// at a time (code-house-rules 12.1). A refusal names what is missing (PRD-UXP-003).
 
 export interface MasterVersion {
   readonly id: string;
@@ -52,9 +55,48 @@ export interface MasterRecord {
   readonly [field: string]: unknown;
 }
 
-interface MasterList {
+/** A page of a master's records and where the next page starts (code-house-rules 12.1). */
+export interface MasterPage {
   readonly asOf: string;
   readonly records: readonly MasterRecord[];
+  readonly next: string | null;
+}
+
+/** One page of a kind's records, after the cursor the server gave, or the refusal thrown as ApiFailure. */
+async function readPage(kind: Kind, after: string | undefined): Promise<MasterPage> {
+  const result = await api.call(kindRoutes[kind].list, { query: after === undefined ? {} : { after } });
+  if (result.ok) return result.data;
+  throw new ApiFailure(result.status, result.error);
+}
+
+/** A master's records, read a page at a time where the reader may view them; Load more reads the next. */
+export function useMasterPages(kind: Kind, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [kindRoutes[kind].list, 'pages'],
+    queryFn: ({ pageParam }) => readPage(kind, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: MasterPage) => last.next ?? undefined,
+    enabled,
+  });
+}
+
+/**
+ * Every record of a kind, for a reference field's choices and names: read page by page until the last, each page
+ * within the cap (code-house-rules 12.1).
+ */
+function useAllRecords(kind: Kind, enabled = true): readonly MasterRecord[] {
+  const query = useInfiniteQuery({
+    queryKey: [kindRoutes[kind].list, 'all'],
+    queryFn: ({ pageParam }) => readPage(kind, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: MasterPage) => last.next ?? undefined,
+    enabled,
+  });
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  return query.data?.pages.flatMap((page) => page.records) ?? [];
 }
 
 const APPROVED: readonly RecordState[] = ['Scheduled', 'In force', 'Ended'];
@@ -67,17 +109,10 @@ export function versionOn(record: MasterRecord, date: string): MasterVersion | u
   );
 }
 
-/** A master's records, read where the reader may view them. */
-export function useMasterList(kind: Kind, enabled = true) {
-  const query = useQuery({ ...readQuery(api, listRead[kind], {}), enabled });
-  return query as typeof query & { data: MasterList | undefined };
-}
-
 /** Each record of a kind by its code and the name of its latest version, for a reference field. */
 export function useNames(kind: Kind, enabled = true): ReadonlyMap<string, string> {
-  const query = useMasterList(kind, enabled);
   return new Map(
-    (query.data?.records ?? []).map((record) => {
+    useAllRecords(kind, enabled).map((record) => {
       const name = record.versions[0]?.[labelField(kind)];
       return [record.id, typeof name === 'string' ? `${record.code} · ${name}` : record.code] as const;
     }),
@@ -319,29 +354,52 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
   );
 }
 
-/** The opening values of a form: a new record's empty lists, or the latest version's fields for a new version. */
-function openingValues(kind: Kind, today: string, record?: MasterRecord): Record<string, unknown> {
-  const values: Record<string, unknown> = { validFrom: today };
+/**
+ * The opening values of a form: a new record's empty lists; for a new version, the fields of the version it starts
+ * from, the latest unless another is named, as when a draft is re-dated (GC2-7).
+ */
+function openingValues(kind: Kind, today: string, record?: MasterRecord, from?: MasterVersion): FieldValues {
+  const values: FieldValues = { validFrom: today };
+  const base = from ?? record?.versions[0];
   for (const spec of fields[kind]) {
     if (record !== undefined && spec.fixed === true) continue;
     if (spec.kind === 'lines' || spec.kind === 'references') values[spec.name] = [];
-    const latest = record?.versions[0];
-    if (latest?.[spec.name] !== undefined) values[spec.name] = latest[spec.name];
+    if (base?.[spec.name] !== undefined) values[spec.name] = base[spec.name];
   }
   return values;
 }
 
-/** A new record with its first version, or a new version of a record (structure-and-masters 2.2, 2.3). */
-function MasterForm({ kind, record }: { kind: Kind; record?: MasterRecord }) {
-  const today = useBusinessToday();
-  const command: CommandName = record === undefined ? prepareCommand[kind] : versionCommand[kind];
-  const formId = `${kind}-${record === undefined ? 'new' : 'version'}-form`;
-  const form = useRouteForm(routes[command] as never, openingValues(kind, today, record) as never, [
-    { path: 'validFrom', earliest: today },
-  ]);
+/** A form's route: its body checked by the route's own schema, its values as the screen holds them (12.2). */
+type FormRoute = DeclaredFields & { readonly body: z.ZodType<unknown, FieldValues> };
+
+/**
+ * The approved Scheduled version a change starting on `start` would stop short of: it ends where that one starts, and
+ * that one keeps its own values (structure-and-masters 2.2; product owner, 8 Oct 2026).
+ */
+export function laterScheduled(record: MasterRecord, start: string): MasterVersion | undefined {
+  return record.versions
+    .filter((version) => version.state === 'Scheduled' && version.validFrom > start)
+    .reduce<MasterVersion | undefined>(
+      (earliest, version) => (earliest === undefined || version.validFrom < earliest.validFrom ? version : earliest),
+      undefined,
+    );
+}
+
+/**
+ * A new record with its first version, or a new version of a record from its latest version or from a draft being
+ * re-dated (structure-and-masters 2.2, 2.3; GC2-7).
+ */
+function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord; from?: MasterVersion }) {
+  const command = record === undefined ? kindRoutes[kind].prepare : kindRoutes[kind].version;
+  const route: FormRoute = routes[command];
   const submission = useSubmission(command, ORGANISATION_READS);
+  const today = useBusinessToday();
+  const formId = `${kind}-${record === undefined ? 'new' : 'version'}-form`;
+  const form = useRouteForm(route, openingValues(kind, today, record, from), [{ path: 'validFrom', earliest: today }]);
   const specs = fields[kind].filter((spec) => record === undefined || spec.fixed !== true);
   const error = form.formState.errors.validFrom as { type?: string } | undefined;
+  const start: unknown = form.watch('validFrom');
+  const later = record === undefined || typeof start !== 'string' ? undefined : laterScheduled(record, start);
   return (
     <form
       id={formId}
@@ -349,8 +407,9 @@ function MasterForm({ kind, record }: { kind: Kind; record?: MasterRecord }) {
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         void form.handleSubmit(async (values) => {
+          // The route's own schema checked the values (routeResolver); the kind, chosen at run time, names the route.
           const input = record === undefined ? { body: values } : { params: { recordId: record.id }, body: values };
-          await submission.submit(input as never);
+          await submission.submit(input as Parameters<typeof submission.submit>[0]);
         })(event);
       }}
     >
@@ -374,6 +433,11 @@ function MasterForm({ kind, record }: { kind: Kind; record?: MasterRecord }) {
           {...form.register('validFrom')}
         />
       </FormField>
+      {later !== undefined && (
+        <Banner tone="warning" role="status" message="organisation.later-version-kept">
+          <span>{t('organisation.later-version-kept-body', { date: formatDate(later.validFrom) })}</span>
+        </Banner>
+      )}
       <FormActions form={formId} pending={submission.state.kind === 'pending'} />
     </form>
   );
@@ -388,7 +452,8 @@ function recordTitle(kind: Kind, record: MasterRecord): string {
 function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRecord; onClose: () => void }) {
   const today = useBusinessToday();
   const [date, setDate] = useState(today);
-  const [changing, setChanging] = useState(false);
+  /** The change being prepared: a new version from the latest, or a re-dated draft (GC2-7). */
+  const [changing, setChanging] = useState<{ readonly from?: MasterVersion } | null>(null);
   const [panel, setPanel] = useState<string | null>(null);
   const fixed = fields[kind].filter((spec) => spec.fixed === true);
   const versionFields = fields[kind].filter((spec) => spec.fixed !== true);
@@ -436,7 +501,7 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
                   </div>
                   <Facts specs={[...versionFields, ...status]} values={version} />
                   {version.request?.state === 'Awaiting approval' && (
-                    <div>
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         size="small"
                         variant="ghost"
@@ -445,7 +510,20 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
                           setPanel(version.request?.id ?? null);
                         }}
                       />
+                      {version.validFrom < today && (
+                        <GrantedButton
+                          label="organisation.redate"
+                          recordType={recordTypeOf(kind)}
+                          action="edit"
+                          onClick={() => {
+                            setChanging({ from: version });
+                          }}
+                        />
+                      )}
                     </div>
+                  )}
+                  {version.request?.state === 'Awaiting approval' && version.validFrom < today && (
+                    <p className="m-0 text-body-sm text-text-2">{t('organisation.redate-help')}</p>
                   )}
                 </li>
               ))}
@@ -453,15 +531,20 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
           </Card>
           {panel !== null && <ApprovalPanel requestId={panel} />}
           <Card title="organisation.change">
-            {changing ? (
-              <MasterForm kind={kind} record={record} />
+            {changing !== null ? (
+              <MasterForm
+                key={changing.from?.id ?? 'latest'}
+                kind={kind}
+                record={record}
+                {...(changing.from === undefined ? {} : { from: changing.from })}
+              />
             ) : (
               <GrantedButton
                 label="organisation.change"
                 recordType={recordTypeOf(kind)}
                 action="edit"
                 onClick={() => {
-                  setChanging(true);
+                  setChanging({});
                 }}
               />
             )}
@@ -488,14 +571,14 @@ const statusSpec: FieldSpec = {
 /** One master's tab: its list and drawers. */
 export function MasterTab({ kind }: { kind: Kind }) {
   const timeZone = useTimeZone();
-  const query = useMasterList(kind);
+  const query = useMasterPages(kind);
   const [open, setOpen] = useState<string | null>(null);
   const place = kind === 'site' || kind === 'store';
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
         <GrantedButton
-          label={`organisation.new.${kind}` as MessageId}
+          label={kindText[kind].add}
           recordType={recordTypeOf(kind)}
           action="create"
           variant="primary"
@@ -511,15 +594,15 @@ export function MasterTab({ kind }: { kind: Kind }) {
           }}
         />
       </Toolbar>
-      <ListRead query={query} what={`organisation.what.${kind}` as MessageId}>
-        {(list: MasterList) => {
-          const shown = list.records.find((record) => record.id === open);
+      <ListRead query={query} what={kindText[kind].what}>
+        {({ pages }) => {
+          const records = pages.flatMap((page) => page.records);
+          const asOf = pages.at(-1)?.asOf;
+          const shown = records.find((record) => record.id === open);
           return (
             <div className="flex flex-col gap-3">
-              <div className="flex justify-end">
-                <AsOf asOf={list.asOf} timeZone={timeZone} />
-              </div>
-              {list.records.length === 0 ? (
+              <div className="flex justify-end">{asOf !== undefined && <AsOf asOf={asOf} timeZone={timeZone} />}</div>
+              {records.length === 0 ? (
                 <EmptyState title="organisation.empty.title" body="organisation.empty.body" />
               ) : (
                 <div className="overflow-x-auto rounded-card border border-border bg-surface">
@@ -538,7 +621,7 @@ export function MasterTab({ kind }: { kind: Kind }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {list.records.map((record) => {
+                      {records.map((record) => {
                         const latest = record.versions[0];
                         const status = latest?.status;
                         return (
@@ -570,6 +653,17 @@ export function MasterTab({ kind }: { kind: Kind }) {
                   </table>
                 </div>
               )}
+              {query.hasNextPage && (
+                <div>
+                  <Button
+                    label="organisation.load-more"
+                    disabled={query.isFetchingNextPage}
+                    onClick={() => {
+                      void query.fetchNextPage();
+                    }}
+                  />
+                </div>
+              )}
               {shown !== undefined && (
                 <MasterDrawer
                   kind={kind}
@@ -585,7 +679,7 @@ export function MasterTab({ kind }: { kind: Kind }) {
       </ListRead>
       {open === 'new' && (
         <RecordDrawer
-          title={t(`organisation.new.${kind}`)}
+          title={t(kindText[kind].add)}
           onClose={() => {
             setOpen(null);
           }}

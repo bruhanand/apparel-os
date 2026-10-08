@@ -1,4 +1,4 @@
-import { routes, type CommandRoute, type MasterLists } from '@apparel-os/schemas';
+import { routes, type CommandRoute, type MasterLists, type MasterPageQuery } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -19,15 +19,16 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import { ACCESS, SignedIn, type AccessInterface, type SignedInUser } from '../../access/index.js';
-import type { Prepared, PreparedVersion, Preparer } from '../commands/changes.js';
+import type { Prepared, Preparer } from '../commands/common.js';
+import type { PreparedVersion } from '../commands/prepare.js';
 import { masterKinds, recordTypeOf, type MasterKind } from '../domain/kinds.js';
-import type { MasterList, OrganisationInterface } from '../organisation.js';
+import type { OrganisationInterface } from '../organisation.js';
 import { ORGANISATION } from '../tokens.js';
 
 /**
  * The routes of the organisation structure (structure-and-masters 2.3, 3.8, 8; module-map 4.11; code-house-rules
- * 12.1): each master's list with its version history, preparing a new master or a new version, and the master lists
- * read model. Authenticate and Authorise ran in the guard on the route's action and type, which carries no scope fact
+ * 12.1): each master's records with their version history, a page at a time or one record, preparing a new master
+ * or a new version, and the master lists read model. Authenticate and Authorise ran in the guard on the route's action and type, which carries no scope fact
  * (access-and-approvals 5.3, 7.1); each command runs under its idempotency key, holds its preparer's authority at step
  * 0, and a replay is answered only while the same Authorise still passes (12.4, CH-14). No rule of its own.
  */
@@ -40,56 +41,121 @@ export class StructureController {
     @Inject(ORGANISATION) private readonly organisation: OrganisationInterface,
   ) {}
 
-  // The lists (structure-and-masters 8).
+  // The lists, a page at a time, and one record at a time (structure-and-masters 8; code-house-rules 12.1).
 
   @ApiRoute(routes.listCountries)
-  listCountries(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'country');
+  listCountries(@RouteInput() input: RouteInputOf<typeof routes.listCountries>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'country', input.query);
+  }
+
+  @ApiRoute(routes.readCountry)
+  readCountry(@RouteInput() input: RouteInputOf<typeof routes.readCountry>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'country', input.params.recordId);
   }
 
   @ApiRoute(routes.listStates)
-  listStates(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'state');
+  listStates(@RouteInput() input: RouteInputOf<typeof routes.listStates>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'state', input.query);
+  }
+
+  @ApiRoute(routes.readState)
+  readState(@RouteInput() input: RouteInputOf<typeof routes.readState>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'state', input.params.recordId);
   }
 
   @ApiRoute(routes.listCities)
-  listCities(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'city');
+  listCities(@RouteInput() input: RouteInputOf<typeof routes.listCities>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'city', input.query);
+  }
+
+  @ApiRoute(routes.readCity)
+  readCity(@RouteInput() input: RouteInputOf<typeof routes.readCity>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'city', input.params.recordId);
   }
 
   @ApiRoute(routes.listAreas)
-  listAreas(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'area');
+  listAreas(@RouteInput() input: RouteInputOf<typeof routes.listAreas>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'area', input.query);
+  }
+
+  @ApiRoute(routes.readArea)
+  readArea(@RouteInput() input: RouteInputOf<typeof routes.readArea>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'area', input.params.recordId);
   }
 
   @ApiRoute(routes.listLegalEntities)
-  listLegalEntities(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'legal_entity');
+  listLegalEntities(
+    @RouteInput() input: RouteInputOf<typeof routes.listLegalEntities>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'legal_entity', input.query);
+  }
+
+  @ApiRoute(routes.readLegalEntity)
+  readLegalEntity(@RouteInput() input: RouteInputOf<typeof routes.readLegalEntity>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'legal_entity', input.params.recordId);
   }
 
   @ApiRoute(routes.listTaxRegistrations)
-  listTaxRegistrations(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'tax_registration');
+  listTaxRegistrations(
+    @RouteInput() input: RouteInputOf<typeof routes.listTaxRegistrations>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'tax_registration', input.query);
+  }
+
+  @ApiRoute(routes.readTaxRegistration)
+  readTaxRegistration(
+    @RouteInput() input: RouteInputOf<typeof routes.readTaxRegistration>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'tax_registration', input.params.recordId);
   }
 
   @ApiRoute(routes.listAccountingBooks)
-  listAccountingBooks(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'accounting_book');
+  listAccountingBooks(
+    @RouteInput() input: RouteInputOf<typeof routes.listAccountingBooks>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'accounting_book', input.query);
+  }
+
+  @ApiRoute(routes.readAccountingBook)
+  readAccountingBook(
+    @RouteInput() input: RouteInputOf<typeof routes.readAccountingBook>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'accounting_book', input.params.recordId);
   }
 
   @ApiRoute(routes.listSites)
-  listSites(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'site');
+  listSites(@RouteInput() input: RouteInputOf<typeof routes.listSites>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'site', input.query);
+  }
+
+  @ApiRoute(routes.readSite)
+  readSite(@RouteInput() input: RouteInputOf<typeof routes.readSite>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'site', input.params.recordId);
   }
 
   @ApiRoute(routes.listStores)
-  listStores(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'store');
+  listStores(@RouteInput() input: RouteInputOf<typeof routes.listStores>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'store', input.query);
+  }
+
+  @ApiRoute(routes.readStore)
+  readStore(@RouteInput() input: RouteInputOf<typeof routes.readStore>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'store', input.params.recordId);
   }
 
   @ApiRoute(routes.listGroupings)
-  listGroupings(@SignedIn() user: SignedInUser) {
-    return this.list(user, 'grouping');
+  listGroupings(@RouteInput() input: RouteInputOf<typeof routes.listGroupings>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'grouping', input.query);
+  }
+
+  @ApiRoute(routes.readGrouping)
+  readGrouping(@RouteInput() input: RouteInputOf<typeof routes.readGrouping>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'grouping', input.params.recordId);
   }
 
   // New masters (structure-and-masters 2.3, 3.1).
@@ -289,8 +355,8 @@ export class StructureController {
 
   /**
    * The master lists (module-map 4.11; phases.md stage 1 reports): each master's version in force on the date, read
-   * under the reader's own authorisation (module-map section 3, rule 5): a list whose type the reader may not view is
-   * left out and named (PRD-UXP-003).
+   * under the reader's own authorisation (module-map section 3, rule 5). They need no permission of their own: a list
+   * whose type the reader may not view is left out and named (product owner, 8 Oct 2026; PRD-UXP-003).
    */
   @ApiRoute(routes.readMasterLists)
   async readMasterLists(
@@ -298,8 +364,8 @@ export class StructureController {
     @SignedIn() user: SignedInUser,
   ): Promise<MasterLists> {
     const date = input.query.date;
-    return this.read(user, 'organisation.read-master-lists', async (context, today) => {
-      const structure = await this.organisation.structureOn(context, today, date);
+    return this.read(user, 'organisation.read-master-lists', async (context) => {
+      const structure = await this.organisation.structureOn(context, date);
       const notShown: string[] = [];
       for (const kind of masterKinds) {
         const authorised = await this.access.authorise(context, {
@@ -328,11 +394,28 @@ export class StructureController {
     });
   }
 
-  private list<K extends MasterKind>(user: SignedInUser, kind: K) {
+  private list<K extends MasterKind>(user: SignedInUser, kind: K, query: MasterPageQuery) {
+    const page = { after: query.after, limit: query.limit === undefined ? undefined : Number(query.limit) };
     return this.read(user, `organisation.list-${kind.replaceAll('_', '-')}`, async (context, today) => ({
       asOf: context.startedAt.toISOString(),
-      ...(await this.organisation.list(context, kind, today)),
-    })) as Promise<MasterList<K> & { asOf: string }>;
+      ...(await this.organisation.list(context, kind, today, page)),
+    }));
+  }
+
+  /** One record, or not found, naming it (PRD-UXP-003). */
+  private async one<K extends MasterKind>(user: SignedInUser, kind: K, recordId: string) {
+    const answer = await this.read(user, `organisation.read-${kind.replaceAll('_', '-')}`, async (context, today) => ({
+      asOf: context.startedAt.toISOString(),
+      record: await this.organisation.record(context, kind, recordId, today),
+    }));
+    if (answer.record === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'organisation.record-not-found',
+        missing: [{ kind: 'record', recordType: recordTypeOf(kind), recordId }],
+      });
+    }
+    return { asOf: answer.asOf, record: answer.record };
   }
 
   private async read<Answer>(

@@ -1,4 +1,6 @@
+import type { GroupingKind, OperatingModel, PhysicalKind, PlaceStatus, StoreFormat } from '@apparel-os/schemas';
 import { customType, date, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { Decision } from '../domain/kinds.js';
 
 // Drizzle definitions of the organisation module's tables (code-house-rules 3.4). They mirror the reviewed migration
 // (migrations/organisation/0028) and never create or change a table; an integration test compares each with the
@@ -18,7 +20,7 @@ const daterange = customType<{ data: string; driverData: string }>({
 const versionColumns = () => ({
   id: uuid('id').primaryKey(),
   validDuring: daterange('valid_during').notNull(),
-  decision: text('decision').notNull(),
+  decision: text('decision').$type<Decision>().notNull(),
   preparedByUserId: uuid('prepared_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
@@ -91,12 +93,12 @@ export const siteVersion = organisation.table('site_version', {
   ...versionColumns(),
   siteId: uuid('site_id').notNull(),
   name: text('name').notNull(),
-  physicalKind: text('physical_kind').notNull(),
+  physicalKind: text('physical_kind').$type<PhysicalKind>().notNull(),
   areaId: uuid('area_id').notNull(),
   addresses: text('addresses').array().notNull(),
   openingDate: date('opening_date', { mode: 'string' }),
   closingDate: date('closing_date', { mode: 'string' }),
-  status: text('status').notNull(),
+  status: text('status').$type<PlaceStatus>().notNull(),
 });
 export const siteAlias = organisation.table('site_alias', {
   id: uuid('id').primaryKey(),
@@ -110,12 +112,12 @@ export const storeVersion = organisation.table('store_version', {
   ...versionColumns(),
   storeId: uuid('store_id').notNull(),
   name: text('name').notNull(),
-  format: text('format').notNull(),
-  operatingModel: text('operating_model').notNull(),
+  format: text('format').$type<StoreFormat>().notNull(),
+  operatingModel: text('operating_model').$type<OperatingModel>().notNull(),
   siteId: uuid('site_id').notNull(),
   openingDate: date('opening_date', { mode: 'string' }),
   closingDate: date('closing_date', { mode: 'string' }),
-  status: text('status').notNull(),
+  status: text('status').$type<PlaceStatus>().notNull(),
 });
 export const storeAlias = organisation.table('store_alias', {
   id: uuid('id').primaryKey(),
@@ -124,7 +126,10 @@ export const storeAlias = organisation.table('store_alias', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-export const grouping = organisation.table('grouping', { ...identityColumns(), kind: text('kind').notNull() });
+export const grouping = organisation.table('grouping', {
+  ...identityColumns(),
+  kind: text('kind').$type<GroupingKind>().notNull(),
+});
 export const groupingVersion = organisation.table('grouping_version', {
   ...versionColumns(),
   groupingId: uuid('grouping_id').notNull(),

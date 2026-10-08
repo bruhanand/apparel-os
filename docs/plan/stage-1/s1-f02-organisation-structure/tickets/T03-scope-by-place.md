@@ -13,6 +13,7 @@ Role assignments can select legal entities, Sites, Stores and business units, th
 - **The place tree** (5.2; `PRD-ACS-021`, `DEC-094`, `DEC-098`): a selected Site covers every Store and unit at it, including ones added later; a selected Store covers every unit of it, including ones added later; a selected unit covers only itself; all members covers future members; an empty dimension grants nothing (`PRD-ACS-005`).
 - **Authorise** (5.3, 7.1): matches the Site, Store, unit and legal entity facts a record carries, one assignment per action (`PRD-ACS-004`); an Unknown fact is covered only by all members; the legal entity comes from the unit's mapping version, never from the Site (`POL-10.01`). A refusal names the place or legal entity missing (`PRD-UXP-003`).
 - **Effective grants and row-level security** (7.2; house rules 6.2): grants carry place and legal-entity identifiers, matched by equality against each row's facts, so SQL never expands the tree and places added later are covered.
+- **Site and Store records place-scoped** (structure-and-masters 6.1; product owner, 8 Oct 2026): the `organisation.site` and `organisation.store` record types, unscoped as built in `S1-F02-T01`, declare their place facts and are authorised by them, together with approval requests carrying the document's scope facts (RR-435).
 - **Screen** (access-and-approvals 14): the assignment editor of S1-F01-T16 shows the place scope as the tree, and says that a selected Site covers Stores and units added later, and a selected Store covers units added later.
 
 ## Expected outputs

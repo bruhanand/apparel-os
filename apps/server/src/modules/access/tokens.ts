@@ -6,6 +6,7 @@ export const DEMO_SIGN_IN = 'access.DemoSignIn';
 
 /**
  * The token of every module's approval rules and decision effects (access-and-approvals 8, 9.8b; module-map section 3,
- * rule 6), a `ModuleApprovals` the composition root provides. Optional: with none, access knows only its own rules.
+ * rule 6), a `ModuleApprovals` the composition root provides. Required by AccessModule, so the application refuses
+ * to start without it.
  */
 export const MODULE_APPROVALS = 'access.ModuleApprovals';

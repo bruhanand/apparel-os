@@ -18,22 +18,29 @@
 create schema organisation;
 grant usage on schema organisation to aos_runtime;
 
--- The guard of an effective-dated version row (code-house-rules 7.3), as access.guard_version_change: any change to a
--- version still Awaiting approval; on an Approved version only moving the end of valid_during earlier, never to or
--- before its start. A Rejected version never changes. No version of these masters is withdrawn yet (RR-202): the
--- withdrawal document arrives with the first master that needs it (structure-and-masters 2.3).
+-- The guard of an effective-dated version row (code-house-rules 7.3). A version is frozen when it is prepared
+-- (structure-and-masters 6.1), so a version Awaiting approval changes only by its decision being recorded, once:
+-- Approved or Rejected, nothing else changed, except that an approved version may take an end with it, where an
+-- approved version of the same master starts after it (structure-and-masters 2.2; product owner, 8 Oct 2026). An
+-- Approved version changes only by moving the end of valid_during earlier, never to or before its start. A Rejected
+-- version never changes. No version of these masters is withdrawn yet (RR-202, RR-439): the withdrawal document
+-- arrives with the first master that needs it (structure-and-masters 2.3).
 create function organisation.guard_version_change() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
 declare
-  old_rest jsonb := pg_catalog.to_jsonb(old) - 'valid_during';
-  new_rest jsonb := pg_catalog.to_jsonb(new) - 'valid_during';
+  old_rest jsonb := pg_catalog.to_jsonb(old) - 'valid_during' - 'decision';
+  new_rest jsonb := pg_catalog.to_jsonb(new) - 'valid_during' - 'decision';
 begin
-  if old.decision = 'Awaiting approval' then
+  if old.decision = 'Awaiting approval' and new.decision in ('Approved', 'Rejected') and new_rest = old_rest
+     and pg_catalog.lower(new.valid_during) is not distinct from pg_catalog.lower(old.valid_during)
+     and (new.valid_during = old.valid_during
+          or (new.decision = 'Approved' and pg_catalog.upper_inf(old.valid_during)
+              and pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during))) then
     return new;
   end if;
-  if old.decision = 'Approved' and new_rest = old_rest
+  if old.decision = 'Approved' and new.decision = 'Approved' and new_rest = old_rest
      and pg_catalog.lower(new.valid_during) is not distinct from pg_catalog.lower(old.valid_during)
      and (new.valid_during = old.valid_during
           or (pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during)
@@ -41,11 +48,33 @@ begin
                    or pg_catalog.upper(new.valid_during) < pg_catalog.upper(old.valid_during)))) then
     return new;
   end if;
-  raise exception 'a decided version of %.% changes only as code-house-rules 7.3 allows', tg_table_schema, tg_table_name
+  raise exception 'a version of %.% changes only as code-house-rules 7.3 allows', tg_table_schema, tg_table_name
     using errcode = 'AO003';
 end;
 $$;
 revoke execute on function organisation.guard_version_change() from public;
+
+-- The rows a version freezes with it, aliases and grouping members, are written while it is prepared: a row naming a
+-- version that is already decided is refused (structure-and-masters 6.1; code-house-rules 7.3). The trigger's
+-- arguments name the version table and the row's column that names the version.
+create function organisation.refuse_after_decision() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+declare
+  decided text;
+begin
+  execute pg_catalog.format('select decision from organisation.%I where id = $1', tg_argv[0])
+    into decided
+    using (pg_catalog.to_jsonb(new) ->> tg_argv[1])::uuid;
+  if decided is distinct from 'Awaiting approval' then
+    raise exception 'a row of %.% is frozen with its version, which is decided', tg_table_schema, tg_table_name
+      using errcode = 'AO003';
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function organisation.refuse_after_decision() from public;
 
 -- Geography (structure-and-masters 3.6; PRD-ORG-007, PRD-ORG-011): Country, State, City and Area, each fixed to its
 -- parent at creation, its code unique under its parent; the countries are the Organisation's own. Each level's name
@@ -92,7 +121,6 @@ create table organisation.state (
   constraint state_code check (code <> ''),
   constraint state_code_in_country unique (country_id, code)
 );
-create index state_country on organisation.state (country_id);
 create trigger refuse_row_change before update or delete on organisation.state
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.state
@@ -127,7 +155,6 @@ create table organisation.city (
   constraint city_code check (code <> ''),
   constraint city_code_in_state unique (state_id, code)
 );
-create index city_state on organisation.city (state_id);
 create trigger refuse_row_change before update or delete on organisation.city
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.city
@@ -153,7 +180,7 @@ create index city_version_prepared_by on organisation.city_version (prepared_by_
 create trigger guard_version_change before update on organisation.city_version
   for each row execute function organisation.guard_version_change();
 
--- A area, fixed to its city; its code unique in its city (structure-and-masters 3.1, 6.1).
+-- An area, fixed to its city; its code unique in its city (structure-and-masters 3.1, 6.1).
 create table organisation.area (
   id uuid primary key,
   city_id uuid not null references organisation.city (id),
@@ -162,13 +189,12 @@ create table organisation.area (
   constraint area_code check (code <> ''),
   constraint area_code_in_city unique (city_id, code)
 );
-create index area_city on organisation.area (city_id);
 create trigger refuse_row_change before update or delete on organisation.area
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.area
   for each statement execute function kernel.refuse_change();
 
--- A area's name, effective-dated (structure-and-masters 2.2).
+-- An area's name, effective-dated (structure-and-masters 2.2).
 create table organisation.area_version (
   id uuid primary key,
   area_id uuid not null references organisation.area (id),
@@ -355,11 +381,12 @@ create table organisation.site_alias (
   constraint site_alias_text check (alias <> ''),
   constraint site_alias_once unique (site_version_id, alias)
 );
-create index site_alias_version on organisation.site_alias (site_version_id);
 create trigger refuse_row_change before update or delete on organisation.site_alias
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.site_alias
   for each statement execute function kernel.refuse_change();
+create trigger refuse_after_decision before insert on organisation.site_alias
+  for each row execute function organisation.refuse_after_decision('site_version', 'site_version_id');
 
 -- A Store: a trading business at a Site (structure-and-masters 3.1, 3.3; PRD-ORG-021).
 create table organisation.store (
@@ -417,11 +444,12 @@ create table organisation.store_alias (
   constraint store_alias_text check (alias <> ''),
   constraint store_alias_once unique (store_version_id, alias)
 );
-create index store_alias_version on organisation.store_alias (store_version_id);
 create trigger refuse_row_change before update or delete on organisation.store_alias
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.store_alias
   for each statement execute function kernel.refuse_change();
+create trigger refuse_after_decision before insert on organisation.store_alias
+  for each row execute function organisation.refuse_after_decision('store_version', 'store_version_id');
 
 -- A grouping of Stores: a region or a cluster, its kind fixed at creation (structure-and-masters 3.6; PRD-ORG-007).
 -- Another kind waits for the configuration that names it.
@@ -467,12 +495,13 @@ create table organisation.grouping_member (
   recorded_at timestamptz not null default now(),
   constraint grouping_member_once unique (grouping_version_id, store_id)
 );
-create index grouping_member_version on organisation.grouping_member (grouping_version_id);
 create index grouping_member_store on organisation.grouping_member (store_id);
 create trigger refuse_row_change before update or delete on organisation.grouping_member
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on organisation.grouping_member
   for each statement execute function kernel.refuse_change();
+create trigger refuse_after_decision before insert on organisation.grouping_member
+  for each row execute function organisation.refuse_after_decision('grouping_version', 'grouping_version_id');
 
 -- Runtime grants (code-house-rules 5.2). An identity row is append-only and locked: a decision locks it at step 1, so
 -- two decisions on one master never pass each other (8.2), hence UPDATE on its identifier only (7.1). A version row

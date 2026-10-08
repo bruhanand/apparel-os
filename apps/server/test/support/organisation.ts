@@ -43,13 +43,19 @@ export interface StructureSetup {
   prepare(
     work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion>>,
   ): Promise<Prepared<PreparedVersion>>;
-  /** Decides a request, as the approver unless another user is named, with the approve or reject reason in force. */
+  /**
+   * Decides a request, as the approver unless another user is named, with the approve or reject reason in force.
+   * `hold` runs in the decision's transaction after Decide, while its locks are held (code-house-rules 10.3).
+   */
   decide(
     requestId: string,
     versionId: string,
     outcome?: 'approve' | 'reject',
     by?: SyntheticUser,
+    hold?: (context: TransactionContext) => Promise<void>,
   ): Promise<DecisionOutcome>;
+  /** Another enrolled approver, holding view and approve on every organisation type. */
+  anotherApprover(label: string): Promise<SyntheticUser>;
   /** Today under the synthetic timezone (Etc/UTC), on this setup's clock. */
   today(): string;
   /** The day so many days from today, on this setup's clock. */
@@ -96,18 +102,21 @@ export async function structureSetup(options: {
   const preparer = await write(`${options.label}-PREPARER`);
   const approver = await write(`${options.label}-APPROVER`);
   const types = masterKinds.map(recordTypeOf);
-  const { assignmentId } = await grantSynthetic(options.database, { kind: 'user', id: preparer.id }, [
-    ...types.flatMap((recordType) => PREPARE.map((action) => ({ recordType, action }))),
-    { recordType: 'organisation.master_list', action: 'view' },
-  ]);
-  await grantSynthetic(
+  const { assignmentId } = await grantSynthetic(
     options.database,
-    { kind: 'user', id: approver.id },
-    types.flatMap((recordType) => [
-      { recordType, action: 'view' as const },
-      { recordType, action: 'approve' as const },
-    ]),
+    { kind: 'user', id: preparer.id },
+    types.flatMap((recordType) => PREPARE.map((action) => ({ recordType, action }))),
   );
+  const grantApprove = (user: SyntheticUser) =>
+    grantSynthetic(
+      options.database,
+      { kind: 'user', id: user.id },
+      types.flatMap((recordType) => [
+        { recordType, action: 'view' as const },
+        { recordType, action: 'approve' as const },
+      ]),
+    );
+  await grantApprove(approver);
   const approveReason = await writeSyntheticReason(options.database, 'approve');
   const rejectReason = await writeSyntheticReason(options.database, 'reject');
   let offsetMs = 0;
@@ -132,12 +141,12 @@ export async function structureSetup(options: {
     asPreparer,
     run,
     prepare: (work) => run(preparer.id, (context) => work(context, asPreparer)),
-    decide: (requestId, versionId, outcome = 'approve', by = approver) => {
+    decide: (requestId, versionId, outcome = 'approve', by = approver, hold) => {
       offsetMs += 30_000;
       if (by.factorSecret === undefined) throw new Error('not enrolled');
       const totpCode = codeFor(by.factorSecret, 0, now());
-      return run(by.id, (context) =>
-        access.decide(
+      return run(by.id, async (context) => {
+        const decided = await access.decide(
           context,
           { kind: 'user', id: by.id },
           {
@@ -147,8 +156,15 @@ export async function structureSetup(options: {
             reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
             totpCode,
           },
-        ),
-      );
+        );
+        await hold?.(context);
+        return decided;
+      });
+    },
+    anotherApprover: async (label) => {
+      const user = await write(`${options.label}-${label}`);
+      await grantApprove(user);
+      return user;
     },
     today: () => now().toISOString().slice(0, 10),
     day: (daysFromToday) => new Date(now().getTime() + daysFromToday * DAY_MS).toISOString().slice(0, 10),

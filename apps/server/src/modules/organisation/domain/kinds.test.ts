@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindOfActionType, organisationApprovalRules, versionState } from './kinds.js';
+import { organisationApprovalRules, versionState } from './kinds.js';
 
 // The state a master version shows (design-language 7; DM-4, DEC-105; code-house-rules 7.3) and the approval rules of
 // master changes (access-and-approvals 8; structure-and-masters 2.3; GC2-2, DEC-105).
@@ -25,7 +25,6 @@ describe('the approval rules of master changes', () => {
     for (const rule of organisationApprovalRules) {
       expect(rule).toMatchObject({ module: 'organisation', independent: true, value: 'none', synthetic: false });
       expect(rule.actionType).toBe(`${rule.recordType}.change`);
-      expect(kindOfActionType(rule.actionType)).toBe(rule.recordType.slice('organisation.'.length));
     }
   });
 });

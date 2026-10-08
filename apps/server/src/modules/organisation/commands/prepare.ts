@@ -8,8 +8,8 @@ import type {
   GroupingVersionDraft,
   LegalEntityDraft,
   LegalEntityVersionDraft,
-  MissingItem,
   NameVersionDraft,
+  PlaceStatus,
   SiteDraft,
   SiteVersionDraft,
   StateDraft,
@@ -18,15 +18,9 @@ import type {
   TaxRegistrationDraft,
   TaxRegistrationVersionDraft,
 } from '@apparel-os/schemas';
-import { and, eq, sql } from 'drizzle-orm';
-import { lockTable, type CommandRefusal, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
-import type {
-  AccessInterface,
-  DocumentEffect,
-  EffectDecider,
-  EffectOutcome,
-  ModuleApprovals,
-} from '../../access/index.js';
+import { and, eq, sql, type AnyColumn } from 'drizzle-orm';
+import { sqlStateOf, type TransactionContext } from '../../../kernel/index.js';
+import type { AccessInterface } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import {
   accountingBook,
@@ -54,29 +48,12 @@ import {
   taxRegistrationVersion,
 } from '../db/schema.js';
 import { masterTables } from '../db/tables.js';
-import {
-  actionTypeOf,
-  masterKinds,
-  organisationApprovalRules,
-  recordTypeOf,
-  type MasterKind,
-} from '../domain/kinds.js';
-import { structureChanged } from '../events.js';
+import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
+import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
 
 // Maintain the structure (structure-and-masters 2.2, 2.3, 3.8; module-map 4.11, 6.2 flow A; S1-F02-T01): a draft
-// version, saved Awaiting approval with its approval request in the preparing command's transaction; then, in the
-// decision's transaction, the version taking effect from its start, or rejected, with its audit record and
-// `organisation.structure-changed`. Independent approval is access's rule (GC2-2, DEC-105; PRD-ACS-006).
-
-/** The user preparing a change, and the assignment Authorise used (access-and-approvals 7.1 step 3, 9.1). */
-export interface Preparer {
-  readonly userId: string;
-  readonly roleAssignmentId: string;
-}
-
-export type Prepared<Answer> =
-  | { readonly kind: 'success'; readonly answer: Answer }
-  | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
+// version, saved Awaiting approval with its approval request in the preparing command's transaction. A different
+// authorised person decides it (GC2-2, DEC-105; PRD-ACS-006), and the decision's effect is in effects.ts.
 
 /** What preparing answers: the record, its draft version and the approval request. */
 export interface PreparedVersion {
@@ -85,48 +62,13 @@ export interface PreparedVersion {
   readonly requestId: string;
 }
 
-function refusal<Answer>(kind: CommandRefusal['kind'], code: string, missing: MissingItem[] = []): Prepared<Answer> {
-  return { kind: 'refusal', refusal: { kind, code, missing } };
-}
-
-const notFound = (kind: MasterKind, id: string): MissingItem => ({
-  kind: 'record',
-  recordType: recordTypeOf(kind),
-  recordId: id,
-});
-
-/** Today under the Organisation's timezone, or the refusal while it has none (PRD-MOD-009; code-house-rules 9). */
-async function today(context: TransactionContext): Promise<string | CommandRefusal> {
-  const date = await context.businessDate();
-  if (date.kind === 'set') return date.date;
-  return {
-    kind: 'unavailable',
-    code: 'access.business-date-not-set',
-    missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-  };
-}
-
-/** A version's dates: from its start, open-ended until the next version starts (code-house-rules 7.3). */
-const from = (start: string) => `[${start},)`;
-
-/** Whether a record of a kind exists. */
-async function exists(context: TransactionContext, kind: MasterKind, id: string): Promise<boolean> {
-  const tables = masterTables[kind];
-  const rows = await context.tx
-    .select({ id: tables.identityId })
-    .from(tables.identity)
-    .where(eq(tables.identityId, id));
-  return rows.length > 0;
-}
-
-/** A record another one refers to. */
-interface Reference {
-  readonly kind: MasterKind;
+/** The columns every version row is written with. */
+interface CommonColumns {
   readonly id: string;
+  readonly validDuring: string;
+  readonly decision: 'Awaiting approval';
+  readonly preparedByUserId: string;
 }
-
-/** The rows a version freezes with it, written after the version row. */
-type Children = (context: TransactionContext, versionId: string) => Promise<void>;
 
 interface Change {
   readonly kind: MasterKind;
@@ -135,29 +77,41 @@ interface Change {
   readonly references: readonly Reference[];
   /** The changed fields, for the audit record (numbering-and-audit 4.1). */
   readonly changes: readonly AuditChange[];
-  readonly writeVersion: (
-    context: TransactionContext,
-    common: { id: string; validDuring: string; decision: string; preparedByUserId: string },
-    recordId: string,
-  ) => Promise<void>;
-  readonly children?: Children;
+  readonly writeVersion: (context: TransactionContext, common: CommonColumns, recordId: string) => Promise<void>;
+  /** The rows the version freezes with it, written after the version row. */
+  readonly children?: (context: TransactionContext, versionId: string) => Promise<void>;
 }
 
 interface NewRecord {
-  /** Whether the code is already a record's in its scope (structure-and-masters 2.1). */
-  readonly codeTaken: (context: TransactionContext) => Promise<boolean>;
+  readonly code: string;
+  /** The code's scope (structure-and-masters 2.1): the parent it is unique under, or the Organisation. */
+  readonly under?: { readonly column: AnyColumn; readonly id: string };
   readonly writeIdentity: (context: TransactionContext, id: string) => Promise<void>;
   /** The fixed fields, for the audit record. */
   readonly changes: readonly AuditChange[];
 }
 
-const value = (field: string, after: unknown): AuditChange =>
-  ({ kind: 'value', field, before: null, after: after ?? null }) as AuditChange;
+type ValueChange = Extract<AuditChange, { kind: 'value' }>;
+
+const value = (field: string, after: ValueChange['after']): ValueChange => ({
+  kind: 'value',
+  field,
+  before: null,
+  after,
+});
 
 const optionalDate = (date: string | undefined) => date ?? null;
 
 /** A kind as the audit record's operation names it, such as `legal-entity` (numbering-and-audit 4.1). */
-const operationName = (kind: MasterKind) => kind.replaceAll('_', '-');
+export const operationName = (kind: MasterKind) => kind.replaceAll('_', '-');
+
+/** A version's dates: from its start, open-ended until the next version starts (code-house-rules 7.3). */
+const from = (start: string) => `[${start},)`;
+
+const UNIQUE_VIOLATION = '23505';
+
+/** The kinds whose versions hold only a name. */
+export type NamedKind = 'country' | 'state' | 'city' | 'area' | 'accounting_book';
 
 /**
  * Preparing new masters and new versions (structure-and-masters 2.2, 2.3; module-map 4.11 "Maintain the structure").
@@ -166,7 +120,7 @@ const operationName = (kind: MasterKind) => kind.replaceAll('_', '-');
  */
 export class StructurePreparation {
   constructor(
-    private readonly audit: AuditInterface,
+    protected readonly audit: AuditInterface,
     private readonly access: Pick<AccessInterface, 'requestApproval'>,
   ) {}
 
@@ -189,9 +143,10 @@ export class StructurePreparation {
     }
     let recordId: string;
     if (record.kind === 'new') {
-      if (await record.fixed.codeTaken(context)) return refusal('refused', 'organisation.code-taken');
       recordId = uuidv7();
-      await record.fixed.writeIdentity(context, recordId);
+      if (!(await this.writeNew(context, change.kind, record.fixed, recordId))) {
+        return refusal('refused', 'organisation.code-taken');
+      }
     } else {
       recordId = record.id;
     }
@@ -222,7 +177,8 @@ export class StructurePreparation {
       ],
       source: { kind: 'screen' },
     });
-    // The preparer is the one person who recorded the version, which is frozen when it is prepared (9.1; GC3-1).
+    // The preparer is the one person who recorded the version, which is frozen when it is prepared (9.1; GC3-1). A
+    // request still open on an earlier version of the record is Superseded (access-and-approvals 9.6).
     const requestId = await this.access.requestApproval(context, {
       actionType: actionTypeOf(change.kind),
       document: { module: 'organisation', recordType: recordTypeOf(change.kind), recordId, versionId },
@@ -233,32 +189,67 @@ export class StructurePreparation {
     return { kind: 'success', answer: { recordId, versionId, requestId } };
   }
 
-  /** Whether a code is a record's already, for a master whose code is unique in the Organisation (2.1). */
-  private codeTakenIn(kind: MasterKind, code: string) {
+  /**
+   * Writes a new record's identity row, unless its code is already a record's in its scope (structure-and-masters
+   * 2.1). Two preparations of one code at once: the second meets the unique constraint under a savepoint and is
+   * refused as taken, never failed.
+   */
+  private async writeNew(
+    context: TransactionContext,
+    kind: MasterKind,
+    fixed: NewRecord,
+    recordId: string,
+  ): Promise<boolean> {
     const tables = masterTables[kind];
-    return async (context: TransactionContext) =>
-      (await context.tx.select({ id: tables.identityId }).from(tables.identity).where(eq(tables.identityCode, code)))
-        .length > 0;
+    const taken = await context.tx
+      .select({ id: tables.identityId })
+      .from(tables.identity)
+      .where(
+        and(
+          eq(tables.identityCode, fixed.code),
+          fixed.under === undefined ? undefined : eq(fixed.under.column, fixed.under.id),
+        ),
+      );
+    if (taken.length > 0) return false;
+    await context.tx.execute(sql`savepoint organisation_new_record`);
+    try {
+      await fixed.writeIdentity(context, recordId);
+      await context.tx.execute(sql`release savepoint organisation_new_record`);
+      return true;
+    } catch (error) {
+      if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
+      await context.tx.execute(sql`rollback to savepoint organisation_new_record`);
+      return false;
+    }
   }
 
-  // Geography (3.6; PRD-ORG-007, PRD-ORG-011).
+  // Geography (3.6; PRD-ORG-007, PRD-ORG-011) and books' names (3.2).
 
-  private nameChange(kind: 'country' | 'state' | 'city' | 'area' | 'accounting_book', draft: NameVersionDraft): Change {
-    const versionTables = {
-      country: [countryVersion, 'countryId'],
-      state: [stateVersion, 'stateId'],
-      city: [cityVersion, 'cityId'],
-      area: [areaVersion, 'areaId'],
-      accounting_book: [accountingBookVersion, 'accountingBookId'],
-    } as const;
-    const [table, owner] = versionTables[kind];
+  private nameChange(kind: NamedKind, draft: NameVersionDraft): Change {
+    const name = draft.name;
     return {
       kind,
       validFrom: draft.validFrom,
       references: [],
-      changes: [value('name', draft.name)],
+      changes: [value('name', name)],
       writeVersion: async (context, common, recordId) => {
-        await context.tx.insert(table).values({ ...common, [owner]: recordId, name: draft.name } as never);
+        switch (kind) {
+          case 'country':
+            await context.tx.insert(countryVersion).values({ ...common, countryId: recordId, name });
+            return;
+          case 'state':
+            await context.tx.insert(stateVersion).values({ ...common, stateId: recordId, name });
+            return;
+          case 'city':
+            await context.tx.insert(cityVersion).values({ ...common, cityId: recordId, name });
+            return;
+          case 'area':
+            await context.tx.insert(areaVersion).values({ ...common, areaId: recordId, name });
+            return;
+          case 'accounting_book':
+            await context.tx.insert(accountingBookVersion).values({ ...common, accountingBookId: recordId, name });
+            return;
+        }
       },
     };
   }
@@ -267,7 +258,7 @@ export class StructurePreparation {
     return this.prepare(context, preparer, this.nameChange('country', draft), {
       kind: 'new',
       fixed: {
-        codeTaken: (c) => this.codeTakenIn('country', draft.code)(c),
+        code: draft.code,
         writeIdentity: async (c, id) => {
           await c.tx.insert(country).values({ id, code: draft.code });
         },
@@ -284,13 +275,8 @@ export class StructurePreparation {
     return this.prepare(context, preparer, change, {
       kind: 'new',
       fixed: {
-        codeTaken: async (c) =>
-          (
-            await c.tx
-              .select({ id: state.id })
-              .from(state)
-              .where(and(eq(state.countryId, draft.countryId), eq(state.code, draft.code)))
-          ).length > 0,
+        code: draft.code,
+        under: { column: state.countryId, id: draft.countryId },
         writeIdentity: async (c, id) => {
           await c.tx.insert(state).values({ id, code: draft.code, countryId: draft.countryId });
         },
@@ -304,13 +290,8 @@ export class StructurePreparation {
     return this.prepare(context, preparer, change, {
       kind: 'new',
       fixed: {
-        codeTaken: async (c) =>
-          (
-            await c.tx
-              .select({ id: city.id })
-              .from(city)
-              .where(and(eq(city.stateId, draft.stateId), eq(city.code, draft.code)))
-          ).length > 0,
+        code: draft.code,
+        under: { column: city.stateId, id: draft.stateId },
         writeIdentity: async (c, id) => {
           await c.tx.insert(city).values({ id, code: draft.code, stateId: draft.stateId });
         },
@@ -324,13 +305,8 @@ export class StructurePreparation {
     return this.prepare(context, preparer, change, {
       kind: 'new',
       fixed: {
-        codeTaken: async (c) =>
-          (
-            await c.tx
-              .select({ id: area.id })
-              .from(area)
-              .where(and(eq(area.cityId, draft.cityId), eq(area.code, draft.code)))
-          ).length > 0,
+        code: draft.code,
+        under: { column: area.cityId, id: draft.cityId },
         writeIdentity: async (c, id) => {
           await c.tx.insert(area).values({ id, code: draft.code, cityId: draft.cityId });
         },
@@ -343,7 +319,7 @@ export class StructurePreparation {
   prepareNameVersion(
     context: TransactionContext,
     preparer: Preparer,
-    kind: 'country' | 'state' | 'city' | 'area' | 'accounting_book',
+    kind: NamedKind,
     recordId: string,
     draft: NameVersionDraft,
   ) {
@@ -370,7 +346,7 @@ export class StructurePreparation {
     return this.prepare(context, preparer, this.legalEntityChange(draft), {
       kind: 'new',
       fixed: {
-        codeTaken: (c) => this.codeTakenIn('legal_entity', draft.code)(c),
+        code: draft.code,
         writeIdentity: async (c, id) => {
           await c.tx.insert(legalEntity).values({ id, code: draft.code });
         },
@@ -421,7 +397,7 @@ export class StructurePreparation {
       {
         kind: 'new',
         fixed: {
-          codeTaken: (c) => this.codeTakenIn('tax_registration', draft.code)(c),
+          code: draft.code,
           writeIdentity: async (c, id) => {
             await c.tx.insert(taxRegistration).values({ id, code: draft.code, legalEntityId: draft.legalEntityId });
           },
@@ -449,7 +425,7 @@ export class StructurePreparation {
     return this.prepare(context, preparer, change, {
       kind: 'new',
       fixed: {
-        codeTaken: (c) => this.codeTakenIn('accounting_book', draft.code)(c),
+        code: draft.code,
         writeIdentity: async (c, id) => {
           await c.tx.insert(accountingBook).values({ id, code: draft.code, legalEntityId: draft.legalEntityId });
         },
@@ -464,7 +440,7 @@ export class StructurePreparation {
    * A Site version. Its status is not prepared: a new Site starts Setting up, and a later version keeps the status of
    * the one before it, since the lifecycle events that change it belong to `site-lifecycle` (3.7; module-map 4.16).
    */
-  private siteChange(draft: SiteVersionDraft, status: (context: TransactionContext) => Promise<string>): Change {
+  private siteChange(draft: SiteVersionDraft, status: (context: TransactionContext) => Promise<PlaceStatus>): Change {
     return {
       kind: 'site',
       validFrom: draft.validFrom,
@@ -508,7 +484,7 @@ export class StructurePreparation {
       {
         kind: 'new',
         fixed: {
-          codeTaken: (c) => this.codeTakenIn('site', draft.code)(c),
+          code: draft.code,
           writeIdentity: async (c, id) => {
             await c.tx.insert(site).values({ id, code: draft.code });
           },
@@ -528,7 +504,7 @@ export class StructurePreparation {
   }
 
   /** A Store version, with its Site link (3.3); its status as for a Site. */
-  private storeChange(draft: StoreVersionDraft, status: (context: TransactionContext) => Promise<string>): Change {
+  private storeChange(draft: StoreVersionDraft, status: (context: TransactionContext) => Promise<PlaceStatus>): Change {
     return {
       kind: 'store',
       validFrom: draft.validFrom,
@@ -572,7 +548,7 @@ export class StructurePreparation {
       {
         kind: 'new',
         fixed: {
-          codeTaken: (c) => this.codeTakenIn('store', draft.code)(c),
+          code: draft.code,
           writeIdentity: async (c, id) => {
             await c.tx.insert(store).values({ id, code: draft.code });
           },
@@ -615,8 +591,7 @@ export class StructurePreparation {
     return this.prepare(context, preparer, this.groupingChange(draft), {
       kind: 'new',
       fixed: {
-        codeTaken: async (c) =>
-          (await c.tx.select({ id: grouping.id }).from(grouping).where(eq(grouping.code, draft.code))).length > 0,
+        code: draft.code,
         writeIdentity: async (c, id) => {
           await c.tx.insert(grouping).values({ id, code: draft.code, kind: draft.kind });
         },
@@ -639,7 +614,11 @@ export class StructurePreparation {
  * The status of a Site's or Store's latest approved version, or Setting up while it has none (3.7): a new version
  * keeps it, since only lifecycle events change it.
  */
-async function latestStatus(context: TransactionContext, kind: 'site' | 'store', recordId: string): Promise<string> {
+async function latestStatus(
+  context: TransactionContext,
+  kind: 'site' | 'store',
+  recordId: string,
+): Promise<PlaceStatus> {
   const table = kind === 'site' ? siteVersion : storeVersion;
   const owner = kind === 'site' ? siteVersion.siteId : storeVersion.storeId;
   const [latest] = await context.tx
@@ -649,241 +628,4 @@ async function latestStatus(context: TransactionContext, kind: 'site' | 'store',
     .orderBy(sql`lower(${table.validDuring}) desc`)
     .limit(1);
   return latest?.status ?? 'Setting up';
-}
-
-/** The records a version names, which must be in force on its start when it is approved. */
-async function referencesOf(
-  context: TransactionContext,
-  kind: MasterKind,
-  recordId: string,
-  versionId: string,
-): Promise<Reference[]> {
-  switch (kind) {
-    case 'country':
-    case 'legal_entity':
-      return [];
-    case 'state': {
-      const [row] = await context.tx.select({ id: state.countryId }).from(state).where(eq(state.id, recordId));
-      return row === undefined ? [] : [{ kind: 'country', id: row.id }];
-    }
-    case 'city': {
-      const [row] = await context.tx.select({ id: city.stateId }).from(city).where(eq(city.id, recordId));
-      return row === undefined ? [] : [{ kind: 'state', id: row.id }];
-    }
-    case 'area': {
-      const [row] = await context.tx.select({ id: area.cityId }).from(area).where(eq(area.id, recordId));
-      return row === undefined ? [] : [{ kind: 'city', id: row.id }];
-    }
-    case 'tax_registration': {
-      const [row] = await context.tx
-        .select({ legalEntityId: taxRegistration.legalEntityId, stateId: taxRegistrationVersion.stateId })
-        .from(taxRegistrationVersion)
-        .innerJoin(taxRegistration, eq(taxRegistration.id, taxRegistrationVersion.taxRegistrationId))
-        .where(eq(taxRegistrationVersion.id, versionId));
-      return row === undefined
-        ? []
-        : [
-            { kind: 'legal_entity', id: row.legalEntityId },
-            { kind: 'state', id: row.stateId },
-          ];
-    }
-    case 'accounting_book': {
-      const [row] = await context.tx
-        .select({ id: accountingBook.legalEntityId })
-        .from(accountingBook)
-        .where(eq(accountingBook.id, recordId));
-      return row === undefined ? [] : [{ kind: 'legal_entity', id: row.id }];
-    }
-    case 'site': {
-      const [row] = await context.tx
-        .select({ id: siteVersion.areaId })
-        .from(siteVersion)
-        .where(eq(siteVersion.id, versionId));
-      return row === undefined ? [] : [{ kind: 'area', id: row.id }];
-    }
-    case 'store': {
-      const [row] = await context.tx
-        .select({ id: storeVersion.siteId })
-        .from(storeVersion)
-        .where(eq(storeVersion.id, versionId));
-      return row === undefined ? [] : [{ kind: 'site', id: row.id }];
-    }
-    case 'grouping': {
-      const rows = await context.tx
-        .select({ id: groupingMember.storeId })
-        .from(groupingMember)
-        .where(eq(groupingMember.groupingVersionId, versionId));
-      return rows.map((row) => ({ kind: 'store' as const, id: row.id }));
-    }
-  }
-}
-
-/** Whether a record has an approved version in force on a date (structure-and-masters 2.2). */
-export async function inForceOn(
-  context: TransactionContext,
-  kind: MasterKind,
-  recordId: string,
-  date: string,
-): Promise<boolean> {
-  const tables = masterTables[kind];
-  const rows = await context.tx
-    .select({ id: tables.versionId })
-    .from(tables.version)
-    .where(
-      and(eq(tables.owner, recordId), eq(tables.decision, 'Approved'), sql`${tables.validDuring} @> ${date}::date`),
-    );
-  return rows.length > 0;
-}
-
-/**
- * What a decision does to a master version (module-map 6.2 flow A; access-and-approvals 9.8b): the effect `access`
- * runs in the decision's transaction, under the locks Decide took.
- */
-export class StructureEffects {
-  constructor(private readonly audit: AuditInterface) {}
-
-  /** The master the version is of; fixed once written, so it is read before the locks. */
-  private async versionOf(
-    context: TransactionContext,
-    kind: MasterKind,
-    versionId: string,
-  ): Promise<{ recordId: string; decision: string; start: string } | undefined> {
-    const tables = masterTables[kind];
-    const [row] = await context.tx
-      .select({
-        recordId: sql<string>`${tables.owner}`,
-        decision: sql<string>`${tables.decision}`,
-        start: sql<string>`lower(${tables.validDuring})::text`,
-      })
-      .from(tables.version)
-      .where(eq(tables.versionId, versionId));
-    return row;
-  }
-
-  /**
-   * The rows a decision locks with the request at step 1 (code-house-rules 8.2): the master's identity row, so two
-   * decisions on versions of one master never pass each other. Every version of the master changes only under it.
-   */
-  async targets(context: TransactionContext, kind: MasterKind, versionId: string): Promise<LockTarget[]> {
-    const version = await this.versionOf(context, kind, versionId);
-    return version === undefined
-      ? []
-      : [{ table: lockTable('organisation', kind), id: version.recordId, mode: 'exclusive' }];
-  }
-
-  /**
-   * Makes an approved version take effect from its start (structure-and-masters 2.2; code-house-rules 7.3), rechecked
-   * under the master's lock: still Awaiting approval; not starting on a past date, or refused, to be prepared again
-   * from today or later (GC2-7, DEC-105); no approved version, a Scheduled one included, starting on or after its
-   * start; every record it names in force on its start. The approved version in force or Scheduled at its start ends
-   * there. A record it names stays in force once it is: an approved version ends only where the next one starts, and
-   * none is withdrawn yet, so no later change opens a gap under it.
-   */
-  async approve(
-    context: TransactionContext,
-    decider: EffectDecider,
-    kind: MasterKind,
-    versionId: string,
-  ): Promise<EffectOutcome> {
-    const version = await this.versionOf(context, kind, versionId);
-    if (version === undefined) return refusal('not-found', 'organisation.record-not-found');
-    if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
-    const date = await today(context);
-    if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-    if (version.start < date) return refusal('refused', 'organisation.starts-in-past');
-    const tables = masterTables[kind];
-    const [later] = await context.tx
-      .select({ id: tables.versionId })
-      .from(tables.version)
-      .where(
-        and(
-          eq(tables.owner, version.recordId),
-          eq(tables.decision, 'Approved'),
-          sql`lower(${tables.validDuring}) >= ${version.start}::date`,
-        ),
-      )
-      .limit(1);
-    if (later !== undefined) {
-      return refusal('refused', 'organisation.version-overlaps', [
-        { kind: 'version', recordType: recordTypeOf(kind), recordId: version.recordId, versionId: String(later.id) },
-      ]);
-    }
-    for (const reference of await referencesOf(context, kind, version.recordId, versionId)) {
-      if (!(await inForceOn(context, reference.kind, reference.id, version.start))) {
-        return refusal('refused', 'organisation.reference-not-in-force', [
-          { kind: 'approval', recordType: recordTypeOf(reference.kind), recordId: reference.id },
-        ]);
-      }
-    }
-    await context.tx.execute(
-      sql`update ${tables.version} set valid_during = daterange(lower(valid_during), ${version.start}::date)
-          where ${tables.owner} = ${version.recordId}::uuid and decision = 'Approved'
-            and valid_during @> ${version.start}::date`,
-    );
-    await context.tx.execute(sql`update ${tables.version} set decision = 'Approved' where id = ${versionId}::uuid`);
-    await this.recordDecision(context, decider, kind, version.recordId, versionId, 'Approved');
-    await context.publish(structureChanged, {
-      subject: { module: 'organisation', recordType: recordTypeOf(kind), recordId: version.recordId, versionId },
-      payload: { recordType: recordTypeOf(kind), recordId: version.recordId, versionId },
-    });
-    return { kind: 'success', answer: { recordId: version.recordId } };
-  }
-
-  /** Records a version Rejected; it never takes effect (access-and-approvals 9.5). */
-  async reject(
-    context: TransactionContext,
-    decider: EffectDecider,
-    kind: MasterKind,
-    versionId: string,
-  ): Promise<EffectOutcome> {
-    const version = await this.versionOf(context, kind, versionId);
-    if (version === undefined) return refusal('not-found', 'organisation.record-not-found');
-    if (version.decision !== 'Awaiting approval') return refusal('conflict', 'kernel.stale-version');
-    const tables = masterTables[kind];
-    await context.tx.execute(sql`update ${tables.version} set decision = 'Rejected' where id = ${versionId}::uuid`);
-    await this.recordDecision(context, decider, kind, version.recordId, versionId, 'Rejected');
-    return { kind: 'success', answer: { recordId: version.recordId } };
-  }
-
-  private async recordDecision(
-    context: TransactionContext,
-    decider: EffectDecider,
-    kind: MasterKind,
-    recordId: string,
-    versionId: string,
-    decision: 'Approved' | 'Rejected',
-  ): Promise<void> {
-    await this.audit.record(context, {
-      actor: decider.actor,
-      ...(decider.roleAssignmentId === undefined ? {} : { roleAssignmentId: decider.roleAssignmentId }),
-      ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),
-      ...(decider.reason === undefined ? {} : { reason: decider.reason }),
-      record: { module: 'organisation', type: kind, id: recordId, versionId },
-      operation:
-        decision === 'Approved' ? `approve-${operationName(kind)}-version` : `reject-${operationName(kind)}-version`,
-      changes: [{ kind: 'value', field: 'decision', before: 'Awaiting approval', after: decision }],
-      source: { kind: 'screen' },
-    });
-  }
-}
-
-/**
- * The approval rules and decision effects `organisation` declares to `access` (access-and-approvals 8, 9.8b;
- * module-map section 3, rule 6), which the composition root hands to `access` at start.
- */
-export function organisationApprovals(audit: AuditInterface): ModuleApprovals {
-  const effects = new StructureEffects(audit);
-  return {
-    rules: organisationApprovalRules,
-    effects: new Map<string, DocumentEffect>(
-      masterKinds.map((kind) => [
-        actionTypeOf(kind),
-        {
-          targets: (c, v) => effects.targets(c, kind, v),
-          approve: (c, d, v) => effects.approve(c, d, kind, v),
-          reject: (c, d, v) => effects.reject(c, d, kind, v),
-        },
-      ]),
-    ),
-  };
 }

@@ -1,33 +1,27 @@
-import type { RecordState } from '@apparel-os/schemas';
-import type { ApprovalRule } from '../../access/index.js';
+import {
+  masterActionType,
+  masterKinds,
+  masterRecordType,
+  type MasterKind,
+  type RecordState,
+} from '@apparel-os/schemas';
+import type { ApprovalRule, LatestRequest } from '../../access/index.js';
 
 // The masters of the organisation structure built so far (structure-and-masters 3.1, 6.1; S1-F02-T01), each an
-// identity table and a version table of the schema `organisation`.
+// identity table and a version table of the schema `organisation`. The list of kinds is the schemas package's, which
+// the routes and the screens read too.
 
-export const masterKinds = [
-  'country',
-  'state',
-  'city',
-  'area',
-  'legal_entity',
-  'tax_registration',
-  'accounting_book',
-  'site',
-  'store',
-  'grouping',
-] as const;
-export type MasterKind = (typeof masterKinds)[number];
+export { masterKinds };
+export type { MasterKind };
 
 /** The record type a master is authorised, audited and approved on (access-and-approvals 4.1). */
-export const recordTypeOf = (kind: MasterKind) => `organisation.${kind}` as const;
+export const recordTypeOf = masterRecordType;
 
 /** The action type of a change to a master: one approval rule each (access-and-approvals 8). */
-export const actionTypeOf = (kind: MasterKind) => `organisation.${kind}.change` as const;
+export const actionTypeOf = masterActionType;
 
-/** The kind whose action type this is, or undefined. */
-export function kindOfActionType(actionType: string): MasterKind | undefined {
-  return masterKinds.find((kind) => actionTypeOf(kind) === actionType);
-}
+/** A version's decision (code-house-rules 7.3; structure-and-masters 2.3). */
+export type Decision = 'Awaiting approval' | 'Approved' | 'Rejected';
 
 /**
  * The approval rule of each master change (access-and-approvals 8; structure-and-masters 2.3): approve on the master's
@@ -47,14 +41,14 @@ export const organisationApprovalRules: readonly ApprovalRule[] = masterKinds.ma
 
 /** What decides the state a version shows (design-language 7; DM-4, DEC-105; code-house-rules 7.3). */
 export interface VersionFacts {
-  readonly decision: string;
+  readonly decision: Decision;
   /** The first day, and the day after the last, YYYY-MM-DD; no end while open-ended. */
   readonly start: string;
   readonly end?: string | undefined;
   /** Today under the Organisation's timezone (PRD-MOD-009). */
   readonly today: string;
   /** The state of the version's latest approval request: Superseded when a later version replaced it (9.6). */
-  readonly requestState?: string | undefined;
+  readonly requestState?: LatestRequest['state'] | undefined;
 }
 
 /** The state a screen shows for a version. Business dates as YYYY-MM-DD compare as text. */
@@ -66,7 +60,7 @@ export function versionState(version: VersionFacts): RecordState {
       if (version.start > version.today) return 'Scheduled';
       if (version.end !== undefined && version.end <= version.today) return 'Ended';
       return 'In force';
-    default:
+    case 'Awaiting approval':
       return version.requestState === 'Superseded' ? 'Superseded' : 'Awaiting approval';
   }
 }
