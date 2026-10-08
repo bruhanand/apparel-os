@@ -1,4 +1,10 @@
-import type { AssignmentScope, PermissionAction, RecordTypeDeclaration } from '@apparel-os/schemas';
+import type {
+  AssignmentScope,
+  PermissionAction,
+  PlaceMember,
+  PlaceType,
+  RecordTypeDeclaration,
+} from '@apparel-os/schemas';
 
 // Scope: the canonical key of an exact scope, matching a record's facts, and the effective grants of one assignment
 // (access-and-approvals 5, 7.2; code-house-rules 7.3; DEC-112, CH-7). Pure: no database, no clock.
@@ -7,11 +13,6 @@ type DimensionScope<Member> =
   | { readonly kind: 'all' }
   | { readonly kind: 'selected'; readonly members: readonly Member[] }
   | { readonly kind: 'empty' };
-
-interface PlaceMember {
-  readonly type: 'site' | 'store' | 'business-unit';
-  readonly id: string;
-}
 
 function keyPart<Member>(scope: DimensionScope<Member>, name: (member: Member) => string): string {
   if (scope.kind !== 'selected') return scope.kind;
@@ -51,7 +52,7 @@ export type ScopeDimension = 'legal-entity' | 'place' | 'brand' | 'own-records';
 
 /** A fact of a record that a scope does not cover: a place, a legal entity or a brand, by type and identifier. */
 export interface UncoveredFact {
-  readonly type: 'site' | 'store' | 'business-unit' | 'legal-entity' | 'brand';
+  readonly type: PlaceType | 'legal-entity' | 'brand';
   readonly id: string;
 }
 
@@ -129,6 +130,34 @@ export function scopeCovers(
     return uncovered('brand', facts.brandId === undefined ? undefined : { type: 'brand', id: facts.brandId });
   }
   return { covered: true };
+}
+
+/** A fact the change gives the record, where it is not the fact the record carries now. */
+const changed = (now: string | undefined, after: string | undefined) => (after === now ? undefined : after);
+
+/**
+ * Whether one scope covers a record and the facts a change under preparation or decision moves it to, such as a Store
+ * version linking it to another Site, or a unit's mapping to another legal entity (structure-and-masters 6.1;
+ * product owner, 9 Oct 2026): both must be covered, by the same assignment (PRD-ACS-004). When the facts moved to are
+ * not covered, a place refusal names the place the change moves the record to, not one it keeps (PRD-UXP-003).
+ */
+export function scopeCoversMove(
+  scope: AssignmentScope,
+  recordType: RecordTypeDeclaration,
+  actorId: string,
+  facts: RecordFacts,
+  movesTo: RecordFacts | undefined,
+): Coverage {
+  const now = scopeCovers(scope, recordType, actorId, facts);
+  if (!now.covered || movesTo === undefined) return now;
+  const after = scopeCovers(scope, recordType, actorId, movesTo);
+  if (after.covered || after.dimension !== 'place') return after;
+  const moved = placeFactOf({
+    siteId: changed(facts.siteId, movesTo.siteId),
+    storeId: changed(facts.storeId, movesTo.storeId),
+    businessUnitId: changed(facts.businessUnitId, movesTo.businessUnitId),
+  });
+  return uncovered('place', moved ?? after.fact);
 }
 
 /** A permission of a role version as `access` stores it: actions only matter for grants (4.1). */

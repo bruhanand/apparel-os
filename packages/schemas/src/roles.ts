@@ -77,6 +77,9 @@ export const placeMemberSchema = z.strictObject({
   type: z.enum(['site', 'store', 'business-unit']),
   id: idSchema,
 });
+export type PlaceMember = z.infer<typeof placeMemberSchema>;
+/** The place types a scope selects and a record carries: Site, Store and business unit (PRD-ACS-021). */
+export type PlaceType = PlaceMember['type'];
 
 /**
  * One dimension of a scope (PRD-ACS-005, POL-02.02): all members, which includes later members; selected members,

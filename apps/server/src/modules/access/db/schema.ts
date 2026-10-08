@@ -377,6 +377,13 @@ export const approvalRequest = access.table('approval_request', {
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id'),
   brandId: uuid('brand_id'),
+  // The facts the version under approval moves the document to, where they differ, such as a Store linked to another
+  // Site: eligibility matches both (structure-and-masters 6.1; product owner, 9 Oct 2026). Null when it moves nowhere.
+  movesToLegalEntityId: uuid('moves_to_legal_entity_id'),
+  movesToSiteId: uuid('moves_to_site_id'),
+  movesToStoreId: uuid('moves_to_store_id'),
+  movesToBusinessUnitId: uuid('moves_to_business_unit_id'),
+  movesToBrandId: uuid('moves_to_brand_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

@@ -62,7 +62,7 @@ import {
   taxRegistrationVersion,
 } from '../db/schema.js';
 import { masterTables } from '../db/tables.js';
-import { isPlaceScoped, placeFactsOf, type PlaceFacts } from '../queries/scope.js';
+import { placeFactsOfRecord, type PlaceFacts } from '../queries/scope.js';
 import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
 import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
 import {
@@ -110,6 +110,11 @@ interface Change {
   readonly children?: (context: TransactionContext, versionId: string, recordId: string) => Promise<void>;
   /** The kind's own rules, checked before anything is written (structure-and-masters 3.3 to 3.6; rules.ts). */
   readonly check?: (context: TransactionContext) => Promise<CommandRefusal | undefined>;
+  /**
+   * The place facts the version moves a place-scoped record to, from those it carries now: a Store version's Site, or
+   * a unit's mapping's legal entity (structure-and-masters 6.1; product owner, 9 Oct 2026).
+   */
+  readonly movesTo?: (facts: PlaceFacts) => PlaceFacts;
 }
 
 interface NewRecord {
@@ -139,17 +144,6 @@ export const operationName = (kind: MasterKind) => kind.replaceAll('_', '-');
 const from = (start: string) => `[${start},)`;
 
 const UNIQUE_VIOLATION = '23505';
-
-/** A place-scoped record's place facts on the date, or undefined for a kind that carries none (6.1). */
-export async function recordScope(
-  context: TransactionContext,
-  kind: MasterKind,
-  recordId: string,
-  date: string,
-): Promise<PlaceFacts | undefined> {
-  if (!isPlaceScoped(kind)) return undefined;
-  return (await placeFactsOf(context, kind, [recordId], date)).get(recordId) ?? {};
-}
 
 /** The kinds whose versions hold only a name. */
 export type NamedKind = 'country' | 'state' | 'city' | 'area' | 'accounting_book';
@@ -209,7 +203,10 @@ export class StructurePreparation {
     await change.children?.(context, versionId, recordId);
     // A place-scoped record's facts go with its audit record and its approval request, so its history is read and its
     // change decided within a scope that covers them (structure-and-masters 6.1; access-and-approvals 9.1; RR-435).
-    const facts = await recordScope(context, change.kind, recordId, date);
+    const facts = await placeFactsOfRecord(context, change.kind, recordId, date);
+    // Where the version moves the record, its request keeps where to as well, so its approver covers both (6.1).
+    const after = facts === undefined ? undefined : change.movesTo?.(facts);
+    const movesTo = after !== undefined && facts !== undefined && moves(facts, after) ? after : undefined;
     await this.audit.record(context, {
       ...(facts === undefined ? {} : { scope: facts }),
       actor: { kind: 'user', id: preparer.userId },
@@ -235,6 +232,7 @@ export class StructurePreparation {
       preparers: [preparer.userId],
       requestedBy: preparer,
       ...(facts === undefined ? {} : { facts }),
+      ...(movesTo === undefined ? {} : { movesTo }),
     });
     return { kind: 'success', answer: { recordId, versionId, requestId } };
   }
@@ -559,6 +557,7 @@ export class StructurePreparation {
       kind: 'store',
       validFrom: draft.validFrom,
       references: [{ kind: 'site', id: draft.siteId }],
+      movesTo: (facts) => ({ ...facts, siteId: draft.siteId }),
       changes: [
         value('name', draft.name),
         value('format', draft.format),
@@ -677,6 +676,7 @@ export class StructurePreparation {
       kind: 'business_unit',
       validFrom: draft.validFrom,
       references: mapping === undefined ? [] : mappingReferences(mapping),
+      ...(mapping === undefined ? {} : { movesTo: mappedTo(mapping) }),
       changes: [value('name', draft.name), ...(mapping === undefined ? [] : mappingChanges(mapping))],
       writeVersion: async (context, common, recordId) => {
         await context.tx.insert(businessUnitVersion).values({
@@ -819,6 +819,7 @@ export class StructurePreparation {
         kind: 'business_unit_mapping',
         validFrom: draft.validFrom,
         references: mappingReferences(mapping),
+        movesTo: mappedTo(mapping),
         changes: mappingChanges(mapping),
         writeVersion: async (c, common, recordId) => {
           await c.tx
@@ -971,6 +972,18 @@ const mappingOf = (draft: MappingFields): MappingFields => ({
   taxRegistrationId: draft.taxRegistrationId,
   accountingBookId: draft.accountingBookId,
 });
+
+/** A unit's facts under a mapping: of the legal entity it names (POL-10.01). */
+const mappedTo =
+  (mapping: MappingFields) =>
+  (facts: PlaceFacts): PlaceFacts => ({ ...facts, legalEntityId: mapping.legalEntityId });
+
+/** Whether the facts moved to differ from those a record carries now. */
+const moves = (now: PlaceFacts, after: PlaceFacts) =>
+  now.legalEntityId !== after.legalEntityId ||
+  now.siteId !== after.siteId ||
+  now.storeId !== after.storeId ||
+  now.businessUnitId !== after.businessUnitId;
 
 const mappingReferences = (mapping: MappingFields): Reference[] => [
   { kind: 'legal_entity', id: mapping.legalEntityId },

@@ -414,6 +414,58 @@ describe('scope by place over the routes (access-and-approvals 5.3, 7.1, 9.3; st
     expect((await decide(await version(mine.recordId), storeApprover)).status).toBe(200);
   });
 
+  it('PRD-ACS-004 PRD-UXP-003 a Store version that moves it to another Site is authorised at both Sites: a preparer or an approver covering only one is refused, naming the other', async () => {
+    const from = await approved('/api/organisation/sites', siteBody());
+    const toBody = siteBody();
+    const to = await approved('/api/organisation/sites', toBody);
+    const moving = await approved('/api/organisation/stores', storeBody(from.recordId));
+    const sites = (...ids: string[]): AssignmentScope => ({
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'selected', members: ids.map((id) => ({ type: 'site' as const, id })) },
+      brand: { kind: 'all' },
+    });
+    const moveBody = {
+      name: syntheticName('Store at another Site'),
+      format: 'ebo',
+      operatingModel: 'company-owned',
+      siteId: to.recordId,
+      aliases: [],
+      validFrom: new Date(clock.now().getTime() + 86_400_000).toISOString().slice(0, 10),
+    };
+    const preparer = await enrolled('MOVE-PREPARER', [{ recordType: 'organisation.store', action: 'edit' }], {
+      scope: sites(from.recordId),
+    });
+    const refused = await post(preparer, `/api/organisation/stores/${moving.recordId}/versions`, moveBody);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'access.not-authorised',
+        missing: [{ kind: 'scope', dimension: 'place', factType: 'site', factId: to.recordId, factCode: toBody.code }],
+      },
+    });
+    // The request keeps both Sites: an approver covering only the old one is not eligible; one covering both decides.
+    const prepared = await prepare(`/api/organisation/stores/${moving.recordId}/versions`, moveBody);
+    const approvingAt = (label: string, ...ids: string[]) =>
+      enrolled(
+        label,
+        [
+          { recordType: 'organisation.store', action: 'view' },
+          { recordType: 'organisation.store', action: 'approve' },
+        ],
+        { scope: sites(...ids) },
+      );
+    const oldSiteOnly = await approvingAt('MOVE-OLD-SITE', from.recordId);
+    expect((await decide(prepared, oldSiteOnly)).body).toMatchObject({
+      error: {
+        code: 'access.not-eligible',
+        missing: [{ kind: 'scope', dimension: 'place', factType: 'site', factId: to.recordId }],
+      },
+    });
+    const bothSites = await approvingAt('MOVE-BOTH-SITES', from.recordId, to.recordId);
+    expect((await decide(prepared, bothSites)).status).toBe(200);
+  });
+
   it('PRD-ACS-021 a Site-scoped preparer prepares a Store at its Site, and is refused a Store at another Site, with the place named', async () => {
     const mySite = await approved('/api/organisation/sites', siteBody());
     const otherSiteBody = siteBody();

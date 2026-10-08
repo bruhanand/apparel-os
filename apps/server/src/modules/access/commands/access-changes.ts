@@ -4,6 +4,7 @@ import type {
   MissingItem,
   AssignmentWithdrawalDraft,
   Permission,
+  PlaceMember,
   RecordTypeDeclaration,
   RoleAssignmentDraft,
   RoleDraft,
@@ -994,7 +995,7 @@ function membersByDimension(scope: Extract<AssignmentScope, { kind: 'dimensions'
   ) => ({ dimension, kind: part.kind, members: part.kind === 'selected' ? part.members.map(typed) : [] });
   return [
     ofKind('legal-entity', scope.legalEntity, (id: string): ScopeMember => ({ type: 'legal-entity', id })),
-    ofKind('place', scope.place, (member: { type: 'site' | 'store' | 'business-unit'; id: string }) => member),
+    ofKind('place', scope.place, (member: PlaceMember) => member),
     ofKind('brand', scope.brand, (id: string): ScopeMember => ({ type: 'brand', id })),
   ];
 }

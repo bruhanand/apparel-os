@@ -314,7 +314,7 @@ describe('choosing places and legal entities (access-and-approvals 5.1; structur
 async function authoriseOn(
   userId: string,
   action: 'view' | 'edit' | 'approve',
-  kind: 'site' | 'store' | 'business_unit' | 'location',
+  kind: 'site' | 'store' | 'business_unit' | 'business_unit_mapping' | 'location',
   recordId: string,
 ) {
   return setup.run(userId, async (c) => {
@@ -453,6 +453,106 @@ describe('expanding a place (structure-and-masters 3.9, 9 test 4)', () => {
     expect(await expand({ type: 'business-unit', id: counter.recordId }, setup.today())).toEqual({
       storeIds: [],
       businessUnitIds: [counter.recordId],
+    });
+  });
+});
+
+describe('the facts a record carries on a date (structure-and-masters 6.1; access-and-approvals 5.3)', () => {
+  const factsOn = (kind: 'store' | 'business_unit' | 'business_unit_mapping', recordId: string, date: string) =>
+    setup.run(setup.preparer.id, (c) => setup.organisation.placeFacts(c, kind, recordId, date));
+
+  it('PRD-ACS-021 PRD-ORG-021 a Store with no version in force on the date is at the Site of its version nearest the date: an ended or relocated Store at its last Site', async () => {
+    const siteA = await site();
+    const siteB = await site();
+    const moved = await store(siteA.recordId);
+    await approved(setup, (c, p) =>
+      setup.organisation.prepareStoreVersion(c, p, moved.recordId, {
+        name: syntheticName('Store at its new Site'),
+        format: 'ebo',
+        operatingModel: 'company-owned',
+        siteId: siteB.recordId,
+        aliases: [],
+        validFrom: setup.day(2),
+      }),
+    );
+    // Its last version ended on day 4: moving an approved version's end earlier is what the guard admits (6.1).
+    const owner = await connect(database(), 'migration');
+    try {
+      await owner.query(
+        `update organisation.store_version set valid_during = daterange(lower(valid_during), $3::date)
+         where store_id = $1 and site_id = $2`,
+        [moved.recordId, siteB.recordId, setup.day(4)],
+      );
+    } finally {
+      await owner.end();
+    }
+    expect(await factsOn('store', moved.recordId, setup.day(6))).toEqual({
+      siteId: siteB.recordId,
+      storeId: moved.recordId,
+    });
+    expect(await factsOn('store', moved.recordId, setup.day(3))).toEqual({
+      siteId: siteB.recordId,
+      storeId: moved.recordId,
+    });
+    expect(await factsOn('store', moved.recordId, setup.day(-1))).toEqual({
+      siteId: siteA.recordId,
+      storeId: moved.recordId,
+    });
+  });
+
+  it('POL-10.01 PRD-ACS-001 a unit and its mapping carry the legal entity of the mapping in force; a legal-entity-scoped person is covered only for units mapped to its legal entity', async () => {
+    const mine = await entity();
+    const theirs = await entity();
+    const aSite = await site();
+    const myUnit = await unit(aSite.recordId, mine);
+    const theirUnit = await unit(aSite.recordId, theirs);
+    // A later mapping of my unit to their legal entity, from day 3 (3.4): today it is still mine.
+    await approved(setup, (c, p) =>
+      setup.organisation.prepareBusinessUnitMappingVersion(c, p, myUnit.recordId, {
+        ...theirs,
+        validFrom: setup.day(3),
+      }),
+    );
+    expect(await factsOn('business_unit', myUnit.recordId, setup.today())).toEqual({
+      legalEntityId: mine.legalEntityId,
+      siteId: aSite.recordId,
+      businessUnitId: myUnit.recordId,
+    });
+    expect(await factsOn('business_unit_mapping', myUnit.recordId, setup.day(3))).toMatchObject({
+      legalEntityId: theirs.legalEntityId,
+    });
+    const roleId = await role([
+      { recordType: 'organisation.business_unit', action: 'view' },
+      { recordType: 'organisation.business_unit_mapping', action: 'view' },
+    ]);
+    const byEntity = await assigned(roleId, {
+      kind: 'dimensions',
+      legalEntity: { kind: 'selected', members: [mine.legalEntityId] },
+      place: all,
+      brand: all,
+    });
+    expect(await authoriseOn(byEntity.user.id, 'view', 'business_unit', myUnit.recordId)).toEqual({
+      kind: 'allowed',
+      roleAssignmentId: byEntity.assignmentId,
+    });
+    expect(await authoriseOn(byEntity.user.id, 'view', 'business_unit_mapping', myUnit.recordId)).toMatchObject({
+      kind: 'allowed',
+    });
+    expect(await authoriseOn(byEntity.user.id, 'view', 'business_unit', theirUnit.recordId)).toEqual({
+      kind: 'refused',
+      refusal: {
+        kind: 'not-authorised',
+        code: 'access.not-authorised',
+        missing: [
+          {
+            kind: 'scope',
+            dimension: 'legal-entity',
+            roleAssignmentId: byEntity.assignmentId,
+            factType: 'legal-entity',
+            factId: theirs.legalEntityId,
+          },
+        ],
+      },
     });
   });
 });

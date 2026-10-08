@@ -41,11 +41,31 @@ import type { OrganisationInterface } from '../organisation.js';
 import { ORGANISATION } from '../tokens.js';
 
 /**
- * The routes of the organisation structure (structure-and-masters 2.3, 3.8, 8; module-map 4.11; code-house-rules
+ * The scope facts a command on a place-scoped record type is authorised with (access-and-approvals 5.3, 7.1 step 3;
+ * structure-and-masters 6.1): the record's facts on the day, or a new record's from its draft, and, for a version that
+ * moves the record, the facts it moves it to, which the same assignment must cover (product owner, 9 Oct 2026).
+ */
+interface CommandFacts {
+  readonly facts: RecordFacts;
+  readonly movesTo?: RecordFacts;
+}
+
+/** Finds a command's scope facts in its transaction, on the business date. */
+type CommandFactsOf = (context: TransactionContext, today: string) => Promise<CommandFacts>;
+
+/** Authorise's answer in the command, with the facts it covered when allowed. */
+type CommandAuthorisation =
+  Authorisation | ({ readonly kind: 'allowed'; readonly roleAssignmentId: string } & CommandFacts);
+
+/**
+ * The routes of the organisation structure (structure-and-masters 2.3, 3.8, 6.1, 8; module-map 4.11; code-house-rules
  * 12.1): each master's records with their version history, a page at a time or one record, preparing a new master
- * or a new version, and the master lists read model. Authenticate and Authorise ran in the guard on the route's action and type, which carries no scope fact
- * (access-and-approvals 5.3, 7.1); each command runs under its idempotency key, holds its preparer's authority at step
- * 0, and a replay is answered only while the same Authorise still passes (12.4, CH-14). No rule of its own.
+ * or a new version, and the master lists read model. Authenticate ran in the guard. On a record type that carries no
+ * scope fact, Authorise ran there too, on the route's action and type; on a place-scoped one it runs here, with the
+ * record's facts on the day, for a one-record read, each row of a list, and a command, before any lock
+ * (access-and-approvals 5.3, 7.1 step 3; product owner, 9 Oct 2026). Each command runs under its idempotency key,
+ * holds its preparer's authority at step 0, and a replay is answered only while the same Authorise still passes (12.4,
+ * CH-14). The structure's own rules are `organisation`'s commands'.
  */
 @Controller()
 export class StructureController {
@@ -235,14 +255,15 @@ export class StructureController {
 
   @ApiRoute(routes.prepareSite)
   prepareSite(@RouteInput() input: RouteInputOf<typeof routes.prepareSite>, @SignedIn() user: SignedInUser) {
-    // A new Site is a place no selection names yet: only all-members place scope covers it (5.3; PRD-MOD-015).
+    // A new Site is a place no selection names yet: only all-members place scope covers it (5.3; PRD-MOD-015;
+    // product owner, 9 Oct 2026).
     return this.prepare(
       routes.prepareSite,
       'organisation.prepare-site',
       user,
       input,
       (c, p) => this.organisation.prepareSite(c, p, input.body),
-      () => Promise.resolve({}),
+      () => Promise.resolve({ facts: {} }),
     );
   }
 
@@ -255,7 +276,7 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareStore(c, p, input.body),
-      () => Promise.resolve({ siteId: input.body.siteId }),
+      () => Promise.resolve({ facts: { siteId: input.body.siteId } }),
     );
   }
 
@@ -376,7 +397,8 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareStoreVersion(c, p, input.params.recordId, input.body),
-      this.factsOf('store', input.params.recordId),
+      // A version linking the Store to another Site is authorised at both Sites (6.1; product owner, 9 Oct 2026).
+      this.factsOf('store', input.params.recordId, (facts) => ({ ...facts, siteId: input.body.siteId })),
     );
   }
 
@@ -401,7 +423,8 @@ export class StructureController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareBusinessUnit>,
     @SignedIn() user: SignedInUser,
   ) {
-    // A new unit at its Site, and of its Store where it has one (5.2; PRD-ACS-021).
+    // A new unit at its Site, and of its Store where it has one (5.2; PRD-ACS-021), of the legal entity its first
+    // mapping names (POL-10.01).
     return this.prepare(
       routes.prepareBusinessUnit,
       'organisation.prepare-business-unit',
@@ -410,8 +433,11 @@ export class StructureController {
       (c, p) => this.organisation.prepareBusinessUnit(c, p, input.body),
       () =>
         Promise.resolve({
-          siteId: input.body.siteId,
-          ...(input.body.storeId === undefined ? {} : { storeId: input.body.storeId }),
+          facts: {
+            legalEntityId: input.body.legalEntityId,
+            siteId: input.body.siteId,
+            ...(input.body.storeId === undefined ? {} : { storeId: input.body.storeId }),
+          },
         }),
     );
   }
@@ -427,7 +453,10 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareBusinessUnitVersion(c, p, input.params.recordId, input.body),
-      this.factsOf('business_unit', input.params.recordId),
+      // A version carrying a mapping maps the unit to its legal entity (3.4; POL-10.01).
+      this.factsOf('business_unit', input.params.recordId, (facts) =>
+        input.body.legalEntityId === undefined ? facts : { ...facts, legalEntityId: input.body.legalEntityId },
+      ),
     );
   }
 
@@ -458,7 +487,11 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareBusinessUnitMappingVersion(c, p, input.params.recordId, input.body),
-      this.factsOf('business_unit_mapping', input.params.recordId),
+      // A mapping to another legal entity is authorised for both legal entities (6.1; POL-10.01).
+      this.factsOf('business_unit_mapping', input.params.recordId, (facts) => ({
+        ...facts,
+        legalEntityId: input.body.legalEntityId,
+      })),
     );
   }
 
@@ -664,9 +697,9 @@ export class StructureController {
     user: SignedInUser,
     action: PermissionAction,
     recordType: string,
-    facts: RecordFacts,
+    command: CommandFacts,
   ): Promise<Authorisation> {
-    const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
+    const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, ...command });
     if (authorised.kind === 'allowed') return authorised;
     const missing = await Promise.all(
       authorised.refusal.missing.map(async (item) => {
@@ -677,9 +710,15 @@ export class StructureController {
     return { kind: 'refused', refusal: { ...authorised.refusal, missing } };
   }
 
-  /** The facts of an existing record of a place-scoped kind today, for a command or a replay to authorise with. */
-  private factsOf(kind: MasterKind, recordId: string) {
-    return (context: TransactionContext, today: string) => this.organisation.placeFacts(context, kind, recordId, today);
+  /**
+   * The facts of an existing record of a place-scoped kind today, for a command or a replay to authorise with, and,
+   * for a version that may move it, the facts it moves it to.
+   */
+  private factsOf(kind: MasterKind, recordId: string, moving?: (facts: RecordFacts) => RecordFacts): CommandFactsOf {
+    return async (context, today) => {
+      const facts = await this.organisation.placeFacts(context, kind, recordId, today);
+      return moving === undefined ? { facts } : { facts, movesTo: moving(facts) };
+    };
   }
 
   /**
@@ -691,7 +730,7 @@ export class StructureController {
     const answer = await this.read(user, `organisation.read-${kind.replaceAll('_', '-')}`, async (context, today) => {
       if (isPlaceScoped(kind)) {
         const facts = await this.organisation.placeFacts(context, kind, recordId, today);
-        const authorised = await this.authoriseFacts(context, user, 'view', recordTypeOf(kind), facts);
+        const authorised = await this.authoriseFacts(context, user, 'view', recordTypeOf(kind), { facts });
         if (authorised.kind === 'refused') return { refused: authorised.refusal };
       }
       return {
@@ -743,23 +782,20 @@ export class StructureController {
     user: SignedInUser,
     input: RouteInputOf<R>,
     work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion | MappingVerified>>,
-    /**
-     * For a route on a place-scoped record type, which authorises in its command: the record's facts today, or a new
-     * record's from its draft (access-and-approvals 5.3, 7.1 step 3; structure-and-masters 6.1).
-     */
-    scoped?: (context: TransactionContext, today: string) => Promise<RecordFacts>,
+    /** For a route on a place-scoped record type, which authorises in its command: its scope facts. */
+    commandFactsOf?: CommandFactsOf,
   ) {
-    if ((scoped === undefined) !== (route.access.authorisedIn !== 'command')) {
+    if ((commandFactsOf === undefined) !== (route.access.authorisedIn !== 'command')) {
       throw new CommandDefect(`Route ${route.path} authorises in its command only with the record's facts`);
     }
-    if (scoped === undefined && user.roleAssignmentId === undefined) {
+    if (commandFactsOf === undefined && user.roleAssignmentId === undefined) {
       throw new CommandDefect(`Route ${route.path} prepares a structure change without Authorise`);
     }
     const key: string = input.idempotencyKey;
     const content: RequestContent = requestContentOf(route, input);
     /** Authorise as the guard did, or, for a place-scoped type, with the record's facts in the command's transaction. */
-    const authoriseIn = async (context: TransactionContext): Promise<Authorisation & { facts?: RecordFacts }> => {
-      if (scoped === undefined) {
+    const authoriseIn = async (context: TransactionContext): Promise<CommandAuthorisation> => {
+      if (commandFactsOf === undefined) {
         return { kind: 'allowed', roleAssignmentId: user.roleAssignmentId ?? '' };
       }
       const date = await context.businessDate();
@@ -773,13 +809,20 @@ export class StructureController {
           },
         };
       }
-      const facts = await scoped(context, date.date);
-      const authorised = await this.authoriseFacts(context, user, route.access.action, route.access.recordType, facts);
-      return authorised.kind === 'allowed' ? { ...authorised, facts } : authorised;
+      const command = await commandFactsOf(context, date.date);
+      const authorised = await this.authoriseFacts(
+        context,
+        user,
+        route.access.action,
+        route.access.recordType,
+        command,
+      );
+      return authorised.kind === 'allowed' ? { ...authorised, ...command } : authorised;
     };
     const need = { actorId: user.userId, action: route.access.action, recordType: route.access.recordType };
     const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = scoped === undefined ? await this.access.authorise(context, need) : await authoriseIn(context);
+      const authorised =
+        commandFactsOf === undefined ? await this.access.authorise(context, need) : await authoriseIn(context);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return {
         kind: 'refused',
@@ -813,7 +856,8 @@ export class StructureController {
             {
               action: need.action,
               recordType: need.recordType,
-              ...(authorised.facts === undefined ? {} : { facts: authorised.facts }),
+              ...('facts' in authorised ? { facts: authorised.facts } : {}),
+              ...('movesTo' in authorised ? { movesTo: authorised.movesTo } : {}),
             },
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };

@@ -40,6 +40,7 @@ export interface RecordTypeDeclaration {
 const NONE: ScopeFactsDeclared = { legalEntity: false, place: false, brand: false };
 const ALL: ScopeFactsDeclared = { legalEntity: true, place: true, brand: true };
 const PLACE: ScopeFactsDeclared = { legalEntity: false, place: true, brand: false };
+const LEGAL_ENTITY_AND_PLACE: ScopeFactsDeclared = { legalEntity: true, place: true, brand: false };
 const PREPARED: readonly PermissionAction[] = ['view', 'create', 'edit', 'approve'];
 
 function declare<const Code extends string>(
@@ -156,8 +157,9 @@ const stockRecordTypes = [
  * so they carry no scope fact and the permission on the type decides (5.3). Sites, Stores, business units with their
  * mappings and the mappings' verifications, locations and Stores' default warehouses carry their place (product
  * owner, 8 Oct 2026; S1-F02-T03): a Site is its own place, a Store is itself at its Site, a unit and what belongs to it
- * is the unit at its Site and Store (structure-and-masters 6.1). None carries a legal entity: a unit's legal entity is
- * its mapping's, never the Site's (POL-10.01). Each master is prepared (create, edit) and approved by a different
+ * is the unit at its Site and Store (structure-and-masters 6.1). A unit and what belongs to it carry the legal entity
+ * of the unit's mapping too, never the Site's (POL-10.01; product owner, 9 Oct 2026); a Site and a Store carry none,
+ * since a Site may hold units of several legal entities. Each master is prepared (create, edit) and approved by a different
  * authorised person (GC2-2, DEC-105). The master lists have no permission of their own: they show each master whose
  * type the reader may view, and of the place-scoped ones the records the reader's scope covers, and name the others
  * (product owner, 8 Oct 2026; module-map section 3, rule 5).
@@ -175,14 +177,14 @@ const organisationRecordTypes = [
   declare('organisation.grouping', PREPARED, NONE),
   // Business units, their mappings, locations and default warehouses (S1-F02-T02). A mapping and a default warehouse
   // are dated records of a unit and of a Store, which have no record to create: edit prepares a version.
-  declare('organisation.business_unit', PREPARED, PLACE),
-  declare('organisation.business_unit_mapping', ['view', 'edit', 'approve'], PLACE),
-  declare('organisation.location', PREPARED, PLACE),
-  declare('organisation.store_default_warehouse', ['view', 'edit', 'approve'], PLACE),
+  declare('organisation.business_unit', PREPARED, LEGAL_ENTITY_AND_PLACE),
+  declare('organisation.business_unit_mapping', ['view', 'edit', 'approve'], LEGAL_ENTITY_AND_PLACE),
+  declare('organisation.location', PREPARED, LEGAL_ENTITY_AND_PLACE),
+  declare('organisation.store_default_warehouse', ['view', 'edit', 'approve'], LEGAL_ENTITY_AND_PLACE),
   // Verifying a mapping version is a permission of its own (structure-and-masters 2.3, 3.4; GC2-2, DEC-105;
   // POL-10.08): create on the verification record, which no other permission gives, held by a different person from
   // the one who made the mapping. No new action is needed (access-and-approvals 4.1).
-  declare('organisation.business_unit_mapping_verification', ['view', 'create'], PLACE),
+  declare('organisation.business_unit_mapping_verification', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
 /** Every record type declared so far. */

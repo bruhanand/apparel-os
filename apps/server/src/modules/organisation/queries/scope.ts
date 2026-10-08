@@ -119,9 +119,10 @@ export const organisationScopeMembers: ScopeMembers = {
 
 /**
  * The kinds whose record types declare place facts, and how each finds them (structure-and-masters 6.1; product owner,
- * 8 Oct 2026): a Site is its own place; a Store is itself at the Site it is linked to; a business unit, its mapping and
- * the mapping's verification are the unit at its Site, and its Store where it has one; a location is at its unit; a
- * Store's default warehouse is the Store's. None declares a legal entity or a brand.
+ * 8 and 9 Oct 2026): a Site is its own place; a Store is itself at the Site it is linked to; a business unit, its
+ * mapping and the mapping's verification are the unit at its Site, and its Store where it has one, of the legal entity
+ * its mapping names (POL-10.01); a location is its unit's; a Store's default warehouse is the Store's, of the legal
+ * entity of the Store's whole-store unit. None declares a brand, and a Site or Store no legal entity.
  */
 export const placeScopedKinds = [
   'site',
@@ -137,9 +138,18 @@ export const isPlaceScoped = (kind: MasterKind): kind is PlaceScopedKind =>
   (placeScopedKinds as readonly MasterKind[]).includes(kind);
 
 /**
- * The Site a Store is linked to on the date, by its approved version in force then; for a Store with none in force on
- * the date, such as a new one awaiting approval or a Scheduled one, the Site of its first version (3.3).
+ * The order that puts each record's version nearest a date first (structure-and-masters 6.1; product owner, 9 Oct
+ * 2026): approved versions first; of those, the latest starting on or before the date, so the one in force, or the
+ * last one of a record ended or relocated by then; else the earliest starting after it. A record with no approved
+ * version, such as a new one awaiting approval, by its other versions alike.
  */
+const nearest = (date: string) => sql`(decision = 'Approved') desc, (lower(valid_during) <= ${date}::date) desc,
+  case when lower(valid_during) <= ${date}::date then lower(valid_during) end desc nulls last, lower(valid_during),
+  recorded_at desc`;
+
+const uuidArray = (ids: readonly string[]) => sql`${`{${ids.join(',')}}`}::uuid[]`;
+
+/** The Site each Store is linked to on the date, by its version nearest the date (3.3). */
 async function storeSites(
   context: TransactionContext,
   storeIds: readonly string[],
@@ -148,38 +158,92 @@ async function storeSites(
   if (storeIds.length === 0) return new Map();
   const rows = await context.tx.execute<{ store_id: string; site_id: string }>(sql`
     select distinct on (store_id) store_id, site_id from organisation.store_version
-    where store_id = any (${`{${storeIds.join(',')}}`}::uuid[])
-    order by store_id, (decision = 'Approved' and valid_during @> ${date}::date) desc, lower(valid_during), recorded_at`);
+    where store_id = any (${uuidArray(storeIds)})
+    order by store_id, ${nearest(date)}`);
   return new Map(rows.rows.map((row) => [row.store_id, row.site_id]));
 }
 
+/** The legal entity each unit is mapped to on the date, by its mapping version nearest the date (3.4; POL-10.01). */
+async function unitLegalEntities(
+  context: TransactionContext,
+  unitIds: readonly string[],
+  date: string,
+): Promise<Map<string, string>> {
+  if (unitIds.length === 0) return new Map();
+  const rows = await context.tx.execute<{ business_unit_id: string; legal_entity_id: string }>(sql`
+    select distinct on (business_unit_id) business_unit_id, legal_entity_id from organisation.business_unit_mapping
+    where business_unit_id = any (${uuidArray(unitIds)})
+    order by business_unit_id, ${nearest(date)}`);
+  return new Map(rows.rows.map((row) => [row.business_unit_id, row.legal_entity_id]));
+}
+
 /**
- * A record's place facts (access-and-approvals 5.3): its Site, Store and business unit, as they apply; one left out is
- * not carried, or Unknown. Fits both Authorise's facts and the audit record's scope.
+ * A record's place facts (access-and-approvals 5.3): its Site, Store and business unit, and the legal entity of a
+ * unit's mapping, as they apply; one left out is not carried, or Unknown. Fits both Authorise's facts and the audit
+ * record's scope, whose fields are never set to undefined.
  */
 export interface PlaceFacts {
+  readonly legalEntityId?: string;
   readonly siteId?: string;
   readonly storeId?: string;
   readonly businessUnitId?: string;
 }
 
-/** A unit's place facts: its unit, its Site, and its Store where it has one (3.3). */
-async function unitFacts(context: TransactionContext, unitIds: readonly string[]): Promise<Map<string, PlaceFacts>> {
+/** Each unit's facts on the date: the unit, its Site, its Store where it has one (3.3), its mapping's legal entity. */
+async function unitFacts(
+  context: TransactionContext,
+  unitIds: readonly string[],
+  date: string,
+): Promise<Map<string, PlaceFacts>> {
   if (unitIds.length === 0) return new Map();
   const rows = await context.tx
     .select({ id: businessUnit.id, siteId: businessUnit.siteId, storeId: businessUnit.storeId })
     .from(businessUnit)
     .where(inArray(businessUnit.id, [...unitIds]));
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      {
-        siteId: row.siteId,
-        businessUnitId: row.id,
-        ...(row.storeId === null ? {} : { storeId: row.storeId }),
-      },
-    ]),
+  const entities = await unitLegalEntities(
+    context,
+    rows.map((row) => row.id),
+    date,
   );
+  return new Map(
+    rows.map((row) => {
+      const legalEntityId = entities.get(row.id);
+      const facts: PlaceFacts = {
+        ...(legalEntityId === undefined ? {} : { legalEntityId }),
+        siteId: row.siteId,
+        ...(row.storeId === null ? {} : { storeId: row.storeId }),
+        businessUnitId: row.id,
+      };
+      return [row.id, facts];
+    }),
+  );
+}
+
+/** The legal entity of each Store's whole-store unit on the date, which its default warehouse carries (3.3, 3.6). */
+async function storeLegalEntities(
+  context: TransactionContext,
+  storeIds: readonly string[],
+  date: string,
+): Promise<Map<string, string>> {
+  if (storeIds.length === 0) return new Map();
+  const units = await context.tx
+    .select({ id: businessUnit.id, storeId: businessUnit.storeId })
+    .from(businessUnit)
+    .where(and(inArray(businessUnit.storeId, [...storeIds]), eq(businessUnit.kind, 'whole-store')))
+    .orderBy(businessUnit.id);
+  const entities = await unitLegalEntities(
+    context,
+    units.map((unit) => unit.id),
+    date,
+  );
+  const found = new Map<string, string>();
+  for (const unit of units) {
+    const legalEntityId = entities.get(unit.id);
+    if (unit.storeId !== null && legalEntityId !== undefined && !found.has(unit.storeId)) {
+      found.set(unit.storeId, legalEntityId);
+    }
+  }
+  return found;
 }
 
 /**
@@ -204,14 +268,24 @@ export async function placeFactsOf(
         .where(inArray(tables.identityId, ids));
       return new Map(found.map((row) => [row.id, { siteId: row.id }]));
     }
-    case 'store':
-    case 'store_default_warehouse': {
+    case 'store': {
       const sites = await storeSites(context, ids, date);
       return new Map([...sites].map(([storeId, siteId]) => [storeId, { siteId, storeId }]));
     }
+    case 'store_default_warehouse': {
+      const sites = await storeSites(context, ids, date);
+      const entities = await storeLegalEntities(context, [...sites.keys()], date);
+      return new Map(
+        [...sites].map(([storeId, siteId]) => {
+          const legalEntityId = entities.get(storeId);
+          const facts: PlaceFacts = { ...(legalEntityId === undefined ? {} : { legalEntityId }), siteId, storeId };
+          return [storeId, facts];
+        }),
+      );
+    }
     case 'business_unit':
     case 'business_unit_mapping':
-      return unitFacts(context, ids);
+      return unitFacts(context, ids, date);
     case 'location': {
       const rows = await context.tx
         .select({ id: location.id, unitId: location.businessUnitId })
@@ -220,6 +294,7 @@ export async function placeFactsOf(
       const units = await unitFacts(
         context,
         rows.map((row) => row.unitId),
+        date,
       );
       return new Map(
         rows.flatMap((row) => {
@@ -229,4 +304,18 @@ export async function placeFactsOf(
       );
     }
   }
+}
+
+/**
+ * One record's place facts on the date (6.1): undefined for a kind that carries none; none for a place-scoped record
+ * that does not exist, which only all-members scope covers (access-and-approvals 5.3; PRD-MOD-015).
+ */
+export async function placeFactsOfRecord(
+  context: TransactionContext,
+  kind: MasterKind,
+  recordId: string,
+  date: string,
+): Promise<PlaceFacts | undefined> {
+  if (!isPlaceScoped(kind)) return undefined;
+  return (await placeFactsOf(context, kind, [recordId], date)).get(recordId) ?? {};
 }

@@ -106,6 +106,8 @@ export type {
   FieldClass,
   Permission,
   PermissionAction,
+  PlaceMember,
+  PlaceType,
   RoleAssignmentDraft,
   RoleDraft,
 } from './roles.js';

@@ -1,6 +1,6 @@
 import type { FieldClass, MissingItem, PermissionAction, RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
-import { scopeCovers, type AssignmentInForce, type RecordFacts } from '../domain/scope.js';
+import { scopeCoversMove, type AssignmentInForce, type RecordFacts } from '../domain/scope.js';
 import { assignmentsInForce } from './assignments.js';
 
 /** A restricted field class an action reads or writes (access-and-approvals 6). */
@@ -17,6 +17,12 @@ export interface AuthoriseRequest {
   readonly recordType: string;
   /** The record's scope facts, as its owning module passes them (5.3). */
   readonly facts?: RecordFacts;
+  /**
+   * The facts a change under preparation or decision gives the record, where they differ from `facts`, such as a Store
+   * version linking it to another Site: the one assignment must cover both (structure-and-masters 6.1; product owner,
+   * 9 Oct 2026).
+   */
+  readonly movesTo?: RecordFacts;
   /** The restricted field classes the action reads or writes (6). */
   readonly fieldClasses?: readonly FieldClassUse[];
 }
@@ -57,7 +63,7 @@ export async function authorise(
 ): Promise<Authorisation> {
   const granting = await grantingAssignments(context, registry, request);
   if (granting.kind === 'refused') return granting;
-  return authoriseFacts(granting, request, request.facts ?? {});
+  return authoriseFacts(granting, request, request.facts ?? {}, request.movesTo);
 }
 
 /**
@@ -68,12 +74,12 @@ export async function authorise(
 export async function authoriseEach(
   context: TransactionContext,
   registry: ReadonlyMap<string, RecordTypeDeclaration>,
-  request: Omit<AuthoriseRequest, 'facts'>,
+  request: Omit<AuthoriseRequest, 'facts' | 'movesTo'>,
   facts: readonly RecordFacts[],
 ): Promise<Refused | { readonly kind: 'checked'; readonly each: Authorisation[] }> {
   const granting = await grantingAssignments(context, registry, request);
   if (granting.kind === 'refused') return granting;
-  return { kind: 'checked', each: facts.map((each) => authoriseFacts(granting, request, each)) };
+  return { kind: 'checked', each: facts.map((each) => authoriseFacts(granting, request, each, undefined)) };
 }
 
 type Refused = Extract<Authorisation, { kind: 'refused' }>;
@@ -88,7 +94,7 @@ interface Granting {
 async function grantingAssignments(
   context: TransactionContext,
   registry: ReadonlyMap<string, RecordTypeDeclaration>,
-  request: Omit<AuthoriseRequest, 'facts'>,
+  request: Omit<AuthoriseRequest, 'facts' | 'movesTo'>,
 ): Promise<Granting | Refused> {
   const today = await context.businessDate();
   if (today.kind === 'not-set') {
@@ -116,15 +122,19 @@ async function grantingAssignments(
   return { kind: 'granting', declaration, assignments };
 }
 
-/** The first granting assignment that covers the record's facts and grants every field class used (5.3, 6). */
+/**
+ * The first granting assignment that covers the record's facts, and those a change moves it to, and grants every field
+ * class used (5.3, 6).
+ */
 function authoriseFacts(
   granting: Granting,
-  request: Omit<AuthoriseRequest, 'facts'>,
+  request: Omit<AuthoriseRequest, 'facts' | 'movesTo'>,
   facts: RecordFacts,
+  movesTo: RecordFacts | undefined,
 ): Authorisation {
   let nearest: MissingItem | undefined;
   for (const assignment of granting.assignments) {
-    const coverage = scopeCovers(assignment.scope, granting.declaration, request.actorId, facts);
+    const coverage = scopeCoversMove(assignment.scope, granting.declaration, request.actorId, facts, movesTo);
     if (!coverage.covered) {
       // The refusal names the place or legal entity missing, where the record carries it (PRD-UXP-003).
       nearest ??= {

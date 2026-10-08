@@ -105,7 +105,7 @@ export interface AccessInterface {
    */
   authoriseEach(
     context: TransactionContext,
-    request: Omit<AuthoriseRequest, 'facts'>,
+    request: Omit<AuthoriseRequest, 'facts' | 'movesTo'>,
     facts: readonly RecordFacts[],
   ): ReturnType<typeof authoriseEach>;
   /**
@@ -387,7 +387,11 @@ export class Access implements AccessInterface {
     return authorise(context, this.registry, request);
   }
 
-  authoriseEach(context: TransactionContext, request: Omit<AuthoriseRequest, 'facts'>, facts: readonly RecordFacts[]) {
+  authoriseEach(
+    context: TransactionContext,
+    request: Omit<AuthoriseRequest, 'facts' | 'movesTo'>,
+    facts: readonly RecordFacts[],
+  ) {
     return authoriseEach(context, this.registry, request, facts);
   }
 

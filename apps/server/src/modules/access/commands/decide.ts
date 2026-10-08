@@ -383,7 +383,7 @@ export class Approvals {
         actorId: actor.id,
         action: 'approve',
         recordType,
-        facts: requestFacts(request),
+        ...requestFacts(request),
       });
       if (authorised.kind === 'refused') {
         return {
@@ -546,7 +546,7 @@ export class Approvals {
       actorId: actor.id,
       action: 'approve',
       recordType: rule.recordType,
-      facts: requestFacts(request),
+      ...requestFacts(request),
     });
   }
 

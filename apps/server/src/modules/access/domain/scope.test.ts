@@ -5,7 +5,7 @@ import {
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
-import { grantRowsOf, scopeCovers, scopeKeyOf } from './scope.js';
+import { grantRowsOf, scopeCovers, scopeCoversMove, scopeKeyOf } from './scope.js';
 
 // S1-F01-T11: the canonical scope key (code-house-rules 7.3; DEC-112, CH-7), scope matching (access-and-approvals
 // 5.3, 5.4) and the effective grants of one assignment (7.2). SYNTHETIC identifiers only.
@@ -198,6 +198,29 @@ describe('matching a record (access-and-approvals 5.3, 5.4)', () => {
       dimension: 'own-records',
     });
     expect(scopeCovers(everywhere, scoped, ACTOR, { ...facts, subjectId: ACTOR })).toEqual({ covered: true });
+  });
+
+  it('PRD-ACS-004 PRD-UXP-003 a change that moves a record is covered only where one scope covers both, and a refusal names where it moves to', () => {
+    const sites = (...ids: string[]): AssignmentScope => ({
+      kind: 'dimensions',
+      legalEntity: all,
+      place: { kind: 'selected', members: ids.map((id) => ({ type: 'site' as const, id })) },
+      brand: all,
+    });
+    const now = { legalEntityId: ENTITY, siteId: SITE_A, storeId: STORE };
+    const movesTo = { ...now, siteId: SITE_B };
+    expect(scopeCoversMove(sites(SITE_A), scoped, ACTOR, now, movesTo)).toEqual({
+      covered: false,
+      dimension: 'place',
+      fact: { type: 'site', id: SITE_B },
+    });
+    expect(scopeCoversMove(sites(SITE_B), scoped, ACTOR, now, movesTo)).toEqual({
+      covered: false,
+      dimension: 'place',
+      fact: { type: 'store', id: STORE },
+    });
+    expect(scopeCoversMove(sites(SITE_A, SITE_B), scoped, ACTOR, now, movesTo)).toEqual({ covered: true });
+    expect(scopeCoversMove(sites(SITE_A), scoped, ACTOR, now, undefined)).toEqual({ covered: true });
   });
 });
 

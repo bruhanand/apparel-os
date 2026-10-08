@@ -2,9 +2,12 @@ import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import {
   attachedFileSchema,
+  businessUnitListSchema,
   businessUnitMappingReadSchema,
+  businessUnitReadSchema,
   masterListsSchema,
   storedFileSchema,
+  type AssignmentScope,
   type PermissionAction,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -82,13 +85,17 @@ function freshCode(user: SyntheticUser): string {
   return codeFor(user.factorSecret ?? Buffer.alloc(0), 0, clock.now());
 }
 
-async function enrolled(label: string, authorities: readonly SyntheticAuthority[]): Promise<SyntheticUser> {
+async function enrolled(
+  label: string,
+  authorities: readonly SyntheticAuthority[],
+  options: { readonly scope?: AssignmentScope } = {},
+): Promise<SyntheticUser> {
   const user = await writeSyntheticUser(database, organisationCode, keys, {
     label: `${label}${String(randomInt(1_000_000))}`,
     enrolled: true,
     personas: ['P-ADM'],
   });
-  await grantSynthetic(database, { kind: 'user', id: user.id }, authorities);
+  await grantSynthetic(database, { kind: 'user', id: user.id }, authorities, options);
   const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.22' },
@@ -377,6 +384,38 @@ describe('verified mappings (structure-and-masters 3.4, 3.8; POL-10.08)', () => 
         kind: 'refused',
         code: 'organisation.mapping-legal-entity-mismatch',
         missing: [{ kind: 'record', recordType: 'organisation.accounting_book', recordId: theirs.accountingBookId }],
+      },
+    });
+  });
+});
+
+describe('a unit carries its mapping’s legal entity (structure-and-masters 6.1; access-and-approvals 5.3; POL-10.01; S1-F02-T03)', () => {
+  it('POL-10.01 PRD-ACS-001 PRD-UXP-003 a legal-entity-scoped reader lists and reads only the units mapped to its legal entity, and is refused another with the legal entity named', async () => {
+    const at = await site();
+    const mine = await entity();
+    const theirs = await entity();
+    const myUnit = await approved('/api/organisation/business-units', unitBody(at.recordId, mine));
+    const theirUnit = await approved('/api/organisation/business-units', unitBody(at.recordId, theirs));
+    const reader = await enrolled('LE-READER', [{ recordType: 'organisation.business_unit', action: 'view' }], {
+      scope: {
+        kind: 'dimensions',
+        legalEntity: { kind: 'selected', members: [mine.legalEntityId] },
+        place: { kind: 'all' },
+        brand: { kind: 'all' },
+      },
+    });
+    const listed = businessUnitListSchema.parse((await get(reader, '/api/organisation/business-units')).body);
+    expect(listed.records.map((record) => record.id)).toEqual([myUnit.recordId]);
+    expect(
+      businessUnitReadSchema.parse((await get(reader, `/api/organisation/business-units/${myUnit.recordId}`)).body)
+        .record,
+    ).toMatchObject({ id: myUnit.recordId });
+    const refused = await get(reader, `/api/organisation/business-units/${theirUnit.recordId}`);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'access.not-authorised',
+        missing: [{ kind: 'scope', dimension: 'legal-entity', factType: 'legal-entity', factId: theirs.legalEntityId }],
       },
     });
   });

@@ -33,7 +33,7 @@ import { StructurePreparation, type NamedKind, type PreparedVersion } from './co
 import { verifyMapping } from './commands/verify.js';
 import type { LocationInUse } from './contracts/location-in-use.js';
 import type { MasterKind } from './domain/kinds.js';
-import { isPlaceScoped, placeFactsOf, type PlaceFacts } from './queries/scope.js';
+import { isPlaceScoped, placeFactsOf, placeFactsOfRecord, type PlaceFacts } from './queries/scope.js';
 import {
   kindReads,
   mappingOn,
@@ -254,7 +254,7 @@ export class Organisation extends StructurePreparation implements OrganisationIn
   }
 
   async placeFacts(context: TransactionContext, kind: MasterKind, recordId: string, date: string) {
-    return (await this.placeFactsOf(context, kind, [recordId], date)).get(recordId) ?? {};
+    return (await placeFactsOfRecord(context, kind, recordId, date)) ?? {};
   }
 
   async placeFactsOf(context: TransactionContext, kind: MasterKind, recordIds: readonly string[], date: string) {

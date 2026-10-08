@@ -1,4 +1,4 @@
-import type { AssignmentScope } from '@apparel-os/schemas';
+import type { AssignmentScope, PlaceType } from '@apparel-os/schemas';
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import { assignmentScope, assignmentScopeMember, roleAssignment, rolePermission, roleVersion } from '../db/schema.js';
@@ -52,7 +52,7 @@ export async function scopesOf(
       kind: 'dimensions',
       legalEntity: dimension('legal-entity', (row) => row.memberId),
       place: dimension('place', (row) => ({
-        type: row.memberType as 'site' | 'store' | 'business-unit',
+        type: row.memberType as PlaceType,
         id: row.memberId,
       })),
       brand: dimension('brand', (row) => row.memberId),

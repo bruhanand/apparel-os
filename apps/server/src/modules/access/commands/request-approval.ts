@@ -130,6 +130,12 @@ export interface ModuleApprovalRequest {
    * (9.3; RR-435). A fact left out is Unknown where the record type declares it (PRD-MOD-015).
    */
   readonly facts?: RecordFacts;
+  /**
+   * The facts the version under approval moves the document to, where they differ from `facts`, such as a Store
+   * version linking it to another Site: who may decide must cover both, through one assignment (structure-and-masters
+   * 6.1; product owner, 9 Oct 2026; PRD-ACS-004).
+   */
+  readonly movesTo?: RecordFacts;
 }
 
 /**
@@ -167,6 +173,7 @@ export async function requestModuleApproval(
     valueBasis: rule.value === 'none' ? null : rule.value,
     requestedBy: request.requestedBy,
     facts: request.facts ?? {},
+    ...(request.movesTo === undefined ? {} : { movesTo: request.movesTo }),
   });
 }
 
@@ -182,6 +189,7 @@ async function openRequest(
     readonly valueBasis: string | null;
     readonly requestedBy: { readonly userId: string; readonly roleAssignmentId: string };
     readonly facts?: RecordFacts;
+    readonly movesTo?: RecordFacts;
   },
 ): Promise<string> {
   const preparers = request.preparers;
@@ -252,6 +260,11 @@ async function openRequest(
     storeId: request.facts?.storeId ?? null,
     businessUnitId: request.facts?.businessUnitId ?? null,
     brandId: request.facts?.brandId ?? null,
+    movesToLegalEntityId: request.movesTo?.legalEntityId ?? null,
+    movesToSiteId: request.movesTo?.siteId ?? null,
+    movesToStoreId: request.movesTo?.storeId ?? null,
+    movesToBusinessUnitId: request.movesTo?.businessUnitId ?? null,
+    movesToBrandId: request.movesTo?.brandId ?? null,
   });
   await context.tx
     .insert(approvalRequestPreparer)
@@ -295,19 +308,42 @@ export async function storedPreparers(context: TransactionContext, requestId: st
   return rows.map((row) => row.userId).sort();
 }
 
-/** The scope facts a request froze (9.1, 9.3; RR-435): each that is not null. */
-export function requestFacts(request: {
+/** The scope facts a request froze, as its columns keep them: each null is not carried, or Unknown. */
+interface FrozenFacts {
   readonly legalEntityId: string | null;
   readonly siteId: string | null;
   readonly storeId: string | null;
   readonly businessUnitId: string | null;
   readonly brandId: string | null;
-}): RecordFacts {
-  return {
-    ...(request.legalEntityId === null ? {} : { legalEntityId: request.legalEntityId }),
-    ...(request.siteId === null ? {} : { siteId: request.siteId }),
-    ...(request.storeId === null ? {} : { storeId: request.storeId }),
-    ...(request.businessUnitId === null ? {} : { businessUnitId: request.businessUnitId }),
-    ...(request.brandId === null ? {} : { brandId: request.brandId }),
-  };
+}
+
+const factsOf = (frozen: FrozenFacts): RecordFacts => ({
+  ...(frozen.legalEntityId === null ? {} : { legalEntityId: frozen.legalEntityId }),
+  ...(frozen.siteId === null ? {} : { siteId: frozen.siteId }),
+  ...(frozen.storeId === null ? {} : { storeId: frozen.storeId }),
+  ...(frozen.businessUnitId === null ? {} : { businessUnitId: frozen.businessUnitId }),
+  ...(frozen.brandId === null ? {} : { brandId: frozen.brandId }),
+});
+
+/**
+ * The scope facts a request froze (9.1, 9.3; RR-435), and those its version moves the document to, if any
+ * (structure-and-masters 6.1; product owner, 9 Oct 2026), as Authorise takes them.
+ */
+export function requestFacts(
+  request: FrozenFacts & {
+    readonly movesToLegalEntityId: string | null;
+    readonly movesToSiteId: string | null;
+    readonly movesToStoreId: string | null;
+    readonly movesToBusinessUnitId: string | null;
+    readonly movesToBrandId: string | null;
+  },
+): { readonly facts: RecordFacts; readonly movesTo?: RecordFacts } {
+  const movesTo = factsOf({
+    legalEntityId: request.movesToLegalEntityId,
+    siteId: request.movesToSiteId,
+    storeId: request.movesToStoreId,
+    businessUnitId: request.movesToBusinessUnitId,
+    brandId: request.movesToBrandId,
+  });
+  return { facts: factsOf(request), ...(Object.keys(movesTo).length === 0 ? {} : { movesTo }) };
 }

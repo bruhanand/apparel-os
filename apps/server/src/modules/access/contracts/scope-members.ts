@@ -1,3 +1,4 @@
+import type { PlaceMember } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../../kernel/index.js';
 
 /** A member a role assignment's scope may select: a legal entity, a place or a brand (access-and-approvals 5.1). */
@@ -9,10 +10,7 @@ export interface ScopeMember {
 }
 
 /** A place a role assignment selects (access-and-approvals 5.2; structure-and-masters 3.9). */
-export interface SelectedPlace {
-  readonly type: 'site' | 'store' | 'business-unit';
-  readonly id: string;
-}
+export type SelectedPlace = PlaceMember;
 
 /** The Stores and business units a selected place covers on a date (structure-and-masters 3.9). */
 export interface PlaceExpansion {
@@ -41,8 +39,10 @@ export interface ScopeMembers {
     dates: { readonly validFrom: string; readonly validTo?: string | undefined },
   ): Promise<ScopeMember[]>;
   /**
-   * Expand a place for access: the Stores linked to a Site on the date and the business units at it, or the business
-   * units of a Store, or a unit itself. A place answers none.
+   * Expand a place for access (module-map 4.11 and section 3, rule 6; structure-and-masters 3.8): the Stores linked to
+   * a Site on the date and the business units at it, or the business units of a Store, or a unit itself. The design
+   * names it as an operation of the contract; Authorise and row-level security never call it (access-and-approvals
+   * 7.2), and an implementation that answers no place, as `merchandise`'s for brands, leaves it out.
    */
   expand?(context: TransactionContext, place: SelectedPlace, date: string): Promise<PlaceExpansion>;
 }
