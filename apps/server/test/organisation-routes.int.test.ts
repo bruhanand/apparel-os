@@ -41,6 +41,10 @@ const TYPES = [
   'organisation.site',
   'organisation.store',
   'organisation.grouping',
+  'organisation.business_unit',
+  'organisation.business_unit_mapping',
+  'organisation.location',
+  'organisation.store_default_warehouse',
 ];
 const each = (actions: readonly PermissionAction[]): SyntheticAuthority[] =>
   TYPES.flatMap((recordType) => actions.map((action) => ({ recordType, action })));

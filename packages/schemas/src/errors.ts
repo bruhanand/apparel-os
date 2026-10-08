@@ -312,12 +312,46 @@ export const stockLedgerCodes = declareCodes({
  * - `organisation.reference-not-in-force`: a record the version refers to, such as a Site's Area or a Store's Site, has
  *   no approved version in force on the version's start; `missing` names it.
  */
+/*
+ * S1-F02-T02 (structure-and-masters 3.3 to 3.6, 3.8):
+ * - `organisation.mapping-legal-entity-mismatch`: the registration or book belongs to another legal entity than the
+ *   mapping's (PRD-ORG-020); `missing` names it.
+ * - `organisation.registration-in-another-state`: the registration's State is not the State of the unit's Site on the
+ *   mapping's start (3.4; GC2-1, DEC-105).
+ * - `organisation.mapping-out-of-step`: a Site or registration version would put a mapping in force out of step with
+ *   the State rule (3.4); `missing` names the unit.
+ * - `organisation.unit-without-mapping`: a unit would be in force with no mapping (3.4; domain-model invariant 8).
+ * - `organisation.whole-store-unit-exists`: the Store already has its whole-store unit at that Site (3.3).
+ * - `organisation.store-at-another-site`: the Store is not linked to the unit's Site on its start (3.3).
+ * - `organisation.not-a-warehouse`: a default warehouse names a unit that is not a warehouse unit (3.6).
+ * - `organisation.location-unit-at-another-site`: the location's unit, or its parent, is not at its Site and unit (3.5).
+ * - `organisation.location-in-use-unanswered`: no stock implementation answers whether stock is recorded there (3.5).
+ * - `organisation.location-holds-stock`: stock is still recorded at the location to retire (3.5).
+ * - `organisation.no-mapping-in-force`: a unit has no mapping in force on the date read (3.8).
+ * - `organisation.mapping-not-approved`: only an approved mapping version is verified (3.4).
+ * - `organisation.verifier-made-mapping`: the verifier is the person who made the mapping (3.4; GC2-2, DEC-105).
+ * - `organisation.mapping-already-verified`: a mapping version has its one verification (3.4).
+ */
 export const organisationCodes = declareCodes({
   'organisation.code-taken': 'refused',
   'organisation.record-not-found': 'not-found',
   'organisation.starts-in-past': 'refused',
   'organisation.version-overlaps': 'refused',
   'organisation.reference-not-in-force': 'refused',
+  'organisation.mapping-legal-entity-mismatch': 'refused',
+  'organisation.registration-in-another-state': 'refused',
+  'organisation.mapping-out-of-step': 'refused',
+  'organisation.unit-without-mapping': 'refused',
+  'organisation.whole-store-unit-exists': 'refused',
+  'organisation.store-at-another-site': 'refused',
+  'organisation.not-a-warehouse': 'refused',
+  'organisation.location-unit-at-another-site': 'refused',
+  'organisation.location-in-use-unanswered': 'unavailable',
+  'organisation.location-holds-stock': 'refused',
+  'organisation.no-mapping-in-force': 'not-found',
+  'organisation.mapping-not-approved': 'refused',
+  'organisation.verifier-made-mapping': 'refused',
+  'organisation.mapping-already-verified': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

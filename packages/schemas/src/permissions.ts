@@ -168,6 +168,16 @@ const organisationRecordTypes = [
   declare('organisation.site', PREPARED, NONE),
   declare('organisation.store', PREPARED, NONE),
   declare('organisation.grouping', PREPARED, NONE),
+  // Business units, their mappings, locations and default warehouses (S1-F02-T02). A mapping and a default warehouse
+  // are dated records of a unit and of a Store, which have no record to create: edit prepares a version.
+  declare('organisation.business_unit', PREPARED, NONE),
+  declare('organisation.business_unit_mapping', ['view', 'edit', 'approve'], NONE),
+  declare('organisation.location', PREPARED, NONE),
+  declare('organisation.store_default_warehouse', ['view', 'edit', 'approve'], NONE),
+  // Verifying a mapping version is a permission of its own (structure-and-masters 2.3, 3.4; GC2-2, DEC-105;
+  // POL-10.08): create on the verification record, which no other permission gives, held by a different person from
+  // the one who made the mapping. No new action is needed (access-and-approvals 4.1).
+  declare('organisation.business_unit_mapping_verification', ['view', 'create'], NONE),
 ] as const;
 
 /** Every record type declared so far. */

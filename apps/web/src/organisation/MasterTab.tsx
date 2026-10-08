@@ -28,10 +28,12 @@ import {
   kindText,
   labelField,
   ORGANISATION_READS,
+  PLACE_KINDS,
   recordTypeOf,
   type FieldSpec,
   type Kind,
 } from './kinds';
+import { MappingVerification } from './MappingVerification';
 
 // One master's tab on Setup › Organisation structure or Geography and groupings (structure-and-masters 2.2, 2.3, 8;
 // design-language 10.9, 10.15; S1-F02-T01): the list, each record's version history and the version in force on a
@@ -136,6 +138,8 @@ function FieldValue({ spec, value }: { spec: FieldSpec; value: unknown }) {
     }
     case 'date':
       return <>{formatDate(text(value))}</>;
+    case 'yes-no':
+      return <>{t(value === true ? 'organisation.yes' : 'organisation.no')}</>;
     case 'reference':
       return <>{names.get(text(value)) ?? text(value)}</>;
     case 'lines':
@@ -253,9 +257,23 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
   const error = form.formState.errors[spec.name] as { type?: string } | undefined;
   const invalid = error !== undefined;
   const required =
-    !(spec.kind === 'date' && spec.optional === true) && spec.kind !== 'lines' && spec.kind !== 'references';
+    !((spec.kind === 'date' || spec.kind === 'reference') && spec.optional === true) &&
+    spec.kind !== 'lines' &&
+    spec.kind !== 'references' &&
+    spec.kind !== 'yes-no';
   let control: ReactNode;
   switch (spec.kind) {
+    case 'yes-no':
+      control = (
+        <input
+          id={id}
+          type="checkbox"
+          className="h-5 w-5"
+          {...describedBy(id, { invalid, help: false })}
+          {...form.register(spec.name)}
+        />
+      );
+      break;
     case 'select':
       control = (
         <select
@@ -279,9 +297,11 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
           id={id}
           className={inputClass}
           {...describedBy(id, { invalid, help: false })}
-          {...form.register(spec.name)}
+          {...form.register(spec.name, {
+            setValueAs: (value: unknown) => (spec.optional === true && value === '' ? undefined : value),
+          })}
         >
-          <option value="">{t('organisation.choose')}</option>
+          <option value="">{t(spec.optional === true ? 'organisation.none' : 'organisation.choose')}</option>
           <ReferenceOptions target={spec.target} />
         </select>
       );
@@ -361,12 +381,28 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
 function openingValues(kind: Kind, today: string, record?: MasterRecord, from?: MasterVersion): FieldValues {
   const values: FieldValues = { validFrom: today };
   const base = from ?? record?.versions[0];
-  for (const spec of fields[kind]) {
-    if (record !== undefined && spec.fixed === true) continue;
+  for (const spec of formSpecs(kind, record)) {
     if (spec.kind === 'lines' || spec.kind === 'references') values[spec.name] = [];
+    if (spec.kind === 'yes-no') values[spec.name] = false;
     if (base?.[spec.name] !== undefined) values[spec.name] = base[spec.name];
   }
   return values;
+}
+
+/** Whether a record has an approved version: Scheduled, In force or Ended. */
+const hasApproved = (record: MasterRecord) => record.versions.some((version) => APPROVED.includes(version.state));
+
+/**
+ * The fields of a form: a new record's, without a later version's own fields; a new version's, without the fixed ones
+ * and without those given with the first version, unless the record has no approved version yet, as when a new unit's
+ * draft is re-dated with its first mapping (structure-and-masters 3.4; GC2-7).
+ */
+function formSpecs(kind: Kind, record?: MasterRecord): FieldSpec[] {
+  return fields[kind].filter((spec) =>
+    record === undefined
+      ? spec.laterOnly !== true
+      : spec.fixed !== true && (spec.withFirst !== true || !hasApproved(record)),
+  );
 }
 
 /** A form's route: its body checked by the route's own schema, its values as the screen holds them (12.2). */
@@ -390,13 +426,15 @@ export function laterScheduled(record: MasterRecord, start: string): MasterVersi
  * re-dated (structure-and-masters 2.2, 2.3; GC2-7).
  */
 function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord; from?: MasterVersion }) {
-  const command = record === undefined ? kindRoutes[kind].prepare : kindRoutes[kind].version;
+  // A kind with no record of its own to add is only ever given a record (kindText).
+  const command =
+    (record === undefined ? kindRoutes[kind].prepare : kindRoutes[kind].version) ?? kindRoutes[kind].version;
   const route: FormRoute = routes[command];
   const submission = useSubmission(command, ORGANISATION_READS);
   const today = useBusinessToday();
   const formId = `${kind}-${record === undefined ? 'new' : 'version'}-form`;
   const form = useRouteForm(route, openingValues(kind, today, record, from), [{ path: 'validFrom', earliest: today }]);
-  const specs = fields[kind].filter((spec) => record === undefined || spec.fixed !== true);
+  const specs = formSpecs(kind, record);
   const error = form.formState.errors.validFrom as { type?: string } | undefined;
   const start: unknown = form.watch('validFrom');
   const later = record === undefined || typeof start !== 'string' ? undefined : laterScheduled(record, start);
@@ -443,9 +481,18 @@ function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord;
   );
 }
 
+/** A record's title: its latest version's name, or its code where the version names another record. */
 function recordTitle(kind: Kind, record: MasterRecord): string {
+  const spec = fields[kind].find((each) => each.name === labelField(kind));
   const name = record.versions[0]?.[labelField(kind)];
-  return typeof name === 'string' ? name : record.code;
+  return typeof name === 'string' && spec?.kind !== 'reference' ? name : record.code;
+}
+
+/** A record's name in its list: the latest version's name, or the record it names, in words. */
+function RecordName({ kind, record }: { kind: Kind; record: MasterRecord }) {
+  const spec = fields[kind].find((each) => each.name === labelField(kind));
+  if (spec?.kind === 'reference') return <FieldValue spec={spec} value={record.versions[0]?.[spec.name]} />;
+  return <>{recordTitle(kind, record)}</>;
 }
 
 /** A record's drawer: its fixed fields, the version in force on a chosen date, its version history and a change. */
@@ -456,8 +503,8 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
   const [changing, setChanging] = useState<{ readonly from?: MasterVersion } | null>(null);
   const [panel, setPanel] = useState<string | null>(null);
   const fixed = fields[kind].filter((spec) => spec.fixed === true);
-  const versionFields = fields[kind].filter((spec) => spec.fixed !== true);
-  const status = kind === 'site' || kind === 'store' ? [statusSpec] : [];
+  const versionFields = fields[kind].filter((spec) => spec.fixed !== true && spec.withFirst !== true);
+  const status = PLACE_KINDS.includes(kind) ? [statusSpec] : [];
   const inForce = versionOn(record, date);
   return (
     <RecordDrawer
@@ -499,7 +546,16 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
                         : t('dates.between', { from: formatDate(version.validFrom), to: formatDate(version.validTo) })}
                     </span>
                   </div>
-                  <Facts specs={[...versionFields, ...status]} values={version} />
+                  <Facts
+                    specs={[
+                      ...versionFields,
+                      // The mapping a unit's version was prepared with, decided with it (3.4).
+                      ...fields[kind].filter((spec) => spec.withFirst === true && version[spec.name] !== undefined),
+                      ...status,
+                    ]}
+                    values={version}
+                  />
+                  {kind === 'business_unit_mapping' && <MappingVerification unitId={record.id} version={version} />}
                   {version.request?.state === 'Awaiting approval' && (
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -573,19 +629,22 @@ export function MasterTab({ kind }: { kind: Kind }) {
   const timeZone = useTimeZone();
   const query = useMasterPages(kind);
   const [open, setOpen] = useState<string | null>(null);
-  const place = kind === 'site' || kind === 'store';
+  const place = PLACE_KINDS.includes(kind);
+  const add = kindText[kind].add;
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
-        <GrantedButton
-          label={kindText[kind].add}
-          recordType={recordTypeOf(kind)}
-          action="create"
-          variant="primary"
-          onClick={() => {
-            setOpen('new');
-          }}
-        />
+        {add !== null && (
+          <GrantedButton
+            label={add}
+            recordType={recordTypeOf(kind)}
+            action="create"
+            variant="primary"
+            onClick={() => {
+              setOpen('new');
+            }}
+          />
+        )}
         <span className="flex-1" />
         <Button
           label="setup.refresh"
@@ -637,7 +696,9 @@ export function MasterTab({ kind }: { kind: Kind }) {
                                 {record.code}
                               </button>
                             </td>
-                            <td className="px-3">{recordTitle(kind, record)}</td>
+                            <td className="px-3">
+                              <RecordName kind={kind} record={record} />
+                            </td>
                             {place && (
                               <td className="px-3">
                                 {typeof status === 'string' && <StatusBadge state={stateIdOf(status)} />}
@@ -677,9 +738,9 @@ export function MasterTab({ kind }: { kind: Kind }) {
           );
         }}
       </ListRead>
-      {open === 'new' && (
+      {open === 'new' && add !== null && (
         <RecordDrawer
-          title={t(kindText[kind].add)}
+          title={t(add)}
           onClose={() => {
             setOpen(null);
           }}

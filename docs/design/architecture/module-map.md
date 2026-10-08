@@ -159,7 +159,7 @@ All are **design choices** that implement the cited rules.
 | `numbering` series are scoped by tax registration and billing device | A series is identified by its kind and an opaque scope key the owning module supplies after it has validated the scope. `numbering` calls no one |
 | Every module asks the policy gate; the gate depends on every module's configuration | `configuration` calls no one. Each module registers a validity check for its own configured records. `site-lifecycle` writes activity grants into `configuration` |
 | `files-imports` publishes rows into other modules' records | The target module registers an import handler. Publish calls the handler; the handler writes its own records |
-| `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it |
+| `organisation` must not retire a location where stock is still recorded (a design choice, [structure-and-masters.md](../masters/structure-and-masters.md) 3.5) | `organisation` defines a location-in-use contract; `stock` · ledger implements it, and the composition root hands the implementation to `organisation` at start (`S1-F02-T02`). While none is provided, a location is not retired |
 | `merchandise` must not make a profile piece-tracked at a Site holding its stock without a planned labelling count (`PRD-MER-018`; 4.12) | `merchandise` defines a stock-presence contract; `stock` implements it |
 | `finance` · books must refuse a cost-setting version that changes the formula or pool mode of a book that has held stock ([books-and-posting.md](../finance/books-and-posting.md) 2.2) | `finance` defines a "has this book held stock?" contract; `stock` · ledger implements it (product owner, 6 Oct 2026; [stock-ledger.md](../stock/stock-ledger.md) 13.7) |
 | `exceptions` must verify the business outcome before closure (`PRD-EXC-002`) | `exceptions` defines a resolution-check contract; the module that owns the linked record implements it |
@@ -355,7 +355,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 ### 4.11 `organisation`
 
-**Design choice** (MM-1). **Uses:** `access`, `configuration`, `audit`, `numbering`, `kernel`.
+**Design choice** (MM-1). **Uses:** `access`, `configuration`, `audit`, `numbering`, `files-imports` (to attach a mapping verification's evidence, structure-and-masters 3.4; `S1-F02-T02`), `kernel`.
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |

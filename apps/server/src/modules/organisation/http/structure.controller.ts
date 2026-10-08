@@ -1,4 +1,10 @@
-import { routes, type CommandRoute, type MasterLists, type MasterPageQuery } from '@apparel-os/schemas';
+import {
+  routes,
+  type CommandRoute,
+  type MappingVerified,
+  type MasterLists,
+  type MasterPageQuery,
+} from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -343,6 +349,148 @@ export class StructureController {
     );
   }
 
+  // Business units, their mappings and verifications, locations and default warehouses (structure-and-masters 3.3 to
+  // 3.6; S1-F02-T02).
+
+  @ApiRoute(routes.listBusinessUnits)
+  listBusinessUnits(
+    @RouteInput() input: RouteInputOf<typeof routes.listBusinessUnits>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'business_unit', input.query);
+  }
+
+  @ApiRoute(routes.readBusinessUnit)
+  readBusinessUnit(@RouteInput() input: RouteInputOf<typeof routes.readBusinessUnit>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'business_unit', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareBusinessUnit)
+  prepareBusinessUnit(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareBusinessUnit>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(routes.prepareBusinessUnit, 'organisation.prepare-business-unit', user, input, (c, p) =>
+      this.organisation.prepareBusinessUnit(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareBusinessUnitVersion)
+  prepareBusinessUnitVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareBusinessUnitVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareBusinessUnitVersion,
+      'organisation.prepare-business-unit-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareBusinessUnitVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listBusinessUnitMappings)
+  listBusinessUnitMappings(
+    @RouteInput() input: RouteInputOf<typeof routes.listBusinessUnitMappings>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'business_unit_mapping', input.query);
+  }
+
+  @ApiRoute(routes.readBusinessUnitMapping)
+  readBusinessUnitMapping(
+    @RouteInput() input: RouteInputOf<typeof routes.readBusinessUnitMapping>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'business_unit_mapping', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareBusinessUnitMappingVersion)
+  prepareBusinessUnitMappingVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareBusinessUnitMappingVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareBusinessUnitMappingVersion,
+      'organisation.prepare-business-unit-mapping-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareBusinessUnitMappingVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  /** Verify a mapping version (3.4; POL-10.08): create on the verification record is the verify permission. */
+  @ApiRoute(routes.verifyBusinessUnitMapping)
+  verifyBusinessUnitMapping(
+    @RouteInput() input: RouteInputOf<typeof routes.verifyBusinessUnitMapping>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.verifyBusinessUnitMapping,
+      'organisation.verify-business-unit-mapping',
+      user,
+      input,
+      (c, p) => this.organisation.verifyMapping(c, p, input.params.recordId, input.params.versionId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listLocations)
+  listLocations(@RouteInput() input: RouteInputOf<typeof routes.listLocations>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'location', input.query);
+  }
+
+  @ApiRoute(routes.readLocation)
+  readLocation(@RouteInput() input: RouteInputOf<typeof routes.readLocation>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'location', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareLocation)
+  prepareLocation(@RouteInput() input: RouteInputOf<typeof routes.prepareLocation>, @SignedIn() user: SignedInUser) {
+    return this.prepare(routes.prepareLocation, 'organisation.prepare-location', user, input, (c, p) =>
+      this.organisation.prepareLocation(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareLocationVersion)
+  prepareLocationVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareLocationVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(routes.prepareLocationVersion, 'organisation.prepare-location-version', user, input, (c, p) =>
+      this.organisation.prepareLocationVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listStoreDefaultWarehouses)
+  listStoreDefaultWarehouses(
+    @RouteInput() input: RouteInputOf<typeof routes.listStoreDefaultWarehouses>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'store_default_warehouse', input.query);
+  }
+
+  @ApiRoute(routes.readStoreDefaultWarehouse)
+  readStoreDefaultWarehouse(
+    @RouteInput() input: RouteInputOf<typeof routes.readStoreDefaultWarehouse>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'store_default_warehouse', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareStoreDefaultWarehouseVersion)
+  prepareStoreDefaultWarehouseVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareStoreDefaultWarehouseVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareStoreDefaultWarehouseVersion,
+      'organisation.prepare-store-default-warehouse-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareStoreDefaultWarehouseVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
   @ApiRoute(routes.prepareGroupingVersion)
   prepareGroupingVersion(
     @RouteInput() input: RouteInputOf<typeof routes.prepareGroupingVersion>,
@@ -390,6 +538,10 @@ export class StructureController {
         sites: shown('site', structure.sites),
         stores: shown('store', structure.stores),
         groupings: shown('grouping', structure.groupings),
+        businessUnits: shown('business_unit', structure.businessUnits),
+        businessUnitMappings: shown('business_unit_mapping', structure.businessUnitMappings),
+        locations: shown('location', structure.locations),
+        storeDefaultWarehouses: shown('store_default_warehouse', structure.storeDefaultWarehouses),
       };
     });
   }
@@ -450,7 +602,7 @@ export class StructureController {
     commandName: string,
     user: SignedInUser,
     input: RouteInputOf<R>,
-    work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion>>,
+    work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion | MappingVerified>>,
   ) {
     if (user.roleAssignmentId === undefined) {
       throw new CommandDefect(`Route ${route.path} prepares a structure change without Authorise`);

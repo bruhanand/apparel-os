@@ -2,6 +2,13 @@ import { uuidv7 } from '@apparel-os/domain';
 import type {
   AccountingBookDraft,
   AreaDraft,
+  BusinessUnitDraft,
+  BusinessUnitMappingVersionDraft,
+  BusinessUnitVersionDraft,
+  LocationDraft,
+  LocationKind,
+  LocationVersionDraft,
+  StoreDefaultWarehouseVersionDraft,
   CityDraft,
   CountryDraft,
   GroupingDraft,
@@ -19,14 +26,21 @@ import type {
   TaxRegistrationVersionDraft,
 } from '@apparel-os/schemas';
 import { and, eq, sql, type AnyColumn } from 'drizzle-orm';
-import { sqlStateOf, type TransactionContext } from '../../../kernel/index.js';
+import { sqlStateOf, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
+import type { LocationInUse } from '../contracts/location-in-use.js';
 import {
   accountingBook,
   accountingBookVersion,
   area,
   areaVersion,
+  businessUnit,
+  businessUnitMapping,
+  businessUnitVersion,
+  location,
+  locationVersion,
+  storeDefaultWarehouse,
   city,
   cityVersion,
   country,
@@ -50,6 +64,17 @@ import {
 import { masterTables } from '../db/tables.js';
 import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
 import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
+import {
+  locationPlace,
+  mappingLegalEntity,
+  placeOfLocation,
+  registrationInSiteState,
+  retirable,
+  storeUnitRules,
+  unitOf,
+  warehouseUnit,
+  type UnitFacts,
+} from './rules.js';
 
 // Maintain the structure (structure-and-masters 2.2, 2.3, 3.8; module-map 4.11, 6.2 flow A; S1-F02-T01): a draft
 // version, saved Awaiting approval with its approval request in the preparing command's transaction. A different
@@ -79,7 +104,9 @@ interface Change {
   readonly changes: readonly AuditChange[];
   readonly writeVersion: (context: TransactionContext, common: CommonColumns, recordId: string) => Promise<void>;
   /** The rows the version freezes with it, written after the version row. */
-  readonly children?: (context: TransactionContext, versionId: string) => Promise<void>;
+  readonly children?: (context: TransactionContext, versionId: string, recordId: string) => Promise<void>;
+  /** The kind's own rules, checked before anything is written (structure-and-masters 3.3 to 3.6; rules.ts). */
+  readonly check?: (context: TransactionContext) => Promise<CommandRefusal | undefined>;
 }
 
 interface NewRecord {
@@ -122,6 +149,8 @@ export class StructurePreparation {
   constructor(
     protected readonly audit: AuditInterface,
     private readonly access: Pick<AccessInterface, 'requestApproval'>,
+    /** The location-in-use contract `stock` implements, or undefined while none answers (3.5). */
+    protected readonly locationInUse: LocationInUse | undefined,
   ) {}
 
   private async prepare(
@@ -141,6 +170,8 @@ export class StructurePreparation {
         return refusal('not-found', 'organisation.record-not-found', [notFound(reference.kind, reference.id)]);
       }
     }
+    const broken = await change.check?.(context);
+    if (broken !== undefined) return { kind: 'refusal', refusal: broken };
     let recordId: string;
     if (record.kind === 'new') {
       recordId = uuidv7();
@@ -161,7 +192,7 @@ export class StructurePreparation {
       },
       recordId,
     );
-    await change.children?.(context, versionId);
+    await change.children?.(context, versionId, recordId);
     await this.audit.record(context, {
       actor: { kind: 'user', id: preparer.userId },
       roleAssignmentId: preparer.roleAssignmentId,
@@ -608,17 +639,322 @@ export class StructurePreparation {
   ) {
     return this.prepare(context, preparer, this.groupingChange(draft), { kind: 'existing', id: recordId });
   }
+
+  // Business units and their mappings (3.3, 3.4; PRD-ORG-004 to PRD-ORG-006, PRD-ORG-020; POL-10.01; S1-F02-T02).
+
+  /**
+   * A unit version. A new unit's first version carries its first mapping, written with it as a mapping version that
+   * names it, frozen with it and decided with it (3.4; domain-model invariant 8); so does a later version of a unit
+   * that has no approved version yet, as when a new unit's draft is re-dated (GC2-7). Its status is kept as a Site's.
+   */
+  private unitChange(
+    preparer: Preparer,
+    draft: { readonly name: string; readonly validFrom: string },
+    unit: (context: TransactionContext) => Promise<UnitFacts | undefined>,
+    status: (context: TransactionContext) => Promise<PlaceStatus>,
+    mapping: MappingFields | undefined,
+  ): Change {
+    return {
+      kind: 'business_unit',
+      validFrom: draft.validFrom,
+      references: mapping === undefined ? [] : mappingReferences(mapping),
+      changes: [value('name', draft.name), ...(mapping === undefined ? [] : mappingChanges(mapping))],
+      writeVersion: async (context, common, recordId) => {
+        await context.tx.insert(businessUnitVersion).values({
+          ...common,
+          businessUnitId: recordId,
+          name: draft.name,
+          status: await status(context),
+        });
+      },
+      ...(mapping === undefined
+        ? {}
+        : {
+            children: async (context: TransactionContext, versionId: string, recordId: string) => {
+              await context.tx.insert(businessUnitMapping).values({
+                id: uuidv7(),
+                validDuring: from(draft.validFrom),
+                decision: 'Awaiting approval',
+                preparedByUserId: preparer.userId,
+                businessUnitId: recordId,
+                ...mapping,
+                preparedWithVersionId: versionId,
+              });
+            },
+          }),
+      check: async (context) => {
+        const facts = await unit(context);
+        if (facts === undefined) return undefined;
+        if (mapping !== undefined) {
+          const broken =
+            (await mappingLegalEntity(context, mapping)) ??
+            (await registrationInSiteState(context, facts.siteId, mapping.taxRegistrationId, draft.validFrom));
+          if (broken !== undefined) return broken;
+        }
+        return storeUnitRules(context, facts, draft.validFrom);
+      },
+    };
+  }
+
+  prepareBusinessUnit(context: TransactionContext, preparer: Preparer, draft: BusinessUnitDraft) {
+    const facts: UnitFacts = { siteId: draft.siteId, kind: draft.kind, storeId: draft.storeId ?? null };
+    const change = this.unitChange(
+      preparer,
+      draft,
+      () => Promise.resolve(facts),
+      () => Promise.resolve('Setting up'),
+      mappingOf(draft),
+    );
+    return this.prepare(
+      context,
+      preparer,
+      {
+        ...change,
+        references: [
+          { kind: 'site', id: draft.siteId },
+          ...(draft.storeId === undefined ? [] : [{ kind: 'store' as const, id: draft.storeId }]),
+          ...change.references,
+        ],
+      },
+      {
+        kind: 'new',
+        fixed: {
+          code: draft.code,
+          writeIdentity: async (c, id) => {
+            await c.tx
+              .insert(businessUnit)
+              .values({ id, code: draft.code, siteId: draft.siteId, kind: draft.kind, storeId: draft.storeId ?? null });
+          },
+          changes: [
+            value('code', draft.code),
+            value('siteId', draft.siteId),
+            value('kind', draft.kind),
+            value('storeId', draft.storeId ?? null),
+            value('status', 'Setting up'),
+          ],
+        },
+      },
+    );
+  }
+
+  prepareBusinessUnitVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    recordId: string,
+    draft: BusinessUnitVersionDraft,
+  ) {
+    const mapping =
+      draft.legalEntityId !== undefined && draft.taxRegistrationId !== undefined && draft.accountingBookId !== undefined
+        ? {
+            legalEntityId: draft.legalEntityId,
+            taxRegistrationId: draft.taxRegistrationId,
+            accountingBookId: draft.accountingBookId,
+          }
+        : undefined;
+    const change = this.unitChange(
+      preparer,
+      draft,
+      async (c) => {
+        const unit = await unitOf(c, recordId);
+        return unit === undefined ? undefined : { ...unit, id: recordId };
+      },
+      (c) => latestStatus(c, 'business_unit', recordId),
+      mapping,
+    );
+    return this.prepare(context, preparer, change, { kind: 'existing', id: recordId });
+  }
+
+  /** A later mapping version of a unit (3.4): checked as the first, then decided on its own. */
+  prepareBusinessUnitMappingVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    unitId: string,
+    draft: BusinessUnitMappingVersionDraft,
+  ) {
+    const mapping = mappingOf(draft);
+    return this.prepare(
+      context,
+      preparer,
+      {
+        kind: 'business_unit_mapping',
+        validFrom: draft.validFrom,
+        references: mappingReferences(mapping),
+        changes: mappingChanges(mapping),
+        writeVersion: async (c, common, recordId) => {
+          await c.tx
+            .insert(businessUnitMapping)
+            .values({ ...common, businessUnitId: recordId, ...mapping, preparedWithVersionId: null });
+        },
+        check: async (c) => {
+          const unit = await unitOf(c, unitId);
+          if (unit === undefined) return undefined;
+          return (
+            (await mappingLegalEntity(c, mapping)) ??
+            (await registrationInSiteState(c, unit.siteId, mapping.taxRegistrationId, draft.validFrom))
+          );
+        },
+      },
+      { kind: 'existing', id: unitId },
+    );
+  }
+
+  // Locations (3.5; PRD-ORG-012) and default warehouses (3.6; PRD-ORG-013).
+
+  private locationChange(
+    draft: { name: string; kind: LocationKind; parentLocationId?: string | undefined; validFrom: string },
+    retired: boolean,
+    place: (context: TransactionContext) => Promise<{ siteId: string; businessUnitId: string } | undefined>,
+    locationId: string | undefined,
+  ): Change {
+    return {
+      kind: 'location',
+      validFrom: draft.validFrom,
+      references: draft.parentLocationId === undefined ? [] : [{ kind: 'location', id: draft.parentLocationId }],
+      changes: [
+        value('name', draft.name),
+        value('kind', draft.kind),
+        value('parentLocationId', draft.parentLocationId ?? null),
+        value('retired', retired),
+      ],
+      writeVersion: async (context, common, recordId) => {
+        await context.tx.insert(locationVersion).values({
+          ...common,
+          locationId: recordId,
+          name: draft.name,
+          kind: draft.kind,
+          parentLocationId: draft.parentLocationId ?? null,
+          retired,
+        });
+      },
+      check: async (context) => {
+        const facts = await place(context);
+        if (facts === undefined) return undefined;
+        const broken = await locationPlace(context, facts, draft.parentLocationId);
+        if (broken !== undefined) return broken;
+        return retired && locationId !== undefined ? retirable(context, this.locationInUse, locationId) : undefined;
+      },
+    };
+  }
+
+  prepareLocation(context: TransactionContext, preparer: Preparer, draft: LocationDraft) {
+    const change = this.locationChange(
+      draft,
+      false,
+      () => Promise.resolve({ siteId: draft.siteId, businessUnitId: draft.businessUnitId }),
+      undefined,
+    );
+    return this.prepare(
+      context,
+      preparer,
+      {
+        ...change,
+        references: [
+          { kind: 'site', id: draft.siteId },
+          { kind: 'business_unit', id: draft.businessUnitId },
+          ...change.references,
+        ],
+      },
+      {
+        kind: 'new',
+        fixed: {
+          code: draft.code,
+          under: { column: location.siteId, id: draft.siteId },
+          writeIdentity: async (c, id) => {
+            await c.tx
+              .insert(location)
+              .values({ id, code: draft.code, siteId: draft.siteId, businessUnitId: draft.businessUnitId });
+          },
+          changes: [
+            value('code', draft.code),
+            value('siteId', draft.siteId),
+            value('businessUnitId', draft.businessUnitId),
+          ],
+        },
+      },
+    );
+  }
+
+  /** A later location version; one that retires it asks `stock` first (3.5). */
+  prepareLocationVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    recordId: string,
+    draft: LocationVersionDraft,
+  ) {
+    const change = this.locationChange(draft, draft.retired, (c) => placeOfLocation(c, recordId), recordId);
+    return this.prepare(context, preparer, change, { kind: 'existing', id: recordId });
+  }
+
+  /** A Store's default warehouse from a date: a warehouse unit (3.6). */
+  prepareStoreDefaultWarehouseVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    storeId: string,
+    draft: StoreDefaultWarehouseVersionDraft,
+  ) {
+    return this.prepare(
+      context,
+      preparer,
+      {
+        kind: 'store_default_warehouse',
+        validFrom: draft.validFrom,
+        references: [{ kind: 'business_unit', id: draft.warehouseUnitId }],
+        changes: [value('warehouseUnitId', draft.warehouseUnitId)],
+        writeVersion: async (c, common, recordId) => {
+          await c.tx
+            .insert(storeDefaultWarehouse)
+            .values({ ...common, storeId: recordId, warehouseUnitId: draft.warehouseUnitId });
+        },
+        check: (c) => warehouseUnit(c, draft.warehouseUnitId),
+      },
+      { kind: 'existing', id: storeId },
+    );
+  }
 }
 
+/** A mapping's three fields (3.4). */
+interface MappingFields {
+  readonly legalEntityId: string;
+  readonly taxRegistrationId: string;
+  readonly accountingBookId: string;
+}
+
+const mappingOf = (draft: MappingFields): MappingFields => ({
+  legalEntityId: draft.legalEntityId,
+  taxRegistrationId: draft.taxRegistrationId,
+  accountingBookId: draft.accountingBookId,
+});
+
+const mappingReferences = (mapping: MappingFields): Reference[] => [
+  { kind: 'legal_entity', id: mapping.legalEntityId },
+  { kind: 'tax_registration', id: mapping.taxRegistrationId },
+  { kind: 'accounting_book', id: mapping.accountingBookId },
+];
+
+const mappingChanges = (mapping: MappingFields): AuditChange[] => [
+  value('legalEntityId', mapping.legalEntityId),
+  value('taxRegistrationId', mapping.taxRegistrationId),
+  value('accountingBookId', mapping.accountingBookId),
+];
+
 /**
- * The status of a Site's or Store's latest approved version, or Setting up while it has none (3.7): a new version
- * keeps it, since only lifecycle events change it.
+ * The status of a Site's, Store's or unit's latest approved version, or Setting up while it has none (3.7): a new
+ * version keeps it, since only lifecycle events change it.
  */
 async function latestStatus(
   context: TransactionContext,
-  kind: 'site' | 'store',
+  kind: 'site' | 'store' | 'business_unit',
   recordId: string,
 ): Promise<PlaceStatus> {
+  if (kind === 'business_unit') {
+    const [latest] = await context.tx
+      .select({ status: businessUnitVersion.status })
+      .from(businessUnitVersion)
+      .where(and(eq(businessUnitVersion.businessUnitId, recordId), eq(businessUnitVersion.decision, 'Approved')))
+      .orderBy(sql`lower(${businessUnitVersion.validDuring}) desc`)
+      .limit(1);
+    return latest?.status ?? 'Setting up';
+  }
   const table = kind === 'site' ? siteVersion : storeVersion;
   const owner = kind === 'site' ? siteVersion.siteId : storeVersion.storeId;
   const [latest] = await context.tx

@@ -85,7 +85,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.policy-readiness',
     ],
   },
-  'P-ACC': { home: null, menu: [] },
+  // Accounts verifies business-unit mappings on Setup › Organisation structure (POL-10.08; S1-F02-T02).
+  'P-ACC': { home: null, menu: ['my-work', 'setup.organisation-structure'] },
   'P-CHA': { home: null, menu: [] },
   'P-BKG': { home: null, menu: [] },
   'P-OPS': { home: 'my-work', menu: ['my-work'] },

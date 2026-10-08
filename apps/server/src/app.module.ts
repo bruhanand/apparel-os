@@ -7,25 +7,33 @@ import { InboxModule } from './modules/inbox/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
-import { OrganisationModule, organisationApprovals } from './modules/organisation/index.js';
-import { StockLedgerModule } from './modules/stock/ledger/index.js';
+import {
+  LOCATION_IN_USE,
+  OrganisationModule,
+  organisationApprovals,
+  type LocationInUse,
+} from './modules/organisation/index.js';
+import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.js';
 
 /**
- * The approval rules and decision effects the modules above `access` declare for their documents, handed to `access`
- * at start (access-and-approvals 8, 9.8b; module-map section 3, rule 6): `access` defines the contract and never
- * depends on the modules that implement it. Global, so AccessModule's factory reaches it.
+ * The contracts a lower module defines and a higher one implements, handed over at start (module-map section 3, rule
+ * 6): the approval rules and decision effects the modules above `access` declare for their documents
+ * (access-and-approvals 8, 9.8b), and the location-in-use contract of `organisation` that `stock` · ledger implements
+ * (structure-and-masters 3.5; S1-F02-T02). The defining module never depends on the implementing one. Global, so the
+ * modules' factories reach them.
  */
 @Global()
 @Module({
   imports: [AuditModule],
   providers: [
+    { provide: LOCATION_IN_USE, useFactory: (): LocationInUse => new LocationStock() },
     {
       provide: MODULE_APPROVALS,
-      useFactory: (audit: AuditInterface) => organisationApprovals(audit),
-      inject: [AUDIT],
+      useFactory: (audit: AuditInterface, locationInUse: LocationInUse) => organisationApprovals(audit, locationInUse),
+      inject: [AUDIT, LOCATION_IN_USE],
     },
   ],
-  exports: [MODULE_APPROVALS],
+  exports: [MODULE_APPROVALS, LOCATION_IN_USE],
 })
 export class ModuleApprovalsModule {}
 

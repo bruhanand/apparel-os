@@ -353,7 +353,7 @@ Decided by the product owner: harness decision H3 ([S1-F10 spec](../../plan/stag
 - A synthetic harness that needs rows of its own, such as the documents of the stock harness, keeps them in a schema named `test_<harness>`, created by a third migration set, `apps/server/test/migrations/`.
 - Only test setup applies that set, after the Organisation set, to test databases. The pre-deploy runner never reads it, and the catalogue test fails if such a schema exists in a database the runner migrated (10.4).
 - Harness code lives in `apps/server/test/` and is composed only into a test application.
-- As built (`S1-F06-T05`): the third migration set does not exist yet, so the test of stored files makes its `test_files` schema itself, as the migration role, in its own database copies (`apps/server/test/stored-files.int.test.ts`); it moves into the set when the stock harness (`S1-F10`) creates it.
+- As built (`S1-F06-T05`): the third migration set does not exist yet, so the test of stored files makes its `test_files` schema itself, as the migration role, in its own database copies (`apps/server/test/stored-files.int.test.ts`); it moves into the set when the stock harness (`S1-F10`) creates it. The test of business units does the same for `test_mapping`, the synthetic transaction of structure-and-masters 9 test 1 (`apps/server/test/organisation-units.int.test.ts`; `S1-F02-T02`).
 
 ## 12. Part B: API and runtime
 

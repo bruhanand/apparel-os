@@ -3,7 +3,7 @@ import type { AssignmentScope } from '@apparel-os/schemas';
 import type { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CommandRunner, newCorrelationId, OrganisationRouter, type RoutedOrganisation } from '../src/kernel/index.js';
-import { BookStockHistory } from '../src/modules/stock/ledger/index.js';
+import { BookStockHistory, LocationStock } from '../src/modules/stock/ledger/index.js';
 import { SYNTHETIC_MODULE } from './fixtures/stock-ledger.js';
 import { syntheticCode } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment, syntheticTimezone, writeSyntheticUser } from './support/access.js';
@@ -972,6 +972,36 @@ describe('has this book held stock? (stock-ledger 13.7; module-map section 3, ru
       );
     expect(await ask(heldBook)).toBe(true);
     expect(await ask(emptyBook)).toBe(false);
+  });
+
+  it('structure-and-masters 3.5 PRD-ORG-012 location in use: yes while a balance there holds units, no once it is empty or for another location, whatever the asker may see', async () => {
+    const stock = await stockAt(AT_STORE_2, BRAND_B);
+    const [held] = (
+      await owner.query<{ location_id: string }>('select location_id from stock.balance where id = $1', [stock.balance])
+    ).rows;
+    if (held === undefined) throw new Error('no balance');
+    // The asker holds no stock permission at all: the answer must not depend on its scope (S1-F02-T02).
+    const asker = await writeSyntheticUser(database, routed.organisationCode, keysEnvironment, { label: 'LOCATIONS' });
+    const inUse = new LocationStock();
+    const runner = new CommandRunner({
+      clock: { now: () => new Date() },
+      timezones: syntheticTimezone,
+      logger: log.logger,
+    });
+    const ask = (locationId: string): Promise<boolean> =>
+      runner.read(
+        {
+          commandName: 'stock.synthetic-test',
+          organisation: routed,
+          correlationId: newCorrelationId(),
+          actor: { kind: 'actor', actorId: asker.id },
+        },
+        (context) => inUse.hasStock(context, locationId),
+      );
+    expect(await ask(held.location_id)).toBe(true);
+    expect(await ask(uuidv7())).toBe(false);
+    await owner.query('update stock.balance set quantity = 0, accepted_quantity = 0 where id = $1', [stock.balance]);
+    expect(await ask(held.location_id)).toBe(false);
   });
 
   it('PRD-MOD-001 a book of the other Organisation is not seen', async () => {

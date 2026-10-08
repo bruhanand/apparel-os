@@ -6,7 +6,9 @@ export type { OrganisationDependencies, OrganisationInterface } from './organisa
 export { organisationApprovals } from './commands/effects.js';
 export type { Prepared, Preparer } from './commands/common.js';
 export type { NamedKind, PreparedVersion } from './commands/prepare.js';
+export { LOCATION_IN_USE } from './contracts/location-in-use.js';
+export type { LocationInUse } from './contracts/location-in-use.js';
 export { actionTypeOf, masterKinds, organisationApprovalRules, recordTypeOf } from './domain/kinds.js';
 export type { MasterKind } from './domain/kinds.js';
-export type { InForce, PageRequest, RecordPage, RecordView, Structure } from './queries/records.js';
-export { structureChanged } from './events.js';
+export type { InForce, PageRequest, RecordPage, RecordView, Structure, UnitMapping } from './queries/records.js';
+export { mappingChanged, structureChanged } from './events.js';

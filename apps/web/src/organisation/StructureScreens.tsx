@@ -14,7 +14,8 @@ import { recordTypeOf, type Kind } from './kinds';
 import { MasterTab } from './MasterTab';
 
 // Setup › Organisation structure and Setup › Geography and groupings (structure-and-masters 8; ui-blueprint Setup;
-// S1-F02-T01). Business units and locations join the first screen with S1-F02-T02.
+// S1-F02-T01). Business units with their verified mappings, locations and default warehouses join the first screen
+// with S1-F02-T02.
 
 type Tab = Kind | 'master-lists';
 
@@ -94,6 +95,18 @@ function MasterLists() {
             ...lists.cities.map((each) => ({ type: recordTypeOf('city'), ...each })),
             ...lists.areas.map((each) => ({ type: recordTypeOf('area'), ...each })),
             ...lists.groupings.map((each) => ({ type: recordTypeOf('grouping'), ...each })),
+            ...lists.businessUnits.map((each) => ({ type: recordTypeOf('business_unit'), ...each })),
+            // A unit's mapping in force, with its verification state (structure-and-masters 3.4; POL-10.08).
+            ...lists.businessUnitMappings.map((each) => ({
+              type: recordTypeOf('business_unit_mapping'),
+              ...each,
+              name: t(
+                each.verification === undefined
+                  ? 'organisation.verification.unverified'
+                  : 'organisation.verification.verified',
+              ),
+            })),
+            ...lists.locations.map((each) => ({ type: recordTypeOf('location'), ...each })),
           ];
           return (
             <div className="flex flex-col gap-3">
@@ -141,12 +154,26 @@ function MasterLists() {
   );
 }
 
-/** Setup › Organisation structure: legal entities, registrations, books, Sites, Stores and the master lists. */
+/**
+ * Setup › Organisation structure: legal entities, registrations, books, Sites, Stores, business units and their
+ * mappings, locations, default warehouses and the master lists.
+ */
 export function OrganisationStructureScreen() {
   return (
     <Tabs
       label="screen.setup.organisation-structure"
-      tabs={['legal_entity', 'tax_registration', 'accounting_book', 'site', 'store', 'master-lists']}
+      tabs={[
+        'legal_entity',
+        'tax_registration',
+        'accounting_book',
+        'site',
+        'store',
+        'business_unit',
+        'business_unit_mapping',
+        'location',
+        'store_default_warehouse',
+        'master-lists',
+      ]}
     />
   );
 }

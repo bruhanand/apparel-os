@@ -18,8 +18,11 @@ export function kindOfActionType(actionType: string): Kind | undefined {
   return kinds.find((kind) => masterActionType(kind) === actionType);
 }
 
-/** The words each kind's screens use, each a catalogue entry (code-house-rules 12.13). */
-export const kindText: Readonly<Record<Kind, { readonly add: MessageId; readonly what: MessageId }>> = {
+/**
+ * The words each kind's screens use, each a catalogue entry (code-house-rules 12.13). A unit's mapping and a Store's
+ * default warehouse have no record of their own to add: only versions (structure-and-masters 3.4, 3.6).
+ */
+export const kindText: Readonly<Record<Kind, { readonly add: MessageId | null; readonly what: MessageId }>> = {
   country: { add: 'organisation.new.country', what: 'organisation.what.country' },
   state: { add: 'organisation.new.state', what: 'organisation.what.state' },
   city: { add: 'organisation.new.city', what: 'organisation.what.city' },
@@ -30,6 +33,10 @@ export const kindText: Readonly<Record<Kind, { readonly add: MessageId; readonly
   site: { add: 'organisation.new.site', what: 'organisation.what.site' },
   store: { add: 'organisation.new.store', what: 'organisation.what.store' },
   grouping: { add: 'organisation.new.grouping', what: 'organisation.what.grouping' },
+  business_unit: { add: 'organisation.new.business_unit', what: 'organisation.what.business_unit' },
+  business_unit_mapping: { add: null, what: 'organisation.what.business_unit_mapping' },
+  location: { add: 'organisation.new.location', what: 'organisation.what.location' },
+  store_default_warehouse: { add: null, what: 'organisation.what.store_default_warehouse' },
 };
 
 export interface Option {
@@ -37,14 +44,25 @@ export interface Option {
   readonly label: MessageId;
 }
 
-/** One field of a master's form and of its version history. */
-export type FieldSpec = { readonly name: string; readonly label: MessageId; readonly fixed?: true } & (
+/**
+ * One field of a master's form and of its version history. `fixed`: set when the record is created, shown with the
+ * record. `withFirst`: given with a record's first version only, as a unit's first mapping is (3.4), and shown in its
+ * own place, not with the versions. `laterOnly`: a later version's field only, as retiring a location (3.5).
+ */
+export type FieldSpec = {
+  readonly name: string;
+  readonly label: MessageId;
+  readonly fixed?: true;
+  readonly withFirst?: true;
+  readonly laterOnly?: true;
+} & (
   | { readonly kind: 'text'; readonly mono?: true }
   | { readonly kind: 'date'; readonly optional?: true }
   | { readonly kind: 'select'; readonly options: readonly Option[] }
-  | { readonly kind: 'reference'; readonly target: Kind }
+  | { readonly kind: 'reference'; readonly target: Kind; readonly optional?: true }
   | { readonly kind: 'lines' }
   | { readonly kind: 'references'; readonly target: Kind }
+  | { readonly kind: 'yes-no' }
 );
 
 const code: FieldSpec = { name: 'code', label: 'organisation.field.code', kind: 'text', mono: true, fixed: true };
@@ -171,14 +189,123 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
     name,
     { name: 'storeIds', label: 'organisation.field.storeIds', kind: 'references', target: 'store' },
   ],
+  business_unit: [
+    code,
+    { name: 'siteId', label: 'organisation.field.siteId', kind: 'reference', target: 'site', fixed: true },
+    {
+      name: 'kind',
+      label: 'organisation.field.unitKind',
+      kind: 'select',
+      options: [
+        { value: 'whole-store', label: 'unit-kind.whole-store' },
+        { value: 'brand-counter', label: 'unit-kind.brand-counter' },
+        { value: 'warehouse', label: 'unit-kind.warehouse' },
+        { value: 'office', label: 'unit-kind.office' },
+      ],
+      fixed: true,
+    },
+    {
+      name: 'storeId',
+      label: 'organisation.field.storeId',
+      kind: 'reference',
+      target: 'store',
+      optional: true,
+      fixed: true,
+    },
+    name,
+    ...mappingFields(true),
+  ],
+  business_unit_mapping: mappingFields(false),
+  location: [
+    code,
+    { name: 'siteId', label: 'organisation.field.siteId', kind: 'reference', target: 'site', fixed: true },
+    {
+      name: 'businessUnitId',
+      label: 'organisation.field.businessUnitId',
+      kind: 'reference',
+      target: 'business_unit',
+      fixed: true,
+    },
+    name,
+    {
+      name: 'kind',
+      label: 'organisation.field.locationKind',
+      kind: 'select',
+      options: [
+        { value: 'floor', label: 'location-kind.floor' },
+        { value: 'backstore', label: 'location-kind.backstore' },
+        { value: 'zone', label: 'location-kind.zone' },
+        { value: 'rack', label: 'location-kind.rack' },
+        { value: 'bin', label: 'location-kind.bin' },
+        { value: 'fixture', label: 'location-kind.fixture' },
+        { value: 'display', label: 'location-kind.display' },
+        { value: 'alteration', label: 'location-kind.alteration' },
+      ],
+    },
+    {
+      name: 'parentLocationId',
+      label: 'organisation.field.parentLocationId',
+      kind: 'reference',
+      target: 'location',
+      optional: true,
+    },
+    { name: 'retired', label: 'organisation.field.retired', kind: 'yes-no', laterOnly: true },
+  ],
+  store_default_warehouse: [
+    {
+      name: 'warehouseUnitId',
+      label: 'organisation.field.warehouseUnitId',
+      kind: 'reference',
+      target: 'business_unit',
+    },
+  ],
 };
 
-/** The field that names a version: its name, legal name or registration number. */
+/**
+ * A unit's mapping: its legal entity, tax registration and book together (structure-and-masters 3.4, 8). On a unit,
+ * given with its first version only.
+ */
+function mappingFields(withFirst: boolean): FieldSpec[] {
+  const flag = withFirst ? ({ withFirst: true } as const) : {};
+  return [
+    {
+      name: 'legalEntityId',
+      label: 'organisation.field.legalEntityId',
+      kind: 'reference',
+      target: 'legal_entity',
+      ...flag,
+    },
+    {
+      name: 'taxRegistrationId',
+      label: 'organisation.field.taxRegistrationId',
+      kind: 'reference',
+      target: 'tax_registration',
+      ...flag,
+    },
+    {
+      name: 'accountingBookId',
+      label: 'organisation.field.accountingBookId',
+      kind: 'reference',
+      target: 'accounting_book',
+      ...flag,
+    },
+  ];
+}
+
+/**
+ * The field that names a version: its name, legal name or registration number; none for a mapping or a default
+ * warehouse, whose record is named by its unit's or Store's code.
+ */
 export function labelField(kind: Kind): string {
   if (kind === 'legal_entity') return 'legalName';
   if (kind === 'tax_registration') return 'registrationNumber';
+  if (kind === 'business_unit_mapping') return 'legalEntityId';
+  if (kind === 'store_default_warehouse') return 'warehouseUnitId';
   return 'name';
 }
+
+/** The kinds whose versions carry a status of the place's lifecycle (structure-and-masters 3.7). */
+export const PLACE_KINDS: readonly Kind[] = ['site', 'store', 'business_unit'];
 
 /** The reads a change makes stale: every master's list and record, the master lists and My work. */
 export const ORGANISATION_READS = [

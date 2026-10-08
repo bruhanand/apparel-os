@@ -37,7 +37,8 @@ import {
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic } from '../support/grants.js';
 import { capturingLogger } from '../support/jobs.js';
-import { approvedGeography, structureSetup } from '../support/organisation.js';
+import { startTestFileStore } from '../support/minio.js';
+import { approved, approvedGeography, structureSetup } from '../support/organisation.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
@@ -236,36 +237,121 @@ const structureFixture = await structureSetup({
   label: 'BROWSER-GEO',
 });
 const structureGeography = await approvedGeography(structureFixture, 'JOURNEY');
+// The business units journey (organisation-units.spec.ts; S1-F02-T02): an approved SYNTHETIC Site in the journey's
+// Area, and two legal entities, each with a tax registration in that Area's State and a book, so two units at the one
+// Site can map to different books and registrations (structure-and-masters 9 test 1).
+const unitsSite = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-UNITS-SITE'),
+    name: syntheticName('Journey Units Site'),
+    physicalKind: 'central-warehouse',
+    areaId: structureGeography.area.recordId,
+    addresses: [syntheticName('1 Units Road')],
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const unitsEntities = [];
+for (const label of ['ONE', 'TWO']) {
+  const legalEntity = await approved(structureFixture, (c, p) =>
+    structureFixture.organisation.prepareLegalEntity(c, p, {
+      code: syntheticCode(`JOURNEY-LE-${label}`),
+      legalName: syntheticName(`Journey Entity ${label}`),
+      validFrom: structureFixture.today(),
+    }),
+  );
+  const registrationNumber = `SYNTHETIC-GSTIN-${label}`;
+  await approved(structureFixture, (c, p) =>
+    structureFixture.organisation.prepareTaxRegistration(c, p, {
+      code: syntheticCode(`JOURNEY-GSTIN-${label}`),
+      legalEntityId: legalEntity.recordId,
+      registrationNumber,
+      stateId: structureGeography.state.recordId,
+      validityFrom: structureFixture.today(),
+      validFrom: structureFixture.today(),
+    }),
+  );
+  await approved(structureFixture, (c, p) =>
+    structureFixture.organisation.prepareAccountingBook(c, p, {
+      code: syntheticCode(`JOURNEY-BK-${label}`),
+      legalEntityId: legalEntity.recordId,
+      name: syntheticName(`Journey Book ${label}`),
+      validFrom: structureFixture.today(),
+    }),
+  );
+  // How the unit form names each choice: its code and its latest version's name (the web's useNames).
+  unitsEntities.push({
+    legalEntityOption: `${syntheticCode(`JOURNEY-LE-${label}`)} · ${syntheticName(`Journey Entity ${label}`)}`,
+    registrationOption: `${syntheticCode(`JOURNEY-GSTIN-${label}`)} · ${registrationNumber}`,
+    bookOption: `${syntheticCode(`JOURNEY-BK-${label}`)} · ${syntheticName(`Journey Book ${label}`)}`,
+  });
+}
 await structureFixture.close();
+/** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
+const verifyAuthorities = [
+  { recordType: 'organisation.business_unit_mapping_verification', action: 'view' as const },
+  { recordType: 'organisation.business_unit_mapping_verification', action: 'create' as const },
+  { recordType: 'files_imports.stored_file', action: 'create' as const },
+];
 const organisationTypes = masterKinds.map(organisationRecordType);
+const adminAuthorities = [
+  ...organisationTypes.flatMap((recordType) =>
+    (['view', 'create', 'edit'] as const).map((action) => ({ recordType, action })),
+  ),
+  { recordType: 'access.approval_request', action: 'view' as const },
+  // The verify permission too, so that verifying a mapping they made is refused by the rule alone (GC2-2, DEC-105).
+  ...verifyAuthorities,
+];
+const approverAuthorities = [
+  ...organisationTypes.flatMap((recordType) =>
+    (['view', 'approve'] as const).map((action) => ({ recordType, action })),
+  ),
+  { recordType: 'access.approval_request', action: 'view' as const },
+  // The reasons in force, which the approval panel offers (access-and-approvals 9.5).
+  { recordType: 'access.approval_reason', action: 'view' as const },
+];
 const structureAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
   label: 'BROWSER-STRUCTURE-ADMIN',
   enrolled: true,
   personas: ['P-ADM'],
 });
-await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAdmin.id }, [
-  ...organisationTypes.flatMap((recordType) =>
-    (['view', 'create', 'edit'] as const).map((action) => ({ recordType, action })),
-  ),
-  { recordType: 'access.approval_request', action: 'view' },
+await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAdmin.id }, adminAuthorities);
+// The business units journey's own Admin and approver: journeys run at once, and an authenticator code is taken once
+// (access-and-approvals 3.3), so two journeys never sign in as one person.
+const unitsAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-UNITS-ADMIN',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: unitsAdmin.id }, adminAuthorities);
+const unitsApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-UNITS-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: unitsApprover.id }, approverAuthorities);
+// The Accounts user who verifies a mapping they did not make (POL-10.08), reading the structure.
+const structureAccounts = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-STRUCTURE-ACCOUNTS',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAccounts.id }, [
+  ...organisationTypes.map((recordType) => ({ recordType, action: 'view' as const })),
+  ...verifyAuthorities,
 ]);
 const structureApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
   label: 'BROWSER-STRUCTURE-APPROVER',
   enrolled: true,
   personas: ['P-OWN'],
 });
-await grantSynthetic(settingsDatabase, { kind: 'user', id: structureApprover.id }, [
-  ...organisationTypes.flatMap((recordType) =>
-    (['view', 'approve'] as const).map((action) => ({ recordType, action })),
-  ),
-  { recordType: 'access.approval_request', action: 'view' },
-  // The reasons in force, which the approval panel offers (access-and-approvals 9.5).
-  { recordType: 'access.approval_reason', action: 'view' },
-]);
+await grantSynthetic(settingsDatabase, { kind: 'user', id: structureApprover.id }, approverAuthorities);
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
+// A MinIO container for the evidence files of the business units journey (code-house-rules 12.10).
+const fileStore = await startTestFileStore();
 const app = await startAccessApp(
   world,
   {
@@ -273,7 +359,7 @@ const app = await startAccessApp(
     AOS_ENVIRONMENT: 'local',
     AOS_DEMO_SIGN_IN: JSON.stringify([{ organisationCode: settingsCode, login: demoUser.login, label: demoLabel }]),
   },
-  { origin, port, webApp },
+  { origin, port, webApp, fileStoreEnvironment: fileStore.environment },
 );
 
 // The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A). It serves every
@@ -349,6 +435,27 @@ writeFileSync(
         password: structureApprover.password,
         factorSecretHex: structureApprover.factorSecret?.toString('hex') ?? '',
       },
+      unitsAdmin: {
+        login: unitsAdmin.login,
+        displayName: unitsAdmin.displayName,
+        password: unitsAdmin.password,
+        factorSecretHex: unitsAdmin.factorSecret?.toString('hex') ?? '',
+      },
+      unitsApprover: {
+        login: unitsApprover.login,
+        displayName: unitsApprover.displayName,
+        password: unitsApprover.password,
+        factorSecretHex: unitsApprover.factorSecret?.toString('hex') ?? '',
+      },
+      accounts: {
+        login: structureAccounts.login,
+        displayName: structureAccounts.displayName,
+        password: structureAccounts.password,
+        factorSecretHex: structureAccounts.factorSecret?.toString('hex') ?? '',
+      },
+      siteId: unitsSite.recordId,
+      siteOption: `${syntheticCode('JOURNEY-UNITS-SITE')} · ${syntheticName('Journey Units Site')}`,
+      entities: unitsEntities,
     },
     settings: {
       organisationCode: settingsCode,
@@ -389,6 +496,7 @@ async function stop(): Promise<void> {
   await worker.stop().catch(() => undefined);
   await router.close().catch(() => undefined);
   await app.close().catch(() => undefined);
+  await fileStore.stop().catch(() => undefined);
   try {
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, app.logText());

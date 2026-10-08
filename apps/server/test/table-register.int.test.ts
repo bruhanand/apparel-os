@@ -50,8 +50,12 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'audit.delete_after_retention',
     'audit.ensure_partitions',
     'audit.seal_block',
+    // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).
+    'organisation.mapping_out_of_step',
     // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).
     'stock.book_has_held_stock',
+    // structure-and-masters 3.5: the location-in-use contract's answer, SECURITY DEFINER (S1-F02-T02).
+    'stock.location_has_stock',
     // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).
     'stock.rebuild_partial',
     // stock-ledger 14.1, 14.3: the recheck of holds and freezes the actor cannot see, SECURITY DEFINER (DEC-117).

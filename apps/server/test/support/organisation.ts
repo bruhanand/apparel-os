@@ -10,8 +10,11 @@ import { Access, type DecisionOutcome } from '../../src/modules/access/index.js'
 // The access module's own key reader, so the fresh-code check opens the synthetic factor secrets (11.2).
 import { OrganisationKeys } from '../../src/modules/access/domain/organisation-keys.js';
 import { Audit } from '../../src/modules/audit/index.js';
+// The module's own class, composed here as the application composes it (code-house-rules 11.2).
+import { FilesImports } from '../../src/modules/files-imports/files-imports.js';
 import {
   masterKinds,
+  type LocationInUse,
   Organisation,
   organisationApprovals,
   recordTypeOf,
@@ -79,6 +82,8 @@ export async function structureSetup(options: {
   readonly organisationCode: string;
   readonly keysEnvironment: Record<string, string>;
   readonly label: string;
+  /** The location-in-use implementation, as the composition root hands it over; none answers when left out. */
+  readonly locationInUse?: LocationInUse;
 }): Promise<StructureSetup> {
   const log = capturingLogger();
   const router = new OrganisationRouter(
@@ -89,14 +94,19 @@ export async function structureSetup(options: {
   if (!found.routed) throw new Error(`${options.organisationCode} is not routed`);
   const routed: RoutedOrganisation = found.organisation;
   const audit = new Audit(log.logger);
-  const modules = organisationApprovals(audit);
+  const modules = organisationApprovals(audit, options.locationInUse);
   const access = new Access({
     audit,
     keys: OrganisationKeys.fromEnvironment(options.keysEnvironment),
     approvalRules: modules.rules,
     documentEffects: modules.effects,
   });
-  const organisation = new Organisation({ audit, access });
+  const organisation = new Organisation({
+    audit,
+    access,
+    files: new FilesImports(audit),
+    locationInUse: options.locationInUse,
+  });
   const write = (label: string) =>
     writeSyntheticUser(options.database, options.organisationCode, options.keysEnvironment, { label, enrolled: true });
   const preparer = await write(`${options.label}-PREPARER`);

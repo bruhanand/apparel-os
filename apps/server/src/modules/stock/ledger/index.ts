@@ -1,6 +1,7 @@
 // Public interface of stock · ledger (module-map 4.13; stock-ledger 13). Other code imports only from here.
 export { BOOK_STOCK_HISTORY, STOCK_LEDGER, StockLedgerModule } from './stock-ledger.module.js';
 export { BookStockHistory, type BookStockHistoryContract } from './contracts/book-stock-history.js';
+export { LocationStock } from './contracts/location-stock.js';
 export { StockLedger } from './ledger.js';
 export type {
   CheckedRequest,

@@ -1,5 +1,7 @@
 import {
   MASTER_PAGE_CAP,
+  type BusinessUnitKind,
+  type MappingVerification,
   type MasterKind,
   type MasterLists,
   type MasterRecords,
@@ -14,8 +16,15 @@ import {
   accountingBookVersion,
   area,
   areaVersion,
+  businessUnit,
+  businessUnitMapping,
+  businessUnitMappingVerification,
+  businessUnitVersion,
   city,
   cityVersion,
+  location,
+  locationVersion,
+  storeDefaultWarehouse,
   country,
   countryVersion,
   grouping,
@@ -457,6 +466,166 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
     head: (identity) => ({ id: identity.id, code: identity.code, kind: identity.kind }),
     fields: (row) => ({ name: row.name, storeIds: row.storeIds }),
   }),
+  business_unit: reads('business_unit', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(businessUnit).$dynamic(), where, limit),
+    // With the mapping a version was prepared with, decided with it (structure-and-masters 3.4).
+    versions: async (tx, where) => {
+      const rows = await newestFirst(
+        tx
+          .select({
+            ...versionColumns(businessUnitVersion),
+            owner: businessUnitVersion.businessUnitId,
+            name: businessUnitVersion.name,
+            status: businessUnitVersion.status,
+          })
+          .from(businessUnitVersion)
+          .$dynamic(),
+        where,
+      );
+      const prepared =
+        rows.length === 0
+          ? []
+          : await tx
+              .select({
+                versionId: businessUnitMapping.preparedWithVersionId,
+                legalEntityId: businessUnitMapping.legalEntityId,
+                taxRegistrationId: businessUnitMapping.taxRegistrationId,
+                accountingBookId: businessUnitMapping.accountingBookId,
+              })
+              .from(businessUnitMapping)
+              .where(
+                inArray(
+                  businessUnitMapping.preparedWithVersionId,
+                  rows.map((row) => row.id),
+                ),
+              );
+      const byVersion = new Map(prepared.map((each) => [each.versionId, each]));
+      return rows.map((row) => {
+        const mapping = byVersion.get(row.id);
+        return {
+          ...row,
+          legalEntityId: mapping?.legalEntityId ?? null,
+          taxRegistrationId: mapping?.taxRegistrationId ?? null,
+          accountingBookId: mapping?.accountingBookId ?? null,
+        };
+      });
+    },
+    head: (identity) => ({
+      id: identity.id,
+      code: identity.code,
+      siteId: identity.siteId,
+      kind: identity.kind,
+      ...(identity.storeId === null ? {} : { storeId: identity.storeId }),
+    }),
+    fields: (row) => ({
+      name: row.name,
+      status: row.status,
+      ...(row.legalEntityId === null || row.taxRegistrationId === null || row.accountingBookId === null
+        ? {}
+        : {
+            legalEntityId: row.legalEntityId,
+            taxRegistrationId: row.taxRegistrationId,
+            accountingBookId: row.accountingBookId,
+          }),
+    }),
+  }),
+  // A unit's mapping versions, each with its verification (structure-and-masters 3.4): the record is the unit.
+  business_unit_mapping: reads('business_unit_mapping', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(businessUnit).$dynamic(), where, limit),
+    versions: async (tx, where) => {
+      const rows = await newestFirst(
+        tx
+          .select({
+            ...versionColumns(businessUnitMapping),
+            owner: businessUnitMapping.businessUnitId,
+            legalEntityId: businessUnitMapping.legalEntityId,
+            taxRegistrationId: businessUnitMapping.taxRegistrationId,
+            accountingBookId: businessUnitMapping.accountingBookId,
+          })
+          .from(businessUnitMapping)
+          .$dynamic(),
+        where,
+      );
+      const verifications =
+        rows.length === 0
+          ? []
+          : await tx
+              .select()
+              .from(businessUnitMappingVerification)
+              .where(
+                inArray(
+                  businessUnitMappingVerification.businessUnitMappingId,
+                  rows.map((row) => row.id),
+                ),
+              );
+      const byMapping = new Map(verifications.map((each) => [each.businessUnitMappingId, each]));
+      return rows.map((row) => ({ ...row, verification: byMapping.get(row.id) }));
+    },
+    head: (identity) => ({ id: identity.id, code: identity.code }),
+    fields: (row) => ({
+      legalEntityId: row.legalEntityId,
+      taxRegistrationId: row.taxRegistrationId,
+      accountingBookId: row.accountingBookId,
+      ...(row.verification === undefined
+        ? {}
+        : {
+            verification: {
+              id: row.verification.id,
+              verifiedByUserId: row.verification.verifiedByUserId,
+              verifiedAt: row.verification.verifiedAt.toISOString(),
+              attachmentIds: row.verification.attachmentIds,
+            },
+          }),
+    }),
+  }),
+  location: reads('location', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(location).$dynamic(), where, limit),
+    versions: (tx, where) =>
+      newestFirst(
+        tx
+          .select({
+            ...versionColumns(locationVersion),
+            owner: locationVersion.locationId,
+            name: locationVersion.name,
+            kind: locationVersion.kind,
+            parentLocationId: locationVersion.parentLocationId,
+            retired: locationVersion.retired,
+          })
+          .from(locationVersion)
+          .$dynamic(),
+        where,
+      ),
+    head: (identity) => ({
+      id: identity.id,
+      code: identity.code,
+      siteId: identity.siteId,
+      businessUnitId: identity.businessUnitId,
+    }),
+    fields: (row) => ({
+      name: row.name,
+      kind: row.kind,
+      ...(row.parentLocationId === null ? {} : { parentLocationId: row.parentLocationId }),
+      retired: row.retired,
+    }),
+  }),
+  // A Store's default warehouse versions (3.6): the record is the Store.
+  store_default_warehouse: reads('store_default_warehouse', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(store).$dynamic(), where, limit),
+    versions: (tx, where) =>
+      newestFirst(
+        tx
+          .select({
+            ...versionColumns(storeDefaultWarehouse),
+            owner: storeDefaultWarehouse.storeId,
+            warehouseUnitId: storeDefaultWarehouse.warehouseUnitId,
+          })
+          .from(storeDefaultWarehouse)
+          .$dynamic(),
+        where,
+      ),
+    head: (identity) => ({ id: identity.id, code: identity.code }),
+    fields: (row) => ({ warehouseUnitId: row.warehouseUnitId }),
+  }),
 };
 
 /** The structure as of a date: every master's version in force on it (structure-and-masters 3.8; module-map 4.11). */
@@ -475,5 +644,80 @@ export async function structureOn(context: TransactionContext, date: string): Pr
     sites: await kindReads.site.inForceOn(context, date),
     stores: await kindReads.store.inForceOn(context, date),
     groupings: await kindReads.grouping.inForceOn(context, date),
+    // A unit as of a date, without the mapping its first version was prepared with: its mapping in force is its own list.
+    businessUnits: (await kindReads.business_unit.inForceOn(context, date)).map((unit) => ({
+      id: unit.id,
+      code: unit.code,
+      versionId: unit.versionId,
+      siteId: unit.siteId,
+      kind: unit.kind,
+      ...(unit.storeId === undefined ? {} : { storeId: unit.storeId }),
+      name: unit.name,
+      status: unit.status,
+    })),
+    businessUnitMappings: await kindReads.business_unit_mapping.inForceOn(context, date),
+    locations: await kindReads.location.inForceOn(context, date),
+    storeDefaultWarehouses: await kindReads.store_default_warehouse.inForceOn(context, date),
+  };
+}
+
+/** A unit's mapping as of a date (structure-and-masters 3.8): what a caller stores, and its verification. */
+export interface UnitMapping {
+  readonly businessUnitId: string;
+  readonly siteId: string;
+  readonly storeId: string | null;
+  readonly kind: BusinessUnitKind;
+  readonly legalEntityId: string;
+  readonly taxRegistrationId: string;
+  readonly accountingBookId: string;
+  /** The mapping version the caller stores on what it writes (PRD-ACP-013, PRD-MOD-010). */
+  readonly mappingVersionId: string;
+  /** Absent while the version is unverified; a live statutory action refuses then (POL-10.08). */
+  readonly verification?: MappingVerification;
+}
+
+/** The unit's mapping version in force on the date, or undefined when none is (3.8). */
+export async function mappingOn(
+  context: TransactionContext,
+  businessUnitId: string,
+  date: string,
+): Promise<UnitMapping | undefined> {
+  const [row] = await context.tx
+    .select({
+      siteId: businessUnit.siteId,
+      storeId: businessUnit.storeId,
+      kind: businessUnit.kind,
+      mappingVersionId: businessUnitMapping.id,
+      legalEntityId: businessUnitMapping.legalEntityId,
+      taxRegistrationId: businessUnitMapping.taxRegistrationId,
+      accountingBookId: businessUnitMapping.accountingBookId,
+    })
+    .from(businessUnitMapping)
+    .innerJoin(businessUnit, eq(businessUnit.id, businessUnitMapping.businessUnitId))
+    .where(
+      and(
+        eq(businessUnitMapping.businessUnitId, businessUnitId),
+        eq(businessUnitMapping.decision, 'Approved'),
+        sql`${businessUnitMapping.validDuring} @> ${date}::date`,
+      ),
+    );
+  if (row === undefined) return undefined;
+  const [verified] = await context.tx
+    .select()
+    .from(businessUnitMappingVerification)
+    .where(eq(businessUnitMappingVerification.businessUnitMappingId, row.mappingVersionId));
+  return {
+    businessUnitId,
+    ...row,
+    ...(verified === undefined
+      ? {}
+      : {
+          verification: {
+            id: verified.id,
+            verifiedByUserId: verified.verifiedByUserId,
+            verifiedAt: verified.verifiedAt.toISOString(),
+            attachmentIds: verified.attachmentIds,
+          },
+        }),
   };
 }

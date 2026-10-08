@@ -15,3 +15,17 @@ export const structureChanged = defineEvent({
     versionId: z.uuid(),
   }),
 });
+
+/**
+ * A business unit's mapping version was approved and takes effect from its start (module-map section 8;
+ * structure-and-masters 3.4, 3.8; S1-F02-T02): saved in the decision's transaction, identifiers only. `reports` and
+ * `site-lifecycle` consume it when they are built; until then no consumer is registered.
+ */
+export const mappingChanged = defineEvent({
+  type: 'organisation.mapping-changed',
+  version: 1,
+  payload: z.strictObject({
+    businessUnitId: z.uuid(),
+    mappingVersionId: z.uuid(),
+  }),
+});

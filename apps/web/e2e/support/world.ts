@@ -70,6 +70,21 @@ export interface SyntheticWorld {
     readonly areaOption: string;
     readonly admin: EnrolledUser;
     readonly approver: EnrolledUser;
+    /**
+     * The business units journey (S1-F02-T02): an Accounts user who may verify mappings, an approved Site, and two
+     * legal entities each with a registration in the Site's State and a book, named as the unit form offers them.
+     */
+    readonly accounts: EnrolledUser;
+    /** The journey's own Admin and approver, since journeys run at once and a code is taken once. */
+    readonly unitsAdmin: EnrolledUser;
+    readonly unitsApprover: EnrolledUser;
+    readonly siteId: string;
+    readonly siteOption: string;
+    readonly entities: readonly {
+      readonly legalEntityOption: string;
+      readonly registrationOption: string;
+      readonly bookOption: string;
+    }[];
   };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {

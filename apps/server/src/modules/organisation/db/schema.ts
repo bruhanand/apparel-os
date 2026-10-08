@@ -1,5 +1,13 @@
-import type { GroupingKind, OperatingModel, PhysicalKind, PlaceStatus, StoreFormat } from '@apparel-os/schemas';
-import { customType, date, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type {
+  BusinessUnitKind,
+  GroupingKind,
+  LocationKind,
+  OperatingModel,
+  PhysicalKind,
+  PlaceStatus,
+  StoreFormat,
+} from '@apparel-os/schemas';
+import { boolean, customType, date, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { Decision } from '../domain/kinds.js';
 
 // Drizzle definitions of the organisation module's tables (code-house-rules 3.4). They mirror the reviewed migration
@@ -140,4 +148,58 @@ export const groupingMember = organisation.table('grouping_member', {
   groupingVersionId: uuid('grouping_version_id').notNull(),
   storeId: uuid('store_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+// Business units, mappings and their verifications, locations and default warehouses (migrations/organisation/0029;
+// S1-F02-T02).
+
+export const businessUnit = organisation.table('business_unit', {
+  ...identityColumns(),
+  siteId: uuid('site_id').notNull(),
+  kind: text('kind').$type<BusinessUnitKind>().notNull(),
+  storeId: uuid('store_id'),
+});
+export const businessUnitVersion = organisation.table('business_unit_version', {
+  ...versionColumns(),
+  businessUnitId: uuid('business_unit_id').notNull(),
+  name: text('name').notNull(),
+  status: text('status').$type<PlaceStatus>().notNull(),
+});
+
+export const businessUnitMapping = organisation.table('business_unit_mapping', {
+  ...versionColumns(),
+  businessUnitId: uuid('business_unit_id').notNull(),
+  legalEntityId: uuid('legal_entity_id').notNull(),
+  taxRegistrationId: uuid('tax_registration_id').notNull(),
+  accountingBookId: uuid('accounting_book_id').notNull(),
+  preparedWithVersionId: uuid('prepared_with_version_id'),
+});
+
+export const businessUnitMappingVerification = organisation.table('business_unit_mapping_verification', {
+  id: uuid('id').primaryKey(),
+  businessUnitMappingId: uuid('business_unit_mapping_id').notNull(),
+  verifiedByUserId: uuid('verified_by_user_id').notNull(),
+  verifiedAt: at('verified_at').notNull(),
+  attachmentIds: uuid('attachment_ids').array().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+export const location = organisation.table('location', {
+  ...identityColumns(),
+  siteId: uuid('site_id').notNull(),
+  businessUnitId: uuid('business_unit_id').notNull(),
+});
+export const locationVersion = organisation.table('location_version', {
+  ...versionColumns(),
+  locationId: uuid('location_id').notNull(),
+  name: text('name').notNull(),
+  kind: text('kind').$type<LocationKind>().notNull(),
+  parentLocationId: uuid('parent_location_id'),
+  retired: boolean('retired').notNull(),
+});
+
+export const storeDefaultWarehouse = organisation.table('store_default_warehouse', {
+  ...versionColumns(),
+  storeId: uuid('store_id').notNull(),
+  warehouseUnitId: uuid('warehouse_unit_id').notNull(),
 });
