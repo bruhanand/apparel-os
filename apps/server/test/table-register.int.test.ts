@@ -12,6 +12,7 @@ import * as filesImportsTables from '../src/modules/files-imports/db/schema.js';
 import * as inboxTables from '../src/modules/inbox/db/schema.js';
 import * as stockTables from '../src/modules/stock/ledger/db/schema.js';
 import * as organisationTables from '../src/modules/organisation/db/schema.js';
+import * as numberingTables from '../src/modules/numbering/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { organisationTimezoneVersion } from '../src/modules/configuration/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -518,6 +519,15 @@ describe('the Drizzle definitions of stock · ledger (code-house-rules 3.4, 10.4
   it.each(Object.entries(stockTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
     await expectDefinitionMatches(world.organisations[0].database, table);
   });
+});
+
+describe('the Drizzle definitions of numbering (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(numberingTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
 });
 
 describe('the Drizzle definitions of organisation (code-house-rules 3.4, 10.4)', () => {

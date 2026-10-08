@@ -1,6 +1,6 @@
 import type { Database } from '../db/create-db.js';
 import type { EventDefinition, PublishedEvent } from '../outbox/event-definition.js';
-import type { LockResult, LockStep, LockTarget } from './lock-helper.js';
+import type { LockMode, LockResult, LockStep, LockTable, LockTarget } from './lock-helper.js';
 
 /** The command's one database transaction, as Drizzle gives it. Modules read and write through it (code-house-rules 3.4). */
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -53,6 +53,12 @@ export interface TransactionContext {
    * (code-house-rules 8.2; PRD-INT-003). Read every fact the command rechecks after this returns (code-house-rules 8.1).
    */
   lock(step: LockStep, targets: readonly LockTarget[]): Promise<LockResult>;
+  /**
+   * The lock this command holds on a row through `lock`, with its step and mode, or undefined when it took none. A
+   * module that draws only on rows the command has locked, such as `numbering`'s Allocate on a series it holds
+   * (numbering-and-audit 3.2; code-house-rules 8.2), asks here.
+   */
+  heldLock(table: LockTable, id: string): { readonly step: LockStep; readonly mode: LockMode } | undefined;
   /** The business date of `at`, by default the command's start, under the Organisation's timezone (PRD-MOD-009). */
   businessDate(at?: Date): Promise<BusinessDate>;
   /**

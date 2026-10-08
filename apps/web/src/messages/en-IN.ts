@@ -286,6 +286,25 @@ export const englishIndia = {
   'error.stock.wrong-release-event': 'This hold or reservation cannot be ended by this event.',
   'error.stock.condition-route': 'This condition change needs its own route.',
   'error.stock.rule-not-set': 'A rule this needs is not set yet.',
+  'error.numbering.kind-not-declared': 'Numbers are not set up for this kind of document.',
+  'error.numbering.financial-year-mismatch': 'The financial year does not suit this kind of number series.',
+  'error.numbering.invalid-series': 'The number series is missing its scope.',
+  'error.numbering.format-not-found': 'No number format has that code.',
+  'error.numbering.format-invalid':
+    'A number format needs one sequence part with a width, and no empty or repeated part.',
+  'error.numbering.format-not-for-kind':
+    'This kind of number never restarts by year, so its format cannot show the year.',
+  'error.numbering.scope-text-missing': 'The number format shows a scope part, and the series has none.',
+  'error.numbering.format-could-repeat':
+    'This format could give a number another series already gives. Choose another.',
+  'error.numbering.live-series-exists': 'An open or paused number series already exists for this scope and year.',
+  'error.numbering.series-not-found': 'The number series was not found.',
+  'error.numbering.series-paused': 'The number series is paused. Release it before numbering.',
+  'error.numbering.series-closed': 'The number series is closed and is never used again.',
+  'error.numbering.series-not-open': 'Only an open number series can be paused.',
+  'error.numbering.series-not-paused': 'Only a paused number series can be released.',
+  'error.numbering.series-exhausted': 'The number series has used every number its format allows.',
+  'error.numbering.document-numbered-elsewhere': 'This document already has its number from another series.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',

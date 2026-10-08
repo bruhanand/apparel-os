@@ -862,6 +862,54 @@
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "structure-and-masters 2.2, 3.6, 6.1; code-house-rules 7.3",
       "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "numbering.number_format",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.5, 6.1",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "numbering.number_format_version",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.5, 6.1",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "numbering.number_format_part",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.5, 6.1",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "numbering.series",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "numbering-and-audit 3.1, 3.2, 3.7, 6.1; stock-ledger 10.3 step 8",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "numbering.allocation",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.2, 6.1",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "numbering.series_event",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.7, 6.1",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
     }
   ]
 }

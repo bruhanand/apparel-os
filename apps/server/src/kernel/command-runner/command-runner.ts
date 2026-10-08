@@ -20,7 +20,14 @@ import {
 import { isInsideCommand, runMarked } from './command-mark.js';
 import { isCorrelationId } from './correlation.js';
 import { GuardedConnection } from './guarded-connection.js';
-import { takeLocks, type LockResult, type LockStep, type LockTarget } from './lock-helper.js';
+import {
+  takeLocks,
+  type LockMode,
+  type LockResult,
+  type LockStep,
+  type LockTable,
+  type LockTarget,
+} from './lock-helper.js';
 import type { EventDefinition, PublishedEvent } from '../outbox/event-definition.js';
 import { writeOutboxEvent } from '../outbox/outbox-writer.js';
 import type { ActorSetting, BusinessDate, Transaction, TransactionContext } from './transaction-context.js';
@@ -279,12 +286,17 @@ function checkRequest(request: CommandRequest): void {
   }
 }
 
+function heldKey(table: LockTable, id: string): string {
+  return `${table.schema}.${table.table} ${id.toLowerCase()}`;
+}
+
 class CommandContext implements TransactionContext {
   readonly commandName: string;
   readonly organisationCode: string;
   readonly correlationId: string;
   readonly actor: ActorSetting;
   private lastLockStep: LockStep | undefined;
+  private readonly held = new Map<string, { readonly step: LockStep; readonly mode: LockMode }>();
   private ended = false;
   private notified = false;
 
@@ -319,7 +331,14 @@ class CommandContext implements TransactionContext {
       );
     }
     this.lastLockStep = step;
-    return takeLocks(this.transaction, targets);
+    const result = await takeLocks(this.transaction, targets);
+    for (const target of result.locked) this.held.set(heldKey(target.table, target.id), { step, mode: target.mode });
+    return result;
+  }
+
+  heldLock(table: LockTable, id: string): { readonly step: LockStep; readonly mode: LockMode } | undefined {
+    this.refuseIfEnded();
+    return this.held.get(heldKey(table, id));
   }
 
   async businessDate(at: Date = this.startedAt): Promise<BusinessDate> {

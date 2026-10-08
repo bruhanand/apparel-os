@@ -369,6 +369,44 @@ export const organisationCodes = declareCodes({
   'organisation.location-parent-retired': 'refused',
 });
 
+/**
+ * The codes of `numbering` (numbering-and-audit 3.1 to 3.3, 3.5, 3.7; S1-F08-T01). The owning module's command passes
+ * them on; a series and its format are the owning module's to explain (PRD-UXP-003).
+ *
+ * - `numbering.kind-not-declared`: no owning module declares the kind (3.1).
+ * - `numbering.financial-year-mismatch`: a yearly kind's series needs its financial year; any other kind has none (3.3).
+ * - `numbering.invalid-series`: an empty scope key, display scope key or scope text.
+ * - `numbering.format-not-found`, `numbering.series-not-found`: no format with that code, no such series.
+ * - `numbering.format-invalid`: not exactly one sequence part with a width, empty fixed text, or a repeated part (3.5).
+ * - `numbering.format-not-for-kind`: the year label in the format of a kind that never restarts (3.3, 3.5).
+ * - `numbering.scope-text-missing`: the format shows the scope part, and the series has no scope text (3.5).
+ * - `numbering.format-could-repeat`: the series could give a text another series of its display scope can give, a
+ *   closed one included (3.5; PRD-MOD-008, PRD-ACP-019).
+ * - `numbering.live-series-exists`: an open or paused series exists for the kind, scope and year (3.1; PRD-POS-020).
+ * - `numbering.series-paused`, `numbering.series-closed`: Allocate takes only an open series; Closed is final (3.2).
+ * - `numbering.series-not-open`, `numbering.series-not-paused`: pause takes an open series, release a paused one (3.7).
+ * - `numbering.series-exhausted`: the next number does not fit the format's width (3.5).
+ * - `numbering.document-numbered-elsewhere`: the document already has its number of this kind from another series.
+ */
+export const numberingCodes = declareCodes({
+  'numbering.kind-not-declared': 'refused',
+  'numbering.financial-year-mismatch': 'refused',
+  'numbering.invalid-series': 'refused',
+  'numbering.format-not-found': 'not-found',
+  'numbering.format-invalid': 'refused',
+  'numbering.format-not-for-kind': 'refused',
+  'numbering.scope-text-missing': 'refused',
+  'numbering.format-could-repeat': 'refused',
+  'numbering.live-series-exists': 'refused',
+  'numbering.series-not-found': 'not-found',
+  'numbering.series-paused': 'refused',
+  'numbering.series-closed': 'refused',
+  'numbering.series-not-open': 'refused',
+  'numbering.series-not-paused': 'refused',
+  'numbering.series-exhausted': 'refused',
+  'numbering.document-numbered-elsewhere': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -379,6 +417,7 @@ export const errorCodes = {
   ...filesImportsCodes,
   ...stockLedgerCodes,
   ...organisationCodes,
+  ...numberingCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
