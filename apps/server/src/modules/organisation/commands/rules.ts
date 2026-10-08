@@ -9,6 +9,7 @@ import {
   businessUnitVersion,
   city,
   location,
+  locationVersion,
   siteVersion,
   storeVersion,
   taxRegistration,
@@ -255,4 +256,81 @@ export async function unitOutOfStep(
         limit 1`,
   );
   return result.rows[0]?.unit;
+}
+
+/** What a location version would break in the nesting of locations, as `organisation.location_nesting_broken`. */
+const nestingRefusals = {
+  cycle: 'organisation.location-nesting-cycle',
+  children: 'organisation.location-has-children',
+  'parent-retired': 'organisation.location-parent-retired',
+} as const;
+
+/**
+ * The nesting rules of locations over the days given (3.5; S1-F02-T02 review, product owner, 8 Oct 2026): a location
+ * never nests under itself through any number of levels on a day; it is not retired while a location nested under it
+ * is not; and it does not nest under a parent retired on a day it is in force. Read from the approved versions by the
+ * database's own function, which the check at commit uses too (0029).
+ */
+export async function locationNesting(
+  context: TransactionContext,
+  version: {
+    readonly locationId: string | undefined;
+    readonly parentLocationId: string | undefined;
+    readonly retired: boolean;
+    readonly during: string;
+  },
+): Check {
+  const result = await context.tx.execute<{ broken: keyof typeof nestingRefusals | null }>(
+    sql`select organisation.location_nesting_broken(${version.locationId ?? null}::uuid,
+          ${version.parentLocationId ?? null}::uuid, ${version.retired}, ${version.during}::daterange) as broken`,
+  );
+  const broken = result.rows[0]?.broken ?? null;
+  if (broken === null) return undefined;
+  const named = broken === 'children' ? version.locationId : version.parentLocationId;
+  return refused(
+    nestingRefusals[broken],
+    named === undefined ? [] : [{ kind: 'record', recordType: recordTypeOf('location'), recordId: named }],
+  );
+}
+
+/**
+ * The days a location version starting on the date would have once approved: to the start of the next approved
+ * version, or open-ended (structure-and-masters 2.2), as a date range literal.
+ */
+export async function locationDaysFrom(
+  context: TransactionContext,
+  locationId: string | undefined,
+  start: string,
+): Promise<string> {
+  if (locationId === undefined) return `[${start},)`;
+  const [next] = await context.tx
+    .select({ start: sql<string>`lower(${locationVersion.validDuring})::text` })
+    .from(locationVersion)
+    .where(
+      and(
+        eq(locationVersion.locationId, locationId),
+        eq(locationVersion.decision, 'Approved'),
+        sql`lower(${locationVersion.validDuring}) > ${start}::date`,
+      ),
+    )
+    .orderBy(sql`lower(${locationVersion.validDuring})`)
+    .limit(1);
+  return `[${start},${next?.start ?? ''})`;
+}
+
+/**
+ * The locations a parent is nested under on any day, the parent included, read from the approved versions. A decision
+ * on a location version locks them with its own, shared, so two decisions that would close a loop of nesting
+ * together, or retire a parent while a child is nested under it, never pass each other (code-house-rules 8.2).
+ */
+export async function ancestorsOf(context: TransactionContext, parentLocationId: string): Promise<string[]> {
+  const result = await context.tx.execute<{ id: string }>(
+    sql`with recursive chain (id) as (
+          select ${parentLocationId}::uuid
+          union
+          select p.parent_location_id from organisation.location_version p join chain on p.location_id = chain.id
+          where p.decision = 'Approved' and p.parent_location_id is not null)
+        select id from chain`,
+  );
+  return result.rows.map((row) => row.id);
 }

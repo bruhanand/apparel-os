@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setupRequestSchema } from '@apparel-os/schemas';
+import { setupRequestSchema, type PersonaId } from '@apparel-os/schemas';
 import {
   CommandRunner,
   IdempotencyHelper,
@@ -34,6 +34,7 @@ import {
   writeSyntheticReason,
   writeSyntheticSetting,
   writeSyntheticUser,
+  type SyntheticUser,
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic } from '../support/grants.js';
 import { capturingLogger } from '../support/jobs.js';
@@ -310,42 +311,39 @@ const approverAuthorities = [
   // The reasons in force, which the approval panel offers (access-and-approvals 9.5).
   { recordType: 'access.approval_reason', action: 'view' as const },
 ];
-const structureAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-STRUCTURE-ADMIN',
-  enrolled: true,
-  personas: ['P-ADM'],
-});
-await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAdmin.id }, adminAuthorities);
+/** An enrolled SYNTHETIC user of the settings Organisation holding one persona and the authorities given. */
+async function provisionUser(
+  label: string,
+  persona: PersonaId,
+  authorities: Parameters<typeof grantSynthetic>[2],
+): Promise<SyntheticUser> {
+  const user = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+    label,
+    enrolled: true,
+    personas: [persona],
+  });
+  await grantSynthetic(settingsDatabase, { kind: 'user', id: user.id }, authorities);
+  return user;
+}
+const structureAdmin = await provisionUser('BROWSER-STRUCTURE-ADMIN', 'P-ADM', adminAuthorities);
 // The business units journey's own Admin and approver: journeys run at once, and an authenticator code is taken once
 // (access-and-approvals 3.3), so two journeys never sign in as one person.
-const unitsAdmin = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-UNITS-ADMIN',
-  enrolled: true,
-  personas: ['P-ADM'],
-});
-await grantSynthetic(settingsDatabase, { kind: 'user', id: unitsAdmin.id }, adminAuthorities);
-const unitsApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-UNITS-APPROVER',
-  enrolled: true,
-  personas: ['P-OWN'],
-});
-await grantSynthetic(settingsDatabase, { kind: 'user', id: unitsApprover.id }, approverAuthorities);
+const unitsAdmin = await provisionUser('BROWSER-UNITS-ADMIN', 'P-ADM', adminAuthorities);
+const unitsApprover = await provisionUser('BROWSER-UNITS-APPROVER', 'P-OWN', approverAuthorities);
 // The Accounts user who verifies a mapping they did not make (POL-10.08), reading the structure.
-const structureAccounts = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-STRUCTURE-ACCOUNTS',
-  enrolled: true,
-  personas: ['P-ACC'],
-});
-await grantSynthetic(settingsDatabase, { kind: 'user', id: structureAccounts.id }, [
+const structureAccounts = await provisionUser('BROWSER-STRUCTURE-ACCOUNTS', 'P-ACC', [
   ...organisationTypes.map((recordType) => ({ recordType, action: 'view' as const })),
   ...verifyAuthorities,
 ]);
-const structureApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-STRUCTURE-APPROVER',
-  enrolled: true,
-  personas: ['P-OWN'],
+const structureApprover = await provisionUser('BROWSER-STRUCTURE-APPROVER', 'P-OWN', approverAuthorities);
+
+/** How a journey signs a user in: login, name, password and authenticator secret. */
+const credentialsOf = (user: SyntheticUser) => ({
+  login: user.login,
+  displayName: user.displayName,
+  password: user.password,
+  factorSecretHex: user.factorSecret?.toString('hex') ?? '',
 });
-await grantSynthetic(settingsDatabase, { kind: 'user', id: structureApprover.id }, approverAuthorities);
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
@@ -423,54 +421,19 @@ writeFileSync(
       areaId: structureGeography.area.recordId,
       // How the Site form names the Area: its code and name (approvedGeography).
       areaOption: `${syntheticCode('JOURNEY-AR')} · ${syntheticName('JOURNEY Area')}`,
-      admin: {
-        login: structureAdmin.login,
-        displayName: structureAdmin.displayName,
-        password: structureAdmin.password,
-        factorSecretHex: structureAdmin.factorSecret?.toString('hex') ?? '',
-      },
-      approver: {
-        login: structureApprover.login,
-        displayName: structureApprover.displayName,
-        password: structureApprover.password,
-        factorSecretHex: structureApprover.factorSecret?.toString('hex') ?? '',
-      },
-      unitsAdmin: {
-        login: unitsAdmin.login,
-        displayName: unitsAdmin.displayName,
-        password: unitsAdmin.password,
-        factorSecretHex: unitsAdmin.factorSecret?.toString('hex') ?? '',
-      },
-      unitsApprover: {
-        login: unitsApprover.login,
-        displayName: unitsApprover.displayName,
-        password: unitsApprover.password,
-        factorSecretHex: unitsApprover.factorSecret?.toString('hex') ?? '',
-      },
-      accounts: {
-        login: structureAccounts.login,
-        displayName: structureAccounts.displayName,
-        password: structureAccounts.password,
-        factorSecretHex: structureAccounts.factorSecret?.toString('hex') ?? '',
-      },
+      admin: credentialsOf(structureAdmin),
+      approver: credentialsOf(structureApprover),
+      unitsAdmin: credentialsOf(unitsAdmin),
+      unitsApprover: credentialsOf(unitsApprover),
+      accounts: credentialsOf(structureAccounts),
       siteId: unitsSite.recordId,
       siteOption: `${syntheticCode('JOURNEY-UNITS-SITE')} · ${syntheticName('Journey Units Site')}`,
       entities: unitsEntities,
     },
     settings: {
       organisationCode: settingsCode,
-      admin: {
-        login: settingsAdmin.login,
-        displayName: settingsAdmin.displayName,
-        password: settingsAdmin.password,
-        factorSecretHex: settingsAdmin.factorSecret?.toString('hex') ?? '',
-      },
-      approver: {
-        login: settingsApprover.login,
-        displayName: settingsApprover.displayName,
-        password: settingsApprover.password,
-        factorSecretHex: settingsApprover.factorSecret?.toString('hex') ?? '',
-      },
+      admin: credentialsOf(settingsAdmin),
+      approver: credentialsOf(settingsApprover),
     },
     journey: {
       organisationCode: journeyCode,

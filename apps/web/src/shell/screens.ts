@@ -85,8 +85,10 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.policy-readiness',
     ],
   },
-  // Accounts verifies business-unit mappings on Setup › Organisation structure (POL-10.08; S1-F02-T02).
-  'P-ACC': { home: null, menu: ['my-work', 'setup.organisation-structure'] },
+  // Accounts verifies business-unit mappings on Setup › Organisation structure, the synthetic journey's choice; who
+  // holds the verify permission is KDPS's (POL-10.08, V-01; S1-F02-T02). My work is open to every person without a
+  // menu entry, as the blueprint lists none for Accounts.
+  'P-ACC': { home: null, menu: ['setup.organisation-structure'] },
   'P-CHA': { home: null, menu: [] },
   'P-BKG': { home: null, menu: [] },
   'P-OPS': { home: 'my-work', menu: ['my-work'] },

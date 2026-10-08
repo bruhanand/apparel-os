@@ -76,6 +76,12 @@ export interface ModuleApprovals {
  */
 export interface DocumentEffect {
   targets(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
+  /**
+   * The action types of the other documents the decision decides with this one, such as a new business unit's first
+   * mapping (structure-and-masters 3.4; product owner, 8 Oct 2026). The decider needs approve on each one's record
+   * type too, each through an assignment of its own or the same one (access-and-approvals 9.3).
+   */
+  decidesWith?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
 }

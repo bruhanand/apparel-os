@@ -212,28 +212,62 @@ create constraint trigger check_mapping after insert or update on organisation.b
   deferrable initially deferred
   for each row execute function organisation.check_mapping();
 
--- A new approved Site version (a new Area) or registration version (a new State) that would put a mapping in force
--- out of step is refused too, so the State rule holds at all times (structure-and-masters 3.4; GC2-1). Checked at
--- commit, on the mappings of the units at the Site, or naming the registration, that overlap the new version.
-create function organisation.check_mappings_in_step() returns trigger
+-- An approved unit version starts on a day an approved mapping of the unit is in force, so no day of a unit is
+-- without a mapping (structure-and-masters 3.4; domain-model invariant 8; S1-F02-T02 review). The mappings leave no
+-- gap from the first one's start (check_mapping), so the start is enough. Checked at commit, once the unit's first
+-- version and the mapping prepared with it are both approved.
+create function organisation.check_unit_mapped() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
 begin
-  if not (old.decision = 'Awaiting approval' and new.decision = 'Approved') then
-    return null;
+  if new.decision = 'Approved' and not exists (
+    select 1 from organisation.business_unit_mapping m
+    where m.business_unit_id = new.business_unit_id and m.decision = 'Approved'
+      and m.valid_during @> pg_catalog.lower(new.valid_during)) then
+    raise exception 'business unit % would be in force without a mapping', new.business_unit_id
+      using errcode = 'AO006';
   end if;
-  if tg_table_name = 'site_version' and exists (
+  return null;
+end;
+$$;
+revoke execute on function organisation.check_unit_mapped() from public;
+create constraint trigger check_unit_mapped after insert or update on organisation.business_unit_version
+  deferrable initially deferred
+  for each row execute function organisation.check_unit_mapped();
+
+-- A new approved Site version (a new Area) or registration version (a new State) that would put a mapping in force
+-- out of step is refused too, so the State rule holds at all times (structure-and-masters 3.4; GC2-1). Checked at
+-- commit, on the mappings of the units at the Site, or naming the registration, that overlap the new version.
+create function organisation.check_site_mappings_in_step() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+begin
+  if old.decision = 'Awaiting approval' and new.decision = 'Approved' and exists (
     select 1 from organisation.business_unit u
     join organisation.business_unit_mapping m on m.business_unit_id = u.id and m.decision = 'Approved'
-    where u.site_id = (pg_catalog.to_jsonb(new) ->> 'site_id')::uuid and m.valid_during && new.valid_during
+    where u.site_id = new.site_id and m.valid_during && new.valid_during
       and organisation.mapping_out_of_step(m.id)) then
     raise exception 'a Site version would put a mapping out of step with its registration''s State'
       using errcode = 'AO006';
   end if;
-  if tg_table_name = 'tax_registration_version' and exists (
+  return null;
+end;
+$$;
+revoke execute on function organisation.check_site_mappings_in_step() from public;
+create constraint trigger check_mappings_in_step after update on organisation.site_version
+  deferrable initially deferred
+  for each row execute function organisation.check_site_mappings_in_step();
+
+create function organisation.check_registration_mappings_in_step() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+begin
+  if old.decision = 'Awaiting approval' and new.decision = 'Approved' and exists (
     select 1 from organisation.business_unit_mapping m
-    where m.tax_registration_id = (pg_catalog.to_jsonb(new) ->> 'tax_registration_id')::uuid
+    where m.tax_registration_id = new.tax_registration_id
       and m.decision = 'Approved' and m.valid_during && new.valid_during and organisation.mapping_out_of_step(m.id)) then
     raise exception 'a registration version would put a mapping out of step with its unit''s Site'
       using errcode = 'AO006';
@@ -241,13 +275,10 @@ begin
   return null;
 end;
 $$;
-revoke execute on function organisation.check_mappings_in_step() from public;
-create constraint trigger check_mappings_in_step after update on organisation.site_version
-  deferrable initially deferred
-  for each row execute function organisation.check_mappings_in_step();
+revoke execute on function organisation.check_registration_mappings_in_step() from public;
 create constraint trigger check_mappings_in_step after update on organisation.tax_registration_version
   deferrable initially deferred
-  for each row execute function organisation.check_mappings_in_step();
+  for each row execute function organisation.check_registration_mappings_in_step();
 
 -- A mapping version's verification (structure-and-masters 3.4; POL-10.08): append-only, one per approved mapping
 -- version, with who verified it, when, and the attachments of its evidence, stored files attached through
@@ -361,6 +392,63 @@ $$;
 revoke execute on function organisation.check_location_parent() from public;
 create trigger check_location_parent before insert on organisation.location_version
   for each row execute function organisation.check_location_parent();
+
+-- What a location version over the given days would break in the nesting of approved versions (structure-and-masters
+-- 3.5; S1-F02-T02 review, product owner, 8 Oct 2026), or null: `cycle`, its parent is nested under it on one of those
+-- days, through any number of levels; `children`, it is retired while a location nested under it is not, on a day
+-- both are in force; `parent-retired`, it is not retired and nests under a parent retired on one of those days. Read
+-- by the service when a version is prepared, with its days as approval would give them, and again under the decision's
+-- locks with its final days; and by the check at commit below.
+create function organisation.location_nesting_broken(
+  location_id uuid, parent_location_id uuid, retired boolean, during daterange) returns text
+  language sql
+  stable
+  set search_path = pg_catalog
+as $$
+  select case
+    when exists (
+      with recursive chain (id, during) as (
+        select location_nesting_broken.parent_location_id, location_nesting_broken.during
+        where location_nesting_broken.parent_location_id is not null
+        union
+        select p.parent_location_id, chain.during * p.valid_during
+        from organisation.location_version p
+        join chain on p.location_id = chain.id
+        where p.decision = 'Approved' and p.parent_location_id is not null and p.valid_during && chain.during)
+      select 1 from chain where chain.id = location_nesting_broken.location_id)
+      then 'cycle'
+    when location_nesting_broken.retired and exists (
+      select 1 from organisation.location_version c
+      where c.parent_location_id = location_nesting_broken.location_id and c.decision = 'Approved' and not c.retired
+        and c.valid_during && location_nesting_broken.during)
+      then 'children'
+    when not location_nesting_broken.retired and exists (
+      select 1 from organisation.location_version p
+      where p.location_id = location_nesting_broken.parent_location_id and p.decision = 'Approved' and p.retired
+        and p.valid_during && location_nesting_broken.during)
+      then 'parent-retired'
+  end
+$$;
+revoke execute on function organisation.location_nesting_broken(uuid, uuid, boolean, daterange) from public;
+grant execute on function organisation.location_nesting_broken(uuid, uuid, boolean, daterange) to aos_runtime;
+
+-- The nesting rules hold at commit on every approved location version, once a decision has moved the versions' days.
+create function organisation.check_location_nesting() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+begin
+  if new.decision = 'Approved' and organisation.location_nesting_broken(
+       new.location_id, new.parent_location_id, new.retired, new.valid_during) is not null then
+    raise exception 'location % breaks the nesting of locations', new.location_id using errcode = 'AO006';
+  end if;
+  return null;
+end;
+$$;
+revoke execute on function organisation.check_location_nesting() from public;
+create constraint trigger check_location_nesting after insert or update on organisation.location_version
+  deferrable initially deferred
+  for each row execute function organisation.check_location_nesting();
 
 -- A Store's default warehouse for replenishment and returns, effective-dated (structure-and-masters 3.6;
 -- PRD-ORG-013): a warehouse unit, which names its Site too; one in force per Store. Its identity is the Store's. Other

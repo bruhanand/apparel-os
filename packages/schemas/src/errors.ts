@@ -331,6 +331,12 @@ export const stockLedgerCodes = declareCodes({
  * - `organisation.mapping-not-approved`: only an approved mapping version is verified (3.4).
  * - `organisation.verifier-made-mapping`: the verifier is the person who made the mapping (3.4; GC2-2, DEC-105).
  * - `organisation.mapping-already-verified`: a mapping version has its one verification (3.4).
+ * - `organisation.mapping-incomplete`: a unit version names some of a mapping's three fields, not all (3.4).
+ * - `organisation.mapping-through-mapping-change`: a unit version of a unit with an approved version names a mapping;
+ *   its mapping changes only through a mapping version (3.4; product owner, 8 Oct 2026).
+ * - `organisation.location-nesting-cycle`: the parent is nested under the location already (3.5).
+ * - `organisation.location-has-children`: a location nested under the one to retire is not retired then (3.5).
+ * - `organisation.location-parent-retired`: the parent is retired on a day the location would be under it (3.5).
  */
 export const organisationCodes = declareCodes({
   'organisation.code-taken': 'refused',
@@ -352,6 +358,11 @@ export const organisationCodes = declareCodes({
   'organisation.mapping-not-approved': 'refused',
   'organisation.verifier-made-mapping': 'refused',
   'organisation.mapping-already-verified': 'refused',
+  'organisation.mapping-incomplete': 'refused',
+  'organisation.mapping-through-mapping-change': 'refused',
+  'organisation.location-nesting-cycle': 'refused',
+  'organisation.location-has-children': 'refused',
+  'organisation.location-parent-retired': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

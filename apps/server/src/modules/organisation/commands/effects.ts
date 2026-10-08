@@ -30,7 +30,7 @@ import {
 import { mappingChanged, structureChanged } from '../events.js';
 import { inForceOn, refusal, today, type Reference } from './common.js';
 import { operationName } from './prepare.js';
-import { retirable, storeUnitRules, unitOf, unitOutOfStep } from './rules.js';
+import { ancestorsOf, locationNesting, retirable, storeUnitRules, unitOf, unitOutOfStep } from './rules.js';
 
 // What a decision does to a master version (structure-and-masters 2.2, 2.3; module-map 6.2 flow A;
 // access-and-approvals 9.8b; S1-F02-T01, S1-F02-T02): in the decision's transaction, the version taking effect from its
@@ -236,7 +236,30 @@ export class StructureEffects {
         return [own, { table: lockTable('organisation', 'store'), id: unit.storeId, mode: 'exclusive' }];
       }
     }
+    if (kind === 'location') {
+      // The parent and every location it is nested under, shared (3.5): a decision nesting or retiring a location
+      // waits for one on a location in its chain, so the nesting rules are read under the locks.
+      const [row] = await context.tx
+        .select({ parentId: locationVersion.parentLocationId })
+        .from(locationVersion)
+        .where(eq(locationVersion.id, versionId));
+      const chain = row?.parentId == null ? [] : await ancestorsOf(context, row.parentId);
+      return [
+        own,
+        ...chain.map((id): LockTarget => ({ table: lockTable('organisation', 'location'), id, mode: 'shared' })),
+      ];
+    }
     return [own];
+  }
+
+  /**
+   * The other documents a decision decides with the version: a unit version's mapping prepared with it, so its decider
+   * needs approve on the mapping too (structure-and-masters 3.4; product owner, 8 Oct 2026).
+   */
+  async decidesWith(context: TransactionContext, kind: MasterKind, versionId: string): Promise<readonly string[]> {
+    if (kind !== 'business_unit') return [];
+    const mapping = await mappingPreparedWith(context, versionId);
+    return mapping?.decision === 'Awaiting approval' ? [actionTypeOf('business_unit_mapping')] : [];
   }
 
   /**
@@ -350,10 +373,31 @@ export class StructureEffects {
         .from(tables.version)
         .where(and(eq(tables.owner, version.recordId), eq(tables.decision, 'Approved')))
         .limit(1);
-      if (approved !== undefined) return undefined;
+      const mapping = await mappingPreparedWith(context, versionId);
+      if (approved !== undefined) {
+        // Once a unit has an approved version its mapping changes only through the mapping action, and every later
+        // version starts on a day a mapping is in force (product owner, 8 Oct 2026; domain-model invariant 8).
+        if (mapping?.decision === 'Awaiting approval') {
+          return {
+            kind: 'refused',
+            code: 'organisation.mapping-through-mapping-change',
+            missing: [
+              { kind: 'record', recordType: recordTypeOf('business_unit_mapping'), recordId: version.recordId },
+            ],
+          };
+        }
+        return (await inForceOn(context, 'business_unit_mapping', version.recordId, version.start))
+          ? undefined
+          : {
+              kind: 'refused',
+              code: 'organisation.unit-without-mapping',
+              missing: [
+                { kind: 'record', recordType: recordTypeOf('business_unit_mapping'), recordId: version.recordId },
+              ],
+            };
+      }
       const rules = await storeUnitRules(context, unit, version.start);
       if (rules !== undefined) return rules;
-      const mapping = await mappingPreparedWith(context, versionId);
       if (
         mapping === undefined &&
         !(await inForceOn(context, 'business_unit_mapping', version.recordId, version.start))
@@ -386,6 +430,26 @@ export class StructureEffects {
     versionId: string,
   ): Promise<Effect> {
     await this.inForce(context, kind, version.recordId, versionId, version.start);
+    if (kind === 'location') {
+      // The nesting rules on the version's final days (3.5; S1-F02-T02 review).
+      const [row] = await context.tx
+        .select({
+          parentId: locationVersion.parentLocationId,
+          retired: locationVersion.retired,
+          during: sql<string>`${locationVersion.validDuring}::text`,
+        })
+        .from(locationVersion)
+        .where(eq(locationVersion.id, versionId));
+      if (row !== undefined) {
+        const broken = await locationNesting(context, {
+          locationId: version.recordId,
+          parentLocationId: row.parentId ?? undefined,
+          retired: row.retired,
+          during: row.during,
+        });
+        if (broken !== undefined) return { kind: 'refused', refusal: broken };
+      }
+    }
     let mappingVersionId: string | undefined;
     if (kind === 'business_unit') {
       const mapping = await mappingPreparedWith(context, versionId);
@@ -529,6 +593,7 @@ export function organisationApprovals(audit: AuditInterface, locationInUse?: Loc
         actionTypeOf(kind),
         {
           targets: (c, v) => effects.targets(c, kind, v),
+          decidesWith: (c, v) => effects.decidesWith(c, kind, v),
           approve: (c, d, v) => effects.approve(c, d, kind, v),
           reject: (c, d, v) => effects.reject(c, d, kind, v),
         },

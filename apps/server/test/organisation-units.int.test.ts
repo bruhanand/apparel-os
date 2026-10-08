@@ -11,7 +11,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { LocationInUse, PreparedVersion } from '../src/modules/organisation/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
-import { syntheticKeysEnvironment } from './support/access.js';
+import { syntheticKeysEnvironment, writeSyntheticUser } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
 import {
   approved,
@@ -40,12 +40,14 @@ const stocked = new Set<string>();
 let home: Awaited<ReturnType<typeof approvedGeography>>;
 let away: Awaited<ReturnType<typeof approvedGeography>>;
 let counter = 0;
+let keys: Record<string, string>;
 
 const next = (prefix: string) => `${prefix}-${String(++counter)}`;
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('units');
   const keysEnvironment = syntheticKeysEnvironment(world);
+  keys = keysEnvironment;
   const [orgA, orgB] = world.organisations;
   const options = {
     directory: world.directory,
@@ -680,5 +682,201 @@ describe('two Organisations (structure-and-masters 9 test 14)', () => {
       other.organisation.record(c, 'business_unit', unit.recordId, other.today()),
     );
     expect(read).toBeUndefined();
+  });
+});
+
+describe('review fixes (S1-F02-T02 review; product owner, 8 Oct 2026)', () => {
+  /** An enrolled approver holding view and approve on the record types given only. */
+  async function approverOf(label: string, recordTypes: readonly string[]) {
+    const [orgA] = world.organisations;
+    const user = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: next(label), enrolled: true });
+    await grantSynthetic(
+      orgA.database,
+      { kind: 'user', id: user.id },
+      recordTypes.flatMap((recordType) => [
+        { recordType, action: 'view' as const },
+        { recordType, action: 'approve' as const },
+      ]),
+    );
+    return user;
+  }
+
+  const unitVersion = (unitId: string, draft: Partial<Record<string, string>>) =>
+    setup.prepare((c, p) =>
+      setup.organisation.prepareBusinessUnitVersion(c, p, unitId, {
+        name: syntheticName('Unit version'),
+        validFrom: setup.day(1),
+        ...draft,
+      }),
+    );
+
+  it('structure-and-masters 3.4 PRD-ACS-006 approving a new unit with its first mapping needs approve on the unit and on the mapping', async () => {
+    const at = await site();
+    const mapping = await entity(home.state.recordId);
+    const unitOnly = await approverOf('UNIT-ONLY', ['organisation.business_unit']);
+    const answer = prepared(await prepareUnit(unitDraft(at.recordId, mapping)));
+    expect(await setup.decide(answer.requestId, answer.versionId, 'approve', unitOnly)).toMatchObject({
+      kind: 'refusal',
+      refusal: {
+        code: 'access.not-eligible',
+        missing: [{ kind: 'permission', recordType: 'organisation.business_unit_mapping', action: 'approve' }],
+      },
+    });
+    const both = await approverOf('BOTH', ['organisation.business_unit', 'organisation.business_unit_mapping']);
+    decided(await setup.decide(answer.requestId, answer.versionId, 'approve', both));
+    // A later unit version, which carries no mapping, needs only the unit's approve.
+    const renamed = prepared(await unitVersion(answer.recordId, {}));
+    decided(await setup.decide(renamed.requestId, renamed.versionId, 'approve', unitOnly));
+  });
+
+  it('structure-and-masters 3.4 a unit version never changes the mapping of a unit with approved versions; a partial mapping is refused', async () => {
+    const at = await site();
+    const mapping = await entity(home.state.recordId);
+    const unit = await approvedUnit(unitDraft(at.recordId, mapping));
+    expect(refusedWith(await unitVersion(unit.recordId, { ...mapping }))).toBe(
+      'organisation.mapping-through-mapping-change',
+    );
+    expect(refusedWith(await unitVersion(unit.recordId, { legalEntityId: mapping.legalEntityId }))).toBe(
+      'organisation.mapping-incomplete',
+    );
+    // A new unit's draft re-dated names all three or none, never some.
+    const fresh = prepared(await prepareUnit(unitDraft(at.recordId, mapping)));
+    expect(
+      refusedWith(
+        await unitVersion(fresh.recordId, {
+          legalEntityId: mapping.legalEntityId,
+          accountingBookId: mapping.accountingBookId,
+        }),
+      ),
+    ).toBe('organisation.mapping-incomplete');
+    decided(await setup.decide(fresh.requestId, fresh.versionId));
+  });
+
+  it('structure-and-masters 3.4 domain-model invariant 8 a unit version starting before the unit’s first mapping is refused', async () => {
+    const at = await site();
+    const mapping = await entity(home.state.recordId);
+    const unit = await approvedUnit({ ...unitDraft(at.recordId, mapping), validFrom: setup.day(5) });
+    const early = prepared(await unitVersion(unit.recordId, { validFrom: setup.day(2) }));
+    expect(refusedWith(await setup.decide(early.requestId, early.versionId))).toBe('organisation.unit-without-mapping');
+    // The database keeps it too, the owner included.
+    const owner = await connect(world.organisations[0].database, 'migration');
+    try {
+      expect(
+        await sqlState(
+          owner.query(
+            `insert into organisation.business_unit_version (id, business_unit_id, name, status, valid_during, decision,
+               prepared_by_user_id) values ($1, $2, 'SYNTHETIC early', 'Setting up', daterange($3::date, $4::date),
+               'Approved', $5)`,
+            [uuidv7(), unit.recordId, setup.day(2), setup.day(5), setup.preparer.id],
+          ),
+        ),
+      ).toBe('AO006');
+    } finally {
+      await owner.end();
+    }
+  });
+
+  it('structure-and-masters 3.5 PRD-ORG-012 locations never nest in a cycle; one is not retired while a child is not', async () => {
+    const at = await site(home.area.recordId, answered);
+    const mapping = await entity(home.state.recordId, answered);
+    const unit = await approvedUnit({ ...unitDraft(at.recordId, mapping), validFrom: answered.today() }, answered);
+    const zone = (overrides: Partial<LocationDraft> = {}) =>
+      approved(answered, (c, p) =>
+        answered.organisation.prepareLocation(c, p, {
+          ...locationDraft(at.recordId, unit.recordId, { kind: 'zone' }),
+          validFrom: answered.today(),
+          ...overrides,
+        }),
+      );
+    const version = (locationId: string, draft: { parentLocationId?: string; retired?: boolean }) =>
+      answered.prepare((c, p) =>
+        answered.organisation.prepareLocationVersion(c, p, locationId, {
+          name: syntheticName('Zone version'),
+          kind: 'zone',
+          retired: draft.retired ?? false,
+          validFrom: answered.day(1),
+          ...(draft.parentLocationId === undefined ? {} : { parentLocationId: draft.parentLocationId }),
+        }),
+      );
+    const a = await zone();
+    const b = await zone({ parentLocationId: a.recordId });
+    const c = await zone({ parentLocationId: b.recordId });
+    // A → B → A, and A → C → B → A, are refused when prepared.
+    expect(refusedWith(await version(a.recordId, { parentLocationId: b.recordId }))).toBe(
+      'organisation.location-nesting-cycle',
+    );
+    expect(refusedWith(await version(a.recordId, { parentLocationId: c.recordId }))).toBe(
+      'organisation.location-nesting-cycle',
+    );
+    // Two drafts that close a cycle together: the second is refused when approved.
+    const d = await zone();
+    const e = await zone();
+    const dUnderE = prepared(await version(d.recordId, { parentLocationId: e.recordId }));
+    const eUnderD = prepared(await version(e.recordId, { parentLocationId: d.recordId }));
+    decided(await answered.decide(dUnderE.requestId, dUnderE.versionId));
+    expect(refusedWith(await answered.decide(eUnderD.requestId, eUnderD.versionId))).toBe(
+      'organisation.location-nesting-cycle',
+    );
+    // A location with a child not retired is not retired, when prepared and when approved; once the child is, it is.
+    expect(refusedWith(await version(b.recordId, { retired: true }))).toBe('organisation.location-has-children');
+    const retireC = prepared(await version(c.recordId, { retired: true }));
+    decided(await answered.decide(retireC.requestId, retireC.versionId));
+    const retireB = prepared(await version(b.recordId, { retired: true }));
+    const child = (parentLocationId: string) =>
+      answered.prepare((cx, p) =>
+        answered.organisation.prepareLocation(cx, p, {
+          ...locationDraft(at.recordId, unit.recordId, { kind: 'bin', parentLocationId }),
+          validFrom: answered.today(),
+        }),
+      );
+    const lateChild = prepared(await child(b.recordId));
+    decided(await answered.decide(lateChild.requestId, lateChild.versionId));
+    expect(refusedWith(await answered.decide(retireB.requestId, retireB.versionId))).toBe(
+      'organisation.location-has-children',
+    );
+    // A new child of a location retired on a day the child would be in force is refused, when prepared and approved.
+    const f = await zone();
+    const retireF = prepared(await version(f.recordId, { retired: true }));
+    const orphan = prepared(await child(f.recordId));
+    decided(await answered.decide(retireF.requestId, retireF.versionId));
+    expect(refusedWith(await child(f.recordId))).toBe('organisation.location-parent-retired');
+    expect(refusedWith(await answered.decide(orphan.requestId, orphan.versionId))).toBe(
+      'organisation.location-parent-retired',
+    );
+    // The database refuses a cycle, the owner included.
+    const owner = await connect(world.organisations[0].database, 'migration');
+    try {
+      await owner.query('begin');
+      await owner.query(
+        `update organisation.location_version set valid_during = daterange(lower(valid_during), $2::date)
+         where location_id = $1 and decision = 'Approved'`,
+        [e.recordId, answered.day(9)],
+      );
+      await owner.query(
+        `insert into organisation.location_version (id, location_id, name, kind, parent_location_id, retired,
+           valid_during, decision, prepared_by_user_id)
+         values ($1, $2, 'SYNTHETIC cycle', 'zone', $3, false, daterange($4::date, null), 'Approved', $5)`,
+        [uuidv7(), e.recordId, d.recordId, answered.day(9), answered.preparer.id],
+      );
+      expect(await sqlState(owner.query('commit'))).toBe('AO006');
+    } finally {
+      await owner.end();
+    }
+  });
+});
+
+describe('location codes (structure-and-masters 3.1, 6.1; domain-model)', () => {
+  it('structure-and-masters 2.1 PRD-ORG-012 a location code is unique at its Site: taken at the same Site, free at another', async () => {
+    const first = await site();
+    const second = await site();
+    const mapping = await entity(home.state.recordId);
+    const here = await approvedUnit(unitDraft(first.recordId, mapping));
+    const there = await approvedUnit(unitDraft(second.recordId, mapping));
+    const code = syntheticCode(next('SHARED-LOC'));
+    const at = (siteId: string, unitId: string) =>
+      setup.prepare((c, p) => setup.organisation.prepareLocation(c, p, { ...locationDraft(siteId, unitId), code }));
+    prepared(await at(first.recordId, here.recordId));
+    expect(refusedWith(await at(first.recordId, here.recordId))).toBe('organisation.code-taken');
+    prepared(await at(second.recordId, there.recordId));
   });
 });

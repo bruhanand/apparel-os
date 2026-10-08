@@ -78,6 +78,8 @@ interface DocumentHandler {
   authorityTargets?(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
   /** The rows Decide locks with the request at step 1 (code-house-rules 8.2). */
   targets(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
+  /** The action types of other documents the decision decides with it, whose approve the decider needs too. */
+  decidesWith?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   /** A check of the document's own, under the locks, before the code is taken. */
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
   approve(context: TransactionContext, decider: Decider, versionId: string): Promise<Prepared<unknown>>;
@@ -114,6 +116,9 @@ function moduleEffect(effect: DocumentEffect): DocumentHandler {
   };
   return {
     targets: (c, v) => effect.targets(c, v),
+    ...(effect.decidesWith === undefined
+      ? {}
+      : { decidesWith: (c: TransactionContext, v: string) => effect.decidesWith?.(c, v) ?? Promise.resolve([]) }),
     approve: (c, d, v) => effect.approve(c, decider(d), v),
     reject: (c, d, v) => effect.reject(c, decider(d), v),
   };
@@ -339,7 +344,10 @@ export class Approvals {
     context: TransactionContext,
     actor: DecidingActor,
     request: RequestRow,
-  ): Promise<{ kind: 'eligible'; roleAssignmentId: string } | { kind: 'refused'; refusal: CommandRefusal }> {
+  ): Promise<
+    | { kind: 'eligible'; roleAssignmentId: string; alsoRelied: readonly string[] }
+    | { kind: 'refused'; refusal: CommandRefusal }
+  > {
     if (actor.kind !== 'user') {
       return {
         kind: 'refused',
@@ -364,21 +372,31 @@ export class Approvals {
       };
     }
     const rule = this.ruleOf(request.actionType);
-    const authorised = await authorise(context, this.dependencies.registry, {
-      actorId: actor.id,
-      action: 'approve',
-      recordType: rule.recordType,
-    });
-    if (authorised.kind === 'refused') {
-      return {
-        kind: 'refused',
-        refusal: {
-          kind: authorised.refusal.kind === 'unavailable' ? 'unavailable' : 'not-authorised',
-          code: authorised.refusal.kind === 'unavailable' ? authorised.refusal.code : 'access.not-eligible',
-          missing: [...authorised.refusal.missing],
-        },
-      };
+    // Approve on the request's record type, and on that of each document the decision decides with it, such as a new
+    // business unit's first mapping (structure-and-masters 3.4; product owner, 8 Oct 2026).
+    const decidesWith =
+      (await this.handlerOf(request.actionType).decidesWith?.(context, request.documentVersionId)) ?? [];
+    const relied: string[] = [];
+    for (const recordType of [rule.recordType, ...decidesWith.map((each) => this.ruleOf(each).recordType)]) {
+      const authorised = await authorise(context, this.dependencies.registry, {
+        actorId: actor.id,
+        action: 'approve',
+        recordType,
+      });
+      if (authorised.kind === 'refused') {
+        return {
+          kind: 'refused',
+          refusal: {
+            kind: authorised.refusal.kind === 'unavailable' ? 'unavailable' : 'not-authorised',
+            code: authorised.refusal.kind === 'unavailable' ? authorised.refusal.code : 'access.not-eligible',
+            missing: [...authorised.refusal.missing],
+          },
+        };
+      }
+      relied.push(authorised.roleAssignmentId);
     }
+    const [roleAssignmentId, ...alsoRelied] = relied;
+    if (roleAssignmentId === undefined) throw new CommandDefect('Eligibility relied on no assignment');
     const preparers = new Set([
       ...(await storedPreparers(context, request.id)),
       // An access change's preparers are read again from its change rows; another module's are those it named (9.1).
@@ -407,7 +425,7 @@ export class Approvals {
         },
       };
     }
-    return { kind: 'eligible', roleAssignmentId: authorised.roleAssignmentId };
+    return { kind: 'eligible', roleAssignmentId, alsoRelied };
   }
 
   /** The reason versions in force today of a kind (access-and-approvals 9.5). */
@@ -558,8 +576,15 @@ export class Approvals {
     const relied = await this.eligibility(context, actor, found);
     const held =
       relied.kind === 'eligible' ? await reliedAuthority(context, actor, relied.roleAssignmentId) : undefined;
+    // The assignments relied on for the documents decided with it, shared too (structure-and-masters 3.4).
+    const alsoHeld = [];
+    for (const assignmentId of relied.kind === 'eligible' ? relied.alsoRelied : []) {
+      alsoHeld.push(await reliedAuthority(context, actor, assignmentId));
+    }
+    // The lock helper takes a row named twice once, exclusively when either names it so (code-house-rules 8.2).
     await context.lock(LOCK_STEP.authority, [
       ...(held?.targets ?? []),
+      ...alsoHeld.flatMap((each) => each.targets),
       ...((await handler.authorityTargets?.(context, found.documentVersionId)) ?? []),
     ]);
     await context.lock(LOCK_STEP.document, [
@@ -574,11 +599,17 @@ export class Approvals {
     const eligible = await this.eligibility(context, actor, request);
     if (eligible.kind === 'refused') return { kind: 'refusal', refusal: eligible.refusal, causedBySecret: false };
     // Eligible now through another assignment than the one locked: the authority changed while the locks were taken.
-    if (relied.kind !== 'eligible' || relied.roleAssignmentId !== eligible.roleAssignmentId) {
+    if (
+      relied.kind !== 'eligible' ||
+      relied.roleAssignmentId !== eligible.roleAssignmentId ||
+      relied.alsoRelied.join() !== eligible.alsoRelied.join()
+    ) {
       return refused('conflict', 'kernel.stale-version');
     }
     // A version of the approver's role took effect while the locks were taken (DEC-118, RR-360).
-    if (held !== undefined && (await held.roleChanged())) return refused('conflict', 'kernel.stale-version');
+    for (const each of held === undefined ? alsoHeld : [held, ...alsoHeld]) {
+      if (await each.roleChanged()) return refused('conflict', 'kernel.stale-version');
+    }
     const checked = await this.checkReason(context, rule, input);
     if (checked.kind === 'refusal') return { kind: 'refusal', refusal: checked.refusal, causedBySecret: false };
     const reason = checked.reason;

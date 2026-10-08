@@ -910,6 +910,16 @@ export const englishIndia = {
   'error.organisation.verifier-made-mapping':
     'You made this mapping, so you cannot verify it. A different person with the verify permission verifies it.',
   'error.organisation.mapping-already-verified': 'This mapping version is verified already.',
+  'error.organisation.mapping-incomplete':
+    'A mapping names a legal entity, a tax registration and an accounting book together. Give all three, or none.',
+  'error.organisation.mapping-through-mapping-change':
+    'This business unit has an approved version, so its mapping changes only through a new mapping version.',
+  'error.organisation.location-nesting-cycle':
+    'This parent location is nested under this location already, so nesting them would make a loop.',
+  'error.organisation.location-has-children':
+    'A location nested under this one is not retired on that date. Retire or move it first.',
+  'error.organisation.location-parent-retired':
+    'The parent location is retired on a day this location would be in use. Choose another parent.',
   'organisation.field.unitKind': 'Kind',
   'organisation.field.storeId': 'Store',
   'organisation.field.taxRegistrationId': 'Tax registration',

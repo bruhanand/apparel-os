@@ -65,6 +65,8 @@ import { masterTables } from '../db/tables.js';
 import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
 import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
 import {
+  locationDaysFrom,
+  locationNesting,
   locationPlace,
   mappingLegalEntity,
   placeOfLocation,
@@ -743,6 +745,12 @@ export class StructurePreparation {
     recordId: string,
     draft: BusinessUnitVersionDraft,
   ) {
+    const fields = [draft.legalEntityId, draft.taxRegistrationId, draft.accountingBookId];
+    const given = fields.filter((field) => field !== undefined).length;
+    // A mapping is its three fields together, never some of them (3.4; product owner, 8 Oct 2026).
+    if (given > 0 && given < fields.length) {
+      return Promise.resolve(refusal<PreparedVersion>('refused', 'organisation.mapping-incomplete'));
+    }
     const mapping =
       draft.legalEntityId !== undefined && draft.taxRegistrationId !== undefined && draft.accountingBookId !== undefined
         ? {
@@ -751,7 +759,7 @@ export class StructurePreparation {
             accountingBookId: draft.accountingBookId,
           }
         : undefined;
-    const change = this.unitChange(
+    const unitChange = this.unitChange(
       preparer,
       draft,
       async (c) => {
@@ -761,6 +769,21 @@ export class StructurePreparation {
       (c) => latestStatus(c, 'business_unit', recordId),
       mapping,
     );
+    const change: Change = {
+      ...unitChange,
+      check: async (c) => {
+        // Once the unit has an approved version, its mapping changes only through the mapping action, under that
+        // action's permissions (3.4; product owner, 8 Oct 2026).
+        if (mapping !== undefined && (await hasApprovedVersion(c, recordId))) {
+          return {
+            kind: 'refused',
+            code: 'organisation.mapping-through-mapping-change',
+            missing: [{ kind: 'record', recordType: recordTypeOf('business_unit_mapping'), recordId }],
+          };
+        }
+        return unitChange.check?.(c);
+      },
+    };
     return this.prepare(context, preparer, change, { kind: 'existing', id: recordId });
   }
 
@@ -829,7 +852,14 @@ export class StructurePreparation {
       check: async (context) => {
         const facts = await place(context);
         if (facts === undefined) return undefined;
-        const broken = await locationPlace(context, facts, draft.parentLocationId);
+        const broken =
+          (await locationPlace(context, facts, draft.parentLocationId)) ??
+          (await locationNesting(context, {
+            locationId,
+            parentLocationId: draft.parentLocationId,
+            retired,
+            during: await locationDaysFrom(context, locationId, draft.validFrom),
+          }));
         if (broken !== undefined) return broken;
         return retired && locationId !== undefined ? retirable(context, this.locationInUse, locationId) : undefined;
       },
@@ -936,6 +966,16 @@ const mappingChanges = (mapping: MappingFields): AuditChange[] => [
   value('taxRegistrationId', mapping.taxRegistrationId),
   value('accountingBookId', mapping.accountingBookId),
 ];
+
+/** Whether a unit has an approved version (3.4). */
+async function hasApprovedVersion(context: TransactionContext, unitId: string): Promise<boolean> {
+  const [row] = await context.tx
+    .select({ id: businessUnitVersion.id })
+    .from(businessUnitVersion)
+    .where(and(eq(businessUnitVersion.businessUnitId, unitId), eq(businessUnitVersion.decision, 'Approved')))
+    .limit(1);
+  return row !== undefined;
+}
 
 /**
  * The status of a Site's, Store's or unit's latest approved version, or Setting up while it has none (3.7): a new

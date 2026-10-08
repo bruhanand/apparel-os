@@ -50,6 +50,8 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'audit.delete_after_retention',
     'audit.ensure_partitions',
     'audit.seal_block',
+    // structure-and-masters 3.5: what a location version would break in the nesting of locations (S1-F02-T02 review).
+    'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).
     'organisation.mapping_out_of_step',
     // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).

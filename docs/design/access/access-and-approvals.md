@@ -322,6 +322,7 @@ A large document is approved by a click and posted later by a job, one at a time
 - **Approve may still refuse** under the locks, such as for a version whose start has passed, and then nothing of the decision is written, as for an access change; the approver sees the owner's refusal on the approval panel (`PRD-UXP-003`).
 - **The owner's version history** reads the latest request of each version from `access`, so a version a later one superseded shows Superseded (9.6) and opens its approval panel.
 - **Independence and eligibility** are 9.3's, unchanged: a master change has no value, so approve on its record type suffices, and its preparer, the one person who prepared the version, never decides it (`PRD-ACS-006`; structure-and-masters 2.3, GC2-2).
+- **Documents decided together** (S1-F02-T02 review; product owner, 8 Oct 2026). An effect may name the action types of other documents its decision decides with the version, such as a new business unit's first mapping (structure-and-masters 3.4). The decider then needs approve on each one's record type as well, through an assignment in force, the same one or another; each assignment relied on is locked shared at step 0 and rechecked under the locks, for an approval and a rejection alike. Until all are held the request shows unavailable, naming the missing permission, and My work does not offer it.
 
 ### 9.9 Bulk approval
 
