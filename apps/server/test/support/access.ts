@@ -23,6 +23,8 @@ import {
   ACCESS,
   ACCESS_ENVIRONMENT,
   MODULE_APPROVALS,
+  SCOPE_MEMBERS,
+  type ScopeMembers,
   ORGANISATION_KEYS,
   ORGANISATION_KEYS_VARIABLE,
   type ModuleApprovals,
@@ -257,9 +259,21 @@ export async function startAccessApp(
     const registry = [...permissionRegistry, ...options.extraRecordTypes];
     builder = builder.overrideProvider(ACCESS).useFactory({
       // With the modules' approval rules and decision effects, as the application builds it (9.8b).
-      factory: (audit: AuditInterface, keys: OrganisationKeys, modules: ModuleApprovals) =>
-        new Access({ audit, keys, registry, approvalRules: modules.rules, documentEffects: modules.effects }),
-      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS],
+      factory: (
+        audit: AuditInterface,
+        keys: OrganisationKeys,
+        modules: ModuleApprovals,
+        scopeMembers: ScopeMembers[],
+      ) =>
+        new Access({
+          audit,
+          keys,
+          registry,
+          approvalRules: modules.rules,
+          documentEffects: modules.effects,
+          scopeMembers,
+        }),
+      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, SCOPE_MEMBERS],
     });
   }
   const moduleRef = await builder

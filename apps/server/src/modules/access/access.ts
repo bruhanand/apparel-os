@@ -57,7 +57,15 @@ import { checkFreshCode, type FreshCode } from './commands/fresh-code.js';
 import { revokeSessions, type Revoker, type RevocationTarget } from './commands/sessions.js';
 import { UserChanges, type NewUser, type PreparedWithCredential } from './commands/user-changes.js';
 import type { OrganisationKeys } from './domain/organisation-keys.js';
-import { authorise, restrictFields, type Authorisation, type AuthoriseRequest } from './queries/authorise.js';
+import type { ScopeMembers } from './contracts/scope-members.js';
+import {
+  authorise,
+  authoriseEach,
+  restrictFields,
+  type Authorisation,
+  type AuthoriseRequest,
+} from './queries/authorise.js';
+import type { RecordFacts } from './domain/scope.js';
 import { ownAccess, type OwnAccess } from './queries/own-access.js';
 import { securitySettings } from './queries/security-settings.js';
 import {
@@ -91,6 +99,15 @@ export interface AccessInterface {
   ): Promise<AuthenticatedServiceIdentity | undefined>;
   /** Authorise: the one assignment that grants the action, or what is missing (7.1 step 3). */
   authorise(context: TransactionContext, request: AuthoriseRequest): Promise<Authorisation>;
+  /**
+   * Authorise each of several records of one type for one action, as a list does for each row (7.1 step 3; RR-296):
+   * each record's answer, or one refusal when no assignment grants the action on the type at all.
+   */
+  authoriseEach(
+    context: TransactionContext,
+    request: Omit<AuthoriseRequest, 'facts'>,
+    facts: readonly RecordFacts[],
+  ): ReturnType<typeof authoriseEach>;
   /**
    * Holds the authority a command relies on (code-house-rules 8.2 "Authority first"; 7.1 step 4; RR-325, RR-360):
    * locks the actor, the assignment Authorise returned and the role it grants in shared mode at step 0, with any
@@ -302,6 +319,11 @@ export interface AccessDependencies {
   readonly composition?: Composition;
   /** The effects of decisions on modules' master versions, by action type (9.8b; module-map 6.2 flow A). */
   readonly documentEffects?: ReadonlyMap<string, DocumentEffect>;
+  /**
+   * The scope contract's implementations, which check the members an assignment selects (5.1; module-map section 3,
+   * rule 6). None by default: then no member can be selected.
+   */
+  readonly scopeMembers?: readonly ScopeMembers[];
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -326,7 +348,7 @@ export class Access implements AccessInterface {
       dependencies.composition ?? PRODUCTION_COMPOSITION,
       this.registry,
     );
-    this.changes = new AccessChanges(dependencies.audit, this.registry);
+    this.changes = new AccessChanges(dependencies.audit, this.registry, dependencies.scopeMembers);
     this.users = new UserChanges(dependencies.audit);
     this.settings = new ApprovalSettingsChanges(dependencies.audit);
     this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit);
@@ -363,6 +385,10 @@ export class Access implements AccessInterface {
 
   authorise(context: TransactionContext, request: AuthoriseRequest) {
     return authorise(context, this.registry, request);
+  }
+
+  authoriseEach(context: TransactionContext, request: Omit<AuthoriseRequest, 'facts'>, facts: readonly RecordFacts[]) {
+    return authoriseEach(context, this.registry, request, facts);
   }
 
   holdAuthority(

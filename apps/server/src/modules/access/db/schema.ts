@@ -371,6 +371,12 @@ export const approvalRequest = access.table('approval_request', {
   valueBasis: text('value_basis'),
   valueAmount: bigint('value_amount', { mode: 'number' }),
   state: text('state').notNull(),
+  // The scope facts of the document, which eligibility matches (9.1, 9.3; RR-435): null where not carried or Unknown.
+  legalEntityId: uuid('legal_entity_id'),
+  siteId: uuid('site_id'),
+  storeId: uuid('store_id'),
+  businessUnitId: uuid('business_unit_id'),
+  brandId: uuid('brand_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

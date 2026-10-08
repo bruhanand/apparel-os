@@ -2631,7 +2631,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.business_unit_mapping"
+          "recordType": "organisation.business_unit_mapping",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -2909,7 +2910,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.business_unit"
+          "recordType": "organisation.business_unit",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -3183,7 +3185,8 @@
         "x-access": {
           "kind": "action",
           "action": "create",
-          "recordType": "organisation.business_unit"
+          "recordType": "organisation.business_unit",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -5185,7 +5188,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.location"
+          "recordType": "organisation.location",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -5448,7 +5452,8 @@
         "x-access": {
           "kind": "action",
           "action": "create",
-          "recordType": "organisation.location"
+          "recordType": "organisation.location",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -7983,7 +7988,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.site"
+          "recordType": "organisation.site",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -8264,7 +8270,8 @@
         "x-access": {
           "kind": "action",
           "action": "create",
-          "recordType": "organisation.site"
+          "recordType": "organisation.site",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -8945,7 +8952,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.store_default_warehouse"
+          "recordType": "organisation.store_default_warehouse",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -9176,7 +9184,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.store"
+          "recordType": "organisation.store",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -9457,7 +9466,8 @@
         "x-access": {
           "kind": "action",
           "action": "create",
-          "recordType": "organisation.store"
+          "recordType": "organisation.store",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -11817,7 +11827,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.business_unit_mapping"
+          "recordType": "organisation.business_unit_mapping",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -12044,7 +12055,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.business_unit"
+          "recordType": "organisation.business_unit",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -13098,7 +13110,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.location"
+          "recordType": "organisation.location",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -14021,7 +14034,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.site"
+          "recordType": "organisation.site",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -14472,7 +14486,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.store_default_warehouse"
+          "recordType": "organisation.store_default_warehouse",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -14687,7 +14702,8 @@
         "x-access": {
           "kind": "action",
           "action": "edit",
-          "recordType": "organisation.store"
+          "recordType": "organisation.store",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -17516,7 +17532,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.business_unit"
+          "recordType": "organisation.business_unit",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -17780,7 +17797,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.business_unit_mapping"
+          "recordType": "organisation.business_unit_mapping",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -18941,7 +18959,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.location"
+          "recordType": "organisation.location",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -21098,7 +21117,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.site"
+          "recordType": "organisation.site",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -21593,7 +21613,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.store"
+          "recordType": "organisation.store",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -21864,7 +21885,8 @@
         "x-access": {
           "kind": "action",
           "action": "view",
-          "recordType": "organisation.store_default_warehouse"
+          "recordType": "organisation.store_default_warehouse",
+          "authorisedIn": "command"
         },
         "parameters": [
           {
@@ -23839,7 +23861,8 @@
         "x-access": {
           "kind": "action",
           "action": "create",
-          "recordType": "organisation.business_unit_mapping_verification"
+          "recordType": "organisation.business_unit_mapping_verification",
+          "authorisedIn": "command"
         },
         "parameters": [
           {

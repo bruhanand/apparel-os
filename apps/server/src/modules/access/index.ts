@@ -39,7 +39,15 @@ export type { LatestRequest } from './queries/access-records.js';
 export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } from './commands/approval-use.js';
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
-export type { RecordFacts } from './domain/scope.js';
+export type { RecordFacts, UncoveredFact } from './domain/scope.js';
+export { SCOPE_MEMBERS } from './contracts/scope-members.js';
+export type {
+  PlaceExpansion,
+  ScopeMember,
+  ScopeMembers,
+  ScopeMemberType,
+  SelectedPlace,
+} from './contracts/scope-members.js';
 export { ACCESS_JOBS_IDENTITY, accessJobKinds } from './jobs/job-kinds.js';
 export type { AuthenticatedServiceIdentity } from './queries/service-identities.js';
 export { ORGANISATION_KEYS_VARIABLE } from './domain/organisation-keys.js';

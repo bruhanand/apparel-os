@@ -86,6 +86,20 @@ export interface SyntheticWorld {
       readonly bookOption: string;
     }[];
   };
+  /**
+   * The scope journey (S1-F02-T03), in the security settings Organisation: an Admin who prepares role assignments, an
+   * approver who decides them, a person with no assignment yet, the role the journey assigns, and two approved Stores
+   * at one Site, the first the one the journey selects.
+   */
+  readonly scope: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reader: EnrolledUser;
+    readonly readerOption: string;
+    readonly roleOption: string;
+    readonly stores: readonly { readonly id: string; readonly code: string; readonly name: string }[];
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

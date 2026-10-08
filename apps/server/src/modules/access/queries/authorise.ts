@@ -55,6 +55,41 @@ export async function authorise(
   registry: ReadonlyMap<string, RecordTypeDeclaration>,
   request: AuthoriseRequest,
 ): Promise<Authorisation> {
+  const granting = await grantingAssignments(context, registry, request);
+  if (granting.kind === 'refused') return granting;
+  return authoriseFacts(granting, request, request.facts ?? {});
+}
+
+/**
+ * Authorise each of several records of one type for one action (7.1 step 3: "in a list, each row's"; RR-296): the
+ * assignments in force are read once, and each record's facts are matched as Authorise matches them. Refused as a
+ * whole when no assignment grants the action on the type at all, or today is not known.
+ */
+export async function authoriseEach(
+  context: TransactionContext,
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  request: Omit<AuthoriseRequest, 'facts'>,
+  facts: readonly RecordFacts[],
+): Promise<Refused | { readonly kind: 'checked'; readonly each: Authorisation[] }> {
+  const granting = await grantingAssignments(context, registry, request);
+  if (granting.kind === 'refused') return granting;
+  return { kind: 'checked', each: facts.map((each) => authoriseFacts(granting, request, each)) };
+}
+
+type Refused = Extract<Authorisation, { kind: 'refused' }>;
+
+interface Granting {
+  readonly kind: 'granting';
+  readonly declaration: RecordTypeDeclaration;
+  readonly assignments: readonly AssignmentInForce[];
+}
+
+/** The assignments in force today whose role grants the action on the record type, or the refusal (7.1 step 3). */
+async function grantingAssignments(
+  context: TransactionContext,
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  request: Omit<AuthoriseRequest, 'facts'>,
+): Promise<Granting | Refused> {
   const today = await context.businessDate();
   if (today.kind === 'not-set') {
     return {
@@ -69,7 +104,7 @@ export async function authorise(
   const declaration = registry.get(request.recordType);
   const permissionMissing: MissingItem = { kind: 'permission', recordType: request.recordType, action: request.action };
   if (declaration?.actions.includes(request.action) !== true) return notAuthorised([permissionMissing]);
-  const granting = (await assignmentsInForce(context, today.date, request.actorId)).filter((assignment) =>
+  const assignments = (await assignmentsInForce(context, today.date, request.actorId)).filter((assignment) =>
     assignment.permissions.some(
       (permission) =>
         permission.kind === 'action' &&
@@ -77,12 +112,27 @@ export async function authorise(
         permission.action === request.action,
     ),
   );
-  if (granting.length === 0) return notAuthorised([permissionMissing]);
+  if (assignments.length === 0) return notAuthorised([permissionMissing]);
+  return { kind: 'granting', declaration, assignments };
+}
+
+/** The first granting assignment that covers the record's facts and grants every field class used (5.3, 6). */
+function authoriseFacts(
+  granting: Granting,
+  request: Omit<AuthoriseRequest, 'facts'>,
+  facts: RecordFacts,
+): Authorisation {
   let nearest: MissingItem | undefined;
-  for (const assignment of granting) {
-    const coverage = scopeCovers(assignment.scope, declaration, request.actorId, request.facts ?? {});
+  for (const assignment of granting.assignments) {
+    const coverage = scopeCovers(assignment.scope, granting.declaration, request.actorId, facts);
     if (!coverage.covered) {
-      nearest ??= { kind: 'scope', dimension: coverage.dimension, roleAssignmentId: assignment.assignmentId };
+      // The refusal names the place or legal entity missing, where the record carries it (PRD-UXP-003).
+      nearest ??= {
+        kind: 'scope',
+        dimension: coverage.dimension,
+        roleAssignmentId: assignment.assignmentId,
+        ...(coverage.fact === undefined ? {} : { factType: coverage.fact.type, factId: coverage.fact.id }),
+      };
       continue;
     }
     const missingClass = (request.fieldClasses ?? []).find((use) => !grantsFieldClass(assignment, use));
@@ -97,10 +147,10 @@ export async function authorise(
     }
     return { kind: 'allowed', roleAssignmentId: assignment.assignmentId };
   }
-  return notAuthorised([nearest ?? permissionMissing]);
+  return notAuthorised([nearest ?? { kind: 'permission', recordType: request.recordType, action: request.action }]);
 }
 
-function notAuthorised(missing: MissingItem[]): Authorisation {
+function notAuthorised(missing: MissingItem[]): Refused {
   return { kind: 'refused', refusal: { kind: 'not-authorised', code: 'access.not-authorised', missing } };
 }
 

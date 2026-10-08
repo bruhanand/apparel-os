@@ -49,7 +49,32 @@ export interface RecordFacts {
 
 export type ScopeDimension = 'legal-entity' | 'place' | 'brand' | 'own-records';
 
-export type Coverage = { readonly covered: true } | { readonly covered: false; readonly dimension: ScopeDimension };
+/** A fact of a record that a scope does not cover: a place, a legal entity or a brand, by type and identifier. */
+export interface UncoveredFact {
+  readonly type: 'site' | 'store' | 'business-unit' | 'legal-entity' | 'brand';
+  readonly id: string;
+}
+
+/**
+ * Whether a scope covers a record; when it does not, the dimension and, where the record carries it, the fact missing
+ * (PRD-UXP-003): for place, the most exact place the record carries, its unit, else its Store, else its Site. An
+ * Unknown fact names none.
+ */
+export type Coverage =
+  | { readonly covered: true }
+  | { readonly covered: false; readonly dimension: ScopeDimension; readonly fact?: UncoveredFact };
+
+/** The most exact place a record carries: its business unit, else its Store, else its Site (5.2). */
+function placeFactOf(facts: RecordFacts): UncoveredFact | undefined {
+  if (facts.businessUnitId !== undefined) return { type: 'business-unit', id: facts.businessUnitId };
+  if (facts.storeId !== undefined) return { type: 'store', id: facts.storeId };
+  if (facts.siteId !== undefined) return { type: 'site', id: facts.siteId };
+  return undefined;
+}
+
+function uncovered(dimension: ScopeDimension, fact: UncoveredFact | undefined): Coverage {
+  return fact === undefined ? { covered: false, dimension } : { covered: false, dimension, fact };
+}
 
 function coversMember(scope: DimensionScope<string>, fact: string | undefined): boolean {
   if (scope.kind === 'all') return true;
@@ -94,10 +119,15 @@ export function scopeCovers(
   if (scope.brand.kind === 'empty') return { covered: false, dimension: 'brand' };
   const declared = recordType.scopeFacts;
   if (declared.legalEntity && !coversMember(scope.legalEntity, facts.legalEntityId)) {
-    return { covered: false, dimension: 'legal-entity' };
+    return uncovered(
+      'legal-entity',
+      facts.legalEntityId === undefined ? undefined : { type: 'legal-entity', id: facts.legalEntityId },
+    );
   }
-  if (declared.place && !coversPlace(scope.place, facts)) return { covered: false, dimension: 'place' };
-  if (declared.brand && !coversMember(scope.brand, facts.brandId)) return { covered: false, dimension: 'brand' };
+  if (declared.place && !coversPlace(scope.place, facts)) return uncovered('place', placeFactOf(facts));
+  if (declared.brand && !coversMember(scope.brand, facts.brandId)) {
+    return uncovered('brand', facts.brandId === undefined ? undefined : { type: 'brand', id: facts.brandId });
+  }
   return { covered: true };
 }
 

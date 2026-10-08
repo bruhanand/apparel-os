@@ -110,9 +110,8 @@ const SYNTHETIC_PREFIX = 'test-';
  * - a module rule never takes an access action type or the `access` module;
  * - a synthetic rule is accepted only in a test composition, and its action type begins `test-`; a rule that is not
  *   synthetic never does (stock-ledger 13.2, 15.3; DEC-112, H2 and H4);
- * - its record type is declared, with approve (4.1);
- * - its record type declares no scope fact, since a request does not yet keep the document's scope facts that
- *   eligibility would check (9.1, 9.3): the rule of a scoped document arrives with them (S1-F10-T02 Notes).
+ * - its record type is declared, with approve (4.1). A record type that declares scope facts is a rule like any
+ *   other: the request keeps the document's facts and eligibility matches them (9.1, 9.3; RR-435, S1-F02-T03).
  */
 export function approvalRulesOf(
   moduleRules: readonly ApprovalRule[],
@@ -135,10 +134,6 @@ export function approvalRulesOf(
     const declaration = registry.get(each.recordType);
     if (declaration?.actions.includes('approve') !== true) {
       throw new Error(`Approval rule ${each.actionType}: record type ${each.recordType} takes no approve`);
-    }
-    const facts = declaration.scopeFacts;
-    if (facts.legalEntity || facts.place || facts.brand) {
-      throw new Error(`Approval rule ${each.actionType}: a scoped record type is not supported yet`);
     }
     rules.set(each.actionType, each);
   }

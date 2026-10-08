@@ -104,6 +104,43 @@ export async function grantSynthetic(
 }
 
 /**
+ * Writes a SYNTHETIC role holding the actions given, Approved from yesterday, with no assignment, for a test or a
+ * journey to assign through the real commands (S1-F02-T03). Returns its identifier.
+ */
+export async function writeSyntheticRole(
+  database: string,
+  role: { readonly code: string; readonly name: string; readonly authorities: readonly SyntheticAuthority[] },
+): Promise<string> {
+  const roleId = uuidv7();
+  const versionId = uuidv7();
+  const owner = await connect(database, 'migration');
+  try {
+    await owner.query('begin');
+    await owner.query('insert into access.role (id, code, self_service) values ($1, $2, false)', [roleId, role.code]);
+    await owner.query(
+      `insert into access.role_version (id, role_id, name, valid_during, decision)
+       values ($1, $2, $3, daterange($4::date, null), 'Awaiting approval')`,
+      [versionId, roleId, role.name, yesterday()],
+    );
+    for (const authority of role.authorities) {
+      await owner.query(
+        `insert into access.role_permission (id, role_version_id, kind, record_type, action, field_class, field_access)
+         values ($1, $2, 'action', $3, $4, null, null)`,
+        [uuidv7(), versionId, authority.recordType, authority.action],
+      );
+    }
+    await owner.query(`update access.role_version set decision = 'Approved' where id = $1`, [versionId]);
+    await owner.query('commit');
+    return roleId;
+  } catch (error) {
+    await owner.query('rollback');
+    throw error;
+  } finally {
+    await owner.end();
+  }
+}
+
+/**
  * Writes an Approved, all-members assignment to the actor of a role that already exists, such as one of the two
  * roles the setup step creates (access-and-approvals 9.11), from the start of the role's Approved version, then the
  * actor's effective grants from that version's actions, as access builds them (7.2). SYNTHETIC; returns the

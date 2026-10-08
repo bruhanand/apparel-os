@@ -62,6 +62,7 @@ import {
   taxRegistrationVersion,
 } from '../db/schema.js';
 import { masterTables } from '../db/tables.js';
+import { isPlaceScoped, placeFactsOf, type PlaceFacts } from '../queries/scope.js';
 import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
 import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
 import {
@@ -139,6 +140,17 @@ const from = (start: string) => `[${start},)`;
 
 const UNIQUE_VIOLATION = '23505';
 
+/** A place-scoped record's place facts on the date, or undefined for a kind that carries none (6.1). */
+export async function recordScope(
+  context: TransactionContext,
+  kind: MasterKind,
+  recordId: string,
+  date: string,
+): Promise<PlaceFacts | undefined> {
+  if (!isPlaceScoped(kind)) return undefined;
+  return (await placeFactsOf(context, kind, [recordId], date)).get(recordId) ?? {};
+}
+
 /** The kinds whose versions hold only a name. */
 export type NamedKind = 'country' | 'state' | 'city' | 'area' | 'accounting_book';
 
@@ -195,7 +207,11 @@ export class StructurePreparation {
       recordId,
     );
     await change.children?.(context, versionId, recordId);
+    // A place-scoped record's facts go with its audit record and its approval request, so its history is read and its
+    // change decided within a scope that covers them (structure-and-masters 6.1; access-and-approvals 9.1; RR-435).
+    const facts = await recordScope(context, change.kind, recordId, date);
     await this.audit.record(context, {
+      ...(facts === undefined ? {} : { scope: facts }),
       actor: { kind: 'user', id: preparer.userId },
       roleAssignmentId: preparer.roleAssignmentId,
       record: { module: 'organisation', type: change.kind, id: recordId, versionId },
@@ -218,6 +234,7 @@ export class StructurePreparation {
       value: { kind: 'none' },
       preparers: [preparer.userId],
       requestedBy: preparer,
+      ...(facts === undefined ? {} : { facts }),
     });
     return { kind: 'success', answer: { recordId, versionId, requestId } };
   }

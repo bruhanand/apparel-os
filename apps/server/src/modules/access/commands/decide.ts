@@ -21,7 +21,7 @@ import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
 import type { SecuritySettingsChanges } from './security-settings.js';
 import { checkFreshCode, takeFreshCode } from './fresh-code.js';
-import { preparersOf, storedPreparers } from './request-approval.js';
+import { preparersOf, requestFacts, storedPreparers } from './request-approval.js';
 import type { UserChanges } from './user-changes.js';
 
 // Deciding an approval request (access-and-approvals 9.3, 9.5, 9.6; module-map 6.2 flow A; PRD-ACS-006,
@@ -378,10 +378,12 @@ export class Approvals {
       (await this.handlerOf(request.actionType).decidesWith?.(context, request.documentVersionId)) ?? [];
     const relied: string[] = [];
     for (const recordType of [rule.recordType, ...decidesWith.map((each) => this.ruleOf(each).recordType)]) {
+      // Covering the document's scope facts, which the request froze (9.3; RR-435).
       const authorised = await authorise(context, this.dependencies.registry, {
         actorId: actor.id,
         action: 'approve',
         recordType,
+        facts: requestFacts(request),
       });
       if (authorised.kind === 'refused') {
         return {
@@ -544,6 +546,7 @@ export class Approvals {
       actorId: actor.id,
       action: 'approve',
       recordType: rule.recordType,
+      facts: requestFacts(request),
     });
   }
 

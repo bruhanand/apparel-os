@@ -29,7 +29,7 @@ import {
 } from '../domain/kinds.js';
 import { mappingChanged, structureChanged } from '../events.js';
 import { inForceOn, refusal, today, type Reference } from './common.js';
-import { operationName } from './prepare.js';
+import { operationName, recordScope } from './prepare.js';
 import { ancestorsOf, locationNesting, retirable, storeUnitRules, unitOf, unitOutOfStep } from './rules.js';
 
 // What a decision does to a master version (structure-and-masters 2.2, 2.3; module-map 6.2 flow A;
@@ -565,7 +565,11 @@ export class StructureEffects {
     versionId: string,
     decision: 'Approved' | 'Rejected',
   ): Promise<void> {
+    // The record's place facts, as its preparation's audit record carried them (structure-and-masters 6.1).
+    const date = await context.businessDate();
+    const facts = date.kind === 'set' ? await recordScope(context, kind, recordId, date.date) : undefined;
     await this.audit.record(context, {
+      ...(facts === undefined ? {} : { scope: facts }),
       actor: decider.actor,
       ...(decider.roleAssignmentId === undefined ? {} : { roleAssignmentId: decider.roleAssignmentId }),
       ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),

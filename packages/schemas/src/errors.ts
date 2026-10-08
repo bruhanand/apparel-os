@@ -156,8 +156,11 @@ export const accessCodes = declareCodes({
  *   self-service permission on a type with no subject person (4.1, 5.4).
  * - `access.service-only-permission`: a role holds a permission on a record type only service identities hold, never
  *   a person's role; `missing` names each (access-and-approvals 2.3; PRD-SEC-018; S1-F01-T29).
- * - `access.scope-members-not-available`: selected members, which need the scope contract of `organisation` and
- *   `merchandise` (S1-F02, S1-F03; 5.1).
+ * - `access.scope-members-not-available`: selected members of a type no implementation of the scope contract answers
+ *   yet: brands, until `merchandise`'s side (S1-F03-T01; 5.1; module-map section 3, rule 6).
+ * - `access.scope-member-not-found`: a selected legal entity, Site, Store or business unit that does not exist as the
+ *   type named, or is in force on no day of the assignment's dates; `missing` names each (5.1; structure-and-masters
+ *   3.8; S1-F02-T03).
  * - `access.role-code-taken`, `access.role-not-found`, `access.actor-not-found`, `access.assignment-not-found`.
  * - `access.not-withdrawable`: the assignment is not approved, is withdrawn already, or has started (7.3).
  */
@@ -171,6 +174,7 @@ export const accessRoleCodes = declareCodes({
   'access.permission-not-declared': 'refused',
   'access.service-only-permission': 'refused',
   'access.scope-members-not-available': 'unavailable',
+  'access.scope-member-not-found': 'refused',
   'access.role-code-taken': 'refused',
   'access.role-not-found': 'not-found',
   'access.actor-not-found': 'not-found',

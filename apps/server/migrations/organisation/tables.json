@@ -358,7 +358,7 @@
       "marks": ["locked"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "access-and-approvals 9.1, 9.6, 13.1; code-house-rules 8.2",
-      "why": "Read by Decide and by the eligibility check of My work in access; an access change carries no scope fact (access-and-approvals 9.11); only access code reads it"
+      "why": "Read by Decide and by the eligibility check of My work in access; it keeps the scope facts of the document it binds to (9.1; RR-435), which eligibility matches, but no reader is shown its rows: only access code reads it"
     },
     {
       "table": "access.approval_request_preparer",

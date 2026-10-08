@@ -6,6 +6,8 @@ import {
   siteListSchema,
   siteReadSchema,
   storeListSchema,
+  storeReadSchema,
+  type AssignmentScope,
   type PermissionAction,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -70,13 +72,17 @@ function freshCode(user: SyntheticUser): string {
   return codeFor(user.factorSecret ?? Buffer.alloc(0), 0, clock.now());
 }
 
-async function enrolled(label: string, authorities: readonly SyntheticAuthority[]): Promise<SyntheticUser> {
+async function enrolled(
+  label: string,
+  authorities: readonly SyntheticAuthority[],
+  options: { readonly scope?: AssignmentScope } = {},
+): Promise<SyntheticUser> {
   const user = await writeSyntheticUser(database, organisationCode, keys, {
     label: `${label}${String(randomInt(1_000_000))}`,
     enrolled: true,
     personas: ['P-ADM'],
   });
-  await grantSynthetic(database, { kind: 'user', id: user.id }, authorities);
+  await grantSynthetic(database, { kind: 'user', id: user.id }, authorities, options);
   const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.21' },
@@ -325,6 +331,116 @@ describe('a list is read a page at a time, and one record on its own (code-house
       error: {
         code: 'organisation.record-not-found',
         missing: [{ kind: 'record', recordType: 'organisation.site', recordId: unknown }],
+      },
+    });
+  });
+});
+
+describe('scope by place over the routes (access-and-approvals 5.3, 7.1, 9.3; structure-and-masters 6.1; S1-F02-T03)', () => {
+  const storeBody = (siteId: string) => ({
+    code: code('STORE'),
+    name: syntheticName('Store'),
+    format: 'ebo',
+    operatingModel: 'company-owned',
+    siteId,
+    aliases: [],
+    validFrom: today(),
+  });
+  const onlyStore = (storeId: string): AssignmentScope => ({
+    kind: 'dimensions',
+    legalEntity: { kind: 'all' },
+    place: { kind: 'selected', members: [{ type: 'store', id: storeId }] },
+    brand: { kind: 'all' },
+  });
+
+  it('PRD-ACS-021 PRD-UXP-003 a Store-scoped reader reads its Store, sees only it listed, and is refused at another Store with the place named', async () => {
+    const site = await approved('/api/organisation/sites', siteBody());
+    const mine = await approved('/api/organisation/stores', storeBody(site.recordId));
+    const otherBody = storeBody(site.recordId);
+    const other = await approved('/api/organisation/stores', otherBody);
+    const reader = await enrolled('STORE-READER', [{ recordType: 'organisation.store', action: 'view' }], {
+      scope: onlyStore(mine.recordId),
+    });
+    expect(
+      storeReadSchema.parse((await get(reader, `/api/organisation/stores/${mine.recordId}`)).body).record,
+    ).toMatchObject({
+      id: mine.recordId,
+    });
+    const refused = await get(reader, `/api/organisation/stores/${other.recordId}`);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'access.not-authorised',
+        missing: [
+          { kind: 'scope', dimension: 'place', factType: 'store', factId: other.recordId, factCode: otherBody.code },
+        ],
+      },
+    });
+    const listed = storeListSchema.parse((await get(reader, '/api/organisation/stores')).body);
+    expect(listed.records.map((record) => record.id)).toEqual([mine.recordId]);
+    const lists = masterListsSchema.parse((await get(reader, `/api/organisation/master-lists?date=${today()}`)).body);
+    expect(lists.stores.map((each) => each.id)).toEqual([mine.recordId]);
+  });
+
+  it('RR-435 PRD-ACS-004 a request keeps the Store it is for: a Store-scoped approver decides that Store’s change and is not eligible at another', async () => {
+    const site = await approved('/api/organisation/sites', siteBody());
+    const mine = await approved('/api/organisation/stores', storeBody(site.recordId));
+    const other = await approved('/api/organisation/stores', storeBody(site.recordId));
+    const storeApprover = await enrolled(
+      'STORE-APPROVER',
+      [
+        { recordType: 'organisation.store', action: 'view' },
+        { recordType: 'organisation.store', action: 'approve' },
+      ],
+      { scope: onlyStore(mine.recordId) },
+    );
+    const version = (storeId: string) =>
+      prepare(`/api/organisation/stores/${storeId}/versions`, {
+        name: syntheticName('Store renamed'),
+        format: 'ebo',
+        operatingModel: 'company-owned',
+        siteId: site.recordId,
+        aliases: [],
+        // From tomorrow: a version on the day an approved one starts is refused (structure-and-masters 6.1).
+        validFrom: new Date(clock.now().getTime() + 86_400_000).toISOString().slice(0, 10),
+      });
+    const elsewhere = await decide(await version(other.recordId), storeApprover);
+    expect(elsewhere.body).toMatchObject({
+      error: {
+        code: 'access.not-eligible',
+        missing: [{ kind: 'scope', dimension: 'place', factType: 'store', factId: other.recordId }],
+      },
+    });
+    expect((await decide(await version(mine.recordId), storeApprover)).status).toBe(200);
+  });
+
+  it('PRD-ACS-021 a Site-scoped preparer prepares a Store at its Site, and is refused a Store at another Site, with the place named', async () => {
+    const mySite = await approved('/api/organisation/sites', siteBody());
+    const otherSiteBody = siteBody();
+    const otherSite = await approved('/api/organisation/sites', otherSiteBody);
+    const preparer = await enrolled('SITE-PREPARER', [{ recordType: 'organisation.store', action: 'create' }], {
+      scope: {
+        kind: 'dimensions',
+        legalEntity: { kind: 'all' },
+        place: { kind: 'selected', members: [{ type: 'site', id: mySite.recordId }] },
+        brand: { kind: 'all' },
+      },
+    });
+    expect((await post(preparer, '/api/organisation/stores', storeBody(mySite.recordId))).status).toBe(200);
+    const refused = await post(preparer, '/api/organisation/stores', storeBody(otherSite.recordId));
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'access.not-authorised',
+        missing: [
+          {
+            kind: 'scope',
+            dimension: 'place',
+            factType: 'site',
+            factId: otherSite.recordId,
+            factCode: otherSiteBody.code,
+          },
+        ],
       },
     });
   });

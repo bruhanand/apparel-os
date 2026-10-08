@@ -135,6 +135,13 @@ export const englishIndia = {
   'missing.permission.named': 'Needs {action} on {recordType}.',
   'missing.record-type': 'Your role assignments grant nothing on this kind of record.',
   'missing.scope': 'None of your role assignments covers the record’s scope.',
+  'missing.scope.named': 'None of your role assignments covers the {type} {code}.',
+  'missing.scope-member': 'A chosen legal entity or place was not found.',
+  'scope.fact.site': 'Site',
+  'scope.fact.store': 'Store',
+  'scope.fact.business-unit': 'business unit',
+  'scope.fact.legal-entity': 'legal entity',
+  'scope.fact.brand': 'brand',
   'missing.assignment': 'One of your role assignments nearly covers this, but its scope stops short.',
   'missing.field-class': 'This needs a permission to see a restricted field.',
   'missing.policy': 'The policy it depends on is not signed, or its values are not configured.',
@@ -206,7 +213,9 @@ export const englishIndia = {
   'error.access.service-only-permission':
     'One of these permissions belongs to the background system only. A role for people cannot hold it.',
   'error.access.scope-members-not-available':
-    'Choosing particular legal entities, places or brands is not available yet. Use all members or none.',
+    'Choosing particular brands is not available yet. Use all members or none for brands.',
+  'error.access.scope-member-not-found':
+    'A chosen legal entity or place does not exist, or is not in force on these dates. Choose again from the list.',
   'error.access.role-code-taken': 'Another role already has this code.',
   'error.access.role-not-found': 'This role was not found.',
   'error.access.actor-not-found': 'This person or service identity was not found.',
@@ -671,7 +680,15 @@ export const englishIndia = {
   'scope.dimension.brand': 'Brand',
   'scope.selected-members': 'Selected members',
   'scope.selected-later':
-    'Selected members arrive with the legal entities, places and brands they choose from; until then each dimension is all members or empty.',
+    'Particular brands can be chosen once brands exist; until then brands are all members or empty.',
+  'scope.place-tree.label': 'Places',
+  'scope.place-tree.site': 'Site {name}',
+  'scope.place-tree.store': 'Store {name}',
+  'scope.place-tree.unit': '{kind} {name}',
+  'scope.place-tree.none': 'No Site is in force today.',
+  'scope.place-tree.not-shown': 'You may not view the Sites, so no place can be chosen.',
+  'scope.legal-entities.not-shown': 'You may not view the legal entities, so none can be chosen.',
+  'scope.choose-one': 'Choose at least one member for each dimension set to selected members.',
   'scope.place-tree':
     'Places form one tree. A selected Site covers its Stores and business units, including ones added later; a selected Store covers its business units, including ones added later.',
   'scope.empty-warning': 'A dimension left empty grants nothing: this assignment would give no access.',

@@ -1,6 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type {
   AssignmentScope,
+  MissingItem,
   AssignmentWithdrawalDraft,
   Permission,
   RecordTypeDeclaration,
@@ -19,9 +20,11 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { AuditActor, AuditInterface } from '../../audit/index.js';
+import type { ScopeMember, ScopeMembers } from '../contracts/scope-members.js';
 import {
   appUser,
   assignmentScope,
+  assignmentScopeMember,
   role,
   roleAssignment,
   roleAssignmentChange,
@@ -128,6 +131,8 @@ export class AccessChanges {
   constructor(
     private readonly audit: AuditInterface,
     private readonly registry: ReadonlyMap<string, RecordTypeDeclaration>,
+    /** The scope contract's implementations, which check selected members (5.1; module-map section 3, rule 6). */
+    private readonly scopeMembers: readonly ScopeMembers[] = [],
   ) {}
 
   /**
@@ -347,14 +352,8 @@ export class AccessChanges {
     if (ownRecords !== foundRole.selfService || (ownRecords && draft.actor.kind !== 'user')) {
       return refusal('refused', 'access.self-service-scope');
     }
-    const selectedIn = selectedDimensions(draft.scope);
-    if (selectedIn.length > 0) {
-      return refusal(
-        'unavailable',
-        'access.scope-members-not-available',
-        selectedIn.map((dimension) => ({ kind: 'scope', dimension })),
-      );
-    }
+    const members = await this.checkMembers(context, draft);
+    if (members !== undefined) return { kind: 'refusal', refusal: members };
     const scopeKey = scopeKeyOf(draft.scope);
     const range = rangeOf(draft.validFrom, draft.validTo);
     const actorId = draft.actor.kind === 'user' ? draft.actor.userId : draft.actor.serviceIdentityId;
@@ -375,16 +374,25 @@ export class AccessChanges {
       withdrawalId: null,
     });
     if (draft.scope.kind === 'dimensions') {
-      const dimensions = [
-        ['legal-entity', draft.scope.legalEntity.kind],
-        ['place', draft.scope.place.kind],
-        ['brand', draft.scope.brand.kind],
-      ] as const;
-      await context.tx
-        .insert(assignmentScope)
-        .values(
-          dimensions.map(([dimension, kind]) => ({ id: uuidv7(), roleAssignmentId: assignmentId, dimension, kind })),
-        );
+      const rows = membersByDimension(draft.scope).map((each) => ({ ...each, scopeId: uuidv7() }));
+      await context.tx.insert(assignmentScope).values(
+        rows.map((row) => ({
+          id: row.scopeId,
+          roleAssignmentId: assignmentId,
+          dimension: row.dimension,
+          kind: row.kind,
+        })),
+      );
+      // The selected members, as the scope key names them (5.1; code-house-rules 7.3).
+      const memberRows = rows.flatMap((row) =>
+        row.members.map((member) => ({
+          id: uuidv7(),
+          assignmentScopeId: row.scopeId,
+          memberType: member.type,
+          memberId: member.id,
+        })),
+      );
+      if (memberRows.length > 0) await context.tx.insert(assignmentScopeMember).values(memberRows);
     }
     await context.tx
       .insert(roleAssignmentChange)
@@ -476,6 +484,48 @@ export class AccessChanges {
       preparer,
     });
     return { kind: 'success', answer: { withdrawalId, versionId, requestId } };
+  }
+
+  /**
+   * Check scope membership (access-and-approvals 5.1; module-map section 3, rule 6): each selected member through the
+   * scope contract's implementation that answers its type. A dimension whose members no implementation answers is
+   * unavailable (`access.scope-members-not-available`), such as brands until S1-F03; a member that does not exist, is
+   * not of the type named or is in force on no day of the assignment's dates is refused, each named
+   * (`access.scope-member-not-found`; PRD-UXP-003).
+   */
+  private async checkMembers(
+    context: TransactionContext,
+    draft: RoleAssignmentDraft,
+  ): Promise<CommandRefusal | undefined> {
+    if (draft.scope.kind !== 'dimensions') return undefined;
+    const selected = membersByDimension(draft.scope).filter((row) => row.kind === 'selected');
+    const unanswered = selected.filter((row) =>
+      row.members.some((member) => !this.scopeMembers.some((each) => each.answers.includes(member.type))),
+    );
+    if (unanswered.length > 0) {
+      return {
+        kind: 'unavailable',
+        code: 'access.scope-members-not-available',
+        missing: unanswered.map((row) => ({ kind: 'scope', dimension: row.dimension })),
+      };
+    }
+    const dates = { validFrom: draft.validFrom, validTo: draft.validTo };
+    const missing: MissingItem[] = [];
+    for (const row of selected) {
+      for (const implementation of this.scopeMembers) {
+        const asked = row.members.filter((member) => implementation.answers.includes(member.type));
+        if (asked.length === 0) continue;
+        for (const member of await implementation.notFound(context, asked, dates)) {
+          missing.push({
+            kind: 'scope-member',
+            dimension: row.dimension,
+            memberType: member.type,
+            memberId: member.id,
+          });
+        }
+      }
+    }
+    return missing.length === 0 ? undefined : { kind: 'refused', code: 'access.scope-member-not-found', missing };
   }
 
   private async overlapping(
@@ -935,12 +985,16 @@ export class AccessChanges {
   }
 }
 
-/** The dimensions of a scope that select members (access-and-approvals 5.1). */
-function selectedDimensions(scope: AssignmentScope): ('legal-entity' | 'place' | 'brand')[] {
-  if (scope.kind === 'own-records') return [];
-  const selected: ('legal-entity' | 'place' | 'brand')[] = [];
-  if (scope.legalEntity.kind === 'selected') selected.push('legal-entity');
-  if (scope.place.kind === 'selected') selected.push('place');
-  if (scope.brand.kind === 'selected') selected.push('brand');
-  return selected;
+/** Each dimension of a scope with its kind and its selected members, typed as the scope rows keep them (5.1). */
+function membersByDimension(scope: Extract<AssignmentScope, { kind: 'dimensions' }>) {
+  const ofKind = <Member>(
+    dimension: 'legal-entity' | 'place' | 'brand',
+    part: { readonly kind: 'all' | 'empty' } | { readonly kind: 'selected'; readonly members: readonly Member[] },
+    typed: (member: Member) => ScopeMember,
+  ) => ({ dimension, kind: part.kind, members: part.kind === 'selected' ? part.members.map(typed) : [] });
+  return [
+    ofKind('legal-entity', scope.legalEntity, (id: string): ScopeMember => ({ type: 'legal-entity', id })),
+    ofKind('place', scope.place, (member: { type: 'site' | 'store' | 'business-unit'; id: string }) => member),
+    ofKind('brand', scope.brand, (id: string): ScopeMember => ({ type: 'brand', id })),
+  ];
 }

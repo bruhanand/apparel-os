@@ -33,6 +33,7 @@ import { StructurePreparation, type NamedKind, type PreparedVersion } from './co
 import { verifyMapping } from './commands/verify.js';
 import type { LocationInUse } from './contracts/location-in-use.js';
 import type { MasterKind } from './domain/kinds.js';
+import { isPlaceScoped, placeFactsOf, type PlaceFacts } from './queries/scope.js';
 import {
   kindReads,
   mappingOn,
@@ -171,6 +172,21 @@ export interface OrganisationInterface {
    * caller to store (PRD-ACP-013) and its verification; refused when no mapping is in force on that date.
    */
   mappingOn(context: TransactionContext, unitId: string, date: string): Promise<Prepared<UnitMapping>>;
+  /**
+   * The place facts a record carries on a date, for Authorise (structure-and-masters 6.1; access-and-approvals 5.3;
+   * S1-F02-T03): a Site is its own place; a Store is itself at the Site it is linked to; a business unit, its mapping
+   * and the mapping's verification are the unit at its Site and Store; a location is at its unit; a Store's default
+   * warehouse is the Store's. A kind that carries no place, and a record that does not exist, answer none, so only
+   * all-members scope covers the latter (PRD-MOD-015).
+   */
+  placeFacts(context: TransactionContext, kind: MasterKind, recordId: string, date: string): Promise<PlaceFacts>;
+  /** The place facts of several records of one kind, by identifier; one that does not exist is left out. */
+  placeFactsOf(
+    context: TransactionContext,
+    kind: MasterKind,
+    recordIds: readonly string[],
+    date: string,
+  ): Promise<ReadonlyMap<string, PlaceFacts>>;
 }
 
 export interface OrganisationDependencies {
@@ -235,5 +251,14 @@ export class Organisation extends StructurePreparation implements OrganisationIn
 
   structureOn(context: TransactionContext, date: string) {
     return structureOn(context, date);
+  }
+
+  async placeFacts(context: TransactionContext, kind: MasterKind, recordId: string, date: string) {
+    return (await this.placeFactsOf(context, kind, [recordId], date)).get(recordId) ?? {};
+  }
+
+  async placeFactsOf(context: TransactionContext, kind: MasterKind, recordIds: readonly string[], date: string) {
+    if (!isPlaceScoped(kind)) return new Map(recordIds.map((id) => [id, {}] as const));
+    return placeFactsOf(context, kind, recordIds, date);
   }
 }

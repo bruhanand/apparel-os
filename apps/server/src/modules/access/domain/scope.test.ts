@@ -14,6 +14,9 @@ const SITE_B = '01900000-0000-7000-8000-00000000b002';
 const SITE_A = '01900000-0000-7000-8000-00000000b001';
 const STORE = '01900000-0000-7000-8000-00000000b101';
 const UNIT = '01900000-0000-7000-8000-00000000b201';
+const OTHER_UNIT = '01900000-0000-7000-8000-00000000b202';
+const OTHER_STORE = '01900000-0000-7000-8000-00000000b102';
+const OTHER_ENTITY = '01900000-0000-7000-8000-00000000b402';
 const BRAND = '01900000-0000-7000-8000-00000000b301';
 const ENTITY = '01900000-0000-7000-8000-00000000b401';
 const ACTOR = '01900000-0000-7000-8000-00000000a001';
@@ -116,6 +119,50 @@ describe('matching a record (access-and-approvals 5.3, 5.4)', () => {
     expect(scopeCovers(store, scoped, ACTOR, { ...facts, storeId: undefined })).toEqual({
       covered: false,
       dimension: 'place',
+      fact: { type: 'business-unit', id: UNIT },
+    });
+  });
+
+  it('PRD-ACS-021 a selected Site covers its Stores and units, a Store its units, a unit only itself (5.2)', () => {
+    const place = (type: 'site' | 'store' | 'business-unit', id: string): AssignmentScope => ({
+      kind: 'dimensions',
+      legalEntity: all,
+      place: { kind: 'selected', members: [{ type, id }] },
+      brand: all,
+    });
+    const atStore = { siteId: SITE_A, storeId: STORE, businessUnitId: UNIT };
+    const atOtherUnit = { ...atStore, businessUnitId: OTHER_UNIT };
+    expect(scopeCovers(place('site', SITE_A), scoped, ACTOR, atOtherUnit)).toEqual({ covered: true });
+    expect(scopeCovers(place('store', STORE), scoped, ACTOR, atOtherUnit)).toEqual({ covered: true });
+    expect(scopeCovers(place('business-unit', UNIT), scoped, ACTOR, atStore)).toEqual({ covered: true });
+    expect(scopeCovers(place('business-unit', UNIT), scoped, ACTOR, atOtherUnit)).toEqual({
+      covered: false,
+      dimension: 'place',
+      fact: { type: 'business-unit', id: OTHER_UNIT },
+    });
+  });
+
+  it('PRD-UXP-003 a refusal names the place or legal entity missing, the most exact one the record carries', () => {
+    const storeOnly: AssignmentScope = {
+      kind: 'dimensions',
+      legalEntity: { kind: 'selected', members: [ENTITY] },
+      place: { kind: 'selected', members: [{ type: 'store', id: STORE }] },
+      brand: all,
+    };
+    expect(scopeCovers(storeOnly, scoped, ACTOR, { siteId: SITE_B, storeId: OTHER_STORE })).toEqual({
+      covered: false,
+      dimension: 'legal-entity',
+    });
+    expect(
+      scopeCovers(storeOnly, scoped, ACTOR, { legalEntityId: OTHER_ENTITY, siteId: SITE_A, storeId: STORE }),
+    ).toEqual({ covered: false, dimension: 'legal-entity', fact: { type: 'legal-entity', id: OTHER_ENTITY } });
+    expect(
+      scopeCovers(storeOnly, scoped, ACTOR, { legalEntityId: ENTITY, siteId: SITE_B, storeId: OTHER_STORE }),
+    ).toEqual({ covered: false, dimension: 'place', fact: { type: 'store', id: OTHER_STORE } });
+    expect(scopeCovers(storeOnly, scoped, ACTOR, { legalEntityId: ENTITY, siteId: SITE_B })).toEqual({
+      covered: false,
+      dimension: 'place',
+      fact: { type: 'site', id: SITE_B },
     });
   });
 

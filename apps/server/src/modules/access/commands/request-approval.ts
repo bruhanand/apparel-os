@@ -15,6 +15,7 @@ import {
   settingVersionChange,
 } from '../db/schema.js';
 import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules.js';
+import type { RecordFacts } from '../domain/scope.js';
 import { approvalDecided, approvalRequested } from '../events.js';
 
 /** The document a request binds to: its record and exact version (access-and-approvals 9.1; PRD-ACS-007). */
@@ -124,6 +125,11 @@ export interface ModuleApprovalRequest {
   readonly preparers: readonly string[];
   /** The user submitting it, and the assignment Authorise used (7.1 step 3). */
   readonly requestedBy: { readonly userId: string; readonly roleAssignmentId: string };
+  /**
+   * The document's scope facts, as the owning module passes them to Authorise (5.3): who may decide must cover them
+   * (9.3; RR-435). A fact left out is Unknown where the record type declares it (PRD-MOD-015).
+   */
+  readonly facts?: RecordFacts;
 }
 
 /**
@@ -160,6 +166,7 @@ export async function requestModuleApproval(
     value: request.value,
     valueBasis: rule.value === 'none' ? null : rule.value,
     requestedBy: request.requestedBy,
+    facts: request.facts ?? {},
   });
 }
 
@@ -174,6 +181,7 @@ async function openRequest(
     readonly value: RequestValue;
     readonly valueBasis: string | null;
     readonly requestedBy: { readonly userId: string; readonly roleAssignmentId: string };
+    readonly facts?: RecordFacts;
   },
 ): Promise<string> {
   const preparers = request.preparers;
@@ -239,6 +247,11 @@ async function openRequest(
     valueBasis: request.valueBasis,
     valueAmount: request.value.kind === 'known' ? request.value.amountPaise : null,
     state: 'Awaiting approval',
+    legalEntityId: request.facts?.legalEntityId ?? null,
+    siteId: request.facts?.siteId ?? null,
+    storeId: request.facts?.storeId ?? null,
+    businessUnitId: request.facts?.businessUnitId ?? null,
+    brandId: request.facts?.brandId ?? null,
   });
   await context.tx
     .insert(approvalRequestPreparer)
@@ -280,4 +293,21 @@ export async function storedPreparers(context: TransactionContext, requestId: st
     .from(approvalRequestPreparer)
     .where(eq(approvalRequestPreparer.approvalRequestId, requestId));
   return rows.map((row) => row.userId).sort();
+}
+
+/** The scope facts a request froze (9.1, 9.3; RR-435): each that is not null. */
+export function requestFacts(request: {
+  readonly legalEntityId: string | null;
+  readonly siteId: string | null;
+  readonly storeId: string | null;
+  readonly businessUnitId: string | null;
+  readonly brandId: string | null;
+}): RecordFacts {
+  return {
+    ...(request.legalEntityId === null ? {} : { legalEntityId: request.legalEntityId }),
+    ...(request.siteId === null ? {} : { siteId: request.siteId }),
+    ...(request.storeId === null ? {} : { storeId: request.storeId }),
+    ...(request.businessUnitId === null ? {} : { businessUnitId: request.businessUnitId }),
+    ...(request.brandId === null ? {} : { brandId: request.brandId }),
+  };
 }

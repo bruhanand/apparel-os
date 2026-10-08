@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Grant } from '../shell/screens';
 import { SessionContext, type ShellSession } from '../shell/session';
-import { AssignmentScopeFields, AssignmentsScreen, scopeOfChoices } from './AssignmentsScreen';
+import { AssignmentScopeFields, AssignmentsScreen, scopeOfChoices, type ScopeStructure } from './AssignmentsScreen';
 import { formatDate, formatPaise } from './format';
 import { permissionGrid, permissionsOfGrid, withAllActions } from './permission-grid';
 import { FormActions, RecordDrawer } from './RecordDrawer';
@@ -207,7 +207,120 @@ describe('the assignment editor (access-and-approvals 4.3, 5.1, 5.2, 14; PRD-ACS
     );
     expect(text(full)).not.toContain('A dimension left empty grants nothing');
     expect(text(full)).toContain('A selected Site covers its Stores and business units, including ones added later');
-    expect(text(full)).toContain('Selected members arrive with the legal entities, places and brands');
+    expect(text(full)).toContain('Particular brands can be chosen once brands exist');
+  });
+
+  // S1-F02-T03: selected legal entities and places, from the structure in force today (access-and-approvals 5.1, 14).
+  const SITE = id(81);
+  const STORE = id(82);
+  const COUNTER = id(83);
+  const WAREHOUSE = id(84);
+  const ENTITY = id(85);
+  const structure: ScopeStructure = {
+    notShown: [],
+    legalEntities: [{ id: ENTITY, code: 'SYN-LE', versionId: id(90), legalName: 'SYNTHETIC entity' }],
+    sites: [
+      {
+        id: SITE,
+        code: 'SYN-SITE',
+        versionId: id(91),
+        name: 'SYNTHETIC site',
+        physicalKind: 'retail-site',
+        areaId: id(99),
+        addresses: [],
+        aliases: [],
+        status: 'Setting up',
+      },
+    ],
+    stores: [
+      {
+        id: STORE,
+        code: 'SYN-STORE',
+        versionId: id(92),
+        name: 'SYNTHETIC store',
+        format: 'ebo',
+        operatingModel: 'company-owned',
+        siteId: SITE,
+        aliases: [],
+        status: 'Setting up',
+      },
+    ],
+    businessUnits: [
+      {
+        id: COUNTER,
+        code: 'SYN-BC',
+        versionId: id(93),
+        siteId: SITE,
+        storeId: STORE,
+        kind: 'brand-counter',
+        name: 'SYNTHETIC counter',
+        status: 'Setting up',
+      },
+      {
+        id: WAREHOUSE,
+        code: 'SYN-WH',
+        versionId: id(94),
+        siteId: SITE,
+        kind: 'warehouse',
+        name: 'SYNTHETIC warehouse',
+        status: 'Setting up',
+      },
+    ],
+  };
+
+  it('PRD-ACS-021 shows the places as a tree: each Site, its Stores with their units, and the units under the Site', () => {
+    const html = renderToStaticMarkup(
+      <AssignmentScopeFields
+        choices={{ legalEntity: 'selected', place: 'selected', brand: 'all' }}
+        register={() => ({})}
+        structure={structure}
+      />,
+    );
+    const order = ['Site SYN-SITE', 'Store SYN-STORE', 'Brand counter SYN-BC', 'Warehouse SYN-WH'].map((each) =>
+      text(html).indexOf(each),
+    );
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toContain(`value="site:${SITE}"`);
+    expect(html).toContain(`value="store:${STORE}"`);
+    expect(html).toContain(`value="business-unit:${COUNTER}"`);
+    // The counter sits under its Store, the warehouse under the Site.
+    expect(html.indexOf(`business-unit:${COUNTER}`)).toBeLessThan(html.indexOf(`business-unit:${WAREHOUSE}`));
+    expect(text(html)).toContain('SYN-LE · SYNTHETIC entity');
+    expect(text(html)).toContain('a selected Store covers its business units, including ones added later');
+    // Brands cannot be selected yet (S1-F03).
+    expect(html).toContain('<input type="radio" disabled="" value="selected"/>');
+  });
+
+  it('builds a selected scope from the ticked members, places by their type', () => {
+    expect(
+      scopeOfChoices(
+        { legalEntity: 'selected', place: 'selected', brand: 'all' },
+        { legalEntityIds: [ENTITY], places: [`site:${SITE}`, `business-unit:${COUNTER}`] },
+      ),
+    ).toEqual({
+      kind: 'dimensions',
+      legalEntity: { kind: 'selected', members: [ENTITY] },
+      place: {
+        kind: 'selected',
+        members: [
+          { type: 'site', id: SITE },
+          { type: 'business-unit', id: COUNTER },
+        ],
+      },
+      brand: { kind: 'all' },
+    });
+  });
+
+  it('names what of the structure the reader may not view, instead of an empty tree', () => {
+    const html = renderToStaticMarkup(
+      <AssignmentScopeFields
+        choices={{ legalEntity: 'all', place: 'selected', brand: 'all' }}
+        register={() => ({})}
+        structure={{ ...structure, notShown: ['organisation.site'] }}
+      />,
+    );
+    expect(text(html)).toContain('You may not view the Sites, so no place can be chosen.');
   });
 
   it('lists assignments with the person, the role, the scope per dimension, the dates and the state', () => {

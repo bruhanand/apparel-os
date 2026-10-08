@@ -20,6 +20,11 @@ export function missingText(item: MissingItem): string {
     const least = Number(item.minimumLength);
     if (Number.isInteger(least) && least >= 0) return t('missing.password-rule.minimum-length', { count: least });
   }
+  // A scope that stops short names the place or legal entity, by its code where the server gives it (PRD-UXP-003).
+  const fact = `scope.fact.${item.factType ?? ''}`;
+  if (item.kind === 'scope' && isMessageId(fact) && (item.factCode ?? item.factId) !== undefined) {
+    return t('missing.scope.named', { type: t(fact), code: item.factCode ?? item.factId ?? '' });
+  }
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
 }

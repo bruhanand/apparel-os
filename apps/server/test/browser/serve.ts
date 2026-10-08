@@ -36,7 +36,7 @@ import {
   writeSyntheticUser,
   type SyntheticUser,
 } from '../support/access.js';
-import { assignSyntheticRole, grantSynthetic } from '../support/grants.js';
+import { assignSyntheticRole, grantSynthetic, writeSyntheticRole } from '../support/grants.js';
 import { capturingLogger } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup } from '../support/organisation.js';
@@ -287,6 +287,36 @@ for (const label of ['ONE', 'TWO']) {
     bookOption: `${syntheticCode(`JOURNEY-BK-${label}`)} · ${syntheticName(`Journey Book ${label}`)}`,
   });
 }
+// The scope journey (scope-by-place.spec.ts; S1-F02-T03): an approved SYNTHETIC Site with two Stores, one of which
+// a role assignment selects (access-and-approvals 5.2; PRD-ACS-021).
+const scopeSite = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-SCOPE-SITE'),
+    name: syntheticName('Journey Scope Site'),
+    physicalKind: 'retail-site',
+    areaId: structureGeography.area.recordId,
+    addresses: [syntheticName('1 Scope Road')],
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const scopeStores = [];
+for (const label of ['MINE', 'OTHER']) {
+  const code = syntheticCode(`JOURNEY-SCOPE-STORE-${label}`);
+  const name = syntheticName(`Journey Scope Store ${label}`);
+  const answer = await approved(structureFixture, (c, p) =>
+    structureFixture.organisation.prepareStore(c, p, {
+      code,
+      name,
+      format: 'ebo',
+      operatingModel: 'company-owned',
+      siteId: scopeSite.recordId,
+      aliases: [],
+      validFrom: structureFixture.today(),
+    }),
+  );
+  scopeStores.push({ id: answer.recordId, code, name });
+}
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -336,6 +366,40 @@ const structureAccounts = await provisionUser('BROWSER-STRUCTURE-ACCOUNTS', 'P-A
   ...verifyAuthorities,
 ]);
 const structureApprover = await provisionUser('BROWSER-STRUCTURE-APPROVER', 'P-OWN', approverAuthorities);
+// The scope journey's people (S1-F02-T03): an Admin who prepares role assignments and reads the structure to choose
+// places from; an approver who decides them; and a person with no assignment yet, given one by the journey, of a
+// SYNTHETIC role that reads Sites, Stores and business units.
+const scopeAdmin = await provisionUser('BROWSER-SCOPE-ADMIN', 'P-ADM', [
+  { recordType: 'access.role_assignment', action: 'view' },
+  { recordType: 'access.role_assignment', action: 'create' },
+  { recordType: 'access.user', action: 'view' },
+  { recordType: 'access.role', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+  ...['legal_entity', 'site', 'store', 'business_unit'].map((kind) => ({
+    recordType: `organisation.${kind}`,
+    action: 'view' as const,
+  })),
+]);
+const scopeApprover = await provisionUser('BROWSER-SCOPE-APPROVER', 'P-OWN', [
+  { recordType: 'access.role_assignment', action: 'view' },
+  { recordType: 'access.role_assignment', action: 'approve' },
+  { recordType: 'access.user', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const scopeReader = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-SCOPE-READER',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+const scopeRole = { code: syntheticCode('JOURNEY-STORE-READER'), name: syntheticName('Journey Store Reader') };
+await writeSyntheticRole(settingsDatabase, {
+  ...scopeRole,
+  authorities: ['site', 'store', 'business_unit'].map((kind) => ({
+    recordType: `organisation.${kind}`,
+    action: 'view' as const,
+  })),
+});
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
 const credentialsOf = (user: SyntheticUser) => ({
@@ -429,6 +493,16 @@ writeFileSync(
       siteId: unitsSite.recordId,
       siteOption: `${syntheticCode('JOURNEY-UNITS-SITE')} · ${syntheticName('Journey Units Site')}`,
       entities: unitsEntities,
+    },
+    scope: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(scopeAdmin),
+      approver: credentialsOf(scopeApprover),
+      reader: credentialsOf(scopeReader),
+      // How the assignment form names the person and the role (AssignmentsScreen).
+      readerOption: `${scopeReader.displayName} (${scopeReader.login})`,
+      roleOption: `${scopeRole.code} · ${scopeRole.name}`,
+      stores: scopeStores,
     },
     settings: {
       organisationCode: settingsCode,

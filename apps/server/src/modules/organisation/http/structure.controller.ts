@@ -4,6 +4,7 @@ import {
   type MappingVerified,
   type MasterLists,
   type MasterPageQuery,
+  type PermissionAction,
 } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
@@ -24,10 +25,18 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type SignedInUser } from '../../access/index.js';
+import {
+  ACCESS,
+  SignedIn,
+  type AccessInterface,
+  type Authorisation,
+  type RecordFacts,
+  type SignedInUser,
+} from '../../access/index.js';
 import type { Prepared, Preparer } from '../commands/common.js';
 import type { PreparedVersion } from '../commands/prepare.js';
 import { masterKinds, recordTypeOf, type MasterKind } from '../domain/kinds.js';
+import { isPlaceScoped, placeCode } from '../queries/scope.js';
 import type { OrganisationInterface } from '../organisation.js';
 import { ORGANISATION } from '../tokens.js';
 
@@ -226,15 +235,27 @@ export class StructureController {
 
   @ApiRoute(routes.prepareSite)
   prepareSite(@RouteInput() input: RouteInputOf<typeof routes.prepareSite>, @SignedIn() user: SignedInUser) {
-    return this.prepare(routes.prepareSite, 'organisation.prepare-site', user, input, (c, p) =>
-      this.organisation.prepareSite(c, p, input.body),
+    // A new Site is a place no selection names yet: only all-members place scope covers it (5.3; PRD-MOD-015).
+    return this.prepare(
+      routes.prepareSite,
+      'organisation.prepare-site',
+      user,
+      input,
+      (c, p) => this.organisation.prepareSite(c, p, input.body),
+      () => Promise.resolve({}),
     );
   }
 
   @ApiRoute(routes.prepareStore)
   prepareStore(@RouteInput() input: RouteInputOf<typeof routes.prepareStore>, @SignedIn() user: SignedInUser) {
-    return this.prepare(routes.prepareStore, 'organisation.prepare-store', user, input, (c, p) =>
-      this.organisation.prepareStore(c, p, input.body),
+    // A new Store at its Site: a selected Site covers the Stores added at it later (5.2; PRD-ACS-021).
+    return this.prepare(
+      routes.prepareStore,
+      'organisation.prepare-store',
+      user,
+      input,
+      (c, p) => this.organisation.prepareStore(c, p, input.body),
+      () => Promise.resolve({ siteId: input.body.siteId }),
     );
   }
 
@@ -334,8 +355,13 @@ export class StructureController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareSiteVersion>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.prepare(routes.prepareSiteVersion, 'organisation.prepare-site-version', user, input, (c, p) =>
-      this.organisation.prepareSiteVersion(c, p, input.params.recordId, input.body),
+    return this.prepare(
+      routes.prepareSiteVersion,
+      'organisation.prepare-site-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareSiteVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('site', input.params.recordId),
     );
   }
 
@@ -344,8 +370,13 @@ export class StructureController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareStoreVersion>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.prepare(routes.prepareStoreVersion, 'organisation.prepare-store-version', user, input, (c, p) =>
-      this.organisation.prepareStoreVersion(c, p, input.params.recordId, input.body),
+    return this.prepare(
+      routes.prepareStoreVersion,
+      'organisation.prepare-store-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareStoreVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('store', input.params.recordId),
     );
   }
 
@@ -370,8 +401,18 @@ export class StructureController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareBusinessUnit>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.prepare(routes.prepareBusinessUnit, 'organisation.prepare-business-unit', user, input, (c, p) =>
-      this.organisation.prepareBusinessUnit(c, p, input.body),
+    // A new unit at its Site, and of its Store where it has one (5.2; PRD-ACS-021).
+    return this.prepare(
+      routes.prepareBusinessUnit,
+      'organisation.prepare-business-unit',
+      user,
+      input,
+      (c, p) => this.organisation.prepareBusinessUnit(c, p, input.body),
+      () =>
+        Promise.resolve({
+          siteId: input.body.siteId,
+          ...(input.body.storeId === undefined ? {} : { storeId: input.body.storeId }),
+        }),
     );
   }
 
@@ -386,6 +427,7 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareBusinessUnitVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('business_unit', input.params.recordId),
     );
   }
 
@@ -416,6 +458,7 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareBusinessUnitMappingVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('business_unit_mapping', input.params.recordId),
     );
   }
 
@@ -431,6 +474,7 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.verifyMapping(c, p, input.params.recordId, input.params.versionId, input.body),
+      this.factsOf('business_unit_mapping', input.params.recordId),
     );
   }
 
@@ -446,8 +490,14 @@ export class StructureController {
 
   @ApiRoute(routes.prepareLocation)
   prepareLocation(@RouteInput() input: RouteInputOf<typeof routes.prepareLocation>, @SignedIn() user: SignedInUser) {
-    return this.prepare(routes.prepareLocation, 'organisation.prepare-location', user, input, (c, p) =>
-      this.organisation.prepareLocation(c, p, input.body),
+    // A new location at its unit (5.2).
+    return this.prepare(
+      routes.prepareLocation,
+      'organisation.prepare-location',
+      user,
+      input,
+      (c, p) => this.organisation.prepareLocation(c, p, input.body),
+      this.factsOf('business_unit', input.body.businessUnitId),
     );
   }
 
@@ -456,8 +506,13 @@ export class StructureController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareLocationVersion>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.prepare(routes.prepareLocationVersion, 'organisation.prepare-location-version', user, input, (c, p) =>
-      this.organisation.prepareLocationVersion(c, p, input.params.recordId, input.body),
+    return this.prepare(
+      routes.prepareLocationVersion,
+      'organisation.prepare-location-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareLocationVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('location', input.params.recordId),
     );
   }
 
@@ -488,6 +543,7 @@ export class StructureController {
       user,
       input,
       (c, p) => this.organisation.prepareStoreDefaultWarehouseVersion(c, p, input.params.recordId, input.body),
+      this.factsOf('store_default_warehouse', input.params.recordId),
     );
   }
 
@@ -516,13 +572,18 @@ export class StructureController {
       const structure = await this.organisation.structureOn(context, date);
       const notShown: string[] = [];
       for (const kind of masterKinds) {
-        const authorised = await this.access.authorise(context, {
-          actorId: user.userId,
-          action: 'view',
-          recordType: recordTypeOf(kind),
-        });
-        if (authorised.kind !== 'allowed') notShown.push(recordTypeOf(kind));
+        // A place-scoped type is shown when an assignment grants view on it; its rows are then filtered by scope.
+        const request = { actorId: user.userId, action: 'view' as const, recordType: recordTypeOf(kind) };
+        const authorised = isPlaceScoped(kind)
+          ? await this.access.authoriseEach(context, request, [])
+          : await this.access.authorise(context, request);
+        if (authorised.kind === 'refused') notShown.push(recordTypeOf(kind));
       }
+      // Of a place-scoped master, the records the reader's scope covers on the date (structure-and-masters 6.1).
+      const covered = async <T extends { id: string }>(kind: MasterKind, list: T[]): Promise<T[]> => {
+        if (notShown.includes(recordTypeOf(kind)) || !isPlaceScoped(kind) || list.length === 0) return list;
+        return this.coveredRows(context, user, kind, list, date);
+      };
       const shown = <T>(kind: MasterKind, list: T[]): T[] => (notShown.includes(recordTypeOf(kind)) ? [] : list);
       return {
         date,
@@ -535,31 +596,110 @@ export class StructureController {
         legalEntities: shown('legal_entity', structure.legalEntities),
         taxRegistrations: shown('tax_registration', structure.taxRegistrations),
         accountingBooks: shown('accounting_book', structure.accountingBooks),
-        sites: shown('site', structure.sites),
-        stores: shown('store', structure.stores),
+        sites: shown('site', await covered('site', structure.sites)),
+        stores: shown('store', await covered('store', structure.stores)),
         groupings: shown('grouping', structure.groupings),
-        businessUnits: shown('business_unit', structure.businessUnits),
-        businessUnitMappings: shown('business_unit_mapping', structure.businessUnitMappings),
-        locations: shown('location', structure.locations),
-        storeDefaultWarehouses: shown('store_default_warehouse', structure.storeDefaultWarehouses),
+        businessUnits: shown('business_unit', await covered('business_unit', structure.businessUnits)),
+        businessUnitMappings: shown(
+          'business_unit_mapping',
+          await covered('business_unit_mapping', structure.businessUnitMappings),
+        ),
+        locations: shown('location', await covered('location', structure.locations)),
+        storeDefaultWarehouses: shown(
+          'store_default_warehouse',
+          await covered('store_default_warehouse', structure.storeDefaultWarehouses),
+        ),
       };
     });
   }
 
+  /**
+   * A page of a master's records. Of a place-scoped master, only the records the reader's scope covers today, each
+   * authorised with its own facts (access-and-approvals 7.1 step 3, "in a list, each row's"; structure-and-masters
+   * 6.1), so a page may hold fewer records than its limit; its cursor still moves on past the records left out.
+   */
   private list<K extends MasterKind>(user: SignedInUser, kind: K, query: MasterPageQuery) {
     const page = { after: query.after, limit: query.limit === undefined ? undefined : Number(query.limit) };
-    return this.read(user, `organisation.list-${kind.replaceAll('_', '-')}`, async (context, today) => ({
-      asOf: context.startedAt.toISOString(),
-      ...(await this.organisation.list(context, kind, today, page)),
-    }));
+    return this.read(user, `organisation.list-${kind.replaceAll('_', '-')}`, async (context, today) => {
+      const found = await this.organisation.list(context, kind, today, page);
+      const records = isPlaceScoped(kind)
+        ? await this.coveredRows(context, user, kind, found.records, today)
+        : found.records;
+      return { asOf: context.startedAt.toISOString(), records, next: found.next };
+    });
   }
 
-  /** One record, or not found, naming it (PRD-UXP-003). */
+  /**
+   * The rows of a place-scoped master the reader's scope covers on the date, each through one assignment granting
+   * view on it (access-and-approvals 7.1 step 3, 7.2). Refused when no assignment grants view on the type at all.
+   */
+  private async coveredRows<T extends { id: string }>(
+    context: TransactionContext,
+    user: SignedInUser,
+    kind: MasterKind,
+    rows: readonly T[],
+    date: string,
+  ): Promise<T[]> {
+    const facts = await this.organisation.placeFactsOf(
+      context,
+      kind,
+      rows.map((row) => row.id),
+      date,
+    );
+    const checked = await this.access.authoriseEach(
+      context,
+      { actorId: user.userId, action: 'view', recordType: recordTypeOf(kind) },
+      rows.map((row) => facts.get(row.id) ?? {}),
+    );
+    if (checked.kind === 'refused') throw new ApiRefusal({ ...checked.refusal, missing: [...checked.refusal.missing] });
+    return rows.filter((_row, index) => checked.each[index]?.kind === 'allowed');
+  }
+
+  /**
+   * Authorise in the command for a place-scoped record (access-and-approvals 7.1 step 3, 5.3; RR-296): with its facts
+   * on the date. A refusal for a place names the place by its code too, so the screen can say which (PRD-UXP-003).
+   */
+  private async authoriseFacts(
+    context: TransactionContext,
+    user: SignedInUser,
+    action: PermissionAction,
+    recordType: string,
+    facts: RecordFacts,
+  ): Promise<Authorisation> {
+    const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
+    if (authorised.kind === 'allowed') return authorised;
+    const missing = await Promise.all(
+      authorised.refusal.missing.map(async (item) => {
+        const code = await placeCode(context, item.factType, item.factId);
+        return code === undefined ? item : { ...item, factCode: code };
+      }),
+    );
+    return { kind: 'refused', refusal: { ...authorised.refusal, missing } };
+  }
+
+  /** The facts of an existing record of a place-scoped kind today, for a command or a replay to authorise with. */
+  private factsOf(kind: MasterKind, recordId: string) {
+    return (context: TransactionContext, today: string) => this.organisation.placeFacts(context, kind, recordId, today);
+  }
+
+  /**
+   * One record, or not found, naming it (PRD-UXP-003). A place-scoped record is authorised with its facts first, so a
+   * reader outside its scope is refused, naming the place, and learns nothing more of it; one that does not exist
+   * carries no fact, which only all-members scope covers (5.3; PRD-MOD-015).
+   */
   private async one<K extends MasterKind>(user: SignedInUser, kind: K, recordId: string) {
-    const answer = await this.read(user, `organisation.read-${kind.replaceAll('_', '-')}`, async (context, today) => ({
-      asOf: context.startedAt.toISOString(),
-      record: await this.organisation.record(context, kind, recordId, today),
-    }));
+    const answer = await this.read(user, `organisation.read-${kind.replaceAll('_', '-')}`, async (context, today) => {
+      if (isPlaceScoped(kind)) {
+        const facts = await this.organisation.placeFacts(context, kind, recordId, today);
+        const authorised = await this.authoriseFacts(context, user, 'view', recordTypeOf(kind), facts);
+        if (authorised.kind === 'refused') return { refused: authorised.refusal };
+      }
+      return {
+        asOf: context.startedAt.toISOString(),
+        record: await this.organisation.record(context, kind, recordId, today),
+      };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
     if (answer.record === undefined) {
       throw new ApiRefusal({
         kind: 'not-found',
@@ -603,16 +743,43 @@ export class StructureController {
     user: SignedInUser,
     input: RouteInputOf<R>,
     work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion | MappingVerified>>,
+    /**
+     * For a route on a place-scoped record type, which authorises in its command: the record's facts today, or a new
+     * record's from its draft (access-and-approvals 5.3, 7.1 step 3; structure-and-masters 6.1).
+     */
+    scoped?: (context: TransactionContext, today: string) => Promise<RecordFacts>,
   ) {
-    if (user.roleAssignmentId === undefined) {
+    if ((scoped === undefined) !== (route.access.authorisedIn !== 'command')) {
+      throw new CommandDefect(`Route ${route.path} authorises in its command only with the record's facts`);
+    }
+    if (scoped === undefined && user.roleAssignmentId === undefined) {
       throw new CommandDefect(`Route ${route.path} prepares a structure change without Authorise`);
     }
     const key: string = input.idempotencyKey;
     const content: RequestContent = requestContentOf(route, input);
+    /** Authorise as the guard did, or, for a place-scoped type, with the record's facts in the command's transaction. */
+    const authoriseIn = async (context: TransactionContext): Promise<Authorisation & { facts?: RecordFacts }> => {
+      if (scoped === undefined) {
+        return { kind: 'allowed', roleAssignmentId: user.roleAssignmentId ?? '' };
+      }
+      const date = await context.businessDate();
+      if (date.kind === 'not-set') {
+        return {
+          kind: 'refused',
+          refusal: {
+            kind: 'unavailable',
+            code: 'access.business-date-not-set',
+            missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+          },
+        };
+      }
+      const facts = await scoped(context, date.date);
+      const authorised = await this.authoriseFacts(context, user, route.access.action, route.access.recordType, facts);
+      return authorised.kind === 'allowed' ? { ...authorised, facts } : authorised;
+    };
     const need = { actorId: user.userId, action: route.access.action, recordType: route.access.recordType };
-    const preparer: Preparer = { userId: user.userId, roleAssignmentId: user.roleAssignmentId };
     const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.access.authorise(context, need);
+      const authorised = scoped === undefined ? await this.access.authorise(context, need) : await authoriseIn(context);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return {
         kind: 'refused',
@@ -631,13 +798,23 @@ export class StructureController {
         content,
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          // Step 0: the preparer and the assignment the guard's Authorise found, rechecked under the locks
+          // Authorise with the record's facts, for a place-scoped type, before any lock (7.1 step 3).
+          const authorised = await authoriseIn(context);
+          if (authorised.kind === 'refused') {
+            return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
+          }
+          const preparer: Preparer = { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId };
+          // Step 0: the preparer and the assignment Authorise found, rechecked under the locks with the same facts
           // (code-house-rules 8.2 "Authority first"; access-and-approvals 7.1 step 4).
           const held = await this.access.holdAuthority(
             context,
             { kind: 'user', id: user.userId },
             preparer.roleAssignmentId,
-            { action: need.action, recordType: need.recordType },
+            {
+              action: need.action,
+              recordType: need.recordType,
+              ...(authorised.facts === undefined ? {} : { facts: authorised.facts }),
+            },
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
           const outcome = await work(context, preparer);

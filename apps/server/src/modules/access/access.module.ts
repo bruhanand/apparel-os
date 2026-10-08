@@ -33,6 +33,7 @@ import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS } from './tokens.js';
 import type { ModuleApprovals } from './domain/approval-rules.js';
+import { SCOPE_MEMBERS, type ScopeMembers } from './contracts/scope-members.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { sessionProbe } from './commands/probe-session.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
@@ -117,10 +118,23 @@ export class AccessJobIdentitiesModule {}
     {
       // With the approval rules and decision effects other modules declare, which the composition root provides
       // (access-and-approvals 8, 9.8b). Required: a composition without them fails at start, never at a request.
+      // With the scope contract's implementations too, where the composition root provides them (5.1; module-map
+      // section 3, rule 6): without them no member can be selected.
       provide: ACCESS,
-      useFactory: (audit: AuditInterface, keys: OrganisationKeys, modules: ModuleApprovals) =>
-        new Access({ audit, keys, approvalRules: modules.rules, documentEffects: modules.effects }),
-      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS],
+      useFactory: (
+        audit: AuditInterface,
+        keys: OrganisationKeys,
+        modules: ModuleApprovals,
+        scopeMembers: readonly ScopeMembers[] | undefined,
+      ) =>
+        new Access({
+          audit,
+          keys,
+          approvalRules: modules.rules,
+          documentEffects: modules.effects,
+          scopeMembers: scopeMembers ?? [],
+        }),
+      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, { token: SCOPE_MEMBERS, optional: true }],
     },
     {
       // The history reads (numbering-and-audit 4.5): rows through `audit`, Authorise and masking through `access`.

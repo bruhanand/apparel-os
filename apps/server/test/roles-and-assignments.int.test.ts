@@ -351,7 +351,7 @@ describe('personas and empty scope grant nothing (access-and-approvals 2.1, 5.1;
     expect(await as(emptyReader.id, (c) => access.ownAccess(c, emptyReader.id))).toMatchObject({ grants: [] });
   });
 
-  it('PRD-ACS-005 refuses selected members until the scope contract of S1-F02 and S1-F03 exists', async () => {
+  it('PRD-ACS-005 refuses selected members of a type no implementation of the scope contract answers (5.1)', async () => {
     const user = await newUser('SELECTED');
     const roleId = await approvedRole([{ recordType: 'access.role', action: 'view' }]);
     const scope: AssignmentScope = {

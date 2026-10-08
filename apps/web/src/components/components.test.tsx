@@ -81,6 +81,19 @@ describe('UnavailableState (design-language 10.17; PRD-UXP-003)', () => {
     expect(html).toContain('bg-w-bg');
   });
 
+  it('PRD-UXP-003 names the place a scope stops short of, by its code (S1-F02-T03)', () => {
+    const html = renderToStaticMarkup(
+      <UnavailableState
+        missing={[
+          { kind: 'scope', dimension: 'place', factType: 'store', factId: 'x', factCode: 'SYN-STORE-2' },
+          { kind: 'scope', dimension: 'legal-entity', factType: 'legal-entity', factId: 'y' },
+        ]}
+      />,
+    );
+    expect(text(html)).toContain('None of your role assignments covers the Store SYN-STORE-2.');
+    expect(text(html)).toContain('None of your role assignments covers the legal entity y.');
+  });
+
   it('PRD-UXP-003 names the missing permission: the action and the record type (S1-F01-AT18)', () => {
     const html = renderToStaticMarkup(
       <UnavailableState

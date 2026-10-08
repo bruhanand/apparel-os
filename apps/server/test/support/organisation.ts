@@ -17,6 +17,7 @@ import {
   type LocationInUse,
   Organisation,
   organisationApprovals,
+  organisationScopeMembers,
   recordTypeOf,
   type Prepared,
   type PreparedVersion,
@@ -100,6 +101,7 @@ export async function structureSetup(options: {
     keys: OrganisationKeys.fromEnvironment(options.keysEnvironment),
     approvalRules: modules.rules,
     documentEffects: modules.effects,
+    scopeMembers: [organisationScopeMembers],
   });
   const organisation = new Organisation({
     audit,

@@ -7,6 +7,7 @@ import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { businessUnitMapping, businessUnitMappingVerification } from '../db/schema.js';
 import { recordTypeOf } from '../domain/kinds.js';
 import { refusal, type Prepared, type Preparer } from './common.js';
+import { recordScope } from './prepare.js';
 
 // Verify a business unit's mapping version (structure-and-masters 2.3, 3.4; POL-10.08; GC2-2, DEC-105; S1-F02-T02): an
 // append-only record linked to the one version, with who verified it, when, and its evidence, stored files attached
@@ -50,6 +51,9 @@ export async function verifyMapping(
     .from(businessUnitMappingVerification)
     .where(eq(businessUnitMappingVerification.businessUnitMappingId, mappingVersionId));
   if (already !== undefined) return refusal('refused', 'organisation.mapping-already-verified', [version]);
+  // The unit's place facts, which the verification and its evidence carry (structure-and-masters 6.1).
+  const date = await context.businessDate();
+  const facts = date.kind === 'set' ? await recordScope(context, 'business_unit_mapping', unitId, date.date) : {};
   const verificationId = uuidv7();
   const attachmentIds: string[] = [];
   // A second verification of the version at once meets the unique key and is refused, never failed; its attachments
@@ -61,7 +65,7 @@ export async function verifyMapping(
       fileReceiptId: file.fileReceiptId,
       record: { module: 'organisation', type: VERIFICATION_RECORD_TYPE, id: verificationId },
       evidence: EVIDENCE,
-      scope: {},
+      scope: facts ?? {},
       attachedBy: { kind: 'user', id: verifier.userId },
       roleAssignmentId: verifier.roleAssignmentId,
     });
@@ -82,6 +86,7 @@ export async function verifyMapping(
     return refusal('refused', 'organisation.mapping-already-verified', [version]);
   }
   await dependencies.audit.record(context, {
+    ...(facts === undefined ? {} : { scope: facts }),
     actor: { kind: 'user', id: verifier.userId },
     roleAssignmentId: verifier.roleAssignmentId,
     record: { module: 'organisation', type: 'business_unit_mapping', id: unitId, versionId: mappingVersionId },

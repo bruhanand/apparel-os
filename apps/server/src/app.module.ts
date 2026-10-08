@@ -1,6 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { CommandRunnerModule, idempotencyModuleWith, KernelModule, OrganisationRoutingModule } from './kernel/index.js';
-import { AccessContractsModule, AccessModule, MODULE_APPROVALS } from './modules/access/index.js';
+import {
+  AccessContractsModule,
+  AccessModule,
+  MODULE_APPROVALS,
+  SCOPE_MEMBERS,
+  type ScopeMembers,
+} from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { FilesImportsModule } from './modules/files-imports/index.js';
 import { InboxModule } from './modules/inbox/index.js';
@@ -11,6 +17,7 @@ import {
   LOCATION_IN_USE,
   OrganisationModule,
   organisationApprovals,
+  organisationScopeMembers,
   type LocationInUse,
 } from './modules/organisation/index.js';
 import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.js';
@@ -18,7 +25,8 @@ import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.j
 /**
  * The contracts a lower module defines and a higher one implements, handed over at start (module-map section 3, rule
  * 6): the approval rules and decision effects the modules above `access` declare for their documents
- * (access-and-approvals 8, 9.8b), and the location-in-use contract of `organisation` that `stock` · ledger implements
+ * (access-and-approvals 8, 9.8b), the scope contract of `access` that `organisation` implements (5.1; S1-F02-T03),
+ * and the location-in-use contract of `organisation` that `stock` · ledger implements
  * (structure-and-masters 3.5; S1-F02-T02). The defining module never depends on the implementing one. Global, so the
  * modules' factories reach them.
  */
@@ -32,8 +40,11 @@ import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.j
       useFactory: (audit: AuditInterface, locationInUse: LocationInUse) => organisationApprovals(audit, locationInUse),
       inject: [AUDIT, LOCATION_IN_USE],
     },
+    // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
+    // `merchandise` brands from S1-F03-T01.
+    { provide: SCOPE_MEMBERS, useValue: [organisationScopeMembers] satisfies readonly ScopeMembers[] },
   ],
-  exports: [MODULE_APPROVALS, LOCATION_IN_USE],
+  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS],
 })
 export class ModuleApprovalsModule {}
 
