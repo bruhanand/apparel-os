@@ -24,7 +24,7 @@ Updated 7 Oct 2026.
 | `S1-F11` Shared calculations | Done, accepted 8 Oct 2026: 38 golden cases pass on the server and in Chromium on the counter build (`apps/counter`), the counter bundle excludes costing, CI green (run 37679034974). Left in later stages: the live values (RR-136 to RR-145) and RR-042 |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) starts right after `S1-F01`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC9-9 and GC9-10 approved; the rest of GC-9 is finished in `S1-F14-T01` (RR-010) |
-| `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026 on `s1/f06-file-intake`, not yet merged into `main`. T01 to T04 wait on `S1-F02`, `S1-F03`, `S1-F04` and `S1-F08` |
+| `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026 on `s1/f06-file-intake`, not yet merged into `main`; `S1-F06-T06` (protected download, encrypted receipt names; RR-432, RR-433) in progress. T01 to T04 wait on `S1-F02`, `S1-F03`, `S1-F04` and `S1-F08` |
 | `S1-F08` Number series and exceptions | Not started. Gains `S1-F08-T04` (live updates and the failed-jobs view), split from T02 (`DEC-116`) |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
