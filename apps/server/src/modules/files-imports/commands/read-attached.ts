@@ -1,5 +1,5 @@
 import type { AttachedFile, FieldClass, Receipt } from '@apparel-os/schemas';
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   ApiRefusal,
   CommandDefect,
@@ -15,7 +15,8 @@ import {
   type StructuredLogger,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
+import { freshCodeRefusal, takeFreshCode } from '../../access/index.js';
+import type { AccessInterface, FreshCode, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { attachment, fileReceipt, storedFile } from '../db/schema.js';
 import { contentHashOf, openFile } from '../domain/file-seal.js';
@@ -44,9 +45,9 @@ interface SealedReceipt {
   readonly receiptId: string;
   readonly receivedAt: Date;
   readonly sourceSystem: string;
-  readonly originalNameSealed: string | null;
+  readonly originalNameSealed: string;
   readonly claimedReferenceSealed: string | null;
-  readonly scheme: string | null;
+  readonly scheme: string;
 }
 
 interface Found {
@@ -63,7 +64,8 @@ interface Found {
   readonly format: AttachedFile['format'];
   readonly objectKey: string;
   readonly scheme: string;
-  readonly receipts: readonly SealedReceipt[];
+  /** The one receipt the attachment was made from, never another receipt of the same bytes (section 11, 15.1). */
+  readonly receipt: SealedReceipt;
 }
 
 type Looked =
@@ -106,9 +108,16 @@ async function lookUp(
       format: storedFile.format,
       objectKey: storedFile.objectKey,
       scheme: storedFile.encryptionScheme,
+      receiptId: fileReceipt.id,
+      receivedAt: fileReceipt.receivedAt,
+      sourceSystem: fileReceipt.sourceSystem,
+      originalNameSealed: fileReceipt.originalNameSealed,
+      claimedReferenceSealed: fileReceipt.claimedReferenceSealed,
+      receiptScheme: fileReceipt.encryptionScheme,
     })
     .from(attachment)
     .innerJoin(storedFile, eq(storedFile.id, attachment.storedFileId))
+    .innerJoin(fileReceipt, eq(fileReceipt.id, attachment.fileReceiptId))
     .where(eq(attachment.id, attachmentId));
   const row = rows[0];
   if (row === undefined) return { kind: 'refused', refusal: NOT_FOUND };
@@ -132,24 +141,19 @@ async function lookUp(
     format: row.format as AttachedFile['format'],
     objectKey: row.objectKey,
     scheme: row.scheme,
-    receipts: [],
+    // Still encrypted, and decrypted only when the file is served, after the authority holds.
+    receipt: {
+      receiptId: row.receiptId,
+      receivedAt: row.receivedAt,
+      sourceSystem: row.sourceSystem,
+      originalNameSealed: row.originalNameSealed,
+      claimedReferenceSealed: row.claimedReferenceSealed,
+      scheme: row.receiptScheme,
+    },
   };
   const authorised = await access.authorise(context, needOf(found, userId));
   if (authorised.kind === 'refused') return { kind: 'refused', refusal: authorised.refusal };
-  // Read only after the authority holds; still encrypted, and decrypted only when the file is served.
-  const receipts = await context.tx
-    .select({
-      receiptId: fileReceipt.id,
-      receivedAt: fileReceipt.receivedAt,
-      sourceSystem: fileReceipt.sourceSystem,
-      originalNameSealed: fileReceipt.originalNameSealed,
-      claimedReferenceSealed: fileReceipt.claimedReferenceSealed,
-      scheme: fileReceipt.encryptionScheme,
-    })
-    .from(fileReceipt)
-    .where(eq(fileReceipt.storedFileId, row.storedFileId))
-    .orderBy(asc(fileReceipt.receivedAt), asc(fileReceipt.id));
-  return { kind: 'found', found: { ...found, receipts }, roleAssignmentId: authorised.roleAssignmentId };
+  return { kind: 'found', found, roleAssignmentId: authorised.roleAssignmentId };
 }
 
 function needOf(found: Found, actorId: string) {
@@ -193,26 +197,22 @@ async function content(deps: ReadAttachedDependencies, reader: Reader, found: Fo
     sizeBytes: found.sizeBytes,
     format: found.format,
     restrictedClasses: [...found.classes],
-    receipts: found.receipts.map((receipt) => receiptOf(deps.keys, organisationCode, receipt)),
+    receipt: receiptOf(deps.keys, organisationCode, found.receipt),
     contentBase64: bytes.toString('base64'),
   };
 }
 
 /** Decrypts a receipt's name and reference for a reader already authorised to be served the file (RR-433). */
 function receiptOf(keys: OrganisationKeys, organisationCode: string, receipt: SealedReceipt): Receipt {
-  const open = (sealed: string | null, field: 'original-name' | 'claimed-reference'): string | null =>
-    sealed === null || receipt.scheme === null
-      ? null
-      : openReceiptText(keys, organisationCode, receipt.receiptId, field, {
-          scheme: receipt.scheme,
-          ciphertext: sealed,
-        });
+  const open = (sealed: string, field: 'original-name' | 'claimed-reference'): string =>
+    openReceiptText(keys, organisationCode, receipt.receiptId, field, { scheme: receipt.scheme, ciphertext: sealed });
   return {
     receiptId: receipt.receiptId,
     receivedAt: receipt.receivedAt.toISOString(),
     sourceSystem: receipt.sourceSystem,
     originalName: open(receipt.originalNameSealed, 'original-name'),
-    claimedReference: open(receipt.claimedReferenceSealed, 'claimed-reference'),
+    claimedReference:
+      receipt.claimedReferenceSealed === null ? null : open(receipt.claimedReferenceSealed, 'claimed-reference'),
   };
 }
 
@@ -255,26 +255,18 @@ export async function readAttachedFile(
 
 /**
  * A download that exports a restricted class is a protected action (access-and-approvals 3.3; PRD-SEC-001, RR-432): it
- * takes a fresh authenticator code, checked as every protected action checks one. A missing, wrong or already used code
- * is refused. With `take`, the code's step is recorded so it is never accepted again, in the caller's transaction.
- * How long a code stays fresh is OPEN (GC3-6; KDPS Owner): no duration is chosen here.
+ * takes a fresh authenticator code, checked as every protected action checks one. A missing code counts as one that
+ * does not match. How long a code stays fresh is OPEN (GC3-6; KDPS Owner): no duration is chosen here.
  */
-async function freshCodeRefusal(
+function checkedCode(
   access: AccessInterface,
   context: TransactionContext,
   userId: string,
   totpCode: string | undefined,
-  take = false,
-): Promise<CommandRefusal<'not-authorised' | 'refused'> | undefined> {
-  const refused = { kind: 'not-authorised', code: 'access.authenticator-code-refused', missing: [] } as const;
-  if (totpCode === undefined) return refused;
-  const checked = await access.checkFreshCode(context, userId, totpCode);
-  if (checked.kind === 'not-enrolled') {
-    return { kind: 'refused', code: 'access.enrolment-not-started', missing: [] };
-  }
-  if (checked.kind === 'refused') return refused;
-  if (take && !(await checked.take())) return refused;
-  return undefined;
+): Promise<FreshCode> {
+  return totpCode === undefined
+    ? Promise.resolve({ kind: 'refused' })
+    : access.checkFreshCode(context, userId, totpCode);
 }
 
 /**
@@ -297,8 +289,9 @@ export async function downloadAttachedFile(
     if (found.kind === 'refused' || found.found.classes.length === 0) return found;
     // Nothing is fetched for a restricted file before its code is seen to be fresh. The code is only checked here;
     // it is taken in the command's own transaction (PRD-SEC-001).
-    const refusal = await freshCodeRefusal(deps.access, context, reader.userId, totpCode);
-    return refusal === undefined ? found : ({ kind: 'refused', refusal } as const);
+    const checked = await checkedCode(deps.access, context, reader.userId, totpCode);
+    const refusal = freshCodeRefusal(checked);
+    return refusal === undefined ? found : ({ kind: 'refused', refusal: refusal.refusal } as const);
   });
   if (looked.kind === 'refused') return refuse(looked.refusal);
   const { found } = looked;
@@ -330,8 +323,9 @@ export async function downloadAttachedFile(
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
         if (found.classes.length > 0) {
-          const refusal = await freshCodeRefusal(deps.access, context, reader.userId, totpCode, true);
-          if (refusal !== undefined) return { kind: 'refusal', refusal, causedBySecret: true };
+          // Checked again and taken here, so a code another request used in between is refused (PRD-SEC-001).
+          const refusal = await takeFreshCode(await checkedCode(deps.access, context, reader.userId, totpCode));
+          if (refusal !== undefined) return { kind: 'refusal', ...refusal };
         }
         for (const fieldClass of found.classes) {
           await deps.audit.recordAccess(context, {

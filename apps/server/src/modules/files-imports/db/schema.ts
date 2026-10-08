@@ -31,9 +31,9 @@ export const fileReceipt = filesImports.table('file_receipt', {
   sourceSystem: text('source_system').notNull(),
   /** Encrypted with the Organisation key (RR-433): the base64url of nonce, tag and ciphertext. Null: none claimed. */
   claimedReferenceSealed: text('claimed_reference_sealed'),
-  /** Encrypted likewise; null only on a receipt written before 0025, whose name is Unknown. */
-  originalNameSealed: text('original_name_sealed'),
-  encryptionScheme: text('encryption_scheme'),
+  /** Encrypted likewise. */
+  originalNameSealed: text('original_name_sealed').notNull(),
+  encryptionScheme: text('encryption_scheme').notNull(),
   correlationId: uuid('correlation_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
@@ -42,6 +42,8 @@ export const fileReceipt = filesImports.table('file_receipt', {
 export const attachment = filesImports.table('attachment', {
   id: uuid('id').primaryKey(),
   storedFileId: uuid('stored_file_id').notNull(),
+  /** The receipt the file was attached from; a receipt of that same stored file (a composite foreign key). */
+  fileReceiptId: uuid('file_receipt_id').notNull(),
   recordModule: text('record_module').notNull(),
   recordType: text('record_type').notNull(),
   recordId: uuid('record_id').notNull(),

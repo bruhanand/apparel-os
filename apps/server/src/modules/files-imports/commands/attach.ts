@@ -3,7 +3,7 @@ import type { FieldClass } from '@apparel-os/schemas';
 import { and, eq, isNull } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
-import { attachment, storedFile } from '../db/schema.js';
+import { attachment, fileReceipt, storedFile } from '../db/schema.js';
 
 /** The record a file is attached to: its module, type, identifier and the version, where it has versions. */
 export interface AttachedRecord {
@@ -26,6 +26,11 @@ export interface EvidenceKind {
 
 export interface AttachRequest {
   readonly storedFileId: string;
+  /**
+   * The receipt the attaching module got back from Store a file for this hand-in. A reader of the attachment is
+   * served this receipt's name and reference and no other receipt of the same bytes (section 11, 15.1).
+   */
+  readonly fileReceiptId: string;
   readonly record: AttachedRecord;
   readonly evidence: EvidenceKind;
   /** The record's scope facts, as its module holds them; a fact it does not hold is Unknown (PRD-MOD-015). */
@@ -58,6 +63,12 @@ export async function attach(
     .from(storedFile)
     .where(eq(storedFile.id, request.storedFileId));
   if (file[0] === undefined) throw new CommandDefect('A file was attached that is not stored');
+  const receipt = await context.tx
+    .select({ id: fileReceipt.id })
+    .from(fileReceipt)
+    .where(and(eq(fileReceipt.id, request.fileReceiptId), eq(fileReceipt.storedFileId, request.storedFileId)));
+  if (receipt[0] === undefined)
+    throw new CommandDefect('A file was attached from a receipt that is not a receipt of the file');
   const classes = [...new Set(request.evidence.restrictedClasses)];
   const id = uuidv7();
   const inserted = await context.tx
@@ -65,6 +76,7 @@ export async function attach(
     .values({
       id,
       storedFileId: request.storedFileId,
+      fileReceiptId: request.fileReceiptId,
       recordModule: request.record.module,
       recordType: request.record.type,
       recordId: request.record.id,
@@ -84,7 +96,7 @@ export async function attach(
     .returning({ id: attachment.id });
   if (inserted[0] === undefined) {
     const existing = await context.tx
-      .select({ id: attachment.id, evidences: attachment.evidences })
+      .select({ id: attachment.id, evidences: attachment.evidences, fileReceiptId: attachment.fileReceiptId })
       .from(attachment)
       .where(
         and(
@@ -100,6 +112,9 @@ export async function attach(
     if (found === undefined) throw new CommandDefect('An attachment could be neither written nor found');
     if (found.evidences !== request.evidence.kind) {
       throw new CommandDefect('The file is attached to this record already as other evidence');
+    }
+    if (found.fileReceiptId !== request.fileReceiptId) {
+      throw new CommandDefect('The file is attached to this record already from another receipt');
     }
     return { attachmentId: found.id, alreadyAttached: true };
   }

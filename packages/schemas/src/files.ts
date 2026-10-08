@@ -50,13 +50,13 @@ export type StoredFileAnswer = z.infer<typeof storedFileSchema>;
 
 /**
  * A receipt of the file as an authorised reader is served it: the name and reference are decrypted only here (section
- * 11, 15.1; RR-433). A null reference is none claimed; a null name is Unknown (a receipt written before it was encrypted).
+ * 11, 15.1; RR-433). A null reference is none claimed; the name is always present.
  */
 export const receiptSchema = z.strictObject({
   receiptId: idSchema,
   receivedAt: z.iso.datetime({ offset: true }),
   sourceSystem: z.string(),
-  originalName: z.string().nullable(),
+  originalName: z.string(),
   claimedReference: z.string().nullable(),
 });
 export type Receipt = z.infer<typeof receiptSchema>;
@@ -70,8 +70,8 @@ export const attachedFileSchema = z.strictObject({
   format: storedFileFormatSchema,
   /** The restricted field classes the attachment carries; empty for a plain file. */
   restrictedClasses: z.array(fieldClassSchema),
-  /** Every receipt of the file, oldest first. */
-  receipts: z.array(receiptSchema),
+  /** The one receipt the attachment was made from; no other receipt of the same bytes is served (section 11). */
+  receipt: receiptSchema,
   contentBase64: z.base64(),
 });
 export type AttachedFile = z.infer<typeof attachedFileSchema>;

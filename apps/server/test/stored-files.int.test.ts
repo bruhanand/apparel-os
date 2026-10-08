@@ -192,13 +192,14 @@ function errorOf(answer: Answer) {
 async function attachTo(
   index: 0 | 1,
   actorId: string,
-  storedFileId: string,
+  stored: { readonly storedFileId: string; readonly receiptId: string },
   options: {
     readonly site?: string;
     readonly kind?: { kind: string; restrictedClasses: FieldClass[] };
     readonly versionId?: string;
     readonly recordId?: string;
     readonly rollback?: boolean;
+    readonly receiptId?: string;
   } = {},
 ): Promise<{ attachmentId: string; recordId: string }> {
   const organisation = index === 0 ? organisationA : organisationB;
@@ -213,7 +214,8 @@ async function attachTo(
     },
     async (context) => {
       const attached = await files.attach(context, {
-        storedFileId,
+        storedFileId: stored.storedFileId,
+        fileReceiptId: options.receiptId ?? stored.receiptId,
         record: {
           module: 'test-files',
           type: TEST_TYPE,
@@ -684,7 +686,7 @@ describe('attaching evidence (imports-and-opening-data 13.1, 15.1; PRD-MOD-011)'
   it('records the record and its version, what it evidences, who attached it and when, and the scope facts', async () => {
     const stored = storedFileSchema.parse((await store(uploader.cookie, pngBytes('attach-record'))).body);
     const versionId = uuidv7();
-    const { attachmentId, recordId } = await attachTo(0, uploader.user.id, stored.storedFileId, {
+    const { attachmentId, recordId } = await attachTo(0, uploader.user.id, stored, {
       versionId,
       site: SITE_A,
     });
@@ -693,6 +695,7 @@ describe('attaching evidence (imports-and-opening-data 13.1, 15.1; PRD-MOD-011)'
     )[0];
     expect(row).toMatchObject({
       stored_file_id: stored.storedFileId,
+      file_receipt_id: stored.receiptId,
       record_module: 'test-files',
       record_type: TEST_TYPE,
       record_id: recordId,
@@ -717,7 +720,7 @@ describe('attaching evidence (imports-and-opening-data 13.1, 15.1; PRD-MOD-011)'
   it('PRD-INT-004 leaves no link when the transaction rolls back, and the object stays', async () => {
     const stored = storedFileSchema.parse((await store(uploader.cookie, pngBytes('rolled-back'))).body);
     const before = await rows(0, 'select 1 from files_imports.attachment');
-    const { attachmentId } = await attachTo(0, uploader.user.id, stored.storedFileId, { rollback: true });
+    const { attachmentId } = await attachTo(0, uploader.user.id, stored, { rollback: true });
     expect(attachmentId).not.toBe('');
     expect(await rows(0, 'select 1 from files_imports.attachment')).toHaveLength(before.length);
     expect(await rows(0, 'select 1 from files_imports.attachment where id = $1', [attachmentId])).toHaveLength(0);
@@ -728,7 +731,7 @@ describe('attaching evidence (imports-and-opening-data 13.1, 15.1; PRD-MOD-011)'
 
   it('PRD-MOD-011 an attachment is never edited or deleted', async () => {
     const stored = storedFileSchema.parse((await store(uploader.cookie, pngBytes('append-only'))).body);
-    const { attachmentId } = await attachTo(0, uploader.user.id, stored.storedFileId);
+    const { attachmentId } = await attachTo(0, uploader.user.id, stored);
     const client = await connect(world.organisations[0].database, 'migration');
     try {
       await expect(
@@ -741,10 +744,24 @@ describe('attaching evidence (imports-and-opening-data 13.1, 15.1; PRD-MOD-011)'
     }
   });
 
+  it('refuses an attachment naming a receipt that is not a receipt of the file attached', async () => {
+    const one = storedFileSchema.parse((await store(uploader.cookie, pngBytes('receipt-mismatch-one'))).body);
+    const other = storedFileSchema.parse((await store(uploader.cookie, pngBytes('receipt-mismatch-two'))).body);
+    await expect(attachTo(0, uploader.user.id, one, { receiptId: other.receiptId })).rejects.toThrow(
+      /not a receipt of the file/,
+    );
+    await expect(attachTo(0, uploader.user.id, one, { receiptId: uuidv7() })).rejects.toThrow(
+      /not a receipt of the file/,
+    );
+    expect(
+      await rows(0, 'select 1 from files_imports.attachment where stored_file_id = $1', [one.storedFileId]),
+    ).toHaveLength(0);
+  });
+
   it('attaching the same file to the same record again writes nothing more', async () => {
     const stored = storedFileSchema.parse((await store(uploader.cookie, pngBytes('twice-attached'))).body);
-    const first = await attachTo(0, uploader.user.id, stored.storedFileId);
-    const again = await attachTo(0, uploader.user.id, stored.storedFileId, { recordId: first.recordId });
+    const first = await attachTo(0, uploader.user.id, stored);
+    const again = await attachTo(0, uploader.user.id, stored, { recordId: first.recordId });
     expect(again.attachmentId).toBe(first.attachmentId);
     expect(
       await rows(0, 'select 1 from files_imports.attachment where stored_file_id = $1', [stored.storedFileId]),
@@ -776,10 +793,9 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
         })
       ).body,
     );
-    attachmentPlain = (await attachTo(0, uploader.user.id, plain.storedFileId, { site: SITE_A })).attachmentId;
-    attachmentRestricted = (
-      await attachTo(0, uploader.user.id, restricted.storedFileId, { site: SITE_A, kind: idEvidence })
-    ).attachmentId;
+    attachmentPlain = (await attachTo(0, uploader.user.id, plain, { site: SITE_A })).attachmentId;
+    attachmentRestricted = (await attachTo(0, uploader.user.id, restricted, { site: SITE_A, kind: idEvidence }))
+      .attachmentId;
     const view: SyntheticAuthority[] = [{ recordType: TEST_TYPE, action: 'view' }];
     readerAllA = await signedIn(0, 'READERALL', view, { sites: [SITE_A], fieldClasses: ['identity-documents'] });
     readerSiteB = await signedIn(0, 'READERB', view, { sites: [SITE_B], fieldClasses: ['identity-documents'] });
@@ -797,9 +813,39 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
     expect(file.contentHash).toBe(sha256(plainBytes));
     expect(file.restrictedClasses).toEqual([]);
     // The receipt's name and reference are decrypted only for a reader served the file (RR-433).
-    expect(file.receipts.map((r) => [r.originalName, r.claimedReference])).toEqual([
-      ['SYNTHETIC-plain.pdf', 'SYN-P-1'],
+    expect([file.receipt.originalName, file.receipt.claimedReference]).toEqual(['SYNTHETIC-plain.pdf', 'SYN-P-1']);
+  });
+
+  it("RR-433 serves only the receipt the attachment was made from, not another uploader's receipt of the same bytes", async () => {
+    // The same bytes handed in again by someone else, with their own name and reference (PRD-IMP-002).
+    const otherUploader = await signedIn(0, 'UPLOADERC', [
+      { recordType: 'files_imports.stored_file', action: 'create' },
     ]);
+    const again = storedFileSchema.parse(
+      (
+        await store(otherUploader.cookie, plainBytes, {
+          originalName: 'SYNTHETIC-scope-b-secret.pdf',
+          claimedReference: 'SYN-SCOPE-B-9',
+        })
+      ).body,
+    );
+    expect(again.alreadyStored).toBe(true);
+    const inB = await attachTo(0, uploader.user.id, again, { site: SITE_B });
+    const fromA = await call('GET', readPath(attachmentPlain), readerAllA.cookie);
+    expect(fromA.status).toBe(200);
+    expect(JSON.stringify(fromA.body)).not.toContain('SCOPE-B');
+    expect(JSON.stringify(fromA.body)).not.toContain('scope-b-secret');
+    const fileA = attachedFileSchema.parse(fromA.body);
+    expect([fileA.receipt.originalName, fileA.receipt.claimedReference]).toEqual(['SYNTHETIC-plain.pdf', 'SYN-P-1']);
+    const fromB = await call('GET', readPath(inB.attachmentId), readerSiteB.cookie);
+    expect(fromB.status).toBe(200);
+    const fileB = attachedFileSchema.parse(fromB.body);
+    expect(fileB.receipt.receiptId).toBe(again.receiptId);
+    expect([fileB.receipt.originalName, fileB.receipt.claimedReference]).toEqual([
+      'SYNTHETIC-scope-b-secret.pdf',
+      'SYN-SCOPE-B-9',
+    ]);
+    expect(JSON.stringify(fromB.body)).not.toContain('SYN-P-1');
   });
 
   it("PRD-SEC-005 refuses a file outside the reader's scope as not found and serves nothing", async () => {
@@ -867,9 +913,7 @@ describe('reading a file (imports-and-opening-data 11, 13.1; numbering-and-audit
     const file = attachedFileSchema.parse(answer.body);
     expect(Buffer.from(file.contentBase64, 'base64').equals(restrictedBytes)).toBe(true);
     expect(file.restrictedClasses).toEqual(['identity-documents']);
-    expect(file.receipts.map((r) => [r.originalName, r.claimedReference])).toEqual([
-      ['SYNTHETIC-id-photo.jpg', 'SYN-R-1'],
-    ]);
+    expect([file.receipt.originalName, file.receipt.claimedReference]).toEqual(['SYNTHETIC-id-photo.jpg', 'SYN-R-1']);
     const written = await rows<Record<string, unknown>>(
       0,
       `select kind, outcome, field_class, exposure, record_type, record_id, user_id from audit.access_record

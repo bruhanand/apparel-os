@@ -438,7 +438,7 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "imports-and-opening-data 3.1, 15.1; code-house-rules 6.3",
-      "why": "Every receipt of a stored file (uploader, time, source system, and the original name and claimed reference, which are encrypted with the Organisation key); written with the file before it is attached to any record, so it has no scope facts yet. Readable by any session of the runtime role without row-level security: the file's hash and size and format (via the stored file), the times, the uploader and the source system. The original name and claimed reference are ciphertext there, and only the files-imports module's own code decrypts them, for a reader served the file through an attachment it may see (RR-433; PRD-SEC-006)"
+      "why": "Every receipt of a stored file (uploader, time, source system, and the original name and claimed reference, which are encrypted with the Organisation key); written with the file before it is attached to any record, so it has no scope facts yet. Readable by any session of the runtime role without row-level security: the file's hash and size and format (via the stored file), the times, the uploader and the source system. The original name and claimed reference are ciphertext there, and only the files-imports module's own code decrypts them, for a reader served the file through an attachment it may see, and then only the receipt that attachment was made from (RR-433; PRD-SEC-006)"
     },
     {
       "table": "files_imports.attachment",

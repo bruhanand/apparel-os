@@ -21,7 +21,8 @@ export type {
   PreparedWithCredential,
 } from './access.js';
 export type { Decider, EffectOptions, Prepared, Preparer } from './commands/access-changes.js';
-export type { FreshCode } from './commands/fresh-code.js';
+export type { FreshCode, FreshCodeRefusal } from './commands/fresh-code.js';
+export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
 export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked } from './events.js';
 export { accessApprovalRules } from './domain/approval-rules.js';
