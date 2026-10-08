@@ -423,6 +423,29 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "access-and-approvals 9.11, 13.1; code-house-rules 6.3; DEC-112",
       "why": "Read by the setup step and the recovery command, operator commands that act before any scope applies (code-house-rules 6.3); it holds a fingerprint and two user identifiers, never a secret, and only access code reads it"
+    },
+    {
+      "table": "files_imports.stored_file",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 3.1, 11, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3",
+      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does"
+    },
+    {
+      "table": "files_imports.file_receipt",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 3.1, 15.1; code-house-rules 6.3",
+      "why": "Every receipt of a stored file (uploader, time, source system, and the original name and claimed reference, which are encrypted with the Organisation key); written with the file before it is attached to any record, so it has no scope facts yet. Readable by any session of the runtime role without row-level security: the file's hash and size and format (via the stored file), the times, the uploader and the source system. The original name and claimed reference are ciphertext there, and only the files-imports module's own code decrypts them, for a reader served the file through an attachment it may see, and then only the receipt that attachment was made from (RR-433; PRD-SEC-006)"
+    },
+    {
+      "table": "files_imports.attachment",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 11, 13.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
     }
   ]
 }

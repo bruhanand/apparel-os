@@ -6,11 +6,15 @@ import {
   IDEMPOTENCY_HELPER,
   JOB_IDENTITIES,
   OrganisationRoutingModule,
+  ORGANISATION_ROUTER,
   REPLAY_SECRET_CHECK,
   RESTRICTED_VALUE_CIPHER,
+  SESSION_PROBE,
   type CommandRunner,
   type IdempotencyHelper,
   type JobIdentities,
+  type OrganisationRouter,
+  type SessionProbe,
 } from '../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { Access } from './access.js';
@@ -29,6 +33,7 @@ import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS, DEMO_SIGN_IN } from './tokens.js';
 import { unknowableHash } from './domain/password-hash.js';
+import { sessionProbe } from './commands/probe-session.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { CREDENTIAL_RESETS, SESSIONS, SessionsController } from './http/sessions.controller.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
@@ -103,6 +108,11 @@ export class AccessJobIdentitiesModule {}
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
+    {
+      provide: SESSION_PROBE,
+      useFactory: (router: OrganisationRouter, runner: CommandRunner): SessionProbe => sessionProbe(router, runner),
+      inject: [ORGANISATION_ROUTER, COMMAND_RUNNER],
+    },
     {
       provide: ACCESS,
       useFactory: (audit: AuditInterface, keys: OrganisationKeys) => new Access({ audit, keys }),

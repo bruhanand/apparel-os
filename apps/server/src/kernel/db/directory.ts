@@ -20,6 +20,22 @@ export async function listDirectory(db: NodePgDatabase): Promise<DirectoryEntry[
     .orderBy(sql`${directoryEntry.organisationCode} collate "C"`);
 }
 
+/**
+ * An Organisation's identifier (the directory row's UUIDv7) and the name of its database, by its code compared
+ * exactly; undefined when the directory has none. The identifier starts every object key in the file store
+ * (backup-and-restore 2.1; GC9-10).
+ */
+export async function findOrganisationEntry(
+  db: NodePgDatabase,
+  organisationCode: string,
+): Promise<{ readonly organisationId: string; readonly databaseName: string } | undefined> {
+  const rows = await db
+    .select({ organisationId: directoryEntry.id, databaseName: directoryEntry.databaseName })
+    .from(directoryEntry)
+    .where(eq(directoryEntry.organisationCode, organisationCode));
+  return rows[0];
+}
+
 /** The name of an Organisation's database, by its code compared exactly; undefined when the directory has none. */
 export async function findDatabaseName(db: NodePgDatabase, organisationCode: string): Promise<string | undefined> {
   const rows = await db

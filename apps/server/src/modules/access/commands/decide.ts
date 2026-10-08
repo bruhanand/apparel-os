@@ -20,7 +20,7 @@ import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
 import type { SecuritySettingsChanges } from './security-settings.js';
-import { checkFreshCode } from './fresh-code.js';
+import { checkFreshCode, takeFreshCode } from './fresh-code.js';
 import { preparersOf, storedPreparers } from './request-approval.js';
 import type { UserChanges } from './user-changes.js';
 
@@ -536,14 +536,8 @@ export class Approvals {
     const keys = this.dependencies.keys;
     if (keys === undefined) throw new CommandDefect('Deciding needs the Organisation keys for the fresh code');
     const code = await checkFreshCode(context, keys, actor.id, input.totpCode);
-    if (code.kind === 'not-enrolled') return refused('refused', 'access.enrolment-not-started');
-    if (code.kind === 'refused' || !(await code.take())) {
-      return {
-        kind: 'refusal',
-        refusal: { kind: 'not-authorised', code: 'access.authenticator-code-refused', missing: [] },
-        causedBySecret: true,
-      };
-    }
+    const codeRefused = await takeFreshCode(code);
+    if (codeRefused !== undefined) return { kind: 'refusal', ...codeRefused };
 
     const decisionId = uuidv7();
     const outcome = input.outcome === 'approve' ? 'Approved' : 'Rejected';

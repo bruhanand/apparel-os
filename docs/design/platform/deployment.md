@@ -130,6 +130,7 @@ Each external adapter on `kdps-test` is either switched off or pointed at a sand
 - Until KDPS answers question 37, imports keep **no customer name or phone number** from the earlier POS reports (`PRD-SEC-009`, `PRD-SEC-010`). Nothing personal is kept by default.
 - Logs are pino JSON to standard output, read in Railway's log view (Stack: Diagnostics). Logs carry no secrets or unneeded personal data (`PRD-SEC-014`).
 - Secrets live in each environment's Railway variables, never in the repository. Among them, `AOS_ORGANISATION_KEYS` holds the key of each Organisation that encrypts authenticator secrets and restricted values (access-and-approvals 6); the server refuses to start without it.
+- File storage (stored files, [imports-and-opening-data.md](imports-and-opening-data.md) 3.1 step 2 and 11; `S1-F06-T05`) is set by six variables of `app` and `worker`: `AOS_FILE_STORE_ENDPOINT`, `AOS_FILE_STORE_REGION`, `AOS_FILE_STORE_BUCKET`, `AOS_FILE_STORE_ACCESS_KEY_ID`, `AOS_FILE_STORE_SECRET_ACCESS_KEY` and `AOS_FILE_STORE_ADDRESSING` (`path`, as MinIO needs, or `virtual`). With none set, file storage is not configured: storing or reading a file answers `unavailable` (`files-imports.file-store-not-configured`) and nothing else is affected, so a deploy without them starts. With only some set, the server refuses to start and names the missing variables, never a value. They have no defaults. On `dev` the bucket is wired to `app` only after the product owner authorises the Railway environment (RR-187). **Design choice.**
 
 ## 10. Open questions
 

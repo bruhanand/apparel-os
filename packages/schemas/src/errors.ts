@@ -235,6 +235,31 @@ export const accessApprovalCodes = declareCodes({
   'access.setting-not-found': 'not-found',
 });
 
+/**
+ * The codes of `files-imports` for stored files and evidence attachments (imports-and-opening-data 9.3, 11, 13.1;
+ * DEC-117; S1-F06-T05). A refusal names its reason, and nothing is stored (9.3).
+ *
+ * - `files-imports.type-not-allowed`: the content is not a PDF, JPEG or PNG, whatever the name says (9.2, A-1).
+ * - `files-imports.file-too-large`: over the evidence size limit; `missing` names the limit in bytes, never truncated.
+ * - `files-imports.active-content`: a PDF holding scripts, embedded files or launch actions; `missing` names which.
+ * - `files-imports.pdf-not-inspectable`: a PDF whose content cannot be checked for active content (encrypted, or
+ *   expanding past the checking budget), refused rather than trusted.
+ * - `files-imports.file-store-not-configured`: no file storage is set for this environment (code-house-rules 12.14).
+ * - `files-imports.attachment-not-found`: no attachment with that identifier is visible to the reader; a file out of
+ *   the reader's scope answers the same as one that does not exist.
+ * - `files-imports.restricted-file-is-an-export`: the attachment carries a restricted class, so reading it is an
+ *   export: use the download command, which writes an access record (numbering-and-audit 5.1).
+ */
+export const filesImportsCodes = declareCodes({
+  'files-imports.type-not-allowed': 'refused',
+  'files-imports.file-too-large': 'refused',
+  'files-imports.active-content': 'refused',
+  'files-imports.pdf-not-inspectable': 'refused',
+  'files-imports.file-store-not-configured': 'unavailable',
+  'files-imports.attachment-not-found': 'not-found',
+  'files-imports.restricted-file-is-an-export': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -242,6 +267,7 @@ export const errorCodes = {
   ...accessRoleCodes,
   ...accessSessionCodes,
   ...accessApprovalCodes,
+  ...filesImportsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

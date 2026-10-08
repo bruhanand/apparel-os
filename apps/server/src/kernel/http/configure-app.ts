@@ -1,5 +1,6 @@
+import { routes, type Route } from '@apparel-os/schemas';
 import type { INestApplication } from '@nestjs/common';
-import { correlationIdMiddleware, correlationIdOf } from '../command-runner/correlation.js';
+import { correlationIdMiddleware, correlationIdOf, newCorrelationId } from '../command-runner/correlation.js';
 import { LOGGER } from '../logging/logging.module.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import type { Clock } from '../time/clock.js';
@@ -7,6 +8,7 @@ import { systemClock } from '../time/clock.js';
 import { ERROR_CODE_LOCAL } from './error-envelope.filter.js';
 import type { HttpSettings } from './http-settings.js';
 import type { HttpRequest, HttpResponse } from './http-types.js';
+import { largeJsonBody, mountPatternOf, SESSION_PROBE, type SessionProbe } from './large-body.js';
 import { HTTP_SETTINGS } from './origin-check.guard.js';
 
 /**
@@ -46,6 +48,17 @@ export function configureApp(app: INestApplication, clock: Clock = systemClock):
     next();
   });
   app.use(requestLog(app.get<StructuredLogger>(LOGGER), clock));
+  // Resolved at the first large request; with no probe provided, no request is admitted (fail-safe).
+  const admitted = async (request: HttpRequest): Promise<boolean> => {
+    const probe = app.get<SessionProbe | undefined>(SESSION_PROBE, { strict: false });
+    return probe === undefined ? false : probe(request.headers.cookie, correlationIdOf(request) ?? newCorrelationId());
+  };
+  // A route that takes more than the ordinary body limit, such as storing a file, names its own (route table).
+  for (const route of Object.values(routes) as readonly Route[]) {
+    if (route.command && route.bodyLimitBytes !== undefined) {
+      app.use(mountPatternOf(route), largeJsonBody(route.bodyLimitBytes, admitted));
+    }
+  }
 }
 
 /**

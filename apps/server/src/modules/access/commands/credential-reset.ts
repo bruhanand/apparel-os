@@ -16,7 +16,7 @@ import { hashPassword } from '../domain/password-hash.js';
 import { checkPasswordRules, passwordRuleMissing } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { findUser, userInForce } from '../queries/users.js';
-import { checkFreshCode } from './fresh-code.js';
+import { checkFreshCode, freshCodeRefusal, takeFreshCode } from './fresh-code.js';
 import type { OwnRequest } from './own-credentials.js';
 import { revokeSessions } from './sessions.js';
 
@@ -86,8 +86,8 @@ export class CredentialResets {
           return refusal('not-found', 'access.user-not-found', false);
         }
         const code = await checkFreshCode(context, this.dependencies.keys, request.userId, reset.totpCode);
-        if (code.kind === 'not-enrolled') return refusal('refused', 'access.enrolment-not-started', false);
-        if (code.kind === 'refused') return refusal('not-authorised', 'access.authenticator-code-refused', true);
+        const codeRefused = freshCodeRefusal(code);
+        if (codeRefused !== undefined) return { kind: 'refusal', ...codeRefused };
         const password = reset.reset === 'authenticator' ? undefined : reset.temporaryPassword;
         if (reset.reset !== 'authenticator') {
           // The schema refuses a password reset without a temporary password; the command refuses it too.
@@ -103,7 +103,8 @@ export class CredentialResets {
             return refusal('refused', 'access.password-refused', true, [passwordRuleMissing(passwordRule)]);
           }
         }
-        if (!(await code.take())) return refusal('not-authorised', 'access.authenticator-code-refused', true);
+        const notTaken = await takeFreshCode(code);
+        if (notTaken !== undefined) return { kind: 'refusal', ...notTaken };
 
         const { changes, credentialIds } = await replaceCredentials(context, reset.userId, {
           passwordHash: password === undefined ? undefined : await hashPassword(password),

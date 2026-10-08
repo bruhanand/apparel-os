@@ -110,12 +110,21 @@ const kernelRecordTypes = [declareServiceOnly('kernel.outbox_event', ['view', 'e
  */
 const inboxRecordTypes = [declareServiceOnly('inbox.work_item', ['edit'], NONE)] as const;
 
+/**
+ * `files-imports` (module-map 4.7; imports-and-opening-data 13.1, 15.1). A stored file belongs to the Organisation
+ * and carries no scope fact of its own: storing one needs create on the type. Reading a file goes through the
+ * record it is attached to, authorised on that record's own type and scope facts (section 11), so no permission on
+ * the stored file lets anyone read its content.
+ */
+const filesImportsRecordTypes = [declare('files_imports.stored_file', ['view', 'create'], NONE)] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
   ...auditRecordTypes,
   ...kernelRecordTypes,
   ...inboxRecordTypes,
+  ...filesImportsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -123,7 +132,8 @@ export type RecordTypeCode =
   | (typeof accessRecordTypes)[number]['code']
   | (typeof auditRecordTypes)[number]['code']
   | (typeof kernelRecordTypes)[number]['code']
-  | (typeof inboxRecordTypes)[number]['code'];
+  | (typeof inboxRecordTypes)[number]['code']
+  | (typeof filesImportsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

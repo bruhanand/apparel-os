@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { uuidv7 } from '@apparel-os/domain';
-import { Secret, type PersonaId } from '@apparel-os/schemas';
+import { permissionRegistry, Secret, type PersonaId, type RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { pino } from 'pino';
@@ -18,7 +18,15 @@ import {
   type Clock,
   type OrganisationTimezoneSource,
 } from '../../src/kernel/index.js';
-import { ACCESS_ENVIRONMENT, ORGANISATION_KEYS_VARIABLE } from '../../src/modules/access/index.js';
+import {
+  Access,
+  ACCESS,
+  ACCESS_ENVIRONMENT,
+  ORGANISATION_KEYS,
+  ORGANISATION_KEYS_VARIABLE,
+} from '../../src/modules/access/index.js';
+import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
+import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
 // The access module's own helpers, used only to write the fewest rows a test needs until the setup step and the user
 // commands exist (code-house-rules 11.2): the factor secret is sealed exactly as the module seals it.
 import { sealFactorSecret } from '../../src/modules/access/domain/factor-secret.js';
@@ -224,6 +232,10 @@ export async function startAccessApp(
     readonly clock?: Clock;
     /** A built web app to serve from the same origin, as the real server does (S1-F01-T27). */
     readonly webApp?: string;
+    /** The file store variables (files-imports); none by default, so file storage is not configured. */
+    readonly fileStoreEnvironment?: Record<string, string>;
+    /** Record types beside the declared ones, for a test-only record type (code-house-rules 11.4). */
+    readonly extraRecordTypes?: readonly RecordTypeDeclaration[];
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -239,7 +251,16 @@ export async function startAccessApp(
   );
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  if (options.extraRecordTypes !== undefined) {
+    const registry = [...permissionRegistry, ...options.extraRecordTypes];
+    builder = builder.overrideProvider(ACCESS).useFactory({
+      factory: (audit: AuditInterface, keys: OrganisationKeys) => new Access({ audit, keys, registry }),
+      inject: [AUDIT, ORGANISATION_KEYS],
+    });
+  }
   const moduleRef = await builder
+    .overrideProvider(FILE_STORE_ENVIRONMENT)
+    .useValue(options.fileStoreEnvironment ?? {})
     .overrideProvider(LOGGER)
     .useValue(logger)
     .overrideProvider(ROUTING_ENVIRONMENT)

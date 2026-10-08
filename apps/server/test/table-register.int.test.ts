@@ -8,6 +8,7 @@ import { migrationSetFolder, type MigrationSetName } from '../src/kernel/index.j
 import * as kernelTables from '../src/kernel/db/schema.js';
 // The audit and access modules' table definitions, read only for the same comparison.
 import * as accessTables from '../src/modules/access/db/schema.js';
+import * as filesImportsTables from '../src/modules/files-imports/db/schema.js';
 import * as inboxTables from '../src/modules/inbox/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { organisationTimezoneVersion } from '../src/modules/configuration/db/schema.js';
@@ -486,6 +487,15 @@ describe('the Drizzle definitions of inbox (code-house-rules 3.4, 10.4)', () => 
   it.each(Object.entries(inboxTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
     await expectDefinitionMatches(world.organisations[0].database, table);
   });
+});
+
+describe('the Drizzle definitions of files-imports (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(filesImportsTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
 });
 
 describe('the Drizzle definitions of the Organisation set (code-house-rules 3.4, 10.4)', () => {

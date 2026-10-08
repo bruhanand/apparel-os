@@ -36,7 +36,13 @@ export { connectionToDatabase } from './db/connection.js';
 export { createDb } from './db/create-db.js';
 export type { Database, DatabaseHandle, PoolOptions } from './db/create-db.js';
 export { applyDatabasePrivileges } from './db/database-privileges.js';
-export { findDatabaseName, findDirectoryEntries, listDirectory, registerInDirectory } from './db/directory.js';
+export {
+  findDatabaseName,
+  findDirectoryEntries,
+  findOrganisationEntry,
+  listDirectory,
+  registerInDirectory,
+} from './db/directory.js';
 export type { DirectoryEntry } from './db/directory.js';
 export { migrateAll } from './db/migrate-all.js';
 export type { MigrateAllOptions } from './db/migrate-all.js';
@@ -65,6 +71,8 @@ export {
   TRUSTED_PROXY_HOPS_VARIABLE,
 } from './http/http-settings.js';
 export type { HttpSettings } from './http/http-settings.js';
+export { SESSION_PROBE } from './http/large-body.js';
+export type { SessionProbe } from './http/large-body.js';
 export { HTTP_ENVIRONMENT, HTTP_SETTINGS } from './http/origin-check.guard.js';
 export {
   canonicalJson,

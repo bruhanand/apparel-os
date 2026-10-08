@@ -302,6 +302,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Publish | The reviewer | Hands the reviewed rows to the target module's import handler, one transaction per document. A required document posts whole or not at all (`PRD-IMP-012`) | The required review is missing; the handler refuses |
 | Register an import handler | Each target module, at start | Lets Publish reach the module that owns the records | — |
 
+- Attach is the one operation other modules call in their own transaction (`S1-F06-T05`): the caller names the stored file, the record and version, the kind of evidence with its restricted classes, and the record's scope facts. Store a file and Read a file are routes of `files-imports`, since only the app hands in and serves files (code-house-rules 12.1; imports-and-opening-data 11).
 - The framework never writes another module's records. The handler does (rule 6).
 - A suggestion is offered for manual selection. Identity and commercial facts are never filled from an unaccepted guess (`PRD-IMP-009`).
 - An analytical-history import creates no live stock, receivable or tax document (`PRD-IMP-010`).
