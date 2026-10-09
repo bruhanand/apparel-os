@@ -66,6 +66,24 @@ export interface SyntheticWorld {
     readonly code: string;
   };
   /**
+   * The live-update journey (S1-F08-T04): an Operations user who owns the SYNTHETIC type at a SYNTHETIC Site, a person
+   * who may raise it, and the test document an exception links to.
+   */
+  readonly live: {
+    readonly organisationCode: string;
+    readonly operations: EnrolledUser;
+    readonly raiser: EnrolledUser;
+    readonly siteId: string;
+    readonly typeCode: string;
+    readonly link: { readonly module: string; readonly recordType: string; readonly recordId: string };
+  };
+  /** The operations view journey (S1-F08-T04): a person holding view on `kernel.job`, and the failing job's kind. */
+  readonly operationsView: {
+    readonly organisationCode: string;
+    readonly viewer: EnrolledUser;
+    readonly jobKind: string;
+  };
+  /**
    * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
    * Area, an Admin who may prepare the structure and an approver who may approve it.
    */

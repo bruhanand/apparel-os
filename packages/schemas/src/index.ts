@@ -174,6 +174,16 @@ export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-
 export type { Exposure, MyWork, WorkItem } from './work-item.js';
 
 export {
+  failedJobListSchema,
+  failedJobOutcomeSchema,
+  failedJobSchema,
+  LIVE_RESYNC,
+  liveMessageSchema,
+  liveSubjectSchema,
+} from './operations.js';
+export type { FailedJob, FailedJobList, FailedJobOutcome, LiveMessage } from './operations.js';
+
+export {
   errorCodes,
   errorCodeSchema,
   errorEnvelopeSchema,

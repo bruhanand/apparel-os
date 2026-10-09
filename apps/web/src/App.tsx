@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useCallback, useMemo, useState } from 'react';
 import { createQueryClient } from './api/query';
+import { useLiveUpdates } from './live/use-live-updates';
 import { useIdleLock } from './lock/use-idle-lock';
 import { router } from './router';
 import { SessionContext, type ShellSession } from './shell/session';
@@ -36,6 +37,8 @@ export function App() {
     setSessionState((current) => (current.state === 'active' ? { ...current, state: 'locked' } : current));
   }, []);
   useIdleLock(session, lockScreen);
+  // Live updates refresh what is on screen without reloading (code-house-rules 12.12; S1-F08-T04).
+  useLiveUpdates(session, queryClient);
   const control = useMemo(() => ({ session, setSession }), [session, setSession]);
   return (
     <QueryClientProvider client={queryClient}>

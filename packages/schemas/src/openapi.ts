@@ -57,7 +57,13 @@ function parameters(route: Route): JsonSchema[] {
 
 function responses(route: Route): Record<string, JsonSchema> {
   const answers: Record<string, JsonSchema> = {
-    '200': { description: 'Success', content: { 'application/json': { schema: jsonSchema(route.response) } } },
+    '200':
+      !route.command && route.stream === 'event-stream'
+        ? {
+            description: 'A stream of server-sent events, each message’s data as this schema (code-house-rules 12.12)',
+            content: { 'text/event-stream': { schema: jsonSchema(route.response) } },
+          }
+        : { description: 'Success', content: { 'application/json': { schema: jsonSchema(route.response) } } },
   };
   const byStatus = new Map<number, string[]>();
   for (const code of codesOfRoute(route)) {

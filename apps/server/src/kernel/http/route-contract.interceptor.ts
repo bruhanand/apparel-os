@@ -49,6 +49,8 @@ export class RouteContractInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<HttpRequest>();
     const response = context.switchToHttp().getResponse<HttpResponse>();
     keepRouteInput(request, parseInput(route, request));
+    // A stream's handler encodes each message through the route's schema as it writes it (12.12).
+    if (!route.command && route.stream === 'event-stream') return next.handle();
     return next.handle().pipe(
       map((value: unknown) => {
         const answer = value instanceof RouteAnswer ? value : new RouteAnswer(value, false);

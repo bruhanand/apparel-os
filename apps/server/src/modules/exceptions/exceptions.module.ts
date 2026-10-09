@@ -1,12 +1,20 @@
-import { Module } from '@nestjs/common';
-import { CommandRunnerModule } from '../../kernel/index.js';
-import { AccessModule } from '../access/index.js';
+import { Inject, Module, Optional, type OnModuleInit } from '@nestjs/common';
+import {
+  CommandRunnerModule,
+  FAILED_JOB_EXCEPTIONS,
+  LIVE_UPDATES,
+  type FailedJobExceptions,
+  type LiveUpdates,
+} from '../../kernel/index.js';
+import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { INBOX, InboxModule, type InboxInterface } from '../inbox/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ExceptionTypeRegistration } from './domain/types.js';
 import { Exceptions } from './exceptions.js';
 import { ExceptionsController } from './http/exceptions.controller.js';
+import { EXCEPTION_RECORD_TYPE } from './domain/types.js';
+import { exceptionsOfJobs, mayViewException } from './queries/admission.js';
 import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
 
 /**
@@ -29,7 +37,28 @@ import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
       ) => new Exceptions({ numbering, inbox, audit, types: types ?? [] }),
       inject: [NUMBERING, INBOX, AUDIT, { token: EXCEPTION_TYPES, optional: true }],
     },
+    {
+      // The exception raised for each failed job, for the operations view (code-house-rules 12.9; S1-F08-T04).
+      provide: FAILED_JOB_EXCEPTIONS,
+      useFactory:
+        (access: AccessInterface): FailedJobExceptions =>
+        (context, jobIds) =>
+          exceptionsOfJobs(context, access, context.actor.kind === 'actor' ? context.actor.actorId : '', jobIds),
+      inject: [ACCESS],
+    },
   ],
   exports: [EXCEPTIONS],
 })
-export class ExceptionsModule {}
+export class ExceptionsModule implements OnModuleInit {
+  constructor(
+    @Inject(ACCESS) private readonly access: AccessInterface,
+    @Optional() @Inject(LIVE_UPDATES) private readonly live: LiveUpdates | null,
+  ) {}
+
+  /** An exception's live updates go to whoever may view it, its owner included (12.4 "As built"; 12.12). */
+  onModuleInit(): void {
+    this.live?.registerAudience([EXCEPTION_RECORD_TYPE], (context, actorId, event) =>
+      mayViewException(context, this.access, actorId, event.subject.recordId),
+    );
+  }
+}

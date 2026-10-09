@@ -87,11 +87,14 @@ test('POL-02.07 DEC-118 the Admin prepares a session-limit change and the approv
     await test.step('the approver approves it from My work with a listed reason and a fresh code', async () => {
       const app = await signedIn(approver, world.organisationCode, world.approver);
       await expect(approver.getByRole('heading', { level: 1, name: 'My work' })).toBeVisible();
+      // The approver's My work also holds other journeys' approvals, which live updates add at any moment (S1-F08-T04),
+      // so the item is found by its record, not by its place in the list.
+      const item = approver.getByRole('listitem').filter({ hasText: 'Security setting change' });
       await expect(async () => {
         await approver.getByRole('button', { name: 'Refresh' }).click();
-        await expect(approver.getByRole('button', { name: 'Open and decide' })).toHaveCount(1, { timeout: 1_000 });
+        await expect(item.getByRole('button', { name: 'Open and decide' })).toHaveCount(1, { timeout: 1_000 });
       }).toPass({ timeout: 30_000 });
-      await approver.getByRole('button', { name: 'Open and decide' }).click();
+      await item.getByRole('button', { name: 'Open and decide' }).click();
       const drawer = approver.getByRole('dialog');
       await expect(drawer.getByRole('heading', { name: 'Security setting change' })).toBeVisible();
       await expect(drawer.getByText('1200', { exact: true })).toBeVisible();

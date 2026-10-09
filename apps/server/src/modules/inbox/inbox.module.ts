@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
-import { CommandRunnerModule } from '../../kernel/index.js';
-import { AccessModule } from '../access/index.js';
+import { Inject, Module, Optional, type OnModuleInit } from '@nestjs/common';
+import { CommandRunnerModule, LIVE_UPDATES, type LiveUpdates } from '../../kernel/index.js';
+import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
+import { WORK_ITEM_RECORD_TYPE } from './events.js';
+import { mayActOn } from './queries/my-work.js';
 import { MyWorkController } from './http/my-work.controller.js';
 import { Inbox, INBOX } from './inbox.js';
 
@@ -16,4 +18,16 @@ import { Inbox, INBOX } from './inbox.js';
   providers: [{ provide: INBOX, useValue: new Inbox() }],
   exports: [INBOX],
 })
-export class InboxModule {}
+export class InboxModule implements OnModuleInit {
+  constructor(
+    @Inject(ACCESS) private readonly access: AccessInterface,
+    @Optional() @Inject(LIVE_UPDATES) private readonly live: LiveUpdates | null,
+  ) {}
+
+  /** A work item's live updates go only to those who may act on it (access-and-approvals 11.1; 12.12). */
+  onModuleInit(): void {
+    this.live?.registerAudience([WORK_ITEM_RECORD_TYPE], (context, actorId, event) =>
+      mayActOn(context, this.access, actorId, event.subject.recordId),
+    );
+  }
+}

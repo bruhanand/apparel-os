@@ -53,6 +53,7 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
+import { failedJobListSchema, liveMessageSchema } from './operations.js';
 import {
   commentRequestSchema,
   exceptionChangedSchema,
@@ -163,6 +164,11 @@ export type RouteAccess =
        * (access-and-approvals 3.3; S1-F01-T09). Every other route answers a locked session `access.session-locked`.
        */
       readonly whileLocked?: true;
+      /**
+       * Authenticated without counting as the session's activity, so it never keeps an idle session from locking: the
+       * live-update stream, which reconnects on its own (access-and-approvals 3.3; code-house-rules 12.12; S1-F08-T04).
+       */
+      readonly passive?: true;
     }
   | {
       readonly kind: 'action';
@@ -237,6 +243,11 @@ interface RouteBase {
 export interface ReadRoute extends RouteBase {
   readonly method: 'GET';
   readonly command: false;
+  /**
+   * `event-stream`: the answer is a `text/event-stream` (code-house-rules 12.12), each message's data encoded through
+   * `response`, written by the handler itself; the route's refusals before the stream opens use the one envelope.
+   */
+  readonly stream?: 'event-stream';
 }
 
 /**
@@ -965,6 +976,27 @@ export const routes = {
     command: false,
     response: myWorkSchema,
     codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
+  }),
+  // Live updates (code-house-rules 12.12; deployment.md section 5; S1-F08-T04): one stream per session, every signed-in
+  // user's, carrying only what the session's actor may view. It does not count as the session's activity.
+  openLiveUpdates: defineRoute({
+    method: 'GET',
+    path: '/api/kernel/live',
+    access: { kind: 'own', passive: true },
+    command: false,
+    stream: 'event-stream',
+    response: liveMessageSchema,
+    codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
+  }),
+  // The operations view's failed jobs (code-house-rules 12.9; module-map 4.1; PRD-SEC-013; S1-F08-T04): view on
+  // `kernel.job`, which carries no scope fact.
+  listFailedJobs: defineRoute({
+    method: 'GET',
+    path: '/api/kernel/failed-jobs',
+    access: { kind: 'action', action: 'view', recordType: 'kernel.job' },
+    command: false,
+    response: failedJobListSchema,
+    codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete', 'access.not-authorised'],
   }),
   // Stored files and evidence (imports-and-opening-data 3.1, 9.3, 11, 13.1; PRD-IMP-002, PRD-SEC-005, PRD-SEC-006;
   // S1-F06-T05). The file travels as base64 in the JSON body. Storing needs create on the stored file; reading goes

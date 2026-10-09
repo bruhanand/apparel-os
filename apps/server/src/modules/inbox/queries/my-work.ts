@@ -19,54 +19,7 @@ export async function listMyWork(
   userId: string,
 ): Promise<{ asOf: string; items: WorkItem[] }> {
   const open = await context.tx.select().from(workItem).where(eq(workItem.open, true));
-  const actors =
-    open.length === 0
-      ? []
-      : await context.tx
-          .select()
-          .from(workItemActor)
-          .where(
-            inArray(
-              workItemActor.workItemId,
-              open.map((item) => item.id),
-            ),
-          );
-  const approvalRequestIds = open
-    .filter((item) =>
-      actors.some((actor) => actor.workItemId === item.id && actor.eligibility === APPROVAL_ELIGIBILITY),
-    )
-    .map((item) => item.ownerRecordId);
-  const eligible = new Set(await access.eligibleRequests(context, userId, approvalRequestIds));
-  // A role actor: its holders whose assignment covers the item's facts may act (12.2; S1-F08-T02).
-  const byId = new Map(open.map((item) => [item.id, item]));
-  const roleActors = actors.filter((actor) => actor.roleId !== null && byId.has(actor.workItemId));
-  const held = await access.rolesHeld(
-    context,
-    userId,
-    roleActors.map((actor) => {
-      const item = byId.get(actor.workItemId);
-      return {
-        roleId: actor.roleId ?? '',
-        recordType: item?.ownerRecordType ?? '',
-        facts: {
-          siteId: item?.siteId ?? undefined,
-          storeId: item?.storeId ?? undefined,
-          businessUnitId: item?.businessUnitId ?? undefined,
-          brandId: item?.brandId ?? undefined,
-        },
-      };
-    }),
-  );
-  const heldItems = new Set(roleActors.filter((_actor, index) => held[index] === true).map((a) => a.workItemId));
-  const mine = open.filter(
-    (item) =>
-      heldItems.has(item.id) ||
-      actors.some(
-        (actor) =>
-          actor.workItemId === item.id &&
-          (actor.userId === userId || (actor.eligibility === APPROVAL_ELIGIBILITY && eligible.has(item.ownerRecordId))),
-      ),
-  );
+  const mine = await actableBy(context, access, userId, open);
   const orderable = mine.map((item) => ({
     item,
     id: item.id,
@@ -93,6 +46,82 @@ export async function listMyWork(
       ...(item.kind === 'exception' ? { nextAction: 'exceptions.open-exception' } : {}),
     })),
   };
+}
+
+/**
+ * The items, of those given, the user may act on now: as a named user, by the owner's eligibility rule, or as a holder
+ * of a role whose assignment covers the item's facts, each of which `access` answers at this read (11.1, 11.2, 12.2).
+ * My work lists them; the live-update stream sends an item's changes only to them (code-house-rules 12.12).
+ */
+export async function actableBy(
+  context: TransactionContext,
+  access: AccessInterface,
+  userId: string,
+  items: readonly (typeof workItem.$inferSelect)[],
+): Promise<(typeof workItem.$inferSelect)[]> {
+  const actors =
+    items.length === 0
+      ? []
+      : await context.tx
+          .select()
+          .from(workItemActor)
+          .where(
+            inArray(
+              workItemActor.workItemId,
+              items.map((item) => item.id),
+            ),
+          );
+  const approvalRequestIds = items
+    .filter((item) =>
+      actors.some((actor) => actor.workItemId === item.id && actor.eligibility === APPROVAL_ELIGIBILITY),
+    )
+    .map((item) => item.ownerRecordId);
+  const eligible = new Set(await access.eligibleRequests(context, userId, approvalRequestIds));
+  // A role actor: its holders whose assignment covers the item's facts may act (12.2; S1-F08-T02).
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const roleActors = actors.filter((actor) => actor.roleId !== null && byId.has(actor.workItemId));
+  const held = await access.rolesHeld(
+    context,
+    userId,
+    roleActors.map((actor) => {
+      const item = byId.get(actor.workItemId);
+      return {
+        roleId: actor.roleId ?? '',
+        recordType: item?.ownerRecordType ?? '',
+        facts: {
+          siteId: item?.siteId ?? undefined,
+          storeId: item?.storeId ?? undefined,
+          businessUnitId: item?.businessUnitId ?? undefined,
+          brandId: item?.brandId ?? undefined,
+        },
+      };
+    }),
+  );
+  const heldItems = new Set(roleActors.filter((_actor, index) => held[index] === true).map((a) => a.workItemId));
+  return items.filter(
+    (item) =>
+      heldItems.has(item.id) ||
+      actors.some(
+        (actor) =>
+          actor.workItemId === item.id &&
+          (actor.userId === userId || (actor.eligibility === APPROVAL_ELIGIBILITY && eligible.has(item.ownerRecordId))),
+      ),
+  );
+}
+
+/**
+ * Whether the user may act on one work item, open or closed (access-and-approvals 11.1): the live-update audience of
+ * `inbox.work_item` (code-house-rules 12.12). A closed approval item reaches its named and role actors; whoever was
+ * eligible to decide it reads My work again at their next read.
+ */
+export async function mayActOn(
+  context: TransactionContext,
+  access: AccessInterface,
+  userId: string,
+  workItemId: string,
+): Promise<boolean> {
+  const item = await context.tx.select().from(workItem).where(eq(workItem.id, workItemId));
+  return (await actableBy(context, access, userId, item)).length > 0;
 }
 
 function exposureOf(item: typeof workItem.$inferSelect): Orderable['exposure'] {

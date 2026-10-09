@@ -61,6 +61,8 @@ export const screens = {
     need: view('exceptions.exception_routing'),
   },
   'setup.audit-log': { section: 'setup', path: '/setup/audit-log', need: view('audit.audit_record') },
+  // The operations view: failed jobs, later backup and recovery status (code-house-rules 12.9; S1-F08-T04, S1-F14).
+  'setup.operations': { section: 'setup', path: '/setup/operations', need: view('kernel.job') },
   'setup.policy-readiness': {
     section: 'setup',
     path: '/setup/policy-readiness',
@@ -89,6 +91,7 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.organisation-structure',
       'setup.geography',
       'setup.exception-rules',
+      'setup.operations',
       'setup.policy-readiness',
     ],
   },

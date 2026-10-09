@@ -32,6 +32,7 @@ import type { Acting, Changed } from '../commands/lifecycle.js';
 import { summarise } from '../domain/summary.js';
 import { EXCEPTION_RECORD_TYPE } from '../domain/types.js';
 import type { ExceptionsInterface } from '../exceptions.js';
+import { isOwner } from '../queries/admission.js';
 import type { ExceptionRecord } from '../queries/read.js';
 import { EXCEPTIONS } from '../tokens.js';
 
@@ -410,14 +411,7 @@ export class ExceptionsController {
 
   /** Whether the reader is the owner, a holder of the owning role, or an escalation recipient (12.2, 11.3). */
   private async ownerOf(context: TransactionContext, userId: string, record: ExceptionRecord): Promise<boolean> {
-    const parties = [
-      record.row.ownerUserId !== null
-        ? ({ kind: 'user', userId: record.row.ownerUserId } as const)
-        : ({ kind: 'role', roleId: record.row.ownerRoleId ?? '' } as const),
-      ...record.escalatedTo,
-    ];
-    if (parties.some((party) => party.kind === 'user' && party.userId === userId)) return true;
-    return (await this.heldRoles(context, userId, record, parties)).some(Boolean);
+    return isOwner(context, this.access, userId, record);
   }
 
   /** Whether the reader holds the owning role, or a role escalated to, within the exception's scope (12.2). */

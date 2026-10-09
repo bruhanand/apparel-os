@@ -8,6 +8,8 @@ import { pino } from 'pino';
 import { AppModule } from '../../src/app.module.js';
 import {
   CLOCK,
+  LIVE_SETTINGS,
+  type LiveSettings,
   configureApp,
   serveWebApp,
   HTTP_ENVIRONMENT,
@@ -243,6 +245,8 @@ export async function startAccessApp(
     readonly extraRecordTypes?: readonly RecordTypeDeclaration[];
     /** Exception types beside the module's own, for a test-only raising module (code-house-rules 11.4). */
     readonly exceptionTypes?: readonly ExceptionTypeRegistration[];
+    /** The live-update stream's timing; SYNTHETIC, short enough for a test to sit through (12.12). */
+    readonly liveSettings?: LiveSettings;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -258,6 +262,9 @@ export async function startAccessApp(
   );
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  if (options.liveSettings !== undefined) {
+    builder = builder.overrideProvider(LIVE_SETTINGS).useValue(options.liveSettings);
+  }
   if (options.exceptionTypes !== undefined) {
     builder = builder.overrideProvider(EXCEPTION_TYPES).useValue(options.exceptionTypes);
   }

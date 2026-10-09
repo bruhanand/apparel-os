@@ -58,6 +58,8 @@ export async function authenticateSession(
   audit: AuditInterface,
   identifier: string,
   networkAddress: string,
+  /** False for a passive route, the live-update stream: it does not count as the session's activity (S1-F08-T04). */
+  keepsActivity = true,
 ): Promise<AuthenticateResult> {
   const today = await context.businessDate();
   // With no timezone, no user has a state in force today, so no session reaches anything (fail-safe).
@@ -107,8 +109,32 @@ export async function authenticateSession(
     await record('session-locked');
     return { kind: 'locked', session: authenticated };
   }
-  if (now > found.lastActivityAt) {
+  if (keepsActivity && now > found.lastActivityAt) {
     await context.tx.update(session).set({ lastActivityAt: now }).where(eq(session.id, found.id));
   }
   return { kind: 'in-force', session: authenticated };
+}
+
+/**
+ * Whether a session is still open for its live-update stream (access-and-approvals 3.3; code-house-rules 12.12;
+ * PRD-SEC-008): In force, an office session within its limits, of a user Active today. A read on the authenticate path
+ * that keeps no activity and ends or locks nothing; the next request's Authenticate does that. A Locked session is not
+ * open: its stream closes, and the browser opens it again after the unlock.
+ */
+export async function sessionStillOpen(context: TransactionContext, sessionId: string): Promise<boolean> {
+  const [found] = await context.tx
+    .select({
+      userId: session.appUserId,
+      kind: session.kind,
+      state: session.state,
+      startedAt: session.startedAt,
+      lastActivityAt: session.lastActivityAt,
+    })
+    .from(session)
+    .where(eq(session.id, sessionId));
+  if (found?.state !== 'In force' || found.kind !== 'office') return false;
+  const limits = await readSetting(context, 'access.office-session-limits');
+  if (limits.kind === 'not-set') return false;
+  if (sessionLimitReached(limits.value, found, context.startedAt) !== 'none') return false;
+  return (await userInForce(context, found.userId))?.state === 'Active';
 }

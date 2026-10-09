@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { defineConsumer, type ConsumerDefinition, type TransactionContext } from '../../../kernel/index.js';
 import { approvalDecided, approvalRequested } from '../../access/index.js';
 import { workItem, workItemActor } from '../db/schema.js';
+import { announceItems } from '../events.js';
 
 /**
  * The code of the internal service identity the inbox's consumers run as (access-and-approvals 2.3; PRD-SEC-018). The
@@ -54,7 +55,9 @@ async function publishItem(
     })
     .onConflictDoNothing()
     .returning({ id: workItem.id });
-  if (inserted.length === 0 || item.actors.length === 0) return;
+  if (inserted.length === 0) return;
+  await announceItems(context, [id]);
+  if (item.actors.length === 0) return;
   await context.tx.insert(workItemActor).values(
     item.actors.map((actor) => ({
       id: uuidv7(),
@@ -72,7 +75,7 @@ async function closeItems(
   ownerRecordId: string,
   state: string,
 ): Promise<void> {
-  await context.tx
+  const closed = await context.tx
     .update(workItem)
     .set({ state, open: false })
     .where(
@@ -82,7 +85,12 @@ async function closeItems(
         eq(workItem.kind, kind),
         eq(workItem.open, true),
       ),
-    );
+    )
+    .returning({ id: workItem.id });
+  await announceItems(
+    context,
+    closed.map((row) => row.id),
+  );
 }
 
 /**

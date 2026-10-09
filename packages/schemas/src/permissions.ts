@@ -102,8 +102,16 @@ const auditRecordTypes = [
   declareServiceOnly('audit.audit_partition', ['view', 'create'], NONE),
 ] as const;
 
-/** `kernel`: the outbox, which the outbox processor dispatches (code-house-rules 12.8; RR-273). */
-const kernelRecordTypes = [declareServiceOnly('kernel.outbox_event', ['view', 'edit'], NONE)] as const;
+/**
+ * `kernel`: the outbox, which the outbox processor dispatches (code-house-rules 12.8; RR-273); and the jobs of the
+ * worker, whose failed ones the operations view lists to whoever holds view on `kernel.job` (12.9; module-map 4.1;
+ * PRD-SEC-013; S1-F08-T04). A job belongs to the Organisation as a whole, so it carries no scope fact. Who holds it is
+ * KDPS's (V-01, RR-064).
+ */
+const kernelRecordTypes = [
+  declareServiceOnly('kernel.outbox_event', ['view', 'edit'], NONE),
+  declare('kernel.job', ['view'], NONE),
+] as const;
 
 /**
  * `inbox` (access-and-approvals 11; module-map 4.8). My work needs no permission (11.2, 9.11); `inbox.work_item`

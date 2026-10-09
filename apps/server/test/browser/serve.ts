@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { setupRequestSchema, type PersonaId } from '@apparel-os/schemas';
 import {
   CommandRunner,
+  CommandTimedOut,
+  defineConsumer,
+  defineEvent,
   IdempotencyHelper,
   newCorrelationId,
   OrganisationRouter,
@@ -41,7 +44,7 @@ import {
   type SyntheticUser,
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic, writeSyntheticRole } from '../support/grants.js';
-import { capturingLogger } from '../support/jobs.js';
+import { capturingLogger, writeSyntheticServiceIdentity } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup } from '../support/organisation.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
@@ -56,6 +59,7 @@ import {
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
+import { z } from 'zod';
 
 // The server of the browser journeys (S1-F01-T15, S1-F01-T20; code-house-rules 10.1, 11.2): a test composition of the
 // whole application, and of the worker that feeds My work, on a PostgreSQL container of its own. It holds three
@@ -93,6 +97,22 @@ const SYNTHETIC_SESSION_LIMITS = { idleLockSeconds: 1800, absoluteSeconds: 28800
  * (access-and-approvals 3.3; RR-304).
  */
 const SYNTHETIC_SHORT_IDLE_LIMITS = { idleLockSeconds: 15, absoluteSeconds: 28800 };
+
+/** The SYNTHETIC work the operations view journey's failing consumer is handed (S1-F08-T04). */
+const syntheticFailing = defineEvent({
+  type: 'kernel.synthetic-work-requested',
+  version: 1,
+  payload: z.object({ recordId: z.uuid() }),
+});
+const SYNTHETIC_FAILING_IDENTITY = 'synthetic-failing-consumer';
+/** A SYNTHETIC consumer that always fails transiently, so its job exhausts its SYNTHETIC retries (12.9). */
+const syntheticAlwaysFails = defineConsumer({
+  name: 'kernel.synthetic-always-fails',
+  event: syntheticFailing,
+  serviceIdentity: SYNTHETIC_FAILING_IDENTITY,
+  authorises: { action: 'view', recordType: 'kernel.outbox_event' },
+  handle: (context) => Promise.reject(new CommandTimedOut('statement', '57014', context.correlationId)),
+});
 
 function required(name: string): string {
   const value = process.env[name];
@@ -487,6 +507,46 @@ const raisedException = await fixtureCommand((context) =>
 );
 if (raisedException.kind !== 'done')
   throw new Error(`The synthetic exception was refused: ${raisedException.refusal.code}`);
+// The live-update journey (live-updates.spec.ts; S1-F08-T04): an enrolled Operations user who owns, by a SYNTHETIC rule
+// approved here as a fixture, the SYNTHETIC type at a SYNTHETIC Site; a person who may raise exceptions, whom the
+// journey uses through the API while the Operations user watches My work; and an unresolved test document to link.
+const liveSite = '01900000-0000-7000-8000-00000000b5e1';
+const liveOps = await provisionUser('BROWSER-LIVE-OPS', 'P-OPS', [
+  { recordType: 'exceptions.exception', action: 'view' },
+]);
+const liveRaiser = await provisionUser('BROWSER-LIVE-RAISER', 'P-OPS', [
+  { recordType: 'exceptions.exception', action: 'view' },
+  { recordType: 'exceptions.exception', action: 'create' },
+]);
+const liveRouting = await fixtureCommand((context) =>
+  fixtureExceptions.prepareRouting(
+    context,
+    { userId: exceptionsOps.id, roleAssignmentId: crypto.randomUUID() },
+    {
+      typeCode: syntheticMismatch.code,
+      siteId: liveSite,
+      owner: { kind: 'user', userId: liveOps.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: liveOps.id },
+      validFrom: new Date().toISOString().slice(0, 10),
+      origin: 'synthetic',
+    },
+  ),
+);
+if (liveRouting.kind !== 'done') throw new Error(`The live rule was refused: ${liveRouting.refusal.code}`);
+const liveOwner = await connect(settingsDatabase, 'migration');
+await liveOwner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
+  liveRouting.value.versionId,
+]);
+await liveOwner.end();
+const liveDocument = await fixtureCommand((context) => writeTestDocument(context));
+// The operations view journey (operations-view.spec.ts; S1-F08-T04): an enrolled person holding view on `kernel.job`
+// through a labelled SYNTHETIC role (who holds it is KDPS's: V-01, RR-064), and a SYNTHETIC consumer that always fails,
+// handed one event, so its job exhausts its SYNTHETIC retries under the worker below.
+const operationsViewer = await provisionUser('BROWSER-OPERATIONS', 'P-ADM', [
+  { recordType: 'kernel.job', action: 'view' },
+]);
+await writeSyntheticServiceIdentity(settingsDatabase, SYNTHETIC_FAILING_IDENTITY, [syntheticAlwaysFails.authorises]);
 await fixtureRouter.close();
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
@@ -525,8 +585,8 @@ const runner = new CommandRunner({
   logger: workerLog.logger,
 });
 const inboxRegistry: JobRegistry = {
-  events: [approvalRequested, approvalDecided],
-  consumers: inboxConsumers,
+  events: [approvalRequested, approvalDecided, syntheticFailing],
+  consumers: [...inboxConsumers, syntheticAlwaysFails],
   jobKinds: [],
 };
 const worker = new Worker({
@@ -545,6 +605,24 @@ const worker = new Worker({
   settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
 });
 await worker.start();
+// The failing consumer's one event, published once the worker has registered it, since a consumer receives only the
+// events recorded from its first registration on (code-house-rules 12.8).
+const settingsForWorker = await router.resolveForSignIn(settingsCode);
+if (!settingsForWorker.routed) throw new Error('The settings Organisation was not routed');
+const failingRecord = crypto.randomUUID();
+await runner.run(
+  {
+    commandName: 'test-syn-operations.fixture',
+    organisation: settingsForWorker.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: exceptionsOps.id },
+  },
+  (context) =>
+    context.publish(syntheticFailing, {
+      subject: { module: 'kernel', recordType: 'kernel.synthetic_record', recordId: failingRecord },
+      payload: { recordId: failingRecord },
+    }),
+);
 
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
@@ -601,6 +679,19 @@ writeFileSync(
       organisationCode: settingsCode,
       operations: credentialsOf(exceptionsOps),
       code: raisedException.value.code,
+    },
+    live: {
+      organisationCode: settingsCode,
+      operations: credentialsOf(liveOps),
+      raiser: credentialsOf(liveRaiser),
+      siteId: liveSite,
+      typeCode: syntheticMismatch.code,
+      link: { module: TEST_EXCEPTIONS_MODULE, recordType: TEST_DOCUMENT_TYPE, recordId: liveDocument },
+    },
+    operationsView: {
+      organisationCode: settingsCode,
+      viewer: credentialsOf(operationsViewer),
+      jobKind: syntheticAlwaysFails.name,
     },
     journey: {
       organisationCode: journeyCode,

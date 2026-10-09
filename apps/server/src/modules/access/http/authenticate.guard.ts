@@ -95,7 +95,15 @@ export class AuthenticateGuard implements CanActivate {
         correlationId,
         actor: { kind: 'no-actor', path: 'authenticate' },
       },
-      (transaction) => authenticateSession(transaction, this.audit, routed.sessionIdentifier, networkAddress),
+      (transaction) =>
+        authenticateSession(
+          transaction,
+          this.audit,
+          routed.sessionIdentifier,
+          networkAddress,
+          // The live-update stream does not count as activity, so it never keeps a session from locking (S1-F08-T04).
+          !(route.access.kind === 'own' && route.access.passive === true),
+        ),
     );
     if (result.kind === 'not-signed-in') throw notSignedIn();
     const whileLocked = route.access.kind === 'own' && route.access.whileLocked === true;
@@ -168,4 +176,9 @@ function incomplete(steps: readonly SignInStep[]): ApiRefusal {
     missing,
     next: steps[0] === 'enrolment' ? 'access.start-enrolment' : 'access.change-password',
   });
+}
+
+/** The signed-in user of a request that passed Authenticate, or undefined: for the kernel's routes (SESSION_ACCESS). */
+export function signedInOf(request: object): SignedInUser | undefined {
+  return signedIn.get(request);
 }

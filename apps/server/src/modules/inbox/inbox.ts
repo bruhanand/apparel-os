@@ -2,6 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import { and, desc, eq } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../kernel/index.js';
 import { workItem, workItemActor, workItemEscalation } from './db/schema.js';
+import { announceItems } from './events.js';
 
 // The inbox's interface for the modules that own work (access-and-approvals 11.1, 11.3; module-map 4.8). `exceptions`
 // and higher modules call it in their own transaction; `access` publishes through the outbox (module-map section 3,
@@ -80,22 +81,35 @@ export class Inbox implements InboxInterface {
       })
       .onConflictDoNothing()
       .returning({ id: workItem.id });
-    if (inserted.length === 0 || item.actors.length === 0) return;
-    await context.tx.insert(workItemActor).values(item.actors.map((actor) => actorRow(id, actor)));
+    if (inserted.length === 0) return;
+    if (item.actors.length > 0) {
+      await context.tx.insert(workItemActor).values(item.actors.map((actor) => actorRow(id, actor)));
+    }
+    await announceItems(context, [id]);
   }
 
   async updateState(context: TransactionContext, module: string, recordId: string, state: string): Promise<void> {
-    await context.tx
+    const changed = await context.tx
       .update(workItem)
       .set({ state })
-      .where(and(eq(workItem.ownerModule, module), eq(workItem.ownerRecordId, recordId), eq(workItem.open, true)));
+      .where(and(eq(workItem.ownerModule, module), eq(workItem.ownerRecordId, recordId), eq(workItem.open, true)))
+      .returning({ id: workItem.id });
+    await announceItems(
+      context,
+      changed.map((row) => row.id),
+    );
   }
 
   async close(context: TransactionContext, module: string, recordId: string, state: string): Promise<void> {
-    await context.tx
+    const closed = await context.tx
       .update(workItem)
       .set({ state, open: false })
-      .where(and(eq(workItem.ownerModule, module), eq(workItem.ownerRecordId, recordId), eq(workItem.open, true)));
+      .where(and(eq(workItem.ownerModule, module), eq(workItem.ownerRecordId, recordId), eq(workItem.open, true)))
+      .returning({ id: workItem.id });
+    await announceItems(
+      context,
+      closed.map((row) => row.id),
+    );
   }
 
   async escalate(context: TransactionContext, module: string, recordId: string, recipient: ItemActor): Promise<void> {
@@ -116,6 +130,7 @@ export class Inbox implements InboxInterface {
       recipientRoleId: 'roleId' in recipient ? recipient.roleId : null,
       escalatedAt: context.startedAt,
     });
+    await announceItems(context, [item.id]);
   }
 }
 

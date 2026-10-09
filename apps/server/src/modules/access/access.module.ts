@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { sessionAccess } from './queries/session-access.js';
 import {
   COMMAND_RUNNER,
   CommandRunnerModule,
@@ -9,6 +10,7 @@ import {
   ORGANISATION_ROUTER,
   REPLAY_SECRET_CHECK,
   RESTRICTED_VALUE_CIPHER,
+  SESSION_ACCESS,
   SESSION_PROBE,
   type CommandRunner,
   type IdempotencyHelper,
@@ -110,6 +112,8 @@ export class AccessJobIdentitiesModule {}
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
+    // What the live-update stream and the operations view ask of access (code-house-rules 12.12; S1-F08-T04).
+    { provide: SESSION_ACCESS, useValue: sessionAccess },
     {
       provide: SESSION_PROBE,
       useFactory: (router: OrganisationRouter, runner: CommandRunner): SessionProbe => sessionProbe(router, runner),

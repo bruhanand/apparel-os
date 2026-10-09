@@ -1,5 +1,11 @@
 import { Global, Module } from '@nestjs/common';
-import { CommandRunnerModule, idempotencyModuleWith, KernelModule, OrganisationRoutingModule } from './kernel/index.js';
+import {
+  CommandRunnerModule,
+  idempotencyModuleWith,
+  KernelModule,
+  LiveUpdatesModule,
+  OrganisationRoutingModule,
+} from './kernel/index.js';
 import {
   AccessContractsModule,
   AccessModule,
@@ -79,6 +85,8 @@ export class ModuleApprovalsModule {}
     // configuration supplies the Organisation's timezone to the command runner (RR-231, RR-250).
     ConfigurationTimezoneModule,
     CommandRunnerModule,
+    // Live updates and the operations view (code-house-rules 12.9, 12.12; S1-F08-T04).
+    LiveUpdatesModule,
     // The idempotency helper with the contracts access implements (RR-248), global for every module's commands.
     idempotencyModuleWith(AccessContractsModule),
     ModuleApprovalsModule,
