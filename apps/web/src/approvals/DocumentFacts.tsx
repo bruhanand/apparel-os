@@ -1,4 +1,9 @@
-import { VOCABULARY_CONFIRMATION, type ApprovalRequestView } from '@apparel-os/schemas';
+import {
+  AGREEMENT_CHANGE,
+  BANK_DETAILS_CHANGE,
+  VOCABULARY_CONFIRMATION,
+  type ApprovalRequestView,
+} from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../api';
@@ -210,6 +215,53 @@ function ProposalFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A bank-detail change: the party, the dates, and the new details masked, as they stay on every read; Show on the
+ * party opens them with a fresh code (structure-and-masters 5.1; access-and-approvals 6; S1-F03-T03).
+ */
+function BankDetailsFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readParty', { params: { partyId: view.document.recordId } }),
+    enabled: useViewable('merchandise.party'),
+  });
+  const party = query.data?.record;
+  const version = party?.bankDetails.versions.find((each) => each.id === view.document.versionId);
+  if (party === undefined || version === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="parties.facts.party">
+        <span className="font-mono">{party.code}</span> {party.versions[0]?.legalName}
+      </Fact>
+      <Fact label="dates.label">{dates(version.validFrom, version.validTo)}</Fact>
+      <Fact label="parties.bank.title">{t('parties.facts.bank')}</Fact>
+    </Facts>
+  );
+}
+
+/** An agreement version: its code, model and dates (structure-and-masters 5.2; S1-F03-T03). */
+function AgreementFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readAgreement', { params: { agreementId: view.document.recordId } }),
+    enabled: useViewable('merchandise.agreement'),
+  });
+  const agreement = query.data?.record;
+  const version = agreement?.versions.find((each) => each.id === view.document.versionId);
+  if (agreement === undefined || version === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="organisation.field.code">
+        <span className="font-mono">{agreement.code}</span>
+      </Fact>
+      <Fact label="agreement.field.commercialModel">
+        {version.terms.commercialModel === null
+          ? t('agreement.option.unknown')
+          : t(`agreement.model.${version.terms.commercialModel}`)}
+      </Fact>
+      <Fact label="dates.label">{dates(version.validFrom, version.validTo)}</Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -229,6 +281,10 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <LimitFacts view={view} />;
     case VOCABULARY_CONFIRMATION:
       return <ProposalFacts view={view} />;
+    case BANK_DETAILS_CHANGE:
+      return <BankDetailsFacts view={view} />;
+    case AGREEMENT_CHANGE:
+      return <AgreementFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;

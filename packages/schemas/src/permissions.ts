@@ -241,6 +241,16 @@ const merchandiseRecordTypes = [
   declare('merchandise.attribute', ['view', 'create', 'edit'], NONE),
   declare('merchandise.vocabulary_value', ['view', 'edit'], NONE),
   declare('merchandise.vocabulary_proposal', ['view', 'create', 'approve'], NONE),
+  // `merchandise` · parties (structure-and-masters 5, 6.2; S1-F03-T03). A party, its roles and its brand–supplier
+  // links belong to the Organisation as a whole, as the catalogue does, so they carry no scope fact (5.3): create adds
+  // a party, edit records a version or a role; they take effect when recorded, as no source names an approval for
+  // them (2.3). Bank details are the restricted field class bank-details (PRD-ACS-008): edit prepares a change, which
+  // a different authorised person approves (POL-02.07; GC2-6, DEC-105). An agreement's versions are approved by a
+  // different authorised person too (GC2-2, DEC-105); its margins are the restricted field class margin.
+  declare('merchandise.party', ['view', 'create', 'edit'], NONE),
+  declareWithFields('merchandise.party_bank_details', ['view', 'edit', 'approve'], NONE, ['bank-details']),
+  declare('merchandise.brand_supplier_link', ['view', 'edit'], NONE),
+  declareWithFields('merchandise.agreement', ['view', 'create', 'edit', 'approve'], NONE, ['margin']),
 ] as const;
 
 /** Every record type declared so far. */

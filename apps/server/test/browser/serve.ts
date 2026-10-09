@@ -450,6 +450,22 @@ const vocabularyAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
 if (vocabularyAttributeAnswer.kind !== 'success') {
   throw new Error(`The synthetic attribute was refused: ${vocabularyAttributeAnswer.refusal.code}`);
 }
+// The bank details journey (bank-details.spec.ts; S1-F03-T03): one SYNTHETIC supplier, recorded through the parties
+// part's real command by the fixture person (code-house-rules 11.2), whose bank details the journey changes.
+const bankSupplier = { code: syntheticCode('JOURNEY-SUPPLIER'), legalName: syntheticName('Journey Supplier') };
+const bankSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.parties.prepareParty(c, p, {
+    ...bankSupplier,
+    taxIdentities: [],
+    msmeClassification: null,
+    contacts: [],
+    roles: ['supplier'],
+    validFrom: structureFixture.today(),
+  }),
+);
+if (bankSupplierAnswer.kind !== 'success') {
+  throw new Error(`The synthetic supplier was refused: ${bankSupplierAnswer.refusal.code}`);
+}
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -560,6 +576,46 @@ const vocabularyConfirmer = await provisionUser('BROWSER-VOCABULARY-CONFIRMER', 
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
+
+// The bank details journey's people (S1-F03-T03): a person who prepares a supplier's bank-detail change, holding the
+// class bank-details to write it, and a different person who approves it from My work and shows the details with the
+// class to read them. Who holds which is KDPS's (V-01, RR-064).
+const bankPreparer = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-BANK-PREPARER',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(
+  settingsDatabase,
+  { kind: 'user', id: bankPreparer.id },
+  [
+    { recordType: 'merchandise.party', action: 'view' },
+    { recordType: 'merchandise.party_bank_details', action: 'view' },
+    { recordType: 'merchandise.party_bank_details', action: 'edit' },
+    // Approve too, so the refusal of their own change is for the preparation alone (PRD-ACS-006).
+    { recordType: 'merchandise.party_bank_details', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { fieldClasses: [{ fieldClass: 'bank-details', access: 'view-and-edit' }] },
+);
+const bankApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-BANK-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(
+  settingsDatabase,
+  { kind: 'user', id: bankApprover.id },
+  [
+    { recordType: 'merchandise.party', action: 'view' },
+    { recordType: 'merchandise.party_bank_details', action: 'view' },
+    { recordType: 'merchandise.party_bank_details', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { fieldClasses: [{ fieldClass: 'bank-details', access: 'view' }] },
+);
 
 // The exceptions journey (exceptions.spec.ts; S1-F08-T02), in the settings Organisation, whose worker identities the
 // setup step wrote: the test-only raising module's schema (code-house-rules 11.4), a SYNTHETIC exception-code series,
@@ -988,6 +1044,12 @@ writeFileSync(
       booking: credentialsOf(vocabularyBooking),
       confirmer: credentialsOf(vocabularyConfirmer),
       attributeName: vocabularyAttribute.name,
+    },
+    bankDetails: {
+      organisationCode: settingsCode,
+      preparer: credentialsOf(bankPreparer),
+      approver: credentialsOf(bankApprover),
+      supplierCode: bankSupplier.code,
     },
     scope: {
       organisationCode: settingsCode,

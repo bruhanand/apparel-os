@@ -198,6 +198,25 @@ import {
   vocabularyValueListSchema,
   vocabularyValueReadSchema,
 } from './catalogue.js';
+import {
+  agreementDraftSchema,
+  agreementListSchema,
+  agreementReadSchema,
+  agreementVersionDraftSchema,
+  bankDetailsDraftSchema,
+  bankDetailsShowRequestSchema,
+  bankDetailsShownSchema,
+  brandSupplierLinkDraftSchema,
+  brandSupplierLinkListSchema,
+  partyChangedSchema,
+  partyDraftSchema,
+  partyListSchema,
+  partyReadSchema,
+  partyRoleVersionDraftSchema,
+  partyVersionDraftSchema,
+  termsInForceQuerySchema,
+  termsInForceSchema,
+} from './parties.js';
 
 // The route table (code-house-rules 12.1, 12.2). The server, the web app's typed client and the OpenAPI document are
 // all made from it, so they cannot drift apart (PRD Stack: API).
@@ -544,7 +563,45 @@ const CATALOGUE_DECISION_CODES = [
   'merchandise.attribute-not-list',
   'merchandise.proposal-not-found',
   'merchandise.proposal-not-open',
+  // An agreement version or a bank-detail change of the parties part (structure-and-masters 5.1, 5.2; S1-F03-T03).
+  'merchandise.party-not-supplier',
 ] as const satisfies readonly ErrorCode[];
+
+/** The codes every change of the parties part can answer (structure-and-masters 2, 5; S1-F03-T03). */
+const PARTY_CHANGE_CODES = [
+  'access.not-signed-in',
+  'access.session-locked',
+  'access.sign-in-incomplete',
+  'access.not-authorised',
+  'access.business-date-not-set',
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'merchandise.code-taken',
+  'merchandise.record-not-found',
+  'merchandise.starts-in-past',
+  'merchandise.version-overlaps',
+  'merchandise.reference-not-in-force',
+  'merchandise.party-not-supplier',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes preparing an agreement or its version can answer (5.2). */
+const AGREEMENT_CHANGE_CODES = [
+  ...PARTY_CHANGE_CODES,
+  'merchandise.agreement-exists',
+  'merchandise.supplier-terms-on-brand-agreement',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes of a protected action of the parties part, which takes a fresh authenticator code (3.3). */
+const PARTY_PROTECTED_CODES = [
+  'access.authenticator-code-refused',
+  'access.enrolment-not-started',
+] as const satisfies readonly ErrorCode[];
+
+/** The restricted fields of a bank-detail change (access-and-approvals 6; code-house-rules 12.4). */
+const BANK_DETAIL_FIELDS = (['accountHolder', 'accountNumber', 'ifsc', 'bankName'] as const).map((field) => ({
+  path: [field],
+  fieldClass: 'bank-details' as const,
+}));
 
 /** The routes of the API. A unit adds its routes here as they are built. */
 export const routes = {
@@ -2523,6 +2580,171 @@ export const routes = {
     shows: 'nothing',
     response: vocabularyProposedSchema,
     codes: CATALOGUE_PROPOSE_CODES,
+  }),
+  // The parties part of merchandise (structure-and-masters 5, 8; module-map 4.12; S1-F03-T03): parties with their
+  // dated roles, brand–supplier links and agreements. A party's versions, roles and links take effect when recorded
+  // (2.3); an agreement version and a bank-detail change wait for a different authorised person (GC2-2, GC2-6, DEC-105;
+  // POL-02.07). Bank details are always masked in a read; showing one version is a protected action with a fresh code,
+  // an access record and an answer never repeated (access-and-approvals 3.3, 6; DEC-114).
+  listParties: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/parties',
+    query: masterPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.party' },
+    command: false,
+    response: partyListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readParty: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/parties/{partyId}',
+    params: z.strictObject({ partyId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.party' },
+    command: false,
+    response: partyReadSchema,
+    codes: CATALOGUE_READ_CODES,
+  }),
+  prepareParty: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/parties',
+    access: { kind: 'action', action: 'create', recordType: 'merchandise.party' },
+    command: true,
+    body: partyDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: PARTY_CHANGE_CODES,
+  }),
+  preparePartyVersion: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/parties/{partyId}/versions',
+    params: z.strictObject({ partyId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'merchandise.party' },
+    command: true,
+    body: partyVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: PARTY_CHANGE_CODES,
+  }),
+  preparePartyRoleVersion: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/parties/{partyId}/roles',
+    params: z.strictObject({ partyId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'merchandise.party' },
+    command: true,
+    body: partyRoleVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: PARTY_CHANGE_CODES,
+  }),
+  prepareBankDetails: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/parties/{partyId}/bank-details',
+    params: z.strictObject({ partyId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'merchandise.party_bank_details' },
+    command: true,
+    body: bankDetailsDraftSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: BANK_DETAIL_FIELDS,
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: [...PARTY_CHANGE_CODES, ...PARTY_PROTECTED_CODES],
+  }),
+  showBankDetails: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/parties/{partyId}/bank-details/{versionId}/show',
+    params: z.strictObject({ partyId: idSchema, versionId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.party_bank_details' },
+    command: true,
+    body: bankDetailsShowRequestSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: bankDetailsShownSchema,
+    codes: [
+      ...HISTORY_CODES,
+      ...PARTY_PROTECTED_CODES,
+      'kernel.cross-site-request',
+      'merchandise.bank-details-not-found',
+    ],
+  }),
+  listBrandSupplierLinks: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/brand-supplier-links',
+    query: masterPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.brand_supplier_link' },
+    command: false,
+    response: brandSupplierLinkListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareBrandSupplierLink: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/brand-supplier-links',
+    access: { kind: 'action', action: 'edit', recordType: 'merchandise.brand_supplier_link' },
+    command: true,
+    body: brandSupplierLinkDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: PARTY_CHANGE_CODES,
+  }),
+  listAgreements: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/agreements',
+    query: masterPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.agreement' },
+    command: false,
+    response: agreementListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readAgreement: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/agreements/{agreementId}',
+    params: z.strictObject({ agreementId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.agreement' },
+    command: false,
+    response: agreementReadSchema,
+    codes: CATALOGUE_READ_CODES,
+  }),
+  readTermsInForce: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/agreement-terms',
+    query: termsInForceQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'merchandise.agreement' },
+    command: false,
+    response: termsInForceSchema,
+    codes: [...HISTORY_CODES, 'merchandise.no-terms-in-force'],
+  }),
+  prepareAgreement: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/agreements',
+    access: { kind: 'action', action: 'create', recordType: 'merchandise.agreement' },
+    command: true,
+    body: agreementDraftSchema,
+    secretFields: [],
+    restrictedFields: [{ path: ['margins'], fieldClass: 'margin' }],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: AGREEMENT_CHANGE_CODES,
+  }),
+  prepareAgreementVersion: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/agreements/{agreementId}/versions',
+    params: z.strictObject({ agreementId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'merchandise.agreement' },
+    command: true,
+    body: agreementVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [{ path: ['margins'], fieldClass: 'margin' }],
+    shows: 'nothing',
+    response: partyChangedSchema,
+    codes: AGREEMENT_CHANGE_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

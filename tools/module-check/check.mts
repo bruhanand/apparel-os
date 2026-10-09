@@ -88,7 +88,8 @@ const SAME_TIER_CALLS: Readonly<Record<string, readonly string[]>> = {
   'ai-gateway': ['access', 'audit'],
   // Tier 2 (4.12, 4.14)
   'merchandise/catalogue': ['organisation'],
-  'merchandise/parties': ['organisation'],
+  // The parties part reads brands through the catalogue's interface, one module (4.12; S1-F03-T03).
+  'merchandise/parties': ['organisation', 'merchandise/catalogue'],
   'finance/books': ['organisation', 'exceptions'],
   'finance/tax-rules': ['organisation', 'exceptions'],
   // Tier 4 (section 5)

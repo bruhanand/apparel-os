@@ -14,6 +14,7 @@ import * as inboxTables from '../src/modules/inbox/db/schema.js';
 import * as stockTables from '../src/modules/stock/ledger/db/schema.js';
 import * as organisationTables from '../src/modules/organisation/db/schema.js';
 import * as catalogueTables from '../src/modules/merchandise/catalogue/db/schema.js';
+import * as partiesTables from '../src/modules/merchandise/parties/db/schema.js';
 import * as numberingTables from '../src/modules/numbering/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { organisationTimezoneVersion } from '../src/modules/configuration/db/schema.js';
@@ -562,6 +563,12 @@ describe('the Drizzle definitions of merchandise · catalogue (code-house-rules 
       await expectDefinitionMatches(world.organisations[0].database, table);
     },
   );
+});
+
+describe('the Drizzle definitions of merchandise · parties (code-house-rules 3.4, 10.4; S1-F03-T03)', () => {
+  it.each(Object.entries(partiesTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
+  });
 });
 
 describe('the Drizzle definitions of the Organisation set (code-house-rules 3.4, 10.4)', () => {

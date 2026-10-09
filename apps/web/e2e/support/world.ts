@@ -171,6 +171,16 @@ export interface SyntheticWorld {
     readonly confirmer: EnrolledUser;
     readonly attributeName: string;
   };
+  /**
+   * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's
+   * bank-detail change, a different person who approves it and shows it, and the SYNTHETIC supplier's code.
+   */
+  readonly bankDetails: {
+    readonly organisationCode: string;
+    readonly preparer: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly supplierCode: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

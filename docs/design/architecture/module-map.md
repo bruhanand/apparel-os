@@ -377,7 +377,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 ### 4.12 `merchandise` (catalogue and parties)
 
-**Uses:** `access`, `configuration`, `audit`, `numbering`, `files-imports`, `organisation`, `kernel`.
+**Uses:** `access`, `configuration`, `audit`, `numbering`, `files-imports`, `organisation`, `kernel`. Within the module, the parties part reads brands through the catalogue part's interface, for brand–supplier links and brand agreements (`S1-F03-T03`).
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |

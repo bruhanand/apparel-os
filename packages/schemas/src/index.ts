@@ -512,3 +512,6 @@ export type {
 
 // The merchandise catalogue (structure-and-masters 4; S1-F03-T01).
 export * from './catalogue.js';
+
+// The parties part of merchandise (structure-and-masters 5; S1-F03-T03).
+export * from './parties.js';

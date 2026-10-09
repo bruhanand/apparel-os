@@ -1,5 +1,9 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
+  AGREEMENT_TYPE,
+  BANK_DETAILS_TYPE,
+  BRAND_SUPPLIER_LINK_TYPE,
+  PARTY_TYPE,
   catalogueKinds,
   catalogueRecordType,
   permissionRegistry,
@@ -31,6 +35,7 @@ import {
   type Preparer,
 } from '../../src/modules/organisation/index.js';
 import { Catalogue, catalogueApprovals, catalogueScopeMembers } from '../../src/modules/merchandise/catalogue/index.js';
+import { Parties, partiesApprovals } from '../../src/modules/merchandise/parties/index.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
@@ -48,6 +53,8 @@ export interface StructureSetup {
   readonly organisation: Organisation;
   /** The merchandise catalogue, composed with `access` as the application composes it (S1-F03-T01). */
   readonly catalogue: Catalogue;
+  /** The parties part, composed with `access` and the synthetic keys as the application composes it (S1-F03-T03). */
+  readonly parties: Parties;
   readonly preparer: SyntheticUser;
   readonly approver: SyntheticUser;
   readonly asPreparer: Preparer;
@@ -109,14 +116,17 @@ export async function structureSetup(options: {
   const audit = new Audit(log.logger);
   const structure = organisationApprovals(audit, options.locationInUse);
   const catalogueModule = catalogueApprovals(audit);
+  const partiesModule = partiesApprovals(audit);
+  const keys = OrganisationKeys.fromEnvironment(options.keysEnvironment);
   const access = new Access({
     audit,
-    keys: OrganisationKeys.fromEnvironment(options.keysEnvironment),
-    approvalRules: [...structure.rules, ...catalogueModule.rules],
-    documentEffects: new Map([...structure.effects, ...catalogueModule.effects]),
+    keys,
+    approvalRules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules],
+    documentEffects: new Map([...structure.effects, ...catalogueModule.effects, ...partiesModule.effects]),
     scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
   });
   const catalogue = new Catalogue({ audit, access });
+  const parties = new Parties({ audit, access, files: new FilesImports(audit), keys });
   const organisation = new Organisation({
     audit,
     access,
@@ -129,7 +139,15 @@ export async function structureSetup(options: {
   const approver = await write(`${options.label}-APPROVER`);
   const types = masterKinds.map(recordTypeOf);
   // The catalogue's types too, each with only the actions it declares (access-and-approvals 4.1; S1-F03-T01).
-  const catalogueTypes = [...catalogueKinds.map(catalogueRecordType), VOCABULARY_PROPOSAL_TYPE];
+  const catalogueTypes = [
+    ...catalogueKinds.map(catalogueRecordType),
+    VOCABULARY_PROPOSAL_TYPE,
+    // The parties part's types (S1-F03-T03); no field class, which a test grants where it needs one.
+    PARTY_TYPE,
+    BANK_DETAILS_TYPE,
+    BRAND_SUPPLIER_LINK_TYPE,
+    AGREEMENT_TYPE,
+  ];
   const declared = new Map(permissionRegistry.map((each) => [each.code, each.actions]));
   const grants = (actions: readonly PermissionAction[]) => [
     ...types.flatMap((recordType) => actions.map((action) => ({ recordType, action }))),
@@ -168,6 +186,7 @@ export async function structureSetup(options: {
     access,
     organisation,
     catalogue,
+    parties,
     preparer,
     approver,
     asPreparer,

@@ -13,7 +13,13 @@ export const ORGANISATION_KEYS_VARIABLE = 'AOS_ORGANISATION_KEYS';
 
 /** What a subkey is for. Each gets its own subkey. */
 export type KeyPurpose =
-  'authenticator-secret' | 'restricted-value' | 'sign-in-throttling' | 'stored-file' | 'file-receipt';
+  | 'authenticator-secret'
+  | 'restricted-value'
+  | 'sign-in-throttling'
+  | 'stored-file'
+  | 'file-receipt'
+  /** A party's bank details, kept encrypted by merchandise (access-and-approvals 6; S1-F03-T03). */
+  | 'bank-details';
 
 /** A value encrypted under an Organisation's key. The scheme names the algorithm and its version. */
 export interface SealedValue {

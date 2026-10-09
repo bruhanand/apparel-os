@@ -67,6 +67,14 @@ export const screens = {
     path: '/setup/vocabularies',
     need: view('merchandise.vocabulary_value'),
   },
+  // Suppliers and agreements: parties with their roles and bank details, and brand–supplier links; Agreement: an
+  // agreement's dated terms (structure-and-masters 5, 8; ui-blueprint Setup; S1-F03-T03).
+  'setup.suppliers-and-agreements': {
+    section: 'setup',
+    path: '/setup/suppliers-and-agreements',
+    need: view('merchandise.party'),
+  },
+  'setup.agreement': { section: 'setup', path: '/setup/agreement', need: view('merchandise.agreement') },
   // Exception rules: owner, due time and escalation per type and Site (access-and-approvals 12.2, 14; S1-F08-T02).
   'setup.exception-rules': {
     section: 'setup',

@@ -538,7 +538,27 @@ export const merchandiseCodes = declareCodes({
   'merchandise.brand-counter-one-brand': 'refused',
   'merchandise.proposal-not-found': 'not-found',
   'merchandise.proposal-not-open': 'refused',
+  ...merchandisePartiesCodes(),
 });
+
+/**
+ * The codes of `merchandise` · parties (structure-and-masters 5; S1-F03-T03), beside the catalogue's shared ones.
+ *
+ * - `merchandise.party-not-supplier`: the party named does not hold the supplier role in force on the date (5.1).
+ * - `merchandise.agreement-exists`: the brand or supplier already has an agreement; a change is its new version (5.2).
+ * - `merchandise.supplier-terms-on-brand-agreement`: cash-discount and interest terms are a supplier's (PRD-PAY-015).
+ * - `merchandise.no-terms-in-force`: no approved agreement version is in force on the date (5.5).
+ * - `merchandise.bank-details-not-found`: the party has no bank-detail version of that identifier.
+ */
+function merchandisePartiesCodes() {
+  return {
+    'merchandise.party-not-supplier': 'refused',
+    'merchandise.agreement-exists': 'refused',
+    'merchandise.supplier-terms-on-brand-agreement': 'refused',
+    'merchandise.no-terms-in-force': 'not-found',
+    'merchandise.bank-details-not-found': 'not-found',
+  } as const;
+}
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
