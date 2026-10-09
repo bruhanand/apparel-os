@@ -1277,3 +1277,17 @@
 - **Why.** These identities are part of the deployed software, not of anyone's access: their grants are fixed by the reviewed code, a person cannot hold them, and requiring an approver for each deploy that adds a job would stop the worker without adding control.
 - **Changed.** `PRD-ACS-023` (one sentence added). access-and-approvals 9.11a; `plan/open-items.md` RR-457.
 
+## DEC-123 — Master picks of `DEC-112` written into the PRD
+
+- **Date:** 9 Oct 2026 · **Decided by:** product owner · **Report item:** RR-047 (data notes gaps 1, 2, 3, 4 and 18), whose answers `DEC-112` gave on 5 Oct 2026
+- **Question.** `DEC-112` settled five master picks but left their PRD bullets to be drafted and approved before `S1-F03`. Approve the bullets as drafted?
+- **Options.** Approve as drafted; approve with changes; keep RR-047 open.
+- **Choice.** Approved as drafted:
+  - gift-with-purchase, promotional and packaging goods are SKUs with an explicit purpose and their actual stock cost, their use reported apart from merchandise sales (gap 1), with "Gift-with-purchase" defined apart from "Gift voucher";
+  - a brand may name an optional parent brand, apart from its aliases (gap 2);
+  - brands and suppliers are linked many-to-many by effective-dated links, no exclusive supplier is inferred, and each booking names its actual supplier (gap 3);
+  - supplier cash-discount and interest terms are recorded as structured terms; calculating, applying and posting them follow a later payment design, with values and treatment set by Accounts and the CA (gap 4);
+  - an opening row keeps its original receipt date only where a source backs it, otherwise its original age is Unknown, time since the switch is reported apart, and season proves no age, older seasons being flagged only through an explicit season order (gap 18).
+- **Why.** The picks were already decided in `DEC-112`; the PRD must say them before the code that implements them (`S1-F03`, `S1-F13`).
+- **Changed.** PRD "Words used" (new row Gift-with-purchase); `PRD-MER-019`, `PRD-MER-020`, `PRD-MER-021`, `PRD-BKG-014`, `PRD-PAY-015`, `PRD-LIF-030`, `PRD-LIF-031` (new). structure-and-masters 4.1, 5.1 and 5.2; imports-and-opening-data 10.2; `plan/open-items.md` RR-047. Still OPEN: the season order and the cutoff for "old" (RR-199); the supplier-term values (RR-235).
+

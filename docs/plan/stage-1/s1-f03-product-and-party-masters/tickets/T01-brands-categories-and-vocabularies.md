@@ -1,7 +1,7 @@
 # S1-F03-T01 — Brands, categories and vocabularies
 
 Status: blocked
-Blocked by: S1-F02-T02 (units, for brand coverage); RR-047: the PRD bullets for the `DEC-112` master picks, and the structure-and-masters edits they need, approved (product owner; drafted during S1-F02)
+Blocked by: S1-F02-T02 (units, for brand coverage); RR-047: the PRD bullets for the `DEC-112` master picks, and the structure-and-masters edits they need, approved (product owner (done, `DEC-123`); drafted during S1-F02)
 Feature: [S1-F03 Product and party masters](../../spec.md)
 
 ## Build

@@ -28,7 +28,7 @@ Updated 9 Oct 2026.
 
 ## What's next
 
-1. Product and party masters (`S1-F03`), after you approve the master PRD bullets (RR-047), which are still to be drafted for you.
+1. Product and party masters (`S1-F03`); its PRD bullets are approved (`DEC-123`).
 2. Then policy readiness (`S1-F04`) and the rest, in the order of the [stage spec](plan/stage-1/spec.md).
 
 ## Waiting on you
@@ -39,6 +39,6 @@ Updated 9 Oct 2026.
 | 2 | Done 7 Oct 2026: Demo 1 watched on `dev` and `S1-F01` accepted (RR-350) | — |
 | 3 | Done 9 Oct 2026: your answers to RR-401, RR-236, RR-187, RR-440, RR-444, RR-445, RR-453 and RR-457 are recorded (`DEC-122`, open-items, designs); the code they need is ticket `S1-F02-T04` | — |
 | 4 | For awareness only: the QR code library is mature but has had no release since December 2024. We will recheck it is still maintained before production (RR-380) | Nothing now; production |
-| 5 | Approve the PRD bullets for the stage 1 master picks (RR-047). They were due to be drafted during `S1-F02` and are not drafted yet; they will be brought to you before `S1-F03` | Product and party masters (`S1-F03`) |
+| 5 | Done 9 Oct 2026: the master PRD bullets approved (`DEC-123`, RR-047) | — |
 
 Before stage 1 ends you also decide the offline counter's sections 6 to 10 and approve the rest of backup and restore; the full list is [open-items.md](plan/open-items.md) section 1. KDPS's own answers are in [questions-for-kdps.md](questions-for-kdps.md); none blocks building, and almost all block only going live.

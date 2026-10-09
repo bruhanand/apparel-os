@@ -28,7 +28,7 @@ Updated 7 Oct 2026.
 | `S1-F08` Number series and exceptions | Done 9 Oct 2026: gapless number series (T01), exceptions in My work (T02), evidence files on exceptions and approval decisions (T03), live updates and the failed-jobs view (T04). Open: RR-449 (no screen defines number formats or series yet), RR-453, RR-454, RR-455, RR-456 |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
-Next: product and party masters (`S1-F03`), after the master PRD bullets are approved (RR-047). `S1-F02-T04` (configurable classifications and grouping kinds) is done, 9 Oct 2026. `S1-F05` (approval authority) is done, 9 Oct 2026. `S1-F08` (number series and exceptions) is done, 9 Oct 2026. `S1-F02` (organisation structure: T01 legal entities, Sites and Stores; T02 business units, verified mappings and locations; T03 scope by place, 9 Oct 2026) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
+Next: product and party masters (`S1-F03`); its PRD bullets are approved (`DEC-123`, 9 Oct 2026). `S1-F02-T04` (configurable classifications and grouping kinds) is done, 9 Oct 2026. `S1-F05` (approval authority) is done, 9 Oct 2026. `S1-F08` (number series and exceptions) is done, 9 Oct 2026. `S1-F02` (organisation structure: T01 legal entities, Sites and Stores; T02 business units, verified mappings and locations; T03 scope by place, 9 Oct 2026) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
 
 ## 3. Scope
 

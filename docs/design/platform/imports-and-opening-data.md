@@ -446,7 +446,8 @@ One manifest row is one SKU, or one source identity not yet resolved to a SKU, a
 | Batch and expiry | Only where the tracking profile requires them; missing values block the row | `PRD-MER-011` |
 | Condition | As the stock ledger names conditions | stock-ledger 2.2 |
 | Owner | The Organisation's legal entity, or a supplier or brand under its agreement. Operations verifies it | `POL-14.02`, `PRD-ORG-014` |
-| Season | A season value, or Unknown selected explicitly by a person and audited. Unknown matches no season-specific offer and loosens no other requirement | `PRD-LIF-006`, `PRD-ACP-014` |
+| Season | A season value, or Unknown selected explicitly by a person and audited. Unknown matches no season-specific offer and loosens no other requirement. A season proves no receipt date and no age; older seasons are flagged only through an explicit season order (RR-199) | `PRD-LIF-006`, `PRD-LIF-031`, `PRD-ACP-014` |
+| Original receipt date | The date the goods were first received, kept only where a source document backs it; otherwise Unknown. Time since the switch is reported apart from original age | `PRD-LIF-030` |
 | Valuation evidence | A cost per unit with the evidence it rests on, or Unknown. What counts as evidence is OPEN (GC6-9). Accounts verifies values | `PRD-LIF-005`, `POL-14.03` |
 | Source words | The earlier POS's item, brand, colour, size, design, season and supplier as given | `PRD-IMP-003` |
 

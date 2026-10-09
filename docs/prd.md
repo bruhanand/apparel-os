@@ -122,6 +122,7 @@ Business words:
 | FIFO | First-in, first-out inventory cost formula |
 | Fill rate | The share of the ordered quantity that the supplier delivered |
 | Gift voucher | A bearer voucher issued by the Organisation, identified by a unique code and redeemable as a tender within its configured validity |
+| Gift-with-purchase | Goods given free with a qualifying purchase. A SKU with its own stock cost; not a Gift voucher and not a tender |
 | GRN | Goods receipt note: the record of goods physically counted at the receiving Site |
 | GSP | GST Suvidha Provider: an approved service connecting software to the government GST system |
 | GST | Goods and Services Tax |
@@ -334,6 +335,9 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-016` Bill, count, transfer and return piece-tracked goods by scanning the piece ID. A supplier barcode identifies the SKU, not the piece, and cannot complete these actions alone.
 - `PRD-MER-017` At a Store still selling through an earlier POS, piece rules start at its switch count.
 - `PRD-MER-018` Changing a merchandise tracking profile from quantity-tracked to piece-tracked applies only through a labelling count: count, label and verify every piece of that profile at each Site; piece rules start from that count.
+- `PRD-MER-019` Keep gift-with-purchase, promotional and packaging goods as SKUs with an explicit purpose and their actual stock cost. Giving one away does not make its cost zero. Report their use apart from merchandise sales.
+- `PRD-MER-020` A brand may name an optional parent brand, its family, kept apart from its aliases.
+- `PRD-MER-021` Link brands and suppliers many-to-many through effective-dated links. Never infer an exclusive supplier from a brand.
 
 ## Source conversion and imports
 
@@ -366,6 +370,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-BKG-011` Measure supplier fill rate, delivery timeliness, damage and PT accuracy.
 - `PRD-BKG-012` Suggest buying and size quantities from qualified sales history, with human approval.
 - `PRD-BKG-013` Configure commitment, amendment and cancellation rules; cancellation cannot erase quantities already physically received.
+- `PRD-BKG-014` Each booking names its actual supplier.
 
 ## Receiving and price tickets
 
@@ -625,6 +630,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-PAY-012` Track commission from sales basis to brand invoice, receipt, franchise share and onward payment.
 - `PRD-PAY-013` Do not disburse unreceived onward commission without the configured Owner authority.
 - `PRD-PAY-014` Record expense allocation by Store and brand.
+- `PRD-PAY-015` Record supplier cash-discount and interest terms as structured terms on the supplier's agreement. Calculating, applying and posting them follow a later payment design; Accounts and the CA set their values and treatment.
 
 ### Tax and assets
 
@@ -755,6 +761,8 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 - `PRD-LIF-020` Preserve identities and history after closure; reopening requires fresh readiness, mapping and access approval.
 - `PRD-LIF-021` Relocation creates a new linked Site. Renaming does not replace the physical identity.
 - `PRD-LIF-029` On relocation the Store keeps its code, name and history; its Site link moves to the new linked Site from the relocation date.
+- `PRD-LIF-030` An opening row keeps its original receipt date only where a source document backs it; otherwise its original age is Unknown. Report time since the switch apart from original age.
+- `PRD-LIF-031` Season groups goods; it proves no receipt date and no age. Flag older seasons only through an explicit, configured season order.
 - `PRD-LIF-022` Export masters, documents, lines, stock/accounting movements, attachments, mappings and audit history with reconstructible relationships and reconciled totals.
 - `PRD-LIF-023` Retain customer history and in-progress work through migration. Demo-data retirement cannot authorise deletion of real business records.
 - `PRD-LIF-025` At a Store's switch count, label every piece of a piece-tracked profile that has no piece ID, and verify every piece ID counted. Plan each Store's labelling before its switch day.

@@ -196,10 +196,10 @@ Owner: `merchandise` · catalogue. Merchandise tracking policy (`POL-04`).
 
 | Record | Code unique in | Fixed at creation | Versioned fields | IDs |
 | --- | --- | --- | --- | --- |
-| Brand | The Organisation | — | Name, aliases | `PRD-MER-001` |
+| Brand | The Organisation | — | Name, aliases, optional parent brand (another brand, its family), kept apart from the aliases | `PRD-MER-001`, `PRD-MER-020` |
 | Category | The Organisation | — | Name, parent category, size set, the attributes that make up a SKU's identity, tracking profile (4.6) | `PRD-MER-002`, `PRD-ORG-011`, `POL-04.01` |
 | Style | The Organisation | Brand, category | Brand article number; season, collection, launch date, gender, fabric, fit, HSN; each a value or Unknown | `PRD-MER-002`, `PRD-MER-004`, `PRD-MER-005` |
-| SKU | The Organisation | Style; colour; size; any other identity attribute the category names | Stock unit (4.4) | `PRD-MER-002`, `POL-04.02`, `POL-04.03`, `POL-04.04` |
+| SKU | The Organisation | Style; colour; size; any other identity attribute the category names | Stock unit (4.4); purpose: merchandise, gift-with-purchase, promotional or packaging | `PRD-MER-002`, `PRD-MER-019`, `POL-04.02`, `POL-04.03`, `POL-04.04` |
 | Size set | The Organisation | Category | Ordered sizes | `PRD-MER-002` |
 | Attribute and vocabulary value | Its attribute | — | Label | `PRD-MER-004`, `PRD-MER-013`, `PRD-IMP-008` |
 | External code | Its code, kind and scope, per validity dates (4.3) | — | Validity dates; active or historical alias | `PRD-MER-006`, `PRD-MER-007` |
@@ -276,7 +276,8 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 
 - A party is a company or person the Organisation deals with on the supply side. Its code is unique in the Organisation.
 - A party holds one or more roles: supplier, agent, ordering party, invoicing party, goods mover. Each role is its own dated record, so each is maintained independently (`PRD-MER-001`). **Design choice:** one party record per legal person, with roles, rather than one record per role.
-- A brand is not a party. Brands and suppliers are kept apart (`PRD-MER-001`).
+- A brand is not a party. Brands and suppliers are kept apart (`PRD-MER-001`). They are linked many-to-many by effective-dated brand–supplier links; no exclusive supplier is inferred from a brand, and each booking names its actual supplier (`PRD-MER-021`, `PRD-BKG-014`; `DEC-123`).
+- A SKU's purpose (merchandise, gift-with-purchase, promotional or packaging) does not change its stock cost: giving a gift-with-purchase away keeps its actual cost, and its use is reported apart from merchandise sales (`PRD-MER-019`; `DEC-123`).
 - Versioned fields: legal name; tax identity numbers, kept as text; MSME classification, verified against evidence before any payment control uses it (`POL-10.09`); each supplier's classification is OPEN (V-61; Accounts, CA; stage 5); contacts.
 - **Bank details** of any party are restricted fields (`PRD-ACS-008`), encrypted at rest and kept out of logs and unauthorised caches (`PRD-SEC-006`). A change is a new version. A supplier's change takes effect only after approval by a different authorised person (`POL-02.07`). Every other party's bank-detail change needs the same approval, not only a supplier's (GC2-6, DEC-105).
 - Customers, partners and employees are not parties here. Records stay separate in each module. An optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically (DM-7, DEC-105).
@@ -294,6 +295,7 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | Return rights | Whether unsold goods may go back; the window in days or a fixed season-end date; whether it starts at dispatch, receipt or acceptance | `POL-01.08`, `POL-01.09` |
 | Return conditions | Eligible condition tags; packaging and quantity limits; supplier approval; freight and deductions; settlement by credit note, replacement or refund | `POL-01.10` |
 | Money terms | Margins, commissions, payment terms, credit-note terms, brand-funded promotion terms | `PRD-ORG-016`, `POL-01.14` |
+| Cash-discount and interest terms | Structured supplier terms, each a value or Unknown; calculating, applying and posting them follow a later payment design, with values and treatment set by Accounts and the CA (RR-235) | `PRD-PAY-015` |
 
 - Margins are restricted fields (`PRD-ACS-008`).
 - The signed agreement is attached as evidence through `files-imports`, as stored files from the start (`S1-F06-T05`; product owner, 6 Oct 2026).
