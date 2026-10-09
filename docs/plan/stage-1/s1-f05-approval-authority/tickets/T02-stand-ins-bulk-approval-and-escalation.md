@@ -1,7 +1,7 @@
 # S1-F05-T02 — Stand-ins, bulk approval and escalation
 
-Status: blocked
-Blocked by: S1-F05-T01, S1-F08-T02
+Status: done
+Blocked by: S1-F05-T01 (done), S1-F08-T02 (done)
 Feature: [S1-F05 Approval authority](../../spec.md)
 
 ## Build
@@ -33,3 +33,5 @@ Stand-in grants, bulk decisions and approval and task routing, with their migrat
 - Beyond the ticket: the approval rule setting (the allowlist) can now be prepared for a module's action type, not only access's; `access.approval-requested` carries the document's scope facts; approval work items keep the document's scope facts; the list of stand-in grants as a route only; Overdue shown on approval and task items, not only exceptions.
 - Follow-ups: RR-462 (three stand-in picks; product owner), RR-463 (withdrawing or ending a grant early, the grant's facts on its approval panel, one action per grant on screen, no list screen), RR-464 (task action types are approval rules'), RR-465 (the escalation interval). RR-459 stands: escalation now adds a recipient to an overdue approval, but who sees one no limit covers before then is still to confirm.
 - Review fixes (9 Oct 2026, branch `s1/f05-review-fixes`): a grant is approved by someone other than its preparer, the stand-in and the person stood in for (`access.stand-in-party`; product owner, 9 Oct 2026); RR-462 closed with its three picks kept, with tests for no chaining, a giver-prepared request and a delegated access change; a Store or unit under a selected Site or Store is within the giver's scope through the scope contract's expansion; a stand-in's replay needs a grant that still covers the scope and value; bulk approval sends an item named twice, not found, off the allowlist or at another version to individual review while the others go on, and the batch keeps each item's version (`bulk_decision_batch_item`, migration 0041 edited); an item takes the routing version in force when it was requested; one escalation per work item (migration 0043, `work_item_escalation_once`; both escalation jobs lock and insert once, with concurrency tests); stand-in grants and routings are paged by cursor; design 7.2, 9.4, 9.9, 10, 11.3, 13 and 14 brought in line, `elapsed-minutes-v1` marked as the builders' synthetic format with calendar or working hours OPEN under RR-058.
+- Closed 9 Oct 2026 on `s1/f05-approval-authority`, reviewed with `/code-review` with the feature's other ticket; review fixes `951497d`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): approval rule settings can be prepared for another module's action type; `access.approval-requested` carries scope facts, kept on approval work items; the stand-in grant list as a route only; Overdue shown on approval and task items; `inbox` uses `audit` (module-map 4.8); review fixes added a unique escalation key also used by exceptions (migration 0043) and paging of the setup lists.

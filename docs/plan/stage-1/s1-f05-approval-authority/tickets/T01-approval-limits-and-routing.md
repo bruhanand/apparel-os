@@ -1,7 +1,7 @@
 # S1-F05-T01 — Approval limits and routing
 
-Status: blocked
-Blocked by: S1-F01-T13, S1-F02-T03
+Status: done
+Blocked by: S1-F01-T13 (done), S1-F02-T03 (done)
 Feature: [S1-F05 Approval authority](../../spec.md)
 
 ## Build
@@ -33,3 +33,5 @@ Approval limits and routing in `access`, with their migration and `tables.json` 
 - Beyond the ticket: the limit change's facts on its approval panel (`DocumentFacts`); a test-support option of `startAccessApp` for synthetic approval rules (`extraApprovalRules`), used by the journeys' server; the decide route now lists the limit codes it can answer.
 - Follow-ups: RR-459 (who sees a valued request no limit covers; product owner), RR-460 (an approval work item of a valued request carries no exposure yet), RR-461 (quantity and discount-percentage bases, withdrawing or ending a limit early).
 - Review fixes (9 Oct 2026, branch `s1/f05-review-fixes`): an individual limit now replaces the user's role limits for its action through every assignment, the narrower reading (access-and-approvals 9.2); the limits list is paged by cursor (`SETUP_PAGE_CAP` 100; code-house-rules 12.1); one function for a request's value (`approvalValueOf`); `ValueAuthority` for a limit's or grant action's authority; My work reads the assignments in force once per read. RR-459 closed: kept as built (product owner, 9 Oct 2026).
+- Closed 9 Oct 2026 on `s1/f05-approval-authority`, reviewed with `/code-review` with the feature's other ticket; review fixes `951497d`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): each limit records its origin (KDPS, test setup or synthetic); the approval panel of a limit change shows the limit decided; `startAccessApp({ extraApprovalRules })` for tests; the decide route lists the limit refusal codes.
