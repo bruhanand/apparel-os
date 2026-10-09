@@ -11,19 +11,24 @@ import { requireHeld } from './lock-target.js';
  * series, release a paused one, close either; Closed is final, never reopened or continued (PRD-LIF-015,
  * PRD-OFF-010). Each change is recorded as a series event.
  */
+const CHANGES = {
+  pause: { command: 'Pause', state: 'Paused', event: 'paused' },
+  release: { command: 'Release', state: 'Open', event: 'released' },
+  close: { command: 'Close', state: 'Closed', event: 'closed' },
+} as const;
+
 export async function changeState(
   context: TransactionContext,
   seriesId: string,
   how: 'pause' | 'release' | 'close',
 ): Promise<NumberingResult<SeriesState>> {
-  requireHeld(context, seriesId, how === 'pause' ? 'Pause' : how === 'release' ? 'Release' : 'Close');
+  const { command, state, event } = CHANGES[how];
+  requireHeld(context, seriesId, command);
   const row = await seriesRow(context, seriesId);
   if (row === undefined) return refused('series-not-found');
   if (row.state === 'Closed') return refused('series-closed');
   if (how === 'pause' && row.state !== 'Open') return refused('series-not-open');
   if (how === 'release' && row.state !== 'Paused') return refused('series-not-paused');
-  const state = how === 'pause' ? 'Paused' : how === 'release' ? 'Open' : 'Closed';
-  const event = how === 'pause' ? 'paused' : how === 'release' ? 'released' : 'closed';
   await context.tx.update(series).set({ state }).where(eq(series.id, seriesId));
   await context.tx.insert(seriesEvent).values({ id: uuidv7(), seriesId, event, occurredAt: context.startedAt });
   return answered(stateOf({ ...row, state }));
