@@ -1,7 +1,7 @@
 # S1-F08-T02 — Exceptions in My work
 
-Status: blocked
-Blocked by: S1-F08-T01, S1-F01-T06, S1-F01-T13
+Status: done
+Blocked by: S1-F08-T01 (done), S1-F01-T06 (done), S1-F01-T13 (done)
 Feature: [S1-F08 Number series and exceptions](../../spec.md)
 
 ## Build
@@ -43,3 +43,5 @@ The `exceptions` module with its first migration ([access-and-approvals.md](../.
 - Beyond the ticket: a routing change is approved by a different authorised person through the decision-effect contract (RR-447 asks the product owner to confirm); the exception record's Take action for a role holder; the read model as a route, with no dashboard screen.
 - Open: RR-447 (routing approval), RR-448 (a job failing by its active limit raises nothing), RR-449 (no screen defines formats or series), RR-450 (the escalation interval), RR-451 (the routing's Site is not checked). Evidence files are S1-F08-T03; the live stream and the failed-jobs view S1-F08-T04.
 - Review fixes (9 Oct 2026, S1-F08 review): routing changes keep their approval by a second person, and exception codes come from one Organisation-wide series that never restarts, both approved by the product owner (P1, P3; RR-447 closed). Preparing a routing checks its Site exists through the scope contract, `exceptions.site-not-found` (S2; RR-451 closed). A paused or used-up exception-code series is named as such, `exceptions.exception-code-series-paused` and `-exhausted` (S3). The exception record offers reassign, Raise it again, and Resolve shown disabled naming the owning module (S1; access-and-approvals 14), with the journey extended. Escalation selects only exceptions not yet escalated (J5); the failed-job consumer uses the worker's logger (J2); one scope-fact builder, `scopeFactsOf`, in `kernel` (J1). Integration tests write their routed Sites (`writeSyntheticSites`).
+- Closed 9 Oct 2026 on `s1/f08-number-series-and-exceptions`, reviewed with `/code-review` with the feature's other tickets; review fixes `894cd99` to `3100c8f`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): a "Take it" action for the owning role; the open-exceptions read model as a route only; the new `inbox` interface for owning modules; `access` answers `rolesHeld` and `partyNames`; routing changes through second-person approval (approved by the product owner, 9 Oct 2026).

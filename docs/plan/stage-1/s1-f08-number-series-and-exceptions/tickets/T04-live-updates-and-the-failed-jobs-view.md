@@ -1,7 +1,7 @@
 # S1-F08-T04 — Live updates and the failed-jobs view
 
-Status: blocked
-Blocked by: S1-F08-T02, S1-F01-T06, S1-F01-T13
+Status: done
+Blocked by: S1-F08-T02 (done), S1-F01-T06 (done), S1-F01-T13 (done)
 Feature: [S1-F08 Number series and exceptions](../../spec.md)
 
 ## Build
@@ -31,3 +31,5 @@ The live-update route and its schema in `packages/schemas`; the failed-job read 
 - Beyond the ticket: the `passive` mark, so an open stream never keeps a session from locking (an `own` route option and an argument of Authenticate); the failed jobs reach the operators' streams live; a small refactor so My work and the stream share one "who may act" test (`actableBy`), and the exceptions record route and the stream share one "who owns it" test (`isOwner`). The security settings journey now finds its approval by its record, since live updates add other journeys' approvals to the approver's My work at any moment.
 - Open: RR-455 (the stream's own connection per Organisation, for the connection budget). RR-448 is covered by the view and closed. A closed approval item reaches its named and role actors live; whoever was only eligible to decide it sees the change at their next read (access-and-approvals 11.3 "As built").
 - Review fixes (9 Oct 2026, S1-F08 review): the failed jobs are read a page at a time by cursor, with Load more (H1); the stream listens again after losing its connection (H3), checks the session before each batch (H4), answers only once it knows where it starts, takes the events committed within the look back as seen so one committing late is still sent (H6), and the browser reads everything again at every open (H5); code-house-rules 12.12 records the look back's dependence on CH-3 (S4; RR-456) and deployment.md section 4 counts the LISTEN connection (S5). The journeys' server starts its worker before any fixture writes an event (S6).
+- Closed 9 Oct 2026 on `s1/f08-number-series-and-exceptions`, reviewed with `/code-review` with the feature's other tickets; review fixes `894cd99` to `3100c8f`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): opening the live stream does not count as session activity (`passive`); failed jobs reach operators live; shared `actableBy` and `isOwner` tests; the security-settings journey finds its approval by record; the shared `scopeFactsOf` in `kernel`; consumers get the worker's logger; the shared person and role picker.

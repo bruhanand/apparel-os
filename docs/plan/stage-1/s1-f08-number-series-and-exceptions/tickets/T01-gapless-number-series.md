@@ -1,7 +1,7 @@
 # S1-F08-T01 — Gapless number series
 
-Status: blocked
-Blocked by: S1-F01-T04
+Status: done
+Blocked by: S1-F01-T04 (done)
 Feature: [S1-F08 Number series and exceptions](../../spec.md)
 
 ## Build
@@ -34,3 +34,5 @@ The `numbering` module with its first migration ([numbering-and-audit.md](../../
 - numbering-and-audit 6.1 does not say which `numbering` tables are `scoped` (house rules 6.1); write it there with the code.
 - Built (9 Oct 2026): the `numbering` module (`apps/server/src/modules/numbering`), migration 0033 with its six register entries, and `apps/server/test/numbering.int.test.ts` (tests 1 to 5, both kinds, the unlocked refusal, the replay, the second Organisation). The details settled are written in numbering-and-audit 6.1 "As built": every table `unscoped`, format versions and parts, the empty display year as a stated value, the could-repeat check, exhausted series. The kernel's transaction context gained `heldLock`, which Allocate asks (code-house-rules 8.2). The refusal codes are declared in `packages/schemas` (`numberingCodes`) with their English messages. No route, so no OpenAPI change. `numbering` is not yet in the app's composition: the first owning module (S1-F06 or S1-F08-T02) imports it and provides its kinds under `NUMBERED_KINDS`.
 - Review fixes (9 Oct 2026, S1-F08 review): migration 0033's series guard lets the next number only stay or step on by one, never jump or go back (H2, tested in `numbering.int.test.ts`); Pause, release and close read their change from a table (J4).
+- Closed 9 Oct 2026 on `s1/f08-number-series-and-exceptions`, reviewed with `/code-review` with the feature's other tickets; review fixes `894cd99` to `3100c8f`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): the kernel's `heldLock` so Allocate can refuse a series the command has not locked; the `numbering` refusal codes and their English messages; `defineFormatVersion`.

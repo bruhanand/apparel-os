@@ -1,7 +1,7 @@
 # S1-F08-T03 — Evidence files on exceptions and approvals
 
-Status: blocked
-Blocked by: S1-F08-T02, S1-F06-T05
+Status: done
+Blocked by: S1-F08-T02 (done), S1-F06-T05 (done)
 Feature: [S1-F08 Number series and exceptions](../../spec.md)
 
 ## Build
@@ -33,3 +33,5 @@ Evidence attachment for exceptions and decisions; screens; tests
 - Beyond the ticket: the record drawer's Evidence n tab (design-language 10.15 names it; the ticket asks only for a picker and a list); `base64Of` moved from the mapping verification screen into the shared `apps/web/src/files/Evidence.tsx`, and the evidence list schema into `packages/schemas` `files.ts`.
 - Open: RR-452 (an owner with no grant on `exceptions.exception` acts on it but cannot add or open its evidence), RR-453 (which classes each kind of evidence carries), RR-454 (no screen opens a restricted evidence file yet). RR-320 is closed.
 - Review fixes (9 Oct 2026, S1-F08 review): whoever may act on an exception adds and opens its evidence with no grant on `exceptions.exception`: `files-imports` asks the owning module through the record-reader contract it defines and `exceptions` implements (`AttachedRecordReaders`), names the admitted record for the attachment's policy (migration 0039) and authorises the restricted classes alone (`authoriseFieldClasses`) (P2; product owner, 9 Oct 2026; RR-452 closed).
+- Closed 9 Oct 2026 on `s1/f08-number-series-and-exceptions`, reviewed with `/code-review` with the feature's other tickets; review fixes `894cd99` to `3100c8f`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): the record drawer's "Evidence n" tab; shared evidence parts and schema moved into `files`; the `files-imports` record-reader contract and migration 0039 so an exception's owner may add and open evidence (product owner, 9 Oct 2026); `access.authoriseFieldClasses`.
