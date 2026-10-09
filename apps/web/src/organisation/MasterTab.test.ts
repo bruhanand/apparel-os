@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { laterScheduled, versionOn, type MasterRecord, type MasterVersion } from './MasterTab';
+import { laterScheduled, versionOn, withKindValue, type MasterRecord, type MasterVersion } from './MasterTab';
 
 // The version facts the organisation screens show (structure-and-masters 2.2; S1-F02-T01). Every value is SYNTHETIC.
 
@@ -30,6 +30,27 @@ describe('a change that starts before an approved Scheduled version (structure-a
   it('PRD-MOD-010 names none when no approved version starts after it', () => {
     expect(laterScheduled(record, '2026-10-20')).toBeUndefined();
     expect(laterScheduled(record, '2026-10-25')).toBeUndefined();
+  });
+});
+
+describe('a Site’s or Store’s classifications, one value of each kind (structure-and-masters 3.1; product owner, 9 Oct 2026)', () => {
+  const kindOf = new Map([
+    ['SYNTHETIC-value-a1', 'SYNTHETIC-kind-a'],
+    ['SYNTHETIC-value-a2', 'SYNTHETIC-kind-a'],
+    ['SYNTHETIC-value-b1', 'SYNTHETIC-kind-b'],
+  ]);
+
+  it('PRD-ORG-008 choosing a value of a kind replaces the value of that kind and keeps the others', () => {
+    expect(
+      withKindValue(['SYNTHETIC-value-a1', 'SYNTHETIC-value-b1'], kindOf, 'SYNTHETIC-kind-a', 'SYNTHETIC-value-a2'),
+    ).toEqual(['SYNTHETIC-value-b1', 'SYNTHETIC-value-a2']);
+    expect(withKindValue([], kindOf, 'SYNTHETIC-kind-b', 'SYNTHETIC-value-b1')).toEqual(['SYNTHETIC-value-b1']);
+  });
+
+  it('PRD-ORG-008 choosing none for a kind removes its value', () => {
+    expect(withKindValue(['SYNTHETIC-value-a1', 'SYNTHETIC-value-b1'], kindOf, 'SYNTHETIC-kind-a', undefined)).toEqual([
+      'SYNTHETIC-value-b1',
+    ]);
   });
 });
 

@@ -445,6 +445,13 @@ describe('preparing a unit with its first mapping (access-and-approvals 9.8b; RR
       validFrom: today(),
     });
     expect(redated.body).toMatchObject({ error: { code: 'access.not-authorised', missing: [MAPPING_EDIT] } });
+    // A later mapping version is the mapping's own route, under edit on the mapping (S1-F02-T04 review).
+    const later = await post(unitOnly, `/api/organisation/business-unit-mappings/${draft.recordId}/versions`, {
+      ...mapping,
+      validFrom: today(),
+    });
+    expect(later.status, JSON.stringify(later.body)).toBe(403);
+    expect(later.body).toMatchObject({ error: { code: 'access.not-authorised', missing: [MAPPING_EDIT] } });
     // A later unit version that names no mapping needs edit on the unit only.
     const renamed = await post(unitOnly, `/api/organisation/business-units/${draft.recordId}/versions`, {
       name: syntheticName('Renamed unit'),

@@ -248,6 +248,76 @@ describe('classification kinds and values, and grouping kinds, are the Organisat
     });
   });
 
+  it('PRD-ORG-008 a Site or Store version holds at most one value of each kind, refused naming the kind, and the database holds it too (product owner, 9 Oct 2026)', async () => {
+    const siteKind = await classificationKind('site');
+    const [one, two] = [await classificationValue(siteKind.recordId), await classificationValue(siteKind.recordId)];
+    const otherKind = await classificationKind('site');
+    const other = await classificationValue(otherKind.recordId);
+    const twice = {
+      kind: 'refusal',
+      refusal: {
+        code: 'organisation.classification-kind-twice',
+        missing: [{ kind: 'record', recordType: 'organisation.classification_kind', recordId: siteKind.recordId }],
+      },
+    };
+    expect(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSite(c, p, siteDraft({ classificationValueIds: [one.recordId, two.recordId] })),
+      ),
+    ).toMatchObject(twice);
+    // One value of each of two kinds is a Site's classification.
+    const site = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareSite(c, p, siteDraft({ classificationValueIds: [one.recordId, other.recordId] })),
+      ),
+    );
+    const storeKind = await classificationKind('store');
+    const [first, second] = [
+      await classificationValue(storeKind.recordId),
+      await classificationValue(storeKind.recordId),
+    ];
+    const storeSite = await approved(setup, (c, p) => setup.organisation.prepareSite(c, p, siteDraft()));
+    expect(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareStore(
+          c,
+          p,
+          storeDraft(storeSite.recordId, { classificationValueIds: [first.recordId, second.recordId] }),
+        ),
+      ),
+    ).toMatchObject({
+      kind: 'refusal',
+      refusal: {
+        code: 'organisation.classification-kind-twice',
+        missing: [{ kind: 'record', recordType: 'organisation.classification_kind', recordId: storeKind.recordId }],
+      },
+    });
+
+    // Behind the service, the database refuses a second value of one kind on a version (migration 0044).
+    const owner = await connect(world.organisations[0].database, 'migration');
+    try {
+      await expect(
+        owner.query(
+          `insert into organisation.site_classification
+             (id, site_version_id, classification_value_id, classification_kind_id, applies_to)
+           values ($1, $2, $3, $4, 'site')`,
+          [uuidv7(), site.versionId, two.recordId, siteKind.recordId],
+        ),
+      ).rejects.toThrow(/site_classification_one_per_kind/);
+      // A value named with a kind it is not of is refused by the foreign key.
+      await expect(
+        owner.query(
+          `insert into organisation.site_classification
+             (id, site_version_id, classification_value_id, classification_kind_id, applies_to)
+           values ($1, $2, $3, $4, 'site')`,
+          [uuidv7(), site.versionId, two.recordId, storeKind.recordId],
+        ),
+      ).rejects.toThrow(/foreign key/);
+    } finally {
+      await owner.end();
+    }
+  });
+
   it('structure-and-masters 2.1 a value’s code is unique in its kind, and the same code may serve another kind', async () => {
     const [one, two] = [await classificationKind('site'), await classificationKind('site')];
     const code = syntheticCode(next('SHARED'));
@@ -308,6 +378,64 @@ describe('classification kinds and values, and grouping kinds, are the Organisat
         refusal: { code: 'access.self-preparation' },
       });
     }
+  });
+
+  it('RR-440 a grouping kind migration 0044 recorded with no version is listed so, given a first version through flow A, and its grouping awaiting approval is then approved', async () => {
+    // As migration 0044 leaves an earlier kind on dev: an identity row with no version (SYNTHETIC code).
+    const kindId = uuidv7();
+    const owner = await connect(world.organisations[0].database, 'migration');
+    try {
+      await owner.query(`insert into organisation.grouping_kind (id, code) values ($1, $2)`, [
+        kindId,
+        syntheticCode(next('LEGACY-KIND')),
+      ]);
+    } finally {
+      await owner.end();
+    }
+    const listed = await setup.run(setup.preparer.id, (c) =>
+      setup.organisation.record(c, 'grouping_kind', kindId, setup.today()),
+    );
+    expect(listed).toMatchObject({ id: kindId, versions: [] });
+    expect((await structureOn(setup.today())).groupingKinds.map((each) => each.id)).not.toContain(kindId);
+
+    // A grouping of it, awaiting approval, is refused while the kind has no version in force, naming the kind.
+    const grouping = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareGrouping(c, p, {
+          code: syntheticCode(next('GROUP')),
+          groupingKindId: kindId,
+          name: syntheticName('Grouping of an earlier kind'),
+          storeIds: [],
+          validFrom: setup.today(),
+        }),
+      ),
+    );
+    expect(await setup.decide(grouping.requestId, grouping.versionId)).toMatchObject({
+      kind: 'refusal',
+      refusal: {
+        code: 'organisation.reference-not-in-force',
+        missing: [{ kind: 'approval', recordType: 'organisation.grouping_kind', recordId: kindId }],
+      },
+    });
+
+    // The Admin prepares the kind's first version; a different person approves it, and it is in force.
+    const first = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareNameVersion(c, p, 'grouping_kind', kindId, {
+          name: syntheticName('Earlier kind named'),
+          validFrom: setup.today(),
+        }),
+      ),
+    );
+    decided(await setup.decide(first.requestId, first.versionId));
+    expect((await structureOn(setup.today())).groupingKinds).toContainEqual(
+      expect.objectContaining({ id: kindId, name: syntheticName('Earlier kind named') }),
+    );
+    // The grouping that waited is approved now.
+    decided(await setup.decide(grouping.requestId, grouping.versionId));
+    expect((await structureOn(setup.today())).groupings).toContainEqual(
+      expect.objectContaining({ id: grouping.recordId, groupingKindId: kindId }),
+    );
   });
 
   it('RR-440 no classification kind, value or grouping kind exists in a fresh Organisation', async () => {

@@ -199,7 +199,10 @@ test('PRD-ORG-008 RR-440 an Admin defines a classification kind and value; anoth
         await drawer.getByLabel(/^Physical kind/).selectOption({ label: 'Retail site' });
         await drawer.getByLabel(/^Area/).selectOption({ label: world.areaOption });
         await drawer.getByLabel(/^Addresses/).fill('SYNTHETIC 1 Classified Road');
-        await drawer.getByRole('checkbox', { name: `${VALUE.code} · ${VALUE.name}` }).check();
+        // One list for each Site kind, offering its values, of which at most one is chosen (product owner, 9 Oct 2026).
+        await drawer
+          .getByRole('combobox', { name: new RegExp(KIND.code) })
+          .selectOption({ label: `${VALUE.code} · ${VALUE.name}` });
       });
       await approveFromMyWork(approver, app, 'Site change');
     });

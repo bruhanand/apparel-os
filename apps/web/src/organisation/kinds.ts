@@ -51,6 +51,15 @@ export interface RecordFilter {
   readonly equals: string;
 }
 
+/**
+ * A references field holding at most one target for each record of `kind`, such as one classification value of each
+ * classification kind: the target's `field` names its record of that kind (structure-and-masters 3.1).
+ */
+export interface OnePer {
+  readonly kind: Kind;
+  readonly field: string;
+}
+
 export interface Option {
   readonly value: string;
   readonly label: MessageId;
@@ -73,7 +82,13 @@ export type FieldSpec = {
   | { readonly kind: 'select'; readonly options: readonly Option[] }
   | { readonly kind: 'reference'; readonly target: Kind; readonly optional?: true }
   | { readonly kind: 'lines' }
-  | { readonly kind: 'references'; readonly target: Kind; readonly where?: RecordFilter }
+  | {
+      readonly kind: 'references';
+      readonly target: Kind;
+      readonly where?: RecordFilter;
+      /** At most one of the targets for each record of another kind, chosen from one list each (OnePer). */
+      readonly onePer?: OnePer;
+    }
   | { readonly kind: 'yes-no' }
 );
 
@@ -94,7 +109,8 @@ const closingDate: FieldSpec = {
 const aliases: FieldSpec = { name: 'aliases', label: 'organisation.field.aliases', kind: 'lines' };
 /**
  * The Organisation's own classifications a Site or Store version carries: the values of its kinds for Sites, or for
- * Stores (structure-and-masters 3.1, 8; PRD-ORG-008; S1-F02-T04). None is set in the app.
+ * Stores, at most one of each kind, chosen from one list for each kind (structure-and-masters 3.1, 8; PRD-ORG-008;
+ * S1-F02-T04; product owner, 9 Oct 2026). None is set in the app.
  */
 const classifications = (place: 'site' | 'store'): FieldSpec => ({
   name: 'classificationValueIds',
@@ -102,6 +118,7 @@ const classifications = (place: 'site' | 'store'): FieldSpec => ({
   kind: 'references',
   target: 'classification_value',
   where: { field: 'appliesTo', equals: place },
+  onePer: { kind: 'classification_kind', field: 'classificationKindId' },
 });
 
 export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {

@@ -106,7 +106,8 @@ create trigger guard_version_change before update on organisation.classification
   for each row execute function organisation.guard_version_change();
 
 -- A value of a classification kind, fixed to it, its code unique in its kind (2.1, 3.1). It keeps what its kind
--- classifies, held to the kind's by the foreign key, so a Site names only a Site kind's values.
+-- classifies, held to the kind's by the foreign key, so a Site names only a Site kind's values. The triple
+-- (id, kind, applies_to) is unique so a Site's or Store's classification can name the value with its kind.
 create table organisation.classification_value (
   id uuid primary key,
   classification_kind_id uuid not null,
@@ -115,7 +116,7 @@ create table organisation.classification_value (
   recorded_at timestamptz not null default now(),
   constraint classification_value_code check (code <> ''),
   constraint classification_value_code_in_kind unique (classification_kind_id, code),
-  constraint classification_value_classifies unique (id, applies_to),
+  constraint classification_value_classifies unique (id, classification_kind_id, applies_to),
   constraint classification_value_kind foreign key (classification_kind_id, applies_to)
     references organisation.classification_kind (id, applies_to)
 );
@@ -147,17 +148,19 @@ create trigger guard_version_change before update on organisation.classification
   for each row execute function organisation.guard_version_change();
 
 -- A classification a Site version carries, frozen with it, as its aliases are (3.1, 6.1): a value of a kind that
--- classifies Sites, held by the foreign key on (value, 'site').
+-- classifies Sites, held by the foreign key on (value, its kind, 'site'). A version holds at most one value of each
+-- kind, as it holds one value of a field (product owner, 9 Oct 2026).
 create table organisation.site_classification (
   id uuid primary key,
   site_version_id uuid not null references organisation.site_version (id),
   classification_value_id uuid not null,
+  classification_kind_id uuid not null,
   applies_to text not null,
   recorded_at timestamptz not null default now(),
   constraint site_classification_site check (applies_to = 'site'),
-  constraint site_classification_once unique (site_version_id, classification_value_id),
-  constraint site_classification_value foreign key (classification_value_id, applies_to)
-    references organisation.classification_value (id, applies_to)
+  constraint site_classification_one_per_kind unique (site_version_id, classification_kind_id),
+  constraint site_classification_value foreign key (classification_value_id, classification_kind_id, applies_to)
+    references organisation.classification_value (id, classification_kind_id, applies_to)
 );
 create index site_classification_value on organisation.site_classification (classification_value_id);
 create trigger refuse_row_change before update or delete on organisation.site_classification
@@ -167,17 +170,19 @@ create trigger refuse_truncate before truncate on organisation.site_classificati
 create trigger refuse_after_decision before insert on organisation.site_classification
   for each row execute function organisation.refuse_after_decision('site_version', 'site_version_id');
 
--- A classification a Store version carries, frozen with it: a value of a kind that classifies Stores.
+-- A classification a Store version carries, frozen with it: a value of a kind that classifies Stores, at most one of
+-- each kind.
 create table organisation.store_classification (
   id uuid primary key,
   store_version_id uuid not null references organisation.store_version (id),
   classification_value_id uuid not null,
+  classification_kind_id uuid not null,
   applies_to text not null,
   recorded_at timestamptz not null default now(),
   constraint store_classification_store check (applies_to = 'store'),
-  constraint store_classification_once unique (store_version_id, classification_value_id),
-  constraint store_classification_value foreign key (classification_value_id, applies_to)
-    references organisation.classification_value (id, applies_to)
+  constraint store_classification_one_per_kind unique (store_version_id, classification_kind_id),
+  constraint store_classification_value foreign key (classification_value_id, classification_kind_id, applies_to)
+    references organisation.classification_value (id, classification_kind_id, applies_to)
 );
 create index store_classification_value on organisation.store_classification (classification_value_id);
 create trigger refuse_row_change before update or delete on organisation.store_classification

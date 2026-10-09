@@ -1009,6 +1009,8 @@ export class StructureController {
           if (authorised.kind === 'refused') {
             return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
           }
+          // The further permission goes with the preparer once held, so the command checks it too (RR-444).
+          const alsoHeld = further !== undefined && 'alsoAssignmentId' in authorised ? [further] : [];
           const preparer: Preparer = { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId };
           // Step 0: the preparer and the assignment Authorise found, rechecked under the locks with the same facts
           // (code-house-rules 8.2 "Authority first"; access-and-approvals 7.1 step 4).
@@ -1039,7 +1041,7 @@ export class StructureController {
               : [],
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-          const outcome = await work(context, preparer);
+          const outcome = await work(context, { ...preparer, alsoHeld });
           if (outcome.kind === 'success') return { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' };
           return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
         },

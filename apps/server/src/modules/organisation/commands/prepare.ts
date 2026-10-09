@@ -75,7 +75,7 @@ import {
 import { masterTables } from '../db/tables.js';
 import { placeFactsOfRecord, type PlaceFacts } from '../queries/scope.js';
 import { actionTypeOf, recordTypeOf, type MasterKind } from '../domain/kinds.js';
-import { exists, notFound, refusal, today, type Prepared, type Preparer, type Reference } from './common.js';
+import { exists, notFound, refusal, today, unheld, type Prepared, type Preparer, type Reference } from './common.js';
 import {
   locationDaysFrom,
   locationNesting,
@@ -550,17 +550,7 @@ export class StructurePreparation {
         });
       },
       children: async (context, versionId) => {
-        const classifications = draft.classificationValueIds ?? [];
-        if (classifications.length > 0) {
-          await context.tx.insert(siteClassification).values(
-            classifications.map((classificationValueId) => ({
-              id: uuidv7(),
-              siteVersionId: versionId,
-              classificationValueId,
-              appliesTo: 'site' as const,
-            })),
-          );
-        }
+        await writeClassifications(context, 'site', versionId, draft);
         if (draft.aliases.length === 0) return;
         await context.tx
           .insert(siteAlias)
@@ -628,17 +618,7 @@ export class StructurePreparation {
         });
       },
       children: async (context, versionId) => {
-        const classifications = draft.classificationValueIds ?? [];
-        if (classifications.length > 0) {
-          await context.tx.insert(storeClassification).values(
-            classifications.map((classificationValueId) => ({
-              id: uuidv7(),
-              storeVersionId: versionId,
-              classificationValueId,
-              appliesTo: 'store' as const,
-            })),
-          );
-        }
+        await writeClassifications(context, 'store', versionId, draft);
         if (draft.aliases.length === 0) return;
         await context.tx
           .insert(storeAlias)
@@ -833,6 +813,13 @@ export class StructurePreparation {
             },
           }),
       check: async (context) => {
+        // The mapping written with the unit needs edit on the mapping, held besides the unit's own permission, as
+        // deciding it needs approve on both; refused here too, whatever the caller (access-and-approvals 9.8b; RR-444).
+        const notHeld =
+          mapping === undefined
+            ? undefined
+            : unheld(preparer, { action: 'edit', recordType: recordTypeOf('business_unit_mapping') });
+        if (notHeld !== undefined) return notHeld;
         const facts = await unit(context);
         if (facts === undefined) return undefined;
         if (mapping !== undefined) {
@@ -1095,29 +1082,82 @@ export class StructurePreparation {
 const classificationReferences = (draft: { readonly classificationValueIds?: readonly string[] | undefined }) =>
   (draft.classificationValueIds ?? []).map((id): Reference => ({ kind: 'classification_value', id }));
 
+/** A Site or Store version's draft, as far as its classifications go. */
+interface Classified {
+  readonly classificationValueIds?: readonly string[] | undefined;
+}
+
 /**
- * The refusal while a Site or Store version names a value of a kind that classifies the other (3.1; S1-F02-T04); the
- * database holds it behind the service by the foreign key on what the value classifies.
+ * The values a Site or Store version names, in the order given, each with its kind and what that kind classifies
+ * (3.1).
+ */
+async function valuesNamed(context: TransactionContext, draft: Classified) {
+  const ids = draft.classificationValueIds ?? [];
+  if (ids.length === 0) return [];
+  const rows = await context.tx
+    .select({
+      id: classificationValue.id,
+      kindId: classificationValue.classificationKindId,
+      appliesTo: classificationValue.appliesTo,
+    })
+    .from(classificationValue)
+    .where(inArray(classificationValue.id, [...ids]));
+  return rows.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+}
+
+/**
+ * The refusal while a Site or Store version names a value of a kind that classifies the other, or two values of one
+ * kind: a version holds at most one value of each kind, as it holds one value of a field (3.1; S1-F02-T04; product
+ * owner, 9 Oct 2026). The database holds both behind the service: the foreign key on the value, its kind and what it
+ * classifies, and one row per kind on a version.
  */
 async function classifies(
   context: TransactionContext,
   place: 'site' | 'store',
-  draft: { readonly classificationValueIds?: readonly string[] | undefined },
+  draft: Classified,
 ): Promise<CommandRefusal | undefined> {
-  const ids = draft.classificationValueIds ?? [];
-  if (ids.length === 0) return undefined;
-  const rows = await context.tx
-    .select({ id: classificationValue.id, appliesTo: classificationValue.appliesTo })
-    .from(classificationValue)
-    .where(inArray(classificationValue.id, [...ids]));
+  const rows = await valuesNamed(context, draft);
   const other = rows.find((row) => row.appliesTo !== place);
-  return other === undefined
+  if (other !== undefined) {
+    return {
+      kind: 'refused',
+      code: 'organisation.classification-of-another-kind',
+      missing: [{ kind: 'record', recordType: recordTypeOf('classification_value'), recordId: other.id }],
+    };
+  }
+  const kinds = rows.map((row) => row.kindId);
+  const twice = kinds.find((kindId, index) => kinds.indexOf(kindId) !== index);
+  return twice === undefined
     ? undefined
     : {
         kind: 'refused',
-        code: 'organisation.classification-of-another-kind',
-        missing: [{ kind: 'record', recordType: recordTypeOf('classification_value'), recordId: other.id }],
+        code: 'organisation.classification-kind-twice',
+        missing: [{ kind: 'record', recordType: recordTypeOf('classification_kind'), recordId: twice }],
       };
+}
+
+/** The classifications a Site or Store version carries, frozen with it, each with its value's kind (3.1, 6.1). */
+async function writeClassifications(
+  context: TransactionContext,
+  place: 'site' | 'store',
+  versionId: string,
+  draft: Classified,
+): Promise<void> {
+  const rows = (await valuesNamed(context, draft)).map((row) => ({
+    id: uuidv7(),
+    classificationValueId: row.id,
+    classificationKindId: row.kindId,
+  }));
+  if (rows.length === 0) return;
+  if (place === 'site') {
+    await context.tx
+      .insert(siteClassification)
+      .values(rows.map((row) => ({ ...row, siteVersionId: versionId, appliesTo: 'site' as const })));
+  } else {
+    await context.tx
+      .insert(storeClassification)
+      .values(rows.map((row) => ({ ...row, storeVersionId: versionId, appliesTo: 'store' as const })));
+  }
 }
 
 /** A mapping's three fields (3.4). */

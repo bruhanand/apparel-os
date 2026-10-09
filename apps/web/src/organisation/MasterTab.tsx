@@ -32,6 +32,7 @@ import {
   recordTypeOf,
   type FieldSpec,
   type Kind,
+  type OnePer,
   type RecordFilter,
 } from './kinds';
 import { MappingVerification } from './MappingVerification';
@@ -227,6 +228,72 @@ function ReferenceOptions({ target }: { target: Kind }) {
   );
 }
 
+/**
+ * The chosen targets with `valueId` as the one of its kind, replacing any other of that kind, or with none of that kind
+ * when `valueId` is undefined: one classification value of each kind (structure-and-masters 3.1; product owner,
+ * 9 Oct 2026).
+ */
+export function withKindValue(
+  chosen: readonly string[],
+  kindOf: ReadonlyMap<string, string>,
+  kindId: string,
+  valueId: string | undefined,
+): string[] {
+  const others = chosen.filter((each) => kindOf.get(each) !== kindId);
+  return valueId === undefined ? others : [...others, valueId];
+}
+
+/** One list for each record of the `onePer` kind, offering its targets, of which at most one is chosen (3.1). */
+function OnePerInput({
+  id,
+  target,
+  where,
+  onePer,
+  value,
+  onChange,
+}: {
+  id: string;
+  target: Kind;
+  where?: RecordFilter | undefined;
+  onePer: OnePer;
+  value: readonly string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const kinds = useNames(onePer.kind, true, where);
+  const targets = useAllRecords(target).filter((record) => where === undefined || record[where.field] === where.equals);
+  const names = useNames(target, true, where);
+  const kindOf = new Map(targets.map((record) => [record.id, text(record[onePer.field])]));
+  return (
+    <div id={id} role="group" className="flex flex-col gap-2">
+      {[...kinds].map(([kindId, kindName]) => {
+        const chosen = value.find((each) => kindOf.get(each) === kindId) ?? '';
+        return (
+          <label key={kindId} className="flex flex-col gap-1">
+            <span className="text-body-sm">{kindName}</span>
+            <select
+              className={inputClass}
+              value={chosen}
+              onChange={(event) => {
+                const picked = event.target.value;
+                onChange(withKindValue(value, kindOf, kindId, picked === '' ? undefined : picked));
+              }}
+            >
+              <option value="">{t('organisation.none')}</option>
+              {targets
+                .filter((record) => kindOf.get(record.id) === kindId)
+                .map((record) => (
+                  <option key={record.id} value={record.id}>
+                    {names.get(record.id) ?? record.code}
+                  </option>
+                ))}
+            </select>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReferencesInput({
   id,
   target,
@@ -348,15 +415,26 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
         <Controller
           control={form.control}
           name={spec.name}
-          render={({ field }) => (
-            <ReferencesInput
-              id={id}
-              target={spec.target}
-              where={spec.where}
-              value={(field.value as string[] | undefined) ?? []}
-              onChange={field.onChange}
-            />
-          )}
+          render={({ field }) =>
+            spec.onePer === undefined ? (
+              <ReferencesInput
+                id={id}
+                target={spec.target}
+                where={spec.where}
+                value={(field.value as string[] | undefined) ?? []}
+                onChange={field.onChange}
+              />
+            ) : (
+              <OnePerInput
+                id={id}
+                target={spec.target}
+                where={spec.where}
+                onePer={spec.onePer}
+                value={(field.value as string[] | undefined) ?? []}
+                onChange={field.onChange}
+              />
+            )
+          }
         />
       );
       break;
@@ -544,6 +622,9 @@ function MasterDrawer({ kind, record, onClose }: { kind: Kind; record: MasterRec
             )}
           </Card>
           <Card title="setup.versions">
+            {record.versions.length === 0 && (
+              <p className="m-0 text-body-sm text-text-2">{t('organisation.no-version-yet-body')}</p>
+            )}
             <ol className="m-0 flex list-none flex-col gap-3 p-0" aria-label={t('setup.versions')}>
               {record.versions.map((version) => (
                 <li key={version.id} className="flex flex-col gap-2 border-b border-border pb-3 last:border-b-0">
@@ -714,7 +795,13 @@ export function MasterTab({ kind }: { kind: Kind }) {
                               </td>
                             )}
                             <td className="px-3">
-                              {latest !== undefined && <StatusBadge state={stateIdOf(latest.state)} />}
+                              {latest === undefined ? (
+                                // A record with no version, such as a grouping kind migration 0044 recorded for
+                                // earlier groupings: Change gives it its first version (3.6; RR-440).
+                                <span className="text-body-sm text-text-2">{t('organisation.no-version-yet')}</span>
+                              ) : (
+                                <StatusBadge state={stateIdOf(latest.state)} />
+                              )}
                             </td>
                           </tr>
                         );

@@ -12993,6 +12993,7 @@
               }
             },
             "x-error-codes": [
+              "organisation.classification-kind-twice",
               "organisation.classification-of-another-kind",
               "organisation.code-taken",
               "organisation.starts-in-past"
@@ -15288,6 +15289,7 @@
               }
             },
             "x-error-codes": [
+              "organisation.classification-kind-twice",
               "organisation.classification-of-another-kind",
               "organisation.code-taken",
               "organisation.starts-in-past"
@@ -21248,6 +21250,7 @@
               }
             },
             "x-error-codes": [
+              "organisation.classification-kind-twice",
               "organisation.classification-of-another-kind",
               "organisation.code-taken",
               "organisation.starts-in-past"
@@ -21925,6 +21928,7 @@
               }
             },
             "x-error-codes": [
+              "organisation.classification-kind-twice",
               "organisation.classification-of-another-kind",
               "organisation.code-taken",
               "organisation.starts-in-past"

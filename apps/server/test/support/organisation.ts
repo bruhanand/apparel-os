@@ -145,7 +145,12 @@ export async function structureSetup(options: {
       },
       work,
     );
-  const asPreparer: Preparer = { userId: preparer.id, roleAssignmentId: assignmentId };
+  // The preparer's assignment grants edit on a unit's mapping too, held as the route holds it (RR-444).
+  const asPreparer: Preparer = {
+    userId: preparer.id,
+    roleAssignmentId: assignmentId,
+    alsoHeld: [{ action: 'edit', recordType: 'organisation.business_unit_mapping' }],
+  };
   return {
     access,
     organisation,

@@ -9,7 +9,7 @@ import {
 } from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { LocationInUse, PreparedVersion } from '../src/modules/organisation/index.js';
+import type { LocationInUse, PreparedVersion, Preparer } from '../src/modules/organisation/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment, writeSyntheticUser } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
@@ -750,6 +750,45 @@ describe('review fixes (S1-F02-T02 review; product owner, 8 Oct 2026)', () => {
       ),
     ).toBe('organisation.mapping-incomplete');
     decided(await setup.decide(fresh.requestId, fresh.versionId));
+  });
+
+  it('RR-444 PRD-UXP-003 the command itself refuses a unit prepared with its first mapping by a preparer not holding edit on the mapping, naming the permission', async () => {
+    const at = await site();
+    const mapping = await entity(home.state.recordId);
+    // A caller that held only the route's own permission at step 0 (access-and-approvals 9.8b; product owner, 9 Oct 2026).
+    const unitOnly: Preparer = { userId: setup.asPreparer.userId, roleAssignmentId: setup.asPreparer.roleAssignmentId };
+    const named = {
+      kind: 'refusal',
+      refusal: {
+        kind: 'not-authorised',
+        code: 'access.not-authorised',
+        missing: [{ kind: 'permission', action: 'edit', recordType: 'organisation.business_unit_mapping' }],
+      },
+    };
+    expect(
+      await setup.run(setup.preparer.id, (c) =>
+        setup.organisation.prepareBusinessUnit(c, unitOnly, unitDraft(at.recordId, mapping)),
+      ),
+    ).toMatchObject(named);
+    // A new unit's draft re-dated with its first mapping needs the same; one naming no mapping does not.
+    const draft = prepared(await prepareUnit(unitDraft(at.recordId, mapping)));
+    expect(
+      await setup.run(setup.preparer.id, (c) =>
+        setup.organisation.prepareBusinessUnitVersion(c, unitOnly, draft.recordId, {
+          name: syntheticName('Re-dated unit'),
+          ...mapping,
+          validFrom: setup.today(),
+        }),
+      ),
+    ).toMatchObject(named);
+    prepared(
+      await setup.run(setup.preparer.id, (c) =>
+        setup.organisation.prepareBusinessUnitVersion(c, unitOnly, draft.recordId, {
+          name: syntheticName('Renamed unit'),
+          validFrom: setup.today(),
+        }),
+      ),
+    );
   });
 
   it('structure-and-masters 3.4 domain-model invariant 8 a unit version starting before the unit’s first mapping is refused', async () => {

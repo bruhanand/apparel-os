@@ -1100,6 +1100,8 @@ export const englishIndia = {
     'The parent location is retired on a day this location would be in use. Choose another parent.',
   'error.organisation.classification-of-another-kind':
     'This classification belongs to a kind for the other: a Site takes a Site kind’s values, a Store a Store kind’s.',
+  'error.organisation.classification-kind-twice':
+    'Two values of one classification kind were chosen. Choose at most one value of each kind.',
   'organisation.field.unitKind': 'Kind',
   'organisation.field.storeId': 'Store',
   'organisation.field.taxRegistrationId': 'Tax registration',
@@ -1188,6 +1190,9 @@ export const englishIndia = {
   'organisation.lines-help': 'One per line.',
   'organisation.in-force-on': 'Version in force on',
   'organisation.none-in-force': 'No approved version is in force on this date.',
+  'organisation.no-version-yet': 'No version yet',
+  'organisation.no-version-yet-body':
+    'This record has no version yet, so it is not in force. Use Change to prepare its first version for another person to approve.',
   'organisation.change': 'Prepare a new version',
   'organisation.redate': 'Re-date',
   'organisation.redate-help':

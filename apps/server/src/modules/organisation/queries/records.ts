@@ -131,6 +131,27 @@ function byVersion<Row extends { versionId: string }, T>(rows: readonly Row[], p
   return map;
 }
 
+/** The classification values each Site or Store version carries, in the order they were written (3.1). */
+async function classificationsOf(
+  tx: Tx,
+  rows: { table: typeof siteClassification | typeof storeClassification; versionId: AnyColumn },
+  versions: readonly { readonly id: string }[],
+) {
+  if (versions.length === 0) return new Map<string, string[]>();
+  const { table, versionId } = rows;
+  const found = await tx
+    .select({ versionId: sql<string>`${versionId}`, valueId: table.classificationValueId })
+    .from(table)
+    .where(
+      inArray(
+        versionId,
+        versions.map((version) => version.id),
+      ),
+    )
+    .orderBy(asc(table.recordedAt), asc(table.id));
+  return byVersion(found, (row) => row.valueId);
+}
+
 const optional = <K extends string>(key: K, date: string | null) =>
   (date === null ? {} : { [key]: date }) as Partial<Record<K, string>>;
 
@@ -384,23 +405,10 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
               .orderBy(asc(siteAlias.recordedAt), asc(siteAlias.id)),
         (row) => row.alias,
       );
-      const classifications = byVersion(
-        rows.length === 0
-          ? []
-          : await tx
-              .select({
-                versionId: siteClassification.siteVersionId,
-                valueId: siteClassification.classificationValueId,
-              })
-              .from(siteClassification)
-              .where(
-                inArray(
-                  siteClassification.siteVersionId,
-                  rows.map((row) => row.id),
-                ),
-              )
-              .orderBy(asc(siteClassification.recordedAt), asc(siteClassification.id)),
-        (row) => row.valueId,
+      const classifications = await classificationsOf(
+        tx,
+        { table: siteClassification, versionId: siteClassification.siteVersionId },
+        rows,
       );
       return rows.map((row) => ({
         ...row,
@@ -456,23 +464,10 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
               .orderBy(asc(storeAlias.recordedAt), asc(storeAlias.id)),
         (row) => row.alias,
       );
-      const classifications = byVersion(
-        rows.length === 0
-          ? []
-          : await tx
-              .select({
-                versionId: storeClassification.storeVersionId,
-                valueId: storeClassification.classificationValueId,
-              })
-              .from(storeClassification)
-              .where(
-                inArray(
-                  storeClassification.storeVersionId,
-                  rows.map((row) => row.id),
-                ),
-              )
-              .orderBy(asc(storeClassification.recordedAt), asc(storeClassification.id)),
-        (row) => row.valueId,
+      const classifications = await classificationsOf(
+        tx,
+        { table: storeClassification, versionId: storeClassification.storeVersionId },
+        rows,
       );
       return rows.map((row) => ({
         ...row,

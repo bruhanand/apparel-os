@@ -393,6 +393,8 @@ export const stockLedgerCodes = declareCodes({
  * S1-F02-T04 (structure-and-masters 3.1, 6.1; RR-440):
  * - `organisation.classification-of-another-kind`: a Site or Store version names a classification value of a kind that
  *   classifies the other; `missing` names the value.
+ * - `organisation.classification-kind-twice`: a Site or Store version names two values of one classification kind; a
+ *   version holds at most one of each (product owner, 9 Oct 2026); `missing` names the kind.
  */
 export const organisationCodes = declareCodes({
   'organisation.code-taken': 'refused',
@@ -420,6 +422,7 @@ export const organisationCodes = declareCodes({
   'organisation.location-has-children': 'refused',
   'organisation.location-parent-retired': 'refused',
   'organisation.classification-of-another-kind': 'refused',
+  'organisation.classification-kind-twice': 'refused',
 });
 
 /**

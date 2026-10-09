@@ -240,6 +240,7 @@ export const siteClassification = organisation.table('site_classification', {
   id: uuid('id').primaryKey(),
   siteVersionId: uuid('site_version_id').notNull(),
   classificationValueId: uuid('classification_value_id').notNull(),
+  classificationKindId: uuid('classification_kind_id').notNull(),
   appliesTo: text('applies_to').$type<'site'>().notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
@@ -247,6 +248,7 @@ export const storeClassification = organisation.table('store_classification', {
   id: uuid('id').primaryKey(),
   storeVersionId: uuid('store_version_id').notNull(),
   classificationValueId: uuid('classification_value_id').notNull(),
+  classificationKindId: uuid('classification_kind_id').notNull(),
   appliesTo: text('applies_to').$type<'store'>().notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

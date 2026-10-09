@@ -448,10 +448,14 @@ const ORGANISATION_STRUCTURE_RULE_CODES = [
   'organisation.location-holds-stock',
 ] as const satisfies readonly ErrorCode[];
 
-/** The codes a preparation of a Site or Store can answer: a classification of the other's kind (3.1; S1-F02-T04). */
+/**
+ * The codes a preparation of a Site or Store can answer: a classification of the other's kind, or two of one kind
+ * (3.1; S1-F02-T04; product owner, 9 Oct 2026).
+ */
 const ORGANISATION_PLACE_PREPARE_CODES = [
   ...ORGANISATION_PREPARE_CODES,
   'organisation.classification-of-another-kind',
+  'organisation.classification-kind-twice',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes a preparation of a unit, a mapping, a location or a default warehouse can answer. */

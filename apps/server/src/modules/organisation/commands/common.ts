@@ -1,4 +1,4 @@
-import type { MissingItem } from '@apparel-os/schemas';
+import type { MissingItem, PermissionAction } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import { masterTables } from '../db/tables.js';
@@ -10,6 +10,32 @@ import { recordTypeOf, type MasterKind } from '../domain/kinds.js';
 export interface Preparer {
   readonly userId: string;
   readonly roleAssignmentId: string;
+  /**
+   * The permissions besides the route's that Authorise found and step 0 held for the preparer, such as edit on a
+   * unit's mapping prepared with the unit (access-and-approvals 9.8b; RR-444). A command that writes what one covers
+   * refuses without it, naming it (PRD-UXP-003).
+   */
+  readonly alsoHeld?: readonly HeldPermission[];
+}
+
+/** A permission held for a command: an action on a record type (access-and-approvals 4.1). */
+export interface HeldPermission {
+  readonly action: PermissionAction;
+  readonly recordType: string;
+}
+
+/** The refusal while the preparer does not hold the permission, naming it (PRD-UXP-003). */
+export function unheld(preparer: Preparer, permission: HeldPermission): CommandRefusal | undefined {
+  const held = (preparer.alsoHeld ?? []).some(
+    (each) => each.action === permission.action && each.recordType === permission.recordType,
+  );
+  return held
+    ? undefined
+    : {
+        kind: 'not-authorised',
+        code: 'access.not-authorised',
+        missing: [{ kind: 'permission', action: permission.action, recordType: permission.recordType }],
+      };
 }
 
 export type Prepared<Answer> =
