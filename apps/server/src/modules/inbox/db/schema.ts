@@ -39,6 +39,18 @@ export const workItemActor = inbox.table('work_item_actor', {
   workItemId: uuid('work_item_id').notNull(),
   userId: uuid('user_id'),
   eligibility: text('eligibility'),
+  /** A role whose holders, with an assignment covering the item's facts, may act (12.2; migration 0035). */
+  roleId: uuid('role_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An escalation of a work item: the recipient added, the owner kept (11.3; migration 0035). Append-only. */
+export const workItemEscalation = inbox.table('work_item_escalation', {
+  id: uuid('id').primaryKey(),
+  workItemId: uuid('work_item_id').notNull(),
+  recipientUserId: uuid('recipient_user_id'),
+  recipientRoleId: uuid('recipient_role_id'),
+  escalatedAt: at('escalated_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

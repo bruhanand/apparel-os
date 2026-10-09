@@ -53,6 +53,20 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
+import {
+  commentRequestSchema,
+  exceptionChangedSchema,
+  exceptionParamsSchema,
+  exceptionViewSchema,
+  noBodySchema,
+  openExceptionsSchema,
+  raisedSchema,
+  raiseRequestSchema,
+  reassignRequestSchema,
+  routingListSchema,
+  routingVersionDraftSchema,
+  routingVersionPreparedSchema,
+} from './exceptions.js';
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
   securitySettingPreparedSchema,
@@ -340,6 +354,22 @@ const HISTORY_CODES = [
   'access.sign-in-incomplete',
   'access.not-authorised',
   'access.business-date-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes a read of an exception can answer (access-and-approvals 12, 14; S1-F08-T02). */
+const EXCEPTION_READ_CODES = [
+  ...HISTORY_CODES,
+  'exceptions.exception-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes an action on an exception can answer: the reads', and its lifecycle's (12.3). */
+const EXCEPTION_ACTION_CODES = [
+  ...EXCEPTION_READ_CODES,
+  'exceptions.not-open',
+  'exceptions.not-closed',
+  'exceptions.already-owner',
+  'exceptions.party-not-found',
+  'exceptions.resolution-not-verified',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes a read of one organisation master can answer: the reads' own, and a record that does not exist. */
@@ -1655,6 +1685,136 @@ export const routes = {
     access: { kind: 'own' },
     command: false,
     response: masterListsSchema,
+    codes: HISTORY_CODES,
+  }),
+  // Exceptions (access-and-approvals 12, 14; module-map 4.13; S1-F08-T02). An exception carries its Site, Store,
+  // business unit and brand, so its routes authorise in the command, with its facts; its owner, or a holder of the
+  // owning role, acts on it by being its owner (module-map 4.13), and anyone else needs the route's action covering it.
+  listExceptionRouting: defineRoute({
+    method: 'GET',
+    path: '/api/exceptions/routing',
+    access: { kind: 'action', action: 'view', recordType: 'exceptions.exception_routing' },
+    command: false,
+    response: routingListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareExceptionRouting: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/routing',
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception_routing' },
+    command: true,
+    body: routingVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: routingVersionPreparedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'exceptions.type-not-registered',
+      'exceptions.starts-in-past',
+      'exceptions.version-overlaps',
+      'exceptions.party-not-found',
+    ],
+  }),
+  raiseException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions',
+    access: { kind: 'action', action: 'create', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: raiseRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: raisedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'exceptions.type-not-registered',
+      'exceptions.link-not-for-type',
+      'exceptions.no-exception-code-series',
+      'exceptions.no-routing',
+    ],
+  }),
+  readException: defineRoute({
+    method: 'GET',
+    path: '/api/exceptions/exceptions/{exceptionId}',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: false,
+    response: exceptionViewSchema,
+    codes: EXCEPTION_READ_CODES,
+  }),
+  commentOnException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/comment',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: commentRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  reassignException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/reassign',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: reassignRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  takeException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/take',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: noBodySchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  closeException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/close',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: noBodySchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  reopenException: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/reopen',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: commentRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  // The read model (12.3; PRD-EXC-004): open exceptions by Store, brand and type, within the reader's scope.
+  listOpenExceptions: defineRoute({
+    method: 'GET',
+    path: '/api/exceptions/open-summary',
+    access: { kind: 'action', action: 'view', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: false,
+    response: openExceptionsSchema,
     codes: HISTORY_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;

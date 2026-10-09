@@ -6,6 +6,7 @@ import { setupRequestSchema, type PersonaId } from '@apparel-os/schemas';
 import {
   CommandRunner,
   IdempotencyHelper,
+  newCorrelationId,
   OrganisationRouter,
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
@@ -22,7 +23,10 @@ import {
 import { jobIdentities } from '../../src/modules/access/commands/job-identities.js';
 // The codes of the two roles the setup step creates, so the journey assigns exactly those roles (9.11).
 import { FIRST_ADMIN_ROLE, FIRST_APPROVER_ROLE } from '../../src/modules/access/domain/first-roles.js';
-import { inboxConsumers } from '../../src/modules/inbox/index.js';
+import { Audit } from '../../src/modules/audit/index.js';
+import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
+import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
@@ -41,8 +45,16 @@ import { capturingLogger } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup } from '../support/organisation.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
+import {
+  createTestExceptionsSchema,
+  defineSyntheticCodeSeries,
+  syntheticMismatch,
+  TEST_DOCUMENT_TYPE,
+  TEST_EXCEPTIONS_MODULE,
+  writeTestDocument,
+} from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
-import { databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
+import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 
 // The server of the browser journeys (S1-F01-T15, S1-F01-T20; code-house-rules 10.1, 11.2): a test composition of the
@@ -401,6 +413,82 @@ await writeSyntheticRole(settingsDatabase, {
   })),
 });
 
+// The exceptions journey (exceptions.spec.ts; S1-F08-T02), in the settings Organisation, whose worker identities the
+// setup step wrote: the test-only raising module's schema (code-house-rules 11.4), a SYNTHETIC exception-code series,
+// a SYNTHETIC rule routing its SYNTHETIC type at no Site to an enrolled Operations user, approved here as a fixture
+// (code-house-rules 11.2), and one exception raised on a test document that is not resolved, so closing is refused.
+await createTestExceptionsSchema(settingsDatabase);
+const exceptionsOps = await provisionUser('BROWSER-EXCEPTIONS-OPS', 'P-OPS', [
+  { recordType: 'exceptions.exception', action: 'view' },
+]);
+const fixtureLog = capturingLogger();
+const fixtureRouter = new OrganisationRouter(
+  { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
+  fixtureLog.logger,
+);
+const fixtureRunner = new CommandRunner({
+  clock: { now: () => new Date() },
+  timezones: syntheticTimezone,
+  logger: fixtureLog.logger,
+});
+const fixtureNumbering = new Numbering({ kinds: [EXCEPTION_CODE_KIND] });
+const fixtureExceptions = new Exceptions({
+  numbering: fixtureNumbering,
+  inbox: new Inbox(),
+  audit: new Audit(fixtureLog.logger),
+  types: [syntheticMismatch],
+});
+const settingsRouted = await fixtureRouter.resolveForSignIn(settingsCode);
+if (!settingsRouted.routed) throw new Error('The settings Organisation was not routed');
+const fixtureCommand = <T>(work: Parameters<typeof fixtureRunner.run<T>>[1]) =>
+  fixtureRunner.run(
+    {
+      commandName: 'test-syn-exceptions.fixture',
+      organisation: settingsRouted.organisation,
+      correlationId: newCorrelationId(),
+      actor: { kind: 'actor', actorId: exceptionsOps.id },
+    },
+    work,
+  );
+await fixtureCommand((context) => defineSyntheticCodeSeries(context, fixtureNumbering));
+const fixtureRouting = await fixtureCommand((context) =>
+  fixtureExceptions.prepareRouting(
+    context,
+    { userId: exceptionsOps.id, roleAssignmentId: crypto.randomUUID() },
+    {
+      typeCode: syntheticMismatch.code,
+      siteId: null,
+      owner: { kind: 'user', userId: exceptionsOps.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: exceptionsOps.id },
+      validFrom: new Date().toISOString().slice(0, 10),
+      origin: 'synthetic',
+    },
+  ),
+);
+if (fixtureRouting.kind !== 'done') throw new Error(`The synthetic rule was refused: ${fixtureRouting.refusal.code}`);
+const fixtureOwner = await connect(settingsDatabase, 'migration');
+await fixtureOwner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
+  fixtureRouting.value.versionId,
+]);
+await fixtureOwner.end();
+const exceptionDocument = await fixtureCommand((context) => writeTestDocument(context));
+const raisedException = await fixtureCommand((context) =>
+  fixtureExceptions.raiseInOwnCommand(context, {
+    raisingEvent: `${TEST_EXCEPTIONS_MODULE}.journey:${exceptionDocument}`,
+    typeCode: syntheticMismatch.code,
+    facts: { siteId: null, storeId: null, businessUnitId: null, brandId: null },
+    links: [
+      { module: TEST_EXCEPTIONS_MODULE, recordType: TEST_DOCUMENT_TYPE, recordId: exceptionDocument, versionId: null },
+    ],
+    exposure: { kind: 'unknown' },
+    raisedBy: { kind: 'user', id: exceptionsOps.id },
+  }),
+);
+if (raisedException.kind !== 'done')
+  throw new Error(`The synthetic exception was refused: ${raisedException.refusal.code}`);
+await fixtureRouter.close();
+
 /** How a journey signs a user in: login, name, password and authenticator secret. */
 const credentialsOf = (user: SyntheticUser) => ({
   login: user.login,
@@ -421,7 +509,7 @@ const app = await startAccessApp(
     AOS_ENVIRONMENT: 'local',
     AOS_DEMO_SIGN_IN: JSON.stringify([{ organisationCode: settingsCode, login: demoUser.login, label: demoLabel }]),
   },
-  { origin, port, webApp, fileStoreEnvironment: fileStore.environment },
+  { origin, port, webApp, fileStoreEnvironment: fileStore.environment, exceptionTypes: [syntheticMismatch] },
 );
 
 // The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A). It serves every
@@ -508,6 +596,11 @@ writeFileSync(
       organisationCode: settingsCode,
       admin: credentialsOf(settingsAdmin),
       approver: credentialsOf(settingsApprover),
+    },
+    exceptions: {
+      organisationCode: settingsCode,
+      operations: credentialsOf(exceptionsOps),
+      code: raisedException.value.code,
     },
     journey: {
       organisationCode: journeyCode,

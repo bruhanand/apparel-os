@@ -7,7 +7,18 @@
       "retryBackoff": true,
       "activeLimitSeconds": 300
     },
-    "inbox.close-approval": { "retries": 4, "retryDelaySeconds": 10, "retryBackoff": true, "activeLimitSeconds": 300 }
+    "inbox.close-approval": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
+    },
+    "exceptions.raise-unfinished-operation": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
+    }
   },
   "jobKinds": {
     "audit.seal-closed-block": {
@@ -39,6 +50,13 @@
       "everySeconds": 3600
     },
     "access.rebuild-grants": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 60
+    },
+    "exceptions.escalate-overdue": {
       "retries": 4,
       "retryDelaySeconds": 10,
       "retryBackoff": true,

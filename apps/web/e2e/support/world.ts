@@ -59,6 +59,12 @@ export interface SyntheticWorld {
     readonly admin: EnrolledUser;
     readonly approver: EnrolledUser;
   };
+  /** The exceptions journey (S1-F08-T02): an Operations user who owns one SYNTHETIC exception, by its code. */
+  readonly exceptions: {
+    readonly organisationCode: string;
+    readonly operations: EnrolledUser;
+    readonly code: string;
+  };
   /**
    * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
    * Area, an Admin who may prepare the structure and an approver who may approve it.

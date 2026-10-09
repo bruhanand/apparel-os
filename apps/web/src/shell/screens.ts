@@ -54,6 +54,12 @@ export const screens = {
     need: view('organisation.site'),
   },
   'setup.geography': { section: 'setup', path: '/setup/geography', need: view('organisation.country') },
+  // Exception rules: owner, due time and escalation per type and Site (access-and-approvals 12.2, 14; S1-F08-T02).
+  'setup.exception-rules': {
+    section: 'setup',
+    path: '/setup/exception-rules',
+    need: view('exceptions.exception_routing'),
+  },
   'setup.audit-log': { section: 'setup', path: '/setup/audit-log', need: view('audit.audit_record') },
   'setup.policy-readiness': {
     section: 'setup',
@@ -82,6 +88,7 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.security-settings',
       'setup.organisation-structure',
       'setup.geography',
+      'setup.exception-rules',
       'setup.policy-readiness',
     ],
   },

@@ -102,9 +102,10 @@ export async function assignmentsInForce(
     assignment: sql`${roleAssignment.validDuring} @> ${businessDate}::date`,
     actorId,
   });
-  return dated.map(({ assignmentId, actorId: actor, scope, permissions }) => ({
+  return dated.map(({ assignmentId, actorId: actor, roleId, scope, permissions }) => ({
     assignmentId,
     actorId: actor,
+    roleId,
     scope,
     permissions,
   }));
@@ -142,6 +143,7 @@ async function datedAssignments(
     .select({
       id: roleAssignment.id,
       actorId: actor,
+      roleId: roleAssignment.roleId,
       roleVersionId: roleVersion.id,
       validDuring: sql<string>`(${roleAssignment.validDuring} * ${roleVersion.validDuring})::text`,
     })
@@ -167,6 +169,7 @@ async function datedAssignments(
     return {
       assignmentId: row.id,
       actorId: row.actorId,
+      roleId: row.roleId,
       scope,
       permissions: permissions.get(row.roleVersionId) ?? [],
       roleVersionId: row.roleVersionId,

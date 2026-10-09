@@ -109,6 +109,9 @@ export function MyWorkList({
                       <span className="text-body">{subject.name}</span>
                     )}
                     <StatusBadge state={stateIdOf(item.state)} />
+                    {item.kind === 'exception' && item.due.kind === 'at' && item.due.at < work.asOf && (
+                      <StatusBadge state="overdue" />
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-body-sm text-text-2">
                     {subject !== undefined && (
@@ -132,6 +135,17 @@ export function MyWorkList({
                     }}
                   >
                     {t('my-work.open-decide')}
+                  </button>
+                )}
+                {item.nextAction === 'exceptions.open-exception' && (
+                  <button
+                    type="button"
+                    className="h-9 rounded-control px-3 font-semibold text-accent hover:bg-tint"
+                    onClick={() => {
+                      onOpen(item);
+                    }}
+                  >
+                    {t('my-work.open-exception')}
                   </button>
                 )}
               </li>

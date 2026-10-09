@@ -5,6 +5,7 @@ import { api } from '../api';
 import { readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
 import { approvalSubject } from '../approvals/subject';
+import { ExceptionDrawer } from '../exceptions/ExceptionDrawer';
 import { approvalRead, subjectReads, useApprovalSubjects, useSubjectLists } from '../approvals/use-subjects';
 import { Button } from '../components/Button';
 import { t } from '../messages/catalogue';
@@ -18,8 +19,8 @@ const myWorkRead = () => readQuery(api, 'listMyWork', {});
 
 /**
  * Home › My work (access-and-approvals 11.2; spec section 6 "My work"): loading, empty, the list in the server's order,
- * error, and the time it was read (PRD-PRF-004). Opening an approval opens its panel in the drawer; acting runs the
- * owner's operation with its own checks (module-map 4.8).
+ * error, and the time it was read (PRD-PRF-004). Opening an approval opens its panel in the drawer, and an exception
+ * its record (access-and-approvals 12, 14); acting runs the owner's operation with its own checks (module-map 4.8).
  */
 export function MyWorkScreen() {
   const query = useQuery(myWorkRead());
@@ -43,7 +44,16 @@ export function MyWorkScreen() {
       <ListRead query={query} what="my-work.what">
         {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} subjects={subjects} />}
       </ListRead>
-      {open !== null && (
+      {open !== null && open.kind === 'exception' && (
+        <ExceptionDrawer
+          exceptionId={open.owner.recordId}
+          onClose={() => {
+            setOpen(null);
+            void query.refetch();
+          }}
+        />
+      )}
+      {open !== null && open.kind !== 'exception' && (
         <ApprovalDrawer
           item={open}
           onClose={() => {

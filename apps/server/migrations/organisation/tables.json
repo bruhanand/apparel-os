@@ -910,6 +910,62 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "numbering-and-audit 3.7, 6.1",
       "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command, and people see a number through that module's scoped document"
+    },
+    {
+      "table": "exceptions.exception_type",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 12.1, 13.3",
+      "why": "The types modules register in code, holding no scope fact; only exceptions code reads it"
+    },
+    {
+      "table": "exceptions.exception_routing",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "access-and-approvals 12.2, 13.3; POL-02.16",
+      "why": "The Organisation's routing setting, read and changed under exceptions.exception_routing, which declares no scope fact; only exceptions code reads it"
+    },
+    {
+      "table": "exceptions.exception_routing_version",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 12.2, 13.3; code-house-rules 7.3",
+      "why": "The routing's versions, overlap key the routing, locked with the routing while one is decided; only exceptions code reads it"
+    },
+    {
+      "table": "exceptions.exception",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 12.1, 12.3, 13.3",
+      "why": "An exception is acted on by its owner, a named user or a holder of a role within the Site's scope, who may hold no grant on its type (module-map 4.13), and is raised inside the command that found the problem, whose actor may hold none either, so no row-level policy can admit both; only exceptions code reads it, admitting a reader only as the owner or through Authorise on exceptions.exception with the exception's facts (access-and-approvals 7.1, 12.4)"
+    },
+    {
+      "table": "exceptions.exception_link",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 12.1, 13.3",
+      "why": "Read only with its exception, after the exception's reader is admitted; only exceptions code reads it"
+    },
+    {
+      "table": "exceptions.exception_event",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 12.3, 13.3; POL-03.05",
+      "why": "Read only with its exception, after the exception's reader is admitted; only exceptions code reads it"
+    },
+    {
+      "table": "inbox.work_item_escalation",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 11.3, 13.2",
+      "why": "The escalations of a work item, read with it by inbox; only inbox code reads it"
     }
   ]
 }

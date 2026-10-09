@@ -9,6 +9,7 @@ import * as kernelTables from '../src/kernel/db/schema.js';
 // The audit and access modules' table definitions, read only for the same comparison.
 import * as accessTables from '../src/modules/access/db/schema.js';
 import * as filesImportsTables from '../src/modules/files-imports/db/schema.js';
+import * as exceptionsTables from '../src/modules/exceptions/db/schema.js';
 import * as inboxTables from '../src/modules/inbox/db/schema.js';
 import * as stockTables from '../src/modules/stock/ledger/db/schema.js';
 import * as organisationTables from '../src/modules/organisation/db/schema.js';
@@ -523,6 +524,15 @@ describe('the Drizzle definitions of stock · ledger (code-house-rules 3.4, 10.4
 
 describe('the Drizzle definitions of numbering (code-house-rules 3.4, 10.4)', () => {
   it.each(Object.entries(numberingTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
+});
+
+describe('the Drizzle definitions of exceptions (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(exceptionsTables))(
     'code-house-rules 3.4 %s matches its migrated table',
     async (_name, table) => {
       await expectDefinitionMatches(world.organisations[0].database, table);

@@ -5,11 +5,20 @@ import {
   AccessModule,
   MODULE_APPROVALS,
   SCOPE_MEMBERS,
+  type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { FilesImportsModule } from './modules/files-imports/index.js';
+import {
+  EXCEPTION_CODE_KIND,
+  EXCEPTION_TYPES,
+  ExceptionsModule,
+  routingApprovals,
+  type ExceptionTypeRegistration,
+} from './modules/exceptions/index.js';
 import { InboxModule } from './modules/inbox/index.js';
+import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
@@ -22,12 +31,21 @@ import {
 } from './modules/organisation/index.js';
 import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.js';
 
+/** The approval rules and decision effects of several modules, as one (access-and-approvals 9.8b). */
+function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals {
+  return {
+    rules: modules.flatMap((each) => each.rules),
+    effects: new Map(modules.flatMap((each) => [...each.effects])),
+  };
+}
+
 /**
  * The contracts a lower module defines and a higher one implements, handed over at start (module-map section 3, rule
  * 6): the approval rules and decision effects the modules above `access` declare for their documents
  * (access-and-approvals 8, 9.8b), the scope contract of `access` that `organisation` implements (5.1; S1-F02-T03),
- * and the location-in-use contract of `organisation` that `stock` · ledger implements
- * (structure-and-masters 3.5; S1-F02-T02). The defining module never depends on the implementing one. Global, so the
+ * the location-in-use contract of `organisation` that `stock` · ledger implements
+ * (structure-and-masters 3.5; S1-F02-T02), and the kinds `numbering` serves, declared by the modules that own them
+ * (numbering-and-audit 3.1; S1-F08-T02). The defining module never depends on the implementing one. Global, so the
  * modules' factories reach them.
  */
 @Global()
@@ -37,14 +55,19 @@ import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.j
     { provide: LOCATION_IN_USE, useFactory: (): LocationInUse => new LocationStock() },
     {
       provide: MODULE_APPROVALS,
-      useFactory: (audit: AuditInterface, locationInUse: LocationInUse) => organisationApprovals(audit, locationInUse),
+      useFactory: (audit: AuditInterface, locationInUse: LocationInUse) =>
+        bothApprovals(organisationApprovals(audit, locationInUse), routingApprovals(audit)),
       inject: [AUDIT, LOCATION_IN_USE],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` brands from S1-F03-T01.
     { provide: SCOPE_MEMBERS, useValue: [organisationScopeMembers] satisfies readonly ScopeMembers[] },
+    // The kinds the owning modules number (numbering-and-audit 3.1): so far the exception code (S1-F08-T02).
+    { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND] satisfies readonly NumberedKind[] },
+    // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
+    { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
   ],
-  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS],
+  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS, NUMBERED_KINDS, EXCEPTION_TYPES],
 })
 export class ModuleApprovalsModule {}
 
@@ -63,6 +86,7 @@ export class ModuleApprovalsModule {}
     AuditModule,
     AccessModule,
     InboxModule,
+    ExceptionsModule,
     FilesImportsModule,
     CatalogueModule,
     PartiesModule,

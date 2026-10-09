@@ -11,6 +11,7 @@ import type { CommandOutcome, IdempotencyHelper, IdempotentAnswer } from '../ide
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
 import type { OrganisationRouter, RoutedOrganisation } from '../routing/organisation-router.js';
 import { StaleAuthority, type JobAuthority, type JobIdentities } from './contracts.js';
+import { eventScopeFacts, JOB_RECORD_TYPE, jobFailed } from './job-failed.js';
 import { KEEP_EVERY_JOB, startJobQueue } from './job-queue.js';
 import {
   checkRegistry,
@@ -81,6 +82,10 @@ interface Served {
  *   however many workers run, and its step is a command keyed by the job's identity.
  * - **The retry rule** of 12.9: a transient failure is retried by the job kind's setting, a refusal is kept and
  *   never retried, a defect fails the job at once and is logged. A failed job stays failed (CH-9).
+ * - **A job that fails for good**, at its last attempt or at once as a defect, is published once as
+ *   `kernel.job-failed`, keyed by the job's identifier, under the processor's identity, with the scope facts of the
+ *   event it was delivering; `exceptions` raises its unfinished-operation exception from it (12.9; S1-F08-T02). A
+ *   failed delivery of that event itself is only logged, so a failure never feeds on itself.
  *
  * The NOTIFY a command sends at commit is not listened to yet: the processor reads the outbox at the poll interval
  * of its settings (RR-272).
@@ -364,10 +369,19 @@ export class Worker {
       { batchSize: 1, perJobResults: true, pollingIntervalSeconds },
       async (jobs): Promise<JobResult[]> =>
         Promise.all(
-          jobs.map(async (job) => ({
-            id: job.id,
-            ...(await this.deliver(organisation.organisationCode, job.data, job.id)),
-          })),
+          jobs.map(async (job) => {
+            const result = await this.deliver(organisation.organisationCode, job.data, job.id);
+            const retry = this.dependencies.settings.consumers[job.data.consumer];
+            const consumer = this.dependencies.registry.consumers.find((each) => each.name === job.data.consumer);
+            if (finalFailure(result, job.retryCount, retry?.retries) && consumer?.event.type !== jobFailed.type) {
+              await this.recordFailure(served, {
+                jobId: job.id,
+                jobKind: job.data.consumer,
+                eventId: job.data.eventId,
+              });
+            }
+            return { id: job.id, ...result };
+          }),
         ),
     );
     for (const kind of this.dependencies.registry.jobKinds) {
@@ -378,10 +392,13 @@ export class Worker {
         { batchSize: 1, perJobResults: true, pollingIntervalSeconds },
         async (jobs): Promise<JobResult[]> =>
           Promise.all(
-            jobs.map(async (job) => ({
-              id: job.id,
-              ...(await this.runJobKind(organisation.organisationCode, kind, job.id)),
-            })),
+            jobs.map(async (job) => {
+              const result = await this.runJobKind(organisation.organisationCode, kind, job.id);
+              if (finalFailure(result, job.retryCount, setting.retries)) {
+                await this.recordFailure(served, { jobId: job.id, jobKind: kind.name, eventId: null });
+              }
+              return { id: job.id, ...result };
+            }),
           ),
       );
       const send = (): void => {
@@ -448,6 +465,48 @@ export class Worker {
     }
   }
 
+  /**
+   * Publishes `kernel.job-failed` for a job that failed for good, once, keyed by the job's identifier, under the
+   * outbox processor's identity and authority (code-house-rules 12.8, 12.9; S1-F08-T02). It carries the scope facts of
+   * the event the job was delivering. Logged, never thrown: the failed job stays failed and visible either way.
+   */
+  async recordFailure(
+    served: { readonly organisation: RoutedOrganisation },
+    failed: { readonly jobId: string; readonly jobKind: string; readonly eventId: string | null },
+  ): Promise<void> {
+    const { organisation } = served;
+    const fields = { organisationCode: organisation.organisationCode, jobKind: failed.jobKind, jobId: failed.jobId };
+    try {
+      const actorId = await this.authenticate(organisation, OUTBOX_PROCESSOR_IDENTITY);
+      if (actorId === undefined) {
+        this.log('error', { ...fields, outcome: 'identity-not-enabled' }, 'The failed job was not published');
+        return;
+      }
+      const answer = await this.dependencies.helper.run(
+        this.request(organisation, 'kernel.record-job-failed', actorId),
+        {
+          key: failed.jobId,
+          content: contentOf({ jobId: failed.jobId }),
+          authoriseReplay: (context) => this.dependencies.identities.authorise(context, actorId, OUTBOX_AUTHORITY),
+          work: async (context) => {
+            const refused = await this.unauthorised(context, actorId, OUTBOX_AUTHORITY);
+            if (refused !== undefined) return refused;
+            const scope = failed.eventId === null ? {} : await eventScopeFacts(context, failed.eventId);
+            await context.publish(jobFailed, {
+              subject: { module: 'kernel', recordType: JOB_RECORD_TYPE, recordId: failed.jobId },
+              scope,
+              payload: { jobId: failed.jobId, jobKind: failed.jobKind, eventId: failed.eventId },
+            });
+            return success({ jobId: failed.jobId });
+          },
+        },
+      );
+      this.log('warn', { ...fields, outcome: answer.kind, replayed: answer.replayed }, 'The failed job was published');
+    } catch (error) {
+      this.log('error', { ...fields, outcome: 'defect', error: errorName(error) }, 'The failed job was not published');
+    }
+  }
+
   private defect(fields: Record<string, string>, error: unknown): StepResult {
     this.log('error', { ...fields, outcome: 'defect', error: errorName(error) }, 'Job step failed: a defect');
     return { status: 'deadletter', output: { outcome: 'defect', error: errorName(error) } };
@@ -481,6 +540,16 @@ export class Worker {
   private log(level: 'info' | 'warn' | 'error', fields: Record<string, unknown>, message: string): void {
     this.dependencies.logger.structured(level, { service: SERVICE, ...fields }, message, CONTEXT);
   }
+}
+
+/**
+ * Whether a step's result fails its job for good (code-house-rules 12.9): a defect or a job not run fails at once; a
+ * transient failure fails for good at the last attempt its retry setting allows. `retryCount` is pg-boss's count of
+ * the attempts before this one.
+ */
+export function finalFailure(result: StepResult, retryCount: number, retries: number | undefined): boolean {
+  if (result.status === 'deadletter') return true;
+  return result.status === 'failed' && retries !== undefined && retryCount >= retries;
 }
 
 function contentOf(body: Record<string, string>): RequestContent {

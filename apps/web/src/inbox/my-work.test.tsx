@@ -120,3 +120,25 @@ describe('the My work list (access-and-approvals 11.2; PRD-ACS-009, PRD-UXP-003)
     expect(text(html)).toContain('Nothing waiting for you');
   });
 });
+
+describe('an exception in My work (access-and-approvals 12.3, 14; S1-F08-T02)', () => {
+  it('PRD-EXC-001 shows its state, Overdue past its due time, and opens its record', () => {
+    const exception = item(1, {
+      kind: 'exception',
+      owner: { ...item(1).owner, module: 'exceptions', recordType: 'exceptions.exception' },
+      due: { kind: 'at', at: '2026-10-07T09:00:00.000Z' },
+      exposure: { kind: 'unknown' },
+      state: 'Unresolved',
+      nextAction: 'exceptions.open-exception',
+    });
+    const html = text(
+      renderToStaticMarkup(<MyWorkList work={work([exception])} onOpen={() => undefined} timeZone="Etc/UTC" />),
+    );
+    expect(html).toContain('Exception');
+    expect(html).toContain('Unresolved');
+    expect(html).toContain('Overdue');
+    expect(html).toContain('Value not known yet');
+    expect(html).toContain('Open');
+    expect(html).not.toContain('Open and decide');
+  });
+});

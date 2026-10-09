@@ -126,6 +126,8 @@ export type { LogLevel, StructuredLogger } from './logging/pino-logger.service.j
 export { JOB_IDENTITIES, StaleAuthority } from './jobs/contracts.js';
 export type { JobAuthority, JobAuthorityHeld, JobIdentities } from './jobs/contracts.js';
 export { JOB_SCHEMA, KEEP_EVERY_JOB, startJobQueue } from './jobs/job-queue.js';
+export { JOB_RECORD_TYPE, jobFailed, jobState } from './jobs/job-failed.js';
+export type { JobState } from './jobs/job-failed.js';
 export { checkRegistry, defineConsumer, defineJobKind } from './jobs/registry.js';
 export type {
   ConsumerDefinition,

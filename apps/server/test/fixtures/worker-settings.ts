@@ -33,6 +33,9 @@ export const SYNTHETIC_EVERY_SECONDS: Readonly<Record<string, number>> = {
   'audit.check-partition-coverage': 3600,
   'audit.ensure-partitions': 3600,
   'access.rebuild-grants': 60,
+  // SYNTHETIC: the escalation of overdue exceptions every minute (S1-F08-T02), a test value only; its real interval
+  // is a worker setting with no default (CH-10).
+  'exceptions.escalate-overdue': 60,
 };
 
 /**

@@ -281,6 +281,8 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
         permissions:
           'audit.audit_partition create,audit.audit_partition view,audit.audit_seal create,audit.audit_seal view',
       },
+      // The exceptions job and consumer: escalation and the unfinished-operation exception (S1-F08-T02).
+      { code: 'exceptions', permissions: 'exceptions.exception create,exceptions.exception edit' },
       // The inbox's consumers of access events (S1-F01-T13).
       { code: 'inbox', permissions: 'inbox.work_item edit' },
       { code: 'outbox', permissions: 'kernel.outbox_event edit' },
@@ -334,9 +336,9 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
        group by 1 order by 1`,
     );
     expect(types).toEqual([
-      { record_type: 'access.role', count: '6' },
-      { record_type: 'access.role_assignment', count: '6' },
-      { record_type: 'access.service_identity', count: '5' },
+      { record_type: 'access.role', count: '7' },
+      { record_type: 'access.role_assignment', count: '7' },
+      { record_type: 'access.service_identity', count: '6' },
       { record_type: 'access.setting', count: '3' },
       { record_type: 'access.setup_record', count: '1' },
       { record_type: 'access.user', count: '2' },
@@ -346,7 +348,7 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       organisation.databaseName,
       "select count(*)::text as count from audit.access_record where kind = 'permission-changed'",
     );
-    expect(changes).toEqual([{ count: '6' }]);
+    expect(changes).toEqual([{ count: '7' }]);
   });
 
   it('PRD-ACS-023 the first users sign in to the new Organisation, which the running app finds by its code (RR-250)', async () => {

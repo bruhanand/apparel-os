@@ -13,6 +13,7 @@ import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
 import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
+import { ExceptionRulesScreen } from './exceptions/ExceptionRulesScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
 import { ReasonsScreen } from './setup/ReasonsScreen';
 import { RolesScreen } from './setup/RolesScreen';
@@ -98,6 +99,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <OrganisationStructureScreen />;
     case 'setup.geography':
       return <GeographyScreen />;
+    case 'setup.exception-rules':
+      return <ExceptionRulesScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

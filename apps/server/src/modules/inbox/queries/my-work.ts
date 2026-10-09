@@ -8,7 +8,8 @@ import { APPROVAL_ELIGIBILITY } from '../jobs/consumers.js';
 
 /**
  * List my work (access-and-approvals 11.2; module-map 4.8; PRD-ACS-009): the open items the reader may act on now,
- * as a named user or by the owner's eligibility rule, which `access` answers at this read, so an item drops out as
+ * as a named user, by the owner's eligibility rule, or as a holder of a role whose assignment covers the item's
+ * facts, each of which `access` answers at this read, so an item drops out as
  * soon as its reader is no longer eligible (11.2, 9.4). Ordered by due time, then exposure, Unknown above known
  * (PRD-MOD-015). Each item names its next action as a code (PRD-UXP-003).
  */
@@ -36,12 +37,35 @@ export async function listMyWork(
     )
     .map((item) => item.ownerRecordId);
   const eligible = new Set(await access.eligibleRequests(context, userId, approvalRequestIds));
-  const mine = open.filter((item) =>
-    actors.some(
-      (actor) =>
-        actor.workItemId === item.id &&
-        (actor.userId === userId || (actor.eligibility === APPROVAL_ELIGIBILITY && eligible.has(item.ownerRecordId))),
-    ),
+  // A role actor: its holders whose assignment covers the item's facts may act (12.2; S1-F08-T02).
+  const byId = new Map(open.map((item) => [item.id, item]));
+  const roleActors = actors.filter((actor) => actor.roleId !== null && byId.has(actor.workItemId));
+  const held = await access.rolesHeld(
+    context,
+    userId,
+    roleActors.map((actor) => {
+      const item = byId.get(actor.workItemId);
+      return {
+        roleId: actor.roleId ?? '',
+        recordType: item?.ownerRecordType ?? '',
+        facts: {
+          siteId: item?.siteId ?? undefined,
+          storeId: item?.storeId ?? undefined,
+          businessUnitId: item?.businessUnitId ?? undefined,
+          brandId: item?.brandId ?? undefined,
+        },
+      };
+    }),
+  );
+  const heldItems = new Set(roleActors.filter((_actor, index) => held[index] === true).map((a) => a.workItemId));
+  const mine = open.filter(
+    (item) =>
+      heldItems.has(item.id) ||
+      actors.some(
+        (actor) =>
+          actor.workItemId === item.id &&
+          (actor.userId === userId || (actor.eligibility === APPROVAL_ELIGIBILITY && eligible.has(item.ownerRecordId))),
+      ),
   );
   const orderable = mine.map((item) => ({
     item,
@@ -66,6 +90,7 @@ export async function listMyWork(
       exposure: exposure as WorkItem['exposure'],
       state: item.state,
       ...(item.kind === 'approval' ? { nextAction: 'access.decide-approval' } : {}),
+      ...(item.kind === 'exception' ? { nextAction: 'exceptions.open-exception' } : {}),
     })),
   };
 }

@@ -169,6 +169,8 @@ export type StoredPermission =
 export interface AssignmentInForce {
   readonly assignmentId: string;
   readonly actorId: string;
+  /** The role the assignment is of (12.2: a role within the Site's scope; S1-F08-T02). */
+  readonly roleId: string;
   readonly scope: AssignmentScope;
   readonly permissions: readonly StoredPermission[];
 }
@@ -211,7 +213,7 @@ const selected = <Member>(scope: DimensionScope<Member>): readonly Member[] =>
  * (4.1); an assignment empty in any dimension gives no row (PRD-ACS-005). Rows are ordered by record type.
  */
 export function grantRowsOf(
-  assignment: AssignmentInForce,
+  assignment: Omit<AssignmentInForce, 'roleId'>,
   registry: ReadonlyMap<string, RecordTypeDeclaration>,
 ): GrantRow[] {
   if (grantsNothing(assignment.scope)) return [];

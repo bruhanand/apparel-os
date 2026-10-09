@@ -30,6 +30,7 @@ import {
   type ModuleApprovals,
 } from '../../src/modules/access/index.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
+import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
 // The access module's own helpers, used only to write the fewest rows a test needs until the setup step and the user
 // commands exist (code-house-rules 11.2): the factor secret is sealed exactly as the module seals it.
@@ -240,6 +241,8 @@ export async function startAccessApp(
     readonly fileStoreEnvironment?: Record<string, string>;
     /** Record types beside the declared ones, for a test-only record type (code-house-rules 11.4). */
     readonly extraRecordTypes?: readonly RecordTypeDeclaration[];
+    /** Exception types beside the module's own, for a test-only raising module (code-house-rules 11.4). */
+    readonly exceptionTypes?: readonly ExceptionTypeRegistration[];
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -255,6 +258,9 @@ export async function startAccessApp(
   );
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  if (options.exceptionTypes !== undefined) {
+    builder = builder.overrideProvider(EXCEPTION_TYPES).useValue(options.exceptionTypes);
+  }
   if (options.extraRecordTypes !== undefined) {
     const registry = [...permissionRegistry, ...options.extraRecordTypes];
     builder = builder.overrideProvider(ACCESS).useFactory({

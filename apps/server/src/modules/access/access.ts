@@ -1,3 +1,4 @@
+import { partyNames, rolesHeld, type PartyNames, type RoleHeldQuestion } from './queries/parties.js';
 import {
   permissionRegistry,
   registryByCode,
@@ -244,6 +245,13 @@ export interface AccessInterface {
   ): Promise<{ id: string; versionId: string; code: string; kind: 'approve' | 'reject'; text: string }[]>;
   /** Of the requests named, those still open that the user may decide now: My work's eligibility (11.2). */
   eligibleRequests(context: TransactionContext, userId: string, requestIds: readonly string[]): Promise<string[]>;
+  /**
+   * For each question, whether the user holds the role through an assignment in force whose scope covers the record's
+   * facts: "a role within the Site's scope", which My work and `exceptions` ask (12.2; S1-F08-T02).
+   */
+  rolesHeld(context: TransactionContext, userId: string, questions: readonly RoleHeldQuestion[]): Promise<boolean[]>;
+  /** The names of users and roles a record names as its parties; an unknown identifier is left out (12.2). */
+  partyNames(context: TransactionContext, userIds: readonly string[], roleIds: readonly string[]): Promise<PartyNames>;
   /** Authorise for a replayed decision: the same actor, still holding approve on the request's type (12.4). */
   decisionReplayAccess(
     context: TransactionContext,
@@ -518,6 +526,14 @@ export class Access implements AccessInterface {
 
   eligibleRequests(context: TransactionContext, userId: string, requestIds: readonly string[]) {
     return this.approvals.eligibleRequests(context, userId, requestIds);
+  }
+
+  rolesHeld(context: TransactionContext, userId: string, questions: readonly RoleHeldQuestion[]) {
+    return rolesHeld(context, this.registry, userId, questions);
+  }
+
+  partyNames(context: TransactionContext, userIds: readonly string[], roleIds: readonly string[]) {
+    return partyNames(context, userIds, roleIds);
   }
 
   decisionReplayAccess(context: TransactionContext, actor: DecidingActor, requestId: string) {

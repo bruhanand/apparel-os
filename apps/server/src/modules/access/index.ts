@@ -36,6 +36,7 @@ export type {
   ValueBasis,
 } from './domain/approval-rules.js';
 export type { LatestRequest } from './queries/access-records.js';
+export type { PartyNames, RoleHeldQuestion } from './queries/parties.js';
 export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } from './commands/approval-use.js';
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';

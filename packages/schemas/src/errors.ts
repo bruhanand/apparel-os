@@ -407,6 +407,41 @@ export const numberingCodes = declareCodes({
   'numbering.document-numbered-elsewhere': 'refused',
 });
 
+/**
+ * The codes of `exceptions` (access-and-approvals 12; module-map 4.13; S1-F08-T02). A refusal names what blocks it
+ * (PRD-UXP-003).
+ *
+ * - `exceptions.no-exception-code-series`: no Open series of the exception-code kind, so an operation that would raise
+ *   a numbered exception is unavailable; `missing` names the series (DEC-116).
+ * - `exceptions.no-routing`: no routing in force for the type at the Site, so an operation whose exceptions would have
+ *   no owner is unavailable; `missing` names the type and the Site (POL-02.16).
+ * - `exceptions.type-not-registered`: no module registers the type (12.1).
+ * - `exceptions.link-not-for-type`: the type does not link to that record type (12.1).
+ * - `exceptions.exception-not-found`: no exception the reader may see has that identifier.
+ * - `exceptions.not-open`: the exception is closed; reopen it first (12.3).
+ * - `exceptions.not-closed`: only a closed exception is reopened (12.3).
+ * - `exceptions.resolution-not-verified`: the owning module's resolution check does not verify the linked business
+ *   outcome, so the exception stays open; `missing` names the check (PRD-EXC-002).
+ * - `exceptions.already-owner`: the exception is already assigned to that party.
+ * - `exceptions.starts-in-past`: a routing version never starts on a past date (GC2-7, DEC-105).
+ * - `exceptions.version-overlaps`: a version of the routing starts on or after this one's start (code-house-rules 7.3).
+ * - `exceptions.party-not-found`: the owner or the escalation names a user or a role that does not exist.
+ */
+export const exceptionsCodes = declareCodes({
+  'exceptions.no-exception-code-series': 'unavailable',
+  'exceptions.no-routing': 'unavailable',
+  'exceptions.type-not-registered': 'refused',
+  'exceptions.link-not-for-type': 'refused',
+  'exceptions.exception-not-found': 'not-found',
+  'exceptions.not-open': 'refused',
+  'exceptions.not-closed': 'refused',
+  'exceptions.resolution-not-verified': 'refused',
+  'exceptions.already-owner': 'refused',
+  'exceptions.starts-in-past': 'refused',
+  'exceptions.version-overlaps': 'refused',
+  'exceptions.party-not-found': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -418,6 +453,7 @@ export const errorCodes = {
   ...stockLedgerCodes,
   ...organisationCodes,
   ...numberingCodes,
+  ...exceptionsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

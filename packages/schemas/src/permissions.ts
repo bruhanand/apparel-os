@@ -187,6 +187,19 @@ const organisationRecordTypes = [
   declare('organisation.business_unit_mapping_verification', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
+const PLACE_AND_BRAND: ScopeFactsDeclared = { legalEntity: false, place: true, brand: true };
+
+/**
+ * `exceptions` (access-and-approvals 12, 14; module-map 4.13; S1-F08-T02). An exception carries its Site, and its
+ * Store, business unit and brand where they apply (12.1), so view, create (a person raising one) and edit (reassign,
+ * comment, close and reopen as an authorised person) cover those facts; its owner acts on it by being its owner
+ * (module-map 4.13). The routing is the Organisation's setting, read and changed under the type alone.
+ */
+const exceptionsRecordTypes = [
+  declare('exceptions.exception', ['view', 'create', 'edit'], PLACE_AND_BRAND),
+  declare('exceptions.exception_routing', ['view', 'edit', 'approve'], NONE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -196,6 +209,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...filesImportsRecordTypes,
   ...stockRecordTypes,
   ...organisationRecordTypes,
+  ...exceptionsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -206,7 +220,8 @@ export type RecordTypeCode =
   | (typeof inboxRecordTypes)[number]['code']
   | (typeof filesImportsRecordTypes)[number]['code']
   | (typeof stockRecordTypes)[number]['code']
-  | (typeof organisationRecordTypes)[number]['code'];
+  | (typeof organisationRecordTypes)[number]['code']
+  | (typeof exceptionsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(
