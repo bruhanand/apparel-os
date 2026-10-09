@@ -64,5 +64,11 @@ export { missingSettingsRefusal, runSetupStep, SetupRequestRefused } from './ope
 export type { SetupStepOptions } from './operator/setup-step.js';
 export { runRecovery } from './operator/recovery.js';
 export type { RecoveryOptions, RecoveryOutcome, RecoveryRefusal } from './operator/recovery.js';
+export { runAddServiceIdentities } from './operator/add-service-identities.js';
+export type {
+  AddServiceIdentitiesOptions,
+  AddServiceIdentitiesOutcome,
+  DifferingIdentity,
+} from './operator/add-service-identities.js';
 export type { Authority, ServiceIdentityGrant } from './commands/setup.js';
 export { SETUP_IDENTITY } from './domain/first-roles.js';

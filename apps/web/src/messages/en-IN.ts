@@ -502,6 +502,7 @@ export const englishIndia = {
   'history.operation.request-approval': 'Requested approval',
   'history.operation.set-up-organisation': 'Set up the Organisation',
   'history.operation.recover-first-user': 'Recovered a first user',
+  'history.operation.add-service-identities': 'Added the worker’s service identities',
   'history.operation.reset-credential': 'Reset a credential',
   'history.operation.rebuild-grants-date-passed': 'Brought access up to date for a date passed',
   'history.operation.supersede-approval-request': 'Superseded an approval request',

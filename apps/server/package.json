@@ -13,6 +13,7 @@
     "migrate": "node dist/migrate.js",
     "setup-organisation": "node dist/setup-organisation.js",
     "recover-first-user": "node dist/recover-first-user.js",
+    "add-service-identities": "node dist/add-service-identities.js",
     "seed": "node dist-seed/test/seed/seed.js",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",

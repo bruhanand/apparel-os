@@ -106,9 +106,7 @@ export async function writeSetup(
   write: SetupWrite,
 ): Promise<{ readonly firstAdminUserId: string; readonly firstApproverUserId: string }> {
   const actor: AuditActor = { kind: 'service-identity', id: write.setupIdentityId };
-  const record = async (
-    entry: Pick<Parameters<AuditInterface['record']>[1], 'record' | 'changes'>,
-  ): Promise<{ auditRecordId: string }> =>
+  const record: RecordAudit = async (entry) =>
     audit.record(context, { actor, ...entry, operation: 'set-up-organisation', source: { kind: 'operator-command' } });
 
   await setUpTimezone(context, audit, actor, { timezone: write.settings.timezone, origin: write.settings.origin });
@@ -194,7 +192,7 @@ export async function writeSetup(
   }
   const [firstAdminUserId, firstApproverUserId] = userIds as [string, string];
 
-  const holders: { actor: { kind: 'user' | 'service-identity'; id: string }; role: RoleToWrite }[] = [
+  const holders: Holder[] = [
     {
       actor: { kind: 'user', id: firstAdminUserId },
       role: { ...FIRST_ADMIN_ROLE, permissions: FIRST_ADMIN_PERMISSIONS },
@@ -205,22 +203,81 @@ export async function writeSetup(
     },
   ];
   for (const identity of write.serviceIdentities) {
-    const id = uuidv7();
-    await writeServiceIdentity(context, id, identity.code, from);
-    await record({
-      record: { module: 'access', type: 'service_identity', id },
-      changes: [{ kind: 'value', field: 'code', before: null, after: identity.code }],
-    });
-    holders.push({
-      actor: { kind: 'service-identity', id },
-      role: { code: `service-identity:${identity.code}`, name: identity.code, permissions: identity.authorities },
-    });
+    holders.push(await writeInternalIdentity(context, record, identity, from));
   }
+  await writeHolders(context, audit, record, registry, holders, date.date);
 
+  const setupRecordId = uuidv7();
+  await context.tx.insert(setupRecord).values({
+    id: setupRecordId,
+    organisationCode: write.organisationCode,
+    fingerprint: write.fingerprint,
+    canonicalFormVersion: write.canonicalFormVersion,
+    firstAdminUserId,
+    firstApproverUserId,
+  });
+  await record({
+    record: { module: 'access', type: 'setup_record', id: setupRecordId },
+    changes: [
+      { kind: 'value', field: 'fingerprint', before: null, after: write.fingerprint },
+      { kind: 'value', field: 'canonicalFormVersion', before: null, after: write.canonicalFormVersion },
+    ],
+  });
+  return { firstAdminUserId, firstApproverUserId };
+}
+
+/** Writes one audit record of the command that calls it, its actor, operation and source already given. */
+export type RecordAudit = (
+  entry: Pick<Parameters<AuditInterface['record']>[1], 'record' | 'changes'>,
+) => Promise<{ auditRecordId: string }>;
+
+/** An actor to give a role and an all-members assignment of it: a first user, or an internal service identity. */
+export interface Holder {
+  readonly actor: { readonly kind: 'user' | 'service-identity'; readonly id: string };
+  readonly role: RoleToWrite;
+}
+
+/**
+ * Writes an internal service identity the worker runs as, Approved and Active from the business date, with the audit
+ * record of its code, and returns it as a holder of a role granting exactly what its steps declare (access-and-approvals
+ * 2.3, 9.11, 9.11a; RR-271, RR-290, RR-331). The setup step and the command that adds a later identity both use it.
+ */
+export async function writeInternalIdentity(
+  context: TransactionContext,
+  record: RecordAudit,
+  identity: ServiceIdentityGrant,
+  from: string,
+): Promise<Holder> {
+  const id = uuidv7();
+  await writeServiceIdentity(context, id, identity.code, from);
+  await record({
+    record: { module: 'access', type: 'service_identity', id },
+    changes: [{ kind: 'value', field: 'code', before: null, after: identity.code }],
+  });
+  return {
+    actor: { kind: 'service-identity', id },
+    role: { code: `service-identity:${identity.code}`, name: identity.code, permissions: identity.authorities },
+  };
+}
+
+/**
+ * Gives each holder its role and one all-members assignment of it from the business date, each with its audit record
+ * and a permission-change access record, then rebuilds their effective grants (access-and-approvals 7.2, 9.11, 9.11a).
+ * A permission the registry does not declare is a defect.
+ */
+export async function writeHolders(
+  context: TransactionContext,
+  audit: AuditInterface,
+  record: RecordAudit,
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  holders: readonly Holder[],
+  businessDate: string,
+): Promise<void> {
+  const from = `[${businessDate},)`;
   for (const holder of holders) {
     for (const permission of holder.role.permissions) {
       if (registry.get(permission.recordType)?.actions.includes(permission.action) !== true) {
-        throw new CommandDefect(`The setup step would grant an undeclared permission on ${permission.recordType}`);
+        throw new CommandDefect(`The step would grant an undeclared permission on ${permission.recordType}`);
       }
     }
     const roleId = await writeRole(context, holder.role, from);
@@ -244,7 +301,7 @@ export async function writeSetup(
         { kind: 'value', field: 'actor', before: null, after: { ...holder.actor } },
         { kind: 'value', field: 'roleId', before: null, after: roleId.roleId },
         { kind: 'value', field: 'scope', before: null, after: ALL_MEMBERS },
-        { kind: 'value', field: 'validFrom', before: null, after: date.date },
+        { kind: 'value', field: 'validFrom', before: null, after: businessDate },
       ],
     });
     await audit.recordAccess(context, {
@@ -259,27 +316,9 @@ export async function writeSetup(
     registry,
     holders.map((holder) => holder.actor.id),
   );
-
-  const setupRecordId = uuidv7();
-  await context.tx.insert(setupRecord).values({
-    id: setupRecordId,
-    organisationCode: write.organisationCode,
-    fingerprint: write.fingerprint,
-    canonicalFormVersion: write.canonicalFormVersion,
-    firstAdminUserId,
-    firstApproverUserId,
-  });
-  await record({
-    record: { module: 'access', type: 'setup_record', id: setupRecordId },
-    changes: [
-      { kind: 'value', field: 'fingerprint', before: null, after: write.fingerprint },
-      { kind: 'value', field: 'canonicalFormVersion', before: null, after: write.canonicalFormVersion },
-    ],
-  });
-  return { firstAdminUserId, firstApproverUserId };
 }
 
-interface RoleToWrite {
+export interface RoleToWrite {
   readonly code: string;
   readonly name: string;
   readonly permissions: readonly Authority[];

@@ -65,6 +65,16 @@ The steps as planned:
 5. Check step 8's role limits again and `GET /api/health` on the public domain.
 6. Open the public domain at `/`: the web app's sign-in page, with the `dev` banner. The server serves the web app from `apps/web/dist`, which `pnpm build` makes with `AOS_ENVIRONMENT` from the service's variables (deployment.md section 3; `S1-F01-T27`).
 
+## After a deploy that adds a job kind or a consumer
+
+The setup step gives an Organisation the worker's service identities as the registry stood when it ran. A deploy whose worker registry needs a new identity (a new job kind or consumer, such as the `exceptions` identity of `S1-F08-T02`) leaves every Organisation set up before it without that identity, and the worker ends those steps `identity-not-enabled` (access-and-approvals 9.11a; RR-331). After such a deploy, and once the `app` deploy, with its pre-deploy `pnpm migrate`, has finished, run for each Organisation the directory lists, from a shell in `app` (`railway ssh --service app`), which holds `AOS_RUNTIME_DATABASE_URL` and the build:
+
+```sh
+pnpm --filter @apparel-os/server add-service-identities <organisation-code>
+```
+
+It prints one JSON line: `added` with the codes it wrote, `unchanged` when nothing was missing, or `refused` with its reason (exit code 1). A `grants-differ` refusal names an identity that exists with other grants; nothing was written, and it is not corrected by this command. The worker picks the new identity up at its next step, with no restart; a job that already failed `identity-not-enabled` stays failed until an operator runs it again (code-house-rules 12.9). Running it when nothing is missing is harmless. Whether the command needs a decision entry under `PRD-ACS-023` before use outside `dev` is RR-457.
+
 ## A local PostgreSQL
 
 The same files set up a PostgreSQL server on a developer's machine, where the data is synthetic. As a superuser, once per server: `psql -f apps/server/db/roles.sql`, then `psql -f apps/server/db/runtime-limits-synthetic.sql` for the runtime role's starting time limits (CH-3, DEC-112, RR-200), then set both passwords with `\password` as in step 4. The limits reach only sessions that start afterwards, so reconnect the application. Check them as in step 8: as `aos_runtime`, `show lock_timeout;` and `show statement_timeout;` answer `1s` and `5s`. The integration tests need none of this: their container runs both files itself.
