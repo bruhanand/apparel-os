@@ -1,5 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
-import type { PermissionAction } from '@apparel-os/schemas';
+import {
+  catalogueKinds,
+  catalogueRecordType,
+  permissionRegistry,
+  VOCABULARY_PROPOSAL_TYPE,
+  type PermissionAction,
+} from '@apparel-os/schemas';
 import {
   CommandRunner,
   newCorrelationId,
@@ -24,6 +30,7 @@ import {
   type PreparedVersion,
   type Preparer,
 } from '../../src/modules/organisation/index.js';
+import { Catalogue, catalogueApprovals, catalogueScopeMembers } from '../../src/modules/merchandise/catalogue/index.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
@@ -39,6 +46,8 @@ import { connect, databaseUrl } from './postgres.js';
 export interface StructureSetup {
   readonly access: Access;
   readonly organisation: Organisation;
+  /** The merchandise catalogue, composed with `access` as the application composes it (S1-F03-T01). */
+  readonly catalogue: Catalogue;
   readonly preparer: SyntheticUser;
   readonly approver: SyntheticUser;
   readonly asPreparer: Preparer;
@@ -48,6 +57,8 @@ export interface StructureSetup {
   prepare(
     work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion>>,
   ): Promise<Prepared<PreparedVersion>>;
+  /** Runs any command as the preparer, such as a catalogue change (S1-F03-T01). */
+  asPreparerDo<Answer>(work: (context: TransactionContext, preparer: Preparer) => Promise<Answer>): Promise<Answer>;
   /**
    * Decides a request, as the approver unless another user is named, with the approve or reject reason in force.
    * `hold` runs in the decision's transaction after Decide, while its locks are held (code-house-rules 10.3).
@@ -96,14 +107,16 @@ export async function structureSetup(options: {
   if (!found.routed) throw new Error(`${options.organisationCode} is not routed`);
   const routed: RoutedOrganisation = found.organisation;
   const audit = new Audit(log.logger);
-  const modules = organisationApprovals(audit, options.locationInUse);
+  const structure = organisationApprovals(audit, options.locationInUse);
+  const catalogueModule = catalogueApprovals(audit);
   const access = new Access({
     audit,
     keys: OrganisationKeys.fromEnvironment(options.keysEnvironment),
-    approvalRules: modules.rules,
-    documentEffects: modules.effects,
-    scopeMembers: [organisationScopeMembers],
+    approvalRules: [...structure.rules, ...catalogueModule.rules],
+    documentEffects: new Map([...structure.effects, ...catalogueModule.effects]),
+    scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
   });
+  const catalogue = new Catalogue({ audit, access });
   const organisation = new Organisation({
     audit,
     access,
@@ -115,20 +128,20 @@ export async function structureSetup(options: {
   const preparer = await write(`${options.label}-PREPARER`);
   const approver = await write(`${options.label}-APPROVER`);
   const types = masterKinds.map(recordTypeOf);
-  const { assignmentId } = await grantSynthetic(
-    options.database,
-    { kind: 'user', id: preparer.id },
-    types.flatMap((recordType) => PREPARE.map((action) => ({ recordType, action }))),
-  );
+  // The catalogue's types too, each with only the actions it declares (access-and-approvals 4.1; S1-F03-T01).
+  const catalogueTypes = [...catalogueKinds.map(catalogueRecordType), VOCABULARY_PROPOSAL_TYPE];
+  const declared = new Map(permissionRegistry.map((each) => [each.code, each.actions]));
+  const grants = (actions: readonly PermissionAction[]) => [
+    ...types.flatMap((recordType) => actions.map((action) => ({ recordType, action }))),
+    ...catalogueTypes.flatMap((recordType) =>
+      actions
+        .filter((action) => declared.get(recordType)?.includes(action) === true)
+        .map((action) => ({ recordType, action })),
+    ),
+  ];
+  const { assignmentId } = await grantSynthetic(options.database, { kind: 'user', id: preparer.id }, grants(PREPARE));
   const grantApprove = (user: SyntheticUser) =>
-    grantSynthetic(
-      options.database,
-      { kind: 'user', id: user.id },
-      types.flatMap((recordType) => [
-        { recordType, action: 'view' as const },
-        { recordType, action: 'approve' as const },
-      ]),
-    );
+    grantSynthetic(options.database, { kind: 'user', id: user.id }, grants(['view', 'approve']));
   await grantApprove(approver);
   const approveReason = await writeSyntheticReason(options.database, 'approve');
   const rejectReason = await writeSyntheticReason(options.database, 'reject');
@@ -154,11 +167,13 @@ export async function structureSetup(options: {
   return {
     access,
     organisation,
+    catalogue,
     preparer,
     approver,
     asPreparer,
     run,
     prepare: (work) => run(preparer.id, (context) => work(context, asPreparer)),
+    asPreparerDo: (work) => run(preparer.id, (context) => work(context, asPreparer)),
     decide: (requestId, versionId, outcome = 'approve', by = approver, hold) => {
       offsetMs += 30_000;
       if (by.factorSecret === undefined) throw new Error('not enrolled');

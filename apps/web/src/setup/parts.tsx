@@ -88,8 +88,14 @@ export function ListRead<T>({
 }
 
 /** What a preparation answered: sent for approval, or the refusal with what is missing (PRD-UXP-003). */
-export function SubmissionBanner({ state }: { state: SubmissionState }) {
-  if (state.kind === 'done') return <Banner tone="success" role="status" message="setup.sent-for-approval" />;
+export function SubmissionBanner({
+  state,
+  done = 'setup.sent-for-approval',
+}: {
+  state: SubmissionState;
+  done?: MessageId;
+}) {
+  if (state.kind === 'done') return <Banner tone="success" role="status" message={done} />;
   if (state.kind === 'refused') return <RefusalBanner refusal={state.refusal} />;
   return null;
 }

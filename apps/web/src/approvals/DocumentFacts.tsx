@@ -1,4 +1,4 @@
-import type { ApprovalRequestView } from '@apparel-os/schemas';
+import { VOCABULARY_CONFIRMATION, type ApprovalRequestView } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../api';
@@ -8,6 +8,7 @@ import { PersonaChip } from '../shell/AppShell';
 import { useSession } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatDate } from '../setup/format';
+import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { actionTitle } from './subject';
 
@@ -179,6 +180,36 @@ function LimitFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A vocabulary proposal: the attribute, the proposed code and name, and its state; its proposer is never its
+ * confirmer (structure-and-masters 4.2; PRD-IMP-008; S1-F03-T01).
+ */
+function ProposalFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readVocabularyProposal', { params: { proposalId: view.document.recordId } }),
+    enabled: useViewable('merchandise.vocabulary_proposal'),
+  });
+  const attributes = useQuery({
+    ...readQuery(api, 'readAttribute', { params: { recordId: query.data?.proposal.attributeId ?? '' } }),
+    enabled: useViewable('merchandise.attribute') && query.data !== undefined,
+  });
+  const proposal = query.data?.proposal;
+  if (proposal === undefined) return null;
+  const attributeName = attributes.data?.record.versions[0]?.name;
+  return (
+    <Facts>
+      <Fact label="merchandise.field.attributeId">
+        {attributeName ?? attributes.data?.record.code ?? t('organisation.unknown')}
+      </Fact>
+      <Fact label="organisation.field.code">
+        <span className="font-mono">{proposal.code}</span>
+      </Fact>
+      <Fact label="organisation.field.name">{proposal.name}</Fact>
+      <Fact label="merchandise.proposal.state">{t(`state.${stateIdOf(proposal.state)}`)}</Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -196,6 +227,8 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <SettingFacts view={view} />;
     case 'access.approval_limit.change':
       return <LimitFacts view={view} />;
+    case VOCABULARY_CONFIRMATION:
+      return <ProposalFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;

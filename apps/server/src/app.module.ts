@@ -27,7 +27,7 @@ import {
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
 import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
-import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
+import { CatalogueModule, catalogueApprovals, catalogueScopeMembers } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule } from './modules/merchandise/parties/index.js';
 import {
   LOCATION_IN_USE,
@@ -68,12 +68,17 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           routingApprovals(audit),
           // Task and approval routing (access-and-approvals 9.4, 11.3; S1-F05-T02).
           workItemRoutingApprovals(audit),
+          // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01).
+          catalogueApprovals(audit),
         ),
       inject: [AUDIT, LOCATION_IN_USE],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
-    // `merchandise` brands from S1-F03-T01.
-    { provide: SCOPE_MEMBERS, useValue: [organisationScopeMembers] satisfies readonly ScopeMembers[] },
+    // `merchandise` · catalogue brands (S1-F03-T01).
+    {
+      provide: SCOPE_MEMBERS,
+      useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
+    },
     // The kinds the owning modules number (numbering-and-audit 3.1): so far the exception code (S1-F08-T02).
     { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND] satisfies readonly NumberedKind[] },
     // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.

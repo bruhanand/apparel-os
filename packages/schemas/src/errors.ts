@@ -507,6 +507,39 @@ export const exceptionsCodes = declareCodes({
   'exceptions.site-not-found': 'refused',
 });
 
+/**
+ * The codes of `merchandise` · catalogue (structure-and-masters 2, 3.3, 4.1, 4.2, 4.7; S1-F03-T01). A refusal names
+ * what blocks it (PRD-UXP-003).
+ *
+ * - `merchandise.code-taken`: the code is already a record's in its scope, or an open proposal's (2.1).
+ * - `merchandise.record-not-found`: a record the change names, or the record it versions, does not exist.
+ * - `merchandise.starts-in-past`: a version never starts on a past date (2.2; GC2-7, DEC-105).
+ * - `merchandise.version-overlaps`: another approved version of the record starts on the same date (2.2).
+ * - `merchandise.reference-not-in-force`: a record the version names has no approved version in force on its start,
+ *   or a brand it names is retired then (2.2, 2.5).
+ * - `merchandise.parent-cycle`: the parent brand or category is nested under the record already (4.1).
+ * - `merchandise.size-set-of-another-category`: a category names a size set fixed to another category (4.1).
+ * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type (4.2; GC2-9).
+ * - `merchandise.office-unit-has-no-brand`: an office unit operates without a brand (3.3; PRD-ORG-006).
+ * - `merchandise.brand-counter-one-brand`: a brand-counter unit covers exactly one brand (3.3; PRD-ORG-006).
+ * - `merchandise.proposal-not-found`: no proposal has that identifier.
+ * - `merchandise.proposal-not-open`: the proposal is already confirmed or rejected (4.2).
+ */
+export const merchandiseCodes = declareCodes({
+  'merchandise.code-taken': 'refused',
+  'merchandise.record-not-found': 'not-found',
+  'merchandise.starts-in-past': 'refused',
+  'merchandise.version-overlaps': 'refused',
+  'merchandise.reference-not-in-force': 'refused',
+  'merchandise.parent-cycle': 'refused',
+  'merchandise.size-set-of-another-category': 'refused',
+  'merchandise.attribute-not-list': 'refused',
+  'merchandise.office-unit-has-no-brand': 'refused',
+  'merchandise.brand-counter-one-brand': 'refused',
+  'merchandise.proposal-not-found': 'not-found',
+  'merchandise.proposal-not-open': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -520,6 +553,7 @@ export const errorCodes = {
   ...numberingCodes,
   ...exceptionsCodes,
   ...inboxCodes,
+  ...merchandiseCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

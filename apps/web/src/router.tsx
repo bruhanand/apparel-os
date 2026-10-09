@@ -12,6 +12,7 @@ import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
 import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
+import { VocabulariesScreen } from './merchandise/VocabulariesScreen';
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
 import { ExceptionRulesScreen } from './exceptions/ExceptionRulesScreen';
 import { FailedJobsScreen } from './operations/FailedJobsScreen';
@@ -103,6 +104,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <OrganisationStructureScreen />;
     case 'setup.geography':
       return <GeographyScreen />;
+    case 'setup.vocabularies':
+      return <VocabulariesScreen />;
     case 'setup.exception-rules':
       return <ExceptionRulesScreen />;
     case 'setup.operations':

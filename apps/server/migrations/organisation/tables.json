@@ -1086,6 +1086,142 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "access-and-approvals 11.3, 13.2",
       "why": "The escalations of a work item, read with it by inbox; only inbox code reads it"
+    },
+    {
+      "table": "merchandise.brand",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 4.1, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.brand_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 4.1, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.brand_alias",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 4.1, 6.2; code-house-rules 7.1",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.business_unit_coverage",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 3.3, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.business_unit_brand",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 3.3, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.business_unit_brand_member",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 3.3, 6.2; code-house-rules 7.1",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.attribute",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 4.2, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.attribute_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 4.2, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.vocabulary_proposal",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 4.2, 6.2; code-house-rules 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.vocabulary_value",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 4.2, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.vocabulary_value_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 4.2, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.category",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 4.1, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.size_set",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 4.1, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.size_set_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 4.1, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.size_set_member",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 4.1, 6.2; code-house-rules 7.1",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.category_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 4.1, 6.2; code-house-rules 7.3",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.category_identity_attribute",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 4.1, 6.2; code-house-rules 7.1",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
     }
   ]
 }

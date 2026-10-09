@@ -60,6 +60,13 @@ export const screens = {
     need: view('organisation.site'),
   },
   'setup.geography': { section: 'setup', path: '/setup/geography', need: view('organisation.country') },
+  // Vocabularies: brands, the category tree, size sets and the Organisation's attributes with their values and
+  // proposals (structure-and-masters 4.2, 8; ui-blueprint Setup › Vocabularies; S1-F03-T01).
+  'setup.vocabularies': {
+    section: 'setup',
+    path: '/setup/vocabularies',
+    need: view('merchandise.vocabulary_value'),
+  },
   // Exception rules: owner, due time and escalation per type and Site (access-and-approvals 12.2, 14; S1-F08-T02).
   'setup.exception-rules': {
     section: 'setup',

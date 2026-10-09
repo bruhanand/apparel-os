@@ -231,20 +231,20 @@ describe('choosing places and legal entities (access-and-approvals 5.1; structur
         ],
       },
     });
-    // Brands are merchandise's side of the contract (S1-F03-T01): not available yet.
+    // Brands are merchandise's side of the contract (S1-F03-T01): a brand that does not exist is refused.
+    const noBrand = uuidv7();
     expect(
       await prepareAssignment(user.id, roleId, {
         kind: 'dimensions',
         legalEntity: all,
         place: all,
-        brand: { kind: 'selected', members: [uuidv7()] },
+        brand: { kind: 'selected', members: [noBrand] },
       }),
-    ).toEqual({
+    ).toMatchObject({
       kind: 'refusal',
       refusal: {
-        kind: 'unavailable',
-        code: 'access.scope-members-not-available',
-        missing: [{ kind: 'scope', dimension: 'brand' }],
+        code: 'access.scope-member-not-found',
+        missing: [{ kind: 'scope-member', dimension: 'brand', memberType: 'brand', memberId: noBrand }],
       },
     });
   });

@@ -14,3 +14,5 @@ export type { InForce, PageRequest, RecordPage, RecordView, Structure, UnitMappi
 export { mappingChanged, structureChanged } from './events.js';
 export { isPlaceScoped, organisationScopeMembers, placeScopedKinds } from './queries/scope.js';
 export type { PlaceFacts, PlaceScopedKind } from './queries/scope.js';
+export { businessUnitHeads, businessUnitInForce } from './queries/units.js';
+export type { BusinessUnitHead } from './queries/units.js';

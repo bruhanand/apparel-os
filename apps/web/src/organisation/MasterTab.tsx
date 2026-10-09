@@ -30,6 +30,7 @@ import {
   ORGANISATION_READS,
   PLACE_KINDS,
   recordTypeOf,
+  takesEffectWhenRecorded,
   type FieldSpec,
   type Kind,
   type OnePer,
@@ -55,6 +56,8 @@ export interface MasterVersion {
 export interface MasterRecord {
   readonly id: string;
   readonly code: string;
+  /** The newest version's identifier, sent back with a new version of a catalogue master (code-house-rules 12.7). */
+  readonly versionToken?: string | undefined;
   readonly versions: readonly MasterVersion[];
   readonly [field: string]: unknown;
 }
@@ -88,7 +91,7 @@ export function useMasterPages(kind: Kind, enabled = true) {
  * Every record of a kind, for a reference field's choices and names: read page by page until the last, each page
  * within the cap (code-house-rules 12.1).
  */
-function useAllRecords(kind: Kind, enabled = true): readonly MasterRecord[] {
+export function useAllRecords(kind: Kind, enabled = true): readonly MasterRecord[] {
   const query = useInfiniteQuery({
     queryKey: [kindRoutes[kind].list, 'all'],
     queryFn: ({ pageParam }) => readPage(kind, pageParam),
@@ -473,6 +476,8 @@ function openingValues(kind: Kind, today: string, record?: MasterRecord, from?: 
     if (spec.kind === 'yes-no') values[spec.name] = false;
     if (base?.[spec.name] !== undefined) values[spec.name] = base[spec.name];
   }
+  // A catalogue master's new version sends back the version token the screen read (code-house-rules 12.7).
+  if (record?.versionToken !== undefined) values.versionToken = record.versionToken;
   return values;
 }
 
@@ -525,6 +530,8 @@ function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord;
   const error = form.formState.errors.validFrom as { type?: string } | undefined;
   const start: unknown = form.watch('validFrom');
   const later = record === undefined || typeof start !== 'string' ? undefined : laterScheduled(record, start);
+  // A catalogue master that takes effect when recorded is saved, not sent for approval (structure-and-masters 2.3).
+  const direct = takesEffectWhenRecorded(kind);
   return (
     <form
       id={formId}
@@ -538,7 +545,7 @@ function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord;
         })(event);
       }}
     >
-      <SubmissionBanner state={submission.state} />
+      <SubmissionBanner state={submission.state} {...(direct ? { done: 'merchandise.recorded' as const } : {})} />
       {specs.map((spec) => (
         <FormInput key={spec.name} form={form} spec={spec} formId={formId} />
       ))}
@@ -563,7 +570,11 @@ function MasterForm({ kind, record, from }: { kind: Kind; record?: MasterRecord;
           <span>{t('organisation.later-version-kept-body', { date: formatDate(later.validFrom) })}</span>
         </Banner>
       )}
-      <FormActions form={formId} pending={submission.state.kind === 'pending'} />
+      <FormActions
+        form={formId}
+        pending={submission.state.kind === 'pending'}
+        {...(direct ? { label: 'merchandise.record' as const } : {})}
+      />
     </form>
   );
 }
@@ -714,8 +725,8 @@ const statusSpec: FieldSpec = {
   ],
 };
 
-/** One master's tab: its list and drawers. */
-export function MasterTab({ kind }: { kind: Kind }) {
+/** One master's tab: its list and drawers; only the records `where` names, where it names some. */
+export function MasterTab({ kind, where }: { kind: Kind; where?: RecordFilter }) {
   const timeZone = useTimeZone();
   const query = useMasterPages(kind);
   const [open, setOpen] = useState<string | null>(null);
@@ -745,7 +756,9 @@ export function MasterTab({ kind }: { kind: Kind }) {
       </Toolbar>
       <ListRead query={query} what={kindText[kind].what}>
         {({ pages }) => {
-          const records = pages.flatMap((page) => page.records);
+          const records = pages
+            .flatMap((page) => page.records)
+            .filter((record) => where === undefined || record[where.field] === where.equals);
           const asOf = pages.at(-1)?.asOf;
           const shown = records.find((record) => record.id === open);
           return (

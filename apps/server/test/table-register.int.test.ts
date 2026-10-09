@@ -13,6 +13,7 @@ import * as exceptionsTables from '../src/modules/exceptions/db/schema.js';
 import * as inboxTables from '../src/modules/inbox/db/schema.js';
 import * as stockTables from '../src/modules/stock/ledger/db/schema.js';
 import * as organisationTables from '../src/modules/organisation/db/schema.js';
+import * as catalogueTables from '../src/modules/merchandise/catalogue/db/schema.js';
 import * as numberingTables from '../src/modules/numbering/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import { organisationTimezoneVersion } from '../src/modules/configuration/db/schema.js';
@@ -547,6 +548,15 @@ describe('the Drizzle definitions of exceptions (code-house-rules 3.4, 10.4)', (
 
 describe('the Drizzle definitions of organisation (code-house-rules 3.4, 10.4)', () => {
   it.each(Object.entries(organisationTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
+});
+
+describe('the Drizzle definitions of merchandise · catalogue (code-house-rules 3.4, 10.4)', () => {
+  it.each(Object.entries(catalogueTables))(
     'code-house-rules 3.4 %s matches its migrated table',
     async (_name, table) => {
       await expectDefinitionMatches(world.organisations[0].database, table);

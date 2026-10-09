@@ -509,3 +509,6 @@ export type {
   RoutingList,
   RoutingVersionDraft,
 } from './exceptions.js';
+
+// The merchandise catalogue (structure-and-masters 4; S1-F03-T01).
+export * from './catalogue.js';

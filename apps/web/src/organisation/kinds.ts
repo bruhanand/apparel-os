@@ -1,21 +1,55 @@
-import { masterActionType, masterKinds, masterRecordType, masterRoutes, type MasterKind } from '@apparel-os/schemas';
+import {
+  BRAND_COVERAGE_CHANGE,
+  catalogueKinds,
+  catalogueRecordType,
+  catalogueRoutes,
+  masterActionType,
+  masterKinds,
+  masterRecordType,
+  masterRoutes,
+  type CatalogueKind,
+  type MasterKind,
+} from '@apparel-os/schemas';
 import type { MessageId } from '../messages/catalogue';
 
 // The masters of the organisation structure as the Setup screens show them (structure-and-masters 3.1, 3.6, 8;
 // ui-blueprint Setup › Organisation structure and Geography and groupings; S1-F02-T01): each kind's routes, record
 // type and fields. A field fixed at creation is shown in the new record's form only (3.1).
 
-export const kinds = masterKinds;
-export type Kind = MasterKind;
+// The merchandise catalogue's masters join them with S1-F03-T01 (structure-and-masters 4.1, 8): the same tab, form and
+// version history serve both.
+
+export const kinds = [...masterKinds, ...catalogueKinds] as const;
+export type Kind = MasterKind | CatalogueKind;
+
+const isCatalogue = (kind: Kind): kind is CatalogueKind => (catalogueKinds as readonly string[]).includes(kind);
 
 /** Each kind's routes: its paged list, its one-record read, a new record and a new version. */
-export const kindRoutes = masterRoutes;
+export const kindRoutes: Readonly<
+  Record<
+    Kind,
+    { readonly list: string; readonly read: string; readonly prepare: string | null; readonly version: string }
+  >
+> &
+  typeof masterRoutes &
+  typeof catalogueRoutes = { ...masterRoutes, ...catalogueRoutes };
 
-export const recordTypeOf = masterRecordType;
+export function recordTypeOf(kind: Kind): string {
+  return isCatalogue(kind) ? catalogueRecordType(kind) : masterRecordType(kind);
+}
 
-/** The kind of an approval request's action type, `organisation.<kind>.change`, or undefined. */
+/**
+ * The catalogue kinds whose versions take effect when recorded, as no rule names an approval for them
+ * (structure-and-masters 2.3; S1-F03-T01): their forms say Save and Recorded, not Request approval.
+ */
+export function takesEffectWhenRecorded(kind: Kind): boolean {
+  return isCatalogue(kind) && kind !== 'business_unit_brand';
+}
+
+/** The kind of an approval request's action type, `organisation.<kind>.change` or brand coverage, or undefined. */
 export function kindOfActionType(actionType: string): Kind | undefined {
-  return kinds.find((kind) => masterActionType(kind) === actionType);
+  if (actionType === BRAND_COVERAGE_CHANGE) return 'business_unit_brand';
+  return masterKinds.find((kind) => masterActionType(kind) === actionType);
 }
 
 /**
@@ -43,6 +77,14 @@ export const kindText: Readonly<Record<Kind, { readonly add: MessageId | null; r
     add: 'organisation.new.classification_value',
     what: 'organisation.what.classification_value',
   },
+  // The catalogue (structure-and-masters 4.1, 4.2). A unit's coverage and a vocabulary value have no record to add here:
+  // coverage is the unit's (3.3), and a value is made by confirming its proposal (4.2).
+  brand: { add: 'merchandise.new.brand', what: 'merchandise.what.brand' },
+  business_unit_brand: { add: null, what: 'merchandise.what.business_unit_brand' },
+  category: { add: 'merchandise.new.category', what: 'merchandise.what.category' },
+  size_set: { add: 'merchandise.new.size_set', what: 'merchandise.what.size_set' },
+  attribute: { add: 'merchandise.new.attribute', what: 'merchandise.what.attribute' },
+  vocabulary_value: { add: null, what: 'merchandise.what.vocabulary_value' },
 };
 
 /** Only the records whose fixed field holds a value, such as the classification values of a Site kind. */
@@ -325,6 +367,70 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
     code,
     name,
   ],
+  // The merchandise catalogue (structure-and-masters 4.1, 4.2; S1-F03-T01). No value is set in the app.
+  brand: [
+    code,
+    name,
+    {
+      name: 'parentBrandId',
+      label: 'merchandise.field.parentBrandId',
+      kind: 'reference',
+      target: 'brand',
+      optional: true,
+    },
+    { name: 'aliases', label: 'organisation.field.aliases', kind: 'lines' },
+    { name: 'retired', label: 'merchandise.field.retired', kind: 'yes-no', laterOnly: true },
+  ],
+  business_unit_brand: [{ name: 'brandIds', label: 'merchandise.field.brandIds', kind: 'references', target: 'brand' }],
+  category: [
+    code,
+    name,
+    {
+      name: 'parentCategoryId',
+      label: 'merchandise.field.parentCategoryId',
+      kind: 'reference',
+      target: 'category',
+      optional: true,
+    },
+    { name: 'sizeSetId', label: 'merchandise.field.sizeSetId', kind: 'reference', target: 'size_set', optional: true },
+    {
+      name: 'identityAttributeIds',
+      label: 'merchandise.field.identityAttributeIds',
+      kind: 'references',
+      target: 'attribute',
+    },
+  ],
+  size_set: [
+    code,
+    { name: 'categoryId', label: 'merchandise.field.categoryId', kind: 'reference', target: 'category', fixed: true },
+    name,
+    { name: 'sizes', label: 'merchandise.field.sizes', kind: 'lines' },
+  ],
+  attribute: [
+    code,
+    {
+      name: 'valueKind',
+      label: 'merchandise.field.valueKind',
+      kind: 'select',
+      options: [
+        { value: 'list', label: 'merchandise.value-kind.list' },
+        { value: 'text', label: 'merchandise.value-kind.text' },
+      ],
+      fixed: true,
+    },
+    name,
+  ],
+  vocabulary_value: [
+    {
+      name: 'attributeId',
+      label: 'merchandise.field.attributeId',
+      kind: 'reference',
+      target: 'attribute',
+      fixed: true,
+    },
+    code,
+    name,
+  ],
 };
 
 /**
@@ -367,6 +473,7 @@ export function labelField(kind: Kind): string {
   if (kind === 'tax_registration') return 'registrationNumber';
   if (kind === 'business_unit_mapping') return 'legalEntityId';
   if (kind === 'store_default_warehouse') return 'warehouseUnitId';
+  if (kind === 'business_unit_brand') return 'brandIds';
   return 'name';
 }
 

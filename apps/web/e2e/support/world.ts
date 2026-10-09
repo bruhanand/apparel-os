@@ -161,6 +161,16 @@ export interface SyntheticWorld {
     readonly roleOption: string;
     readonly stores: readonly { readonly id: string; readonly code: string; readonly name: string }[];
   };
+  /**
+   * The vocabularies journey (S1-F03-T01), in the security settings Organisation: a Booking user who proposes values,
+   * a different person who confirms them, and the name of the SYNTHETIC list-type attribute whose tab they use.
+   */
+  readonly vocabularies: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly confirmer: EnrolledUser;
+    readonly attributeName: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

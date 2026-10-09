@@ -224,6 +224,25 @@ const exceptionsRecordTypes = [
   declare('exceptions.exception_routing', ['view', 'edit', 'approve'], NONE),
 ] as const;
 
+/**
+ * `merchandise` · catalogue (structure-and-masters 4, 6.2; module-map 4.12; S1-F03-T01). Brands, categories, size
+ * sets, attributes and vocabulary values belong to the Organisation as a whole, as the structure's own kinds do, so
+ * they carry no scope fact and the permission on the type decides (5.3). A brand's coverage by a business unit is a
+ * dated record of the unit, which has no record to create: edit prepares a version, approve decides it (3.3; GC2-2,
+ * DEC-105). A vocabulary value is created only by confirming its proposal: create proposes, approve confirms or
+ * rejects, by a different person (4.2; PRD-IMP-008, POL-02.07). Whether these types carry place or brand facts is the
+ * product owner's to confirm (S1-F03-T01, open item).
+ */
+const merchandiseRecordTypes = [
+  declare('merchandise.brand', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.business_unit_brand', ['view', 'edit', 'approve'], NONE),
+  declare('merchandise.category', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.size_set', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.attribute', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.vocabulary_value', ['view', 'edit'], NONE),
+  declare('merchandise.vocabulary_proposal', ['view', 'create', 'approve'], NONE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -234,6 +253,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...stockRecordTypes,
   ...organisationRecordTypes,
   ...exceptionsRecordTypes,
+  ...merchandiseRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -245,7 +265,8 @@ export type RecordTypeCode =
   | (typeof filesImportsRecordTypes)[number]['code']
   | (typeof stockRecordTypes)[number]['code']
   | (typeof organisationRecordTypes)[number]['code']
-  | (typeof exceptionsRecordTypes)[number]['code'];
+  | (typeof exceptionsRecordTypes)[number]['code']
+  | (typeof merchandiseRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

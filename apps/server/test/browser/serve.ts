@@ -436,6 +436,20 @@ for (const label of ['MINE', 'OTHER']) {
   );
   scopeStores.push({ id: answer.recordId, code, name });
 }
+// The vocabularies journey (vocabularies.spec.ts; S1-F03-T01): one list-type SYNTHETIC attribute, recorded through
+// the catalogue's real command by the fixture person (code-house-rules 11.2), so the Vocabularies screen has a tab
+// whose values a Booking user proposes. No attribute is set by the application (GC2-9).
+const vocabularyAttribute = { code: syntheticCode('JOURNEY-COLOUR'), name: syntheticName('Journey Colour') };
+const vocabularyAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.catalogue.prepareAttribute(c, p, {
+    ...vocabularyAttribute,
+    valueKind: 'list',
+    validFrom: structureFixture.today(),
+  }),
+);
+if (vocabularyAttributeAnswer.kind !== 'success') {
+  throw new Error(`The synthetic attribute was refused: ${vocabularyAttributeAnswer.refusal.code}`);
+}
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -522,6 +536,30 @@ await writeSyntheticRole(settingsDatabase, {
     action: 'view' as const,
   })),
 });
+
+// The vocabularies journey's people (S1-F03-T01): a Booking user who reads the catalogue, proposes values and may
+// confirm another person's, and a different person who confirms from My work. Who holds which is KDPS's (V-01, RR-064).
+const catalogueViews = [
+  'merchandise.brand',
+  'merchandise.category',
+  'merchandise.size_set',
+  'merchandise.attribute',
+  'merchandise.vocabulary_value',
+  'merchandise.vocabulary_proposal',
+].map((recordType) => ({ recordType, action: 'view' as const }));
+const vocabularyBooking = await provisionUser('BROWSER-VOCABULARY-BOOKING', 'P-BKG', [
+  ...catalogueViews,
+  { recordType: 'merchandise.vocabulary_proposal', action: 'create' },
+  { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const vocabularyConfirmer = await provisionUser('BROWSER-VOCABULARY-CONFIRMER', 'P-BKG', [
+  ...catalogueViews,
+  { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
 
 // The exceptions journey (exceptions.spec.ts; S1-F08-T02), in the settings Organisation, whose worker identities the
 // setup step wrote: the test-only raising module's schema (code-house-rules 11.4), a SYNTHETIC exception-code series,
@@ -944,6 +982,12 @@ writeFileSync(
       siteId: unitsSite.recordId,
       siteOption: `${syntheticCode('JOURNEY-UNITS-SITE')} · ${syntheticName('Journey Units Site')}`,
       entities: unitsEntities,
+    },
+    vocabularies: {
+      organisationCode: settingsCode,
+      booking: credentialsOf(vocabularyBooking),
+      confirmer: credentialsOf(vocabularyConfirmer),
+      attributeName: vocabularyAttribute.name,
     },
     scope: {
       organisationCode: settingsCode,
