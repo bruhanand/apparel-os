@@ -1,4 +1,4 @@
-import type { DueRule, ExceptionCategory, ExceptionLink, MissingItem } from '@apparel-os/schemas';
+import type { DueRule, ExceptionCategory, ExceptionLink, FieldClass, MissingItem } from '@apparel-os/schemas';
 import { dueRuleSchema, exceptionCategorySchema, exceptionTypeCodeSchema } from '@apparel-os/schemas';
 import type { NumberedKind } from '../../numbering/index.js';
 import type { TransactionContext } from '../../../kernel/index.js';
@@ -25,13 +25,16 @@ export type ResolutionAnswer =
  * An exception type as its raising module registers it (12.1; module-map section 3, rule 6): its code
  * `<module>.<name>`, its category among the kinds of `PRD-EXC-001` and source conflict (`POL-03.04`), the record types
  * it links to, and the resolution check the module implements, which closing waits for (PRD-EXC-002). The check reads
- * the module's own records through the module's own code, in the closing command's transaction.
+ * the module's own records through the module's own code, in the closing command's transaction. It declares the
+ * restricted field classes its evidence files carry, which a reader of them needs (imports-and-opening-data 11;
+ * S1-F08-T03): declared for every type, so none is left out by a default.
  */
 export interface ExceptionTypeRegistration {
   readonly code: string;
   readonly category: ExceptionCategory;
   readonly module: string;
   readonly linksTo: readonly string[];
+  readonly evidenceClasses: readonly FieldClass[];
   readonly resolutionCheck: (context: TransactionContext, subject: ResolutionSubject) => Promise<ResolutionAnswer>;
 }
 

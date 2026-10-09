@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { uuidv7 } from '@apparel-os/domain';
 import { setupRequestSchema, type PersonaId } from '@apparel-os/schemas';
 import {
   CommandRunner,
@@ -32,6 +33,7 @@ import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { syntheticWorkerSettings } from '../fixtures/worker-settings.js';
 import {
+  codeFor,
   startAccessApp,
   syntheticKeysEnvironment,
   syntheticTimezone,
@@ -421,6 +423,28 @@ await createTestExceptionsSchema(settingsDatabase);
 const exceptionsOps = await provisionUser('BROWSER-EXCEPTIONS-OPS', 'P-OPS', [
   { recordType: 'exceptions.exception', action: 'view' },
 ]);
+// The evidence journey (evidence.spec.ts; S1-F08-T03): an Operations user of its own, who owns a SYNTHETIC exception
+// at a Site of its own and adds a SYNTHETIC photograph to it (journeys run at once, and an authenticator code is taken
+// once, so two journeys never sign in as one person); an Admin who prepares an exception rule change, here through the
+// API once the server listens; and an approver who decides it with a SYNTHETIC PDF as evidence and an approve reason
+// of its own in force.
+const evidenceOps = await provisionUser('BROWSER-EVIDENCE-OPS', 'P-OPS', [
+  { recordType: 'exceptions.exception', action: 'view' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const evidenceSite = uuidv7();
+const evidenceRulesAdmin = await provisionUser('BROWSER-EVIDENCE-RULES', 'P-ADM', [
+  { recordType: 'exceptions.exception_routing', action: 'view' },
+  { recordType: 'exceptions.exception_routing', action: 'edit' },
+]);
+const evidenceApprover = await provisionUser('BROWSER-EVIDENCE-APPROVER', 'P-OWN', [
+  { recordType: 'exceptions.exception_routing', action: 'view' },
+  { recordType: 'exceptions.exception_routing', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const evidenceReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
 const fixtureLog = capturingLogger();
 const fixtureRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
@@ -467,10 +491,27 @@ const fixtureRouting = await fixtureCommand((context) =>
   ),
 );
 if (fixtureRouting.kind !== 'done') throw new Error(`The synthetic rule was refused: ${fixtureRouting.refusal.code}`);
+const evidenceRouting = await fixtureCommand((context) =>
+  fixtureExceptions.prepareRouting(
+    context,
+    { userId: exceptionsOps.id, roleAssignmentId: crypto.randomUUID() },
+    {
+      typeCode: syntheticMismatch.code,
+      siteId: evidenceSite,
+      owner: { kind: 'user', userId: evidenceOps.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: evidenceOps.id },
+      validFrom: new Date().toISOString().slice(0, 10),
+      origin: 'synthetic',
+    },
+  ),
+);
+if (evidenceRouting.kind !== 'done') throw new Error(`The evidence rule was refused: ${evidenceRouting.refusal.code}`);
 const fixtureOwner = await connect(settingsDatabase, 'migration');
-await fixtureOwner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
-  fixtureRouting.value.versionId,
-]);
+await fixtureOwner.query(
+  `update exceptions.exception_routing_version set decision = 'Approved' where id = any($1::uuid[])`,
+  [[fixtureRouting.value.versionId, evidenceRouting.value.versionId]],
+);
 await fixtureOwner.end();
 const exceptionDocument = await fixtureCommand((context) => writeTestDocument(context));
 const raisedException = await fixtureCommand((context) =>
@@ -487,6 +528,22 @@ const raisedException = await fixtureCommand((context) =>
 );
 if (raisedException.kind !== 'done')
   throw new Error(`The synthetic exception was refused: ${raisedException.refusal.code}`);
+const evidenceDocument = await fixtureCommand((context) => writeTestDocument(context));
+const evidenceException = await fixtureCommand((context) =>
+  fixtureExceptions.raiseInOwnCommand(context, {
+    raisingEvent: `${TEST_EXCEPTIONS_MODULE}.evidence-journey:${evidenceDocument}`,
+    typeCode: syntheticMismatch.code,
+    facts: { siteId: evidenceSite, storeId: null, businessUnitId: null, brandId: null },
+    links: [
+      { module: TEST_EXCEPTIONS_MODULE, recordType: TEST_DOCUMENT_TYPE, recordId: evidenceDocument, versionId: null },
+    ],
+    exposure: { kind: 'unknown' },
+    // The fixture's commands run as the exceptions journey's user (code-house-rules 11.2).
+    raisedBy: { kind: 'user', id: exceptionsOps.id },
+  }),
+);
+if (evidenceException.kind !== 'done')
+  throw new Error(`The evidence exception was refused: ${evidenceException.refusal.code}`);
 await fixtureRouter.close();
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
@@ -546,6 +603,39 @@ const worker = new Worker({
 });
 await worker.start();
 
+// The evidence journey's exception rule change, prepared through the API by its Admin, so the approver finds it in My
+// work (S1-F08-T03), once the worker runs. Every value is SYNTHETIC.
+{
+  const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.31' };
+  const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: at,
+    body: JSON.stringify({
+      organisationCode: settingsCode,
+      login: evidenceRulesAdmin.login,
+      password: evidenceRulesAdmin.password,
+      totpCode: codeFor(evidenceRulesAdmin.factorSecret ?? Buffer.alloc(0)),
+    }),
+  });
+  if (signedIn.status !== 200)
+    throw new Error(`The evidence rules Admin was not signed in: ${String(signedIn.status)}`);
+  const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  const prepared = await fetch(`${app.baseUrl}/api/exceptions/routing`, {
+    method: 'POST',
+    headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({
+      typeCode: syntheticMismatch.code,
+      siteId: uuidv7(),
+      owner: { kind: 'user', userId: exceptionsOps.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: exceptionsOps.id },
+      validFrom: new Date().toISOString().slice(0, 10),
+      origin: 'synthetic',
+    }),
+  });
+  if (prepared.status !== 200) throw new Error(`The evidence rule change was refused: ${await prepared.text()}`);
+}
+
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
   worldFile,
@@ -601,6 +691,15 @@ writeFileSync(
       organisationCode: settingsCode,
       operations: credentialsOf(exceptionsOps),
       code: raisedException.value.code,
+    },
+    // S1-F08-T03: the Operations user who owns the evidence exception, by its code, and the approver who decides the
+    // rule change with evidence, with the reason they give.
+    evidence: {
+      organisationCode: settingsCode,
+      operations: credentialsOf(evidenceOps),
+      code: evidenceException.value.code,
+      approver: credentialsOf(evidenceApprover),
+      reasonId: evidenceReasonId,
     },
     journey: {
       organisationCode: journeyCode,

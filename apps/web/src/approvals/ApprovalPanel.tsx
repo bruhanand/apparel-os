@@ -24,12 +24,14 @@ import { DocumentFacts } from './DocumentFacts';
 import { ORGANISATION_READS } from '../organisation/kinds';
 import { actionTitle } from './subject';
 import { approvalRead } from './use-subjects';
+import { EvidenceList, EvidencePicker, useChosenFile, useStoreEvidence } from '../files/Evidence';
 
 // The approval panel (design-language 10.14; access-and-approvals 9.3, 9.5, 9.6; spec section 6 "Approval panel"):
 // the request bound to one version (PRD-ACS-007), its preparers, its value on its basis (PRD-ACS-015), and the
 // decision, given by an authorised person other than the preparers (PRD-ACS-006, POL-02.08) with a reason
-// (POL-02.23, DEC-104) and a fresh authenticator code (access-and-approvals 3.3). Whether the reader may decide comes
-// from the server, which checks it again at the decision; the panel never decides it.
+// (POL-02.23, DEC-104), evidence where the approver gives it (PRD-ACS-010; stored first, then linked in the decision;
+// S1-F08-T03) and a fresh authenticator code (access-and-approvals 3.3). Whether the reader may decide comes from the
+// server, which checks it again at the decision; the panel never decides it.
 
 interface Reason {
   readonly id: string;
@@ -105,8 +107,9 @@ function DecisionFields({
   outcomes: readonly ('approve' | 'reject')[];
   reasons: readonly Reason[];
   submission: SubmissionState;
-  onDecide: (body: DecisionRequest) => void;
+  onDecide: (body: DecisionRequest, evidence: File | null) => void;
 }) {
+  const chosen = useChosenFile();
   const form = useForm<DecisionForm>({
     resolver: zodResolver(decisionFormSchema(reasonKind)),
     mode: 'onBlur',
@@ -128,16 +131,19 @@ function DecisionFields({
       className="flex flex-col gap-3 bg-sunken p-4"
       onSubmit={(event) => {
         void form.handleSubmit((values) => {
-          onDecide({
-            versionId: view.document.versionId,
-            outcome: values.outcome,
-            reason:
-              reasonKind === 'listed'
-                ? { kind: 'listed', reasonId: values.reasonId }
-                : { kind: 'free-text', text: values.text.trim() },
-            ...(values.comment.trim() === '' ? {} : { comment: values.comment.trim() }),
-            totpCode: values.totpCode,
-          });
+          onDecide(
+            {
+              versionId: view.document.versionId,
+              outcome: values.outcome,
+              reason:
+                reasonKind === 'listed'
+                  ? { kind: 'listed', reasonId: values.reasonId }
+                  : { kind: 'free-text', text: values.text.trim() },
+              ...(values.comment.trim() === '' ? {} : { comment: values.comment.trim() }),
+              totpCode: values.totpCode,
+            },
+            chosen.file,
+          );
         })(event);
       }}
     >
@@ -201,6 +207,7 @@ function DecisionFields({
           {...form.register('comment')}
         />
       </FormField>
+      <EvidencePicker id="decision-evidence" label="evidence.picker.optional" onChange={chosen.choose} />
       <FormField id="decision-code" label="approval.code" required error={errors.totpCode} help="approval.code.help">
         <input
           id="decision-code"
@@ -235,14 +242,17 @@ export function ApprovalPanelView({
   submission,
   onDecide,
   facts,
+  evidenceBanner,
   timeZone,
 }: {
   view: ApprovalRequestView;
   names: ReadonlyMap<string, string>;
   reasons: readonly Reason[];
   submission: SubmissionState;
-  onDecide: (body: DecisionRequest) => void;
+  onDecide: (body: DecisionRequest, evidence: File | null) => void;
   facts?: ReactNode;
+  /** A refusal of storing the evidence file, shown above the decision form. */
+  evidenceBanner?: ReactNode;
   /** The Organisation's timezone (PRD-MOD-017; DEC-118). */
   timeZone: string;
 }) {
@@ -318,6 +328,13 @@ export function ApprovalPanelView({
             )}
           </Banner>
         )}
+        {shown === 'decided' && view.decision !== undefined && view.decision.evidence.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-label font-semibold text-text-2">{t('evidence.title')}</span>
+            <EvidenceList attachmentIds={view.decision.evidence} />
+          </div>
+        )}
+        {shown === 'decide' && evidenceBanner}
       </div>
       {shown === 'decide' && view.decidable.kind === 'available' && (
         <DecisionFields
@@ -353,6 +370,7 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
     enabled: grants('access.approval_reason', granted),
   });
   const users = useQuery({ ...readQuery(api, 'listUsers', {}), enabled: grants('access.user', granted) });
+  const storing = useStoreEvidence();
   const submission = useSubmission('decideApproval', [
     'readApprovalRequest',
     'listMyWork',
@@ -389,9 +407,19 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
       reasons={reasons.data?.reasons ?? []}
       submission={submission.state}
       facts={<DocumentFacts view={request.data} />}
+      evidenceBanner={storing.banner}
       timeZone={timeZone}
-      onDecide={(body) => {
-        void submission.submit({ params: { requestId }, body }).then(() => request.refetch());
+      onDecide={(body, file) => {
+        void (async () => {
+          // The file is stored first, outside the decision, and linked in the decision's transaction (9.5).
+          const evidence = file === null ? undefined : await storing.store(file);
+          if (file !== null && evidence === undefined) return;
+          await submission.submit({
+            params: { requestId },
+            body: evidence === undefined ? body : { ...body, evidence: [evidence] },
+          });
+          await request.refetch();
+        })();
       }}
     />
   );

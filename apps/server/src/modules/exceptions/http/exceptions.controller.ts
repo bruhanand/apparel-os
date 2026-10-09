@@ -29,6 +29,7 @@ import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedIn
 import type { Outcome } from '../commands/common.js';
 import { ROUTING_ACTION_TYPE } from '../commands/routing.js';
 import type { Acting, Changed } from '../commands/lifecycle.js';
+import type { EvidenceAdded } from '../commands/evidence.js';
 import { summarise } from '../domain/summary.js';
 import { EXCEPTION_RECORD_TYPE } from '../domain/types.js';
 import type { ExceptionsInterface } from '../exceptions.js';
@@ -216,6 +217,37 @@ export class ExceptionsController {
     );
   }
 
+  /**
+   * Evidence (12.3; POL-03.05; S1-F08-T03): admitted as a comment is, and, since the file is attached under the
+   * exception's own type and served only through a grant on it (imports-and-opening-data 11), the person also needs
+   * view on `exceptions.exception` covering it, which an owner admitted as owner may lack. Checked in the command, so a
+   * refusal names it and the attachment's row-level security never refuses a write.
+   */
+  @ApiRoute(routes.addExceptionEvidence)
+  async addExceptionEvidence(
+    @SignedIn() user: SignedInUser,
+    @RouteInput() input: RouteInputOf<typeof routes.addExceptionEvidence>,
+  ) {
+    return this.lifecycle(
+      routes.addExceptionEvidence,
+      'exceptions.add-evidence',
+      user,
+      input,
+      async (context, acting) => {
+        const record = await this.exceptions.readException(context, input.params.exceptionId);
+        if (record === undefined) return { kind: 'refused', refusal: notFound() };
+        const viewing = await this.access.authorise(context, {
+          actorId: user.userId,
+          action: 'view',
+          recordType: EXCEPTION_RECORD_TYPE,
+          facts: factsOfRecord(record),
+        });
+        if (viewing.kind === 'refused') return { kind: 'refused', refusal: viewing.refusal };
+        return this.exceptions.addEvidence(context, acting, input.params.exceptionId, input.body.evidence);
+      },
+    );
+  }
+
   @ApiRoute(routes.reassignException)
   async reassignException(
     @SignedIn() user: SignedInUser,
@@ -319,7 +351,7 @@ export class ExceptionsController {
     commandName: string,
     user: SignedInUser,
     input: RouteInputOf<R> & { params: { exceptionId: string } },
-    operation: (context: TransactionContext, acting: Acting) => Promise<Outcome<Changed>>,
+    operation: (context: TransactionContext, acting: Acting) => Promise<Outcome<Changed | EvidenceAdded>>,
     options: { readonly takeOnly?: boolean } = {},
   ) {
     const exceptionId = input.params.exceptionId;
@@ -522,6 +554,7 @@ export class ExceptionsController {
         byName: event.actorId === null ? null : (actorNames.users.get(event.actorId) ?? null),
         to: event.to === null ? null : { party: event.to, name: named[cursor++] ?? null },
         comment: event.comment,
+        attachmentId: event.attachmentId,
       })),
       mayAct,
       mayTake: row.state !== 'Closed' && (await this.mayTake(context, userId, record)),

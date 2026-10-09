@@ -19,6 +19,7 @@ const siteRule: ApprovalRule = {
   independent: true,
   value: 'none',
   freeTextReason: false,
+  decisionEvidenceClasses: [],
   synthetic: false,
 };
 

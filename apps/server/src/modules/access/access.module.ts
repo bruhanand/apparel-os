@@ -34,6 +34,7 @@ import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS } from './tokens.js';
 import type { ModuleApprovals } from './domain/approval-rules.js';
 import { SCOPE_MEMBERS, type ScopeMembers } from './contracts/scope-members.js';
+import { DECISION_EVIDENCE, type DecisionEvidence } from './contracts/decision-evidence.js';
 import { unknowableHash } from './domain/password-hash.js';
 import { sessionProbe } from './commands/probe-session.js';
 import { AuthenticateGuard } from './http/authenticate.guard.js';
@@ -126,6 +127,7 @@ export class AccessJobIdentitiesModule {}
         keys: OrganisationKeys,
         modules: ModuleApprovals,
         scopeMembers: readonly ScopeMembers[] | undefined,
+        decisionEvidence: DecisionEvidence | undefined,
       ) =>
         new Access({
           audit,
@@ -133,8 +135,16 @@ export class AccessJobIdentitiesModule {}
           approvalRules: modules.rules,
           documentEffects: modules.effects,
           scopeMembers: scopeMembers ?? [],
+          decisionEvidence,
         }),
-      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, { token: SCOPE_MEMBERS, optional: true }],
+      // And the decision-evidence contract files-imports implements, where provided (9.5; S1-F08-T03).
+      inject: [
+        AUDIT,
+        ORGANISATION_KEYS,
+        MODULE_APPROVALS,
+        { token: SCOPE_MEMBERS, optional: true },
+        { token: DECISION_EVIDENCE, optional: true },
+      ],
     },
     {
       // The history reads (numbering-and-audit 4.5): rows through `audit`, Authorise and masking through `access`.

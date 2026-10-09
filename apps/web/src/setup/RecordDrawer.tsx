@@ -47,8 +47,8 @@ export function FormActions({
  * (full screen on a phone), with the record's mono reference, title, one status badge and a close button; the tabs
  * Details · History (RR-312: the record's history is read here, so nobody types an identifier); a scrolling body of
  * solid cards; and a footer outside the scrolling body, which holds `footer` and the actions of any form in the body
- * (FormActions). Esc closes it, and focus goes back to the control that opened it. Evidence
- * arrives with stored files (S1-F06).
+ * (FormActions). Esc closes it, and focus goes back to the control that opened it. A record that takes evidence files
+ * adds the tab Evidence n between them (10.15 "Tabs: Details · Evidence n · History"; S1-F08-T03).
  */
 export function RecordDrawer({
   reference,
@@ -57,6 +57,7 @@ export function RecordDrawer({
   onClose,
   details,
   history,
+  evidence,
   footer,
 }: {
   reference?: string;
@@ -65,9 +66,17 @@ export function RecordDrawer({
   onClose: () => void;
   details: ReactNode;
   history?: ReactNode;
+  /** The record's evidence files, with how many there are, shown in their own tab. */
+  evidence?: { readonly count: number; readonly content: ReactNode };
   footer?: ReactNode;
 }) {
-  const [tab, setTab] = useState<'details' | 'history'>('details');
+  const [tab, setTab] = useState<'details' | 'evidence' | 'history'>('details');
+  const tabs = [
+    'details' as const,
+    ...(evidence === undefined ? [] : ['evidence' as const]),
+    ...(history === undefined ? [] : ['history' as const]),
+  ];
+  const shown = tabs.includes(tab) ? tab : 'details';
   const [footerElement, setFooterElement] = useState<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const close = useRef(onClose);
@@ -122,18 +131,18 @@ export function RecordDrawer({
               ×
             </button>
           </header>
-          {history !== undefined && (
+          {tabs.length > 1 && (
             <div role="tablist" aria-label={t('drawer.tabs')} className="flex gap-2 border-b border-border px-4">
-              {(['details', 'history'] as const).map((each) => (
+              {tabs.map((each) => (
                 <button
                   key={each}
                   type="button"
                   role="tab"
                   id={`drawer-tab-${each}`}
-                  aria-selected={tab === each}
+                  aria-selected={shown === each}
                   aria-controls="drawer-panel"
                   className={
-                    tab === each
+                    shown === each
                       ? 'h-9 border-b-2 border-accent px-3 font-semibold text-text'
                       : 'h-9 px-3 text-text-2 hover:text-accent'
                   }
@@ -141,18 +150,20 @@ export function RecordDrawer({
                     setTab(each);
                   }}
                 >
-                  {t(`drawer.tab.${each}`)}
+                  {each === 'evidence'
+                    ? t('drawer.tab.evidence', { count: evidence?.count ?? 0 })
+                    : t(`drawer.tab.${each}`)}
                 </button>
               ))}
             </div>
           )}
           <div
             id="drawer-panel"
-            role={history === undefined ? undefined : 'tabpanel'}
-            aria-labelledby={history === undefined ? undefined : `drawer-tab-${tab}`}
+            role={tabs.length > 1 ? 'tabpanel' : undefined}
+            aria-labelledby={tabs.length > 1 ? `drawer-tab-${shown}` : undefined}
             className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
           >
-            {tab === 'details' || history === undefined ? details : history}
+            {shown === 'details' ? details : shown === 'evidence' ? evidence?.content : history}
           </div>
           <footer
             ref={setFooterElement}

@@ -42,6 +42,8 @@ export type { ModuleApprovalRequest, RequestValue } from './commands/request-app
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
 export type { RecordFacts, UncoveredFact } from './domain/scope.js';
 export { SCOPE_MEMBERS } from './contracts/scope-members.js';
+export { DECISION_EVIDENCE, DECISION_EVIDENCE_KIND } from './contracts/decision-evidence.js';
+export type { DecisionEvidence, DecisionEvidenceLink } from './contracts/decision-evidence.js';
 export type {
   PlaceExpansion,
   ScopeMember,

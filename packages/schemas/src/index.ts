@@ -162,6 +162,8 @@ export type {
 
 export {
   attachedFileSchema,
+  evidenceFileSchema,
+  evidenceListSchema,
   receiptSchema,
   EVIDENCE_MAX_BYTES,
   storedFileFormatSchema,
@@ -169,7 +171,14 @@ export {
   storeFileRequestSchema,
   STORE_FILE_BODY_LIMIT_BYTES,
 } from './files.js';
-export type { AttachedFile, Receipt, StoredFileAnswer, StoredFileFormat, StoreFileRequest } from './files.js';
+export type {
+  AttachedFile,
+  EvidenceFile,
+  Receipt,
+  StoredFileAnswer,
+  StoredFileFormat,
+  StoreFileRequest,
+} from './files.js';
 export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-item.js';
 export type { Exposure, MyWork, WorkItem } from './work-item.js';
 
@@ -401,6 +410,8 @@ export {
   exceptionCategorySchema,
   exceptionChangedSchema,
   exceptionEventViewSchema,
+  exceptionEvidenceAddedSchema,
+  exceptionEvidenceRequestSchema,
   exceptionExposureSchema,
   exceptionLinkSchema,
   exceptionParamsSchema,

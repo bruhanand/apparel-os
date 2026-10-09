@@ -1,4 +1,5 @@
 import type { TransactionContext } from '../../kernel/index.js';
+import type { DecisionEvidence } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import { attach, type Attached, type AttachRequest } from './commands/attach.js';
 
@@ -14,6 +15,14 @@ export interface FilesImportsInterface {
    * facts. Never edits an attachment (PRD-MOD-011).
    */
   attach(context: TransactionContext, request: AttachRequest): Promise<Attached>;
+}
+
+/**
+ * The decision-evidence contract `access` defines (access-and-approvals 9.5; module-map section 3, rule 6; S1-F08-T03),
+ * implemented by Attach: the composition root hands it to `access`, which never depends on files-imports.
+ */
+export function decisionEvidence(audit: AuditInterface): DecisionEvidence {
+  return { attach: (context, request) => attach(context, audit, request) };
 }
 
 export class FilesImports implements FilesImportsInterface {

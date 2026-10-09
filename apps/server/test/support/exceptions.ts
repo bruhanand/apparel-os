@@ -46,6 +46,8 @@ export const syntheticMismatch: ExceptionTypeRegistration = {
   category: 'mismatch',
   module: TEST_EXCEPTIONS_MODULE,
   linksTo: [TEST_DOCUMENT_TYPE],
+  // SYNTHETIC: its evidence carries no restricted field class (S1-F08-T03).
+  evidenceClasses: [],
   resolutionCheck: async (context, subject) => {
     const missing = [];
     for (const link of subject.links) {

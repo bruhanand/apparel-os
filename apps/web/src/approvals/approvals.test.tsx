@@ -98,6 +98,7 @@ describe('panelCase', () => {
           decision: {
             id: VERSION,
             outcome: 'Approved',
+            evidence: [],
             approverId: APPROVER,
             reason: { kind: 'free-text', text: 'SYNTHETIC first list' },
             decidedAt: '2026-10-07T09:30:00.000Z',
@@ -217,6 +218,7 @@ describe('the approval panel', () => {
         decision: {
           id: VERSION,
           outcome: 'Approved',
+          evidence: [],
           approverId: ADMIN,
           reason: { kind: 'listed', reasonId: REASON, code: 'SYN-OK', text: 'SYNTHETIC checked' },
           decidedAt: '2026-10-07T09:30:00.000Z',

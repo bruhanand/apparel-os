@@ -36,6 +36,8 @@ export const organisationApprovalRules: readonly ApprovalRule[] = masterKinds.ma
   independent: true,
   value: 'none',
   freeTextReason: false,
+  // A master change's decision evidence carries no restricted field class (access-and-approvals 9.5; S1-F08-T03).
+  decisionEvidenceClasses: [],
   synthetic: false,
 }));
 
