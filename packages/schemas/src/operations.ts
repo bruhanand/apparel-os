@@ -68,9 +68,42 @@ export const failedJobSchema = z.strictObject({
 });
 export type FailedJob = z.infer<typeof failedJobSchema>;
 
-/** The operations view's list of failed jobs, newest first, with the time it was read (PRD-PRF-004). */
+/**
+ * The largest page of the failed jobs: a technical cap the builders set (code-house-rules 12.1 "Reads"), not a KDPS
+ * value. A longer list is read page by page with the cursor.
+ */
+export const FAILED_JOB_PAGE_CAP = 100;
+
+/**
+ * Where the next page of failed jobs starts: the last job's failure time (its creation time where none was recorded),
+ * in UTC to the microsecond, `_`, and its identifier. Opaque to the screen, which only hands back the `next` it was
+ * given.
+ */
+export const failedJobCursorSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+/**
+ * A page of the failed jobs (code-house-rules 12.1): newest first, starting after the job `before` names, at most
+ * `limit` of them (the cap when left out).
+ */
+export const failedJobPageQuerySchema = z.strictObject({
+  before: failedJobCursorSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= FAILED_JOB_PAGE_CAP, { message: `At most ${String(FAILED_JOB_PAGE_CAP)}` })
+    .optional(),
+});
+export type FailedJobPageQuery = z.infer<typeof failedJobPageQuerySchema>;
+
+/**
+ * A page of the operations view's failed jobs, newest first, with the time it was read (PRD-PRF-004) and where the
+ * next page starts, if any.
+ */
 export const failedJobListSchema = z.strictObject({
   asOf: z.iso.datetime({ offset: true }),
   jobs: z.array(failedJobSchema),
+  next: failedJobCursorSchema.nullable(),
 });
 export type FailedJobList = z.infer<typeof failedJobListSchema>;

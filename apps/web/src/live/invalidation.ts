@@ -52,11 +52,21 @@ export function parseMessage(data: string): LiveMessage | null {
   }
 }
 
-/** Whether a cached read's key (`[route, input]`) is one a stale read names. */
+/**
+ * Whether a cached read's key (`[route, input]`) is one a stale read names: the route, and where the stale read names
+ * a record, a read whose path parameters name that record.
+ */
 export function keyIsStale(stale: Stale, key: readonly unknown[]): boolean {
   if (stale.kind === 'everything') return true;
   const [route, input] = key;
   return stale.reads.some(
-    (read) => read.route === route && (read.recordId === undefined || JSON.stringify(input).includes(read.recordId)),
+    (read) => read.route === route && (read.recordId === undefined || pathParametersOf(input).includes(read.recordId)),
   );
+}
+
+/** The values of a read input's path parameters, or none. */
+function pathParametersOf(input: unknown): readonly unknown[] {
+  if (typeof input !== 'object' || input === null || !('params' in input)) return [];
+  const { params } = input;
+  return typeof params === 'object' && params !== null ? Object.values(params) : [];
 }

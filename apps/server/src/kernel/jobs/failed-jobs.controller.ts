@@ -3,7 +3,7 @@ import { Controller, Inject, Req } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { CommandRunner } from '../command-runner/command-runner.js';
 import { COMMAND_RUNNER } from '../command-runner/command-runner.module.js';
-import { ApiRoute } from '../http/api-route.js';
+import { ApiRoute, RouteInput, type RouteInputOf } from '../http/api-route.js';
 import type { HttpRequest } from '../http/http-types.js';
 import {
   FAILED_JOB_EXCEPTIONS,
@@ -26,7 +26,10 @@ export class FailedJobsController {
   ) {}
 
   @ApiRoute(routes.listFailedJobs)
-  async listFailedJobs(@Req() request: HttpRequest): Promise<FailedJobList> {
+  async listFailedJobs(
+    @Req() request: HttpRequest,
+    @RouteInput() input: RouteInputOf<typeof routes.listFailedJobs>,
+  ): Promise<FailedJobList> {
     const session = this.moduleRef.get<SessionAccess>(SESSION_ACCESS, { strict: false }).signedInOf(request);
     const exceptions = this.failedJobExceptions();
     return this.runner.read(
@@ -37,7 +40,7 @@ export class FailedJobsController {
         actor: { kind: 'actor', actorId: session.userId },
       },
       async (context) => {
-        const jobs = await listFailedJobs(context);
+        const { jobs, next } = await listFailedJobs(context, input.query);
         const raised =
           exceptions === undefined
             ? new Map<string, { exceptionId: string; code: string }>()
@@ -48,6 +51,7 @@ export class FailedJobsController {
         return {
           asOf: context.startedAt.toISOString(),
           jobs: jobs.map((job) => ({ ...job, exception: raised.get(job.jobId) ?? null })),
+          next,
         };
       },
     );

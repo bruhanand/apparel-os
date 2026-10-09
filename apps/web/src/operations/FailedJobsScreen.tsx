@@ -1,8 +1,8 @@
-import type { FailedJob } from '@apparel-os/schemas';
-import { useQuery } from '@tanstack/react-query';
+import type { FailedJob, FailedJobList } from '@apparel-os/schemas';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
-import { readQuery } from '../api/query';
+import { ApiFailure } from '../api/query';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
@@ -18,11 +18,17 @@ import { useTimeZone } from '../shell/session';
  * failed jobs as a simple list from the design language's table, each with its diagnostic evidence and a link to the
  * unfinished-operation exception raised for it, where one was (access-and-approvals 9.8 step 4; DEC-116). For
  * whoever holds view on `kernel.job`; who that is, is KDPS's (V-01). It refreshes live when a job fails (12.12).
- * Backup and recovery status join it in S1-F14.
+ * Backup and recovery status join it in S1-F14. The list is read a page at a time; Load more reads the next
+ * (code-house-rules 12.1 "Reads").
  */
 export function FailedJobsScreen() {
   const timeZone = useTimeZone();
-  const query = useQuery(readQuery(api, 'listFailedJobs', {}));
+  const query = useInfiniteQuery({
+    queryKey: ['listFailedJobs', 'pages'],
+    queryFn: ({ pageParam }) => readPage(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: FailedJobList) => last.next ?? undefined,
+  });
   const [exceptionId, setExceptionId] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-4">
@@ -36,38 +42,51 @@ export function FailedJobsScreen() {
         />
       </Toolbar>
       <ListRead query={query} what="operations.failed-jobs.what">
-        {(list) => (
-          <div className="flex flex-col gap-3">
-            <div className="flex justify-end">
-              <AsOf asOf={list.asOf} timeZone={timeZone} />
+        {({ pages }) => {
+          const jobs = pages.flatMap((page) => page.jobs);
+          const asOf = pages[0]?.asOf;
+          return (
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-end">{asOf !== undefined && <AsOf asOf={asOf} timeZone={timeZone} />}</div>
+              {jobs.length === 0 ? (
+                <EmptyState title="operations.failed-jobs.empty.title" body="operations.failed-jobs.empty.body" />
+              ) : (
+                <div className="overflow-x-auto rounded-card border border-border bg-surface">
+                  <table className="w-full border-collapse text-body">
+                    <thead>
+                      <tr>
+                        <Th label="operations.job.kind" />
+                        <Th label="operations.job.state" />
+                        <Th label="operations.job.failed-at" />
+                        <Th label="operations.job.attempts" />
+                        <Th label="operations.job.outcome" />
+                        <Th label="operations.job.event" />
+                        <Th label="operations.job.reference" />
+                        <Th label="operations.job.exception" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jobs.map((job) => (
+                        <FailedJobRow key={job.jobId} job={job} timeZone={timeZone} onOpen={setExceptionId} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {query.hasNextPage && (
+                <div>
+                  <Button
+                    label="organisation.load-more"
+                    disabled={query.isFetchingNextPage}
+                    onClick={() => {
+                      void query.fetchNextPage();
+                    }}
+                  />
+                </div>
+              )}
             </div>
-            {list.jobs.length === 0 ? (
-              <EmptyState title="operations.failed-jobs.empty.title" body="operations.failed-jobs.empty.body" />
-            ) : (
-              <div className="overflow-x-auto rounded-card border border-border bg-surface">
-                <table className="w-full border-collapse text-body">
-                  <thead>
-                    <tr>
-                      <Th label="operations.job.kind" />
-                      <Th label="operations.job.state" />
-                      <Th label="operations.job.failed-at" />
-                      <Th label="operations.job.attempts" />
-                      <Th label="operations.job.outcome" />
-                      <Th label="operations.job.event" />
-                      <Th label="operations.job.reference" />
-                      <Th label="operations.job.exception" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.jobs.map((job) => (
-                      <FailedJobRow key={job.jobId} job={job} timeZone={timeZone} onOpen={setExceptionId} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        }}
       </ListRead>
       {exceptionId !== null && (
         <ExceptionDrawer
@@ -79,6 +98,13 @@ export function FailedJobsScreen() {
       )}
     </div>
   );
+}
+
+/** One page of the failed jobs, before the cursor the server gave, or the refusal thrown as ApiFailure. */
+async function readPage(before: string | undefined): Promise<FailedJobList> {
+  const result = await api.call('listFailedJobs', { query: before === undefined ? {} : { before } });
+  if (result.ok) return result.data;
+  throw new ApiFailure(result.status, result.error);
 }
 
 function FailedJobRow({

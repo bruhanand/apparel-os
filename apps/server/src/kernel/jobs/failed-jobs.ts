@@ -1,4 +1,9 @@
-import type { FailedJob, FailedJobOutcome } from '@apparel-os/schemas';
+import {
+  FAILED_JOB_PAGE_CAP,
+  type FailedJob,
+  type FailedJobOutcome,
+  type FailedJobPageQuery,
+} from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
 import type { TransactionContext } from '../command-runner/transaction-context.js';
 import { OUTBOX_DELIVERY_QUEUE } from './worker.js';
@@ -27,43 +32,78 @@ interface Row extends Record<string, unknown> {
   created_on: Date;
   completed_on: Date | null;
   event_type: string | null;
+  position: string;
+}
+
+/** A page of failed jobs and where the next page starts, if any (code-house-rules 12.1 "Reads"). */
+export interface FailedJobPage {
+  readonly jobs: Omit<FailedJob, 'exception'>[];
+  readonly next: string | null;
 }
 
 /**
- * Every failed job of the Organisation, newest first, with its diagnostic evidence: the queue, the consumer or job
+ * A page of the failed jobs of the Organisation, newest first by failure time (creation time where none was
+ * recorded), then by identifier, starting after the job the cursor names and holding at most `limit`, the cap when
+ * left out (code-house-rules 12.1 "Reads"), with its diagnostic evidence: the queue, the consumer or job
  * kind, the event a delivery carried and its type, the attempts made and allowed, when it was created and failed, what
  * its last attempt came to and the error's class name. Identifiers, counts and times only: a job's data holds
  * identifiers only (12.9), and of its output only a known outcome and a class name are read, never a message
  * (PRD-SEC-014). The exception of each is the caller's to add.
  */
-export async function listFailedJobs(context: TransactionContext): Promise<Omit<FailedJob, 'exception'>[]> {
+export async function listFailedJobs(
+  context: TransactionContext,
+  query: FailedJobPageQuery = {},
+): Promise<FailedJobPage> {
+  const limit = query.limit === undefined ? FAILED_JOB_PAGE_CAP : Number(query.limit);
+  const before = query.before === undefined ? undefined : positionOf(query.before);
   const rows = await context.tx.execute<Row>(sql`
     select j.id::text as id, j.name, j.data, j.output, j.retry_count, j.retry_limit, j.created_on, j.completed_on,
-           e.event_type
+           e.event_type,
+           pg_catalog.to_char(coalesce(j.completed_on, j.created_on) at time zone 'UTC',
+                              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || '_' || j.id::text as position
       from pgboss.job j
       left join kernel.outbox_event e on e.id::text = j.data ->> 'eventId'
      where j.state = 'failed'
-     order by j.completed_on desc nulls last, j.id desc`);
-  return rows.rows.map((row) => {
-    const data = objectOf(row.data);
-    const output = objectOf(row.output);
-    const delivery = row.name === OUTBOX_DELIVERY_QUEUE;
-    const consumer = typeof data.consumer === 'string' && data.consumer !== '' ? data.consumer : null;
-    const eventId = typeof data.eventId === 'string' && UUID.test(data.eventId) ? data.eventId : null;
-    return {
-      jobId: row.id,
-      queue: row.name,
-      jobKind: delivery && consumer !== null ? consumer : row.name,
-      eventId,
-      eventType: eventId === null ? null : row.event_type,
-      attempts: row.retry_count + 1,
-      attemptsAllowed: row.retry_limit + 1,
-      createdAt: new Date(row.created_on).toISOString(),
-      failedAt: row.completed_on === null ? null : new Date(row.completed_on).toISOString(),
-      outcome: outcomeOf(output),
-      errorName: typeof output.error === 'string' && ERROR_NAME.test(output.error) ? output.error : null,
-    };
-  });
+       ${
+         before === undefined
+           ? sql``
+           : sql`and (coalesce(j.completed_on, j.created_on), j.id) < (${before.at}::timestamptz, ${before.id}::uuid)`
+       }
+     order by coalesce(j.completed_on, j.created_on) desc, j.id desc
+     limit ${limit + 1}`);
+  const page = rows.rows.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    jobs: page.map(jobOf),
+    next: rows.rows.length > page.length && last !== undefined ? last.position : null,
+  };
+}
+
+/** The cursor's failure time and job identifier. */
+function positionOf(cursor: string): { at: string; id: string } {
+  const split = cursor.lastIndexOf('_');
+  return { at: cursor.slice(0, split), id: cursor.slice(split + 1) };
+}
+
+function jobOf(row: Row): Omit<FailedJob, 'exception'> {
+  const data = objectOf(row.data);
+  const output = objectOf(row.output);
+  const delivery = row.name === OUTBOX_DELIVERY_QUEUE;
+  const consumer = typeof data.consumer === 'string' && data.consumer !== '' ? data.consumer : null;
+  const eventId = typeof data.eventId === 'string' && UUID.test(data.eventId) ? data.eventId : null;
+  return {
+    jobId: row.id,
+    queue: row.name,
+    jobKind: delivery && consumer !== null ? consumer : row.name,
+    eventId,
+    eventType: eventId === null ? null : row.event_type,
+    attempts: row.retry_count + 1,
+    attemptsAllowed: row.retry_limit + 1,
+    createdAt: new Date(row.created_on).toISOString(),
+    failedAt: row.completed_on === null ? null : new Date(row.completed_on).toISOString(),
+    outcome: outcomeOf(output),
+    errorName: typeof output.error === 'string' && ERROR_NAME.test(output.error) ? output.error : null,
+  };
 }
 
 function outcomeOf(output: Record<string, unknown>): FailedJobOutcome {

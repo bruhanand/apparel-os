@@ -26,6 +26,10 @@ describe('live updates in the browser (code-house-rules 12.12)', () => {
     });
     expect(keyIsStale(stale, ['readException', { params: { exceptionId: EXCEPTION } }])).toBe(true);
     expect(keyIsStale(stale, ['readException', { params: { exceptionId: OTHER } }])).toBe(false);
+    // A record named elsewhere than the read's path, as in a query, is not the read's record.
+    expect(keyIsStale(stale, ['readException', { params: { exceptionId: OTHER }, query: { note: EXCEPTION } }])).toBe(
+      false,
+    );
   });
 
   it('deployment.md 5 a resync makes every read stale', () => {

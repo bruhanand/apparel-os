@@ -53,7 +53,7 @@ import {
   userVersionDraftSchema,
 } from './approvals.js';
 import { myWorkSchema } from './work-item.js';
-import { failedJobListSchema, liveMessageSchema } from './operations.js';
+import { failedJobListSchema, failedJobPageQuerySchema, liveMessageSchema } from './operations.js';
 import {
   commentRequestSchema,
   exceptionChangedSchema,
@@ -995,6 +995,7 @@ export const routes = {
   listFailedJobs: defineRoute({
     method: 'GET',
     path: '/api/kernel/failed-jobs',
+    query: failedJobPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: 'kernel.job' },
     command: false,
     response: failedJobListSchema,

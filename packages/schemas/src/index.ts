@@ -183,14 +183,17 @@ export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-
 export type { Exposure, MyWork, WorkItem } from './work-item.js';
 
 export {
+  FAILED_JOB_PAGE_CAP,
+  failedJobCursorSchema,
   failedJobListSchema,
   failedJobOutcomeSchema,
+  failedJobPageQuerySchema,
   failedJobSchema,
   LIVE_RESYNC,
   liveMessageSchema,
   liveSubjectSchema,
 } from './operations.js';
-export type { FailedJob, FailedJobList, FailedJobOutcome, LiveMessage } from './operations.js';
+export type { FailedJob, FailedJobList, FailedJobOutcome, FailedJobPageQuery, LiveMessage } from './operations.js';
 
 export {
   errorCodes,

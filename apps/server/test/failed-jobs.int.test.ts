@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { failedJobListSchema, type FailedJob } from '@apparel-os/schemas';
+import { FAILED_JOB_PAGE_CAP, failedJobListSchema, type FailedJob } from '@apparel-os/schemas';
 import type { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -217,8 +217,8 @@ async function cookieOf(user: Enrolled, organisationCode = world.organisations[0
   return cookie;
 }
 
-async function failedJobs(user: Enrolled, organisationCode?: string) {
-  const response = await fetch(`${api.baseUrl}/api/kernel/failed-jobs`, {
+async function failedJobs(user: Enrolled, organisationCode?: string, query = '') {
+  const response = await fetch(`${api.baseUrl}/api/kernel/failed-jobs${query}`, {
     headers: { cookie: await cookieOf(user, organisationCode) },
   });
   const text = await response.text();
@@ -362,6 +362,30 @@ describe('failed jobs kept and listed (code-house-rules 12.9; access-and-approva
     }
     await boss.supervise();
     expect((await listed()).map((job) => job.jobId).sort()).toEqual(before.map((job) => job.jobId).sort());
+  });
+
+  it('code-house-rules 12.1 the list is read page by page with a cursor, never past its cap', async () => {
+    // Three more SYNTHETIC failed jobs, failed by pg-boss at once with no retry.
+    for (let i = 0; i < 3; i += 1) {
+      const id = (await boss.send(IDLE_QUEUE, {}, { ...KEEP_EVERY_JOB, retryLimit: 0 })) ?? '';
+      await boss.fetch(IDLE_QUEUE);
+      await boss.fail(IDLE_QUEUE, id, { error: 'SyntheticFailure' });
+    }
+    const all = await listed();
+    expect(all.length).toBeGreaterThanOrEqual(5);
+    const seen: string[] = [];
+    let query = '?limit=2';
+    for (;;) {
+      const call = await failedJobs(operator, undefined, query);
+      expect(call.status, call.text).toBe(200);
+      const page = failedJobListSchema.parse(call.body);
+      expect(page.jobs.length).toBeLessThanOrEqual(2);
+      seen.push(...page.jobs.map((job) => job.jobId));
+      if (page.next === null) break;
+      query = `?limit=2&before=${encodeURIComponent(page.next)}`;
+    }
+    expect(seen).toEqual(all.map((job) => job.jobId));
+    expect((await failedJobs(operator, undefined, `?limit=${String(FAILED_JOB_PAGE_CAP + 1)}`)).status).toBe(400);
   });
 
   it('PRD-SEC-014 the list holds no secret, restricted value or error message', async () => {
