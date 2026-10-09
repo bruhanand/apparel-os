@@ -12,6 +12,7 @@ import { GrantedButton, inputClass, useGranted } from '../setup/parts';
 import { useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { ORGANISATION_READS } from './kinds';
+import { base64Of } from '../files/Evidence';
 
 // A mapping version's verification on Setup › Organisation structure (structure-and-masters 3.4, 8; POL-10.08;
 // S1-F02-T02): who verified it and when, with its evidence files; or, for an approved version not yet verified, the
@@ -33,16 +34,6 @@ function EvidenceFile({ attachmentId, index }: { attachmentId: string; index: nu
     enabled: useGranted(VERIFICATION, 'view'),
   });
   return <li>{query.data?.receipt.originalName ?? t('organisation.verification.file', { number: index + 1 })}</li>;
-}
-
-/** The bytes of a chosen file, as base64 (imports-and-opening-data 9.3 "Evidence files"). */
-async function base64Of(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = '';
-  for (let start = 0; start < bytes.length; start += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
-  }
-  return btoa(binary);
 }
 
 /** Stores the evidence file, then verifies the mapping version with it. */

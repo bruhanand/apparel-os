@@ -9,13 +9,14 @@ import {
 import {
   AccessContractsModule,
   AccessModule,
+  DECISION_EVIDENCE,
   MODULE_APPROVALS,
   SCOPE_MEMBERS,
   type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
-import { FilesImportsModule } from './modules/files-imports/index.js';
+import { decisionEvidence, FilesImportsModule } from './modules/files-imports/index.js';
 import {
   EXCEPTION_CODE_KIND,
   EXCEPTION_TYPES,
@@ -72,8 +73,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND] satisfies readonly NumberedKind[] },
     // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
     { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
+    // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
+    { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
   ],
-  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS, NUMBERED_KINDS, EXCEPTION_TYPES],
+  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS, NUMBERED_KINDS, EXCEPTION_TYPES, DECISION_EVIDENCE],
 })
 export class ModuleApprovalsModule {}
 

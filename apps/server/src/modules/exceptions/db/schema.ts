@@ -88,6 +88,8 @@ export const exceptionEvent = exceptions.table('exception_event', {
   toUserId: uuid('to_user_id'),
   toRoleId: uuid('to_role_id'),
   comment: text('comment'),
+  /** The attachment of an evidence event's stored file, in files-imports (0037); null for any other event. */
+  attachmentId: uuid('attachment_id'),
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

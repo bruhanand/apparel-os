@@ -75,3 +75,15 @@ export const attachedFileSchema = z.strictObject({
   contentBase64: z.base64(),
 });
 export type AttachedFile = z.infer<typeof attachedFileSchema>;
+
+/** One evidence file, as Store a file answered it (imports-and-opening-data 13.1). */
+export const evidenceFileSchema = z.strictObject({ storedFileId: idSchema, fileReceiptId: idSchema });
+export type EvidenceFile = z.infer<typeof evidenceFileSchema>;
+
+/** Evidence files given together: one or more, each stored file given once (S1-F02-T02, S1-F08-T03). */
+export const evidenceListSchema = z
+  .array(evidenceFileSchema)
+  .min(1)
+  .refine((list) => new Set(list.map((each) => each.storedFileId)).size === list.length, {
+    message: 'Each is given once',
+  });

@@ -64,6 +64,7 @@ export class ApprovalsController {
             outcome: input.body.outcome,
             reason: input.body.reason,
             comment: input.body.comment,
+            evidence: input.body.evidence,
             totpCode: input.body.totpCode,
           });
           return outcome.kind === 'success'

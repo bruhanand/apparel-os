@@ -57,6 +57,8 @@ import { failedJobListSchema, liveMessageSchema } from './operations.js';
 import {
   commentRequestSchema,
   exceptionChangedSchema,
+  exceptionEvidenceAddedSchema,
+  exceptionEvidenceRequestSchema,
   exceptionParamsSchema,
   exceptionViewSchema,
   noBodySchema,
@@ -1786,6 +1788,22 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: exceptionChangedSchema,
+    codes: EXCEPTION_ACTION_CODES,
+  }),
+  // Evidence on an open exception (access-and-approvals 12.3; POL-03.05; S1-F08-T03): stored files, each stored
+  // first, linked in this command's transaction as evidence events. Admitted as the comment is, and needs view on the
+  // exception's type covering it besides, since the file is served only through that grant (imports-and-opening-data 11).
+  addExceptionEvidence: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/evidence',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: exceptionEvidenceRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionEvidenceAddedSchema,
     codes: EXCEPTION_ACTION_CODES,
   }),
   reassignException: defineRoute({

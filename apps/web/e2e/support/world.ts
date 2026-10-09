@@ -84,6 +84,17 @@ export interface SyntheticWorld {
     readonly jobKind: string;
   };
   /**
+   * The evidence journey (S1-F08-T03): an Operations user who owns one SYNTHETIC exception, by its code, and an
+   * approver who decides an exception rule change with the approve reason given.
+   */
+  readonly evidence: {
+    readonly organisationCode: string;
+    readonly operations: EnrolledUser;
+    readonly code: string;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+  };
+  /**
    * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
    * Area, an Admin who may prepare the structure and an approver who may approve it.
    */

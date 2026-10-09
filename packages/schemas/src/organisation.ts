@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { businessDateSchema, idSchema } from './common.js';
 import { recordStateSchema } from './access-records.js';
 import { approvalRequestStateSchema } from './approvals.js';
+import { evidenceListSchema } from './files.js';
 
 // The organisation structure the first organisation ticket builds (structure-and-masters 2, 3.1 to 3.3, 3.6 to 3.8,
 // 8; module-map 4.11; S1-F02-T01): geography, legal entities, tax registrations, accounting books, Sites, Stores and
@@ -373,19 +374,12 @@ export const locationVersionDraftSchema = z
 /** A Store's default warehouse from a date: a warehouse unit (3.6; PRD-ORG-013). */
 export const storeDefaultWarehouseVersionDraftSchema = z.strictObject({ warehouseUnitId: idSchema, validFrom });
 
-/** One evidence file, as Store a file answered it (imports-and-opening-data 13.1). */
-const evidenceFileSchema = z.strictObject({ storedFileId: idSchema, fileReceiptId: idSchema });
 /**
  * Verify a mapping version (3.4; POL-10.08): the evidence, one stored file or more, each given once, attached to the
  * verification through files-imports (S1-F06-T05).
  */
 export const mappingVerificationRequestSchema = z.strictObject({
-  evidence: z
-    .array(evidenceFileSchema)
-    .min(1)
-    .refine((list) => new Set(list.map((each) => each.storedFileId)).size === list.length, {
-      message: 'Each is given once',
-    }),
+  evidence: evidenceListSchema,
 });
 export type MappingVerificationRequest = z.infer<typeof mappingVerificationRequestSchema>;
 /** What verifying answers: the verification and the attachment of each evidence file. */

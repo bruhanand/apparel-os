@@ -8,6 +8,7 @@ import {
 } from '../../kernel/index.js';
 import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { FILES_IMPORTS, FilesImportsModule, type FilesImportsInterface } from '../files-imports/index.js';
 import { INBOX, InboxModule, type InboxInterface } from '../inbox/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ExceptionTypeRegistration } from './domain/types.js';
@@ -19,12 +20,12 @@ import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
 
 /**
  * The exceptions module (module-map 4.13; access-and-approvals 12): tier 2, uses `access`, `audit`, `inbox`,
- * `numbering` and `kernel`. Exception codes come from its own numbered kind, which the composition root hands to
+ * `numbering`, `files-imports` (evidence, S1-F08-T03) and `kernel`. Exception codes come from its own numbered kind, which the composition root hands to
  * `numbering` under NUMBERED_KINDS; the types the raising modules register reach it there too, under EXCEPTION_TYPES
  * (module-map section 3, rule 6).
  */
 @Module({
-  imports: [CommandRunnerModule, AuditModule, AccessModule, InboxModule, NumberingModule],
+  imports: [CommandRunnerModule, AuditModule, AccessModule, InboxModule, NumberingModule, FilesImportsModule],
   controllers: [ExceptionsController],
   providers: [
     {
@@ -34,8 +35,9 @@ import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
         inbox: InboxInterface,
         audit: AuditInterface,
         types: readonly ExceptionTypeRegistration[] | undefined,
-      ) => new Exceptions({ numbering, inbox, audit, types: types ?? [] }),
-      inject: [NUMBERING, INBOX, AUDIT, { token: EXCEPTION_TYPES, optional: true }],
+        files: FilesImportsInterface,
+      ) => new Exceptions({ numbering, inbox, audit, types: types ?? [], files }),
+      inject: [NUMBERING, INBOX, AUDIT, { token: EXCEPTION_TYPES, optional: true }, FILES_IMPORTS],
     },
     {
       // The exception raised for each failed job, for the operations view (code-house-rules 12.9; S1-F08-T04).

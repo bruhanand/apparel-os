@@ -20,6 +20,8 @@ export interface ExceptionRecord {
     readonly actorId: string | null;
     readonly to: ExceptionParty | null;
     readonly comment: string | null;
+    /** The attachment an evidence event links (S1-F08-T03); null for any other event. */
+    readonly attachmentId: string | null;
     readonly occurredAt: Date;
   }[];
   readonly earlierCode: string | null;
@@ -74,6 +76,7 @@ export async function readException(
       actorId: event.actorId,
       to: event.toUserId === null && event.toRoleId === null ? null : partyOf(event.toUserId, event.toRoleId),
       comment: event.comment,
+      attachmentId: event.attachmentId,
       occurredAt: event.occurredAt,
     })),
     earlierCode: earlier?.code ?? null,

@@ -1,4 +1,4 @@
-import type { AccessActionType, RecordTypeDeclaration } from '@apparel-os/schemas';
+import type { AccessActionType, FieldClass, RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { CommandRefusal, Composition, LockTarget, TransactionContext } from '../../../kernel/index.js';
 
 /**
@@ -12,7 +12,8 @@ export type ValueBasis = 'none' | 'cost';
  * The fixed parts of one approval rule, kept in code (access-and-approvals 8; domain-model section 5): the module that
  * owns the document, the record type whose approve permission decides it (9.3), whether independent approval is
  * required, which can never be switched off (PRD-ACS-006, POL-02.07), its value basis (PRD-ACS-015), and whether its
- * decision gives a free-text reason, which only a reason-list change does (DEC-104). A synthetic rule is declared by
+ * decision gives a free-text reason, which only a reason-list change does (DEC-104), and the restricted field classes
+ * the evidence of its decision carries (9.5; imports-and-opening-data 11; S1-F08-T03). A synthetic rule is declared by
  * test code only and accepted only in a test composition (stock-ledger 15.3; DEC-112, H4).
  */
 export interface ApprovalRule {
@@ -23,6 +24,11 @@ export interface ApprovalRule {
   readonly independent: true;
   readonly value: ValueBasis;
   readonly freeTextReason: boolean;
+  /**
+   * The restricted field classes a decision's evidence files carry, which a reader of them needs besides view on the
+   * record type (imports-and-opening-data 11). Declared for every rule, so none is left out by a default.
+   */
+  readonly decisionEvidenceClasses: readonly FieldClass[];
   readonly synthetic: boolean;
 }
 
@@ -34,6 +40,8 @@ function rule(actionType: AccessActionType, recordType: string, freeTextReason =
     independent: true,
     value: 'none',
     freeTextReason,
+    // An access change's decision evidence carries no restricted field class (9.5; S1-F08-T03; RR-453).
+    decisionEvidenceClasses: [],
     synthetic: false,
   };
 }

@@ -39,6 +39,8 @@ export const routingApprovalRule: ApprovalRule = {
   independent: true,
   value: 'none',
   freeTextReason: false,
+  // A routing decision's evidence carries no restricted field class (access-and-approvals 9.5; S1-F08-T03).
+  decisionEvidenceClasses: [],
   synthetic: false,
 };
 

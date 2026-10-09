@@ -26,6 +26,7 @@ import {
   type LockTarget,
   type TransactionContext,
 } from '../../kernel/index.js';
+import type { DecisionEvidence } from './contracts/decision-evidence.js';
 import type { AuditInterface } from '../audit/index.js';
 import {
   AccessChanges,
@@ -332,6 +333,11 @@ export interface AccessDependencies {
    * rule 6). None by default: then no member can be selected.
    */
   readonly scopeMembers?: readonly ScopeMembers[];
+  /**
+   * Where a decision's evidence files are linked: the contract files-imports implements (9.5; S1-F08-T03). Without
+   * it, a decision given evidence is a defect of the composition.
+   */
+  readonly decisionEvidence?: DecisionEvidence | undefined;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -370,6 +376,7 @@ export class Access implements AccessInterface {
       keys: dependencies.keys,
       rules: this.rules,
       effects: effectsOf(dependencies.documentEffects ?? new Map(), this.rules),
+      evidence: dependencies.decisionEvidence,
     });
   }
 

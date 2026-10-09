@@ -9,7 +9,8 @@ import {
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { AuditInterface } from '../../audit/index.js';
+import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import { DECISION_EVIDENCE_KIND, type DecisionEvidence } from '../contracts/decision-evidence.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
 import type { ApprovalRule, DocumentEffect } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
@@ -43,6 +44,8 @@ export interface DecisionInput {
   readonly reason:
     { readonly kind: 'listed'; readonly reasonId: string } | { readonly kind: 'free-text'; readonly text: string };
   readonly comment?: string | undefined;
+  /** The evidence files, each stored first through files-imports and linked in the decision (9.5; S1-F08-T03). */
+  readonly evidence?: readonly { readonly storedFileId: string; readonly fileReceiptId: string }[] | undefined;
   readonly totpCode: string;
 }
 
@@ -96,6 +99,17 @@ function refused(kind: CommandRefusal['kind'], code: string, missing: MissingIte
 
 const HELD = { locksHeld: true } as const;
 
+/** The document's scope facts the request froze (9.1), as an attachment keeps them; a null fact is Unknown. */
+function scopeOf(request: RequestRow): AuditScope {
+  return {
+    ...(request.legalEntityId === null ? {} : { legalEntityId: request.legalEntityId }),
+    ...(request.siteId === null ? {} : { siteId: request.siteId }),
+    ...(request.storeId === null ? {} : { storeId: request.storeId }),
+    ...(request.businessUnitId === null ? {} : { businessUnitId: request.businessUnitId }),
+    ...(request.brandId === null ? {} : { brandId: request.brandId }),
+  };
+}
+
 /** Another module's document: Decide changes nothing of it (module-map 6.2; access-and-approvals 9.5, 9.8). */
 const MODULE_DOCUMENT: DocumentHandler = {
   targets: () => Promise.resolve([]),
@@ -140,6 +154,8 @@ export class Approvals {
       readonly rules: ReadonlyMap<string, ApprovalRule>;
       /** The effects of decisions on modules' master versions, by action type (9.8b; module-map 6.2 flow A). */
       readonly effects?: ReadonlyMap<string, DocumentEffect>;
+      /** Where a decision's evidence files are linked: the contract files-imports implements (9.5; S1-F08-T03). */
+      readonly evidence?: DecisionEvidence | undefined;
     },
   ) {
     const { changes, users, settings, securitySettings } = dependencies;
@@ -634,7 +650,30 @@ export class Approvals {
       // "Reason"; PRD-ACS-013), so a record's history says why it was approved or rejected.
       reason: reason.text,
     };
+    const evidenceAttachmentIds: string[] = [];
     const writeDecision = async () => {
+      // The evidence files, stored before this transaction, are linked to the document decided in it, so a decision
+      // that does not commit leaves no link (9.5; S1-F08-T03). The reader of a link needs view on the rule's record
+      // type covering the request's facts, and the classes the rule declares for its evidence (imports 11).
+      for (const file of input.evidence ?? []) {
+        const attacher = this.dependencies.evidence;
+        if (attacher === undefined) throw new CommandDefect('A decision was given evidence with no files-imports');
+        const attached = await attacher.attach(context, {
+          storedFileId: file.storedFileId,
+          fileReceiptId: file.fileReceiptId,
+          record: {
+            module: request.documentModule,
+            type: rule.recordType,
+            id: request.documentRecordId,
+            versionId: request.documentVersionId,
+          },
+          evidence: { kind: DECISION_EVIDENCE_KIND, restrictedClasses: rule.decisionEvidenceClasses },
+          scope: scopeOf(request),
+          attachedBy: { kind: 'user', id: actor.id },
+          roleAssignmentId: eligible.roleAssignmentId,
+        });
+        evidenceAttachmentIds.push(attached.attachmentId);
+      }
       await context.tx.insert(approvalDecision).values({
         id: decisionId,
         approvalRequestId: request.id,
@@ -648,6 +687,7 @@ export class Approvals {
         valueKind: request.valueKind,
         valueBasis: request.valueBasis,
         valueAmount: request.valueAmount,
+        evidenceAttachmentIds,
         decidedAt: context.startedAt,
       });
       await context.tx.update(approvalRequest).set({ state: outcome }).where(eq(approvalRequest.id, request.id));
@@ -684,6 +724,9 @@ export class Approvals {
               : { kind: 'free-text', text: reason.text },
         },
         { kind: 'value', field: 'comment', before: null, after: input.comment ?? null },
+        ...(evidenceAttachmentIds.length === 0
+          ? []
+          : [{ kind: 'value' as const, field: 'evidence', before: null, after: evidenceAttachmentIds }]),
       ],
       source: { kind: 'screen' },
     });
@@ -735,6 +778,7 @@ export class Approvals {
               approverId: decision.approverUserId,
               reason,
               ...(decision.comment === null ? {} : { comment: decision.comment }),
+              evidence: decision.evidenceAttachmentIds,
               decidedAt: decision.decidedAt.toISOString(),
             },
           }),

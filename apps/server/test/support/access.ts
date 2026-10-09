@@ -24,11 +24,13 @@ import {
   Access,
   ACCESS,
   ACCESS_ENVIRONMENT,
+  DECISION_EVIDENCE,
   MODULE_APPROVALS,
   SCOPE_MEMBERS,
   type ScopeMembers,
   ORGANISATION_KEYS,
   ORGANISATION_KEYS_VARIABLE,
+  type DecisionEvidence,
   type ModuleApprovals,
 } from '../../src/modules/access/index.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
@@ -277,6 +279,7 @@ export async function startAccessApp(
         keys: OrganisationKeys,
         modules: ModuleApprovals,
         scopeMembers: ScopeMembers[],
+        decisionEvidence: DecisionEvidence,
       ) =>
         new Access({
           audit,
@@ -285,8 +288,9 @@ export async function startAccessApp(
           approvalRules: modules.rules,
           documentEffects: modules.effects,
           scopeMembers,
+          decisionEvidence,
         }),
-      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, SCOPE_MEMBERS],
+      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, SCOPE_MEMBERS, DECISION_EVIDENCE],
     });
   }
   const moduleRef = await builder

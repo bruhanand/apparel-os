@@ -15,12 +15,14 @@ import { Card, inputClass, ListRead } from '../setup/parts';
 import { RecordDrawer } from '../setup/RecordDrawer';
 import { useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
+import { EvidenceList, EvidencePicker, useChosenFile, useStoreEvidence } from '../files/Evidence';
 
 // The exception record (access-and-approvals 12, 14; ui-blueprint Home › Exception: Details · History; design-language
 // 10.15; S1-F08-T02): its code, type, state, owner, due time, exposure, Site and the records it is about, what
 // happened to it, and the actions its reader may take: comment, take it for a role's holder, close and reopen. Closing
 // runs the owning module's resolution check on the server; a refusal names what is still missing (PRD-UXP-003). Its
-// evidence files arrive with S1-F08-T03.
+// evidence files are in the tab Evidence n: each opens through the app, and while it is open its reader who may act on
+// it adds one, stored first and then linked (access-and-approvals 12.3; design-language 10.15; S1-F08-T03).
 
 /** The read of one exception, shared by the drawer and its actions. */
 export function exceptionRead(exceptionId: string) {
@@ -214,6 +216,54 @@ function Actions({ view }: { view: ExceptionView }) {
   );
 }
 
+/** The evidence files of an exception, from its evidence events, in the order they were added. */
+function evidenceOf(view: ExceptionView): string[] {
+  return view.events.flatMap((event) => (event.attachmentId === null ? [] : [event.attachmentId]));
+}
+
+/** The evidence tab: the files, and, on an open exception its reader may act on, the picker that adds one. */
+function Evidence({ view }: { view: ExceptionView }) {
+  const chosen = useChosenFile();
+  const storing = useStoreEvidence();
+  const adding = useSubmission('addExceptionEvidence', READS);
+  const pending = storing.state.kind === 'pending' || adding.state.kind === 'pending';
+  return (
+    <Card title="evidence.title">
+      <EvidenceList attachmentIds={evidenceOf(view)} />
+      {view.mayAct && view.state !== 'Closed' && (
+        <form
+          noValidate
+          className="flex flex-col gap-2"
+          aria-label={t('evidence.add')}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const file = chosen.file;
+            if (file === null) return;
+            void (async () => {
+              const evidence = await storing.store(file);
+              if (evidence === undefined) return;
+              const added = await adding.submit({ params: { exceptionId: view.id }, body: { evidence: [evidence] } });
+              if (added !== undefined) chosen.clear();
+            })();
+          }}
+        >
+          {storing.banner}
+          <Outcome state={adding.state} done="evidence.added" />
+          <EvidencePicker
+            id="exception-evidence"
+            label="evidence.picker"
+            onChange={chosen.choose}
+            resetKey={chosen.resetKey}
+          />
+          <div>
+            <Button type="submit" label="evidence.add" disabled={chosen.file === null || pending} />
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 /** The drawer of one exception, opened from My work. */
 export function ExceptionDrawer({ exceptionId, onClose }: { exceptionId: string; onClose: () => void }) {
   const query = useQuery(exceptionRead(exceptionId));
@@ -225,6 +275,9 @@ export function ExceptionDrawer({ exceptionId, onClose }: { exceptionId: string;
       title={view === undefined ? t('my-work.kind.exception') : t(`exception.category.${view.type.category}`)}
       {...(view === undefined ? {} : { state: view.overdue ? 'Overdue' : view.state })}
       onClose={onClose}
+      {...(view === undefined
+        ? {}
+        : { evidence: { count: evidenceOf(view).length, content: <Evidence view={view} /> } })}
       details={
         <ListRead query={query} what="exception.what">
           {(read) => (

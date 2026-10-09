@@ -409,6 +409,8 @@ export const approvalDecision = access.table('approval_decision', {
   valueKind: text('value_kind').notNull(),
   valueBasis: text('value_basis'),
   valueAmount: bigint('value_amount', { mode: 'number' }),
+  /** The attachment of each evidence file given with the decision, in files-imports (9.5; 0038); empty for none. */
+  evidenceAttachmentIds: uuid('evidence_attachment_ids').array().notNull(),
   decidedAt: at('decided_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

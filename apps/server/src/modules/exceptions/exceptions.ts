@@ -1,4 +1,4 @@
-import type { ExceptionParty, RoutingList, RoutingVersionDraft } from '@apparel-os/schemas';
+import type { EvidenceFile, ExceptionParty, RoutingList, RoutingVersionDraft } from '@apparel-os/schemas';
 import type { LatestRequest } from '../access/index.js';
 import {
   JOB_RECORD_TYPE,
@@ -8,6 +8,8 @@ import {
   type TransactionContext,
 } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
+import type { FilesImportsInterface } from '../files-imports/index.js';
+import { addEvidence, type EvidenceAdded } from './commands/evidence.js';
 import type { InboxInterface } from '../inbox/index.js';
 import type { NumberingInterface } from '../numbering/index.js';
 import { routingInForce, today, type Outcome } from './commands/common.js';
@@ -37,6 +39,8 @@ export const unfinishedOperation: ExceptionTypeRegistration = {
   category: 'unfinished-operation',
   module: 'exceptions',
   linksTo: [JOB_RECORD_TYPE],
+  // A failed job's evidence, such as a screenshot of what the operator saw, carries no restricted class (S1-F08-T03).
+  evidenceClasses: [],
   resolutionCheck: async (context, subject) => {
     const missing = [];
     for (const link of subject.links) {
@@ -55,6 +59,8 @@ export interface ExceptionsDependencies {
   readonly audit: AuditInterface;
   /** The types the raising modules register (12.1; module-map section 3, rule 6), beside its own. */
   readonly types: readonly ExceptionTypeRegistration[];
+  /** Where evidence files are attached (S1-F08-T03); a composition that adds no evidence may leave it out. */
+  readonly files?: Pick<FilesImportsInterface, 'attach'> | undefined;
 }
 
 /**
@@ -78,6 +84,13 @@ export interface ExceptionsInterface {
   /** Raise in a command of its own, as after a rollback, so it survives (module-map 4.13). */
   raiseInOwnCommand(context: TransactionContext, input: RaiseInput): Promise<Outcome<Raised>>;
   comment(context: TransactionContext, acting: Acting, exceptionId: string, text: string): Promise<Outcome<Changed>>;
+  /** Evidence on an open exception: each stored file linked through files-imports as an evidence event (12.3). */
+  addEvidence(
+    context: TransactionContext,
+    acting: Acting,
+    exceptionId: string,
+    files: readonly EvidenceFile[],
+  ): Promise<Outcome<EvidenceAdded>>;
   reassign(
     context: TransactionContext,
     acting: Acting,
@@ -144,6 +157,10 @@ export class Exceptions implements ExceptionsInterface {
 
   comment(context: TransactionContext, acting: Acting, exceptionId: string, text: string) {
     return comment(context, this.raising, acting, exceptionId, text);
+  }
+
+  addEvidence(context: TransactionContext, acting: Acting, exceptionId: string, files: readonly EvidenceFile[]) {
+    return addEvidence(context, { ...this.raising, files: this.dependencies.files }, acting, exceptionId, files);
   }
 
   reassign(context: TransactionContext, acting: Acting, exceptionId: string, to: ExceptionParty) {

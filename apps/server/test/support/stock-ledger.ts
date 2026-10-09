@@ -77,6 +77,7 @@ export const syntheticRules: readonly ApprovalRule[] = [
     independent: true,
     value: 'none',
     freeTextReason: false,
+    decisionEvidenceClasses: [],
     synthetic: true,
   },
   {
@@ -86,6 +87,7 @@ export const syntheticRules: readonly ApprovalRule[] = [
     independent: true,
     value: 'cost',
     freeTextReason: false,
+    decisionEvidenceClasses: [],
     synthetic: true,
   },
 ];

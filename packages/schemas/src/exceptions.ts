@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { businessDateSchema, idSchema, paiseSchema } from './common.js';
+import { evidenceListSchema } from './files.js';
 import { settingOriginSchema } from './settings.js';
 
 // Exceptions (access-and-approvals 12, 14; module-map 4.13; PRD-EXC-001 to PRD-EXC-004, POL-02.16, POL-03.04,
@@ -130,14 +131,19 @@ export type ExceptionLink = z.infer<typeof exceptionLinkSchema>;
 /** The states of an exception (DEC-105, DM-4; design-language section 7). Overdue is shown beside them. */
 export const exceptionStateSchema = z.enum(['Unresolved', 'Resolved', 'Closed', 'Reopened']);
 
-/** One event of an exception's history (13.3): raised, assigned, comment, escalated, resolved, closed, reopened. */
+/**
+ * One event of an exception's history (13.3): raised, assigned, comment, evidence, escalated, resolved, closed,
+ * reopened. An evidence event names the attachment of the stored file it added, read through files-imports
+ * (S1-F08-T03; imports-and-opening-data 11); every other event names none.
+ */
 export const exceptionEventViewSchema = z.strictObject({
   id: idSchema,
-  kind: z.enum(['raised', 'assigned', 'comment', 'escalated', 'resolved', 'closed', 'reopened']),
+  kind: z.enum(['raised', 'assigned', 'comment', 'evidence', 'escalated', 'resolved', 'closed', 'reopened']),
   at: z.iso.datetime({ offset: true }),
   byName: z.string().min(1).nullable(),
   to: namedPartySchema.nullable(),
   comment: z.string().min(1).nullable(),
+  attachmentId: idSchema.nullable(),
 });
 
 /** An exception as the record drawer shows it (access-and-approvals 12, 14). */
@@ -185,6 +191,14 @@ export const commentRequestSchema = z.strictObject({ comment: z.string().trim().
 export const reassignRequestSchema = z.strictObject({ to: exceptionPartySchema });
 export const noBodySchema = z.strictObject({});
 export const exceptionChangedSchema = z.strictObject({ exceptionId: idSchema, state: exceptionStateSchema });
+/** Evidence added to an open exception (12.3; POL-03.05; S1-F08-T03): stored files, each stored first. */
+export const exceptionEvidenceRequestSchema = z.strictObject({ evidence: evidenceListSchema });
+/** What adding evidence answers: the attachment of each file, in the order given. */
+export const exceptionEvidenceAddedSchema = z.strictObject({
+  exceptionId: idSchema,
+  state: exceptionStateSchema,
+  attachmentIds: z.array(idSchema).min(1),
+});
 
 /**
  * The read model (access-and-approvals 12.3; PRD-EXC-004): the open exceptions the reader's scope covers, by Store,

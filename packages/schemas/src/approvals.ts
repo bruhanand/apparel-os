@@ -8,6 +8,7 @@ import {
   recordVersionRefSchema,
   totpCodeSchema,
 } from './common.js';
+import { evidenceListSchema } from './files.js';
 import { errorCodeSchema, missingItemSchema, type ErrorCode } from './errors.js';
 
 // Approval requests and decisions (access-and-approvals 9.1, 9.3, 9.5, 9.6; PRD-ACS-006, PRD-ACS-007, PRD-ACS-010),
@@ -105,6 +106,8 @@ export const approvalRequestViewSchema = z.strictObject({
       approverId: idSchema,
       reason: shownReasonSchema,
       comment: z.string().min(1).optional(),
+      /** The attachment of each evidence file the approver gave with the decision (9.5; S1-F08-T03). */
+      evidence: z.array(idSchema),
       decidedAt: z.iso.datetime({ offset: true }),
     })
     .optional(),
@@ -126,14 +129,15 @@ export const decisionReasonSchema = z.discriminatedUnion('kind', [
 /**
  * Deciding a request, named in the path. It names the version the approver reviewed, so a decision on an older
  * version is refused (PRD-ACS-007), and carries a fresh authenticator code, since deciding is a protected action
- * (PRD-SEC-001; access-and-approvals 3.3). A service identity never decides (PRD-SEC-018). Evidence files arrive with
- * `S1-F06-T05` (RR-320).
+ * (PRD-SEC-001; access-and-approvals 3.3). A service identity never decides (PRD-SEC-018). Evidence, where given, is
+ * stored files, each stored first, then linked in the decision's own transaction (9.5; S1-F08-T03).
  */
 export const decisionRequestSchema = z.strictObject({
   versionId: idSchema,
   outcome: z.enum(['approve', 'reject']),
   reason: decisionReasonSchema,
   comment: z.string().min(1).optional(),
+  evidence: evidenceListSchema.optional(),
   totpCode: totpCodeSchema,
 });
 export type DecisionRequest = z.infer<typeof decisionRequestSchema>;
