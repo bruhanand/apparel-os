@@ -10,8 +10,11 @@ import type {
   MappingVerified,
   StoreDefaultWarehouseVersionDraft,
   CityDraft,
+  ClassificationKindDraft,
+  ClassificationValueDraft,
   CountryDraft,
   GroupingDraft,
+  GroupingKindDraft,
   GroupingVersionDraft,
   LegalEntityDraft,
   LegalEntityVersionDraft,
@@ -67,6 +70,11 @@ export interface OrganisationInterface {
   prepareSite(context: TransactionContext, preparer: Preparer, draft: SiteDraft): Answer;
   prepareStore(context: TransactionContext, preparer: Preparer, draft: StoreDraft): Answer;
   prepareGrouping(context: TransactionContext, preparer: Preparer, draft: GroupingDraft): Answer;
+  // The Organisation's own grouping kinds and classification kinds and values (3.1, 3.6; RR-440; S1-F02-T04); their
+  // later versions are name versions.
+  prepareGroupingKind(context: TransactionContext, preparer: Preparer, draft: GroupingKindDraft): Answer;
+  prepareClassificationKind(context: TransactionContext, preparer: Preparer, draft: ClassificationKindDraft): Answer;
+  prepareClassificationValue(context: TransactionContext, preparer: Preparer, draft: ClassificationValueDraft): Answer;
   /** A new version of a master whose versions hold only a name. */
   prepareNameVersion(
     context: TransactionContext,

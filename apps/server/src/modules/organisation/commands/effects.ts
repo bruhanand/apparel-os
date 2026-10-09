@@ -8,7 +8,13 @@ import {
   area,
   businessUnitMapping,
   city,
+  classificationValue,
+  grouping,
+  groupingKind,
   groupingMember,
+  groupingVersion,
+  siteClassification,
+  storeClassification,
   location,
   locationVersion,
   siteVersion,
@@ -73,7 +79,16 @@ async function referencesOf(
   switch (kind) {
     case 'country':
     case 'legal_entity':
+    case 'grouping_kind':
+    case 'classification_kind':
       return [];
+    case 'classification_value': {
+      const [row] = await context.tx
+        .select({ id: classificationValue.classificationKindId })
+        .from(classificationValue)
+        .where(eq(classificationValue.id, recordId));
+      return row === undefined ? [] : [{ kind: 'classification_kind', id: row.id }];
+    }
     case 'state': {
       const [row] = await context.tx.select({ id: state.countryId }).from(state).where(eq(state.id, recordId));
       return row === undefined ? [] : [{ kind: 'country', id: row.id }];
@@ -111,21 +126,53 @@ async function referencesOf(
         .select({ id: siteVersion.areaId })
         .from(siteVersion)
         .where(eq(siteVersion.id, versionId));
-      return row === undefined ? [] : [{ kind: 'area', id: row.id }];
+      const classifications = await context.tx
+        .select({ id: siteClassification.classificationValueId })
+        .from(siteClassification)
+        .where(eq(siteClassification.siteVersionId, versionId));
+      return row === undefined
+        ? []
+        : [
+            { kind: 'area', id: row.id },
+            ...classifications.map((each) => ({ kind: 'classification_value' as const, id: each.id })),
+          ];
     }
     case 'store': {
       const [row] = await context.tx
         .select({ id: storeVersion.siteId })
         .from(storeVersion)
         .where(eq(storeVersion.id, versionId));
-      return row === undefined ? [] : [{ kind: 'site', id: row.id }];
+      const classifications = await context.tx
+        .select({ id: storeClassification.classificationValueId })
+        .from(storeClassification)
+        .where(eq(storeClassification.storeVersionId, versionId));
+      return row === undefined
+        ? []
+        : [
+            { kind: 'site', id: row.id },
+            ...classifications.map((each) => ({ kind: 'classification_value' as const, id: each.id })),
+          ];
     }
     case 'grouping': {
       const rows = await context.tx
         .select({ id: groupingMember.storeId })
         .from(groupingMember)
         .where(eq(groupingMember.groupingVersionId, versionId));
-      return rows.map((row) => ({ kind: 'store' as const, id: row.id }));
+      const stores = rows.map((row) => ({ kind: 'store' as const, id: row.id }));
+      // A new grouping's kind is in force on its first version's start (3.6; S1-F02-T04). A grouping made before grouping
+      // kinds were records keeps its kind, which may have no version yet, so a later version does not name it.
+      const [approvedVersion] = await context.tx
+        .select({ id: groupingVersion.id })
+        .from(groupingVersion)
+        .where(and(eq(groupingVersion.groupingId, recordId), eq(groupingVersion.decision, 'Approved')))
+        .limit(1);
+      if (approvedVersion !== undefined) return stores;
+      const [kind] = await context.tx
+        .select({ id: groupingKind.id })
+        .from(grouping)
+        .innerJoin(groupingKind, eq(groupingKind.code, grouping.kind))
+        .where(eq(grouping.id, recordId));
+      return kind === undefined ? stores : [{ kind: 'grouping_kind', id: kind.id }, ...stores];
     }
     case 'business_unit': {
       const unit = await unitOf(context, recordId);

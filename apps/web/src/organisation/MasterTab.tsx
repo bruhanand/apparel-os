@@ -32,6 +32,7 @@ import {
   recordTypeOf,
   type FieldSpec,
   type Kind,
+  type RecordFilter,
 } from './kinds';
 import { MappingVerification } from './MappingVerification';
 
@@ -111,13 +112,18 @@ export function versionOn(record: MasterRecord, date: string): MasterVersion | u
   );
 }
 
-/** Each record of a kind by its code and the name of its latest version, for a reference field. */
-export function useNames(kind: Kind, enabled = true): ReadonlyMap<string, string> {
+/**
+ * Each record of a kind by its code and the name of its latest version, for a reference field; only those `where`
+ * names, where it names some, such as the classification values of a Site kind (S1-F02-T04).
+ */
+export function useNames(kind: Kind, enabled = true, where?: RecordFilter): ReadonlyMap<string, string> {
   return new Map(
-    useAllRecords(kind, enabled).map((record) => {
-      const name = record.versions[0]?.[labelField(kind)];
-      return [record.id, typeof name === 'string' ? `${record.code} · ${name}` : record.code] as const;
-    }),
+    useAllRecords(kind, enabled)
+      .filter((record) => where === undefined || record[where.field] === where.equals)
+      .map((record) => {
+        const name = record.versions[0]?.[labelField(kind)];
+        return [record.id, typeof name === 'string' ? `${record.code} · ${name}` : record.code] as const;
+      }),
   );
 }
 
@@ -224,15 +230,17 @@ function ReferenceOptions({ target }: { target: Kind }) {
 function ReferencesInput({
   id,
   target,
+  where,
   value,
   onChange,
 }: {
   id: string;
   target: Kind;
+  where?: RecordFilter | undefined;
   value: readonly string[];
   onChange: (ids: string[]) => void;
 }) {
-  const names = useNames(target);
+  const names = useNames(target, true, where);
   return (
     <div id={id} role="group" className="flex flex-col gap-1">
       {[...names].map(([recordId, name]) => (
@@ -344,6 +352,7 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
             <ReferencesInput
               id={id}
               target={spec.target}
+              where={spec.where}
               value={(field.value as string[] | undefined) ?? []}
               onChange={field.onChange}
             />

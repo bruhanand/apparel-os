@@ -145,18 +145,34 @@ export async function holdAuthority(
   roleAssignmentId: string,
   need: Omit<AuthoriseRequest, 'actorId'>,
   changed: readonly LockTarget[] = [],
+  further: readonly HeldNeed[] = [],
 ): Promise<CommandRefusal | undefined> {
-  const relied = await reliedAuthority(context, actor, roleAssignmentId);
-  await context.lock(LOCK_STEP.authority, [...relied.targets, ...changed]);
+  const held = [{ roleAssignmentId, need }, ...further];
+  const relied = [];
+  for (const each of held) relied.push(await reliedAuthority(context, actor, each.roleAssignmentId));
+  // One step-0 call; the lock helper takes a row named twice once (code-house-rules 8.2).
+  await context.lock(LOCK_STEP.authority, [...relied.flatMap((each) => each.targets), ...changed]);
   if (!(await actorActive(context, actor))) {
     return { kind: 'not-authorised', code: 'access.not-authorised', missing: [{ kind: 'user-state' }] };
   }
-  // A version of the role took effect while the locks were taken: the authority changed, try again (RR-360).
-  if (await relied.roleChanged()) return { kind: 'conflict', code: 'kernel.stale-version', missing: [] };
-  const authorised = await authorise(context, registry, { ...need, actorId: actor.id });
-  if (authorised.kind === 'refused') return { ...authorised.refusal, missing: [...authorised.refusal.missing] };
-  if (authorised.roleAssignmentId !== roleAssignmentId) {
-    return { kind: 'conflict', code: 'kernel.stale-version', missing: [] };
+  for (const [index, each] of held.entries()) {
+    // A version of the role took effect while the locks were taken: the authority changed, try again (RR-360).
+    if (await relied[index]?.roleChanged()) return { kind: 'conflict', code: 'kernel.stale-version', missing: [] };
+    const authorised = await authorise(context, registry, { ...each.need, actorId: actor.id });
+    if (authorised.kind === 'refused') return { ...authorised.refusal, missing: [...authorised.refusal.missing] };
+    if (authorised.roleAssignmentId !== each.roleAssignmentId) {
+      return { kind: 'conflict', code: 'kernel.stale-version', missing: [] };
+    }
   }
   return undefined;
+}
+
+/**
+ * A further permission a command relies on besides its route's, with the assignment Authorise found for it, held at
+ * the same step 0: preparing a unit with its first mapping needs edit on the mapping too (access-and-approvals 9.8b;
+ * RR-444).
+ */
+export interface HeldNeed {
+  readonly roleAssignmentId: string;
+  readonly need: Omit<AuthoriseRequest, 'actorId'>;
 }

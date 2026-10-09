@@ -389,6 +389,10 @@ export const stockLedgerCodes = declareCodes({
  * - `organisation.location-nesting-cycle`: the parent is nested under the location already (3.5).
  * - `organisation.location-has-children`: a location nested under the one to retire is not retired then (3.5).
  * - `organisation.location-parent-retired`: the parent is retired on a day the location would be under it (3.5).
+ *
+ * S1-F02-T04 (structure-and-masters 3.1, 6.1; RR-440):
+ * - `organisation.classification-of-another-kind`: a Site or Store version names a classification value of a kind that
+ *   classifies the other; `missing` names the value.
  */
 export const organisationCodes = declareCodes({
   'organisation.code-taken': 'refused',
@@ -415,6 +419,7 @@ export const organisationCodes = declareCodes({
   'organisation.location-nesting-cycle': 'refused',
   'organisation.location-has-children': 'refused',
   'organisation.location-parent-retired': 'refused',
+  'organisation.classification-of-another-kind': 'refused',
 });
 
 /**

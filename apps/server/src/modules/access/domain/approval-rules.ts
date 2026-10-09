@@ -33,7 +33,12 @@ export interface ApprovalRule {
   readonly synthetic: boolean;
 }
 
-function rule(actionType: AccessActionType, recordType: string, freeTextReason = false): ApprovalRule {
+function rule(
+  actionType: AccessActionType,
+  recordType: string,
+  freeTextReason = false,
+  decisionEvidenceClasses: readonly FieldClass[] = [],
+): ApprovalRule {
   return {
     actionType,
     module: 'access',
@@ -41,8 +46,7 @@ function rule(actionType: AccessActionType, recordType: string, freeTextReason =
     independent: true,
     value: 'none',
     freeTextReason,
-    // An access change's decision evidence carries no restricted field class (9.5; S1-F08-T03; RR-453).
-    decisionEvidenceClasses: [],
+    decisionEvidenceClasses,
     synthetic: false,
   };
 }
@@ -53,7 +57,10 @@ function rule(actionType: AccessActionType, recordType: string, freeTextReason =
  */
 export const accessApprovalRules: ReadonlyMap<string, ApprovalRule> = new Map(
   [
-    rule('access.user.change', 'access.user'),
+    // A user change's evidence, a new user or a change to one, may be a photograph of an identity document, so it
+    // carries identity-documents; every other access change's carries none (9.5; RR-453, product owner 9 Oct 2026;
+    // the KDPS Admin confirms before live use). A credential reset takes no approval, so it has no decision evidence.
+    rule('access.user.change', 'access.user', false, ['identity-documents']),
     rule('access.role.change', 'access.role'),
     rule('access.role_assignment.change', 'access.role_assignment'),
     rule('access.role_assignment.withdrawal', 'access.role_assignment'),

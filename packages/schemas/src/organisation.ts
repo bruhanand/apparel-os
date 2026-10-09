@@ -45,6 +45,9 @@ export const masterKinds = [
   'business_unit_mapping',
   'location',
   'store_default_warehouse',
+  'grouping_kind',
+  'classification_kind',
+  'classification_value',
 ] as const;
 export type MasterKind = (typeof masterKinds)[number];
 
@@ -145,6 +148,27 @@ export const masterRoutes = {
     version: 'prepareStoreDefaultWarehouseVersion',
     lists: 'storeDefaultWarehouses',
   },
+  grouping_kind: {
+    list: 'listGroupingKinds',
+    read: 'readGroupingKind',
+    prepare: 'prepareGroupingKind',
+    version: 'prepareGroupingKindVersion',
+    lists: 'groupingKinds',
+  },
+  classification_kind: {
+    list: 'listClassificationKinds',
+    read: 'readClassificationKind',
+    prepare: 'prepareClassificationKind',
+    version: 'prepareClassificationKindVersion',
+    lists: 'classificationKinds',
+  },
+  classification_value: {
+    list: 'listClassificationValues',
+    read: 'readClassificationValue',
+    prepare: 'prepareClassificationValue',
+    version: 'prepareClassificationValueVersion',
+    lists: 'classificationValues',
+  },
 } as const satisfies Record<
   MasterKind,
   { list: string; read: string; prepare: string | null; version: string; lists: string }
@@ -192,9 +216,12 @@ export type OperatingModel = z.infer<typeof operatingModelSchema>;
 /** The states of a Site or Store (structure-and-masters 3.7; DM-4, DEC-105). A new one is Setting up. */
 export const placeStatusSchema = z.enum(['Setting up', 'Active', 'Closing', 'Closed']);
 export type PlaceStatus = z.infer<typeof placeStatusSchema>;
-/** The kinds of a grouping built so far (structure-and-masters 3.6; PRD-ORG-007). */
-export const groupingKindSchema = z.enum(['region', 'cluster']);
-export type GroupingKind = z.infer<typeof groupingKindSchema>;
+/**
+ * What a classification kind classifies: Sites or Stores (structure-and-masters 3.1; PRD-ORG-008; RR-440). The kinds
+ * and their values are the Organisation's own records; none is set in code (S1-F02-T04).
+ */
+export const classifiesSchema = z.enum(['site', 'store']);
+export type Classifies = z.infer<typeof classifiesSchema>;
 
 /** Opening and closing dates: each Unknown until given (structure-and-masters 2.4), the closing never first. */
 const placeDates = {
@@ -219,12 +246,18 @@ const taxRegistrationFields = {
 const validityInOrder = (value: { validityFrom: string; validityTo?: string | undefined }) =>
   value.validityTo === undefined || value.validityTo > value.validityFrom;
 const VALIDITY_IN_ORDER = { message: 'A validity ends after it starts', path: ['validityTo'] };
+/**
+ * The Organisation's own classification values a Site or Store version carries, each of a kind for Sites or for Stores
+ * (structure-and-masters 3.1; PRD-ORG-008; S1-F02-T04). Left out, the version carries none.
+ */
+const classificationIds = { classificationValueIds: distinctIds.optional() };
 const siteFields = {
   name: textSchema,
   physicalKind: physicalKindSchema,
   areaId: idSchema,
   addresses: distinctTexts,
   aliases: distinctTexts,
+  ...classificationIds,
   ...placeDates,
 };
 const storeFields = {
@@ -234,6 +267,7 @@ const storeFields = {
   /** The Site the Store is at while the version is in force (structure-and-masters 3.3; PRD-ORG-021). */
   siteId: idSchema,
   aliases: distinctTexts,
+  ...classificationIds,
   ...placeDates,
 };
 const groupingFields = { name: textSchema, storeIds: distinctIds };
@@ -274,13 +308,37 @@ export const storeDraftSchema = z
 export const storeVersionDraftSchema = z
   .strictObject({ ...storeFields, validFrom })
   .refine(datesInOrder, DATES_IN_ORDER);
+/** A new grouping: its kind, one of the Organisation's grouping kinds, fixed at creation (3.6; PRD-ORG-007). */
 export const groupingDraftSchema = z.strictObject({
   code: masterCodeSchema,
-  kind: groupingKindSchema,
+  groupingKindId: idSchema,
   ...groupingFields,
   validFrom,
 });
 export const groupingVersionDraftSchema = z.strictObject({ ...groupingFields, validFrom });
+
+// The Organisation's own grouping kinds and classification kinds and values (structure-and-masters 3.1, 3.6; RR-440;
+// S1-F02-T04): records like the other masters, each version holding only a name.
+
+/** A new grouping kind, such as a region or a cluster, if the Organisation defines one (PRD-ORG-007). */
+export const groupingKindDraftSchema = z.strictObject({ code: masterCodeSchema, ...nameFields, validFrom });
+/** A new classification kind: whether it classifies Sites or Stores, fixed at creation (PRD-ORG-008). */
+export const classificationKindDraftSchema = z.strictObject({
+  code: masterCodeSchema,
+  appliesTo: classifiesSchema,
+  ...nameFields,
+  validFrom,
+});
+/** A new value of a classification kind, fixed to it; its code unique in its kind (2.1). */
+export const classificationValueDraftSchema = z.strictObject({
+  classificationKindId: idSchema,
+  code: masterCodeSchema,
+  ...nameFields,
+  validFrom,
+});
+export type GroupingKindDraft = z.infer<typeof groupingKindDraftSchema>;
+export type ClassificationKindDraft = z.infer<typeof classificationKindDraftSchema>;
+export type ClassificationValueDraft = z.infer<typeof classificationValueDraftSchema>;
 
 // Business units, their mappings, locations and default warehouses (structure-and-masters 3.3 to 3.6; S1-F02-T02).
 
@@ -425,8 +483,9 @@ const versionView = {
 const asOf = z.iso.datetime({ offset: true });
 
 // The fields of each master's versions as the screens read them: the drafts' fields, with the status of a Site or Store.
-const siteVersionFields = { ...siteFields, status: placeStatusSchema };
-const storeVersionFields = { ...storeFields, status: placeStatusSchema };
+const shownClassifications = { classificationValueIds: z.array(idSchema) };
+const siteVersionFields = { ...siteFields, ...shownClassifications, status: placeStatusSchema };
+const storeVersionFields = { ...storeFields, ...shownClassifications, status: placeStatusSchema };
 const businessUnitVersionFields = { ...businessUnitFields, status: placeStatusSchema };
 /**
  * In a unit's history, a version a mapping was prepared with (a new unit's first, or its re-dated draft) shows that
@@ -486,7 +545,12 @@ export const taxRegistrationRecordSchema = masterRecord({ legalEntityId: idSchem
 export const accountingBookRecordSchema = masterRecord({ legalEntityId: idSchema }, nameFields);
 export const siteRecordSchema = masterRecord({}, siteVersionFields);
 export const storeRecordSchema = masterRecord({}, storeVersionFields);
-export const groupingRecordSchema = masterRecord({ kind: groupingKindSchema }, groupingFields);
+export const groupingRecordSchema = masterRecord({ groupingKindId: idSchema }, groupingFields);
+export const groupingKindRecordSchema = masterRecord({}, nameFields);
+export const classificationKindRecordSchema = masterRecord({ appliesTo: classifiesSchema }, nameFields);
+/** A value, with what its kind classifies, so an editor offers a Site's values to a Site only. */
+const classificationValueFixed = { classificationKindId: idSchema, appliesTo: classifiesSchema };
+export const classificationValueRecordSchema = masterRecord(classificationValueFixed, nameFields);
 export const businessUnitRecordSchema = masterRecord(businessUnitFixed, businessUnitHistoryFields);
 /** A unit with its mapping versions: the record is the unit, and each version a mapping (3.4). */
 export const businessUnitMappingRecordSchema = masterRecord({}, mappingVersionFields);
@@ -508,6 +572,9 @@ export const businessUnitListSchema = pageOf(businessUnitRecordSchema);
 export const businessUnitMappingListSchema = pageOf(businessUnitMappingRecordSchema);
 export const locationListSchema = pageOf(locationRecordSchema);
 export const storeDefaultWarehouseListSchema = pageOf(storeDefaultWarehouseRecordSchema);
+export const groupingKindListSchema = pageOf(groupingKindRecordSchema);
+export const classificationKindListSchema = pageOf(classificationKindRecordSchema);
+export const classificationValueListSchema = pageOf(classificationValueRecordSchema);
 
 export const countryReadSchema = readOf(countryRecordSchema);
 export const stateReadSchema = readOf(stateRecordSchema);
@@ -523,6 +590,9 @@ export const businessUnitReadSchema = readOf(businessUnitRecordSchema);
 export const businessUnitMappingReadSchema = readOf(businessUnitMappingRecordSchema);
 export const locationReadSchema = readOf(locationRecordSchema);
 export const storeDefaultWarehouseReadSchema = readOf(storeDefaultWarehouseRecordSchema);
+export const groupingKindReadSchema = readOf(groupingKindRecordSchema);
+export const classificationKindReadSchema = readOf(classificationKindRecordSchema);
+export const classificationValueReadSchema = readOf(classificationValueRecordSchema);
 
 export type CountryList = z.infer<typeof countryListSchema>;
 export type StateList = z.infer<typeof stateListSchema>;
@@ -557,6 +627,9 @@ export interface MasterRecords {
   business_unit_mapping: z.infer<typeof businessUnitMappingRecordSchema>;
   location: z.infer<typeof locationRecordSchema>;
   store_default_warehouse: z.infer<typeof storeDefaultWarehouseRecordSchema>;
+  grouping_kind: z.infer<typeof groupingKindRecordSchema>;
+  classification_kind: z.infer<typeof classificationKindRecordSchema>;
+  classification_value: z.infer<typeof classificationValueRecordSchema>;
 }
 
 /** One master as of a date: its version in force then (structure-and-masters 3.8). */
@@ -583,13 +656,16 @@ export const masterListsSchema = z.strictObject({
   accountingBooks: inForce({ legalEntityId: idSchema }, nameFields),
   sites: inForce({}, siteVersionFields),
   stores: inForce({}, storeVersionFields),
-  groupings: inForce({ kind: groupingKindSchema }, groupingFields),
+  groupings: inForce({ groupingKindId: idSchema }, groupingFields),
   /** Each unit with its kind, so `merchandise` can apply brand coverage by kind (3.3). */
   businessUnits: inForce(businessUnitFixed, businessUnitVersionFields),
   /** Each unit's mapping version in force, with its verification, absent while unverified (3.4). */
   businessUnitMappings: inForce({}, mappingVersionFields),
   locations: inForce(locationFixed, locationVersionFields),
   storeDefaultWarehouses: inForce({}, defaultWarehouseFields),
+  groupingKinds: inForce({}, nameFields),
+  classificationKinds: inForce({ appliesTo: classifiesSchema }, nameFields),
+  classificationValues: inForce(classificationValueFixed, nameFields),
 });
 export type MasterLists = z.infer<typeof masterListsSchema>;
 

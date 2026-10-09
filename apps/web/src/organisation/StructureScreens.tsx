@@ -15,7 +15,7 @@ import { MasterTab } from './MasterTab';
 
 // Setup › Organisation structure and Setup › Geography and groupings (structure-and-masters 8; ui-blueprint Setup;
 // S1-F02-T01). Business units with their verified mappings, locations and default warehouses join the first screen
-// with S1-F02-T02.
+// with S1-F02-T02, and the Organisation's own classification kinds and values and grouping kinds with S1-F02-T04.
 
 type Tab = Kind | 'master-lists';
 
@@ -107,6 +107,10 @@ function MasterLists() {
               ),
             })),
             ...lists.locations.map((each) => ({ type: recordTypeOf('location'), ...each })),
+            // The Organisation's own kinds and values (structure-and-masters 3.1, 3.6; S1-F02-T04).
+            ...lists.classificationKinds.map((each) => ({ type: recordTypeOf('classification_kind'), ...each })),
+            ...lists.classificationValues.map((each) => ({ type: recordTypeOf('classification_value'), ...each })),
+            ...lists.groupingKinds.map((each) => ({ type: recordTypeOf('grouping_kind'), ...each })),
           ];
           return (
             <div className="flex flex-col gap-3">
@@ -156,7 +160,7 @@ function MasterLists() {
 
 /**
  * Setup › Organisation structure: legal entities, registrations, books, Sites, Stores, business units and their
- * mappings, locations, default warehouses and the master lists.
+ * mappings, locations, default warehouses, classification kinds and values, grouping kinds and the master lists.
  */
 export function OrganisationStructureScreen() {
   return (
@@ -172,13 +176,16 @@ export function OrganisationStructureScreen() {
         'business_unit_mapping',
         'location',
         'store_default_warehouse',
+        'classification_kind',
+        'classification_value',
+        'grouping_kind',
         'master-lists',
       ]}
     />
   );
 }
 
-/** Setup › Geography and groupings: Country, State, City, Area, and regions and clusters of Stores. */
+/** Setup › Geography and groupings: Country, State, City, Area, and groupings of Stores of the Organisation's kinds. */
 export function GeographyScreen() {
   return <Tabs label="screen.setup.geography" tabs={['country', 'state', 'city', 'area', 'grouping']} />;
 }

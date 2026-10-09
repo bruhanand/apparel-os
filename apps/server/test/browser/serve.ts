@@ -485,6 +485,9 @@ const structureAccounts = await provisionUser('BROWSER-STRUCTURE-ACCOUNTS', 'P-A
   ...verifyAuthorities,
 ]);
 const structureApprover = await provisionUser('BROWSER-STRUCTURE-APPROVER', 'P-OWN', approverAuthorities);
+// The classifications journey's own Admin and approver (organisation-classifications.spec.ts; S1-F02-T04).
+const classifyAdmin = await provisionUser('BROWSER-CLASSIFY-ADMIN', 'P-ADM', adminAuthorities);
+const classifyApprover = await provisionUser('BROWSER-CLASSIFY-APPROVER', 'P-OWN', approverAuthorities);
 // The scope journey's people (S1-F02-T03): an Admin who prepares role assignments and reads the structure to choose
 // places from; an approver who decides them; and a person with no assignment yet, given one by the journey, of a
 // SYNTHETIC role that reads Sites, Stores and business units.
@@ -935,6 +938,8 @@ writeFileSync(
       approver: credentialsOf(structureApprover),
       unitsAdmin: credentialsOf(unitsAdmin),
       unitsApprover: credentialsOf(unitsApprover),
+      classifyAdmin: credentialsOf(classifyAdmin),
+      classifyApprover: credentialsOf(classifyApprover),
       accounts: credentialsOf(structureAccounts),
       siteId: unitsSite.recordId,
       siteOption: `${syntheticCode('JOURNEY-UNITS-SITE')} · ${syntheticName('Journey Units Site')}`,

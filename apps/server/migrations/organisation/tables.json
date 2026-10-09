@@ -920,6 +920,70 @@
       "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
     },
     {
+      "table": "organisation.grouping_kind",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 3.6, 6.1; code-house-rules 7.1, 8.2",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.grouping_kind_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 3.6, 6.1; code-house-rules 7.3",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.classification_kind",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 3.1, 6.1; code-house-rules 7.1, 8.2",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.classification_kind_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 3.1, 6.1; code-house-rules 7.3",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.classification_value",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 2.1, 3.1, 6.1; code-house-rules 7.1, 8.2",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.classification_value_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 2.2, 3.1, 6.1; code-house-rules 7.3",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.site_classification",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 3.1, 6.1; code-house-rules 7.1",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
+      "table": "organisation.store_classification",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 3.1, 6.1; code-house-rules 7.1",
+      "why": "The structure belongs to the Organisation as a whole, as access records do: the permission on the record type decides, and operational records carry these records' identifiers as their scope facts (structure-and-masters 6.1; access-and-approvals 5.3); only organisation code reads it"
+    },
+    {
       "table": "numbering.number_format",
       "class": "unscoped",
       "marks": ["append-only"],

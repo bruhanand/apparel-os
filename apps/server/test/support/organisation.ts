@@ -282,3 +282,14 @@ export async function writeSyntheticSites(database: string, siteIds: readonly st
     await client.end();
   }
 }
+
+/** An approved SYNTHETIC grouping kind from today: the Organisation's own record, never a fixed kind (3.6; RR-440). */
+export function approvedGroupingKind(setup: StructureSetup, label: string) {
+  return approved(setup, (c, p) =>
+    setup.organisation.prepareGroupingKind(c, p, {
+      code: syntheticCode(`${label}-GK`),
+      name: syntheticName(`${label} grouping kind`),
+      validFrom: setup.today(),
+    }),
+  );
+}

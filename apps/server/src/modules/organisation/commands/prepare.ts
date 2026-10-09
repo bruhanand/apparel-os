@@ -10,8 +10,11 @@ import type {
   LocationVersionDraft,
   StoreDefaultWarehouseVersionDraft,
   CityDraft,
+  ClassificationKindDraft,
+  ClassificationValueDraft,
   CountryDraft,
   GroupingDraft,
+  GroupingKindDraft,
   GroupingVersionDraft,
   LegalEntityDraft,
   LegalEntityVersionDraft,
@@ -25,7 +28,7 @@ import type {
   TaxRegistrationDraft,
   TaxRegistrationVersionDraft,
 } from '@apparel-os/schemas';
-import { and, eq, sql, type AnyColumn } from 'drizzle-orm';
+import { and, eq, inArray, sql, type AnyColumn } from 'drizzle-orm';
 import { sqlStateOf, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
@@ -43,20 +46,28 @@ import {
   storeDefaultWarehouse,
   city,
   cityVersion,
+  classificationKind,
+  classificationKindVersion,
+  classificationValue,
+  classificationValueVersion,
   country,
   countryVersion,
   grouping,
+  groupingKind,
+  groupingKindVersion,
   groupingMember,
   groupingVersion,
   legalEntity,
   legalEntityVersion,
   site,
   siteAlias,
+  siteClassification,
   siteVersion,
   state,
   stateVersion,
   store,
   storeAlias,
+  storeClassification,
   storeVersion,
   taxRegistration,
   taxRegistrationVersion,
@@ -146,7 +157,15 @@ const from = (start: string) => `[${start},)`;
 const UNIQUE_VIOLATION = '23505';
 
 /** The kinds whose versions hold only a name. */
-export type NamedKind = 'country' | 'state' | 'city' | 'area' | 'accounting_book';
+export type NamedKind =
+  | 'country'
+  | 'state'
+  | 'city'
+  | 'area'
+  | 'accounting_book'
+  | 'grouping_kind'
+  | 'classification_kind'
+  | 'classification_value';
 
 /**
  * Preparing new masters and new versions (structure-and-masters 2.2, 2.3; module-map 4.11 "Maintain the structure").
@@ -296,6 +315,19 @@ export class StructurePreparation {
             return;
           case 'accounting_book':
             await context.tx.insert(accountingBookVersion).values({ ...common, accountingBookId: recordId, name });
+            return;
+          case 'grouping_kind':
+            await context.tx.insert(groupingKindVersion).values({ ...common, groupingKindId: recordId, name });
+            return;
+          case 'classification_kind':
+            await context.tx
+              .insert(classificationKindVersion)
+              .values({ ...common, classificationKindId: recordId, name });
+            return;
+          case 'classification_value':
+            await context.tx
+              .insert(classificationValueVersion)
+              .values({ ...common, classificationValueId: recordId, name });
             return;
         }
       },
@@ -492,13 +524,15 @@ export class StructurePreparation {
     return {
       kind: 'site',
       validFrom: draft.validFrom,
-      references: [{ kind: 'area', id: draft.areaId }],
+      references: [{ kind: 'area', id: draft.areaId }, ...classificationReferences(draft)],
+      check: (context) => classifies(context, 'site', draft),
       changes: [
         value('name', draft.name),
         value('physicalKind', draft.physicalKind),
         value('areaId', draft.areaId),
         value('addresses', draft.addresses),
         value('aliases', draft.aliases),
+        value('classificationValueIds', draft.classificationValueIds ?? []),
         value('openingDate', optionalDate(draft.openingDate)),
         value('closingDate', optionalDate(draft.closingDate)),
       ],
@@ -516,6 +550,17 @@ export class StructurePreparation {
         });
       },
       children: async (context, versionId) => {
+        const classifications = draft.classificationValueIds ?? [];
+        if (classifications.length > 0) {
+          await context.tx.insert(siteClassification).values(
+            classifications.map((classificationValueId) => ({
+              id: uuidv7(),
+              siteVersionId: versionId,
+              classificationValueId,
+              appliesTo: 'site' as const,
+            })),
+          );
+        }
         if (draft.aliases.length === 0) return;
         await context.tx
           .insert(siteAlias)
@@ -556,7 +601,8 @@ export class StructurePreparation {
     return {
       kind: 'store',
       validFrom: draft.validFrom,
-      references: [{ kind: 'site', id: draft.siteId }],
+      references: [{ kind: 'site', id: draft.siteId }, ...classificationReferences(draft)],
+      check: (context) => classifies(context, 'store', draft),
       movesTo: (facts) => ({ ...facts, siteId: draft.siteId }),
       changes: [
         value('name', draft.name),
@@ -564,6 +610,7 @@ export class StructurePreparation {
         value('operatingModel', draft.operatingModel),
         value('siteId', draft.siteId),
         value('aliases', draft.aliases),
+        value('classificationValueIds', draft.classificationValueIds ?? []),
         value('openingDate', optionalDate(draft.openingDate)),
         value('closingDate', optionalDate(draft.closingDate)),
       ],
@@ -581,6 +628,17 @@ export class StructurePreparation {
         });
       },
       children: async (context, versionId) => {
+        const classifications = draft.classificationValueIds ?? [];
+        if (classifications.length > 0) {
+          await context.tx.insert(storeClassification).values(
+            classifications.map((classificationValueId) => ({
+              id: uuidv7(),
+              storeVersionId: versionId,
+              classificationValueId,
+              appliesTo: 'store' as const,
+            })),
+          );
+        }
         if (draft.aliases.length === 0) return;
         await context.tx
           .insert(storeAlias)
@@ -636,15 +694,88 @@ export class StructurePreparation {
     };
   }
 
+  /**
+   * A new grouping of one of the Organisation's grouping kinds, kept by the kind's code, which is never changed or
+   * reused (3.6; 2.1; S1-F02-T04); the kind is in force on its start when it is approved.
+   */
   prepareGrouping(context: TransactionContext, preparer: Preparer, draft: GroupingDraft) {
-    return this.prepare(context, preparer, this.groupingChange(draft), {
+    const change = this.groupingChange(draft);
+    return this.prepare(
+      context,
+      preparer,
+      { ...change, references: [{ kind: 'grouping_kind', id: draft.groupingKindId }, ...change.references] },
+      {
+        kind: 'new',
+        fixed: {
+          code: draft.code,
+          writeIdentity: async (c, id) => {
+            const [kind] = await c.tx
+              .select({ code: groupingKind.code })
+              .from(groupingKind)
+              .where(eq(groupingKind.id, draft.groupingKindId));
+            if (kind === undefined) throw new Error('A grouping kind checked to exist is gone');
+            await c.tx.insert(grouping).values({ id, code: draft.code, kind: kind.code });
+          },
+          changes: [value('code', draft.code), value('groupingKindId', draft.groupingKindId)],
+        },
+      },
+    );
+  }
+
+  // The Organisation's own grouping kinds and classification kinds and values (3.1, 3.6; RR-440; S1-F02-T04).
+
+  prepareGroupingKind(context: TransactionContext, preparer: Preparer, draft: GroupingKindDraft) {
+    return this.prepare(context, preparer, this.nameChange('grouping_kind', draft), {
       kind: 'new',
       fixed: {
         code: draft.code,
         writeIdentity: async (c, id) => {
-          await c.tx.insert(grouping).values({ id, code: draft.code, kind: draft.kind });
+          await c.tx.insert(groupingKind).values({ id, code: draft.code });
         },
-        changes: [value('code', draft.code), value('kind', draft.kind)],
+        changes: [value('code', draft.code)],
+      },
+    });
+  }
+
+  /** A classification kind classifies Sites or Stores, fixed at creation (3.1; PRD-ORG-008). */
+  prepareClassificationKind(context: TransactionContext, preparer: Preparer, draft: ClassificationKindDraft) {
+    return this.prepare(context, preparer, this.nameChange('classification_kind', draft), {
+      kind: 'new',
+      fixed: {
+        code: draft.code,
+        writeIdentity: async (c, id) => {
+          await c.tx.insert(classificationKind).values({ id, code: draft.code, appliesTo: draft.appliesTo });
+        },
+        changes: [value('code', draft.code), value('appliesTo', draft.appliesTo)],
+      },
+    });
+  }
+
+  /** A value fixed to its kind, its code unique in the kind (2.1); the kind is in force on its start when approved. */
+  prepareClassificationValue(context: TransactionContext, preparer: Preparer, draft: ClassificationValueDraft) {
+    const change = {
+      ...this.nameChange('classification_value', draft),
+      references: [{ kind: 'classification_kind' as const, id: draft.classificationKindId }],
+    };
+    return this.prepare(context, preparer, change, {
+      kind: 'new',
+      fixed: {
+        code: draft.code,
+        under: { column: classificationValue.classificationKindId, id: draft.classificationKindId },
+        writeIdentity: async (c, id) => {
+          const [kind] = await c.tx
+            .select({ appliesTo: classificationKind.appliesTo })
+            .from(classificationKind)
+            .where(eq(classificationKind.id, draft.classificationKindId));
+          if (kind === undefined) throw new Error('A classification kind checked to exist is gone');
+          await c.tx.insert(classificationValue).values({
+            id,
+            code: draft.code,
+            classificationKindId: draft.classificationKindId,
+            appliesTo: kind.appliesTo,
+          });
+        },
+        changes: [value('code', draft.code), value('classificationKindId', draft.classificationKindId)],
       },
     });
   }
@@ -958,6 +1089,35 @@ export class StructurePreparation {
       { kind: 'existing', id: storeId },
     );
   }
+}
+
+/** The classification values a Site or Store version names, each in force on its start when approved (3.1). */
+const classificationReferences = (draft: { readonly classificationValueIds?: readonly string[] | undefined }) =>
+  (draft.classificationValueIds ?? []).map((id): Reference => ({ kind: 'classification_value', id }));
+
+/**
+ * The refusal while a Site or Store version names a value of a kind that classifies the other (3.1; S1-F02-T04); the
+ * database holds it behind the service by the foreign key on what the value classifies.
+ */
+async function classifies(
+  context: TransactionContext,
+  place: 'site' | 'store',
+  draft: { readonly classificationValueIds?: readonly string[] | undefined },
+): Promise<CommandRefusal | undefined> {
+  const ids = draft.classificationValueIds ?? [];
+  if (ids.length === 0) return undefined;
+  const rows = await context.tx
+    .select({ id: classificationValue.id, appliesTo: classificationValue.appliesTo })
+    .from(classificationValue)
+    .where(inArray(classificationValue.id, [...ids]));
+  const other = rows.find((row) => row.appliesTo !== place);
+  return other === undefined
+    ? undefined
+    : {
+        kind: 'refused',
+        code: 'organisation.classification-of-another-kind',
+        missing: [{ kind: 'record', recordType: recordTypeOf('classification_value'), recordId: other.id }],
+      };
 }
 
 /** A mapping's three fields (3.4). */

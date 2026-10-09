@@ -53,7 +53,7 @@ import {
 import { requestModuleApproval, type ModuleApprovalRequest } from './commands/request-approval.js';
 import { approvalRulesOf, effectsOf, type ApprovalRule, type DocumentEffect } from './domain/approval-rules.js';
 import { latestRequests, type LatestRequest } from './queries/access-records.js';
-import { holdAuthority, type AuthorityActor } from './commands/authority.js';
+import { holdAuthority, type AuthorityActor, type HeldNeed } from './commands/authority.js';
 import { SecuritySettingsChanges } from './commands/security-settings.js';
 import {
   Approvals,
@@ -134,6 +134,8 @@ export interface AccessInterface {
    * authority rows the command changes, then rechecks under the locks that the actor is Active, that no version of
    * the role took effect meanwhile (`kernel.stale-version`; DEC-118) and that the same assignment still grants the
    * action. Answers the refusal, or undefined while the authority holds. Called first in the command's transaction.
+   * `further` names the other permissions the command relies on, each with its assignment, held in the same step
+   * (RR-444).
    */
   holdAuthority(
     context: TransactionContext,
@@ -141,6 +143,7 @@ export interface AccessInterface {
     roleAssignmentId: string,
     need: Omit<AuthoriseRequest, 'actorId'>,
     changed?: readonly LockTarget[],
+    further?: readonly HeldNeed[],
   ): Promise<CommandRefusal | undefined>;
   /** Which of a record's field classes the assignment Authorise used grants for a use; the rest are masked (6). */
   restrictFields(
@@ -479,8 +482,9 @@ export class Access implements AccessInterface {
     roleAssignmentId: string,
     need: Omit<AuthoriseRequest, 'actorId'>,
     changed: readonly LockTarget[] = [],
+    further: readonly HeldNeed[] = [],
   ) {
-    return holdAuthority(context, this.registry, actor, roleAssignmentId, need, changed);
+    return holdAuthority(context, this.registry, actor, roleAssignmentId, need, changed, further);
   }
 
   restrictFields(

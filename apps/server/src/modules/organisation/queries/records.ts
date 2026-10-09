@@ -22,6 +22,14 @@ import {
   businessUnitVersion,
   city,
   cityVersion,
+  classificationKind,
+  classificationKindVersion,
+  classificationValue,
+  classificationValueVersion,
+  groupingKind,
+  groupingKindVersion,
+  siteClassification,
+  storeClassification,
   location,
   locationVersion,
   storeDefaultWarehouse,
@@ -251,7 +259,10 @@ function named(
     | typeof stateVersion
     | typeof cityVersion
     | typeof areaVersion
-    | typeof accountingBookVersion,
+    | typeof accountingBookVersion
+    | typeof groupingKindVersion
+    | typeof classificationKindVersion
+    | typeof classificationValueVersion,
   owner: AnyColumn,
 ) {
   return (tx: Tx, where: SQL) =>
@@ -373,7 +384,29 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
               .orderBy(asc(siteAlias.recordedAt), asc(siteAlias.id)),
         (row) => row.alias,
       );
-      return rows.map((row) => ({ ...row, aliases: aliases.get(row.id) ?? [] }));
+      const classifications = byVersion(
+        rows.length === 0
+          ? []
+          : await tx
+              .select({
+                versionId: siteClassification.siteVersionId,
+                valueId: siteClassification.classificationValueId,
+              })
+              .from(siteClassification)
+              .where(
+                inArray(
+                  siteClassification.siteVersionId,
+                  rows.map((row) => row.id),
+                ),
+              )
+              .orderBy(asc(siteClassification.recordedAt), asc(siteClassification.id)),
+        (row) => row.valueId,
+      );
+      return rows.map((row) => ({
+        ...row,
+        aliases: aliases.get(row.id) ?? [],
+        classificationValueIds: classifications.get(row.id) ?? [],
+      }));
     },
     head: (identity) => ({ id: identity.id, code: identity.code }),
     fields: (row) => ({
@@ -382,6 +415,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
       areaId: row.areaId,
       addresses: row.addresses,
       aliases: row.aliases,
+      classificationValueIds: row.classificationValueIds,
       ...optional('openingDate', row.openingDate),
       ...optional('closingDate', row.closingDate),
       status: row.status,
@@ -422,7 +456,29 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
               .orderBy(asc(storeAlias.recordedAt), asc(storeAlias.id)),
         (row) => row.alias,
       );
-      return rows.map((row) => ({ ...row, aliases: aliases.get(row.id) ?? [] }));
+      const classifications = byVersion(
+        rows.length === 0
+          ? []
+          : await tx
+              .select({
+                versionId: storeClassification.storeVersionId,
+                valueId: storeClassification.classificationValueId,
+              })
+              .from(storeClassification)
+              .where(
+                inArray(
+                  storeClassification.storeVersionId,
+                  rows.map((row) => row.id),
+                ),
+              )
+              .orderBy(asc(storeClassification.recordedAt), asc(storeClassification.id)),
+        (row) => row.valueId,
+      );
+      return rows.map((row) => ({
+        ...row,
+        aliases: aliases.get(row.id) ?? [],
+        classificationValueIds: classifications.get(row.id) ?? [],
+      }));
     },
     head: (identity) => ({ id: identity.id, code: identity.code }),
     fields: (row) => ({
@@ -431,13 +487,35 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
       operatingModel: row.operatingModel,
       siteId: row.siteId,
       aliases: row.aliases,
+      classificationValueIds: row.classificationValueIds,
       ...optional('openingDate', row.openingDate),
       ...optional('closingDate', row.closingDate),
       status: row.status,
     }),
   }),
   grouping: reads('grouping', {
-    identities: (tx, where, limit) => inCodeOrder(tx.select().from(grouping).$dynamic(), where, limit),
+    // With its kind's identifier: a grouping keeps its kind by the kind's code (structure-and-masters 3.6; S1-F02-T04).
+    identities: async (tx, where, limit) => {
+      const rows = await inCodeOrder(tx.select().from(grouping).$dynamic(), where, limit);
+      const kinds =
+        rows.length === 0
+          ? []
+          : await tx
+              .select({ id: groupingKind.id, code: groupingKind.code })
+              .from(groupingKind)
+              .where(
+                inArray(
+                  groupingKind.code,
+                  rows.map((row) => row.kind),
+                ),
+              );
+      const byCode = new Map(kinds.map((kind) => [kind.code, kind.id]));
+      return rows.map((row) => {
+        const groupingKindId = byCode.get(row.kind);
+        if (groupingKindId === undefined) throw new Error('A grouping names a kind that is not recorded');
+        return { ...row, groupingKindId };
+      });
+    },
     versions: async (tx, where) => {
       const rows = await newestFirst(
         tx
@@ -463,7 +541,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
       );
       return rows.map((row) => ({ ...row, storeIds: members.get(row.id) ?? [] }));
     },
-    head: (identity) => ({ id: identity.id, code: identity.code, kind: identity.kind }),
+    head: (identity) => ({ id: identity.id, code: identity.code, groupingKindId: identity.groupingKindId }),
     fields: (row) => ({ name: row.name, storeIds: row.storeIds }),
   }),
   business_unit: reads('business_unit', {
@@ -626,6 +704,30 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
     head: (identity) => ({ id: identity.id, code: identity.code }),
     fields: (row) => ({ warehouseUnitId: row.warehouseUnitId }),
   }),
+  // The Organisation's own grouping kinds and classification kinds and values (3.1, 3.6; S1-F02-T04).
+  grouping_kind: reads('grouping_kind', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(groupingKind).$dynamic(), where, limit),
+    versions: named(groupingKindVersion, groupingKindVersion.groupingKindId),
+    head: (identity) => ({ id: identity.id, code: identity.code }),
+    fields: (row) => ({ name: row.name }),
+  }),
+  classification_kind: reads('classification_kind', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(classificationKind).$dynamic(), where, limit),
+    versions: named(classificationKindVersion, classificationKindVersion.classificationKindId),
+    head: (identity) => ({ id: identity.id, code: identity.code, appliesTo: identity.appliesTo }),
+    fields: (row) => ({ name: row.name }),
+  }),
+  classification_value: reads('classification_value', {
+    identities: (tx, where, limit) => inCodeOrder(tx.select().from(classificationValue).$dynamic(), where, limit),
+    versions: named(classificationValueVersion, classificationValueVersion.classificationValueId),
+    head: (identity) => ({
+      id: identity.id,
+      code: identity.code,
+      classificationKindId: identity.classificationKindId,
+      appliesTo: identity.appliesTo,
+    }),
+    fields: (row) => ({ name: row.name }),
+  }),
 };
 
 /** The structure as of a date: every master's version in force on it (structure-and-masters 3.8; module-map 4.11). */
@@ -658,6 +760,9 @@ export async function structureOn(context: TransactionContext, date: string): Pr
     businessUnitMappings: await kindReads.business_unit_mapping.inForceOn(context, date),
     locations: await kindReads.location.inForceOn(context, date),
     storeDefaultWarehouses: await kindReads.store_default_warehouse.inForceOn(context, date),
+    groupingKinds: await kindReads.grouping_kind.inForceOn(context, date),
+    classificationKinds: await kindReads.classification_kind.inForceOn(context, date),
+    classificationValues: await kindReads.classification_value.inForceOn(context, date),
   };
 }
 

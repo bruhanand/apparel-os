@@ -190,7 +190,8 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        where a.attacl is not null and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not like 'pg_toast%'
        order by 1, 2, 3`,
     );
-    expect(columnGrants).toEqual(
+    // Both sides in one order: the database's collation and localeCompare differ on '_' and '.'.
+    expect([...columnGrants].sort((a, b) => a.name.localeCompare(b.name))).toEqual(
       register(set)
         .filter((entry) => entry.runtime.includes(LOCK_ONLY))
         .map((entry) => ({ name: `${entry.table}.id`, grantee: 'aos_runtime', privilege: 'UPDATE' }))

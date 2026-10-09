@@ -1,7 +1,13 @@
 import { registryByCode } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_COMPOSITION } from '../../../kernel/index.js';
-import { approvalRulesOf, effectsOf, type ApprovalRule, type DocumentEffect } from './approval-rules.js';
+import {
+  accessApprovalRules,
+  approvalRulesOf,
+  effectsOf,
+  type ApprovalRule,
+  type DocumentEffect,
+} from './approval-rules.js';
 
 // The approval rules and decision effects other modules declare (access-and-approvals 8, 9.8a, 9.8b), checked once at
 // start (code-house-rules 12.14).
@@ -36,5 +42,11 @@ describe('module approval rules and their decision effects', () => {
     const rules = approvalRulesOf([siteRule], PRODUCTION_COMPOSITION, registry);
     expect(() => effectsOf(new Map([['organisation.store.change', effect]]), rules)).toThrow(/names no module/);
     expect(() => effectsOf(new Map([['access.role.change', effect]]), rules)).toThrow(/names no module/);
+  });
+
+  it('RR-453 a user change’s decision evidence carries identity-documents; every other access change’s none', () => {
+    const classes = new Map([...accessApprovalRules].map(([type, rule]) => [type, rule.decisionEvidenceClasses]));
+    expect(classes.get('access.user.change')).toEqual(['identity-documents']);
+    for (const [type, declared] of classes) if (type !== 'access.user.change') expect(declared, type).toEqual([]);
   });
 });

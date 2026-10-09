@@ -204,6 +204,11 @@ const organisationRecordTypes = [
   // POL-10.08): create on the verification record, which no other permission gives, held by a different person from
   // the one who made the mapping. No new action is needed (access-and-approvals 4.1).
   declare('organisation.business_unit_mapping_verification', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
+  // The Organisation's own grouping kinds and classification kinds and values (structure-and-masters 3.1, 3.6; RR-440;
+  // S1-F02-T04): records of the Organisation as a whole, like groupings, so they carry no scope fact.
+  declare('organisation.grouping_kind', PREPARED, NONE),
+  declare('organisation.classification_kind', PREPARED, NONE),
+  declare('organisation.classification_value', PREPARED, NONE),
 ] as const;
 
 const PLACE_AND_BRAND: ScopeFactsDeclared = { legalEntity: false, place: true, brand: true };

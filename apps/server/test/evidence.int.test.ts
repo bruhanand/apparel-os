@@ -630,6 +630,83 @@ describe('evidence on an approval decision (access-and-approvals 9.5; PRD-ACS-01
     }
   });
 
+  it('RR-453 PRD-ACS-008 evidence on a user change carries identity-documents: listed as restricted, and only a reader with that class opens it', async () => {
+    const USER_VIEW: SyntheticAuthority = { recordType: 'access.user', action: 'view' };
+    const userAdmin = await enrolled('USER-ADMIN', [USER_VIEW, { recordType: 'access.user', action: 'create' }]);
+    const userApprover = await enrolled('USER-APPROVER', [
+      USER_VIEW,
+      { recordType: 'access.user', action: 'approve' },
+      { recordType: 'access.approval_request', action: 'view' },
+      STORE,
+    ]);
+    const userReader = await enrolled('USER-READER', [USER_VIEW]);
+    const identityReader = await enrolled('IDENTITY-READER', [USER_VIEW], { fieldClasses: ['identity-documents'] });
+    const prepared = await post(
+      '/api/access/users',
+      {
+        login: `SYN-EVIDENCED-${String(randomInt(1_000_000))}`,
+        displayName: 'SYNTHETIC evidenced user',
+        personas: ['P-AUD'],
+        temporaryPassword: 'SYNTHETIC-temporary-1',
+      },
+      await cookieOf(userAdmin),
+    );
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(200);
+    const { versionId, requestId } = prepared.body as { versionId: string; requestId: string };
+    const photo = jpeg('identity card');
+    const file = await store(userApprover, photo, 'SYNTHETIC-identity-card.jpg');
+    const decided = await post(
+      `/api/access/approval-requests/${requestId}/decision`,
+      {
+        versionId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId: approveReasonId },
+        evidence: [file],
+        totpCode: freshCode(userApprover),
+      },
+      await cookieOf(userApprover),
+    );
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    const view = approvalRequestViewSchema.parse(
+      (await get(`/api/access/approval-requests/${requestId}`, await cookieOf(userApprover))).body,
+    );
+    const userEvidence = view.decision?.evidence[0] ?? '';
+    const [link] = await rows<{ restricted_classes: string[] }>(
+      databaseA,
+      'select restricted_classes from files_imports.attachment where id = $1',
+      [userEvidence],
+    );
+    expect(link?.restricted_classes).toEqual(['identity-documents']);
+    // Listed as restricted: even a reader with the class is not served it on screen (RR-454).
+    const listed = await get(readPath(userEvidence), await cookieOf(identityReader));
+    expect(codeOf(listed)).toBe('files-imports.restricted-file-is-an-export');
+    // A reader of the user without the class is refused, naming it, and served nothing.
+    const plainCookie = await cookieOf(userReader);
+    const refused = await post(downloadPath(userEvidence), { totpCode: freshCode(userReader) }, plainCookie);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: { code: 'access.not-authorised', missing: [{ kind: 'field-class', fieldClass: 'identity-documents' }] },
+    });
+    expect(JSON.stringify(refused.body)).not.toContain(photo.toString('base64'));
+    // A reader with identity-documents opens it with a fresh code.
+    const identityCookie = await cookieOf(identityReader);
+    const opened = await post(downloadPath(userEvidence), { totpCode: freshCode(identityReader) }, identityCookie);
+    expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+    expect(attachedFileSchema.parse(opened.body)).toMatchObject({
+      contentHash: sha256(photo),
+      restrictedClasses: ['identity-documents'],
+    });
+  });
+
+  it('RR-453 every other approval rule’s decision evidence carries no class, as an exception rule change’s shows', async () => {
+    const [link] = await rows<{ restricted_classes: string[] }>(
+      databaseA,
+      'select restricted_classes from files_imports.attachment where id = $1',
+      [attachmentId],
+    );
+    expect(link?.restricted_classes).toEqual([]);
+  });
+
   it('PRD-ACS-020 a second Organisation is never served the other’s file', async () => {
     const cookie = await cookieOf(readerB, world.organisations[1].code);
     for (const id of [attachmentId]) {

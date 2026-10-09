@@ -420,3 +420,39 @@ describe('a unit carries its mapping’s legal entity (structure-and-masters 6.1
     });
   });
 });
+
+describe('preparing a unit with its first mapping (access-and-approvals 9.8b; RR-444)', () => {
+  const MAPPING_EDIT = { kind: 'permission', action: 'edit', recordType: 'organisation.business_unit_mapping' };
+
+  it('RR-444 PRD-UXP-003 preparing a unit with its first mapping without edit on the mapping is refused, naming the permission', async () => {
+    const siteId = (await site()).recordId;
+    const mapping = await entity();
+    // Create on the unit and the rest, but no edit on the mapping (product owner, 9 Oct 2026).
+    const unitOnly = await enrolled(
+      'UNIT-ONLY',
+      each(['view', 'create', 'edit']).filter(
+        (authority) => !(authority.recordType === 'organisation.business_unit_mapping' && authority.action === 'edit'),
+      ),
+    );
+    const refused = await post(unitOnly, '/api/organisation/business-units', unitBody(siteId, mapping));
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    expect(refused.body).toMatchObject({ error: { code: 'access.not-authorised', missing: [MAPPING_EDIT] } });
+    // A new unit's draft re-dated names its first mapping again, so it needs the same (3.4; GC2-7).
+    const draft = await prepare('/api/organisation/business-units', unitBody(siteId, mapping));
+    const redated = await post(unitOnly, `/api/organisation/business-units/${draft.recordId}/versions`, {
+      name: syntheticName('Unit'),
+      ...mapping,
+      validFrom: today(),
+    });
+    expect(redated.body).toMatchObject({ error: { code: 'access.not-authorised', missing: [MAPPING_EDIT] } });
+    // A later unit version that names no mapping needs edit on the unit only.
+    const renamed = await post(unitOnly, `/api/organisation/business-units/${draft.recordId}/versions`, {
+      name: syntheticName('Renamed unit'),
+      validFrom: today(),
+    });
+    expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
+    // With edit on the mapping too, the same preparation is accepted.
+    const both = await post(admin, '/api/organisation/business-units', unitBody(siteId, mapping));
+    expect(both.status, JSON.stringify(both.body)).toBe(200);
+  });
+});

@@ -133,3 +133,86 @@ test('PRD-ORG-021 PRD-ACS-006 an Admin prepares a Site and a Store at it; anothe
     await approverContext.close();
   }
 });
+
+// S1-F02-T04: the classifications journey (structure-and-masters 3.1, 8; PRD-ORG-008; RR-440, product owner 9 Oct
+// 2026). An Admin defines a classification kind for Sites and a value of it; a different authorised person approves
+// each from My work; the Admin gives a new Site that classification, which the Site editor offers as the
+// Organisation's own; once approved, the Site's version shows it. It runs after the journey above, in this file, so
+// the two never offer each other's Site change in My work.
+const KIND = { code: `SYN-CK-${suffix}`, name: 'SYNTHETIC Journey Site label' };
+const VALUE = { code: `SYN-CV-${suffix}`, name: 'SYNTHETIC Journey Flagship' };
+const CLASSIFIED = { code: `SYN-CSITE-${suffix}`, name: 'SYNTHETIC Journey Classified Site' };
+
+/** Waits until the tab's row for a record shows the text, refreshing the list, which another person's decision changes. */
+async function rowShows(page: Page, code: string, text: string): Promise<Locator> {
+  const row = page.getByRole('row').filter({ hasText: code });
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await expect(row).toContainText(text, { timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
+  return row;
+}
+
+test('PRD-ORG-008 RR-440 an Admin defines a classification kind and value; another person approves; the Admin gives a Site that classification', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const world = readWorld().structure;
+  const adminContext = await browser.newContext();
+  const approverContext = await browser.newContext();
+  const admin = await adminContext.newPage();
+  const approver = await approverContext.newPage();
+  try {
+    await test.step('the Admin defines a classification kind for Sites', async () => {
+      await signedIn(admin, world.organisationCode, world.classifyAdmin);
+      await openStructure(admin, 'Classification kinds');
+      await prepare(admin, 'New classification kind', async (drawer) => {
+        await drawer.getByLabel(/^Code/).fill(KIND.code);
+        await drawer.getByLabel(/^Classifies/).selectOption({ label: 'Sites' });
+        await drawer.getByLabel(/^Name/).fill(KIND.name);
+      });
+      await expect(admin.getByRole('row').filter({ hasText: KIND.code })).toContainText('Awaiting approval');
+    });
+
+    const app = await signedIn(approver, world.organisationCode, world.classifyApprover);
+    await test.step('a different authorised person approves the kind from My work', async () => {
+      await approveFromMyWork(approver, app, 'Classification kind change');
+    });
+
+    await test.step('the Admin defines a value of that kind, and the other person approves it', async () => {
+      await openStructure(admin, 'Classification values');
+      await prepare(admin, 'New classification value', async (drawer) => {
+        await drawer.getByLabel(/^Classification kind/).selectOption({ label: `${KIND.code} · ${KIND.name}` });
+        await drawer.getByLabel(/^Code/).fill(VALUE.code);
+        await drawer.getByLabel(/^Name/).fill(VALUE.name);
+      });
+      await approveFromMyWork(approver, app, 'Classification value change');
+      await openStructure(admin, 'Classification values');
+      await rowShows(admin, VALUE.code, 'In force');
+    });
+
+    await test.step('the Admin gives a new Site that classification, which the Site editor offers', async () => {
+      await openStructure(admin, 'Sites');
+      await prepare(admin, 'New Site', async (drawer) => {
+        await drawer.getByLabel(/^Code/).fill(CLASSIFIED.code);
+        await drawer.getByLabel(/^Name/).fill(CLASSIFIED.name);
+        await drawer.getByLabel(/^Physical kind/).selectOption({ label: 'Retail site' });
+        await drawer.getByLabel(/^Area/).selectOption({ label: world.areaOption });
+        await drawer.getByLabel(/^Addresses/).fill('SYNTHETIC 1 Classified Road');
+        await drawer.getByRole('checkbox', { name: `${VALUE.code} · ${VALUE.name}` }).check();
+      });
+      await approveFromMyWork(approver, app, 'Site change');
+    });
+
+    await test.step('the Site is in force, its version carrying the classification', async () => {
+      await openStructure(admin, 'Sites');
+      const row = await rowShows(admin, CLASSIFIED.code, 'In force');
+      await row.getByRole('button', { name: CLASSIFIED.code }).click();
+      const versions = admin.getByRole('dialog', { name: CLASSIFIED.name }).getByRole('list', { name: 'Versions' });
+      await expect(versions).toContainText(`${VALUE.code} · ${VALUE.name}`);
+    });
+  } finally {
+    await adminContext.close();
+    await approverContext.close();
+  }
+});

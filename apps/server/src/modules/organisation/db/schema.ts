@@ -1,6 +1,6 @@
 import type {
   BusinessUnitKind,
-  GroupingKind,
+  Classifies,
   LocationKind,
   OperatingModel,
   PhysicalKind,
@@ -136,7 +136,8 @@ export const storeAlias = organisation.table('store_alias', {
 
 export const grouping = organisation.table('grouping', {
   ...identityColumns(),
-  kind: text('kind').$type<GroupingKind>().notNull(),
+  /** The code of its grouping kind (migration 0044; S1-F02-T04). */
+  kind: text('kind').notNull(),
 });
 export const groupingVersion = organisation.table('grouping_version', {
   ...versionColumns(),
@@ -202,4 +203,50 @@ export const storeDefaultWarehouse = organisation.table('store_default_warehouse
   ...versionColumns(),
   storeId: uuid('store_id').notNull(),
   warehouseUnitId: uuid('warehouse_unit_id').notNull(),
+});
+
+// The Organisation's own grouping kinds, and classification kinds and values of Sites and Stores, with the
+// classifications each Site and Store version carries (migrations/organisation/0044; S1-F02-T04).
+
+export const groupingKind = organisation.table('grouping_kind', identityColumns());
+export const groupingKindVersion = organisation.table('grouping_kind_version', {
+  ...versionColumns(),
+  groupingKindId: uuid('grouping_kind_id').notNull(),
+  name: text('name').notNull(),
+});
+
+export const classificationKind = organisation.table('classification_kind', {
+  ...identityColumns(),
+  appliesTo: text('applies_to').$type<Classifies>().notNull(),
+});
+export const classificationKindVersion = organisation.table('classification_kind_version', {
+  ...versionColumns(),
+  classificationKindId: uuid('classification_kind_id').notNull(),
+  name: text('name').notNull(),
+});
+
+export const classificationValue = organisation.table('classification_value', {
+  ...identityColumns(),
+  classificationKindId: uuid('classification_kind_id').notNull(),
+  appliesTo: text('applies_to').$type<Classifies>().notNull(),
+});
+export const classificationValueVersion = organisation.table('classification_value_version', {
+  ...versionColumns(),
+  classificationValueId: uuid('classification_value_id').notNull(),
+  name: text('name').notNull(),
+});
+
+export const siteClassification = organisation.table('site_classification', {
+  id: uuid('id').primaryKey(),
+  siteVersionId: uuid('site_version_id').notNull(),
+  classificationValueId: uuid('classification_value_id').notNull(),
+  appliesTo: text('applies_to').$type<'site'>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const storeClassification = organisation.table('store_classification', {
+  id: uuid('id').primaryKey(),
+  storeVersionId: uuid('store_version_id').notNull(),
+  classificationValueId: uuid('classification_value_id').notNull(),
+  appliesTo: text('applies_to').$type<'store'>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
 });

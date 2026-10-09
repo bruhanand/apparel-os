@@ -136,6 +136,9 @@ export interface SyntheticWorld {
     /** The journey's own Admin and approver, since journeys run at once and a code is taken once. */
     readonly unitsAdmin: EnrolledUser;
     readonly unitsApprover: EnrolledUser;
+    /** The classifications journey's own Admin and approver (S1-F02-T04). */
+    readonly classifyAdmin: EnrolledUser;
+    readonly classifyApprover: EnrolledUser;
     readonly siteId: string;
     readonly siteOption: string;
     readonly entities: readonly {

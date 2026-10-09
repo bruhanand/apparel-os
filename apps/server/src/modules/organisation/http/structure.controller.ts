@@ -55,7 +55,26 @@ type CommandFactsOf = (context: TransactionContext, today: string) => Promise<Co
 
 /** Authorise's answer in the command, with the facts it covered when allowed. */
 type CommandAuthorisation =
-  Authorisation | ({ readonly kind: 'allowed'; readonly roleAssignmentId: string } & CommandFacts);
+  | Authorisation
+  | ({
+      readonly kind: 'allowed';
+      readonly roleAssignmentId: string;
+      /** The assignment that granted the further permission the command needs, where it needs one. */
+      readonly alsoAssignmentId?: string;
+    } & CommandFacts);
+
+/**
+ * A permission a command needs besides its route's, on the same facts: preparing a unit with its first mapping needs
+ * edit on the mapping as well as create or edit on the unit, as deciding it needs approve on both
+ * (access-and-approvals 9.8b; RR-444, product owner 9 Oct 2026).
+ */
+interface FurtherPermission {
+  readonly action: PermissionAction;
+  readonly recordType: string;
+}
+
+/** The permission a unit's first mapping needs when it is prepared with a unit version (RR-444). */
+const MAPPING_EDIT: FurtherPermission = { action: 'edit', recordType: recordTypeOf('business_unit_mapping') };
 
 /**
  * The routes of the organisation structure (structure-and-masters 2.3, 3.8, 6.1, 8; module-map 4.11; code-house-rules
@@ -439,6 +458,7 @@ export class StructureController {
             ...(input.body.storeId === undefined ? {} : { storeId: input.body.storeId }),
           },
         }),
+      MAPPING_EDIT,
     );
   }
 
@@ -457,6 +477,8 @@ export class StructureController {
       this.factsOf('business_unit', input.params.recordId, (facts) =>
         input.body.legalEntityId === undefined ? facts : { ...facts, legalEntityId: input.body.legalEntityId },
       ),
+      // A version that names a mapping is a new unit's draft re-dated with its first mapping (3.4; RR-444).
+      input.body.legalEntityId === undefined ? undefined : MAPPING_EDIT,
     );
   }
 
@@ -590,6 +612,134 @@ export class StructureController {
     );
   }
 
+  // The Organisation's own grouping kinds and classification kinds and values (structure-and-masters 3.1, 3.6; RR-440;
+  // S1-F02-T04).
+
+  @ApiRoute(routes.listGroupingKinds)
+  listGroupingKinds(
+    @RouteInput() input: RouteInputOf<typeof routes.listGroupingKinds>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'grouping_kind', input.query);
+  }
+
+  @ApiRoute(routes.readGroupingKind)
+  readGroupingKind(@RouteInput() input: RouteInputOf<typeof routes.readGroupingKind>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'grouping_kind', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareGroupingKind)
+  prepareGroupingKind(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareGroupingKind>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(routes.prepareGroupingKind, 'organisation.prepare-grouping-kind', user, input, (c, p) =>
+      this.organisation.prepareGroupingKind(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareGroupingKindVersion)
+  prepareGroupingKindVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareGroupingKindVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareGroupingKindVersion,
+      'organisation.prepare-grouping-kind-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareNameVersion(c, p, 'grouping_kind', input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listClassificationKinds)
+  listClassificationKinds(
+    @RouteInput() input: RouteInputOf<typeof routes.listClassificationKinds>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'classification_kind', input.query);
+  }
+
+  @ApiRoute(routes.readClassificationKind)
+  readClassificationKind(
+    @RouteInput() input: RouteInputOf<typeof routes.readClassificationKind>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'classification_kind', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareClassificationKind)
+  prepareClassificationKind(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareClassificationKind>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareClassificationKind,
+      'organisation.prepare-classification-kind',
+      user,
+      input,
+      (c, p) => this.organisation.prepareClassificationKind(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareClassificationKindVersion)
+  prepareClassificationKindVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareClassificationKindVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareClassificationKindVersion,
+      'organisation.prepare-classification-kind-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareNameVersion(c, p, 'classification_kind', input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listClassificationValues)
+  listClassificationValues(
+    @RouteInput() input: RouteInputOf<typeof routes.listClassificationValues>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'classification_value', input.query);
+  }
+
+  @ApiRoute(routes.readClassificationValue)
+  readClassificationValue(
+    @RouteInput() input: RouteInputOf<typeof routes.readClassificationValue>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'classification_value', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareClassificationValue)
+  prepareClassificationValue(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareClassificationValue>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareClassificationValue,
+      'organisation.prepare-classification-value',
+      user,
+      input,
+      (c, p) => this.organisation.prepareClassificationValue(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareClassificationValueVersion)
+  prepareClassificationValueVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareClassificationValueVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.prepare(
+      routes.prepareClassificationValueVersion,
+      'organisation.prepare-classification-value-version',
+      user,
+      input,
+      (c, p) => this.organisation.prepareNameVersion(c, p, 'classification_value', input.params.recordId, input.body),
+    );
+  }
+
   /**
    * The master lists (module-map 4.11; phases.md stage 1 reports): each master's version in force on the date, read
    * under the reader's own authorisation (module-map section 3, rule 5). They need no permission of their own: a list
@@ -642,6 +792,9 @@ export class StructureController {
           'store_default_warehouse',
           await covered('store_default_warehouse', structure.storeDefaultWarehouses),
         ),
+        groupingKinds: shown('grouping_kind', structure.groupingKinds),
+        classificationKinds: shown('classification_kind', structure.classificationKinds),
+        classificationValues: shown('classification_value', structure.classificationValues),
       };
     });
   }
@@ -784,7 +937,12 @@ export class StructureController {
     work: (context: TransactionContext, preparer: Preparer) => Promise<Prepared<PreparedVersion | MappingVerified>>,
     /** For a route on a place-scoped record type, which authorises in its command: its scope facts. */
     commandFactsOf?: CommandFactsOf,
+    /** A permission the command needs besides the route's, on the same facts (RR-444). */
+    further?: FurtherPermission,
   ) {
+    if (further !== undefined && commandFactsOf === undefined) {
+      throw new CommandDefect(`Route ${route.path} needs a further permission only with the record's facts`);
+    }
     if ((commandFactsOf === undefined) !== (route.access.authorisedIn !== 'command')) {
       throw new CommandDefect(`Route ${route.path} authorises in its command only with the record's facts`);
     }
@@ -817,7 +975,12 @@ export class StructureController {
         route.access.recordType,
         command,
       );
-      return authorised.kind === 'allowed' ? { ...authorised, ...command } : authorised;
+      if (authorised.kind === 'refused') return authorised;
+      if (further === undefined) return { ...authorised, ...command };
+      // The further permission on the same facts, its refusal naming it (PRD-UXP-003).
+      const also = await this.authoriseFacts(context, user, further.action, further.recordType, command);
+      if (also.kind === 'refused') return also;
+      return { ...authorised, ...command, alsoAssignmentId: also.roleAssignmentId };
     };
     const need = { actorId: user.userId, action: route.access.action, recordType: route.access.recordType };
     const authoriseReplay: ReplayAuthorisation = async (context) => {
@@ -859,6 +1022,21 @@ export class StructureController {
               ...('facts' in authorised ? { facts: authorised.facts } : {}),
               ...('movesTo' in authorised ? { movesTo: authorised.movesTo } : {}),
             },
+            [],
+            // The further permission's assignment, held in the same step and rechecked with the same facts (RR-444).
+            further !== undefined && 'alsoAssignmentId' in authorised
+              ? [
+                  {
+                    roleAssignmentId: authorised.alsoAssignmentId,
+                    need: {
+                      action: further.action,
+                      recordType: further.recordType,
+                      facts: authorised.facts,
+                      ...(authorised.movesTo === undefined ? {} : { movesTo: authorised.movesTo }),
+                    },
+                  },
+                ]
+              : [],
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
           const outcome = await work(context, preparer);

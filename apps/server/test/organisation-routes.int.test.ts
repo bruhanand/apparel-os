@@ -47,6 +47,9 @@ const TYPES = [
   'organisation.business_unit_mapping',
   'organisation.location',
   'organisation.store_default_warehouse',
+  'organisation.grouping_kind',
+  'organisation.classification_kind',
+  'organisation.classification_value',
 ];
 const each = (actions: readonly PermissionAction[]): SyntheticAuthority[] =>
   TYPES.flatMap((recordType) => actions.map((action) => ({ recordType, action })));
@@ -279,6 +282,96 @@ describe('preparing and deciding (structure-and-masters 2.3; module-map 6.2 flow
     expect(
       (await post(admin, `/api/organisation/sites/${uuidv7()}/versions`, { ...siteBody(), code: undefined })).body,
     ).toMatchObject({ error: { kind: 'not-found', code: 'organisation.record-not-found' } });
+  });
+});
+
+describe('the Organisation’s own classifications and grouping kinds over the routes (structure-and-masters 3.1, 3.6, 8; RR-440)', () => {
+  it('PRD-ORG-008 PRD-ORG-007 a kind and its value are prepared and approved; a Site and a Store carry a classification; the master lists show them', async () => {
+    const siteKind = await approved('/api/organisation/classification-kinds', {
+      code: code('CK'),
+      appliesTo: 'site',
+      name: syntheticName('Site label'),
+      validFrom: today(),
+    });
+    const siteValue = await approved('/api/organisation/classification-values', {
+      classificationKindId: siteKind.recordId,
+      code: code('CV'),
+      name: syntheticName('Site label value'),
+      validFrom: today(),
+    });
+    const storeKind = await approved('/api/organisation/classification-kinds', {
+      code: code('CK'),
+      appliesTo: 'store',
+      name: syntheticName('Store label'),
+      validFrom: today(),
+    });
+    const storeValue = await approved('/api/organisation/classification-values', {
+      classificationKindId: storeKind.recordId,
+      code: code('CV'),
+      name: syntheticName('Store label value'),
+      validFrom: today(),
+    });
+    const groupingKind = await approved('/api/organisation/grouping-kinds', {
+      code: code('GK'),
+      name: syntheticName('Grouping kind'),
+      validFrom: today(),
+    });
+    const renamed = await approved(`/api/organisation/grouping-kinds/${groupingKind.recordId}/versions`, {
+      name: syntheticName('Grouping kind renamed'),
+      validFrom: new Date(clock.now().getTime() + 86_400_000).toISOString().slice(0, 10),
+    });
+    // A Store kind's value on a Site is refused, naming the value (PRD-UXP-003).
+    expect(
+      (await post(admin, '/api/organisation/sites', { ...siteBody(), classificationValueIds: [storeValue.recordId] }))
+        .body,
+    ).toMatchObject({
+      error: {
+        code: 'organisation.classification-of-another-kind',
+        missing: [{ kind: 'record', recordType: 'organisation.classification_value', recordId: storeValue.recordId }],
+      },
+    });
+    const site = await approved('/api/organisation/sites', {
+      ...siteBody(),
+      classificationValueIds: [siteValue.recordId],
+    });
+    const store = await approved('/api/organisation/stores', {
+      code: code('STORE'),
+      name: syntheticName('Store'),
+      format: 'ebo',
+      operatingModel: 'company-owned',
+      siteId: site.recordId,
+      aliases: [],
+      classificationValueIds: [storeValue.recordId],
+      validFrom: today(),
+    });
+    await approved('/api/organisation/groupings', {
+      code: code('GROUP'),
+      groupingKindId: groupingKind.recordId,
+      name: syntheticName('Grouping'),
+      storeIds: [store.recordId],
+      validFrom: today(),
+    });
+    const value = await get(admin, `/api/organisation/classification-values/${siteValue.recordId}`);
+    expect(value.body).toMatchObject({
+      record: { classificationKindId: siteKind.recordId, appliesTo: 'site', versions: [{ state: 'In force' }] },
+    });
+    const kind = await get(admin, `/api/organisation/grouping-kinds/${groupingKind.recordId}`);
+    expect(kind.body).toMatchObject({
+      record: { versions: [{ id: renamed.versionId, state: 'Scheduled' }, { state: 'In force' }] },
+    });
+    const lists = masterListsSchema.parse((await get(admin, `/api/organisation/master-lists?date=${today()}`)).body);
+    expect(lists.classificationKinds).toContainEqual(expect.objectContaining({ id: siteKind.recordId }));
+    expect(lists.classificationValues).toContainEqual(expect.objectContaining({ id: storeValue.recordId }));
+    expect(lists.groupingKinds).toContainEqual(
+      expect.objectContaining({ id: groupingKind.recordId, name: syntheticName('Grouping kind') }),
+    );
+    expect(lists.sites).toContainEqual(
+      expect.objectContaining({ id: site.recordId, classificationValueIds: [siteValue.recordId] }),
+    );
+    expect(lists.stores).toContainEqual(
+      expect.objectContaining({ id: store.recordId, classificationValueIds: [storeValue.recordId] }),
+    );
+    expect(lists.groupings).toContainEqual(expect.objectContaining({ groupingKindId: groupingKind.recordId }));
   });
 });
 

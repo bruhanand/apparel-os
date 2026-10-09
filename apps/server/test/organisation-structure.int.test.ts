@@ -8,6 +8,7 @@ import { grantSynthetic } from './support/grants.js';
 import {
   approved,
   approvedGeography,
+  approvedGroupingKind,
   decided,
   prepared,
   structureSetup,
@@ -186,6 +187,7 @@ describe('a master is prepared and then approved by a different authorised perso
     const site = await approvedSite();
     const store = await approved(setup, (c, p) => setup.organisation.prepareStore(c, p, storeDraft(site.recordId)));
     const name = syntheticName('Changed');
+    const groupingKind = await approvedGroupingKind(setup, next('REGIONS'));
     const changes: ((
       ...args: Parameters<Parameters<StructureSetup['prepare']>[0]>
     ) => ReturnType<Parameters<StructureSetup['prepare']>[0]>)[] = [
@@ -241,7 +243,7 @@ describe('a master is prepared and then approved by a different authorised perso
       (c, p) =>
         setup.organisation.prepareGrouping(c, p, {
           code: syntheticCode(next('REGION')),
-          kind: 'region',
+          groupingKindId: groupingKind.recordId,
           name,
           storeIds: [store.recordId],
           validFrom: today,
@@ -751,10 +753,11 @@ describe('Stores at Sites (structure-and-masters 3.3, 3.8)', () => {
   it('PRD-ORG-007 a grouping lists Stores, dated by its versions', async () => {
     const site = await approvedSite();
     const store = await approved(setup, (c, p) => setup.organisation.prepareStore(c, p, storeDraft(site.recordId)));
+    const kind = await approvedGroupingKind(setup, next('RGK'));
     const region = await approved(setup, (c, p) =>
       setup.organisation.prepareGrouping(c, p, {
         code: syntheticCode(next('RG')),
-        kind: 'region',
+        groupingKindId: kind.recordId,
         name: syntheticName('Region'),
         storeIds: [],
         validFrom: setup.today(),

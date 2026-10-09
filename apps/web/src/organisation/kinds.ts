@@ -37,7 +37,19 @@ export const kindText: Readonly<Record<Kind, { readonly add: MessageId | null; r
   business_unit_mapping: { add: null, what: 'organisation.what.business_unit_mapping' },
   location: { add: 'organisation.new.location', what: 'organisation.what.location' },
   store_default_warehouse: { add: null, what: 'organisation.what.store_default_warehouse' },
+  grouping_kind: { add: 'organisation.new.grouping_kind', what: 'organisation.what.grouping_kind' },
+  classification_kind: { add: 'organisation.new.classification_kind', what: 'organisation.what.classification_kind' },
+  classification_value: {
+    add: 'organisation.new.classification_value',
+    what: 'organisation.what.classification_value',
+  },
 };
+
+/** Only the records whose fixed field holds a value, such as the classification values of a Site kind. */
+export interface RecordFilter {
+  readonly field: string;
+  readonly equals: string;
+}
 
 export interface Option {
   readonly value: string;
@@ -61,7 +73,7 @@ export type FieldSpec = {
   | { readonly kind: 'select'; readonly options: readonly Option[] }
   | { readonly kind: 'reference'; readonly target: Kind; readonly optional?: true }
   | { readonly kind: 'lines' }
-  | { readonly kind: 'references'; readonly target: Kind }
+  | { readonly kind: 'references'; readonly target: Kind; readonly where?: RecordFilter }
   | { readonly kind: 'yes-no' }
 );
 
@@ -80,6 +92,17 @@ const closingDate: FieldSpec = {
   optional: true,
 };
 const aliases: FieldSpec = { name: 'aliases', label: 'organisation.field.aliases', kind: 'lines' };
+/**
+ * The Organisation's own classifications a Site or Store version carries: the values of its kinds for Sites, or for
+ * Stores (structure-and-masters 3.1, 8; PRD-ORG-008; S1-F02-T04). None is set in the app.
+ */
+const classifications = (place: 'site' | 'store'): FieldSpec => ({
+  name: 'classificationValueIds',
+  label: 'organisation.field.classificationValueIds',
+  kind: 'references',
+  target: 'classification_value',
+  where: { field: 'appliesTo', equals: place },
+});
 
 export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
   country: [code, name],
@@ -142,6 +165,7 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
     { name: 'areaId', label: 'organisation.field.areaId', kind: 'reference', target: 'area' },
     { name: 'addresses', label: 'organisation.field.addresses', kind: 'lines' },
     aliases,
+    classifications('site'),
     openingDate,
     closingDate,
   ],
@@ -171,19 +195,18 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
     },
     { name: 'siteId', label: 'organisation.field.siteId', kind: 'reference', target: 'site' },
     aliases,
+    classifications('store'),
     openingDate,
     closingDate,
   ],
   grouping: [
     code,
+    // One of the Organisation's own grouping kinds (3.6; RR-440).
     {
-      name: 'kind',
-      label: 'organisation.field.groupingKind',
-      kind: 'select',
-      options: [
-        { value: 'region', label: 'grouping-kind.region' },
-        { value: 'cluster', label: 'grouping-kind.cluster' },
-      ],
+      name: 'groupingKindId',
+      label: 'organisation.field.groupingKindId',
+      kind: 'reference',
+      target: 'grouping_kind',
       fixed: true,
     },
     name,
@@ -258,6 +281,32 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
       kind: 'reference',
       target: 'business_unit',
     },
+  ],
+  grouping_kind: [code, name],
+  classification_kind: [
+    code,
+    {
+      name: 'appliesTo',
+      label: 'organisation.field.appliesTo',
+      kind: 'select',
+      options: [
+        { value: 'site', label: 'classifies.site' },
+        { value: 'store', label: 'classifies.store' },
+      ],
+      fixed: true,
+    },
+    name,
+  ],
+  classification_value: [
+    {
+      name: 'classificationKindId',
+      label: 'organisation.field.classificationKindId',
+      kind: 'reference',
+      target: 'classification_kind',
+      fixed: true,
+    },
+    code,
+    name,
   ],
 };
 
