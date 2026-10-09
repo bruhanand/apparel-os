@@ -2,6 +2,8 @@
 export { FILES_IMPORTS, FilesImportsModule } from './files-imports.module.js';
 export type { FilesImportsInterface } from './files-imports.js';
 export { decisionEvidence } from './files-imports.js';
+export { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
+export type { AttachedRecordReader } from './contracts/record-readers.js';
 export type { Attached, AttachedRecord, AttachRequest, EvidenceKind } from './commands/attach.js';
 export { FILE_STORE, FILE_STORE_ENVIRONMENT } from './file-store/file-store.js';
 export type { FileStore, FileStoreHandle } from './file-store/file-store.js';

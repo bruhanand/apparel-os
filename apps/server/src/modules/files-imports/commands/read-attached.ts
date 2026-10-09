@@ -18,6 +18,7 @@ import {
 import { freshCodeRefusal, takeFreshCode } from '../../access/index.js';
 import type { AccessInterface, FreshCode, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import { attachedRecord, type AttachedRecordReaders } from '../contracts/record-readers.js';
 import { attachment, fileReceipt, storedFile } from '../db/schema.js';
 import { contentHashOf, openFile } from '../domain/file-seal.js';
 import { openReceiptText } from '../domain/receipt-seal.js';
@@ -31,6 +32,8 @@ export interface ReadAttachedDependencies {
   readonly keys: OrganisationKeys;
   readonly fileStore: FileStoreHandle;
   readonly logger: StructuredLogger;
+  /** The owning modules' readers of their records (RR-452). */
+  readonly readers: AttachedRecordReaders;
 }
 
 export interface Reader {
@@ -69,7 +72,14 @@ interface Found {
 }
 
 type Looked =
-  | { readonly kind: 'found'; readonly found: Found; readonly roleAssignmentId: string }
+  | {
+      readonly kind: 'found';
+      readonly found: Found;
+      /** The assignment that granted the read; none for a reader the owning module admitted with no class to grant. */
+      readonly roleAssignmentId: string | undefined;
+      /** Admitted by the record's owning module rather than through a grant on its type (RR-452). */
+      readonly admitted: boolean;
+    }
   | { readonly kind: 'refused'; readonly refusal: CommandRefusal<'not-authorised' | 'unavailable' | 'not-found'> };
 
 const NOT_FOUND = {
@@ -80,16 +90,22 @@ const NOT_FOUND = {
 
 /**
  * Finds the attachment as the reader may see it and authorises the read (imports-and-opening-data 11, 13.1;
- * PRD-SEC-005): row-level security shows an attachment only where a grant on the attached record's type covers its
- * scope facts, so one outside the reader's scope reads as not found; Authorise then checks view on the attached
+ * PRD-SEC-005). Where the attached record's owning module registered a reader, it is asked first whether the reader
+ * may read the record; if it admits them, the attachment shows and only the restricted classes are authorised
+ * (RR-452). Otherwise row-level security shows an attachment only where a grant on the attached record's type covers
+ * its scope facts, so one outside the reader's scope reads as not found; Authorise then checks view on the attached
  * record's own type with its facts, and a grant of every restricted class the attachment carries. Reads only.
  */
 async function lookUp(
   context: TransactionContext,
   access: AccessInterface,
+  readers: AttachedRecordReaders,
   userId: string,
   attachmentId: string,
 ): Promise<Looked> {
+  const record = await attachedRecord(context, attachmentId);
+  if (record === undefined) return { kind: 'refused', refusal: NOT_FOUND };
+  const admitted = await readers.admit(context, record.recordType, record.recordId);
   const rows = await context.tx
     .select({
       attachmentId: attachment.id,
@@ -151,9 +167,20 @@ async function lookUp(
       scheme: row.receiptScheme,
     },
   };
+  if (admitted) {
+    if (classes.length === 0) return { kind: 'found', found, roleAssignmentId: undefined, admitted };
+    const classesHeld = await access.authoriseFieldClasses(context, {
+      actorId: userId,
+      recordType: found.recordType,
+      facts: found.facts,
+      fieldClasses: classes.map((fieldClass) => ({ fieldClass, use: 'view' as const })),
+    });
+    if (classesHeld.kind === 'refused') return { kind: 'refused', refusal: classesHeld.refusal };
+    return { kind: 'found', found, roleAssignmentId: classesHeld.roleAssignmentId, admitted };
+  }
   const authorised = await access.authorise(context, needOf(found, userId));
   if (authorised.kind === 'refused') return { kind: 'refused', refusal: authorised.refusal };
-  return { kind: 'found', found, roleAssignmentId: authorised.roleAssignmentId };
+  return { kind: 'found', found, roleAssignmentId: authorised.roleAssignmentId, admitted };
 }
 
 function needOf(found: Found, actorId: string) {
@@ -244,7 +271,7 @@ export async function readAttachedFile(
   attachmentId: string,
 ): Promise<AttachedFile> {
   const looked = await read(deps, reader, 'files-imports.read-attached-file', (context) =>
-    lookUp(context, deps.access, reader.userId, attachmentId),
+    lookUp(context, deps.access, deps.readers, reader.userId, attachmentId),
   );
   if (looked.kind === 'refused') return refuse(looked.refusal);
   if (looked.found.classes.length > 0) {
@@ -285,7 +312,7 @@ export async function downloadAttachedFile(
   totpCode: string | undefined,
 ): Promise<IdempotentAnswer<JsonValue>> {
   const looked = await read(deps, reader, 'files-imports.authorise-download', async (context) => {
-    const found = await lookUp(context, deps.access, reader.userId, attachmentId);
+    const found = await lookUp(context, deps.access, deps.readers, reader.userId, attachmentId);
     if (found.kind === 'refused' || found.found.classes.length === 0) return found;
     // Nothing is fetched for a restricted file before its code is seen to be fresh. The code is only checked here;
     // it is taken in the command's own transaction (PRD-SEC-001).
@@ -299,7 +326,7 @@ export async function downloadAttachedFile(
   const file = await content(deps, reader, found);
 
   const authoriseReplay: ReplayAuthorisation = async (context) => {
-    const again = await lookUp(context, deps.access, reader.userId, attachmentId);
+    const again = await lookUp(context, deps.access, deps.readers, reader.userId, attachmentId);
     if (again.kind === 'found') return { kind: 'allowed' };
     return { kind: 'refused', refusal: again.refusal as CommandRefusal<'not-authorised' | 'not-found'> };
   };
@@ -315,13 +342,20 @@ export async function downloadAttachedFile(
       content: requestContent,
       authoriseReplay,
       work: async (context): Promise<CommandOutcome<JsonValue>> => {
-        const held = await deps.access.holdAuthority(
-          context,
-          { kind: 'user', id: reader.userId },
-          looked.roleAssignmentId,
-          needOf(found, reader.userId),
-        );
-        if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+        if (looked.admitted) {
+          // The owning module is asked again, and the classes authorised again, in the command (RR-452).
+          const again = await lookUp(context, deps.access, deps.readers, reader.userId, attachmentId);
+          if (again.kind === 'refused') return { kind: 'refusal', refusal: again.refusal, causedBySecret: false };
+        } else {
+          if (looked.roleAssignmentId === undefined) throw new CommandDefect('A granted read named no assignment');
+          const held = await deps.access.holdAuthority(
+            context,
+            { kind: 'user', id: reader.userId },
+            looked.roleAssignmentId,
+            needOf(found, reader.userId),
+          );
+          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+        }
         if (found.classes.length > 0) {
           // Checked again and taken here, so a code another request used in between is refused (PRD-SEC-001).
           const refusal = await takeFreshCode(await checkedCode(deps.access, context, reader.userId, totpCode));

@@ -3,6 +3,7 @@ import type { FieldClass } from '@apparel-os/schemas';
 import { and, eq, isNull } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import type { AttachedRecordReaders } from '../contracts/record-readers.js';
 import { attachment, fileReceipt, storedFile } from '../db/schema.js';
 
 /** The record a file is attached to: its module, type, identifier and the version, where it has versions. */
@@ -49,15 +50,18 @@ export interface Attached {
  * Attach (imports-and-opening-data 13.1, 15.1): links a stored file to one record of any module, inside that record's
  * own transaction, so an attachment written in a transaction that rolls back leaves no link (the stored object stays,
  * as an object with no record, backup-and-restore 3.3). The attachment is never edited. Row-level security checks
- * that the actor could read the row it writes, so attaching needs a grant on the record's type that covers its facts
- * (code-house-rules 6.2).
+ * that the actor could read the row it writes: through a grant on the record's type that covers its facts
+ * (code-house-rules 6.2), or, where the record's owning module registered a reader, through that module's answer
+ * (imports-and-opening-data 11; RR-452).
  */
 export async function attach(
   context: TransactionContext,
   audit: AuditInterface,
   request: AttachRequest,
+  readers?: AttachedRecordReaders,
 ): Promise<Attached> {
   if (context.readOnly) throw new CommandDefect('A file was attached in a read');
+  await readers?.admit(context, request.record.type, request.record.id);
   const file = await context.tx
     .select({ id: storedFile.id })
     .from(storedFile)

@@ -62,6 +62,7 @@ const SYNTHETIC_LIMITS = { idleLockSeconds: 3600, absoluteSeconds: 7200 };
 const SYNTHETIC_DUE = { format: 'elapsed-minutes-v1', minutes: 30 } as const;
 const SITE = '01900000-0000-7000-8000-0000000e6001';
 const SITE_NO_GRANT = '01900000-0000-7000-8000-0000000e6002';
+const SITE_NO_CLASS = '01900000-0000-7000-8000-0000000e6003';
 const ACTOR = '01900000-0000-7000-8000-0000000e6a01';
 /** A comment a test-only trigger fails a decision on, after its evidence is linked (code-house-rules 11.4). */
 const FAIL_MARKER = 'SYNTHETIC fail the decision at commit';
@@ -104,6 +105,7 @@ let approver: Enrolled;
 let approveReasonId: string;
 let owner: Enrolled;
 let ownerNoGrant: Enrolled;
+let ownerNoClass: Enrolled;
 let outsider: Enrolled;
 let plainReader: Enrolled;
 let costReader: Enrolled;
@@ -154,7 +156,9 @@ beforeAll(async () => {
   ]);
   approveReasonId = await writeSyntheticReason(databaseA, 'approve');
   owner = await enrolled('OWNER', [VIEW_EXCEPTION, STORE]);
-  ownerNoGrant = await enrolled('OWNER-NO-GRANT', [STORE]);
+  // Owners with no grant on `exceptions.exception`: one holds the SYNTHETIC cost class through another role, one none.
+  ownerNoGrant = await enrolled('OWNER-NO-GRANT', [STORE], { fieldClasses: ['cost'] });
+  ownerNoClass = await enrolled('OWNER-NO-CLASS', [STORE]);
   outsider = await enrolled('OUTSIDER', [STORE]);
   plainReader = await enrolled('PLAIN-READER', [VIEW_EXCEPTION]);
   costReader = await enrolled('COST-READER', [VIEW_EXCEPTION], { fieldClasses: ['cost'] });
@@ -187,10 +191,17 @@ beforeAll(async () => {
   for (const type of [syntheticMismatch, syntheticCostly]) {
     await approvedRouting({ typeCode: type.code, siteId: SITE, owner: { kind: 'user', userId: owner.id } });
   }
+  for (const type of [syntheticMismatch, syntheticCostly]) {
+    await approvedRouting({
+      typeCode: type.code,
+      siteId: SITE_NO_GRANT,
+      owner: { kind: 'user', userId: ownerNoGrant.id },
+    });
+  }
   await approvedRouting({
-    typeCode: syntheticMismatch.code,
-    siteId: SITE_NO_GRANT,
-    owner: { kind: 'user', userId: ownerNoGrant.id },
+    typeCode: syntheticCostly.code,
+    siteId: SITE_NO_CLASS,
+    owner: { kind: 'user', userId: ownerNoClass.id },
   });
 }, 240_000);
 
@@ -400,18 +411,20 @@ describe('evidence on an exception (access-and-approvals 12.1, 12.3; POL-03.05)'
     ).toEqual([]);
   });
 
-  it('PRD-SEC-005 an owner with no grant on the exception’s type may act on it but not add evidence', async () => {
+  it('PRD-SEC-005 RR-452 an owner with no grant on the exception’s type adds evidence and opens it, as exceptions answers', async () => {
     const theirs = await raise(syntheticMismatch, SITE_NO_GRANT);
-    const file = await store(ownerNoGrant, jpeg('no grant'), 'SYNTHETIC-no-grant.jpg');
+    const bytes = jpeg('no grant');
+    const file = await store(ownerNoGrant, bytes, 'SYNTHETIC-no-grant.jpg');
     const added = await post(evidencePath(theirs), { evidence: [file] }, await cookieOf(ownerNoGrant));
-    expect(added.status, JSON.stringify(added.body)).toBe(403);
-    expect(added.body).toMatchObject({
-      error: {
-        code: 'access.not-authorised',
-        missing: [{ kind: 'permission', recordType: 'exceptions.exception', action: 'view' }],
-      },
-    });
-    expect(await rows(databaseA, `select 1 from files_imports.attachment where record_id = $1`, [theirs])).toEqual([]);
+    expect(added.status, JSON.stringify(added.body)).toBe(200);
+    const theirAttachment = (added.body as { attachmentIds: string[] }).attachmentIds[0] ?? '';
+    const read = await get(readPath(theirAttachment), await cookieOf(ownerNoGrant));
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    expect(attachedFileSchema.parse(read.body).contentHash).toBe(sha256(bytes));
+    // Another owner's exception is still not theirs to open.
+    const notTheirs = await get(readPath(attachmentId), await cookieOf(ownerNoGrant));
+    expect(notTheirs.status).toBe(404);
+    expect(JSON.stringify(notTheirs.body)).not.toContain(photo.toString('base64'));
   });
 
   it('POL-03.05 a closed exception takes no evidence', async () => {
@@ -464,6 +477,42 @@ describe('evidence that carries a restricted class (imports-and-opening-data 11;
     });
     expect(JSON.stringify(download.body)).not.toContain(photo.toString('base64'));
     expect(await accessRecords(plainReader.id)).toEqual([]);
+  });
+
+  it('PRD-ACS-008 RR-452 an owner admitted without a grant still needs the class the evidence carries', async () => {
+    const withClass = await raise(syntheticCostly, SITE_NO_GRANT);
+    const sheet = jpeg('owner cost sheet');
+    const added = await post(
+      evidencePath(withClass),
+      { evidence: [await store(ownerNoGrant, sheet, 'SYNTHETIC-owner-cost.jpg')] },
+      await cookieOf(ownerNoGrant),
+    );
+    expect(added.status, JSON.stringify(added.body)).toBe(200);
+    const theirs = (added.body as { attachmentIds: string[] }).attachmentIds[0] ?? '';
+    const cookie = await cookieOf(ownerNoGrant);
+    const download = await post(downloadPath(theirs), { totpCode: freshCode(ownerNoGrant) }, cookie);
+    expect(download.status, JSON.stringify(download.body)).toBe(200);
+    expect(attachedFileSchema.parse(download.body).contentHash).toBe(sha256(sheet));
+    expect(await accessRecords(ownerNoGrant.id)).toEqual([
+      { field_class: 'cost', exposure: 'exported', record_type: 'exceptions.exception' },
+    ]);
+
+    const without = await raise(syntheticCostly, SITE_NO_CLASS);
+    const noClassCookie = await cookieOf(ownerNoClass);
+    const addedWithout = await post(
+      evidencePath(without),
+      { evidence: [await store(ownerNoClass, sheet, 'SYNTHETIC-owner-cost.jpg')] },
+      noClassCookie,
+    );
+    expect(addedWithout.status, JSON.stringify(addedWithout.body)).toBe(200);
+    const unreadable = (addedWithout.body as { attachmentIds: string[] }).attachmentIds[0] ?? '';
+    const refused = await post(downloadPath(unreadable), { totpCode: freshCode(ownerNoClass) }, noClassCookie);
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: { code: 'access.not-authorised', missing: [{ kind: 'field-class', fieldClass: 'cost' }] },
+    });
+    expect(JSON.stringify(refused.body)).not.toContain(sheet.toString('base64'));
+    expect(await accessRecords(ownerNoClass.id)).toEqual([]);
   });
 
   it('PRD-SEC-007 a reader with the class downloads it with a fresh code, and an access record is written', async () => {

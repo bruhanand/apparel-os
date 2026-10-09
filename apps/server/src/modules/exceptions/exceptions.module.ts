@@ -5,10 +5,17 @@ import {
   LIVE_UPDATES,
   type FailedJobExceptions,
   type LiveUpdates,
+  type TransactionContext,
 } from '../../kernel/index.js';
 import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
-import { FILES_IMPORTS, FilesImportsModule, type FilesImportsInterface } from '../files-imports/index.js';
+import {
+  ATTACHED_RECORD_READERS,
+  FILES_IMPORTS,
+  FilesImportsModule,
+  type AttachedRecordReaders,
+  type FilesImportsInterface,
+} from '../files-imports/index.js';
 import { INBOX, InboxModule, type InboxInterface } from '../inbox/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ExceptionTypeRegistration } from './domain/types.js';
@@ -54,13 +61,20 @@ import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
 export class ExceptionsModule implements OnModuleInit {
   constructor(
     @Inject(ACCESS) private readonly access: AccessInterface,
+    @Inject(ATTACHED_RECORD_READERS) private readonly readers: AttachedRecordReaders,
     @Optional() @Inject(LIVE_UPDATES) private readonly live: LiveUpdates | null,
   ) {}
 
-  /** An exception's live updates go to whoever may view it, its owner included (12.4 "As built"; 12.12). */
+  /**
+   * An exception's live updates, and its evidence files, go to whoever may view it, its owner included (12.4 "As
+   * built"; 12.12; imports-and-opening-data 11; product owner, 9 Oct 2026, RR-452).
+   */
   onModuleInit(): void {
+    const mayView = (context: TransactionContext, actorId: string, exceptionId: string) =>
+      mayViewException(context, this.access, actorId, exceptionId);
     this.live?.registerAudience([EXCEPTION_RECORD_TYPE], (context, actorId, event) =>
-      mayViewException(context, this.access, actorId, event.subject.recordId),
+      mayView(context, actorId, event.subject.recordId),
     );
+    this.readers.register([EXCEPTION_RECORD_TYPE], { mayRead: mayView });
   }
 }

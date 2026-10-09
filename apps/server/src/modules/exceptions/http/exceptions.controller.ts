@@ -219,33 +219,18 @@ export class ExceptionsController {
   }
 
   /**
-   * Evidence (12.3; POL-03.05; S1-F08-T03): admitted as a comment is, and, since the file is attached under the
-   * exception's own type and served only through a grant on it (imports-and-opening-data 11), the person also needs
-   * view on `exceptions.exception` covering it, which an owner admitted as owner may lack. Checked in the command, so a
-   * refusal names it and the attachment's row-level security never refuses a write.
+   * Evidence (12.3; POL-03.05; S1-F08-T03): admitted as a comment is. Whoever may act on the exception may add it; its
+   * file is attached and served as `exceptions` answers who may read the exception, through the reader it registers
+   * with files-imports, so an owner needs no grant on `exceptions.exception` (imports-and-opening-data 11; product
+   * owner, 9 Oct 2026, RR-452).
    */
   @ApiRoute(routes.addExceptionEvidence)
   async addExceptionEvidence(
     @SignedIn() user: SignedInUser,
     @RouteInput() input: RouteInputOf<typeof routes.addExceptionEvidence>,
   ) {
-    return this.lifecycle(
-      routes.addExceptionEvidence,
-      'exceptions.add-evidence',
-      user,
-      input,
-      async (context, acting) => {
-        const record = await this.exceptions.readException(context, input.params.exceptionId);
-        if (record === undefined) return { kind: 'refused', refusal: notFound() };
-        const viewing = await this.access.authorise(context, {
-          actorId: user.userId,
-          action: 'view',
-          recordType: EXCEPTION_RECORD_TYPE,
-          facts: factsOfRecord(record),
-        });
-        if (viewing.kind === 'refused') return { kind: 'refused', refusal: viewing.refusal };
-        return this.exceptions.addEvidence(context, acting, input.params.exceptionId, input.body.evidence);
-      },
+    return this.lifecycle(routes.addExceptionEvidence, 'exceptions.add-evidence', user, input, (context, acting) =>
+      this.exceptions.addEvidence(context, acting, input.params.exceptionId, input.body.evidence),
     );
   }
 

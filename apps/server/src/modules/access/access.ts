@@ -63,6 +63,7 @@ import type { ScopeMembers } from './contracts/scope-members.js';
 import {
   authorise,
   authoriseEach,
+  authoriseFieldClasses,
   restrictFields,
   type Authorisation,
   type AuthoriseRequest,
@@ -101,6 +102,15 @@ export interface AccessInterface {
   ): Promise<AuthenticatedServiceIdentity | undefined>;
   /** Authorise: the one assignment that grants the action, or what is missing (7.1 step 3). */
   authorise(context: TransactionContext, request: AuthoriseRequest): Promise<Authorisation>;
+  /**
+   * Authorise the restricted field classes alone, for a reader the record's owning module admitted without a grant on
+   * its type (imports-and-opening-data 11; RR-452): the one assignment whose scope covers the facts and whose role
+   * grants every class, or the class missing.
+   */
+  authoriseFieldClasses(
+    context: TransactionContext,
+    request: Required<Pick<AuthoriseRequest, 'actorId' | 'recordType' | 'facts' | 'fieldClasses'>>,
+  ): Promise<Authorisation>;
   /**
    * Authorise each of several records of one type for one action, as a list does for each row (7.1 step 3; RR-296):
    * each record's answer, or one refusal when no assignment grants the action on the type at all.
@@ -400,6 +410,13 @@ export class Access implements AccessInterface {
 
   authorise(context: TransactionContext, request: AuthoriseRequest) {
     return authorise(context, this.registry, request);
+  }
+
+  authoriseFieldClasses(
+    context: TransactionContext,
+    request: Required<Pick<AuthoriseRequest, 'actorId' | 'recordType' | 'facts' | 'fieldClasses'>>,
+  ) {
+    return authoriseFieldClasses(context, this.registry, request);
   }
 
   authoriseEach(

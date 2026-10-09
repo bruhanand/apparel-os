@@ -2,6 +2,7 @@ import type { TransactionContext } from '../../kernel/index.js';
 import type { DecisionEvidence } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import { attach, type Attached, type AttachRequest } from './commands/attach.js';
+import type { AttachedRecordReaders } from './contracts/record-readers.js';
 
 /**
  * The files-imports module's interface to other modules (module-map 4.7; imports-and-opening-data 13.1). Only Attach
@@ -26,9 +27,12 @@ export function decisionEvidence(audit: AuditInterface): DecisionEvidence {
 }
 
 export class FilesImports implements FilesImportsInterface {
-  constructor(private readonly audit: AuditInterface) {}
+  constructor(
+    private readonly audit: AuditInterface,
+    private readonly readers?: AttachedRecordReaders,
+  ) {}
 
   attach(context: TransactionContext, request: AttachRequest): Promise<Attached> {
-    return attach(context, this.audit, request);
+    return attach(context, this.audit, request, this.readers);
   }
 }

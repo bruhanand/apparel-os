@@ -160,6 +160,48 @@ function authoriseFacts(
   return notAuthorised([nearest ?? { kind: 'permission', recordType: request.recordType, action: request.action }]);
 }
 
+/**
+ * Authorise the restricted field classes alone, for a reader the record's owning module admitted without any grant on
+ * its type, such as an exception's owner (imports-and-opening-data 11 "As built"; product owner, 9 Oct 2026, RR-452):
+ * one assignment in force today whose scope covers the record's facts and whose role grants every class used (5.3,
+ * 6). Each assignment on its own, as Authorise checks them (PRD-ACS-004). A refusal names the class missing.
+ */
+export async function authoriseFieldClasses(
+  context: TransactionContext,
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  request: {
+    readonly actorId: string;
+    readonly recordType: string;
+    readonly facts: RecordFacts;
+    readonly fieldClasses: readonly FieldClassUse[];
+  },
+): Promise<Authorisation> {
+  const today = await context.businessDate();
+  if (today.kind === 'not-set') {
+    return {
+      kind: 'refused',
+      refusal: {
+        kind: 'unavailable',
+        code: 'access.business-date-not-set',
+        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+      },
+    };
+  }
+  const declaration = registry.get(request.recordType);
+  const first = request.fieldClasses[0];
+  const classMissing: MissingItem[] =
+    first === undefined ? [] : [{ kind: 'field-class', fieldClass: first.fieldClass, use: first.use }];
+  if (declaration === undefined) return notAuthorised(classMissing);
+  const assignments = await assignmentsInForce(context, today.date, request.actorId);
+  if (assignments.length === 0) return notAuthorised(classMissing);
+  return authoriseFacts(
+    { kind: 'granting', declaration, assignments },
+    { actorId: request.actorId, action: 'view', recordType: request.recordType, fieldClasses: request.fieldClasses },
+    request.facts,
+    undefined,
+  );
+}
+
 function notAuthorised(missing: MissingItem[]): Refused {
   return { kind: 'refused', refusal: { kind: 'not-authorised', code: 'access.not-authorised', missing } };
 }

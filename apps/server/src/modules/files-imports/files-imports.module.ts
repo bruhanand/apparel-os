@@ -18,6 +18,7 @@ import {
   type OrganisationKeys,
 } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
 import { FilesImports } from './files-imports.js';
 import { FILE_STORE, FILE_STORE_ENVIRONMENT, type FileStoreHandle } from './file-store/file-store.js';
 import { fileStoreFromEnvironment, S3FileStore } from './file-store/s3-file-store.js';
@@ -42,10 +43,12 @@ export const FILES_IMPORTS = 'files-imports.FilesImports';
       useFactory: (env: Readonly<Record<string, string | undefined>>): FileStoreHandle => fileStoreFromEnvironment(env),
       inject: [FILE_STORE_ENVIRONMENT],
     },
+    // The owning modules' readers of their records, which they register with at start (RR-452).
+    { provide: ATTACHED_RECORD_READERS, useFactory: () => new AttachedRecordReaders() },
     {
       provide: FILES_IMPORTS,
-      useFactory: (audit: AuditInterface) => new FilesImports(audit),
-      inject: [AUDIT],
+      useFactory: (audit: AuditInterface, readers: AttachedRecordReaders) => new FilesImports(audit, readers),
+      inject: [AUDIT, ATTACHED_RECORD_READERS],
     },
     {
       provide: STORE_FILE_DEPENDENCIES,
@@ -69,11 +72,21 @@ export const FILES_IMPORTS = 'files-imports.FilesImports';
         keys: OrganisationKeys,
         fileStore: FileStoreHandle,
         logger: StructuredLogger,
-      ) => ({ runner, helper, access, audit, keys, fileStore, logger }),
-      inject: [COMMAND_RUNNER, IDEMPOTENCY_HELPER, ACCESS, AUDIT, ORGANISATION_KEYS, FILE_STORE, LOGGER],
+        readers: AttachedRecordReaders,
+      ) => ({ runner, helper, access, audit, keys, fileStore, logger, readers }),
+      inject: [
+        COMMAND_RUNNER,
+        IDEMPOTENCY_HELPER,
+        ACCESS,
+        AUDIT,
+        ORGANISATION_KEYS,
+        FILE_STORE,
+        LOGGER,
+        ATTACHED_RECORD_READERS,
+      ],
     },
   ],
-  exports: [FILES_IMPORTS],
+  exports: [FILES_IMPORTS, ATTACHED_RECORD_READERS],
 })
 export class FilesImportsModule implements OnApplicationShutdown {
   constructor(@Inject(FILE_STORE) private readonly fileStore: FileStoreHandle) {}
