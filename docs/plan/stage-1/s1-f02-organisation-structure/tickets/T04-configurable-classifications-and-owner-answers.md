@@ -1,6 +1,6 @@
 # S1-F02-T04 — Configurable classifications and grouping kinds, with the 9 Oct answers
 
-Status: ready-for-agent
+Status: done
 Blocked by: S1-F02-T03 (done)
 Feature: [S1-F02 Organisation structure and verified mappings](../../spec.md)
 
@@ -36,3 +36,5 @@ Migration and `tables.json` entries; schemas and routes; screens; tests; design 
 - Beyond the ticket: the `further` parameter of `access`'s `holdAuthority` (a small change, needed because step 0 is one lock call); the table-register test now sorts both sides alike, since the new table names exposed a collation difference; the `approvedGroupingKind` test helper.
 - Review fixes (9 Oct 2026, branch `s1/f02-t04-review-fixes`; product owner's answers of 9 Oct 2026): a Site or Store version holds at most one value of each classification kind, held by migration `0044` (one row per version and kind, the value's foreign key with its kind) and refused in prepare as `organisation.classification-kind-twice`, naming the kind; the editors offer one list per kind (this replaces the earlier "several values of one kind"); what a kind classifies, fixed at creation, and no evidence on a credential reset are recorded as the product owner's; a grouping kind with no version is listed "No version yet" and given its first version through flow A, after which its grouping awaiting approval is approved (tested); the unit command itself refuses a unit version writing a mapping without edit on the mapping held (`Preparer.alsoHeld`), and the mapping version route is tested to refuse naming it; RR-440 keeps the Organisation row open; one helper each for writing and reading a version's classifications.
 - Left open: RR-454, the screen's download of a restricted evidence file, is now due (the first class is declared here); the KDPS starting list (KDPS Owner 63) and the Admin's confirmation of the identity-document class stay with KDPS.
+- Closed 9 Oct 2026: commits `0e3f613` and `3d9f575` (review fixes), reviewed with `/code-review`, no blocking finding left. The product owner's answers of 9 Oct 2026 are built: a classification kind is for Sites or for Stores, fixed at creation; at most one value of each kind per Site or Store version; credential resets carry no evidence.
+- Beyond the ticket (logged at the product owner's request): the optional `further` parameter on `access`'s `holdAuthority`; `Preparer.alsoHeld` and the `unheld` helper; the table-register sort fix; test helpers `approvedGroupingKind` and a web render test; the RR-454 note in open-items.
