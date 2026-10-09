@@ -1268,3 +1268,12 @@
 - **Why.** The URL is shared with nobody, the data is synthetic, and re-entering a password and code for each test is slow. `POL-02.17` already allows "Any easier test path" that is "development-only and cannot weaken production authentication", and `PRD-ACS-017` keeps development test access apart from production authentication; the switch lives only in development environments' settings, so production authentication is unchanged.
 - **Changed.** No PRD or policy text changes. deployment.md section 3 and D-6 (the design's "no easier path" on development is replaced); access-and-approvals 3.4 (new); numbering-and-audit 5.2 (the new access-record kind); code-house-rules 12.14; `AGENTS.md`; ticket `S1-F01-T28`.
 
+## DEC-122 — The worker's internal service identities in an existing Organisation
+
+- **Date:** 9 Oct 2026 · **Decided by:** product owner · **Report item:** RR-457, left by RR-331 (`add-service-identities`); 9 Oct 2026
+- **Question.** `PRD-ACS-023` says that after the setup step every change to roles, permissions, role assignments and approval rules needs approval by a different authorised person. The operator command that gives an existing Organisation the worker's new internal service identities writes their roles and assignments with no second person, as the setup step does. Allow it, or make it a prepared and approved change?
+- **Options.** Allow it as an exception logged here; or rebuild it as a prepared change a second person approves before the identity takes effect.
+- **Choice.** Allow it. The worker's internal service identities, whose grants come from the deployed build's registry, which grant no person anything and which no user can view, are written by the setup step or by the operator command `add-service-identities`, with audit records, and need no second person's approval. Every other change to roles, permissions, role assignments and approval rules still does.
+- **Why.** These identities are part of the deployed software, not of anyone's access: their grants are fixed by the reviewed code, a person cannot hold them, and requiring an approver for each deploy that adds a job would stop the worker without adding control.
+- **Changed.** `PRD-ACS-023` (one sentence added). access-and-approvals 9.11a; `plan/open-items.md` RR-457.
+
