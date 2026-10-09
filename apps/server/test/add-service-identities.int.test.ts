@@ -11,18 +11,19 @@ import {
   restrictedValueCipherNotConfigured,
   secretCheckNotImplemented,
   Worker,
+  type Clock,
   type JobKindDefinition,
   type JobRegistry,
 } from '../src/kernel/index.js';
 import { runAddServiceIdentities, runSetupStep, type ServiceIdentityGrant } from '../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
+import { configurationTimezoneSource } from '../src/modules/configuration/index.js';
 import { exceptionsConsumers, exceptionsJobKinds } from '../src/modules/exceptions/index.js';
 import { serviceIdentitiesOf } from '../src/setup-organisation.js';
 import { jobRegistry } from '../src/worker.module.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
-import { syntheticTimezone } from './support/access.js';
 import { capturingLogger } from './support/jobs.js';
 import { connect, createTestDatabase, databaseUrl, dropDatabase } from './support/postgres.js';
 
@@ -58,7 +59,10 @@ const escalateOverdue: JobKindDefinition = (() => {
 })();
 
 /** Sets up a fresh SYNTHETIC Organisation with the service identities given, as the setup step writes them. */
-async function setUp(serviceIdentities: readonly ServiceIdentityGrant[]): Promise<{ code: string; database: string }> {
+async function setUp(
+  serviceIdentities: readonly ServiceIdentityGrant[],
+  clock?: Clock,
+): Promise<{ code: string; database: string }> {
   const suffix = randomBytes(3).toString('hex').toUpperCase();
   const database = `syn_addsi_${suffix.toLowerCase()}`;
   created.push(database);
@@ -91,17 +95,19 @@ async function setUp(serviceIdentities: readonly ServiceIdentityGrant[]): Promis
     }),
     serviceIdentities,
     logger: log.logger,
+    ...(clock === undefined ? {} : { clock }),
   });
   expect(outcome.outcome).toBe('created');
   return { code, database };
 }
 
-function add(organisationCode: string, serviceIdentities = serviceIdentitiesOf(jobRegistry)) {
+function add(organisationCode: string, serviceIdentities = serviceIdentitiesOf(jobRegistry), clock?: Clock) {
   return runAddServiceIdentities({
     runtimeConnectionString: databaseUrl(directory, 'runtime'),
     organisationCode,
     serviceIdentities,
     logger: log.logger,
+    ...(clock === undefined ? {} : { clock }),
   });
 }
 
@@ -144,15 +150,17 @@ async function footprint(database: string): Promise<Record<string, number>> {
   return counts;
 }
 
-/** A worker over the test directory that runs the escalation of overdue exceptions, as `dev`'s does. */
-async function runEscalation(organisationCode: string) {
+/** A worker over the test directory that runs the escalation of overdue exceptions, as `dev`'s does, at the clock given. */
+async function runEscalation(organisationCode: string, clock: Clock = { now: () => new Date() }) {
   const router = new OrganisationRouter(
     { directoryConnectionString: databaseUrl(directory, 'runtime'), poolMax: 4 },
     log.logger,
   );
   const runner = new CommandRunner({
-    clock: { now: () => new Date() },
-    timezones: syntheticTimezone,
+    clock,
+    // The worker reads the Organisation's timezone from configuration, as WorkerModule composes it (code-house-rules
+    // 9): the setup step wrote it, and a stand-in timezone would date the step on another day than the identity.
+    timezones: configurationTimezoneSource,
     logger: log.logger,
   });
   const registry: JobRegistry = { events: jobRegistry.events, consumers: [], jobKinds: [escalateOverdue] };
@@ -251,6 +259,24 @@ describe('an Organisation set up with an older registry (RR-331; access-and-appr
     expect(outcomes.map((each) => each.outcome).sort()).toEqual(['added', 'unchanged']);
     const exceptions = (await identities(other.database)).filter((each) => each.code === 'exceptions');
     expect(exceptions).toHaveLength(1);
+  });
+});
+
+describe('at 00:30 under the Organisation timezone, before midnight UTC (code-house-rules 9; PRD-MOD-009)', () => {
+  // SYNTHETIC instant: 00:30 on 10 Oct 2026 in Asia/Kolkata, the fixtures' timezone, is 19:00 on 9 Oct in UTC.
+  const halfPastMidnight: Clock = { now: () => new Date('2026-10-09T19:00:00.000Z') };
+
+  it('PRD-MOD-009 access-and-approvals 7.1: the worker runs a step whose identity was added that business day', async () => {
+    const organisation = await setUp(serviceIdentitiesOf(olderRegistry), halfPastMidnight);
+    expect(await add(organisation.code, serviceIdentitiesOf(jobRegistry), halfPastMidnight)).toEqual({
+      outcome: 'added',
+      organisationCode: organisation.code,
+      added: ['exceptions'],
+    });
+    expect(await runEscalation(organisation.code, halfPastMidnight)).toEqual({
+      status: 'completed',
+      output: { outcome: 'done', replayed: false },
+    });
   });
 });
 
