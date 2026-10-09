@@ -504,6 +504,27 @@ describe('formats (numbering-and-audit 3.5, 7 test 5)', () => {
     expect(first.seriesId).not.toBe(second.seriesId);
   });
 
+  it('PRD-MOD-004 the database lets a series step its next number on only by one, never jump or go back', async () => {
+    const definition = billSeries();
+    const { seriesId } = done(await define(definition));
+    const client = await connect(world.organisations[0].database, 'runtime');
+    const step = (by: number) =>
+      client.query('update numbering.series set next_sequence = next_sequence + $2 where id = $1', [seriesId, by]);
+    try {
+      expect(await sqlState(step(2))).toBe('AO003');
+      expect(await sqlState(step(-1))).toBe('AO003');
+      await step(0);
+      await step(1);
+      const after = await client.query<{ next: string }>(
+        'select next_sequence as next from numbering.series where id = $1',
+        [seriesId],
+      );
+      expect(Number(after.rows[0]?.next)).toBe(2);
+    } finally {
+      await client.end();
+    }
+  });
+
   it('a series keeps its format for life; a new format version applies only to series defined after it', async () => {
     const code = syntheticCode(next('FMT'));
     done(await run((c) => numbering.defineFormatVersion(c, code, BATCH_FORMAT)));

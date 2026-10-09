@@ -85,6 +85,8 @@ create unique index series_live on numbering.series (kind, scope_key, financial_
 create index series_display_scope on numbering.series (kind, display_scope_key, display_year);
 create index series_format_version on numbering.series (number_format_version_id);
 
+-- A series changes only in its state and by moving its next number on by one, never jumping, so no number is skipped
+-- (3.2; PRD-MOD-004).
 create function numbering.guard_series_change() returns trigger
   language plpgsql
   set search_path = pg_catalog
@@ -94,8 +96,8 @@ begin
     raise exception 'a closed series is final' using errcode = 'AO003';
   end if;
   if (pg_catalog.to_jsonb(new) - 'state' - 'next_sequence') <> (pg_catalog.to_jsonb(old) - 'state' - 'next_sequence')
-     or new.next_sequence < old.next_sequence then
-    raise exception 'a series changes only in its state and by moving its next number on' using errcode = 'AO003';
+     or new.next_sequence not in (old.next_sequence, old.next_sequence + 1) then
+    raise exception 'a series changes only in its state and by moving its next number on by one' using errcode = 'AO003';
   end if;
   return new;
 end;
