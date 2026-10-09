@@ -1,4 +1,4 @@
-import type { ExceptionView } from '@apparel-os/schemas';
+import { paiseSchema, type ExceptionView } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
@@ -10,17 +10,20 @@ import { StatusBadge } from '../components/StatusBadge';
 import { describedBy, FormField } from '../forms/FormField';
 import { formatDateTime } from '../history/format';
 import { t, type MessageId } from '../messages/catalogue';
-import { formatPaise } from '../setup/format';
-import { Card, inputClass, ListRead } from '../setup/parts';
+import { formatPaise, paiseOfRupees } from '../setup/format';
+import { Card, GrantedButton, inputClass, ListRead } from '../setup/parts';
 import { RecordDrawer } from '../setup/RecordDrawer';
 import { useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { EvidenceList, EvidencePicker, useChosenFile, useStoreEvidence } from '../files/Evidence';
+import { PartyField, partyOf } from './ExceptionRulesScreen';
 
 // The exception record (access-and-approvals 12, 14; ui-blueprint Home › Exception: Details · History; design-language
 // 10.15; S1-F08-T02): its code, type, state, owner, due time, exposure, Site and the records it is about, what
-// happened to it, and the actions its reader may take: comment, take it for a role's holder, close and reopen. Closing
-// runs the owning module's resolution check on the server; a refusal names what is still missing (PRD-UXP-003). Its
+// happened to it, and the actions its reader may take: comment, reassign, take it for a role's holder, raise it again
+// on the same records, close and reopen. Resolve is shown unavailable, naming the owning module that records the
+// correction (12.3). Closing runs the owning module's resolution check on the server; a refusal, and an action the
+// reader's permissions do not reach, names what is still missing (PRD-UXP-003; S1-F08 review). Its
 // evidence files are in the tab Evidence n: each opens through the app, and while it is open its reader who may act on
 // it adds one, stored first and then linked (access-and-approvals 12.3; design-language 10.15; S1-F08-T03).
 
@@ -196,6 +199,19 @@ function Actions({ view }: { view: ExceptionView }) {
               onSubmit={(text) => comment.submit({ params, body: { comment: text } })}
             />
           </Card>
+          <Reassign view={view} />
+          <Card title="exception.resolve">
+            <p className="m-0 text-body-sm text-text-2">{t('exception.resolve-help', { module: view.type.module })}</p>
+            <div>
+              <Button
+                label="exception.resolve"
+                disabled
+                reason="exception.resolve-by-module"
+                onClick={() => undefined}
+              />
+            </div>
+          </Card>
+          <RaiseAgain view={view} />
           <Card title="exception.close">
             <p className="m-0 text-body-sm text-text-2">{t('exception.close-help')}</p>
             <Outcome state={close.state} done="exception.closed" />
@@ -213,6 +229,145 @@ function Actions({ view }: { view: ExceptionView }) {
         </>
       )}
     </>
+  );
+}
+
+/** Reassign an open exception to a person or a role (12.3), chosen from the lists the reader may view. */
+function Reassign({ view }: { view: ExceptionView }) {
+  const reassign = useSubmission('reassignException', READS);
+  const [to, setTo] = useState<{ kind: '' | 'user' | 'role'; id: string }>({ kind: '', id: '' });
+  const party = partyOf(to);
+  return (
+    <Card title="exception.reassign">
+      <Outcome state={reassign.state} done="exception.reassigned" />
+      <PartyField
+        id="exception-reassign"
+        kindLabel="exception.reassign-kind"
+        whoLabel="exception.reassign-who"
+        value={to}
+        onChange={setTo}
+      />
+      <div>
+        <Button
+          label="exception.reassign"
+          disabled={party === undefined || reassign.state.kind === 'pending'}
+          onClick={() => {
+            if (party === undefined) return;
+            void reassign.submit({ params: { exceptionId: view.id }, body: { to: party } }).then((answer) => {
+              if (answer !== undefined) setTo({ kind: '', id: '' });
+            });
+          }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Raise a new exception of this type on the same records and at the same place, as when the problem happens again
+ * (12.1; PRD-EXC-004: it links to this one). For whoever may create exceptions; the exposure is a known amount or
+ * Unknown, never a default (PRD-MOD-015).
+ */
+function RaiseAgain({ view }: { view: ExceptionView }) {
+  const raise = useSubmission('raiseException', ['listMyWork', 'listOpenExceptions']);
+  const [open, setOpen] = useState(false);
+  const [exposure, setExposure] = useState<'' | 'known' | 'unknown'>('');
+  const [amount, setAmount] = useState('');
+  const [comment, setComment] = useState('');
+  const paise = exposure === 'known' ? paiseOfRupees(amount) : undefined;
+  const ready = exposure === 'unknown' || paise !== undefined;
+  return (
+    <Card title="exception.raise">
+      <p className="m-0 text-body-sm text-text-2">{t('exception.raise-help')}</p>
+      <Outcome state={raise.state} done="exception.raised-again" />
+      {!open ? (
+        <div>
+          <GrantedButton
+            label="exception.raise"
+            recordType="exceptions.exception"
+            action="create"
+            onClick={() => {
+              setOpen(true);
+            }}
+          />
+        </div>
+      ) : (
+        <form
+          noValidate
+          className="flex flex-col gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!ready) return;
+            void raise
+              .submit({
+                body: {
+                  typeCode: view.type.code,
+                  siteId: view.siteId,
+                  storeId: view.storeId,
+                  businessUnitId: view.businessUnitId,
+                  brandId: view.brandId,
+                  links: view.links,
+                  exposure:
+                    paise === undefined ? { kind: 'unknown' } : { kind: 'known', amount: paiseSchema.decode(paise) },
+                  comment: comment.trim() === '' ? null : comment.trim(),
+                },
+              })
+              .then((answer) => {
+                if (answer === undefined) return;
+                setOpen(false);
+                setExposure('');
+                setAmount('');
+                setComment('');
+              });
+          }}
+        >
+          <FormField id="exception-raise-exposure" label="exception.raise-exposure" required>
+            <select
+              id="exception-raise-exposure"
+              className={inputClass}
+              value={exposure}
+              {...describedBy('exception-raise-exposure', { invalid: false, help: false })}
+              onChange={(event) => {
+                setExposure(event.target.value as '' | 'known' | 'unknown');
+              }}
+            >
+              <option value="">{t('rules.choose')}</option>
+              <option value="known">{t('exception.raise-exposure.known')}</option>
+              <option value="unknown">{t('exception.exposure.unknown')}</option>
+            </select>
+          </FormField>
+          {exposure === 'known' && (
+            <FormField id="exception-raise-amount" label="exception.raise-amount" required>
+              <input
+                id="exception-raise-amount"
+                inputMode="decimal"
+                className={inputClass}
+                value={amount}
+                {...describedBy('exception-raise-amount', { invalid: false, help: false })}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                }}
+              />
+            </FormField>
+          )}
+          <FormField id="exception-raise-comment" label="exception.raise-comment">
+            <textarea
+              id="exception-raise-comment"
+              rows={2}
+              className={`${inputClass} h-auto py-2`}
+              value={comment}
+              {...describedBy('exception-raise-comment', { invalid: false, help: false })}
+              onChange={(event) => {
+                setComment(event.target.value);
+              }}
+            />
+          </FormField>
+          <div>
+            <Button type="submit" label="exception.raise" disabled={!ready || raise.state.kind === 'pending'} />
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }
 

@@ -1749,6 +1749,7 @@ export const routes = {
       'exceptions.starts-in-past',
       'exceptions.version-overlaps',
       'exceptions.party-not-found',
+      'exceptions.site-not-found',
     ],
   }),
   raiseException: defineRoute({

@@ -44,6 +44,7 @@ import {
   TEST_EXCEPTIONS_MODULE,
   writeTestDocument,
 } from './support/exceptions.js';
+import { writeSyntheticSites } from './support/organisation.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { capturingLogger } from './support/jobs.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
@@ -172,6 +173,8 @@ beforeAll(async () => {
       fieldClasses: ['cost'],
     },
   );
+  // The Sites routed to exist in `organisation` (access-and-approvals 12.2; RR-451).
+  await writeSyntheticSites(databaseA, [SITE, SITE_NO_GRANT, SITE_NO_CLASS]);
   minio = await startTestFileStore();
   clock = new SyntheticClock();
   api = await startAccessApp(world, keys, {
@@ -357,6 +360,13 @@ async function raise(type: ExceptionTypeRegistration, siteId = SITE): Promise<st
   return raised.value.exceptionId;
 }
 
+/** A SYNTHETIC Site of its own, so a routing for it is new (RR-451: a routed Site exists). */
+async function freshSite(): Promise<string> {
+  const siteId = uuidv7();
+  await writeSyntheticSites(databaseA, [siteId]);
+  return siteId;
+}
+
 const evidencePath = (exceptionId: string) => `/api/exceptions/exceptions/${exceptionId}/evidence`;
 
 describe('evidence on an exception (access-and-approvals 12.1, 12.3; POL-03.05)', () => {
@@ -536,7 +546,7 @@ describe('evidence on an approval decision (access-and-approvals 9.5; PRD-ACS-01
   it('PRD-ACS-010 the approver attaches a PDF with the decision; it opens from the decision for an authorised reader', async () => {
     const prepared = await prepareRouting({
       typeCode: syntheticMismatch.code,
-      siteId: uuidv7(),
+      siteId: await freshSite(),
       owner: { kind: 'user', userId: owner.id },
     });
     requestId = prepared.requestId;
@@ -592,7 +602,7 @@ describe('evidence on an approval decision (access-and-approvals 9.5; PRD-ACS-01
     try {
       const prepared = await prepareRouting({
         typeCode: syntheticMismatch.code,
-        siteId: uuidv7(),
+        siteId: await freshSite(),
         owner: { kind: 'user', userId: owner.id },
       });
       const file = await store(approver, pdf('never linked'), 'SYNTHETIC-never-linked.pdf');

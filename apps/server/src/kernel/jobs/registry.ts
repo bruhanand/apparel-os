@@ -45,10 +45,15 @@ export interface ConsumerDefinition<Payload extends Record<string, unknown> = Re
   readonly serviceIdentity: string;
   /** The action its steps need, authorised in each step and again before a redelivery is answered (RR-273; CH-14). */
   readonly authorises: JobAuthority;
-  readonly handle: (context: TransactionContext, event: DeliveredEvent<Payload>) => Promise<ConsumerOutcome>;
+  /** Handles one delivery in its step's transaction; the tools are the worker's, as a job kind's are. */
+  readonly handle: (
+    context: TransactionContext,
+    event: DeliveredEvent<Payload>,
+    tools: JobStepTools,
+  ) => Promise<ConsumerOutcome>;
 }
 
-/** What a job kind's step has to hand besides its transaction. */
+/** What a job kind's or a consumer's step has to hand besides its transaction. */
 export interface JobStepTools {
   /** The worker's logger, for an alert such as `audit-partitions-short`. Identifiers and codes only. */
   readonly logger: StructuredLogger;

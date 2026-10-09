@@ -61,6 +61,7 @@ import {
   writeTestDocument,
 } from './support/exceptions.js';
 import { grantSynthetic } from './support/grants.js';
+import { writeSyntheticSites } from './support/organisation.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
@@ -165,6 +166,8 @@ beforeAll(async () => {
       },
     )
   ).roleId;
+  // The Sites routed to exist in `organisation` (access-and-approvals 12.2; RR-451).
+  await writeSyntheticSites(databaseA, [SITE, ROLE_SITE, JOB_SITE]);
   clock = new SyntheticClock();
   api = await startAccessApp(world, keys, { clock, exceptionTypes: [syntheticMismatch] });
   router = new OrganisationRouter(
@@ -353,6 +356,20 @@ describe('an exception needs its series and its routing (access-and-approvals 12
       escalation: { kind: 'user', userId: escalation.id },
     });
     expect((unknownParty.body as { error: { code: string } }).error.code).toBe('exceptions.party-not-found');
+    // RR-451: a Site that does not exist in organisation is named, and nothing is prepared.
+    const nowhere = uuidv7();
+    const unknownSite = await routeTo({
+      siteId: nowhere,
+      owner: { kind: 'user', userId: owner.id },
+      escalation: { kind: 'user', userId: escalation.id },
+    });
+    expect(unknownSite.status).toBe(422);
+    expect(unknownSite.body).toMatchObject({
+      error: {
+        code: 'exceptions.site-not-found',
+        missing: [{ kind: 'scope-member', dimension: 'place', memberType: 'site', memberId: nowhere }],
+      },
+    });
     const set = await routeTo({
       siteId: SITE,
       owner: { kind: 'user', userId: owner.id },

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Grant } from '../shell/screens';
 import { SessionContext, type ShellSession } from '../shell/session';
 import { AssignmentScopeFields, AssignmentsScreen, scopeOfChoices, type ScopeStructure } from './AssignmentsScreen';
-import { formatDate, formatPaise } from './format';
+import { formatDate, formatPaise, paiseOfRupees } from './format';
 import { permissionGrid, permissionsOfGrid, withAllActions } from './permission-grid';
 import { FormActions, RecordDrawer } from './RecordDrawer';
 import { ReasonsScreen } from './ReasonsScreen';
@@ -95,6 +95,16 @@ describe('India formatting (design-language 8)', () => {
     expect(formatPaise(12_345_678)).toBe('₹1,23,456.78');
     expect(formatPaise(5)).toBe('₹0.05');
     expect(formatDate('2026-10-07')).toBe('07 Oct 2026');
+  });
+
+  it('PRD-MOD-014 reads rupees typed with up to two decimals as whole paise, and nothing else', () => {
+    expect(paiseOfRupees('1250')).toBe(125_000);
+    expect(paiseOfRupees('0.05')).toBe(5);
+    expect(paiseOfRupees('12.5')).toBe(1250);
+    expect(paiseOfRupees(' 1,23,456.78 ')).toBe(12_345_678);
+    for (const refused of ['', '1.234', '-5', 'abc', '1e3', '.5', '99999999999999999']) {
+      expect(paiseOfRupees(refused)).toBeUndefined();
+    }
   });
 });
 

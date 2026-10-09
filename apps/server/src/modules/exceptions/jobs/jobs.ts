@@ -3,7 +3,6 @@ import {
   defineJobKind,
   JOB_RECORD_TYPE,
   jobFailed,
-  PinoLoggerService,
   type ConsumerDefinition,
   type JobKindDefinition,
   type StructuredLogger,
@@ -65,9 +64,9 @@ export const exceptionsConsumers: readonly ConsumerDefinition[] = [
     event: jobFailed,
     serviceIdentity: EXCEPTIONS_IDENTITY,
     authorises: { action: 'create', recordType: 'exceptions.exception' },
-    handle: async (context, event) => {
+    handle: async (context, event, { logger }) => {
       const actorId = context.actor.kind === 'actor' ? context.actor.actorId : '';
-      const raised = await exceptions(new PinoLoggerService()).raiseInOwnCommand(context, {
+      const raised = await exceptions(logger).raiseInOwnCommand(context, {
         raisingEvent: `kernel.job-failed:${event.id}`,
         typeCode: unfinishedOperation.code,
         facts: {

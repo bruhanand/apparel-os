@@ -5456,6 +5456,7 @@
             },
             "x-error-codes": [
               "exceptions.party-not-found",
+              "exceptions.site-not-found",
               "exceptions.starts-in-past",
               "exceptions.type-not-registered",
               "exceptions.version-overlaps"

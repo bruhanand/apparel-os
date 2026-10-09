@@ -6,7 +6,8 @@ import { readWorld } from './support/world';
 // S1-F08-T02: an exception in My work (access-and-approvals 12, 14, 15 test 21; PRD-EXC-001, PRD-EXC-002,
 // PRD-UXP-003, POL-03.05). An Operations user who owns a SYNTHETIC exception opens it from My work, comments on it, and
 // is refused closing it, with the reason on screen, because the test-only module's resolution check does not yet
-// verify the outcome. Its arrival without reloading is S1-F08-T04's journey. Every value is SYNTHETIC.
+// verify the outcome. The record also offers resolve, reassign and raise, each naming what it still needs (S1-F08
+// review). Its arrival without reloading is S1-F08-T04's journey. Every value is SYNTHETIC.
 
 test('PRD-EXC-002 POL-03.05 the owner opens an exception from My work, comments, and is refused closing it', async ({
   page,
@@ -54,5 +55,19 @@ test('PRD-EXC-002 POL-03.05 the owner opens an exception from My work, comments,
     ).toBeVisible();
     await expect(refusal.getByText('The SYNTHETIC test document is not marked resolved yet.')).toBeVisible();
     await expect(drawer.getByText('Unresolved').first()).toBeVisible();
+  });
+
+  await test.step('the record offers resolve, reassign and raise, each naming what it still needs', async () => {
+    const drawer = page.getByRole('dialog');
+    // Resolved is recorded by the module that owns the problem, never on this record (access-and-approvals 12.3).
+    await expect(drawer.getByRole('button', { name: 'Resolve' })).toBeDisabled();
+    await expect(drawer.getByText(/^It is resolved when .+ records the correction/)).toBeVisible();
+    // The Operations user may not list people, so reassigning to a person names that permission (PRD-UXP-003).
+    await drawer.getByLabel('Assign to').selectOption({ label: 'A person' });
+    await expect(drawer.getByText('Needs View on User')).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Reassign' })).toBeDisabled();
+    // Raising needs create on exceptions, which this user does not hold.
+    await expect(drawer.getByRole('button', { name: 'Raise it again' })).toBeDisabled();
+    await expect(drawer.getByText('Needs Create on Exception')).toBeVisible();
   });
 });

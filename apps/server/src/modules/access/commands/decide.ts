@@ -5,6 +5,7 @@ import {
   CommandDefect,
   LOCK_STEP,
   lockTable,
+  scopeFactsOf,
   type CommandRefusal,
   type LockTarget,
   type TransactionContext,
@@ -101,13 +102,8 @@ const HELD = { locksHeld: true } as const;
 
 /** The document's scope facts the request froze (9.1), as an attachment keeps them; a null fact is Unknown. */
 function scopeOf(request: RequestRow): AuditScope {
-  return {
-    ...(request.legalEntityId === null ? {} : { legalEntityId: request.legalEntityId }),
-    ...(request.siteId === null ? {} : { siteId: request.siteId }),
-    ...(request.storeId === null ? {} : { storeId: request.storeId }),
-    ...(request.businessUnitId === null ? {} : { businessUnitId: request.businessUnitId }),
-    ...(request.brandId === null ? {} : { brandId: request.brandId }),
-  };
+  const { legalEntityId, siteId, storeId, businessUnitId, brandId } = request;
+  return scopeFactsOf({ legalEntityId, siteId, storeId, businessUnitId, brandId });
 }
 
 /** Another module's document: Decide changes nothing of it (module-map 6.2; access-and-approvals 9.5, 9.8). */

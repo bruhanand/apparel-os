@@ -273,7 +273,16 @@ export async function escalateOverdue(
   const due = await context.tx
     .select({ id: exception.id })
     .from(exception)
-    .where(and(ne(exception.state, 'Closed'), lt(exception.dueAt, context.startedAt)))
+    .where(
+      and(
+        ne(exception.state, 'Closed'),
+        lt(exception.dueAt, context.startedAt),
+        // Only those not escalated since they were raised or last reopened, so a run locks no more than it escalates.
+        sql`(select e.kind from exceptions.exception_event e
+              where e.exception_id = ${exception.id} and e.kind in ('escalated', 'raised', 'reopened')
+              order by e.id desc limit 1) is distinct from 'escalated'`,
+      ),
+    )
     .orderBy(asc(exception.id));
   if (due.length === 0) return 0;
   await context.lock(

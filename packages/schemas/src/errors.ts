@@ -430,6 +430,8 @@ export const numberingCodes = declareCodes({
  * - `exceptions.starts-in-past`: a routing version never starts on a past date (GC2-7, DEC-105).
  * - `exceptions.version-overlaps`: a version of the routing starts on or after this one's start (code-house-rules 7.3).
  * - `exceptions.party-not-found`: the owner or the escalation names a user or a role that does not exist.
+ * - `exceptions.site-not-found`: the routing names a Site that does not exist in `organisation`, or is in force on no
+ *   day from the version's first; `missing` names it (12.2; RR-451).
  */
 export const exceptionsCodes = declareCodes({
   'exceptions.no-exception-code-series': 'unavailable',
@@ -446,6 +448,7 @@ export const exceptionsCodes = declareCodes({
   'exceptions.starts-in-past': 'refused',
   'exceptions.version-overlaps': 'refused',
   'exceptions.party-not-found': 'refused',
+  'exceptions.site-not-found': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

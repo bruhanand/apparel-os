@@ -51,6 +51,23 @@ export interface EventScopeFacts {
   readonly subjectUserId?: string;
 }
 
+/** A row's scope facts, each held as an identifier or null; null is Unknown (PRD-MOD-015). */
+export type ScopeFactColumns = { readonly [Fact in keyof EventScopeFacts]?: string | null | undefined };
+
+/**
+ * The scope facts a row holds, as an event, an audit record or an attachment carries them: a null or missing fact is
+ * left out, never passed on as a fact (code-house-rules 12.8 "The row"; PRD-MOD-015). The one builder the modules
+ * share (S1-F08 review).
+ */
+export function scopeFactsOf(row: ScopeFactColumns): EventScopeFacts {
+  const facts: Record<string, string> = {};
+  for (const fact of ['siteId', 'storeId', 'businessUnitId', 'legalEntityId', 'brandId', 'subjectUserId'] as const) {
+    const value = row[fact];
+    if (value !== null && value !== undefined) facts[fact] = value;
+  }
+  return facts;
+}
+
 /** What a command gives to publish one event; the actor and correlation identifier come from its context. */
 export interface PublishedEvent<Payload extends Record<string, unknown>> {
   readonly subject: EventSubject;

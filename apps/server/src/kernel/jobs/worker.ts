@@ -174,7 +174,11 @@ export class Worker {
           }
           const payload = consumer.event.payload.safeParse(event.payload);
           if (!payload.success) throw new CommandDefect(`The payload of event ${event.id} does not match its schema`);
-          const outcome = await consumer.handle(context, { ...event, payload: payload.data });
+          const outcome = await consumer.handle(
+            context,
+            { ...event, payload: payload.data },
+            { logger: this.dependencies.logger },
+          );
           return outcome.kind === 'done' ? success({ eventId: data.eventId }) : refusal(outcome.refusal);
         },
       }),

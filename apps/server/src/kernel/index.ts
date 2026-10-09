@@ -149,7 +149,14 @@ export type { LiveSettings } from './live/live-updates.js';
 export { LiveUpdatesModule } from './live/live.module.js';
 export { LIVE_UPDATES } from './live/live.module-tokens.js';
 export { defineEvent } from './outbox/event-definition.js';
-export type { EventDefinition, EventScopeFacts, EventSubject, PublishedEvent } from './outbox/event-definition.js';
+export type {
+  EventDefinition,
+  EventScopeFacts,
+  EventSubject,
+  PublishedEvent,
+  ScopeFactColumns,
+} from './outbox/event-definition.js';
+export { scopeFactsOf } from './outbox/event-definition.js';
 export { OrganisationRouter } from './routing/organisation-router.js';
 export type { RoutedOrganisation, SessionRouting, SignInRouting } from './routing/organisation-router.js';
 export {

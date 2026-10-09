@@ -205,6 +205,42 @@ const settingsSetup = await runSetupStep({
 if (settingsSetup.outcome !== 'created')
   throw new Error(`The settings setup step did not create: ${settingsSetup.outcome}`);
 
+// The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A), and runs the operations
+// view journey's failing consumer. It serves every Organisation whose outbox identity the setup step wrote: here, the
+// journeys'. It starts before any fixture below writes an event, since a consumer receives only the events recorded
+// from its first registration on (code-house-rules 12.8; S1-F08 review).
+const workerLog = capturingLogger();
+const router = new OrganisationRouter(
+  { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 4 },
+  workerLog.logger,
+);
+const runner = new CommandRunner({
+  clock: { now: () => new Date() },
+  timezones: syntheticTimezone,
+  logger: workerLog.logger,
+});
+const inboxRegistry: JobRegistry = {
+  events: [approvalRequested, approvalDecided, syntheticFailing],
+  consumers: [...inboxConsumers, syntheticAlwaysFails],
+  jobKinds: [],
+};
+const worker = new Worker({
+  router,
+  runner,
+  helper: new IdempotencyHelper({
+    runner,
+    logger: workerLog.logger,
+    secretCheck: secretCheckNotImplemented,
+    cipher: restrictedValueCipherNotConfigured,
+  }),
+  identities: jobIdentities(),
+  logger: workerLog.logger,
+  registry: inboxRegistry,
+  // SYNTHETIC worker settings (DEC-118, DEC-119; CH-10), with a test's short waits.
+  settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
+});
+await worker.start();
+
 const keys = syntheticKeysEnvironment(world);
 const keyring = JSON.parse(keys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
 keyring[journeyCode] = randomBytes(32).toString('base64url');
@@ -604,6 +640,23 @@ const operationsViewer = await provisionUser('BROWSER-OPERATIONS', 'P-ADM', [
   { recordType: 'kernel.job', action: 'view' },
 ]);
 await writeSyntheticServiceIdentity(settingsDatabase, SYNTHETIC_FAILING_IDENTITY, [syntheticAlwaysFails.authorises]);
+// The failing consumer's one event: the worker above has registered it (code-house-rules 12.8).
+const settingsForWorker = await router.resolveForSignIn(settingsCode);
+if (!settingsForWorker.routed) throw new Error('The settings Organisation was not routed');
+const failingRecord = crypto.randomUUID();
+await runner.run(
+  {
+    commandName: 'test-syn-operations.fixture',
+    organisation: settingsForWorker.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: exceptionsOps.id },
+  },
+  (context) =>
+    context.publish(syntheticFailing, {
+      subject: { module: 'kernel', recordType: 'kernel.synthetic_record', recordId: failingRecord },
+      payload: { recordId: failingRecord },
+    }),
+);
 await fixtureRouter.close();
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
@@ -629,60 +682,9 @@ const app = await startAccessApp(
   { origin, port, webApp, fileStoreEnvironment: fileStore.environment, exceptionTypes: [syntheticMismatch] },
 );
 
-// The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A). It serves every
-// Organisation whose outbox identity the setup step wrote: here, the journey's.
-const workerLog = capturingLogger();
-const router = new OrganisationRouter(
-  { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 4 },
-  workerLog.logger,
-);
-const runner = new CommandRunner({
-  clock: { now: () => new Date() },
-  timezones: syntheticTimezone,
-  logger: workerLog.logger,
-});
-const inboxRegistry: JobRegistry = {
-  events: [approvalRequested, approvalDecided, syntheticFailing],
-  consumers: [...inboxConsumers, syntheticAlwaysFails],
-  jobKinds: [],
-};
-const worker = new Worker({
-  router,
-  runner,
-  helper: new IdempotencyHelper({
-    runner,
-    logger: workerLog.logger,
-    secretCheck: secretCheckNotImplemented,
-    cipher: restrictedValueCipherNotConfigured,
-  }),
-  identities: jobIdentities(),
-  logger: workerLog.logger,
-  registry: inboxRegistry,
-  // SYNTHETIC worker settings (DEC-118, DEC-119; CH-10), with a test's short waits.
-  settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
-});
-await worker.start();
-// The failing consumer's one event, published once the worker has registered it, since a consumer receives only the
-// events recorded from its first registration on (code-house-rules 12.8).
-const settingsForWorker = await router.resolveForSignIn(settingsCode);
-if (!settingsForWorker.routed) throw new Error('The settings Organisation was not routed');
-const failingRecord = crypto.randomUUID();
-await runner.run(
-  {
-    commandName: 'test-syn-operations.fixture',
-    organisation: settingsForWorker.organisation,
-    correlationId: newCorrelationId(),
-    actor: { kind: 'actor', actorId: exceptionsOps.id },
-  },
-  (context) =>
-    context.publish(syntheticFailing, {
-      subject: { module: 'kernel', recordType: 'kernel.synthetic_record', recordId: failingRecord },
-      payload: { recordId: failingRecord },
-    }),
-);
-
-// The evidence journey's exception rule change, prepared through the API by its Admin, so the approver finds it in My
-// work (S1-F08-T03), once the worker runs. Every value is SYNTHETIC.
+// The evidence journey's exception rule change, prepared through the API by its Admin once the server listens, so
+// its approval request reaches the approver's My work through the worker (S1-F08-T03). It routes at the business units
+// journey's Site, since a routed Site must exist (RR-451). Every value is SYNTHETIC.
 {
   const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.31' };
   const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
@@ -703,7 +705,7 @@ await runner.run(
     headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify({
       typeCode: syntheticMismatch.code,
-      siteId: uuidv7(),
+      siteId: unitsSite.recordId,
       owner: { kind: 'user', userId: exceptionsOps.id },
       dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
       escalation: { kind: 'user', userId: exceptionsOps.id },

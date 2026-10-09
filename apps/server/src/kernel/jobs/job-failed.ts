@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TransactionContext } from '../command-runner/transaction-context.js';
 import { outboxEvent } from '../db/schema.js';
-import { defineEvent, type EventScopeFacts } from '../outbox/event-definition.js';
+import { defineEvent, scopeFactsOf, type EventScopeFacts } from '../outbox/event-definition.js';
 
 // How a job that fails for good reaches `exceptions` (code-house-rules 12.9 "A failed job"; access-and-approvals 9.8
 // step 4; module-map section 3, rule 4; S1-F08-T02). `kernel` reaches a higher module only by an event or a contract:
@@ -31,13 +31,9 @@ export const JOB_RECORD_TYPE = 'kernel.job';
 export async function eventScopeFacts(context: TransactionContext, eventId: string): Promise<EventScopeFacts> {
   const row = (await context.tx.select().from(outboxEvent).where(eq(outboxEvent.id, eventId)))[0];
   if (row === undefined) return {};
-  const facts: Record<string, string> = {};
-  if (row.siteId !== null) facts.siteId = row.siteId;
-  if (row.storeId !== null) facts.storeId = row.storeId;
-  if (row.businessUnitId !== null) facts.businessUnitId = row.businessUnitId;
-  if (row.legalEntityId !== null) facts.legalEntityId = row.legalEntityId;
-  if (row.brandId !== null) facts.brandId = row.brandId;
-  return facts;
+  // The work's own facts; whose record it was (`subjectUserId`) is no fact of the failure.
+  const { siteId, storeId, businessUnitId, legalEntityId, brandId } = row;
+  return scopeFactsOf({ siteId, storeId, businessUnitId, legalEntityId, brandId });
 }
 
 /** The state of a job as pg-boss keeps it (code-house-rules 12.9), or undefined when no job has that identifier. */

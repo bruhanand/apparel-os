@@ -1,3 +1,4 @@
+import { uuidv7 } from '@apparel-os/domain';
 import type { PermissionAction } from '@apparel-os/schemas';
 import {
   CommandRunner,
@@ -27,7 +28,7 @@ import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
 import { capturingLogger } from './jobs.js';
-import { databaseUrl } from './postgres.js';
+import { connect, databaseUrl } from './postgres.js';
 
 // The organisation structure through its real interfaces (code-house-rules 11.2; S1-F02-T01): `access` built with the
 // approval rules and decision effects `organisation` declares, as the application composes it, and two SYNTHETIC
@@ -243,4 +244,41 @@ export async function approvedGeography(setup: StructureSetup, label: string) {
     }),
   );
   return { country, state, city, area };
+}
+
+/**
+ * SYNTHETIC Sites with the identifiers a test names, each Approved from 2000-01-01 with no end, in an area of a
+ * SYNTHETIC geography: written as the migration role, as a fixture (code-house-rules 11.2), for a test that needs a Site
+ * to exist without walking the structure's approvals (structure-and-masters 3.1).
+ */
+export async function writeSyntheticSites(database: string, siteIds: readonly string[]): Promise<void> {
+  const client = await connect(database, 'migration');
+  const id = () => uuidv7();
+  const label = syntheticCode(`GEO-${id().slice(-8).toUpperCase()}`);
+  const preparer = id();
+  try {
+    const [country, state, city, area] = [id(), id(), id(), id()];
+    await client.query('insert into organisation.country (id, code) values ($1, $2)', [country, label]);
+    await client.query('insert into organisation.state (id, country_id, code) values ($1, $2, $3)', [
+      state,
+      country,
+      label,
+    ]);
+    await client.query('insert into organisation.city (id, state_id, code) values ($1, $2, $3)', [city, state, label]);
+    await client.query('insert into organisation.area (id, city_id, code) values ($1, $2, $3)', [area, city, label]);
+    for (const siteId of siteIds) {
+      await client.query('insert into organisation.site (id, code) values ($1, $2)', [
+        siteId,
+        syntheticCode(`SITE-${siteId.slice(-8).toUpperCase()}`),
+      ]);
+      await client.query(
+        `insert into organisation.site_version (id, site_id, name, physical_kind, area_id, addresses, status,
+           valid_during, decision, prepared_by_user_id)
+         values ($1, $2, $3, 'retail-site', $4, $5, 'Active', '[2000-01-01,)', 'Approved', $6)`,
+        [id(), siteId, syntheticName(`Site ${siteId.slice(-8)}`), area, [syntheticName('Address')], preparer],
+      );
+    }
+  } finally {
+    await client.end();
+  }
 }

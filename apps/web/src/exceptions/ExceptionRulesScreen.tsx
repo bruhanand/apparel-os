@@ -75,8 +75,11 @@ function RoutingTable({ list }: { list: RoutingList }) {
   );
 }
 
-/** The person or role a rule names, chosen from the lists the reader may view. */
-function PartyField({
+/**
+ * The person or role a rule or a reassignment names, chosen from the lists the reader may view; a list the reader may
+ * not view names the permission it needs (PRD-UXP-003).
+ */
+export function PartyField({
   id,
   kindLabel,
   whoLabel,
@@ -84,13 +87,21 @@ function PartyField({
   onChange,
 }: {
   id: string;
-  kindLabel: 'rules.owner-kind' | 'rules.escalation-kind';
-  whoLabel: 'rules.owner-who' | 'rules.escalation-who';
+  kindLabel: 'rules.owner-kind' | 'rules.escalation-kind' | 'exception.reassign-kind';
+  whoLabel: 'rules.owner-who' | 'rules.escalation-who' | 'exception.reassign-who';
   value: { kind: '' | 'user' | 'role'; id: string };
   onChange: (value: { kind: '' | 'user' | 'role'; id: string }) => void;
 }) {
-  const users = useQuery({ ...readQuery(api, 'listUsers', {}), enabled: useGranted('access.user', 'view') });
-  const roles = useQuery({ ...readQuery(api, 'listRoles', {}), enabled: useGranted('access.role', 'view') });
+  const usersGranted = useGranted('access.user', 'view');
+  const rolesGranted = useGranted('access.role', 'view');
+  const users = useQuery({ ...readQuery(api, 'listUsers', {}), enabled: usersGranted });
+  const roles = useQuery({ ...readQuery(api, 'listRoles', {}), enabled: rolesGranted });
+  const listMissing =
+    value.kind === 'user' && !usersGranted
+      ? 'access.user'
+      : value.kind === 'role' && !rolesGranted
+        ? 'access.role'
+        : undefined;
   const options =
     value.kind === 'user'
       ? (users.data?.users ?? []).map((user) => ({ id: user.id, text: user.versions[0]?.displayName ?? user.login }))
@@ -134,11 +145,17 @@ function PartyField({
           </select>
         </FormField>
       )}
+      {listMissing !== undefined && (
+        <span className="text-caption text-text-2">
+          {t('setup.needs', { action: t('action.view'), recordType: t(`record-type.${listMissing}`) })}
+        </span>
+      )}
     </>
   );
 }
 
-function partyOf(value: { kind: '' | 'user' | 'role'; id: string }): ExceptionParty | undefined {
+/** The party a PartyField's choice names, once both its kind and who are chosen. */
+export function partyOf(value: { kind: '' | 'user' | 'role'; id: string }): ExceptionParty | undefined {
   if (value.id === '') return undefined;
   if (value.kind === 'user') return { kind: 'user', userId: value.id };
   if (value.kind === 'role') return { kind: 'role', roleId: value.id };

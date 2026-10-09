@@ -6,6 +6,7 @@ import type { CommandRunner } from '../command-runner/command-runner.js';
 import type { TransactionContext } from '../command-runner/transaction-context.js';
 import { outboxEvent } from '../db/schema.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
+import { scopeFactsOf } from '../outbox/event-definition.js';
 import { OUTBOX_CHANNEL } from '../outbox/outbox-writer.js';
 import type { RoutedOrganisation } from '../routing/organisation-router.js';
 import type { LiveAudience, LiveEvent, SessionAccess, SignedInSession } from './contracts.js';
@@ -442,17 +443,7 @@ export class LiveUpdates {
 }
 
 function liveEventOf(row: typeof outboxEvent.$inferSelect): LiveEvent {
-  const scope: Record<string, string> = {};
-  for (const [key, value] of [
-    ['siteId', row.siteId],
-    ['storeId', row.storeId],
-    ['businessUnitId', row.businessUnitId],
-    ['legalEntityId', row.legalEntityId],
-    ['brandId', row.brandId],
-    ['subjectUserId', row.subjectUserId],
-  ] as const) {
-    if (value !== null) scope[key] = value;
-  }
+  const scope = scopeFactsOf(row);
   return {
     id: row.id,
     type: row.eventType,

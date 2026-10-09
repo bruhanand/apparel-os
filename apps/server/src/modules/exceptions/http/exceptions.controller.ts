@@ -12,6 +12,7 @@ import {
   ApiRefusal,
   ApiRoute,
   COMMAND_RUNNER,
+  CommandDefect,
   commandAnswer,
   IDEMPOTENCY_HELPER,
   requestContentOf,
@@ -25,7 +26,15 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedInUser } from '../../access/index.js';
+import {
+  ACCESS,
+  type AccessInterface,
+  type RecordFacts,
+  SCOPE_MEMBERS,
+  type ScopeMembers,
+  SignedIn,
+  type SignedInUser,
+} from '../../access/index.js';
 import type { Outcome } from '../commands/common.js';
 import { ROUTING_ACTION_TYPE } from '../commands/routing.js';
 import type { Acting, Changed } from '../commands/lifecycle.js';
@@ -71,6 +80,7 @@ export class ExceptionsController {
     @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
     @Inject(ACCESS) private readonly access: AccessInterface,
     @Inject(EXCEPTIONS) private readonly exceptions: ExceptionsInterface,
+    @Inject(SCOPE_MEMBERS) private readonly scopeMembers: readonly ScopeMembers[],
   ) {}
 
   @ApiRoute(routes.listExceptionRouting)
@@ -116,6 +126,8 @@ export class ExceptionsController {
             ),
           });
         }
+        const site = await this.siteNotFound(context, draft.siteId, draft.validFrom);
+        if (site !== undefined) return refusedOutcome(site);
         const preparer = { userId: user.userId, roleAssignmentId };
         const prepared = await this.exceptions.prepareRouting(context, preparer, draft);
         if (prepared.kind === 'refused') return refusedOutcome(prepared.refusal);
@@ -406,6 +418,32 @@ export class ExceptionsController {
       work: run.work,
     });
     return commandAnswer(answer);
+  }
+
+  /**
+   * A routing's Site must exist in `organisation`, in force on some day from the version's first day (access-and-approvals
+   * 12.2; RR-451): asked through the scope contract `access` defines and `organisation` implements (module-map section
+   * 3, rule 6), so `exceptions` never calls `organisation`. A routing with no Site needs none.
+   */
+  private async siteNotFound(
+    context: TransactionContext,
+    siteId: string | null,
+    validFrom: string,
+  ): Promise<CommandRefusal | undefined> {
+    if (siteId === null) return undefined;
+    const member = { type: 'site' as const, id: siteId };
+    const answering = this.scopeMembers.filter((each) => each.answers.includes('site'));
+    if (answering.length === 0) throw new CommandDefect('No scope implementation answers Sites');
+    for (const implementation of answering) {
+      if ((await implementation.notFound(context, [member], { validFrom })).length > 0) {
+        return {
+          kind: 'refused',
+          code: 'exceptions.site-not-found',
+          missing: [{ kind: 'scope-member', dimension: 'place', memberType: 'site', memberId: siteId }],
+        };
+      }
+    }
+    return undefined;
   }
 
   private request(user: SignedInUser, commandName: string) {

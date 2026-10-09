@@ -1,7 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { ExceptionExposure, ExceptionLink } from '@apparel-os/schemas';
 import { and, desc, eq, inArray, lt } from 'drizzle-orm';
-import { CommandDefect, LOCK_STEP, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
+import {
+  CommandDefect,
+  LOCK_STEP,
+  scopeFactsOf,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 import type { AuditActor, AuditInterface } from '../../audit/index.js';
 import type { InboxInterface } from '../../inbox/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
@@ -254,12 +260,7 @@ async function earlierException(
 
 /** The facts an audit record and an event carry: those that apply, never a null as a fact. */
 export function factsOf(facts: ExceptionFacts): Record<string, string> {
-  const scope: Record<string, string> = {};
-  if (facts.siteId !== null) scope.siteId = facts.siteId;
-  if (facts.storeId !== null) scope.storeId = facts.storeId;
-  if (facts.businessUnitId !== null) scope.businessUnitId = facts.businessUnitId;
-  if (facts.brandId !== null) scope.brandId = facts.brandId;
-  return scope;
+  return { ...scopeFactsOf(facts) };
 }
 
 /**
