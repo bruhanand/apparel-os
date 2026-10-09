@@ -134,6 +134,45 @@ export function useNames(kind: Kind, enabled = true, where?: RecordFilter): Read
 /** A value as text: values here are strings, read from the lists. */
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+/**
+ * Attribute values in words: each attribute's name and its vocabulary value's name or its text, or Unknown
+ * (structure-and-masters 2.4, 4.2; S1-F03-T02).
+ */
+function AttributeValues({ value }: { value: unknown }) {
+  const attributes = useNames('attribute');
+  const values = useNames('vocabulary_value');
+  const list = Array.isArray(value) ? (value as { attributeId: string; valueId?: string; text?: string }[]) : [];
+  if (list.length === 0) return <span className="text-text-2">{t('organisation.none')}</span>;
+  return (
+    <ul className="m-0 list-none p-0">
+      {list.map((each) => (
+        <li key={each.attributeId}>
+          {attributes.get(each.attributeId) ?? each.attributeId}:{' '}
+          {each.valueId !== undefined
+            ? (values.get(each.valueId) ?? each.valueId)
+            : (each.text ?? <span className="text-text-2">{t('organisation.unknown')}</span>)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A mixed pack's contents in words: each SKU with its quantity (4.4; S1-F03-T02). */
+function ContentsValue({ value }: { value: unknown }) {
+  const skus = useNames('sku');
+  const list = Array.isArray(value) ? (value as { skuId: string; quantity: number }[]) : [];
+  if (list.length === 0) return <span className="text-text-2">{t('organisation.none')}</span>;
+  return (
+    <ul className="m-0 list-none p-0">
+      {list.map((each) => (
+        <li key={each.skuId}>
+          {skus.get(each.skuId) ?? each.skuId} × {each.quantity}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A field's value in words. */
 function FieldValue({ spec, value }: { spec: FieldSpec; value: unknown }) {
   const names = useNames(
@@ -142,6 +181,12 @@ function FieldValue({ spec, value }: { spec: FieldSpec; value: unknown }) {
   );
   if (value === undefined || value === null) return <span className="text-text-2">{t('organisation.unknown')}</span>;
   switch (spec.kind) {
+    case 'whole':
+      return <>{typeof value === 'number' ? String(value) : text(value)}</>;
+    case 'attribute-values':
+      return <AttributeValues value={value} />;
+    case 'contents':
+      return <ContentsValue value={value} />;
     case 'select': {
       const option = spec.options.find((each) => each.value === value);
       return <>{option === undefined ? text(value) : t(option.label)}</>;
@@ -329,18 +374,121 @@ function ReferencesInput({
   );
 }
 
+/** A mixed pack's contents: a SKU and its quantity on each row (4.4; POL-04.03; S1-F03-T02). */
+function ContentsInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: readonly { skuId: string; quantity: number }[];
+  onChange: (contents: { skuId: string; quantity: number }[]) => void;
+}) {
+  const names = useNames('sku');
+  const replace = (index: number, row: { skuId: string; quantity: number }) => {
+    onChange(value.map((each, at) => (at === index ? row : each)));
+  };
+  return (
+    <div id={id} role="group" className="flex flex-col gap-2">
+      {value.map((row, index) => (
+        <div key={index} className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={t('merchandise.field.skuId')}
+            className={inputClass}
+            value={row.skuId}
+            onChange={(event) => {
+              replace(index, { ...row, skuId: event.target.value });
+            }}
+          >
+            <option value="">{t('organisation.choose')}</option>
+            {[...names].map(([skuId, name]) => (
+              <option key={skuId} value={skuId}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label={t('merchandise.contents.quantity')}
+            type="number"
+            min={1}
+            step={1}
+            className={inputClass}
+            value={row.quantity}
+            onChange={(event) => {
+              replace(index, { ...row, quantity: Number(event.target.value) });
+            }}
+          />
+          <Button
+            size="small"
+            variant="ghost"
+            label="merchandise.contents.remove"
+            onClick={() => {
+              onChange(value.filter((_, at) => at !== index));
+            }}
+          />
+        </div>
+      ))}
+      <div>
+        <Button
+          size="small"
+          label="merchandise.contents.add"
+          onClick={() => {
+            onChange([...value, { skuId: '', quantity: 1 }]);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** One field of a form (design-language 10.7). */
 function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpec; formId: string }) {
   const id = `${formId}-${spec.name}`;
   const error = form.formState.errors[spec.name] as { type?: string } | undefined;
   const invalid = error !== undefined;
+  // Attribute values are kept from the version a change starts from; the screen does not edit them yet (S1-F03-T02).
+  if (spec.kind === 'attribute-values') return null;
   const required =
-    !((spec.kind === 'date' || spec.kind === 'reference') && spec.optional === true) &&
+    !(
+      (spec.kind === 'date' || spec.kind === 'reference' || spec.kind === 'text' || spec.kind === 'whole') &&
+      spec.optional === true
+    ) &&
     spec.kind !== 'lines' &&
     spec.kind !== 'references' &&
+    spec.kind !== 'contents' &&
     spec.kind !== 'yes-no';
   let control: ReactNode;
   switch (spec.kind) {
+    case 'whole':
+      control = (
+        <input
+          id={id}
+          type="number"
+          min={0}
+          step={1}
+          className={inputClass}
+          {...describedBy(id, { invalid, help: false })}
+          {...form.register(spec.name, {
+            setValueAs: (value: unknown) => (value === '' || value === undefined ? undefined : Number(value)),
+          })}
+        />
+      );
+      break;
+    case 'contents':
+      control = (
+        <Controller
+          control={form.control}
+          name={spec.name}
+          render={({ field }) => (
+            <ContentsInput
+              id={id}
+              value={(field.value as { skuId: string; quantity: number }[] | undefined) ?? []}
+              onChange={field.onChange}
+            />
+          )}
+        />
+      );
+      break;
     case 'yes-no':
       control = (
         <input
@@ -447,7 +595,10 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
           id={id}
           className={`${inputClass}${spec.mono === true ? ' font-mono' : ''}`}
           {...describedBy(id, { invalid, help: false })}
-          {...form.register(spec.name)}
+          {...form.register(spec.name, {
+            // An optional text left empty is Unknown (structure-and-masters 2.4; S1-F03-T02).
+            setValueAs: (value: unknown) => (spec.optional === true && value === '' ? undefined : value),
+          })}
         />
       );
   }
@@ -472,7 +623,14 @@ function openingValues(kind: Kind, today: string, record?: MasterRecord, from?: 
   const values: FieldValues = { validFrom: today };
   const base = from ?? record?.versions[0];
   for (const spec of formSpecs(kind, record)) {
-    if (spec.kind === 'lines' || spec.kind === 'references') values[spec.name] = [];
+    if (
+      spec.kind === 'lines' ||
+      spec.kind === 'references' ||
+      spec.kind === 'contents' ||
+      spec.kind === 'attribute-values'
+    ) {
+      values[spec.name] = [];
+    }
     if (spec.kind === 'yes-no') values[spec.name] = false;
     if (base?.[spec.name] !== undefined) values[spec.name] = base[spec.name];
   }
@@ -589,7 +747,10 @@ function recordTitle(kind: Kind, record: MasterRecord): string {
 /** A record's name in its list: the latest version's name, or the record it names, in words. */
 function RecordName({ kind, record }: { kind: Kind; record: MasterRecord }) {
   const spec = fields[kind].find((each) => each.name === labelField(kind));
-  if (spec?.kind === 'reference') return <FieldValue spec={spec} value={record.versions[0]?.[spec.name]} />;
+  // A select or a number is shown in words, such as a SKU's stock unit (S1-F03-T02).
+  if (spec?.kind === 'reference' || spec?.kind === 'select' || spec?.kind === 'whole') {
+    return <FieldValue spec={spec} value={record.versions[0]?.[spec.name]} />;
+  }
   return <>{recordTitle(kind, record)}</>;
 }
 

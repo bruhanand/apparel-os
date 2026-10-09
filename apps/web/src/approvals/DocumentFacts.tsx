@@ -1,6 +1,7 @@
 import {
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
+  PRODUCT_CONFIRMATION,
   VOCABULARY_CONFIRMATION,
   type ApprovalRequestView,
 } from '@apparel-os/schemas';
@@ -216,6 +217,39 @@ function ProposalFacts({ view }: { view: ApprovalRequestView }) {
 }
 
 /**
+ * A product proposal: the style it makes or adds to, and each SKU with its size, stock unit and purpose, Unknown shown
+ * as Unknown; and the original source words. Its proposer is never its confirmer (structure-and-masters 4.2; DM-5,
+ * DEC-105; S1-F03-T02).
+ */
+function ProductProposalFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readProductProposal', { params: { proposalId: view.document.recordId } }),
+    enabled: useViewable('merchandise.product_proposal'),
+  });
+  const proposal = query.data?.proposal;
+  if (proposal === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="products.style">
+        <span className="font-mono">{proposal.style?.code ?? proposal.styleId}</span>
+      </Fact>
+      <Fact label="products.proposal.skus">
+        <ul className="m-0 list-none p-0">
+          {proposal.skus.map((sku) => (
+            <li key={sku.code}>
+              <span className="font-mono">{sku.code}</span> · {sku.size ?? t('organisation.unknown')} ·{' '}
+              {t(`merchandise.stock-unit.${sku.stockUnit}`)} · {t(`merchandise.purpose.${sku.purpose}`)}
+            </li>
+          ))}
+        </ul>
+      </Fact>
+      <Fact label="products.source-words">{proposal.sourceWords ?? t('organisation.unknown')}</Fact>
+      <Fact label="merchandise.proposal.state">{t(`state.${stateIdOf(proposal.state)}`)}</Fact>
+    </Facts>
+  );
+}
+
+/**
  * A bank-detail change: the party, the dates, and the new details masked, as they stay on every read; Show on the
  * party opens them with a fresh code (structure-and-masters 5.1; access-and-approvals 6; S1-F03-T03).
  */
@@ -281,6 +315,8 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <LimitFacts view={view} />;
     case VOCABULARY_CONFIRMATION:
       return <ProposalFacts view={view} />;
+    case PRODUCT_CONFIRMATION:
+      return <ProductProposalFacts view={view} />;
     case BANK_DETAILS_CHANGE:
       return <BankDetailsFacts view={view} />;
     case AGREEMENT_CHANGE:

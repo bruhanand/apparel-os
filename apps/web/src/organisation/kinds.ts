@@ -85,6 +85,13 @@ export const kindText: Readonly<Record<Kind, { readonly add: MessageId | null; r
   size_set: { add: 'merchandise.new.size_set', what: 'merchandise.what.size_set' },
   attribute: { add: 'merchandise.new.attribute', what: 'merchandise.what.attribute' },
   vocabulary_value: { add: null, what: 'merchandise.what.vocabulary_value' },
+  // S1-F03-T02. A category's profile link is the category's (4.6); a style and a SKU are made by confirming a product
+  // proposal (4.2), so none has a record to add here.
+  tracking_profile: { add: 'merchandise.new.tracking_profile', what: 'merchandise.what.tracking_profile' },
+  category_tracking_profile: { add: null, what: 'merchandise.what.category_tracking_profile' },
+  style: { add: null, what: 'merchandise.what.style' },
+  sku: { add: null, what: 'merchandise.what.sku' },
+  pack: { add: 'merchandise.new.pack', what: 'merchandise.what.pack' },
 };
 
 /** Only the records whose fixed field holds a value, such as the classification values of a Site kind. */
@@ -119,7 +126,16 @@ export type FieldSpec = {
   readonly withFirst?: true;
   readonly laterOnly?: true;
 } & (
-  | { readonly kind: 'text'; readonly mono?: true }
+  | { readonly kind: 'text'; readonly mono?: true; readonly optional?: true }
+  /** A whole number, such as a shelf life in days; empty is Unknown where optional (S1-F03-T02). */
+  | { readonly kind: 'whole'; readonly optional?: true }
+  /**
+   * Attribute values, each a vocabulary value or text, or Unknown (structure-and-masters 4.2; S1-F03-T02): shown in
+   * words; a new version keeps those of the version it starts from, as the screen does not edit them yet.
+   */
+  | { readonly kind: 'attribute-values' }
+  /** A mixed pack's contents, SKU by SKU, each with its quantity (4.4; POL-04.03; S1-F03-T02). */
+  | { readonly kind: 'contents' }
   | { readonly kind: 'date'; readonly optional?: true }
   | { readonly kind: 'select'; readonly options: readonly Option[] }
   | { readonly kind: 'reference'; readonly target: Kind; readonly optional?: true }
@@ -431,6 +447,75 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
     code,
     name,
   ],
+  // Tracking profiles, a category's profile, styles, SKUs and packs (structure-and-masters 4.1, 4.4 to 4.6;
+  // S1-F03-T02). No profile, unit or value is set in the app; an empty shelf life is Unknown (POL-04.05).
+  tracking_profile: [
+    code,
+    name,
+    { name: 'pieceTracked', label: 'merchandise.field.pieceTracked', kind: 'yes-no' },
+    { name: 'batchExpiryRequired', label: 'merchandise.field.batchExpiryRequired', kind: 'yes-no' },
+    { name: 'requiredIdentifiers', label: 'merchandise.field.requiredIdentifiers', kind: 'lines' },
+    {
+      name: 'receivingShelfLifeDays',
+      label: 'merchandise.field.receivingShelfLifeDays',
+      kind: 'whole',
+      optional: true,
+    },
+    { name: 'sellingShelfLifeDays', label: 'merchandise.field.sellingShelfLifeDays', kind: 'whole', optional: true },
+  ],
+  category_tracking_profile: [
+    {
+      name: 'trackingProfileId',
+      label: 'merchandise.field.trackingProfileId',
+      kind: 'reference',
+      target: 'tracking_profile',
+    },
+  ],
+  style: [
+    code,
+    { name: 'brandId', label: 'merchandise.field.brandId', kind: 'reference', target: 'brand', fixed: true },
+    { name: 'categoryId', label: 'merchandise.field.categoryId', kind: 'reference', target: 'category', fixed: true },
+    { name: 'brandArticleNumber', label: 'merchandise.field.brandArticleNumber', kind: 'text', optional: true },
+    { name: 'launchDate', label: 'merchandise.field.launchDate', kind: 'date', optional: true },
+    { name: 'hsn', label: 'merchandise.field.hsn', kind: 'text', mono: true, optional: true },
+    { name: 'attributes', label: 'merchandise.field.attributes', kind: 'attribute-values' },
+  ],
+  sku: [
+    code,
+    { name: 'styleId', label: 'merchandise.field.styleId', kind: 'reference', target: 'style', fixed: true },
+    { name: 'size', label: 'merchandise.field.size', kind: 'text', fixed: true },
+    { name: 'identity', label: 'merchandise.field.identity', kind: 'attribute-values', fixed: true },
+    {
+      name: 'stockUnit',
+      label: 'merchandise.field.stockUnit',
+      kind: 'select',
+      options: [
+        { value: 'piece', label: 'merchandise.stock-unit.piece' },
+        { value: 'pair', label: 'merchandise.stock-unit.pair' },
+        { value: 'pack', label: 'merchandise.stock-unit.pack' },
+      ],
+    },
+    {
+      name: 'purpose',
+      label: 'merchandise.field.purpose',
+      kind: 'select',
+      options: [
+        { value: 'merchandise', label: 'merchandise.purpose.merchandise' },
+        { value: 'gift-with-purchase', label: 'merchandise.purpose.gift-with-purchase' },
+        { value: 'promotional', label: 'merchandise.purpose.promotional' },
+        { value: 'packaging', label: 'merchandise.purpose.packaging' },
+      ],
+    },
+  ],
+  pack: [
+    code,
+    { name: 'skuId', label: 'merchandise.field.skuId', kind: 'reference', target: 'sku', fixed: true },
+    { name: 'units', label: 'merchandise.field.units', kind: 'whole', optional: true },
+    { name: 'mixed', label: 'merchandise.field.mixed', kind: 'yes-no' },
+    { name: 'contents', label: 'merchandise.field.contents', kind: 'contents' },
+    { name: 'forPurchasing', label: 'merchandise.field.forPurchasing', kind: 'yes-no' },
+    { name: 'forSelling', label: 'merchandise.field.forSelling', kind: 'yes-no' },
+  ],
 };
 
 /**
@@ -474,6 +559,11 @@ export function labelField(kind: Kind): string {
   if (kind === 'business_unit_mapping') return 'legalEntityId';
   if (kind === 'store_default_warehouse') return 'warehouseUnitId';
   if (kind === 'business_unit_brand') return 'brandIds';
+  // S1-F03-T02: a style, SKU, pack or category profile has no name of its own.
+  if (kind === 'category_tracking_profile') return 'trackingProfileId';
+  if (kind === 'style') return 'brandArticleNumber';
+  if (kind === 'sku') return 'stockUnit';
+  if (kind === 'pack') return 'units';
   return 'name';
 }
 

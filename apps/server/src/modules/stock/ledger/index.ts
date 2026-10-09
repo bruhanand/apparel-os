@@ -2,6 +2,7 @@
 export { BOOK_STOCK_HISTORY, STOCK_LEDGER, StockLedgerModule } from './stock-ledger.module.js';
 export { BookStockHistory, type BookStockHistoryContract } from './contracts/book-stock-history.js';
 export { LocationStock } from './contracts/location-stock.js';
+export { SkuStockPresence } from './contracts/stock-presence.js';
 export { StockLedger } from './ledger.js';
 export type {
   CheckedRequest,
@@ -31,6 +32,7 @@ export type {
 } from './domain/request.js';
 export type { ExpectedQuantity } from './domain/working.js';
 export type { LedgerPlaces, LedgerSkus, SkuFacts, UnitFacts } from './ports.js';
+export { catalogueSkus } from './ports.js';
 export type { CallerRegistration, RegisteredRecordType } from './registry.js';
 export { custody, pieceByCode } from './queries/reads.js';
 export type { CustodyQuery, CustodyRow } from './queries/reads.js';

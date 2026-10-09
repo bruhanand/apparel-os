@@ -172,6 +172,19 @@ export interface SyntheticWorld {
     readonly attributeName: string;
   };
   /**
+   * The products journey (S1-F03-T02), in the security settings Organisation: a Booking user who proposes a style, a
+   * different person who confirms it, how the form names the SYNTHETIC brand and category, and the category's
+   * SYNTHETIC free size.
+   */
+  readonly products: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly confirmer: EnrolledUser;
+    readonly brandOption: string;
+    readonly categoryOption: string;
+    readonly freeSize: string;
+  };
+  /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's
    * bank-detail change, a different person who approves it and shows it, and the SYNTHETIC supplier's code.
    */

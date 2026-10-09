@@ -466,6 +466,65 @@ const bankSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
 if (bankSupplierAnswer.kind !== 'success') {
   throw new Error(`The synthetic supplier was refused: ${bankSupplierAnswer.refusal.code}`);
 }
+// The products journey (products.spec.ts; S1-F03-T02): one SYNTHETIC brand and one category whose size set holds a
+// SYNTHETIC free size, recorded through the catalogue's real commands by the fixture person (code-house-rules 11.2),
+// so a Booking user proposes a style into them. A size set is fixed to its category, which names it by a later version
+// (structure-and-masters 4.1), so the category and its size set are recorded on the fixture's clock a day earlier and
+// the category names its size set from today. No product, size or unit is set by the application.
+const productsBrand = { code: syntheticCode('JOURNEY-PRODUCTS-BRAND'), name: syntheticName('Journey Products Brand') };
+const productsCategory = {
+  code: syntheticCode('JOURNEY-PRODUCTS-CAT'),
+  name: syntheticName('Journey Products Category'),
+};
+const productsFreeSize = 'SYNTHETIC Free Size';
+const recordedCatalogue = <A>(
+  outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } },
+) => {
+  if (outcome.kind !== 'success') throw new Error(`The synthetic catalogue was refused: ${outcome.refusal.code}`);
+  return outcome.answer;
+};
+recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareBrand(c, p, {
+      ...productsBrand,
+      aliases: [],
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+structureFixture.advanceDays(-1);
+const productsCategoryAnswer = recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareCategory(c, p, {
+      ...productsCategory,
+      identityAttributeIds: [],
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+const productsSizeSet = recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareSizeSet(c, p, {
+      code: syntheticCode('JOURNEY-PRODUCTS-SIZES'),
+      categoryId: productsCategoryAnswer.recordId,
+      name: syntheticName('Journey Products Sizes'),
+      sizes: [productsFreeSize],
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+structureFixture.advanceDays(1);
+recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareCategoryVersion(c, p, productsCategoryAnswer.recordId, {
+      name: productsCategory.name,
+      sizeSetId: productsSizeSet.recordId,
+      identityAttributeIds: [],
+      validFrom: structureFixture.today(),
+      versionToken: productsCategoryAnswer.versionId,
+    }),
+  ),
+);
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -573,6 +632,36 @@ const vocabularyBooking = await provisionUser('BROWSER-VOCABULARY-BOOKING', 'P-B
 const vocabularyConfirmer = await provisionUser('BROWSER-VOCABULARY-CONFIRMER', 'P-BKG', [
   ...catalogueViews,
   { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+
+// The products journey's people (S1-F03-T02): a Booking user who reads the catalogue, proposes products and may
+// confirm another person's, and a different person who confirms from My work and reads the SKUs. Who holds which is
+// KDPS's (V-01, RR-064).
+const productViews = [
+  'merchandise.brand',
+  'merchandise.category',
+  'merchandise.size_set',
+  'merchandise.attribute',
+  'merchandise.vocabulary_value',
+  'merchandise.style',
+  'merchandise.sku',
+  'merchandise.pack',
+  'merchandise.external_code',
+  'merchandise.product_proposal',
+].map((recordType) => ({ recordType, action: 'view' as const }));
+const productsBooking = await provisionUser('BROWSER-PRODUCTS-BOOKING', 'P-BKG', [
+  ...productViews,
+  { recordType: 'merchandise.product_proposal', action: 'create' },
+  // Approve too, so the refusal of their own proposal is for the proposal alone (DM-5, DEC-105).
+  { recordType: 'merchandise.product_proposal', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-BKG', [
+  ...productViews,
+  { recordType: 'merchandise.product_proposal', action: 'approve' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
@@ -1044,6 +1133,15 @@ writeFileSync(
       booking: credentialsOf(vocabularyBooking),
       confirmer: credentialsOf(vocabularyConfirmer),
       attributeName: vocabularyAttribute.name,
+    },
+    products: {
+      organisationCode: settingsCode,
+      booking: credentialsOf(productsBooking),
+      confirmer: credentialsOf(productsConfirmer),
+      // How the proposal form names the brand and the category: code and name (useNames).
+      brandOption: `${productsBrand.code} · ${productsBrand.name}`,
+      categoryOption: `${productsCategory.code} · ${productsCategory.name}`,
+      freeSize: productsFreeSize,
     },
     bankDetails: {
       organisationCode: settingsCode,

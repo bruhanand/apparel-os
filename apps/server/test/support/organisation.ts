@@ -6,7 +6,9 @@ import {
   PARTY_TYPE,
   catalogueKinds,
   catalogueRecordType,
+  EXTERNAL_CODE_TYPE,
   permissionRegistry,
+  PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_PROPOSAL_TYPE,
   type PermissionAction,
 } from '@apparel-os/schemas';
@@ -34,8 +36,13 @@ import {
   type PreparedVersion,
   type Preparer,
 } from '../../src/modules/organisation/index.js';
-import { Catalogue, catalogueApprovals, catalogueScopeMembers } from '../../src/modules/merchandise/catalogue/index.js';
-import { Parties, partiesApprovals } from '../../src/modules/merchandise/parties/index.js';
+import {
+  Catalogue,
+  catalogueApprovals,
+  catalogueScopeMembers,
+  type StockPresence,
+} from '../../src/modules/merchandise/catalogue/index.js';
+import { Parties, partiesApprovals, partiesSupplierRoles } from '../../src/modules/merchandise/parties/index.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
@@ -104,6 +111,8 @@ export async function structureSetup(options: {
   readonly label: string;
   /** The location-in-use implementation, as the composition root hands it over; none answers when left out. */
   readonly locationInUse?: LocationInUse;
+  /** The stock-presence implementation, as the composition root hands it over; none answers when left out. */
+  readonly stockPresence?: StockPresence;
 }): Promise<StructureSetup> {
   const log = capturingLogger();
   const router = new OrganisationRouter(
@@ -125,7 +134,14 @@ export async function structureSetup(options: {
     documentEffects: new Map([...structure.effects, ...catalogueModule.effects, ...partiesModule.effects]),
     scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
   });
-  const catalogue = new Catalogue({ audit, access });
+  // The catalogue's contracts as the composition root hands them over (S1-F03-T02): supplier roles from the parties
+  // part, and stock presence where the test gives one; none answers when left out.
+  const catalogue = new Catalogue({
+    audit,
+    access,
+    suppliers: partiesSupplierRoles,
+    stockPresence: options.stockPresence,
+  });
   const parties = new Parties({ audit, access, files: new FilesImports(audit), keys });
   const organisation = new Organisation({
     audit,
@@ -142,6 +158,9 @@ export async function structureSetup(options: {
   const catalogueTypes = [
     ...catalogueKinds.map(catalogueRecordType),
     VOCABULARY_PROPOSAL_TYPE,
+    // Product proposals and external codes (S1-F03-T02).
+    PRODUCT_PROPOSAL_TYPE,
+    EXTERNAL_CODE_TYPE,
     // The parties part's types (S1-F03-T03); no field class, which a test grants where it needs one.
     PARTY_TYPE,
     BANK_DETAILS_TYPE,

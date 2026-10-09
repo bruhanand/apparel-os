@@ -1,6 +1,8 @@
 import {
   BRAND_COVERAGE_CHANGE,
   catalogueRecordType,
+  PRODUCT_CONFIRMATION,
+  PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_CONFIRMATION,
   VOCABULARY_PROPOSAL_TYPE,
   type CatalogueKind,
@@ -45,6 +47,17 @@ export const catalogueApprovalRules: readonly ApprovalRule[] = [
     actionType: VOCABULARY_CONFIRMATION,
     module: 'merchandise',
     recordType: VOCABULARY_PROPOSAL_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
+  // The confirmation of a product proposal, by a different person from its proposer (4.2; DM-5, DEC-105; S1-F03-T02).
+  {
+    actionType: PRODUCT_CONFIRMATION,
+    module: 'merchandise',
+    recordType: PRODUCT_PROPOSAL_TYPE,
     independent: true,
     value: 'none',
     freeTextReason: false,

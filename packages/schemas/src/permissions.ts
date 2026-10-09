@@ -241,6 +241,17 @@ const merchandiseRecordTypes = [
   declare('merchandise.attribute', ['view', 'create', 'edit'], NONE),
   declare('merchandise.vocabulary_value', ['view', 'edit'], NONE),
   declare('merchandise.vocabulary_proposal', ['view', 'create', 'approve'], NONE),
+  // Tracking profiles, styles, SKUs, packs, external codes and product proposals (structure-and-masters 4; S1-F03-T02),
+  // the Organisation's as the catalogue is, so they carry no scope fact (5.3). A style or SKU is created only by
+  // confirming a product proposal: create proposes, approve confirms or rejects, by a different person (4.2; DM-5,
+  // DEC-105); edit records a later version. A category's tracking-profile link is the category's: edit records it.
+  declare('merchandise.tracking_profile', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.category_tracking_profile', ['view', 'edit'], NONE),
+  declare('merchandise.style', ['view', 'edit'], NONE),
+  declare('merchandise.sku', ['view', 'edit'], NONE),
+  declare('merchandise.pack', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.external_code', ['view', 'create', 'edit'], NONE),
+  declare('merchandise.product_proposal', ['view', 'create', 'approve'], NONE),
   // `merchandise` · parties (structure-and-masters 5, 6.2; S1-F03-T03). A party, its roles and its brand–supplier
   // links belong to the Organisation as a whole, as the catalogue does, so they carry no scope fact (5.3): create adds
   // a party, edit records a version or a role; they take effect when recorded, as no source names an approval for

@@ -13,6 +13,8 @@ import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
 import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
 import { VocabulariesScreen } from './merchandise/VocabulariesScreen';
+import { ProductsScreen } from './merchandise/ProductsScreen';
+import { TrackingProfilesScreen } from './merchandise/TrackingProfilesScreen';
 import { SuppliersScreen } from './merchandise/SuppliersScreen';
 import { AgreementScreen } from './merchandise/AgreementScreen';
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
@@ -108,6 +110,10 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <GeographyScreen />;
     case 'setup.vocabularies':
       return <VocabulariesScreen />;
+    case 'setup.products':
+      return <ProductsScreen />;
+    case 'setup.merchandise-tracking-profiles':
+      return <TrackingProfilesScreen />;
     case 'setup.suppliers-and-agreements':
       return <SuppliersScreen />;
     case 'setup.agreement':

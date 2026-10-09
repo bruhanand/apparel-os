@@ -1,6 +1,14 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   BRAND_COVERAGE_CHANGE,
+  type AttributeValue,
+  type CategoryTrackingProfileVersionDraft,
+  type PackDraft,
+  type PackVersionDraft,
+  type SkuVersionDraft,
+  type StyleVersionDraft,
+  type TrackingProfileDraft,
+  type TrackingProfileVersionDraft,
   type AttributeDraft,
   type BrandDraft,
   type BrandVersionDraft,
@@ -41,9 +49,22 @@ import {
   sizeSetMember,
   sizeSetVersion,
   vocabularyValueVersion,
+  categoryTrackingProfile,
+  pack,
+  packContent,
+  packVersion,
+  skuVersion,
+  styleAttributeValue,
+  styleVersion,
+  trackingProfile,
+  trackingProfileVersion,
 } from '../db/schema.js';
 import { catalogueTables } from '../db/tables.js';
 import { approved, operationName, recordTypeOf } from '../domain/kinds.js';
+import type { StockPresence } from '../contracts/stock-presence.js';
+import { trackingProfileChanged } from '../events.js';
+import { isPieceTrackingChange, linkOn, piecesAskedOn } from '../queries/tracking.js';
+import { attributeValuesRefusal, skusOfProfile, stockRecordedRefusal } from './product-rules.js';
 import {
   ancestorsOf,
   approvedOn,
@@ -90,12 +111,16 @@ interface Change {
   readonly check?: (context: TransactionContext, recordId: string | undefined) => Promise<CommandRefusal | undefined>;
   /** The parent the version names, for the nesting rule and its locks (4.1). */
   readonly parent?: { readonly kind: 'brand' | 'category'; readonly id: string | undefined };
+  /** What the change does once its version is written, such as the event module-map section 8 names (2.5). */
+  readonly after?: (context: TransactionContext, recordId: string, versionId: string) => Promise<void>;
 }
 
 interface NewRecord {
   readonly code: string;
   readonly writeIdentity: (context: TransactionContext, id: string) => Promise<void>;
   readonly changes: readonly AuditChange[];
+  /** Whether the code is taken in its scope, where that is not the whole Organisation, as a pack's SKU (4.1). */
+  readonly taken?: (context: TransactionContext) => Promise<boolean>;
 }
 
 const UNIQUE_VIOLATION = '23505';
@@ -106,6 +131,8 @@ export class CataloguePreparation {
   constructor(
     protected readonly audit: AuditInterface,
     protected readonly access: Pick<AccessInterface, 'requestApproval'>,
+    /** The stock-presence contract `stock` implements (4.4, 4.6); none answers when left out. */
+    protected readonly presence?: StockPresence,
   ) {}
 
   private async change(
@@ -192,6 +219,7 @@ export class CataloguePreparation {
     );
     await change.children?.(context, versionId);
     if (direct) await takeEffect(context, change.kind, recordId, versionId, change.validFrom);
+    await change.after?.(context, recordId, versionId);
     const name = operationName(change.kind);
     await this.audit.record(context, {
       actor: { kind: 'user', id: preparer.userId },
@@ -230,8 +258,12 @@ export class CataloguePreparation {
     recordId: string,
   ): Promise<boolean> {
     const tables = catalogueTables[kind];
-    const taken = await context.tx.execute(sql`select 1 from ${tables.identity} where code = ${fixed.code} limit 1`);
-    if (taken.rows.length > 0) return false;
+    if (fixed.taken !== undefined) {
+      if (await fixed.taken(context)) return false;
+    } else {
+      const taken = await context.tx.execute(sql`select 1 from ${tables.identity} where code = ${fixed.code} limit 1`);
+      if (taken.rows.length > 0) return false;
+    }
     await context.tx.execute(sql`savepoint merchandise_new_record`);
     try {
       await fixed.writeIdentity(context, recordId);
@@ -485,4 +517,290 @@ export class CataloguePreparation {
   ) {
     return this.change(context, preparer, this.nameChange(kind, draft), { kind: 'existing', id: recordId });
   }
+
+  // Tracking profiles and each category's link to one (4.5, 4.6; PRD-MER-010, PRD-MER-014, PRD-MER-018, POL-04.01,
+  // POL-04.05; S1-F03-T02).
+
+  private trackingProfileChange(draft: TrackingProfileDraft | TrackingProfileVersionDraft): Change {
+    return {
+      kind: 'tracking_profile',
+      validFrom: draft.validFrom,
+      versionToken: 'versionToken' in draft ? draft.versionToken : undefined,
+      references: [],
+      changes: [
+        value('name', draft.name),
+        value('pieceTracked', draft.pieceTracked),
+        value('batchExpiryRequired', draft.batchExpiryRequired),
+        value('requiredIdentifiers', [...draft.requiredIdentifiers]),
+        value('receivingShelfLifeDays', draft.receivingShelfLifeDays ?? null),
+        value('sellingShelfLifeDays', draft.sellingShelfLifeDays ?? null),
+      ],
+      // PRD-MER-018, DEC-054: a change to piece-tracked is refused while stock of the profile's goods is recorded at a
+      // Site with no labelling count planned there. Labelling counts are stage 2's, so none is planned yet: any Site
+      // holding such stock refuses it (4.6).
+      check: async (c, recordId) => {
+        if (recordId === undefined || !draft.pieceTracked) return undefined;
+        if (!(await isPieceTrackingChange(c, recordId, draft.validFrom))) return undefined;
+        const skus = await skusOfProfile(c, recordId, draft.validFrom);
+        return stockRecordedRefusal(c, this.presence, skus, 'merchandise.labelling-count-not-planned');
+      },
+      writeVersion: async (c, common, recordId) => {
+        await c.tx.insert(trackingProfileVersion).values({
+          ...common,
+          trackingProfileId: recordId,
+          name: draft.name,
+          pieceTracked: draft.pieceTracked,
+          batchExpiryRequired: draft.batchExpiryRequired,
+          requiredIdentifiers: [...draft.requiredIdentifiers],
+          receivingShelfLifeDays: draft.receivingShelfLifeDays ?? null,
+          sellingShelfLifeDays: draft.sellingShelfLifeDays ?? null,
+        });
+      },
+      after: async (c, recordId, versionId) => {
+        await c.publish(trackingProfileChanged, {
+          subject: { module: 'merchandise', recordType: recordTypeOf('tracking_profile'), recordId, versionId },
+          payload: { change: 'profile', recordId, versionId },
+        });
+      },
+    };
+  }
+
+  prepareTrackingProfile(context: TransactionContext, preparer: Preparer, draft: TrackingProfileDraft) {
+    return this.change(context, preparer, this.trackingProfileChange(draft), {
+      kind: 'new',
+      fixed: {
+        code: draft.code,
+        writeIdentity: async (c, id) => {
+          await c.tx.insert(trackingProfile).values({ id, code: draft.code });
+        },
+        changes: [value('code', draft.code)],
+      },
+    });
+  }
+
+  prepareTrackingProfileVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    recordId: string,
+    draft: TrackingProfileVersionDraft,
+  ) {
+    return this.change(context, preparer, this.trackingProfileChange(draft), { kind: 'existing', id: recordId });
+  }
+
+  /**
+   * A category's tracking profile from a date (4.6; POL-04.01). A category moves from quantity to piece tracking only
+   * through its profile's own version, which the labelling count puts in force Site by Site (PRD-MER-018), so a link
+   * keeps the tracking of the link it ends on its start (`merchandise.tracking-change-through-profile`). A category's
+   * first link may name any profile: no stock of its goods can be held before it has one. **Design choice.**
+   */
+  prepareCategoryTrackingProfileVersion(
+    context: TransactionContext,
+    preparer: Preparer,
+    categoryId: string,
+    draft: CategoryTrackingProfileVersionDraft,
+  ) {
+    return this.change(
+      context,
+      preparer,
+      {
+        kind: 'category_tracking_profile',
+        validFrom: draft.validFrom,
+        versionToken: draft.versionToken,
+        references: [{ kind: 'tracking_profile', id: draft.trackingProfileId }],
+        changes: [value('trackingProfileId', draft.trackingProfileId)],
+        check: async (c) => {
+          const previous = await linkOn(c, categoryId, draft.validFrom);
+          if (previous === undefined || previous.trackingProfileId === draft.trackingProfileId) return undefined;
+          const before = await piecesAskedOn(c, previous.trackingProfileId, draft.validFrom);
+          const after = await piecesAskedOn(c, draft.trackingProfileId, draft.validFrom);
+          return before === after
+            ? undefined
+            : {
+                kind: 'refused',
+                code: 'merchandise.tracking-change-through-profile',
+                missing: [recordItem('tracking_profile', draft.trackingProfileId)],
+              };
+        },
+        writeVersion: async (c, common) => {
+          await c.tx
+            .insert(categoryTrackingProfile)
+            .values({ ...common, categoryId, trackingProfileId: draft.trackingProfileId });
+        },
+        after: async (c, recordId, versionId) => {
+          await c.publish(trackingProfileChanged, {
+            subject: {
+              module: 'merchandise',
+              recordType: recordTypeOf('category_tracking_profile'),
+              recordId,
+              versionId,
+            },
+            payload: { change: 'category-link', recordId, versionId },
+          });
+        },
+      },
+      { kind: 'existing', id: categoryId },
+    );
+  }
+
+  // Styles and SKUs: their later versions (4.1, 4.4; PRD-MER-004, POL-04.03, POL-04.04, PRD-MER-019). A new style or
+  // SKU is made only by confirming its product proposal (4.2).
+
+  prepareStyleVersion(context: TransactionContext, preparer: Preparer, styleId: string, draft: StyleVersionDraft) {
+    return this.change(
+      context,
+      preparer,
+      {
+        kind: 'style',
+        validFrom: draft.validFrom,
+        versionToken: draft.versionToken,
+        references: [],
+        changes: [
+          value('brandArticleNumber', draft.brandArticleNumber ?? null),
+          value('launchDate', draft.launchDate ?? null),
+          value('hsn', draft.hsn ?? null),
+          value(
+            'attributes',
+            draft.attributes.map((each) => ({
+              attributeId: each.attributeId,
+              value: each.valueId ?? each.text ?? null,
+            })),
+          ),
+        ],
+        // GC2-9: a list-type attribute takes only an approved value of its vocabulary in force on the start (4.2).
+        check: (c) => attributeValuesRefusal(c, draft.attributes, draft.validFrom),
+        writeVersion: async (c, common) => {
+          await c.tx.insert(styleVersion).values({
+            ...common,
+            styleId,
+            brandArticleNumber: draft.brandArticleNumber ?? null,
+            launchDate: draft.launchDate ?? null,
+            hsn: draft.hsn ?? null,
+          });
+        },
+        children: (c, versionId) => writeStyleAttributes(c, versionId, draft.attributes),
+      },
+      { kind: 'existing', id: styleId },
+    );
+  }
+
+  /**
+   * A SKU's later version (4.4; GC2-5): a new stock unit is refused while stock of the SKU is recorded, asked of the
+   * stock ledger through the stock-presence contract; its purpose may change (PRD-MER-019).
+   */
+  prepareSkuVersion(context: TransactionContext, preparer: Preparer, skuId: string, draft: SkuVersionDraft) {
+    return this.change(
+      context,
+      preparer,
+      {
+        kind: 'sku',
+        validFrom: draft.validFrom,
+        versionToken: draft.versionToken,
+        references: [],
+        changes: [value('stockUnit', draft.stockUnit), value('purpose', draft.purpose)],
+        check: async (c) => {
+          const current = await c.tx.execute<{ stock_unit: string }>(sql`
+            select stock_unit from merchandise.sku_version
+            where sku_id = ${skuId}::uuid and decision = 'Approved'
+              and lower(valid_during) <= ${draft.validFrom}::date
+            order by lower(valid_during) desc limit 1`);
+          const unit = current.rows[0]?.stock_unit;
+          if (unit === undefined || unit === draft.stockUnit) return undefined;
+          return stockRecordedRefusal(c, this.presence, [skuId], 'merchandise.stock-recorded');
+        },
+        writeVersion: async (c, common) => {
+          await c.tx
+            .insert(skuVersion)
+            .values({ ...common, skuId, stockUnit: draft.stockUnit, purpose: draft.purpose });
+        },
+      },
+      { kind: 'existing', id: skuId },
+    );
+  }
+
+  // Packs (4.4; POL-04.03, POL-04.04, PRD-MER-012): each version keeps its conversion, so past quantities keep theirs.
+
+  private packChange(draft: PackDraft | PackVersionDraft, skuId?: string): Change {
+    return {
+      kind: 'pack',
+      validFrom: draft.validFrom,
+      versionToken: 'versionToken' in draft ? draft.versionToken : undefined,
+      references: [
+        ...(skuId === undefined ? [] : [{ kind: 'sku' as const, id: skuId }]),
+        ...draft.contents.map((content) => ({ kind: 'sku' as const, id: content.skuId })),
+      ],
+      changes: [
+        value('units', draft.units ?? null),
+        value('mixed', draft.mixed),
+        value('forPurchasing', draft.forPurchasing),
+        value('forSelling', draft.forSelling),
+        value(
+          'contents',
+          draft.contents.map((content) => ({ skuId: content.skuId, quantity: content.quantity })),
+        ),
+      ],
+      writeVersion: async (c, common, recordId) => {
+        await c.tx.insert(packVersion).values({
+          ...common,
+          packId: recordId,
+          units: draft.units ?? null,
+          mixed: draft.mixed,
+          forPurchasing: draft.forPurchasing,
+          forSelling: draft.forSelling,
+        });
+      },
+      children: async (c, versionId) => {
+        if (draft.contents.length === 0) return;
+        await c.tx.insert(packContent).values(
+          draft.contents.map((content) => ({
+            id: uuidv7(),
+            packVersionId: versionId,
+            skuId: content.skuId,
+            quantity: content.quantity,
+          })),
+        );
+      },
+    };
+  }
+
+  preparePack(context: TransactionContext, preparer: Preparer, draft: PackDraft) {
+    return this.change(context, preparer, this.packChange(draft, draft.skuId), {
+      kind: 'new',
+      fixed: {
+        code: draft.code,
+        // A pack's code is unique in its SKU (4.1).
+        taken: async (c) =>
+          (
+            await c.tx.execute(
+              sql`select 1 from merchandise.pack where sku_id = ${draft.skuId}::uuid and code = ${draft.code}`,
+            )
+          ).rows.length > 0,
+        writeIdentity: async (c, id) => {
+          await c.tx.insert(pack).values({ id, code: draft.code, skuId: draft.skuId });
+        },
+        changes: [value('code', draft.code), value('skuId', draft.skuId)],
+      },
+    });
+  }
+
+  preparePackVersion(context: TransactionContext, preparer: Preparer, packId: string, draft: PackVersionDraft) {
+    return this.change(context, preparer, this.packChange(draft), { kind: 'existing', id: packId });
+  }
+}
+
+/** A style version's attribute values, frozen with it (4.1, 4.2). */
+export async function writeStyleAttributes(
+  context: TransactionContext,
+  versionId: string,
+  attributes: readonly AttributeValue[],
+): Promise<void> {
+  if (attributes.length === 0) return;
+  await context.tx.insert(styleAttributeValue).values(
+    attributes.map((each) => ({
+      id: uuidv7(),
+      styleVersionId: versionId,
+      attributeId: each.attributeId,
+      vocabularyValueId: each.valueId ?? null,
+      textValue: each.text ?? null,
+    })),
+  );
 }

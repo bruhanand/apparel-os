@@ -27,8 +27,16 @@ import {
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
 import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
-import { CatalogueModule, catalogueApprovals, catalogueScopeMembers } from './modules/merchandise/catalogue/index.js';
-import { PartiesModule, partiesApprovals } from './modules/merchandise/parties/index.js';
+import {
+  CatalogueModule,
+  catalogueApprovals,
+  catalogueScopeMembers,
+  STOCK_PRESENCE,
+  SUPPLIER_ROLES,
+  type StockPresence,
+  type SupplierRoles,
+} from './modules/merchandise/catalogue/index.js';
+import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
 import {
   LOCATION_IN_USE,
   OrganisationModule,
@@ -36,7 +44,7 @@ import {
   organisationScopeMembers,
   type LocationInUse,
 } from './modules/organisation/index.js';
-import { LocationStock, StockLedgerModule } from './modules/stock/ledger/index.js';
+import { LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
 
 /** The approval rules and decision effects of several modules, as one (access-and-approvals 9.8b). */
 function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals {
@@ -60,6 +68,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
   imports: [AuditModule],
   providers: [
     { provide: LOCATION_IN_USE, useFactory: (): LocationInUse => new LocationStock() },
+    // The catalogue's contracts (structure-and-masters 4.3, 4.4, 4.6; S1-F03-T02): stock presence, which `stock` ·
+    // ledger answers, and supplier roles, which the parties part answers.
+    { provide: STOCK_PRESENCE, useFactory: (): StockPresence => new SkuStockPresence() },
+    { provide: SUPPLIER_ROLES, useValue: partiesSupplierRoles satisfies SupplierRoles },
     {
       provide: MODULE_APPROVALS,
       useFactory: (audit: AuditInterface, locationInUse: LocationInUse) =>
@@ -88,7 +100,16 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
   ],
-  exports: [MODULE_APPROVALS, LOCATION_IN_USE, SCOPE_MEMBERS, NUMBERED_KINDS, EXCEPTION_TYPES, DECISION_EVIDENCE],
+  exports: [
+    MODULE_APPROVALS,
+    LOCATION_IN_USE,
+    STOCK_PRESENCE,
+    SUPPLIER_ROLES,
+    SCOPE_MEMBERS,
+    NUMBERED_KINDS,
+    EXCEPTION_TYPES,
+    DECISION_EVIDENCE,
+  ],
 })
 export class ModuleApprovalsModule {}
 

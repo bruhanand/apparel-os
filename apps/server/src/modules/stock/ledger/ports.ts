@@ -1,4 +1,5 @@
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { skuOn } from '../../merchandise/catalogue/index.js';
 
 // The read contracts Plan uses (stock-ledger 13.1), as the ledger needs them from `organisation` and `merchandise`
 // (module-map 4.11, 4.12; structure-and-masters 3.8, 4.7). Those modules are not built yet (S1-F02, S1-F03), so the
@@ -60,4 +61,27 @@ export const placesNotBuilt: LedgerPlaces = {
 
 export const skusNotBuilt: LedgerSkus = {
   skuAt: () => Promise.reject(new CommandDefect('merchandise has no SKU read yet (S1-F03)')),
+};
+
+/**
+ * The SKU read wired to `merchandise` · catalogue's Read a SKU as of a date (structure-and-masters 4.7; the merchandise
+ * half of RR-436; S1-F03-T02): the version in force, its brand, stock unit, and whether piece rules and batch tracking
+ * apply at the Site. A SKU with no version in force, or whose category has no tracking profile in force, is undefined:
+ * its tracking is Unknown, and the ledger never defaults it.
+ */
+export const catalogueSkus: LedgerSkus = {
+  async skuAt(context, skuId, siteId, businessDate) {
+    const read = await skuOn(context, skuId, siteId, businessDate);
+    if ('refusal' in read || read.sku.tracking === undefined) return undefined;
+    const sku = read.sku;
+    const tracking = read.sku.tracking;
+    return {
+      skuId,
+      versionId: sku.versionId,
+      brandId: sku.brandId,
+      stockUnit: sku.stockUnit,
+      pieceTracked: tracking.pieceTracked,
+      batchTracked: tracking.batchExpiryRequired,
+    };
+  },
 };

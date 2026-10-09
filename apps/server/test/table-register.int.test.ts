@@ -68,6 +68,8 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'stock.location_has_stock',
     // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).
     'stock.rebuild_partial',
+    // structure-and-masters 4.4, 4.6: the stock-presence contract's answer, SECURITY DEFINER (S1-F03-T02).
+    'stock.sites_holding_stock',
     // stock-ledger 14.1, 14.3: the recheck of holds and freezes the actor cannot see, SECURITY DEFINER (DEC-117).
     'stock.recheck_hidden',
   ],

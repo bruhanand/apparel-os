@@ -2,6 +2,8 @@ import {
   routes,
   type CatalogueChanged,
   type CatalogueKind,
+  type CodeMapped,
+  type ProductProposed,
   type CommandRoute,
   type VocabularyProposed,
   type MasterPageQuery,
@@ -33,7 +35,7 @@ import { recordTypeOf } from '../domain/kinds.js';
 import { CATALOGUE } from '../tokens.js';
 
 type Outcome =
-  | { readonly kind: 'success'; readonly answer: CatalogueChanged | VocabularyProposed }
+  | { readonly kind: 'success'; readonly answer: CatalogueChanged | VocabularyProposed | ProductProposed | CodeMapped }
   | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
 
 /**
@@ -268,6 +270,237 @@ export class CatalogueController {
     return this.command(routes.proposeVocabularyValue, 'merchandise.propose-vocabulary-value', user, input, (c, p) =>
       this.catalogue.proposeVocabularyValue(c, p, input.body),
     );
+  }
+
+  // Tracking profiles and each category's link (4.5, 4.6; S1-F03-T02).
+  @ApiRoute(routes.listTrackingProfiles)
+  listTrackingProfiles(
+    @RouteInput() input: RouteInputOf<typeof routes.listTrackingProfiles>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'tracking_profile', input.query);
+  }
+
+  @ApiRoute(routes.readTrackingProfile)
+  readTrackingProfile(
+    @RouteInput() input: RouteInputOf<typeof routes.readTrackingProfile>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'tracking_profile', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareTrackingProfile)
+  prepareTrackingProfile(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareTrackingProfile>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.prepareTrackingProfile, 'merchandise.record-tracking-profile', user, input, (c, p) =>
+      this.catalogue.prepareTrackingProfile(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.prepareTrackingProfileVersion)
+  prepareTrackingProfileVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareTrackingProfileVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(
+      routes.prepareTrackingProfileVersion,
+      'merchandise.record-tracking-profile-version',
+      user,
+      input,
+      (c, p) => this.catalogue.prepareTrackingProfileVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listCategoryTrackingProfiles)
+  listCategoryTrackingProfiles(
+    @RouteInput() input: RouteInputOf<typeof routes.listCategoryTrackingProfiles>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.list(user, 'category_tracking_profile', input.query);
+  }
+
+  @ApiRoute(routes.readCategoryTrackingProfile)
+  readCategoryTrackingProfile(
+    @RouteInput() input: RouteInputOf<typeof routes.readCategoryTrackingProfile>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.one(user, 'category_tracking_profile', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareCategoryTrackingProfileVersion)
+  prepareCategoryTrackingProfileVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareCategoryTrackingProfileVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(
+      routes.prepareCategoryTrackingProfileVersion,
+      'merchandise.record-category-tracking-profile-version',
+      user,
+      input,
+      (c, p) => this.catalogue.prepareCategoryTrackingProfileVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  // Styles, SKUs and packs (4.1, 4.4; S1-F03-T02).
+  @ApiRoute(routes.listStyles)
+  listStyles(@RouteInput() input: RouteInputOf<typeof routes.listStyles>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'style', input.query);
+  }
+
+  @ApiRoute(routes.readStyle)
+  readStyle(@RouteInput() input: RouteInputOf<typeof routes.readStyle>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'style', input.params.recordId);
+  }
+
+  @ApiRoute(routes.prepareStyleVersion)
+  prepareStyleVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareStyleVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.prepareStyleVersion, 'merchandise.record-style-version', user, input, (c, p) =>
+      this.catalogue.prepareStyleVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listSkus)
+  listSkus(@RouteInput() input: RouteInputOf<typeof routes.listSkus>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'sku', input.query);
+  }
+
+  @ApiRoute(routes.readSku)
+  readSku(@RouteInput() input: RouteInputOf<typeof routes.readSku>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'sku', input.params.recordId);
+  }
+
+  /** Read a SKU as of a date at a Site (4.7), or not found, naming it (PRD-UXP-003). */
+  @ApiRoute(routes.readSkuAsOf)
+  async readSkuAsOf(@RouteInput() input: RouteInputOf<typeof routes.readSkuAsOf>, @SignedIn() user: SignedInUser) {
+    const answer = await this.read(user, 'merchandise.read-sku-as-of', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      found: await this.catalogue.skuOn(context, input.params.recordId, input.query.siteId, input.query.date),
+    }));
+    if ('refusal' in answer.found) throw new ApiRefusal(answer.found.refusal);
+    return { asOf: answer.asOf, sku: answer.found.sku };
+  }
+
+  @ApiRoute(routes.prepareSkuVersion)
+  prepareSkuVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareSkuVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.prepareSkuVersion, 'merchandise.record-sku-version', user, input, (c, p) =>
+      this.catalogue.prepareSkuVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.listPacks)
+  listPacks(@RouteInput() input: RouteInputOf<typeof routes.listPacks>, @SignedIn() user: SignedInUser) {
+    return this.list(user, 'pack', input.query);
+  }
+
+  @ApiRoute(routes.readPack)
+  readPack(@RouteInput() input: RouteInputOf<typeof routes.readPack>, @SignedIn() user: SignedInUser) {
+    return this.one(user, 'pack', input.params.recordId);
+  }
+
+  @ApiRoute(routes.preparePack)
+  preparePack(@RouteInput() input: RouteInputOf<typeof routes.preparePack>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.preparePack, 'merchandise.record-pack', user, input, (c, p) =>
+      this.catalogue.preparePack(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.preparePackVersion)
+  preparePackVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.preparePackVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.preparePackVersion, 'merchandise.record-pack-version', user, input, (c, p) =>
+      this.catalogue.preparePackVersion(c, p, input.params.recordId, input.body),
+    );
+  }
+
+  // Product proposals (4.2; S1-F03-T02): proposed here, confirmed or rejected through the approval panel.
+  @ApiRoute(routes.listProductProposals)
+  listProductProposals(
+    @RouteInput() input: RouteInputOf<typeof routes.listProductProposals>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const page = {
+      after: input.query.after,
+      limit: input.query.limit === undefined ? undefined : Number(input.query.limit),
+    };
+    return this.read(user, 'merchandise.list-product-proposals', async (context) => {
+      const found = await this.catalogue.listProductProposals(context, page);
+      return { asOf: context.startedAt.toISOString(), records: found.records, next: found.next };
+    });
+  }
+
+  @ApiRoute(routes.readProductProposal)
+  async readProductProposal(
+    @RouteInput() input: RouteInputOf<typeof routes.readProductProposal>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const proposalId = input.params.proposalId;
+    const answer = await this.read(user, 'merchandise.read-product-proposal', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      proposal: await this.catalogue.productProposal(context, proposalId),
+    }));
+    if (answer.proposal === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'merchandise.proposal-not-found',
+        missing: [{ kind: 'record', recordType: 'merchandise.product_proposal', recordId: proposalId }],
+      });
+    }
+    return { asOf: answer.asOf, proposal: answer.proposal };
+  }
+
+  @ApiRoute(routes.proposeProduct)
+  proposeProduct(@RouteInput() input: RouteInputOf<typeof routes.proposeProduct>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.proposeProduct, 'merchandise.propose-product', user, input, (c, p) =>
+      this.catalogue.proposeProduct(c, p, input.body),
+    );
+  }
+
+  // External codes (4.3, 4.7; S1-F03-T02).
+  @ApiRoute(routes.listCodeMappings)
+  listCodeMappings(@RouteInput() input: RouteInputOf<typeof routes.listCodeMappings>, @SignedIn() user: SignedInUser) {
+    const query = {
+      skuId: input.query.skuId,
+      after: input.query.after,
+      limit: input.query.limit === undefined ? undefined : Number(input.query.limit),
+    };
+    return this.read(user, 'merchandise.list-code-mappings', async (context) => {
+      const found = await this.catalogue.listCodeMappings(context, query);
+      return { asOf: context.startedAt.toISOString(), records: found.records, next: found.next };
+    });
+  }
+
+  @ApiRoute(routes.mapCode)
+  mapCode(@RouteInput() input: RouteInputOf<typeof routes.mapCode>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.mapCode, 'merchandise.map-code', user, input, (c, p) =>
+      this.catalogue.mapCode(c, p, input.body),
+    );
+  }
+
+  @ApiRoute(routes.endCodeMapping)
+  endCodeMapping(@RouteInput() input: RouteInputOf<typeof routes.endCodeMapping>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.endCodeMapping, 'merchandise.end-code-mapping', user, input, (c, p) =>
+      this.catalogue.endCodeMapping(c, p, input.params.mappingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.resolveCode)
+  async resolveCode(@RouteInput() input: RouteInputOf<typeof routes.resolveCode>, @SignedIn() user: SignedInUser) {
+    const answer = await this.read(user, 'merchandise.resolve-code', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      found: await this.catalogue.resolveCode(context, input.query),
+    }));
+    if ('refusal' in answer.found) throw new ApiRefusal(answer.found.refusal);
+    return { asOf: answer.asOf, resolved: answer.found.resolved };
   }
 
   /** A page of a master's records, in code order (code-house-rules 12.1). */

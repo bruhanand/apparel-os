@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { BRAND_COVERAGE_CHANGE, VOCABULARY_CONFIRMATION } from '@apparel-os/schemas';
+import { BRAND_COVERAGE_CHANGE, PRODUCT_CONFIRMATION, VOCABULARY_CONFIRMATION } from '@apparel-os/schemas';
 import { eq, sql } from 'drizzle-orm';
 import { lockTable, sqlStateOf, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
@@ -16,6 +16,7 @@ import {
 import { catalogueApprovalRules } from '../domain/kinds.js';
 import { approvedOn, referencesInForce, refused, takeEffect, today } from './common.js';
 import { listAttributeRefusal, vocabularyCodeTaken } from './proposals.js';
+import { productProposalEffect } from './products.js';
 import { coverageRules } from './rules.js';
 
 // What a decision does to a catalogue document (module-map 6.2 flow A; access-and-approvals 9.8b; S1-F03-T01): a
@@ -226,6 +227,8 @@ export function catalogueApprovals(audit: AuditInterface): ModuleApprovals {
     effects: new Map<string, DocumentEffect>([
       [BRAND_COVERAGE_CHANGE, coverageEffect(audit)],
       [VOCABULARY_CONFIRMATION, proposalEffect(audit)],
+      // A product proposal's confirmation (4.2; DM-5, DEC-105; S1-F03-T02).
+      [PRODUCT_CONFIRMATION, productProposalEffect(audit)],
     ]),
   };
 }

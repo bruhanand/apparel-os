@@ -8,14 +8,20 @@ import {
   brandAlias,
   businessUnitBrandMember,
   categoryIdentityAttribute,
+  pack,
+  packContent,
   sizeSet,
   sizeSetMember,
+  sku,
+  style,
+  styleAttributeValue,
   vocabularyProposal,
   vocabularyValue,
   type Decision,
 } from '../db/schema.js';
 import { catalogueTables } from '../db/tables.js';
 import { versionState } from '../domain/kinds.js';
+import { identityView } from '../domain/products.js';
 
 // The catalogue's records with every version, a page at a time or one at a time (structure-and-masters 8;
 // code-house-rules 12.1), and the vocabulary proposals (4.2; S1-F03-T01). Every version is shown, newest first, with
@@ -140,6 +146,72 @@ async function versionFields(
     case 'vocabulary_value':
       for (const row of rows) fields.set(row.id, { name: row.name });
       return fields;
+    // S1-F03-T02: tracking profiles, a category's link, styles, SKUs and packs (4.1, 4.4 to 4.6). Unknown is absent.
+    case 'tracking_profile':
+      for (const row of rows) {
+        fields.set(row.id, {
+          name: row.name,
+          pieceTracked: row.pieceTracked,
+          batchExpiryRequired: row.batchExpiryRequired,
+          requiredIdentifiers: row.requiredIdentifiers,
+          ...(row.receivingShelfLifeDays == null ? {} : { receivingShelfLifeDays: row.receivingShelfLifeDays }),
+          ...(row.sellingShelfLifeDays == null ? {} : { sellingShelfLifeDays: row.sellingShelfLifeDays }),
+        });
+      }
+      return fields;
+    case 'category_tracking_profile':
+      for (const row of rows) fields.set(row.id, { trackingProfileId: row.trackingProfileId });
+      return fields;
+    case 'style': {
+      const values = await listed(
+        () =>
+          context.tx
+            .select()
+            .from(styleAttributeValue)
+            .where(inArray(styleAttributeValue.styleVersionId, ids))
+            .orderBy(asc(styleAttributeValue.attributeId)),
+        (row) => row.styleVersionId,
+        (row) => ({
+          attributeId: row.attributeId,
+          ...(row.vocabularyValueId === null ? {} : { valueId: row.vocabularyValueId }),
+          ...(row.textValue === null ? {} : { text: row.textValue }),
+        }),
+      );
+      for (const row of rows) {
+        fields.set(row.id, {
+          ...(row.brandArticleNumber == null ? {} : { brandArticleNumber: row.brandArticleNumber }),
+          ...(row.launchDate == null ? {} : { launchDate: row.launchDate }),
+          ...(row.hsn == null ? {} : { hsn: row.hsn }),
+          attributes: values.get(row.id) ?? [],
+        });
+      }
+      return fields;
+    }
+    case 'sku':
+      for (const row of rows) fields.set(row.id, { stockUnit: row.stockUnit, purpose: row.purpose });
+      return fields;
+    case 'pack': {
+      const contents = await listed(
+        () =>
+          context.tx
+            .select()
+            .from(packContent)
+            .where(inArray(packContent.packVersionId, ids))
+            .orderBy(asc(packContent.skuId)),
+        (row) => row.packVersionId,
+        (row) => ({ skuId: row.skuId, quantity: row.quantity }),
+      );
+      for (const row of rows) {
+        fields.set(row.id, {
+          ...(row.units == null ? {} : { units: row.units }),
+          mixed: row.mixed,
+          forPurchasing: row.forPurchasing,
+          forSelling: row.forSelling,
+          contents: contents.get(row.id) ?? [],
+        });
+      }
+      return fields;
+    }
   }
 }
 
@@ -179,8 +251,57 @@ async function heads(
         .where(inArray(vocabularyValue.id, [...ids]));
       return new Map(rows.map((row) => [row.id, { code: row.code, attributeId: row.attributeId }] as const));
     }
+    case 'style': {
+      const rows = await context.tx
+        .select()
+        .from(style)
+        .where(inArray(style.id, [...ids]));
+      return new Map(
+        rows.map((row) => [row.id, { code: row.code, brandId: row.brandId, categoryId: row.categoryId }] as const),
+      );
+    }
+    case 'sku': {
+      const rows = await context.tx
+        .select()
+        .from(sku)
+        .where(inArray(sku.id, [...ids]));
+      // An identity value of a list-type attribute is a vocabulary value; of a text attribute, text (4.2).
+      const attributeIds = [...new Set(rows.flatMap((row) => Object.keys(row.identity)))];
+      const kinds =
+        attributeIds.length === 0
+          ? []
+          : await context.tx
+              .select({ id: attribute.id, valueKind: attribute.valueKind })
+              .from(attribute)
+              .where(inArray(attribute.id, attributeIds));
+      const listKinds = new Set(kinds.filter((row) => row.valueKind === 'list').map((row) => row.id));
+      return new Map(
+        rows.map(
+          (row) =>
+            [
+              row.id,
+              {
+                code: row.code,
+                styleId: row.styleId,
+                size: row.size,
+                identity: identityView(row.identity, listKinds),
+              },
+            ] as const,
+        ),
+      );
+    }
+    case 'pack': {
+      const rows = await context.tx
+        .select()
+        .from(pack)
+        .where(inArray(pack.id, [...ids]));
+      return new Map(rows.map((row) => [row.id, { code: row.code, skuId: row.skuId }] as const));
+    }
+    // A category's link is named by the category's code (4.6).
     case 'brand':
-    case 'category': {
+    case 'category':
+    case 'tracking_profile':
+    case 'category_tracking_profile': {
       const tables = catalogueTables[kind];
       const rows = await context.tx
         .select({ id: sql<string>`${tables.identityId}`, code: sql<string>`code` })
@@ -265,6 +386,16 @@ function ownerField(kind: CatalogueKind): string {
       return 'attributeId';
     case 'vocabulary_value':
       return 'vocabularyValueId';
+    case 'tracking_profile':
+      return 'trackingProfileId';
+    case 'category_tracking_profile':
+      return 'categoryId';
+    case 'style':
+      return 'styleId';
+    case 'sku':
+      return 'skuId';
+    case 'pack':
+      return 'packId';
   }
 }
 

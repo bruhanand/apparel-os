@@ -1,4 +1,4 @@
-import type { ApiClient, CallInput, ErrorBody, routes } from '@apparel-os/schemas';
+import type { ApiClient, CallInput, CallResult, ErrorBody, routes } from '@apparel-os/schemas';
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 
 // The data layer (PRD Stack: Web, TanStack Query; code-house-rules 12.1, 12.2). Reads go through the typed client and
@@ -23,8 +23,15 @@ export function failureBody(error: unknown): ErrorBody | null {
   return error instanceof ApiFailure ? error.body : null;
 }
 
+/** What a read route answers when it succeeds. */
+type ReadAnswer<K extends ReadName> = Extract<CallResult<Table[K]>, { readonly ok: true }>['data'];
+
 /** The query options of one read route: keyed by the route and its input; a refusal is thrown as ApiFailure. */
-export function readQuery<K extends ReadName>(client: ApiClient<Table>, name: K, input: CallInput<Table[K]>) {
+export function readQuery<K extends ReadName>(
+  client: ApiClient<Table>,
+  name: K,
+  input: CallInput<Table[K]>,
+): { readonly queryKey: readonly [K, CallInput<Table[K]>]; readonly queryFn: () => Promise<ReadAnswer<K>> } {
   return {
     queryKey: [name, input] as const,
     queryFn: async () => {
@@ -74,8 +81,11 @@ type PagedName = keyof typeof PAGED_ROWS;
  * cap, until the last, the rows joined in order (code-house-rules 12.1 "Reads"). For a screen that shows or looks up
  * every row; a refusal is thrown as ApiFailure.
  */
-export function allPagesQuery<K extends PagedName>(client: ApiClient<Table>, name: K) {
-  type Data = Awaited<ReturnType<ReturnType<typeof readQuery<K>>['queryFn']>>;
+export function allPagesQuery<K extends PagedName>(
+  client: ApiClient<Table>,
+  name: K,
+): { readonly queryKey: readonly [K, 'all']; readonly queryFn: () => Promise<ReadAnswer<K>> } {
+  type Data = ReadAnswer<K>;
   type Page = Record<string, unknown> & { readonly next: string | null };
   const read = async (after: string | undefined): Promise<Page> => {
     const input = { query: after === undefined ? {} : { after } } as CallInput<Table[K]>;

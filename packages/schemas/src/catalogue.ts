@@ -31,6 +31,14 @@ export const catalogueKinds = [
   'size_set',
   'attribute',
   'vocabulary_value',
+  // Tracking profiles, styles, SKUs and packs (4.1, 4.4 to 4.6; S1-F03-T02). A style and a SKU are created only by
+  // confirming a product proposal (4.2), so they have no route to create one; a category's tracking-profile link has
+  // the category's identity (4.6), so it has none either.
+  'tracking_profile',
+  'category_tracking_profile',
+  'style',
+  'sku',
+  'pack',
 ] as const;
 export type CatalogueKind = (typeof catalogueKinds)[number];
 
@@ -77,6 +85,21 @@ export const catalogueRoutes = {
     prepare: null,
     version: 'prepareVocabularyValueVersion',
   },
+  tracking_profile: {
+    list: 'listTrackingProfiles',
+    read: 'readTrackingProfile',
+    prepare: 'prepareTrackingProfile',
+    version: 'prepareTrackingProfileVersion',
+  },
+  category_tracking_profile: {
+    list: 'listCategoryTrackingProfiles',
+    read: 'readCategoryTrackingProfile',
+    prepare: null,
+    version: 'prepareCategoryTrackingProfileVersion',
+  },
+  style: { list: 'listStyles', read: 'readStyle', prepare: null, version: 'prepareStyleVersion' },
+  sku: { list: 'listSkus', read: 'readSku', prepare: null, version: 'prepareSkuVersion' },
+  pack: { list: 'listPacks', read: 'readPack', prepare: 'preparePack', version: 'preparePackVersion' },
 } as const satisfies Record<CatalogueKind, { list: string; read: string; prepare: string | null; version: string }>;
 
 /**
@@ -153,6 +176,115 @@ export const vocabularyProposalDraftSchema = z.strictObject({
   ...nameFields,
 });
 
+// Tracking profiles (4.5, 4.6; PRD-MER-010, PRD-MER-011, PRD-MER-014, POL-04.01, POL-04.05): none has a default.
+const shelfLifeDays = z.number().int().min(0).optional();
+const trackingProfileFields = {
+  name: textSchema,
+  /** Piece-tracked, or held as a quantity per SKU and unit (PRD-MER-014). A change to piece-tracked is 4.6's. */
+  pieceTracked: z.boolean(),
+  /** Batch and expiry carried through receiving, movement, sale, return and count (PRD-MER-011, POL-04.05). */
+  batchExpiryRequired: z.boolean(),
+  /** The identifiers the profile requires, each as written; none is set in code (4.5). */
+  requiredIdentifiers: distinctTexts,
+  /** Minimum remaining shelf life in days for receiving and for selling; absent is Unknown (POL-04.05; V-05). */
+  receivingShelfLifeDays: shelfLifeDays,
+  sellingShelfLifeDays: shelfLifeDays,
+};
+export const trackingProfileDraftSchema = z.strictObject({
+  code: masterCodeSchema,
+  ...trackingProfileFields,
+  ...validFrom,
+});
+export const trackingProfileVersionDraftSchema = z.strictObject({
+  ...trackingProfileFields,
+  ...validFrom,
+  ...versionToken,
+});
+/** A category's tracking profile from a date (4.6; POL-04.01): the dated link `category_tracking_profile`. */
+const categoryTrackingProfileFields = { trackingProfileId: idSchema };
+export const categoryTrackingProfileVersionDraftSchema = z.strictObject({
+  ...categoryTrackingProfileFields,
+  ...validFrom,
+  ...versionToken,
+});
+
+/**
+ * An attribute's value on a style or in a SKU's identity (4.1, 4.2; PRD-MER-004, GC2-9): an approved vocabulary value
+ * of a list-type attribute, or text for a text attribute. An attribute not given is Unknown (2.4; PRD-MER-005).
+ */
+export const attributeValueSchema = z
+  .strictObject({ attributeId: idSchema, valueId: idSchema.optional(), text: textSchema.optional() })
+  .refine((each) => (each.valueId === undefined) !== (each.text === undefined), {
+    message: 'Give a value or a text, not both',
+  });
+export type AttributeValue = z.infer<typeof attributeValueSchema>;
+export const attributeValuesSchema = z
+  .array(attributeValueSchema)
+  .refine((list) => new Set(list.map((each) => each.attributeId)).size === list.length, {
+    message: 'Each attribute is given once',
+  });
+/** As a record shows it: an attribute with neither a value nor a text is Unknown (2.4). */
+const attributeValueView = z.strictObject({
+  attributeId: idSchema,
+  valueId: idSchema.optional(),
+  text: textSchema.optional(),
+});
+
+/** A style's versioned fields (4.1; PRD-MER-002, PRD-MER-004, PRD-MER-005): each a value or Unknown (absent). */
+const styleFields = {
+  brandArticleNumber: textSchema.optional(),
+  launchDate: businessDateSchema.optional(),
+  /** The style's HSN as given; the classification it names is `finance`'s (POL-10.02). */
+  hsn: textSchema.optional(),
+  /** Season, collection, gender, fabric, fit and any other attribute the Organisation configures (4.2). */
+  attributes: attributeValuesSchema,
+};
+export const styleVersionDraftSchema = z.strictObject({ ...styleFields, ...validFrom, ...versionToken });
+
+/** The stock units of POL-04.03: one per SKU at a time, quantities whole (4.4). */
+export const stockUnitSchema = z.enum(['piece', 'pair', 'pack']);
+export type StockUnit = z.infer<typeof stockUnitSchema>;
+/** A SKU's purpose (PRD-MER-019; DEC-123): every purpose keeps its actual stock cost. */
+export const skuPurposeSchema = z.enum(['merchandise', 'gift-with-purchase', 'promotional', 'packaging']);
+export type SkuPurpose = z.infer<typeof skuPurposeSchema>;
+const skuFields = { stockUnit: stockUnitSchema, purpose: skuPurposeSchema };
+export const skuVersionDraftSchema = z.strictObject({ ...skuFields, ...validFrom, ...versionToken });
+
+/**
+ * A pack's versioned fields (4.4; POL-04.03, POL-04.04): an explicit conversion to the SKU's stock units, or, for a
+ * mixed size or colour pack, its contents SKU by SKU; and whether it is a purchasing pack, a selling pack or both.
+ */
+const packContentSchema = z.strictObject({ skuId: idSchema, quantity: z.number().int().min(1) });
+const packFields = {
+  units: z.number().int().min(1).optional(),
+  mixed: z.boolean(),
+  forPurchasing: z.boolean(),
+  forSelling: z.boolean(),
+  contents: z.array(packContentSchema),
+};
+interface PackShape {
+  readonly units?: number | undefined;
+  readonly mixed: boolean;
+  readonly forPurchasing: boolean;
+  readonly forSelling: boolean;
+  readonly contents: readonly { readonly skuId: string }[];
+}
+const packRules = (each: PackShape) =>
+  (each.mixed
+    ? each.units === undefined && each.contents.length > 0
+    : each.units !== undefined && each.contents.length === 0) &&
+  (each.forPurchasing || each.forSelling) &&
+  new Set(each.contents.map((content) => content.skuId)).size === each.contents.length;
+const packMessage = {
+  message: 'A pack has a conversion, or contents when mixed, each SKU once, and is for purchasing, selling or both',
+};
+export const packDraftSchema = z
+  .strictObject({ code: masterCodeSchema, skuId: idSchema, ...packFields, ...validFrom })
+  .refine(packRules, packMessage);
+export const packVersionDraftSchema = z
+  .strictObject({ ...packFields, ...validFrom, ...versionToken })
+  .refine(packRules, packMessage);
+
 export type BrandDraft = z.infer<typeof brandDraftSchema>;
 export type BrandVersionDraft = z.infer<typeof brandVersionDraftSchema>;
 export type BusinessUnitBrandVersionDraft = z.infer<typeof businessUnitBrandVersionDraftSchema>;
@@ -163,6 +295,13 @@ export type SizeSetVersionDraft = z.infer<typeof sizeSetVersionDraftSchema>;
 export type AttributeDraft = z.infer<typeof attributeDraftSchema>;
 export type CatalogueNameVersionDraft = z.infer<typeof catalogueNameVersionDraftSchema>;
 export type VocabularyProposalDraft = z.infer<typeof vocabularyProposalDraftSchema>;
+export type TrackingProfileDraft = z.infer<typeof trackingProfileDraftSchema>;
+export type TrackingProfileVersionDraft = z.infer<typeof trackingProfileVersionDraftSchema>;
+export type CategoryTrackingProfileVersionDraft = z.infer<typeof categoryTrackingProfileVersionDraftSchema>;
+export type StyleVersionDraft = z.infer<typeof styleVersionDraftSchema>;
+export type SkuVersionDraft = z.infer<typeof skuVersionDraftSchema>;
+export type PackDraft = z.infer<typeof packDraftSchema>;
+export type PackVersionDraft = z.infer<typeof packVersionDraftSchema>;
 
 /**
  * What recording a catalogue change answers: the record and its version, and the approval request where a rule needs
@@ -214,6 +353,19 @@ export const categoryRecordSchema = catalogueRecord({}, categoryFields);
 export const sizeSetRecordSchema = catalogueRecord({ categoryId: idSchema }, sizeSetFields);
 export const attributeRecordSchema = catalogueRecord({ valueKind: attributeValueKindSchema }, nameFields);
 export const vocabularyValueRecordSchema = catalogueRecord({ attributeId: idSchema }, nameFields);
+export const trackingProfileRecordSchema = catalogueRecord({}, trackingProfileFields);
+/** A category's tracking-profile link: the record is the category, named by its code (4.6). */
+export const categoryTrackingProfileRecordSchema = catalogueRecord({}, categoryTrackingProfileFields);
+export const styleRecordSchema = catalogueRecord(
+  { brandId: idSchema, categoryId: idSchema },
+  { ...styleFields, attributes: z.array(attributeValueView) },
+);
+/** A SKU: its identity fixed at creation; a size or identity value not given is Unknown (PRD-MER-005). */
+export const skuRecordSchema = catalogueRecord(
+  { styleId: idSchema, size: textSchema.nullable(), identity: z.array(attributeValueView) },
+  skuFields,
+);
+export const packRecordSchema = catalogueRecord({ skuId: idSchema }, packFields);
 
 export const brandListSchema = pageOf(brandRecordSchema);
 export const businessUnitBrandListSchema = pageOf(businessUnitBrandRecordSchema);
@@ -221,12 +373,22 @@ export const categoryListSchema = pageOf(categoryRecordSchema);
 export const sizeSetListSchema = pageOf(sizeSetRecordSchema);
 export const attributeListSchema = pageOf(attributeRecordSchema);
 export const vocabularyValueListSchema = pageOf(vocabularyValueRecordSchema);
+export const trackingProfileListSchema = pageOf(trackingProfileRecordSchema);
+export const categoryTrackingProfileListSchema = pageOf(categoryTrackingProfileRecordSchema);
+export const styleListSchema = pageOf(styleRecordSchema);
+export const skuListSchema = pageOf(skuRecordSchema);
+export const packListSchema = pageOf(packRecordSchema);
 export const brandReadSchema = readOf(brandRecordSchema);
 export const businessUnitBrandReadSchema = readOf(businessUnitBrandRecordSchema);
 export const categoryReadSchema = readOf(categoryRecordSchema);
 export const sizeSetReadSchema = readOf(sizeSetRecordSchema);
 export const attributeReadSchema = readOf(attributeRecordSchema);
 export const vocabularyValueReadSchema = readOf(vocabularyValueRecordSchema);
+export const trackingProfileReadSchema = readOf(trackingProfileRecordSchema);
+export const categoryTrackingProfileReadSchema = readOf(categoryTrackingProfileRecordSchema);
+export const styleReadSchema = readOf(styleRecordSchema);
+export const skuReadSchema = readOf(skuRecordSchema);
+export const packReadSchema = readOf(packRecordSchema);
 
 /** Each catalogue kind's record as its list and its read carry it. */
 export interface CatalogueRecords {
@@ -236,6 +398,11 @@ export interface CatalogueRecords {
   size_set: z.infer<typeof sizeSetRecordSchema>;
   attribute: z.infer<typeof attributeRecordSchema>;
   vocabulary_value: z.infer<typeof vocabularyValueRecordSchema>;
+  tracking_profile: z.infer<typeof trackingProfileRecordSchema>;
+  category_tracking_profile: z.infer<typeof categoryTrackingProfileRecordSchema>;
+  style: z.infer<typeof styleRecordSchema>;
+  sku: z.infer<typeof skuRecordSchema>;
+  pack: z.infer<typeof packRecordSchema>;
 }
 
 /** The states of a proposal (domain-model 4; DM-4, DEC-105). */

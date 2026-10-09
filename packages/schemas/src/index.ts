@@ -515,3 +515,6 @@ export * from './catalogue.js';
 
 // The parties part of merchandise (structure-and-masters 5; S1-F03-T03).
 export * from './parties.js';
+
+// Product proposals, external codes and Read a SKU (structure-and-masters 4.2, 4.3, 4.7; S1-F03-T02).
+export * from './products.js';

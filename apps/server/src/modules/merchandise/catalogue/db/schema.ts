@@ -1,5 +1,14 @@
-import type { AttributeValueKind, ProposalState } from '@apparel-os/schemas';
-import { boolean, customType, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type {
+  AttributeValueKind,
+  CodeScope,
+  ExternalCodeKind,
+  ProposalState,
+  SkuPurpose,
+  StockUnit,
+} from '@apparel-os/schemas';
+import { sql } from 'drizzle-orm';
+import { boolean, customType, date, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { StoredProposal } from '../domain/products.js';
 
 // Drizzle definitions of the merchandise catalogue's tables (code-house-rules 3.4). They mirror the reviewed migration
 // (migrations/organisation/0045) and never create or change a table; an integration test compares each with the
@@ -120,5 +129,132 @@ export const categoryIdentityAttribute = merchandise.table('category_identity_at
   id: uuid('id').primaryKey(),
   categoryVersionId: uuid('category_version_id').notNull(),
   attributeId: uuid('attribute_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+// Tracking profiles, styles, SKUs, packs, external codes and product proposals (migrations/organisation/0047;
+// S1-F03-T02).
+
+export const trackingProfile = merchandise.table('tracking_profile', identityColumns());
+export const trackingProfileVersion = merchandise.table('tracking_profile_version', {
+  ...versionColumns(),
+  trackingProfileId: uuid('tracking_profile_id').notNull(),
+  name: text('name').notNull(),
+  pieceTracked: boolean('piece_tracked').notNull(),
+  batchExpiryRequired: boolean('batch_expiry_required').notNull(),
+  requiredIdentifiers: text('required_identifiers').array().notNull(),
+  receivingShelfLifeDays: integer('receiving_shelf_life_days'),
+  sellingShelfLifeDays: integer('selling_shelf_life_days'),
+});
+export const trackingProfileSiteChange = merchandise.table('tracking_profile_site_change', {
+  id: uuid('id').primaryKey(),
+  trackingProfileVersionId: uuid('tracking_profile_version_id').notNull(),
+  siteId: uuid('site_id').notNull(),
+  labellingCountId: uuid('labelling_count_id').notNull(),
+  effectiveDate: date('effective_date', { mode: 'string' }).notNull(),
+  actorUserId: uuid('actor_user_id'),
+  actorServiceIdentityId: uuid('actor_service_identity_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const categoryTrackingProfile = merchandise.table('category_tracking_profile', {
+  ...versionColumns(),
+  categoryId: uuid('category_id').notNull(),
+  trackingProfileId: uuid('tracking_profile_id').notNull(),
+});
+
+export const productProposal = merchandise.table('product_proposal', {
+  id: uuid('id').primaryKey(),
+  styleId: uuid('style_id'),
+  proposal: jsonb('proposal').$type<StoredProposal>().notNull(),
+  sourceWords: text('source_words'),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  state: text('state').$type<ProposalState>().notNull(),
+  decidedByUserId: uuid('decided_by_user_id'),
+  decidedAt: at('decided_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+export const style = merchandise.table('style', {
+  ...identityColumns(),
+  brandId: uuid('brand_id').notNull(),
+  categoryId: uuid('category_id').notNull(),
+  proposalId: uuid('proposal_id').notNull(),
+});
+export const styleVersion = merchandise.table('style_version', {
+  ...versionColumns(),
+  styleId: uuid('style_id').notNull(),
+  brandArticleNumber: text('brand_article_number'),
+  launchDate: date('launch_date', { mode: 'string' }),
+  hsn: text('hsn'),
+});
+export const styleAttributeValue = merchandise.table('style_attribute_value', {
+  id: uuid('id').primaryKey(),
+  styleVersionId: uuid('style_version_id').notNull(),
+  attributeId: uuid('attribute_id').notNull(),
+  vocabularyValueId: uuid('vocabulary_value_id'),
+  textValue: text('text_value'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A SKU's identity: each identity attribute of its category to a vocabulary value or text, or null while Unknown. */
+export type SkuIdentity = Record<string, string | null>;
+
+export const sku = merchandise.table('sku', {
+  ...identityColumns(),
+  styleId: uuid('style_id').notNull(),
+  size: text('size'),
+  identity: jsonb('identity').$type<SkuIdentity>().notNull(),
+  proposalId: uuid('proposal_id').notNull(),
+});
+export const skuVersion = merchandise.table('sku_version', {
+  ...versionColumns(),
+  skuId: uuid('sku_id').notNull(),
+  stockUnit: text('stock_unit').$type<StockUnit>().notNull(),
+  purpose: text('purpose').$type<SkuPurpose>().notNull(),
+});
+
+export const pack = merchandise.table('pack', {
+  ...identityColumns(),
+  skuId: uuid('sku_id').notNull(),
+});
+export const packVersion = merchandise.table('pack_version', {
+  ...versionColumns(),
+  packId: uuid('pack_id').notNull(),
+  units: integer('units'),
+  mixed: boolean('mixed').notNull(),
+  forPurchasing: boolean('for_purchasing').notNull(),
+  forSelling: boolean('for_selling').notNull(),
+});
+export const packContent = merchandise.table('pack_content', {
+  id: uuid('id').primaryKey(),
+  packVersionId: uuid('pack_version_id').notNull(),
+  skuId: uuid('sku_id').notNull(),
+  quantity: integer('quantity').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+export const externalCodeKey = merchandise.table('external_code_key', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull(),
+  kind: text('kind').$type<ExternalCodeKind>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const externalCode = merchandise.table('external_code', {
+  id: uuid('id').primaryKey(),
+  codeKeyId: uuid('code_key_id').notNull(),
+  scopeKind: text('scope_kind').$type<CodeScope['kind']>().notNull(),
+  scopePartyId: uuid('scope_party_id'),
+  scopeBrandId: uuid('scope_brand_id'),
+  scopeKey: uuid('scope_key')
+    .notNull()
+    .generatedAlwaysAs(sql`coalesce(scope_party_id, scope_brand_id, '00000000-0000-0000-0000-000000000000'::uuid)`),
+  skuId: uuid('sku_id').notNull(),
+  packId: uuid('pack_id'),
+  target: text('target')
+    .notNull()
+    .generatedAlwaysAs(sql`sku_id::text || '/' || coalesce(pack_id::text, '')`),
+  alias: boolean('alias').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  preparedByUserId: uuid('prepared_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

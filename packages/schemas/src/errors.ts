@@ -539,7 +539,50 @@ export const merchandiseCodes = declareCodes({
   'merchandise.proposal-not-found': 'not-found',
   'merchandise.proposal-not-open': 'refused',
   ...merchandisePartiesCodes(),
+  ...merchandiseProductCodes(),
 });
+
+/**
+ * The codes of styles, SKUs, codes, packs and tracking profiles (structure-and-masters 4.1 to 4.7; S1-F03-T02).
+ *
+ * - `merchandise.value-not-in-vocabulary`: a list-type attribute is given a value that is not an approved value of it
+ *   in force, or a text attribute a value, or a list-type one a text (4.2; GC2-9).
+ * - `merchandise.not-an-identity-attribute`: a SKU names an attribute its category does not count in a SKU's identity.
+ * - `merchandise.size-not-in-size-set`: the size is not one of the category's size set in force (4.1; PRD-MER-002).
+ * - `merchandise.sku-exists`: a SKU of the style already has that size and identity, Unknown counting as one value.
+ * - `merchandise.stock-recorded`: a SKU's stock unit changes while stock of it is recorded (4.4; GC2-5).
+ * - `merchandise.labelling-count-not-planned`: a change to piece-tracked while stock of the profile's goods is
+ *   recorded at a Site with no labelling count planned (4.6; PRD-MER-018).
+ * - `merchandise.stock-presence-unanswered`: no implementation of the stock-presence contract answers (4.4, 4.6).
+ * - `merchandise.tracking-change-through-profile`: a category's link would move it between piece and quantity tracking;
+ *   that is a change of the profile's own version (4.6).
+ * - `merchandise.not-a-piece-tracking-change`: the profile version is not a change from quantity to piece-tracked.
+ * - `merchandise.pack-of-another-sku`: the pack named is not one of the SKU's (4.3).
+ * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target (4.3).
+ * - `merchandise.code-ambiguous`: more than one target matches the code (4.7; PRD-MER-007).
+ * - `merchandise.code-not-found`: no mapping of the code matches (4.7).
+ * - `merchandise.no-version-in-force`: the SKU has no approved version in force on the date (4.7).
+ * - `merchandise.end-not-allowed`: a mapping's end is before today, not after its start, or later than its end.
+ */
+function merchandiseProductCodes() {
+  return {
+    'merchandise.value-not-in-vocabulary': 'refused',
+    'merchandise.not-an-identity-attribute': 'refused',
+    'merchandise.size-not-in-size-set': 'refused',
+    'merchandise.sku-exists': 'refused',
+    'merchandise.stock-recorded': 'refused',
+    'merchandise.labelling-count-not-planned': 'refused',
+    'merchandise.stock-presence-unanswered': 'unavailable',
+    'merchandise.tracking-change-through-profile': 'refused',
+    'merchandise.not-a-piece-tracking-change': 'refused',
+    'merchandise.pack-of-another-sku': 'refused',
+    'merchandise.code-conflict': 'refused',
+    'merchandise.code-ambiguous': 'refused',
+    'merchandise.code-not-found': 'not-found',
+    'merchandise.no-version-in-force': 'not-found',
+    'merchandise.end-not-allowed': 'refused',
+  } as const;
+}
 
 /**
  * The codes of `merchandise` · parties (structure-and-masters 5; S1-F03-T03), beside the catalogue's shared ones.

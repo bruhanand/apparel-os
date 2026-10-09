@@ -67,6 +67,14 @@ export const screens = {
     path: '/setup/vocabularies',
     need: view('merchandise.vocabulary_value'),
   },
+  // Products: styles, SKUs, barcodes and aliases, and product proposals; Merchandise tracking profiles: profiles, each
+  // category's profile and packs (structure-and-masters 4, 8; ui-blueprint Setup; S1-F03-T02).
+  'setup.products': { section: 'setup', path: '/setup/products', need: view('merchandise.sku') },
+  'setup.merchandise-tracking-profiles': {
+    section: 'setup',
+    path: '/setup/merchandise-tracking-profiles',
+    need: view('merchandise.tracking_profile'),
+  },
   // Suppliers and agreements: parties with their roles and bank details, and brand–supplier links; Agreement: an
   // agreement's dated terms (structure-and-masters 5, 8; ui-blueprint Setup; S1-F03-T03).
   'setup.suppliers-and-agreements': {
@@ -123,7 +131,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // menu entry, as the blueprint lists none for Accounts.
   'P-ACC': { home: null, menu: ['setup.organisation-structure'] },
   'P-CHA': { home: null, menu: [] },
-  'P-BKG': { home: null, menu: [] },
+  // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
+  'P-BKG': { home: null, menu: ['setup.products'] },
   'P-OPS': { home: 'my-work', menu: ['my-work'] },
   'P-WHS': { home: null, menu: ['my-work'] },
   'P-BRM': { home: null, menu: [] },
