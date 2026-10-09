@@ -78,6 +78,7 @@ export function MyWorkList({
   onOpen,
   timeZone,
   subjects = new Map(),
+  selection,
 }: {
   work: MyWork;
   onOpen: (item: WorkItem) => void;
@@ -85,6 +86,15 @@ export function MyWorkList({
   timeZone: string;
   /** The subject of each approval item, by item identifier. */
   subjects?: ReadonlyMap<string, ApprovalSubject>;
+  /**
+   * Selection for bulk approval (access-and-approvals 9.9; design-language 10.9 "Selection"): which items may be
+   * selected, those whose action type is on the allowlist; which are; and how to toggle one.
+   */
+  selection?: {
+    readonly selectable: (item: WorkItem) => boolean;
+    readonly selected: ReadonlySet<string>;
+    readonly toggle: (item: WorkItem) => void;
+  };
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -97,11 +107,29 @@ export function MyWorkList({
         <ul className="flex list-none flex-col gap-2 p-0">
           {work.items.map((item) => {
             const subject = subjects.get(item.id);
+            const toggle = selection?.selectable(item) === true ? selection.toggle : undefined;
+            const selected = selection?.selected.has(item.id) === true;
             return (
               <li
                 key={item.id}
-                className="flex flex-wrap items-center gap-3 rounded-card border border-border bg-surface px-4 py-3"
+                className={cn(
+                  'flex flex-wrap items-center gap-3 rounded-card border border-border px-4 py-3',
+                  selected ? 'bg-tint' : 'bg-surface',
+                )}
               >
+                {toggle !== undefined && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    aria-label={t('bulk.select', {
+                      name: subject?.name ?? subject?.title ?? t(`my-work.kind.${item.kind}`),
+                    })}
+                    checked={selected}
+                    onChange={() => {
+                      toggle(item);
+                    }}
+                  />
+                )}
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{subject?.title ?? t(`my-work.kind.${item.kind}`)}</span>
@@ -109,9 +137,7 @@ export function MyWorkList({
                       <span className="text-body">{subject.name}</span>
                     )}
                     <StatusBadge state={stateIdOf(item.state)} />
-                    {item.kind === 'exception' && item.due.kind === 'at' && item.due.at < work.asOf && (
-                      <StatusBadge state="overdue" />
-                    )}
+                    {item.due.kind === 'at' && item.due.at < work.asOf && <StatusBadge state="overdue" />}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-body-sm text-text-2">
                     {subject !== undefined && (

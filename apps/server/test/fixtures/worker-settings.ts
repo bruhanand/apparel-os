@@ -36,6 +36,8 @@ export const SYNTHETIC_EVERY_SECONDS: Readonly<Record<string, number>> = {
   // SYNTHETIC: the escalation of overdue exceptions every minute (S1-F08-T02), a test value only; its real interval
   // is a worker setting with no default (CH-10).
   'exceptions.escalate-overdue': 60,
+  // SYNTHETIC: the escalation of overdue tasks and approvals every minute (S1-F05-T02), a test value only (CH-10).
+  'inbox.escalate-overdue': 60,
 };
 
 /**

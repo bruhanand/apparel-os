@@ -52,6 +52,21 @@ export const approvalDecided = defineEvent({
 });
 
 /**
+ * A stand-in grant took effect (access-and-approvals 10; module-map 4.3, section 8; PRD-ACS-018; S1-F05-T02): the
+ * grant, the stand-in and the person stood in for, identifiers only. A grant ends by itself at its end, which every read
+ * checks against today (7.2), so its end publishes nothing.
+ */
+export const standInChanged = defineEvent({
+  type: 'access.stand-in-changed',
+  version: 1,
+  payload: z.strictObject({
+    grantId: z.uuid(),
+    standInUserId: z.uuid(),
+    forUserId: z.uuid(),
+  }),
+});
+
+/**
  * A role or role assignment changed what someone may do (access-and-approvals 7.2; module-map section 8): the actors
  * whose effective grants were rebuilt. The live-update stream reads their grants again (code-house-rules 12.12).
  */

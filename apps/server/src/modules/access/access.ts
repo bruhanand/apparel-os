@@ -18,6 +18,8 @@ import {
   type Secret,
   type SecuritySettings,
   type SecuritySettingVersionDraft,
+  type StandInGrantDraft,
+  type StandInGrantList,
   type UserVersionDraft,
 } from '@apparel-os/schemas';
 import {
@@ -38,6 +40,8 @@ import {
   type Preparer,
 } from './commands/access-changes.js';
 import { ApprovalLimitChanges, listApprovalLimits } from './commands/approval-limits.js';
+import type { BatchInput, BatchOutcome } from './commands/bulk.js';
+import { listStandInGrants, StandInGrantChanges } from './commands/stand-ins.js';
 import { ApprovalSettingsChanges } from './commands/approval-settings.js';
 import {
   approvalLockTargets,
@@ -53,6 +57,7 @@ import { holdAuthority, type AuthorityActor } from './commands/authority.js';
 import { SecuritySettingsChanges } from './commands/security-settings.js';
 import {
   Approvals,
+  type BatchItemInput,
   type Decidable,
   type DecidingActor,
   type DecisionInput,
@@ -232,6 +237,26 @@ export interface AccessInterface {
   /** Every approval limit with its basis, and the action types a limit can be set for (9.2, 14). */
   listApprovalLimits(context: TransactionContext): Promise<ApprovalLimitList>;
   /**
+   * Records a stand-in grant (access-and-approvals 10; PRD-ACS-018, POL-02.20; GC3-7, DEC-105): never wider than the
+   * authority of the person stood in for on its dates, for a different authorised person to approve (S1-F05-T02).
+   */
+  prepareStandInGrant(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: StandInGrantDraft,
+  ): Promise<Prepared<{ grantId: string; requestId: string }>>;
+  /** Every stand-in grant, and the approval action types a grant can give (10, 14). */
+  listStandInGrants(context: TransactionContext): Promise<StandInGrantList>;
+  /**
+   * Opens a bulk approval's batch (9.9; PRD-ACS-019, POL-02.19): every action type on the allowlist, the reason in
+   * force, the one fresh code taken (3.3); answers the batch and the selection's totals by basis.
+   */
+  openBulkBatch(context: TransactionContext, actor: DecidingActor, input: BatchInput): Promise<BatchOutcome>;
+  /** One item of a bulk approval: its own decision in its own transaction, under its batch (9.9). */
+  decideInBatch(context: TransactionContext, actor: DecidingActor, input: BatchItemInput): Promise<DecisionOutcome>;
+  /** Every approval rule's action type, its module and value basis: what task and approval routing routes (9.4). */
+  approvalActionTypes(): readonly { readonly actionType: string; readonly module: string }[];
+  /**
    * Request approval of another module's document under the rule it declares (access-and-approvals 8, 9.1; module-map
    * 4.3), in the preparing command's transaction. Returns the request's identifier.
    */
@@ -379,6 +404,7 @@ export class Access implements AccessInterface {
   private readonly securitySettingChanges: SecuritySettingsChanges;
   private readonly approvals: Approvals;
   private readonly limits: ApprovalLimitChanges;
+  private readonly standIns: StandInGrantChanges;
   private readonly rules: ReadonlyMap<string, ApprovalRule>;
 
   constructor(private readonly dependencies: AccessDependencies) {
@@ -390,10 +416,12 @@ export class Access implements AccessInterface {
     );
     this.changes = new AccessChanges(dependencies.audit, this.registry, dependencies.scopeMembers);
     this.users = new UserChanges(dependencies.audit);
-    this.settings = new ApprovalSettingsChanges(dependencies.audit);
+    this.settings = new ApprovalSettingsChanges(dependencies.audit, this.rules);
     this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit);
     this.limits = new ApprovalLimitChanges(dependencies.audit, this.rules, this.changes);
+    this.standIns = new StandInGrantChanges(dependencies.audit, this.rules, this.registry);
     this.approvals = new Approvals({
+      standIns: this.standIns,
       audit: dependencies.audit,
       registry: this.registry,
       changes: this.changes,
@@ -542,6 +570,28 @@ export class Access implements AccessInterface {
     const date = await context.businessDate();
     if (date.kind === 'not-set') throw new CommandDefect('Listing approval limits needs today (code-house-rules 9)');
     return listApprovalLimits(context, date.date, this.rules);
+  }
+
+  prepareStandInGrant(context: TransactionContext, preparer: Preparer, draft: StandInGrantDraft) {
+    return this.standIns.prepare(context, preparer, draft);
+  }
+
+  async listStandInGrants(context: TransactionContext): Promise<StandInGrantList> {
+    const date = await context.businessDate();
+    if (date.kind === 'not-set') throw new CommandDefect('Listing stand-in grants needs today (code-house-rules 9)');
+    return { asOf: context.startedAt.toISOString(), ...(await listStandInGrants(context, date.date, this.rules)) };
+  }
+
+  openBulkBatch(context: TransactionContext, actor: DecidingActor, input: BatchInput) {
+    return this.approvals.openBatch(context, actor, input);
+  }
+
+  decideInBatch(context: TransactionContext, actor: DecidingActor, input: BatchItemInput) {
+    return this.approvals.decideInBatch(context, actor, input);
+  }
+
+  approvalActionTypes() {
+    return [...this.rules.values()].map((rule) => ({ actionType: rule.actionType, module: rule.module }));
   }
 
   requestApproval(context: TransactionContext, request: ModuleApprovalRequest) {

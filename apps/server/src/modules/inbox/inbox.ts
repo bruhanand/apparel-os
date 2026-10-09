@@ -2,6 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import { and, desc, eq } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../kernel/index.js';
 import { workItem, workItemActor, workItemEscalation } from './db/schema.js';
+import { dueAtFrom, routingInForce } from './commands/routing.js';
 import { announceItems } from './events.js';
 
 // The inbox's interface for the modules that own work (access-and-approvals 11.1, 11.3; module-map 4.8). `exceptions`
@@ -22,12 +23,19 @@ export interface ItemOwner {
   readonly versionId: string;
 }
 
-/** A work item as its owner publishes it (11.1). */
-export interface PublishedItem {
-  readonly kind: 'task' | 'exception';
+/**
+ * A work item as its owner publishes it (11.1): an exception with the due time its own routing gave it (12.2); or a
+ * task, with the action type of the work it is for, from whose routing at its Site `inbox` sets its due time and
+ * escalation recipient when it receives it (9.4, 11.1; GC3-8, DEC-105; S1-F05-T02). With no routing in force, a task
+ * carries no due time.
+ */
+export type PublishedItem =
+  | (PublishedCommon & { readonly kind: 'exception'; readonly dueAt: Date })
+  | (PublishedCommon & { readonly kind: 'task'; readonly actionType: string });
+
+interface PublishedCommon {
   readonly owner: ItemOwner;
   readonly state: string;
-  readonly dueAt: Date;
   /** In paise, or Unknown, never Unknown as zero (PRD-MOD-015). */
   readonly exposure: { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amount: number };
   readonly facts: {
@@ -59,6 +67,8 @@ export interface InboxInterface {
 export class Inbox implements InboxInterface {
   async publish(context: TransactionContext, item: PublishedItem): Promise<void> {
     const id = uuidv7();
+    const routed = item.kind === 'task' ? await routedDue(context, item.actionType, item.facts.siteId) : undefined;
+    const dueAt = item.kind === 'exception' ? item.dueAt : (routed?.dueAt ?? null);
     const inserted = await context.tx
       .insert(workItem)
       .values({
@@ -70,7 +80,8 @@ export class Inbox implements InboxInterface {
         ownerVersionId: item.owner.versionId,
         state: item.state,
         open: true,
-        dueAt: item.dueAt,
+        dueAt,
+        routingVersionId: routed?.versionId ?? null,
         exposureKind: item.exposure.kind,
         exposureAmount: item.exposure.kind === 'known' ? item.exposure.amount : null,
         siteId: item.facts.siteId,
@@ -132,6 +143,24 @@ export class Inbox implements InboxInterface {
     });
     await announceItems(context, [item.id]);
   }
+}
+
+/**
+ * The due time and routing version of a task or an approval received now (9.4, 11.1; S1-F05-T02): from the routing in
+ * force today for its action type at its Site, a null Site being its own key, never a fallback; undefined, so no due
+ * time, while none is in force (RR-058; no default).
+ */
+export async function routedDue(
+  context: TransactionContext,
+  actionType: string,
+  siteId: string | null,
+  receivedAt: Date = context.startedAt,
+): Promise<{ readonly dueAt: Date | null; readonly versionId: string } | undefined> {
+  const date = await context.businessDate();
+  if (date.kind === 'not-set') return undefined;
+  const version = await routingInForce(context, actionType, siteId, date.date);
+  if (version === undefined) return undefined;
+  return { dueAt: dueAtFrom(version, receivedAt), versionId: version.id };
 }
 
 function actorRow(workItemId: string, actor: ItemActor) {

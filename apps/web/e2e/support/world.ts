@@ -109,6 +109,15 @@ export interface SyntheticWorld {
     readonly reasonId: string;
   };
   /**
+   * The bulk approval journey (S1-F05-T02), in the security settings Organisation: an approver of a test-only action
+   * type on a SYNTHETIC bulk allowlist, with a SYNTHETIC limit, three requests waiting, and the reason they give.
+   */
+  readonly bulk: {
+    readonly organisationCode: string;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+  };
+  /**
    * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
    * Area, an Admin who may prepare the structure and an approver who may approve it.
    */

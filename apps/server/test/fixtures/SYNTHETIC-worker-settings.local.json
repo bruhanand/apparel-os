@@ -62,6 +62,13 @@
       "retryBackoff": true,
       "activeLimitSeconds": 300,
       "everySeconds": 60
+    },
+    "inbox.escalate-overdue": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 60
     }
   }
 }

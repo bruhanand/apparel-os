@@ -19,6 +19,7 @@ const view: ApprovalRequestView = {
   state: 'Awaiting approval',
   requestedAt: '2026-10-07T09:00:00.000Z',
   decidable: { kind: 'available', reason: 'listed', outcomes: ['approve'], missing: [] },
+  bulkAllowed: false,
   asOf: AS_OF,
 };
 

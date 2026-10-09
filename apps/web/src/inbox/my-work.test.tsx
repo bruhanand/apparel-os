@@ -1,6 +1,8 @@
 import type { MyWork, WorkItem } from '@apparel-os/schemas';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { bulkTotalSchema } from '@apparel-os/schemas';
+import { totalText } from './BulkApproval';
 import { myWorkCount, MyWorkCounter, MyWorkList } from './MyWork';
 import { drawerState } from './MyWorkScreen';
 
@@ -140,5 +142,42 @@ describe('an exception in My work (access-and-approvals 12.3, 14; S1-F08-T02)', 
     expect(html).toContain('Value not known yet');
     expect(html).toContain('Open');
     expect(html).not.toContain('Open and decide');
+  });
+});
+
+describe('bulk approval on My work (access-and-approvals 9.9; design-language 10.9; S1-F05-T02)', () => {
+  it('POL-02.19 offers a checkbox only on the items that may be selected, and tints a selected one', () => {
+    const allowed = item(1);
+    const other = item(2);
+    const html = renderToStaticMarkup(
+      <MyWorkList
+        work={work([allowed, other])}
+        onOpen={() => undefined}
+        timeZone="UTC"
+        selection={{
+          selectable: (each) => each.id === allowed.id,
+          selected: new Set([allowed.id]),
+          toggle: () => undefined,
+        }}
+      />,
+    );
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toContain('bg-tint');
+  });
+
+  it('PRD-ACS-010 shows an overdue approval as Overdue', () => {
+    const overdue = item(1, { due: { kind: 'at', at: '2026-10-07T09:00:00.000Z' } });
+    const html = renderToStaticMarkup(<MyWorkList work={work([overdue])} onOpen={() => undefined} timeZone="UTC" />);
+    expect(text(html)).toContain('Overdue');
+  });
+
+  it('PRD-ACS-019 PRD-MOD-015 a total says its known sum and its Unknown count, never Unknown as zero', () => {
+    const total = (value: object) => bulkTotalSchema.parse(value);
+    expect(totalText(total({ basis: 'cost', known: 152_500, knownCount: 2, unknownCount: 1 }))).toBe(
+      'Total ₹1,525.00 on cost · 1 of unknown value',
+    );
+    expect(totalText(total({ basis: 'cost', known: null, knownCount: 0, unknownCount: 2 }))).toBe(
+      'No known value on cost · 2 of unknown value',
+    );
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   approvalRequestViewSchema,
   approvalValueSchema,
+  bulkTotals,
   decisionRefusalCodes,
   decisionRequestSchema,
   userVersionDraftSchema,
@@ -40,6 +41,7 @@ describe('approval request (PRD-ACS-006, PRD-ACS-007, PRD-UXP-003)', () => {
     state: 'Awaiting approval',
     requestedAt: at,
     decidable: { kind: 'unavailable', code: 'access.self-preparation', missing: [] },
+    bulkAllowed: false,
     asOf: at,
   };
 
@@ -110,5 +112,29 @@ describe('work item (PRD-ACS-009, PRD-MOD-015)', () => {
     expect(workItemSchema.safeParse({ ...item, due: { kind: 'at', at } }).success).toBe(true);
     expect(workItemSchema.safeParse({ ...item, due: null }).success).toBe(false);
     expect(myWorkSchema.safeParse({ asOf: at, items: [item] }).success).toBe(true);
+  });
+});
+
+describe('bulk totals (access-and-approvals 9.9; PRD-ACS-019, PRD-MOD-015)', () => {
+  it('sums known values per basis, counts Unknown apart and never totals two bases together', () => {
+    const values = [
+      approvalValueSchema.parse({ kind: 'known', basis: 'cost', amount: 150_000 }),
+      approvalValueSchema.parse({ kind: 'unknown', basis: 'cost' }),
+      approvalValueSchema.parse({ kind: 'known', basis: 'cost', amount: 2_500 }),
+      approvalValueSchema.parse({ kind: 'known', basis: 'cash-difference', amount: 100 }),
+      approvalValueSchema.parse({ kind: 'none' }),
+    ];
+    expect(bulkTotals(values)).toEqual({
+      totals: [
+        { basis: 'cost', known: 152_500, knownCount: 2, unknownCount: 1 },
+        { basis: 'cash-difference', known: 100, knownCount: 1, unknownCount: 0 },
+      ],
+      noValueCount: 1,
+    });
+  });
+
+  it('a basis of only Unknown values has no known total, never zero', () => {
+    const values = [approvalValueSchema.parse({ kind: 'unknown', basis: 'cost' })];
+    expect(bulkTotals(values).totals).toEqual([{ basis: 'cost', known: null, knownCount: 0, unknownCount: 1 }]);
   });
 });

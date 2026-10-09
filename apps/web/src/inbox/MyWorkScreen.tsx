@@ -6,10 +6,18 @@ import { readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
 import { approvalSubject } from '../approvals/subject';
 import { ExceptionDrawer } from '../exceptions/ExceptionDrawer';
-import { approvalRead, subjectReads, useApprovalSubjects, useSubjectLists } from '../approvals/use-subjects';
+import {
+  approvalRead,
+  subjectReads,
+  useApprovalRequests,
+  useApprovalSubjects,
+  useSubjectLists,
+} from '../approvals/use-subjects';
 import { Button } from '../components/Button';
 import { t } from '../messages/catalogue';
-import { ListRead, Toolbar } from '../setup/parts';
+import { GrantedButton, ListRead, Toolbar } from '../setup/parts';
+import { BulkBar } from './BulkApproval';
+import { StandInDrawer } from './StandInDrawer';
 import { RecordDrawer } from '../setup/RecordDrawer';
 import { useSession, useTimeZone } from '../shell/session';
 import { myWorkCount, MyWorkCounter, MyWorkList } from './MyWork';
@@ -26,11 +34,41 @@ export function MyWorkScreen() {
   const query = useQuery(myWorkRead());
   const timeZone = useTimeZone();
   const [open, setOpen] = useState<WorkItem | null>(null);
-  const subjects = useApprovalSubjects(query.data?.items ?? []);
+  const [delegating, setDelegating] = useState(false);
+  const items = query.data?.items ?? [];
+  const subjects = useApprovalSubjects(items);
+  const requests = useApprovalRequests(items);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const queryClient = useQueryClient();
+  // Selectable for bulk approval: an open approval whose action type is on the allowlist (9.9; POL-02.19). The server
+  // decides each one on its own; one the reader may not decide is left for individual review with its reason.
+  const selectable = (item: WorkItem) => {
+    const view = requests.get(item.id);
+    return view !== undefined && view.bulkAllowed && view.state === 'Awaiting approval';
+  };
+  const chosen = items.filter((item) => selected.has(item.id) && selectable(item));
+  const chosenViews = chosen.flatMap((item) => {
+    const view = requests.get(item.id);
+    return view === undefined ? [] : [view];
+  });
+  const labels = new Map(
+    chosen.flatMap((item) => {
+      const view = requests.get(item.id);
+      const subject = subjects.get(item.id);
+      return view === undefined || subject === undefined ? [] : [[view.id, subject.name ?? subject.title] as const];
+    }),
+  );
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
+        <GrantedButton
+          label="standin.delegate"
+          recordType="access.stand_in_grant"
+          action="create"
+          onClick={() => {
+            setDelegating(true);
+          }}
+        />
         <span className="flex-1" />
         <Button
           label="my-work.refresh"
@@ -41,9 +79,42 @@ export function MyWorkScreen() {
           }}
         />
       </Toolbar>
+      <BulkBar
+        selected={chosenViews}
+        labels={labels}
+        onClear={() => {
+          setSelected(new Set());
+        }}
+      />
       <ListRead query={query} what="my-work.what">
-        {(work) => <MyWorkList work={work} onOpen={setOpen} timeZone={timeZone} subjects={subjects} />}
+        {(work) => (
+          <MyWorkList
+            work={work}
+            onOpen={setOpen}
+            timeZone={timeZone}
+            subjects={subjects}
+            selection={{
+              selectable,
+              selected,
+              toggle: (item) => {
+                setSelected((before) => {
+                  const after = new Set(before);
+                  if (after.has(item.id)) after.delete(item.id);
+                  else after.add(item.id);
+                  return after;
+                });
+              },
+            }}
+          />
+        )}
       </ListRead>
+      {delegating && (
+        <StandInDrawer
+          onClose={() => {
+            setDelegating(false);
+          }}
+        />
+      )}
       {open !== null && open.kind === 'exception' && (
         <ExceptionDrawer
           exceptionId={open.owner.recordId}

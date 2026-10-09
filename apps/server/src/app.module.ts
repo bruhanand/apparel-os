@@ -24,7 +24,7 @@ import {
   routingApprovals,
   type ExceptionTypeRegistration,
 } from './modules/exceptions/index.js';
-import { InboxModule } from './modules/inbox/index.js';
+import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
 import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { CatalogueModule } from './modules/merchandise/catalogue/index.js';
@@ -63,7 +63,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     {
       provide: MODULE_APPROVALS,
       useFactory: (audit: AuditInterface, locationInUse: LocationInUse) =>
-        bothApprovals(organisationApprovals(audit, locationInUse), routingApprovals(audit)),
+        bothApprovals(
+          organisationApprovals(audit, locationInUse),
+          routingApprovals(audit),
+          // Task and approval routing (access-and-approvals 9.4, 11.3; S1-F05-T02).
+          workItemRoutingApprovals(audit),
+        ),
       inject: [AUDIT, LOCATION_IN_USE],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and

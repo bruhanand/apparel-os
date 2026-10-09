@@ -193,6 +193,23 @@ export class AccessChangesController {
     );
   }
 
+  // A stand-in grant, from My work's "delegate during absence" (access-and-approvals 10; S1-F05-T02).
+  @ApiRoute(routes.prepareStandInGrant)
+  async prepareStandInGrant(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareStandInGrant>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareStandInGrant, input);
+    return this.run(
+      routes.prepareStandInGrant,
+      'access.prepare-stand-in-grant',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareStandInGrant(c, p, input.body),
+    );
+  }
+
   @ApiRoute(routes.prepareSecuritySettingVersion)
   async prepareSecuritySettingVersion(
     @RouteInput() input: RouteInputOf<typeof routes.prepareSecuritySettingVersion>,

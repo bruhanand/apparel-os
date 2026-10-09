@@ -259,6 +259,34 @@ export const accessApprovalCodes = declareCodes({
   'access.approval-used': 'refused',
   'access.approval-version-changed': 'refused',
   'access.approval-value-exceeded': 'refused',
+  // Stand-in grants (access-and-approvals 10; PRD-ACS-018, POL-02.20; S1-F05-T02): a grant names two different people;
+  // `access.stand-in-wider-than-authority`: on some day of its dates, an action, its scope or its limit goes beyond what
+  // the person stood in for may decide through one assignment; `missing` names the action and the day.
+  'access.stand-in-for-self': 'refused',
+  'access.stand-in-wider-than-authority': 'refused',
+  'access.stand-in-grant-not-found': 'not-found',
+  // An approved grant of the same stand-in, person stood in for and exact scope overlaps its dates (code-house-rules 7.3).
+  'access.stand-in-overlaps': 'refused',
+  // Bulk approval (9.9; PRD-ACS-011, PRD-ACS-019, POL-02.19; S1-F05-T02): `access.bulk-not-allowed`: an item's action
+  // type is not on the allowlist in force today, so nothing is decided; `missing` names the action type.
+  'access.bulk-not-allowed': 'refused',
+});
+
+/**
+ * The codes of `inbox` (access-and-approvals 9.4, 11.3; module-map 4.8; S1-F05-T02): routing of approvals and tasks.
+ *
+ * - `inbox.action-type-not-routable`: no approval rule, or registered task, has the action type.
+ * - `inbox.starts-in-past`: a routing version never starts on a past date (GC2-7, DEC-105).
+ * - `inbox.version-overlaps`: a version of the routing starts on or after this one's start (code-house-rules 7.3).
+ * - `inbox.party-not-found`: the escalation names a user or a role that does not exist.
+ * - `inbox.site-not-found`: the routing names a Site that does not exist in `organisation` (as exceptions' routing).
+ */
+export const inboxCodes = declareCodes({
+  'inbox.action-type-not-routable': 'refused',
+  'inbox.starts-in-past': 'refused',
+  'inbox.version-overlaps': 'refused',
+  'inbox.party-not-found': 'refused',
+  'inbox.site-not-found': 'refused',
 });
 
 /**
@@ -476,6 +504,7 @@ export const errorCodes = {
   ...organisationCodes,
   ...numberingCodes,
   ...exceptionsCodes,
+  ...inboxCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

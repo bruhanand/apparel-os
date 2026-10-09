@@ -31,6 +31,8 @@ export const accessActionTypeSchema = z.enum([
   'access.setting.change',
   // An approval limit (access-and-approvals 9.2, 9.11; POL-02.07, POL-02.09, POL-02.15; S1-F05-T01).
   'access.approval_limit.change',
+  // A stand-in grant (access-and-approvals 10; PRD-ACS-018, POL-02.20; GC3-7, DEC-105; S1-F05-T02).
+  'access.stand_in_grant.change',
 ]);
 export type AccessActionType = z.infer<typeof accessActionTypeSchema>;
 
@@ -145,6 +147,13 @@ export const approvalRequestViewSchema = z.strictObject({
   decidable: decidableSchema,
   /** Where the reader stands against the value, for a request with a value on a basis (9.2 to 9.4). */
   limit: limitStandingSchema.optional(),
+  /**
+   * Whether its action type is on the bulk allowlist in force today (9.9; POL-02.19), so My work offers it for bulk
+   * approval; the allowlist has no default, and an empty one allows nothing (S1-F05-T02).
+   */
+  bulkAllowed: z.boolean(),
+  /** The stand-in grant the reader would decide it through, where it is one (access-and-approvals 10; S1-F05-T02). */
+  standInGrantId: idSchema.optional(),
   asOf: z.iso.datetime({ offset: true }),
 });
 export type ApprovalRequestView = z.infer<typeof approvalRequestViewSchema>;
@@ -200,6 +209,7 @@ export const decisionRefusalCodes = [
   'access.no-approval-limit',
   'access.above-approval-limit',
   'access.unknown-value-not-covered',
+  'access.bulk-not-allowed',
 ] as const satisfies readonly ErrorCode[];
 export type DecisionRefusal = (typeof decisionRefusalCodes)[number];
 
@@ -338,3 +348,150 @@ export type ApprovalLimitDraft = z.infer<typeof approvalLimitDraftSchema>;
 
 /** What preparing a limit answers. */
 export const approvalLimitPreparedSchema = z.strictObject({ limitId: idSchema, requestId: idSchema });
+
+/**
+ * One action a stand-in grant gives (access-and-approvals 10; PRD-ACS-018, POL-02.20): approving one action type, with
+ * the limit the stand-in may decide up to on its rule's basis, stated as a limit is (9.2): a value in paise, explicit
+ * unlimited authority, or none, with authority over Unknown value apart (PRD-ACS-016). An action with no value takes
+ * the limit `none` and no Unknown authority (DM-8). Never wider than the stood-for person's own (10).
+ */
+export const standInActionSchema = z.strictObject({
+  actionType: z.string().min(1),
+  limit: limitAuthoritySchema,
+  coversUnknown: z.boolean(),
+});
+export type StandInAction = z.infer<typeof standInActionSchema>;
+
+/**
+ * A new stand-in grant (access-and-approvals 10; PRD-ACS-018, POL-02.20; GC3-7, DEC-105): the stand-in, the person
+ * stood in for, the actions with their limits, the scope, and its dates, half-open [validFrom, validTo): it ends by
+ * itself at validTo, which it always has. It takes effect only once a different authorised person approves it. The
+ * names, scopes, limits and periods are KDPS's (KDPS Owner question 5); tests use labelled synthetic ones.
+ */
+export const standInGrantDraftSchema = z
+  .strictObject({
+    standInUserId: idSchema,
+    forUserId: idSchema,
+    actions: z.array(standInActionSchema).min(1),
+    scope: assignmentScopeSchema,
+    origin: settingOriginSchema,
+    validFrom: businessDateSchema,
+    validTo: businessDateSchema,
+  })
+  .refine((draft) => draft.standInUserId !== draft.forUserId, {
+    message: 'A person never stands in for themselves',
+    path: ['standInUserId'],
+  })
+  .refine((draft) => draft.validTo > draft.validFrom, { message: 'A grant ends after it starts', path: ['validTo'] })
+  .refine((draft) => draft.scope.kind === 'dimensions', {
+    message: 'A grant is within a scope of legal entity, place and brand',
+    path: ['scope'],
+  })
+  .refine((draft) => new Set(draft.actions.map((action) => action.actionType)).size === draft.actions.length, {
+    message: 'Each action type once',
+    path: ['actions'],
+  });
+export type StandInGrantDraft = z.infer<typeof standInGrantDraftSchema>;
+
+export const standInGrantPreparedSchema = z.strictObject({ grantId: idSchema, requestId: idSchema });
+
+/** One stand-in grant as the screens and the approval panel's facts show it (10, 14). */
+export const standInGrantRecordSchema = z.strictObject({
+  id: idSchema,
+  standIn: z.strictObject({ userId: idSchema, name: z.string().min(1).nullable() }),
+  forUser: z.strictObject({ userId: idSchema, name: z.string().min(1).nullable() }),
+  actions: z.array(standInActionSchema.extend({ basis: moneyBasisSchema.nullable() })),
+  scope: assignmentScopeSchema,
+  origin: settingOriginSchema,
+  validFrom: businessDateSchema,
+  validTo: businessDateSchema,
+  state: z.enum(['Awaiting approval', 'Superseded', 'Scheduled', 'In force', 'Ended', 'Rejected', 'Withdrawn']),
+  requestId: idSchema.nullable(),
+});
+export type StandInGrantRecord = z.infer<typeof standInGrantRecordSchema>;
+
+/** Every stand-in grant, and the approval action types a grant can give, each with its basis or none (10). */
+export const standInGrantListSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  actionTypes: z.array(z.strictObject({ actionType: z.string().min(1), basis: moneyBasisSchema.nullable() })),
+  grants: z.array(standInGrantRecordSchema),
+});
+export type StandInGrantList = z.infer<typeof standInGrantListSchema>;
+
+/**
+ * Approving several requests at once (access-and-approvals 9.9; PRD-ACS-011, PRD-ACS-019, POL-02.19): each item names
+ * the request and the version the approver reviewed (PRD-ACS-007); one reason from the list in force and one fresh
+ * authenticator code cover the whole selection (3.3; S1-F05-T02).
+ */
+export const bulkDecisionRequestSchema = z
+  .strictObject({
+    items: z.array(z.strictObject({ requestId: idSchema, versionId: idSchema })).min(1),
+    reason: z.strictObject({ kind: z.literal('listed'), reasonId: idSchema }),
+    comment: z.string().min(1).optional(),
+    totpCode: totpCodeSchema,
+  })
+  .refine((body) => new Set(body.items.map((item) => item.requestId)).size === body.items.length, {
+    message: 'Each request once',
+    path: ['items'],
+  });
+export type BulkDecisionRequest = z.infer<typeof bulkDecisionRequestSchema>;
+
+/**
+ * The total of a selection on one basis (9.9; PRD-ACS-019, PRD-MOD-015): the sum of its known values, or null when it
+ * has none, and how many items are of Unknown value, never added as zero. Different bases are never totalled together.
+ */
+export const bulkTotalSchema = z.strictObject({
+  basis: moneyBasisSchema,
+  known: paiseSchema.nullable(),
+  knownCount: z.number().int().nonnegative(),
+  unknownCount: z.number().int().nonnegative(),
+});
+export type BulkTotal = z.infer<typeof bulkTotalSchema>;
+
+/** What bulk approval answers: the batch, the totals, and each item decided or sent to individual review (9.9). */
+export const bulkDecisionAnswerSchema = z.strictObject({
+  batchId: idSchema,
+  totals: z.array(bulkTotalSchema),
+  noValueCount: z.number().int().nonnegative(),
+  items: z.array(
+    z.discriminatedUnion('outcome', [
+      z.strictObject({ requestId: idSchema, outcome: z.literal('Approved'), decisionId: idSchema }),
+      z.strictObject({
+        requestId: idSchema,
+        outcome: z.literal('individual-review'),
+        code: errorCodeSchema,
+        missing: z.array(missingItemSchema),
+      }),
+    ]),
+  ),
+});
+export type BulkDecisionAnswer = z.infer<typeof bulkDecisionAnswerSchema>;
+
+/**
+ * The totals of a selection by basis (access-and-approvals 9.9; PRD-ACS-019, PRD-MOD-015), shared by the server's
+ * answer and the screen's bulk bar: per basis, in the order first met, the sum of the known values in whole paise, or
+ * null when none is known, and the number of Unknown ones, never counted as zero; values with no basis are counted
+ * apart. Integer paise only (PRD-MOD-014).
+ */
+export function bulkTotals(values: readonly ApprovalValue[]): { totals: BulkTotal[]; noValueCount: number } {
+  const totals: { basis: MoneyBasis; known: number | null; knownCount: number; unknownCount: number }[] = [];
+  let noValueCount = 0;
+  for (const value of values) {
+    if (value.kind === 'none') {
+      noValueCount += 1;
+      continue;
+    }
+    let total = totals.find((each) => each.basis === value.basis);
+    if (total === undefined) {
+      total = { basis: value.basis, known: null, knownCount: 0, unknownCount: 0 };
+      totals.push(total);
+    }
+    if (value.kind === 'unknown') {
+      total.unknownCount += 1;
+    } else {
+      total.known = (total.known ?? 0) + value.amount;
+      total.knownCount += 1;
+    }
+  }
+  return { totals: totals.map((each) => bulkTotalSchema.parse(each)), noValueCount };
+}

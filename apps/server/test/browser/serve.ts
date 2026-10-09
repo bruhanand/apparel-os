@@ -150,6 +150,21 @@ const limitsBookingRule: ApprovalRule = {
   synthetic: true,
 };
 
+/**
+ * The bulk approval journey's test-only action type: booking approval on its value at cost (DM-8, DEC-105; S1-F05-T02;
+ * code-house-rules 11.4). SYNTHETIC, so accepted only in this test composition.
+ */
+const BULK_MODULE = syntheticIdentifier('bulk');
+const BULK_BOOKING_TYPE = `${BULK_MODULE}.booking`;
+const BULK_BOOKING = `${BULK_MODULE}.approve-booking`;
+const bulkBookingType: RecordTypeDeclaration = { ...limitsBookingType, code: BULK_BOOKING_TYPE };
+const bulkBookingRule: ApprovalRule = {
+  ...limitsBookingRule,
+  actionType: BULK_BOOKING,
+  module: BULK_MODULE,
+  recordType: BULK_BOOKING_TYPE,
+};
+
 function required(name: string): string {
   const value = process.env[name];
   if (value === undefined || value === '') throw new Error(`${name} is not set`);
@@ -747,6 +762,80 @@ const bookingRequested = (rupees: number) =>
   );
 await bookingRequested(1_500);
 await bookingRequested(5_000_000);
+
+// The bulk approval journey (bulk-approval.spec.ts; S1-F05-T02), in the settings Organisation: an approver of a
+// test-only action type, booking approval on its value at cost (code-house-rules 11.4), through a SYNTHETIC role that
+// holds a SYNTHETIC limit and no authority over an unknown value; the type on a SYNTHETIC bulk allowlist; and three
+// SYNTHETIC requests waiting: two of known value within the limit, one of Unknown value, which nobody holds authority
+// over, so it reaches the approver as one they would decide but for the limit (9.4). The allowlist, the limit and every
+// value are SYNTHETIC: the real ones are KDPS's (B-9, V-02).
+const bulkApprover = await provisionUser('BROWSER-BULK-APPROVER', 'P-OWN', [
+  { recordType: BULK_BOOKING_TYPE, action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+{
+  const owner = await connect(settingsDatabase, 'migration');
+  try {
+    const [assignment] = (
+      await owner.query<{ role_id: string }>('select role_id from access.role_assignment where app_user_id = $1', [
+        bulkApprover.id,
+      ])
+    ).rows;
+    if (assignment === undefined) throw new Error('The bulk approver has no role assignment');
+    const scope = { kind: 'dimensions', legalEntity: { kind: 'all' }, place: { kind: 'all' }, brand: { kind: 'all' } };
+    const scopeKey = 'legal-entity=all;place=all;brand=all';
+    // A SYNTHETIC limit of ₹5,000 on cost for the approver's role (access-and-approvals 9.2), approved as a fixture.
+    await owner.query(
+      `insert into access.approval_limit (id, action_type, basis, holder_kind, role_id, scope, scope_key, holder_key,
+         amount, unlimited, covers_unknown, origin, valid_during, decision)
+       values ($1, $2, 'cost', 'role', $3, $4, $5, $6, 500000, false, false, 'synthetic',
+         daterange(current_date - 1, null), 'Approved')`,
+      [
+        uuidv7(),
+        BULK_BOOKING,
+        assignment.role_id,
+        JSON.stringify(scope),
+        scopeKey,
+        `role:${assignment.role_id}:${scopeKey}`,
+      ],
+    );
+    // The SYNTHETIC allowlist: the action type allowed in bulk (access-and-approvals 8, 9.9; POL-02.19).
+    const settingId = uuidv7();
+    await owner.query('insert into access.approval_rule_setting (id, action_type) values ($1, $2)', [
+      settingId,
+      BULK_BOOKING,
+    ]);
+    await owner.query(
+      `insert into access.approval_rule_setting_version (id, approval_rule_setting_id, bulk_allowed, phone_allowed,
+         valid_during, decision)
+       values ($1, $2, true, false, daterange(current_date - 1, null), 'Approved')`,
+      [uuidv7(), settingId],
+    );
+  } finally {
+    await owner.end();
+  }
+}
+const bulkAccess = new Access({
+  audit: new Audit(fixtureLog.logger),
+  registry: [...permissionRegistry, bulkBookingType],
+  approvalRules: [bulkBookingRule],
+  composition: TEST_COMPOSITION,
+});
+/** A SYNTHETIC booking of the bulk journey, its value at cost in rupees or Unknown, requested by the exceptions user. */
+const bulkRequested = (value: { kind: 'unknown' } | { kind: 'known'; rupees: number }) =>
+  fixtureCommand((context) =>
+    bulkAccess.requestApproval(context, {
+      actionType: BULK_BOOKING,
+      document: { module: BULK_MODULE, recordType: BULK_BOOKING_TYPE, recordId: uuidv7(), versionId: uuidv7() },
+      value: value.kind === 'known' ? { kind: 'known', amountPaise: paise(value.rupees * 100) } : value,
+      preparers: [exceptionsOps.id],
+      requestedBy: { userId: exceptionsOps.id, roleAssignmentId: crypto.randomUUID() },
+    }),
+  );
+await bulkRequested({ kind: 'known', rupees: 1_000 });
+await bulkRequested({ kind: 'known', rupees: 2_500 });
+await bulkRequested({ kind: 'unknown' });
 await fixtureRouter.close();
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
@@ -776,8 +865,8 @@ const app = await startAccessApp(
     fileStoreEnvironment: fileStore.environment,
     exceptionTypes: [syntheticMismatch],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
-    extraRecordTypes: [limitsBookingType],
-    extraApprovalRules: [limitsBookingRule],
+    extraRecordTypes: [limitsBookingType, bulkBookingType],
+    extraApprovalRules: [limitsBookingRule, bulkBookingRule],
   },
 );
 
@@ -893,6 +982,12 @@ writeFileSync(
       bookingApprover: credentialsOf(bookingApprover),
       roleOption: `${bookingRole.code} · ${bookingRole.name}`,
       actionOption: `${LIMITS_BOOKING} · limited on cost`,
+      reasonId: limitsReasonId,
+    },
+    // S1-F05-T02: the bulk approver, and the reason they give.
+    bulk: {
+      organisationCode: settingsCode,
+      approver: credentialsOf(bulkApprover),
       reasonId: limitsReasonId,
     },
     // S1-F08-T03: the Operations user who owns the evidence exception, by its code, and the approver who decides the

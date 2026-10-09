@@ -63,6 +63,8 @@ export const accessApprovalRules: ReadonlyMap<string, ApprovalRule> = new Map(
     rule('access.setting.change', 'access.setting'),
     // Approval limits (9.2; POL-02.07, POL-02.09, POL-02.15; S1-F05-T01).
     rule('access.approval_limit.change', 'access.approval_limit'),
+    // Stand-in grants (10; PRD-ACS-018, POL-02.20; GC3-7, DEC-105; S1-F05-T02).
+    rule('access.stand_in_grant.change', 'access.stand_in_grant'),
   ].map((each) => [each.actionType, each]),
 );
 

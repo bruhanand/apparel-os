@@ -369,6 +369,38 @@
       "why": "The preparers of an approval limit; only access code reads it"
     },
     {
+      "table": "access.stand_in_grant",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 10, 13.1; code-house-rules 6.3, 7.3, 8.2 (overlap key: stand-in, person stood in for, scope_key)",
+      "why": "Read by who may decide and My work before any scope applies (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.stand_in_grant_action",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 10, 13.1",
+      "why": "The actions and limits of a stand-in grant, read with it; only access code reads it"
+    },
+    {
+      "table": "access.stand_in_grant_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of a stand-in grant; only access code reads it"
+    },
+    {
+      "table": "access.bulk_decision_batch",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.9, 13.1",
+      "why": "Links the decisions of one bulk approval; read with them by access; only access code reads it"
+    },
+    {
       "table": "access.approval_request",
       "class": "unscoped",
       "marks": ["locked"],
@@ -419,18 +451,18 @@
     {
       "table": "inbox.work_item_routing",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "access-and-approvals 9.4, 11.3, 13.2; RR-058",
-      "why": "Due times and escalation of tasks and approvals, read by inbox when it receives an item; no rows until KDPS sets them; only inbox code reads it"
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "access-and-approvals 9.4, 11.3, 13.2; RR-058; S1-F05-T02",
+      "why": "Due times and escalation of tasks and approvals, read by inbox when it receives an item and changed under inbox.work_item_routing, which declares no scope fact; only inbox code reads it"
     },
     {
       "table": "inbox.work_item_routing_version",
       "class": "unscoped",
-      "marks": ["versions"],
+      "marks": ["versions", "locked"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
-      "design": "access-and-approvals 9.4, 11.3, 13.2; code-house-rules 7.3",
-      "why": "The routing's versions; only inbox code reads it"
+      "design": "access-and-approvals 9.4, 11.3, 13.2; code-house-rules 7.3 (overlap key: the routing)",
+      "why": "The routing's versions, locked with the routing while one is decided; only inbox code reads it"
     },
     {
       "table": "configuration.organisation_timezone_version",

@@ -83,7 +83,7 @@ const SAME_TIER_CALLS: Readonly<Record<string, readonly string[]>> = {
   access: ['configuration', 'audit'],
   configuration: ['audit'],
   'files-imports': ['access', 'configuration', 'audit', 'ai-gateway'],
-  inbox: ['access'],
+  inbox: ['access', 'audit'],
   notifications: ['access', 'configuration', 'audit'],
   'ai-gateway': ['access', 'audit'],
   // Tier 2 (4.12, 4.14)

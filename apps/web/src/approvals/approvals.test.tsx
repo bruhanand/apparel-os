@@ -46,6 +46,7 @@ function view(overrides: Partial<ApprovalRequestView> = {}): ApprovalRequestView
     state: 'Awaiting approval',
     requestedAt: '2026-10-07T09:00:00.000Z',
     decidable: { kind: 'available', reason: 'listed', outcomes: ['approve', 'reject'], missing: [] },
+    bulkAllowed: false,
     asOf: '2026-10-07T10:00:00.000Z',
     ...overrides,
   };

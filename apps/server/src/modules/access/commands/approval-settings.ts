@@ -16,7 +16,7 @@ import {
   approvalRuleSettingVersion,
   approvalRuleSettingVersionChange,
 } from '../db/schema.js';
-import { accessApprovalRules } from '../domain/approval-rules.js';
+import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules.js';
 import {
   rangeOf,
   refusal,
@@ -55,7 +55,14 @@ const RULE_SETTING: VersionKind = {
 };
 
 export class ApprovalSettingsChanges {
-  constructor(private readonly audit: AuditInterface) {}
+  constructor(
+    private readonly audit: AuditInterface,
+    /**
+     * Every approval rule of the composition, access's own and the modules' (8): any of them takes a setting, such as
+     * the bulk allowlist of another module's action type (9.9; S1-F05-T02). Access's own when left out.
+     */
+    private readonly rules: ReadonlyMap<string, ApprovalRule> = accessApprovalRules,
+  ) {}
 
   /** Prepares a new approve or reject reason, with its first version, and requests its approval (9.5; POL-02.23). */
   async prepareReason(
@@ -158,7 +165,7 @@ export class ApprovalSettingsChanges {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (draft.validFrom < date) return refusal('refused', 'access.starts-in-past');
-    if (!accessApprovalRules.has(draft.actionType)) {
+    if (!this.rules.has(draft.actionType)) {
       return refusal('refused', 'access.action-type-not-declared');
     }
     const existing = await context.tx

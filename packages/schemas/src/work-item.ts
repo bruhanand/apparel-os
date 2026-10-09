@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { idSchema, paiseSchema, recordVersionRefSchema } from './common.js';
+import { businessDateSchema, idSchema, paiseSchema, recordVersionRefSchema } from './common.js';
+import { dueRuleSchema, exceptionPartySchema, namedPartySchema } from './exceptions.js';
+import { settingOriginSchema } from './settings.js';
 
 // A work item in My work (access-and-approvals 11; domain-model 3.3; PRD-ACS-009).
 
@@ -49,3 +51,55 @@ export const myWorkSchema = z.strictObject({
   items: z.array(workItemSchema),
 });
 export type MyWork = z.infer<typeof myWorkSchema>;
+
+/**
+ * A new routing version for the approvals or tasks of one action type at a Site, or with no Site for those that have
+ * none, such as an access change (access-and-approvals 9.4, 11.3; GC3-8, DEC-105; S1-F05-T02): the due-time rule, in
+ * the versioned format exception routing uses (`elapsed-minutes-v1`: due a whole number of minutes after the item is
+ * requested), and the escalation recipient, a named user or a role. No value has a default (KDPS question 52). Once a
+ * different authorised person approves it, it takes effect from its first day, today or later.
+ */
+export const workItemRoutingDraftSchema = z.strictObject({
+  actionType: z.string().min(1),
+  siteId: idSchema.nullable(),
+  dueRule: dueRuleSchema,
+  escalation: exceptionPartySchema,
+  validFrom: businessDateSchema,
+  origin: settingOriginSchema,
+});
+export type WorkItemRoutingDraft = z.infer<typeof workItemRoutingDraftSchema>;
+
+export const workItemRoutingPreparedSchema = z.strictObject({
+  routingId: idSchema,
+  versionId: idSchema,
+  requestId: idSchema,
+});
+
+/**
+ * Setup › Exception rules, the approvals and tasks tab: the action types a routing can be set for, and every routing
+ * with its versions, each with its dates, state and origin (9.4, 11.3; PRD-MOD-010).
+ */
+export const workItemRoutingListSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  actionTypes: z.array(z.strictObject({ actionType: z.string().min(1), module: z.string().min(1) })),
+  routings: z.array(
+    z.strictObject({
+      id: idSchema,
+      actionType: z.string().min(1),
+      siteId: idSchema.nullable(),
+      versions: z.array(
+        z.strictObject({
+          id: idSchema,
+          dueRule: dueRuleSchema,
+          escalation: namedPartySchema,
+          validFrom: businessDateSchema,
+          validUntil: businessDateSchema.nullable(),
+          origin: settingOriginSchema,
+          state: z.enum(['Awaiting approval', 'Superseded', 'Rejected', 'Scheduled', 'In force', 'Ended']),
+          requestId: idSchema.nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+export type WorkItemRoutingList = z.infer<typeof workItemRoutingListSchema>;

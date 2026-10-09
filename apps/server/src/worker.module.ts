@@ -10,7 +10,7 @@ import {
 } from './modules/access/index.js';
 import { auditJobKinds } from './modules/audit/index.js';
 import { exceptionsConsumers, exceptionsJobKinds } from './modules/exceptions/index.js';
-import { inboxConsumers } from './modules/inbox/index.js';
+import { inboxConsumers, inboxJobKinds } from './modules/inbox/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 
 /**
@@ -24,7 +24,8 @@ import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 export const jobRegistry: JobRegistry = {
   events: [approvalRequested, approvalDecided, assignmentChanged, sessionRevoked, jobFailed],
   consumers: [...inboxConsumers, ...exceptionsConsumers],
-  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds],
+  // The escalation of overdue tasks and approvals (access-and-approvals 11.3; S1-F05-T02).
+  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds, ...inboxJobKinds],
 };
 
 /** The worker's composition root: the same build as the app, another start command (deployment.md section 2). */

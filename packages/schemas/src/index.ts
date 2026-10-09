@@ -137,8 +137,24 @@ export {
   moneyBasisSchema,
   userPreparedSchema,
   userVersionDraftSchema,
+  standInActionSchema,
+  standInGrantDraftSchema,
+  standInGrantPreparedSchema,
+  standInGrantRecordSchema,
+  standInGrantListSchema,
+  bulkDecisionRequestSchema,
+  bulkDecisionAnswerSchema,
+  bulkTotalSchema,
+  bulkTotals,
 } from './approvals.js';
 export type {
+  StandInAction,
+  StandInGrantDraft,
+  StandInGrantRecord,
+  StandInGrantList,
+  BulkDecisionRequest,
+  BulkDecisionAnswer,
+  BulkTotal,
   AccessActionType,
   ApprovalLimitDraft,
   LimitAuthority,
@@ -188,8 +204,16 @@ export type {
   StoredFileFormat,
   StoreFileRequest,
 } from './files.js';
-export { dueSchema, exposureSchema, myWorkSchema, workItemSchema } from './work-item.js';
-export type { Exposure, MyWork, WorkItem } from './work-item.js';
+export {
+  dueSchema,
+  exposureSchema,
+  myWorkSchema,
+  workItemSchema,
+  workItemRoutingDraftSchema,
+  workItemRoutingListSchema,
+  workItemRoutingPreparedSchema,
+} from './work-item.js';
+export type { Exposure, MyWork, WorkItem, WorkItemRoutingDraft, WorkItemRoutingList } from './work-item.js';
 
 export {
   FAILED_JOB_PAGE_CAP,

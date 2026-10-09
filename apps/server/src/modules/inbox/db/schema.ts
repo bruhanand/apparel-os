@@ -31,6 +31,8 @@ export const workItem = inbox.table('work_item', {
   legalEntityId: uuid('legal_entity_id'),
   brandId: uuid('brand_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The routing version that gave a task or an approval its due time and escalation (11.1; migration 0042). */
+  routingVersionId: uuid('routing_version_id'),
 });
 
 /** Who may act on an item: a named user, or the owner's eligibility reference (11.1). */
@@ -72,4 +74,8 @@ export const workItemRoutingVersion = inbox.table('work_item_routing_version', {
   validDuring: daterange('valid_during').notNull(),
   decision: text('decision').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** A role escalated to, besides a named user (11.3; migration 0042): exactly one of the two. */
+  escalationRoleId: uuid('escalation_role_id'),
+  origin: text('origin').notNull(),
+  preparedByUserId: uuid('prepared_by_user_id').notNull(),
 });

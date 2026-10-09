@@ -447,6 +447,53 @@ export const approvalDecision = access.table('approval_decision', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
   /** The approval limit the decision relied on, for a value on a basis (9.5, 9.7; 0040); null for none. */
   approvalLimitId: uuid('approval_limit_id'),
+  /** The stand-in grant the decision relied on, where it was one (9.5, 10; 0041); null otherwise. */
+  standInGrantId: uuid('stand_in_grant_id'),
+  /** The bulk batch the decision was made in (9.9; 0041); null for one made on its own. */
+  bulkDecisionBatchId: uuid('bulk_decision_batch_id'),
+});
+
+/**
+ * A stand-in grant: the stand-in, the person stood in for, the scope and the dates, always with an end; a dated row,
+ * its own version (access-and-approvals 10, 13.1; code-house-rules 7.3; migration 0041).
+ */
+export const standInGrant = access.table('stand_in_grant', {
+  id: uuid('id').primaryKey(),
+  standInUserId: uuid('stand_in_user_id').notNull(),
+  forUserId: uuid('for_user_id').notNull(),
+  scope: jsonb('scope').notNull(),
+  scopeKey: text('scope_key').notNull(),
+  origin: text('origin').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One action a stand-in grant gives, with its limit (access-and-approvals 9.2, 10). Never changed. */
+export const standInGrantAction = access.table('stand_in_grant_action', {
+  id: uuid('id').primaryKey(),
+  standInGrantId: uuid('stand_in_grant_id').notNull(),
+  actionType: text('action_type').notNull(),
+  amount: bigint('amount', { mode: 'number' }),
+  unlimited: boolean('unlimited').notNull(),
+  coversUnknown: boolean('covers_unknown').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a stand-in grant: its preparers (access-and-approvals 9.1). */
+export const standInGrantChange = access.table('stand_in_grant_change', {
+  id: uuid('id').primaryKey(),
+  standInGrantId: uuid('stand_in_grant_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A batch of bulk decisions: the approver and the requests selected (access-and-approvals 9.9). An entry. */
+export const bulkDecisionBatch = access.table('bulk_decision_batch', {
+  id: uuid('id').primaryKey(),
+  approverUserId: uuid('approver_user_id').notNull(),
+  approvalRequestIds: uuid('approval_request_ids').array().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
 /**

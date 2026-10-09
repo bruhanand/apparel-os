@@ -49,12 +49,22 @@ import {
   approvalRuleSettingDraftSchema,
   approvalRuleSettingPreparedSchema,
   approvalRuleSettingVersionDraftSchema,
+  bulkDecisionAnswerSchema,
+  bulkDecisionRequestSchema,
   decisionAnswerSchema,
   decisionRequestSchema,
+  standInGrantDraftSchema,
+  standInGrantListSchema,
+  standInGrantPreparedSchema,
   userPreparedSchema,
   userVersionDraftSchema,
 } from './approvals.js';
-import { myWorkSchema } from './work-item.js';
+import {
+  myWorkSchema,
+  workItemRoutingDraftSchema,
+  workItemRoutingListSchema,
+  workItemRoutingPreparedSchema,
+} from './work-item.js';
 import { failedJobListSchema, failedJobPageQuerySchema, liveMessageSchema } from './operations.js';
 import {
   commentRequestSchema,
@@ -896,6 +906,35 @@ export const routes = {
       'access.limit-overlaps',
     ],
   }),
+  // Stand-in grants (access-and-approvals 10, 14; PRD-ACS-018, POL-02.20; GC3-7, DEC-105; S1-F05-T02): every grant,
+  // and a new one recorded for a different authorised person to approve, from My work's "delegate during absence".
+  listStandInGrants: defineRoute({
+    method: 'GET',
+    path: '/api/access/stand-in-grants',
+    access: { kind: 'action', action: 'view', recordType: 'access.stand_in_grant' },
+    command: false,
+    response: standInGrantListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareStandInGrant: defineRoute({
+    method: 'POST',
+    path: '/api/access/stand-in-grants',
+    access: { kind: 'action', action: 'create', recordType: 'access.stand_in_grant' },
+    command: true,
+    body: standInGrantDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: standInGrantPreparedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'access.action-type-not-declared',
+      'access.user-not-found',
+      'access.stand-in-for-self',
+      'access.stand-in-wider-than-authority',
+      'access.stand-in-overlaps',
+    ],
+  }),
   // The essential security settings (access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118, RR-334): each
   // with its versions and the one in force, and a new version prepared for a different authorised person to approve.
   listSecuritySettings: defineRoute({
@@ -970,12 +1009,45 @@ export const routes = {
       'access.above-approval-limit',
       'access.unknown-value-not-covered',
       'access.limit-overlaps',
+      // Stand-in grants and bulk items (access-and-approvals 9.9, 10; S1-F05-T02).
+      'access.stand-in-overlaps',
+      'access.stand-in-wider-than-authority',
+      'access.stand-in-grant-not-found',
       'organisation.record-not-found',
       'organisation.starts-in-past',
       'organisation.version-overlaps',
       'organisation.reference-not-in-force',
       ...ORGANISATION_STRUCTURE_RULE_CODES,
       'kernel.stale-version',
+      'kernel.cross-site-request',
+    ],
+  }),
+  // Bulk approval (access-and-approvals 9.9; code-house-rules 12.1; PRD-ACS-011, PRD-ACS-019, POL-02.19; S1-F05-T02):
+  // the one route that runs several commands. The batch, with the one fresh authenticator code (3.3), in a command of
+  // its own; then each item its own decision in its own transaction, rechecked, under the request's key with the
+  // item's identifier added to its operation (12.4). An item that fails goes to individual review; the others go on.
+  decideApprovalsInBulk: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-requests/bulk-decision',
+    access: { kind: 'decision' },
+    command: true,
+    body: bulkDecisionRequestSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bulkDecisionAnswerSchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'access.business-date-not-set',
+      'access.approval-request-not-found',
+      'access.bulk-not-allowed',
+      'access.no-reason-list-in-force',
+      'access.reason-not-in-force',
+      'access.not-eligible',
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
       'kernel.cross-site-request',
     ],
   }),
@@ -1023,6 +1095,36 @@ export const routes = {
     command: false,
     response: myWorkSchema,
     codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete'],
+  }),
+  // Task and approval routing (access-and-approvals 9.4, 11.3, 14; GC3-8, DEC-105; S1-F05-T02): Setup › Exception
+  // rules' tab for approvals and tasks. A version is prepared, then approved by a different authorised person.
+  listWorkItemRouting: defineRoute({
+    method: 'GET',
+    path: '/api/inbox/routing',
+    access: { kind: 'action', action: 'view', recordType: 'inbox.work_item_routing' },
+    command: false,
+    response: workItemRoutingListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareWorkItemRouting: defineRoute({
+    method: 'POST',
+    path: '/api/inbox/routing',
+    access: { kind: 'action', action: 'edit', recordType: 'inbox.work_item_routing' },
+    command: true,
+    body: workItemRoutingDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: workItemRoutingPreparedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'inbox.action-type-not-routable',
+      'inbox.starts-in-past',
+      'inbox.version-overlaps',
+      'inbox.party-not-found',
+      'inbox.site-not-found',
+    ],
   }),
   // Live updates (code-house-rules 12.12; deployment.md section 5; S1-F08-T04): one stream per session, every signed-in
   // user's, carrying only what the session's actor may view. It does not count as the session's activity.

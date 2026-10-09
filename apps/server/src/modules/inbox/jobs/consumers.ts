@@ -1,6 +1,15 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { and, eq } from 'drizzle-orm';
-import { defineConsumer, type ConsumerDefinition, type TransactionContext } from '../../../kernel/index.js';
+import {
+  defineConsumer,
+  defineJobKind,
+  type ConsumerDefinition,
+  type EventScopeFacts,
+  type JobKindDefinition,
+  type TransactionContext,
+} from '../../../kernel/index.js';
+import { escalateOverdueWork } from '../commands/escalate.js';
+import { routedDue } from '../inbox.js';
 import { approvalDecided, approvalRequested } from '../../access/index.js';
 import { workItem, workItemActor } from '../db/schema.js';
 import { announceItems } from '../events.js';
@@ -19,9 +28,10 @@ const AUTHORITY = { action: 'edit', recordType: 'inbox.work_item' } as const;
 
 /**
  * Adds a work item once: keyed by the owner's record, version and kind, so a replayed or redelivered event never makes
- * a second item (access-and-approvals 11.1; PRD-INT-008). Its actors are written only with the item. The due time
- * stays unset: task and approval routing has no rows and its rule's format is not designed yet (RR-058), so no due
- * time is ever defaulted.
+ * a second item (access-and-approvals 11.1; PRD-INT-008). Its actors are written only with the item. Its due time and
+ * escalation recipient come from the task and approval routing in force for its action type at its Site, from when it
+ * was requested (9.4, 11.1; GC3-8, DEC-105; S1-F05-T02); with none in force it carries no due time, never a default
+ * (RR-058). It keeps the document's scope facts, as the event carries them.
  */
 async function publishItem(
   context: TransactionContext,
@@ -30,9 +40,13 @@ async function publishItem(
     readonly owner: { recordType: string; recordId: string; versionId: string };
     readonly state: string;
     readonly actors: readonly ({ userId: string } | { eligibility: string })[];
+    readonly actionType: string;
+    readonly scope: EventScopeFacts;
+    readonly requestedAt: Date;
   },
 ): Promise<void> {
   const id = uuidv7();
+  const routed = await routedDue(context, item.actionType, item.scope.siteId ?? null, item.requestedAt);
   const inserted = await context.tx
     .insert(workItem)
     .values({
@@ -44,14 +58,15 @@ async function publishItem(
       ownerVersionId: item.owner.versionId,
       state: item.state,
       open: true,
-      dueAt: null,
+      dueAt: routed?.dueAt ?? null,
+      routingVersionId: routed?.versionId ?? null,
       exposureKind: 'none',
       exposureAmount: null,
-      siteId: null,
-      storeId: null,
-      businessUnitId: null,
-      legalEntityId: null,
-      brandId: null,
+      siteId: item.scope.siteId ?? null,
+      storeId: item.scope.storeId ?? null,
+      businessUnitId: item.scope.businessUnitId ?? null,
+      legalEntityId: item.scope.legalEntityId ?? null,
+      brandId: item.scope.brandId ?? null,
     })
     .onConflictDoNothing()
     .returning({ id: workItem.id });
@@ -117,6 +132,9 @@ export const inboxConsumers: readonly ConsumerDefinition[] = [
         },
         state: 'Awaiting approval',
         actors: [{ eligibility: APPROVAL_ELIGIBILITY }],
+        actionType: payload.actionType,
+        scope: event.scope,
+        requestedAt: event.eventTime,
       });
       return { kind: 'done' };
     },
@@ -130,5 +148,20 @@ export const inboxConsumers: readonly ConsumerDefinition[] = [
       await closeItems(context, 'approval', event.payload.requestId, event.payload.state);
       return { kind: 'done' };
     },
+  }),
+];
+
+/**
+ * The job kind that escalates tasks and approvals past their due time (access-and-approvals 9.4, 11.3; PRD-ACS-010;
+ * S1-F05-T02), sent for each Organisation at the interval of its worker setting (code-house-rules 12.9; CH-10), under
+ * the `inbox` identity, authorised for the edit on `inbox.work_item` that identity already holds, so an Organisation
+ * set up earlier needs no new grant for it (access-and-approvals 9.11a).
+ */
+export const inboxJobKinds: readonly JobKindDefinition[] = [
+  defineJobKind({
+    name: 'inbox.escalate-overdue',
+    serviceIdentity: INBOX_IDENTITY,
+    authorises: AUTHORITY,
+    run: async (context) => ({ escalated: await escalateOverdueWork(context) }),
   }),
 ];

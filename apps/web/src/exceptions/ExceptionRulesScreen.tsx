@@ -16,12 +16,13 @@ import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolba
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
+import { WorkRoutingTab } from './WorkRoutingTab';
 
 // Setup › Exception rules (access-and-approvals 12.2, 14; POL-02.16, POL-03.05, DEC-037; ui-blueprint Setup;
 // S1-F08-T02): for each exception type and Site, the owner, the due time and the escalation, each version with its
 // dates, its state and where its values came from. A new version is prepared here and approved by a different
 // authorised person from My work. No field has a default: the owners, due times and escalation are KDPS's (V-03).
-// The tab for the due times and escalation of approvals and tasks is S1-F05-T02's.
+// The tab for the due times and escalation of approvals and tasks is S1-F05-T02's (WorkRoutingTab).
 
 const READS = ['listExceptionRouting', 'listMyWork'] as const;
 
@@ -307,8 +308,47 @@ function RuleForm({ list }: { list: RoutingList }) {
   );
 }
 
-/** Setup › Exception rules. */
+/**
+ * Setup › Exception rules: a tab for the exceptions' rules, and one for the due times and escalation of approvals and
+ * tasks (access-and-approvals 9.4, 11.3, 14; S1-F05-T02), shown to whoever may view task and approval routing.
+ */
 export function ExceptionRulesScreen() {
+  const routingGranted = useGranted('inbox.work_item_routing', 'view');
+  const tabs = routingGranted ? (['exceptions', 'work'] as const) : (['exceptions'] as const);
+  const [current, setCurrent] = useState<'exceptions' | 'work'>('exceptions');
+  return (
+    <div className="flex flex-col gap-4">
+      <div role="tablist" aria-label={t('rules.tabs')} className="flex flex-wrap gap-2 border-b border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            id={`rules-tab-${tab}`}
+            aria-selected={current === tab}
+            aria-controls="rules-tab-panel"
+            className={
+              current === tab
+                ? 'h-9 border-b-2 border-accent px-3 font-semibold text-text'
+                : 'h-9 px-3 text-text-2 hover:text-accent'
+            }
+            onClick={() => {
+              setCurrent(tab);
+            }}
+          >
+            {t(`rules.tab.${tab}`)}
+          </button>
+        ))}
+      </div>
+      <div id="rules-tab-panel" role="tabpanel" aria-labelledby={`rules-tab-${current}`}>
+        {current === 'work' && routingGranted ? <WorkRoutingTab /> : <ExceptionRoutingTab />}
+      </div>
+    </div>
+  );
+}
+
+/** The exceptions' rules tab (S1-F08-T02). */
+function ExceptionRoutingTab() {
   const timeZone = useTimeZone();
   const query = useQuery(readQuery(api, 'listExceptionRouting', {}));
   const [adding, setAdding] = useState(false);

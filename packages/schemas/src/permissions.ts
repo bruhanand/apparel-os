@@ -76,6 +76,9 @@ const accessRecordTypes = [
   // Approval limits (9.2; S1-F05-T01): create prepares a limit, a new one or one replacing another from its start;
   // approve decides it. A limit is never edited in place, so edit is not declared.
   declare('access.approval_limit', ['view', 'create', 'approve'], NONE),
+  // Stand-in grants (10; PRD-ACS-018, POL-02.20; S1-F05-T02): create records a grant, approve decides it (GC3-7). A
+  // grant is never edited in place, so edit is not declared.
+  declare('access.stand_in_grant', ['view', 'create', 'approve'], NONE),
   // The essential security settings: edit prepares a new version, approve decides it; no setting is created or
   // removed through a permission, since a required setting is never left unset (3.3; DEC-118, RR-334; S1-F01-T25).
   declare('access.setting', ['view', 'edit', 'approve'], NONE),
@@ -121,7 +124,12 @@ const kernelRecordTypes = [
  * edit is what the inbox's consumers hold, under their service identity, to publish, update and close work items
  * from the owners' events (RR-273; S1-F01-T13).
  */
-const inboxRecordTypes = [declareServiceOnly('inbox.work_item', ['edit'], NONE)] as const;
+const inboxRecordTypes = [
+  declareServiceOnly('inbox.work_item', ['edit'], NONE),
+  // Task and approval routing (9.4, 11.3; GC3-8, DEC-105; S1-F05-T02): the Organisation's setting, as exception
+  // routing is: edit prepares a version, approve decides it.
+  declare('inbox.work_item_routing', ['view', 'edit', 'approve'], NONE),
+] as const;
 
 /**
  * `files-imports` (module-map 4.7; imports-and-opening-data 13.1, 15.1). A stored file belongs to the Organisation

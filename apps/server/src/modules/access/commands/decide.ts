@@ -30,6 +30,9 @@ import { assignmentsInForce } from '../queries/assignments.js';
 import { authorise, authorisingAssignments } from '../queries/authorise.js';
 import { limitsInForce, type ApprovalLimitChanges } from './approval-limits.js';
 import { identityTarget, limitTarget, reliedAuthority } from './authority.js';
+import { batchRefusal, bulkAllowedToday, openBatch, type BatchInput, type BatchOutcome } from './bulk.js';
+import { grantsInForce, grantTarget, type StandInGrantChanges } from './stand-ins.js';
+import { grantActionCovers, type GrantAction } from '../domain/stand-ins.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
@@ -62,6 +65,15 @@ export interface DecisionInput {
   readonly totpCode: string;
 }
 
+/** One item of a bulk approval, decided in its own transaction under its batch (9.9; S1-F05-T02). */
+export interface BatchItemInput {
+  readonly batchId: string;
+  readonly requestId: string;
+  readonly versionId: string;
+  readonly reason: { readonly kind: 'listed'; readonly reasonId: string };
+  readonly comment?: string | undefined;
+}
+
 export interface DecisionAnswer {
   readonly requestId: string;
   readonly decisionId: string;
@@ -84,6 +96,23 @@ export type Decidable =
   | { readonly kind: 'unavailable'; readonly code: string; readonly missing: MissingItem[] };
 
 type RequestRow = typeof approvalRequest.$inferSelect;
+
+/**
+ * Whether a person may decide a request now (access-and-approvals 9.3): the assignment and the limit relied on, and,
+ * through a stand-in grant, the grant and the person stood in for, whose assignment and limit they are (10); or the
+ * refusal.
+ */
+type Eligibility =
+  | {
+      readonly kind: 'eligible';
+      readonly roleAssignmentId: string;
+      readonly alsoRelied: readonly string[];
+      /** The limit relied on, for a value on a basis (9.5). */
+      readonly limit?: LimitRow;
+      /** The stand-in grant relied on (10; S1-F05-T02). */
+      readonly standIn?: { readonly grantId: string; readonly forUserId: string; readonly action: GrantAction };
+    }
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal };
 
 /** What Decide does with one kind of document (module-map 6.2 flow A). */
 interface DocumentHandler {
@@ -182,6 +211,8 @@ export class Approvals {
       readonly securitySettings: SecuritySettingsChanges;
       /** Approval limits: their changes, decided here like any access change (9.2, 9.11; S1-F05-T01). */
       readonly limits: ApprovalLimitChanges;
+      /** Stand-in grants: their changes, decided here like any access change (10; S1-F05-T02). */
+      readonly standIns: StandInGrantChanges;
       readonly keys?: OrganisationKeys | undefined;
       /** Every approval rule of the composition: access's own and the modules' (access-and-approvals 8). */
       readonly rules: ReadonlyMap<string, ApprovalRule>;
@@ -191,8 +222,18 @@ export class Approvals {
       readonly evidence?: DecisionEvidence | undefined;
     },
   ) {
-    const { changes, users, settings, securitySettings, limits } = dependencies;
+    const { changes, users, settings, securitySettings, limits, standIns } = dependencies;
     this.handlers = new Map<AccessActionType, DocumentHandler>([
+      [
+        'access.stand_in_grant.change',
+        {
+          // The grant, exclusively at step 0: a decision relying on it locks it shared (code-house-rules 8.2).
+          authorityTargets: (_c, v) => Promise.resolve(standIns.authorityTargets(v)),
+          targets: () => Promise.resolve([]),
+          approve: (c, d, v) => standIns.approve(c, d, v, HELD),
+          reject: (c, d, v) => standIns.reject(c, d, v, HELD),
+        },
+      ],
       [
         'access.approval_limit.change',
         {
@@ -406,16 +447,66 @@ export class Approvals {
     context: TransactionContext,
     actor: DecidingActor,
     request: RequestRow,
-  ): Promise<
-    | {
-        kind: 'eligible';
-        roleAssignmentId: string;
-        alsoRelied: readonly string[];
-        /** The limit relied on, for a value on a basis (9.5). */
-        limit?: LimitRow;
+    through: 'any' | 'own-assignments' = 'any',
+  ): Promise<Eligibility> {
+    const own = await this.ownEligibility(context, actor, request);
+    // Through a stand-in grant (access-and-approvals 9.3, 10; PRD-ACS-018): only when the person's own assignments do
+    // not make them eligible, and never past a refusal that no grant changes, such as their own preparation.
+    if (own.kind === 'eligible' || through === 'own-assignments' || actor.kind !== 'user') return own;
+    if (!['access.not-eligible', ...LIMIT_CODES].includes(own.refusal.code)) return own;
+    if (own.refusal.missing.some((item) => item.kind === 'user-state' || item.kind === 'person')) return own;
+    return (await this.grantEligibility(context, actor, request)) ?? own;
+  }
+
+  /**
+   * Eligibility through a stand-in grant (access-and-approvals 9.3, 10; PRD-ACS-018, POL-02.20; S1-F05-T02): a grant to
+   * the person in force today for the request's action type, whose scope covers the request's facts (5.3) and whose
+   * limit covers its value (9.2); the person is none of its preparers (PRD-ACS-006); and the person stood in for is
+   * eligible for it through their own assignments today, so a grant is never wider than their authority, and ends with
+   * it. Grants do not chain. The decision relies on the stood-in-for person's assignment and limit, and on the grant.
+   * The first such grant by identifier, or undefined.
+   */
+  private async grantEligibility(
+    context: TransactionContext,
+    actor: DecidingActor,
+    request: RequestRow,
+  ): Promise<Eligibility | undefined> {
+    const date = await context.businessDate();
+    if (date.kind === 'not-set') return undefined;
+    const rule = this.ruleOf(request.actionType);
+    const declaration = this.dependencies.registry.get(rule.recordType);
+    if (declaration === undefined) throw new CommandDefect(`Record type ${rule.recordType} is not declared`);
+    const { facts, movesTo } = requestFacts(request);
+    for (const grant of await grantsInForce(context, date.date, actor.id, request.actionType)) {
+      if (!scopeCoversMove(grant.scope, declaration, actor.id, facts, movesTo).covered) continue;
+      if (rule.value !== 'none' && !grantActionCovers(grant.action, valueOf(request))) continue;
+      const preparers = new Set([
+        ...(await storedPreparers(context, request.id)),
+        ...(rule.module === 'access' ? await preparersOf(context, request.actionType, request.documentVersionId) : []),
+      ]);
+      if (preparers.has(actor.id)) {
+        return {
+          kind: 'refused',
+          refusal: {
+            kind: 'refused',
+            code: 'access.self-preparation',
+            missing: [{ kind: 'preparer', userId: actor.id }],
+          },
+        };
       }
-    | { kind: 'refused'; refusal: CommandRefusal }
-  > {
+      const giver = await this.eligibility(context, { kind: 'user', id: grant.forUserId }, request, 'own-assignments');
+      if (giver.kind !== 'eligible') continue;
+      return { ...giver, standIn: { grantId: grant.id, forUserId: grant.forUserId, action: grant.action } };
+    }
+    return undefined;
+  }
+
+  /** Who may decide through their own assignments (access-and-approvals 9.3), as built before stand-in grants. */
+  private async ownEligibility(
+    context: TransactionContext,
+    actor: DecidingActor,
+    request: RequestRow,
+  ): Promise<Eligibility> {
     if (actor.kind !== 'user') {
       return {
         kind: 'refused',
@@ -561,7 +652,7 @@ export class Approvals {
     ].sort();
     const candidates: { actorId: string; authority: Authority }[] = [];
     for (const actorId of actors) {
-      const eligible = await this.eligibility(context, { kind: 'user', id: actorId }, request);
+      const eligible = await this.eligibility(context, { kind: 'user', id: actorId }, request, 'own-assignments');
       if (eligible.kind !== 'eligible') continue;
       candidates.push({
         actorId,
@@ -587,6 +678,13 @@ export class Approvals {
   ): Promise<LimitStanding | undefined> {
     const rule = this.ruleOf(request.actionType);
     if (rule.value === 'none' || request.state !== 'Awaiting approval') return undefined;
+    // Through a stand-in grant, the reader stands against the grant's own limit (10; S1-F05-T02).
+    const eligible = await this.eligibility(context, actor, request);
+    if (eligible.kind === 'eligible' && eligible.standIn !== undefined) {
+      const action = eligible.standIn.action;
+      if (request.valueKind === 'unknown') return { kind: 'unknown-covered' };
+      return action.amount === null ? { kind: 'unlimited' } : { kind: 'within', limit: action.amount };
+    }
     const covering = await authorisingAssignments(context, this.dependencies.registry, {
       actorId: actor.id,
       action: 'approve',
@@ -723,7 +821,10 @@ export class Approvals {
       // hidden: their panel says "No approver set up" and Approve stays disabled (design-language 10.14).
       const offered = await this.offeredFor(context, row);
       const shortOfLimit = eligible.kind === 'refused' && LIMIT_CODES.has(eligible.refusal.code);
-      if (offered.includes(userId) || (offered.length === 0 && shortOfLimit)) listed.push(row.id);
+      // A stand-in sees what the grant covers of what the person stood in for is offered (10; PRD-ACS-010).
+      const standingIn =
+        eligible.kind === 'eligible' && eligible.standIn !== undefined && offered.includes(eligible.standIn.forUserId);
+      if (offered.includes(userId) || standingIn || (offered.length === 0 && shortOfLimit)) listed.push(row.id);
     }
     return listed;
   }
@@ -733,12 +834,19 @@ export class Approvals {
     const request = await this.findRequest(context, requestId);
     if (request === undefined) return { kind: 'allowed' } as const;
     const rule = this.ruleOf(request.actionType);
-    return authorise(context, this.dependencies.registry, {
+    const authorised = await authorise(context, this.dependencies.registry, {
       actorId: actor.id,
       action: 'approve',
       recordType: rule.recordType,
       ...requestFacts(request),
     });
+    if (authorised.kind === 'allowed') return authorised;
+    // A stand-in's replay, while a grant of theirs for the action type is still in force (10; S1-F05-T02).
+    const date = await context.businessDate();
+    if (date.kind === 'set' && (await grantsInForce(context, date.date, actor.id, request.actionType)).length > 0) {
+      return { kind: 'allowed' } as const;
+    }
+    return authorised;
   }
 
   /**
@@ -753,6 +861,50 @@ export class Approvals {
    * grants, audit and permission-change records, and the outbox rows (PRD-INT-004, PRD-MOD-006).
    */
   async decide(context: TransactionContext, actor: DecidingActor, input: DecisionInput): Promise<DecisionOutcome> {
+    return this.decideWith(context, actor, input, { kind: 'code', totpCode: input.totpCode });
+  }
+
+  /**
+   * One item of a bulk approval (access-and-approvals 9.9; PRD-ACS-019, POL-02.19; S1-F05-T02): its own decision in its
+   * own transaction, approving, rechecked under the locks for permission, scope, limit, state and independence as any
+   * decision is; the fresh code is the batch's (3.3), so the batch must be the approver's and name the request.
+   */
+  async decideInBatch(context: TransactionContext, actor: DecidingActor, input: BatchItemInput) {
+    return this.decideWith(
+      context,
+      actor,
+      { ...input, outcome: 'approve', totpCode: '' },
+      { kind: 'batch', batchId: input.batchId },
+    );
+  }
+
+  /** Opens a bulk approval's batch with its one fresh code (9.9; 3.3; S1-F05-T02); never by a service identity. */
+  async openBatch(context: TransactionContext, actor: DecidingActor, input: BatchInput): Promise<BatchOutcome> {
+    if (actor.kind !== 'user') {
+      return {
+        kind: 'refusal',
+        refusal: { kind: 'not-authorised', code: 'access.not-eligible', missing: [{ kind: 'person' }] },
+        causedBySecret: false,
+      };
+    }
+    return openBatch(
+      context,
+      {
+        audit: this.dependencies.audit,
+        keys: this.dependencies.keys,
+        approveReasons: () => this.reasonsInForce(context, 'approve'),
+      },
+      actor.id,
+      input,
+    );
+  }
+
+  private async decideWith(
+    context: TransactionContext,
+    actor: DecidingActor,
+    input: DecisionInput,
+    proof: { readonly kind: 'code'; readonly totpCode: string } | { readonly kind: 'batch'; readonly batchId: string },
+  ): Promise<DecisionOutcome> {
     const date = await context.businessDate();
     if (date.kind === 'not-set') {
       return refused('unavailable', 'access.business-date-not-set', [
@@ -768,12 +920,16 @@ export class Approvals {
     // decision changes, exclusive (code-house-rules 8.2 "Authority first"; RR-325, RR-360). The assignment is the one Authorise finds
     // before the locks; an approver who is not eligible then locks none of theirs and is refused under the locks.
     const relied = await this.eligibility(context, actor, found);
+    // Through a stand-in grant, the authority relied on is the stood-in-for person's: their user row, assignment and
+    // role, with the grant and the stand-in's own user row, all shared (code-house-rules 8.2; 10; S1-F05-T02).
+    const standIn = relied.kind === 'eligible' ? relied.standIn : undefined;
+    const reliedActor: DecidingActor = standIn === undefined ? actor : { kind: 'user', id: standIn.forUserId };
     const held =
-      relied.kind === 'eligible' ? await reliedAuthority(context, actor, relied.roleAssignmentId) : undefined;
+      relied.kind === 'eligible' ? await reliedAuthority(context, reliedActor, relied.roleAssignmentId) : undefined;
     // The assignments relied on for the documents decided with it, shared too (structure-and-masters 3.4).
     const alsoHeld = [];
     for (const assignmentId of relied.kind === 'eligible' ? relied.alsoRelied : []) {
-      alsoHeld.push(await reliedAuthority(context, actor, assignmentId));
+      alsoHeld.push(await reliedAuthority(context, reliedActor, assignmentId));
     }
     // The lock helper takes a row named twice once, exclusively when either names it so (code-house-rules 8.2).
     await context.lock(LOCK_STEP.authority, [
@@ -781,6 +937,7 @@ export class Approvals {
       ...alsoHeld.flatMap((each) => each.targets),
       // The approval limit relied on, shared (9.5; S1-F05-T01).
       ...(relied.kind === 'eligible' && relied.limit !== undefined ? [limitTarget(relied.limit.id, 'shared')] : []),
+      ...(standIn === undefined ? [] : [identityTarget(actor, 'shared'), grantTarget(standIn.grantId, 'shared')]),
       ...((await handler.authorityTargets?.(context, found.documentVersionId)) ?? []),
     ]);
     await context.lock(LOCK_STEP.document, [
@@ -799,7 +956,8 @@ export class Approvals {
       relied.kind !== 'eligible' ||
       relied.roleAssignmentId !== eligible.roleAssignmentId ||
       relied.alsoRelied.join() !== eligible.alsoRelied.join() ||
-      relied.limit?.id !== eligible.limit?.id
+      relied.limit?.id !== eligible.limit?.id ||
+      relied.standIn?.grantId !== eligible.standIn?.grantId
     ) {
       return refused('conflict', 'kernel.stale-version');
     }
@@ -812,11 +970,18 @@ export class Approvals {
     const reason = checked.reason;
     const own = await handler.precheck?.(context, request.documentVersionId);
     if (own !== undefined) return { kind: 'refusal', refusal: own, causedBySecret: false };
-    const keys = this.dependencies.keys;
-    if (keys === undefined) throw new CommandDefect('Deciding needs the Organisation keys for the fresh code');
-    const code = await checkFreshCode(context, keys, actor.id, input.totpCode);
-    const codeRefused = await takeFreshCode(code);
-    if (codeRefused !== undefined) return { kind: 'refusal', ...codeRefused };
+    if (proof.kind === 'code') {
+      const keys = this.dependencies.keys;
+      if (keys === undefined) throw new CommandDefect('Deciding needs the Organisation keys for the fresh code');
+      const code = await checkFreshCode(context, keys, actor.id, proof.totpCode);
+      const codeRefused = await takeFreshCode(code);
+      if (codeRefused !== undefined) return { kind: 'refusal', ...codeRefused };
+    } else {
+      // An item of a bulk approval: its batch, recorded with the fresh code in its own command, is the approver's and
+      // names the request, and the action type is still on the allowlist today (9.9; S1-F05-T02).
+      const batchRefused = await batchRefusal(context, proof.batchId, actor.id, request);
+      if (batchRefused !== undefined) return { kind: 'refusal', refusal: batchRefused, causedBySecret: false };
+    }
 
     const decisionId = uuidv7();
     const outcome = input.outcome === 'approve' ? 'Approved' : 'Rejected';
@@ -869,6 +1034,9 @@ export class Approvals {
         decidedAt: context.startedAt,
         // The limit relied on, which the recheck under a posting's locks uses (9.5, 9.7; RR-435).
         approvalLimitId: eligible.limit?.id ?? null,
+        // The stand-in grant relied on, and the bulk batch the decision was made in (9.5, 9.9, 10; S1-F05-T02).
+        standInGrantId: eligible.standIn?.grantId ?? null,
+        bulkDecisionBatchId: proof.kind === 'batch' ? proof.batchId : null,
       });
       await context.tx.update(approvalRequest).set({ state: outcome }).where(eq(approvalRequest.id, request.id));
     };
@@ -937,6 +1105,8 @@ export class Approvals {
       reason = { kind: 'free-text', text: decision.reasonText };
     }
     const standing = await this.standing(context, actor, request);
+    const eligible =
+      request.state === 'Awaiting approval' ? await this.eligibility(context, actor, request) : undefined;
     return {
       id: request.id,
       actionType: request.actionType,
@@ -965,6 +1135,10 @@ export class Approvals {
           }),
       decidable: await this.decidable(context, actor, request),
       ...(standing === undefined ? {} : { limit: standing }),
+      bulkAllowed: await bulkAllowedToday(context, request.actionType),
+      ...(eligible?.kind === 'eligible' && eligible.standIn !== undefined
+        ? { standInGrantId: eligible.standIn.grantId }
+        : {}),
       asOf: context.startedAt.toISOString(),
     };
   }

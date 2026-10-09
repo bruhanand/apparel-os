@@ -4,6 +4,8 @@ import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { WORK_ITEM_RECORD_TYPE } from './events.js';
 import { mayActOn } from './queries/my-work.js';
 import { MyWorkController } from './http/my-work.controller.js';
+import { RoutingController } from './http/routing.controller.js';
+import { AuditModule } from '../audit/index.js';
 import { Inbox, INBOX } from './inbox.js';
 
 /**
@@ -13,8 +15,9 @@ import { Inbox, INBOX } from './inbox.js';
  * publish through its interface, INBOX, in their own transaction (11.1).
  */
 @Module({
-  imports: [CommandRunnerModule, AccessModule],
-  controllers: [MyWorkController],
+  // Audit for the routing's changes (S1-F05-T02).
+  imports: [CommandRunnerModule, AccessModule, AuditModule],
+  controllers: [MyWorkController, RoutingController],
   providers: [{ provide: INBOX, useValue: new Inbox() }],
   exports: [INBOX],
 })

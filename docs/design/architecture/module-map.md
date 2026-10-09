@@ -317,7 +317,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 ### 4.8 `inbox`
 
-**Uses:** `access`, `kernel`.
+**Uses:** `access`, `audit`, `kernel`. `audit` records the changes to task and approval routing, as every change to a setting is audited (numbering-and-audit 4.1; `S1-F05-T02`). **Design choice.**
 
 | Operation | Called by | What it does |
 | --- | --- | --- |

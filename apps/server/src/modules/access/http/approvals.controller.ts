@@ -76,6 +76,115 @@ export class ApprovalsController {
     return commandAnswer(answer);
   }
 
+  /**
+   * Bulk approval (access-and-approvals 9.9; code-house-rules 12.1, 12.4; PRD-ACS-011, PRD-ACS-019, POL-02.19;
+   * S1-F05-T02): the one route that runs several commands. First the batch, in a command of its own under the request's
+   * key, with the one fresh code; then each item its own decision in its own transaction, under the same key with the
+   * item's request added to its operation, so a resent request replays what was done and runs what was not. An item
+   * refused goes to individual review, with its reason; the others go on.
+   */
+  @ApiRoute(routes.decideApprovalsInBulk)
+  async decideInBulk(
+    @RouteInput() input: RouteInputOf<typeof routes.decideApprovalsInBulk>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.decideApprovalsInBulk, input);
+    const actor = { kind: 'user' as const, id: user.userId };
+    const request = (commandName: string) => ({
+      commandName,
+      organisation: user.organisation,
+      correlationId: user.correlationId,
+      actor: { kind: 'actor' as const, actorId: user.userId },
+    });
+    const body = input.body;
+    // The batch: Authenticate only, as for every decision route; the key belongs to this actor (12.4).
+    const batch = await this.helper.run(request('access.decide-in-bulk'), {
+      key: input.idempotencyKey,
+      content,
+      authoriseReplay: () => Promise.resolve({ kind: 'allowed' }),
+      work: async (context): Promise<CommandOutcome<JsonValue>> => {
+        const opened = await this.access.openBulkBatch(context, actor, {
+          items: body.items,
+          reason: body.reason,
+          totpCode: body.totpCode,
+        });
+        return opened.kind === 'success'
+          ? { kind: 'success', answer: opened.answer as unknown as JsonValue, shows: 'nothing' }
+          : opened;
+      },
+    });
+    if (batch.kind !== 'success') return commandAnswer(batch);
+    const opened = batch.answer as unknown as { batchId: string; totals: JsonValue; noValueCount: number };
+    const items = [];
+    for (const item of body.items) {
+      // The item's request added to the operation, as a command name allows it (12.4; command-runner).
+      const decided = await this.helper.run(request(`access.decide-in-bulk.item-${item.requestId}`), {
+        key: input.idempotencyKey,
+        content,
+        authoriseReplay: async (context) => {
+          const access = await this.access.decisionReplayAccess(context, actor, item.requestId);
+          if (access.kind === 'allowed') return { kind: 'allowed' };
+          return {
+            kind: 'refused',
+            refusal: { kind: 'not-authorised', code: access.refusal.code, missing: access.refusal.missing },
+          };
+        },
+        work: async (context): Promise<CommandOutcome<JsonValue>> => {
+          const outcome = await this.access.decideInBatch(context, actor, {
+            batchId: opened.batchId,
+            requestId: item.requestId,
+            versionId: item.versionId,
+            reason: body.reason,
+            comment: body.comment,
+          });
+          return outcome.kind === 'success'
+            ? { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' }
+            : outcome;
+        },
+      });
+      items.push(
+        decided.kind === 'success'
+          ? {
+              requestId: item.requestId,
+              outcome: 'Approved' as const,
+              decisionId: (decided.answer as { decisionId: string }).decisionId,
+            }
+          : {
+              requestId: item.requestId,
+              outcome: 'individual-review' as const,
+              code: decided.refusal.code,
+              missing: [...decided.refusal.missing],
+            },
+      );
+    }
+    return { batchId: opened.batchId, totals: opened.totals, noValueCount: opened.noValueCount, items };
+  }
+
+  // Stand-in grants (access-and-approvals 10, 14; S1-F05-T02): the guard has run Authorise for view.
+  @ApiRoute(routes.listStandInGrants)
+  async listStandInGrants(@SignedIn() user: SignedInUser) {
+    const answer = await this.runner.read(
+      {
+        commandName: 'access.list-stand-in-grants',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      async (context) =>
+        (await context.businessDate()).kind === 'not-set'
+          ? undefined
+          : { listed: await this.access.listStandInGrants(context) },
+    );
+    if (answer === undefined) {
+      throw new ApiRefusal({
+        kind: 'unavailable',
+        code: 'access.business-date-not-set',
+        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+      });
+    }
+    return answer.listed;
+  }
+
   @ApiRoute(routes.readApprovalRequest)
   async readRequest(
     @RouteInput() input: RouteInputOf<typeof routes.readApprovalRequest>,

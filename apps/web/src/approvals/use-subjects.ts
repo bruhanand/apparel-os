@@ -58,6 +58,18 @@ export function approvalRead(requestId: string) {
  * approval requests; an item whose request is not read yet, or may not be, has none and shows its kind.
  */
 export function useApprovalSubjects(items: readonly WorkItem[]): ReadonlyMap<string, ApprovalSubject> {
+  const requests = useApprovalRequests(items);
+  const lists = useSubjectLists();
+  const subjects = new Map<string, ApprovalSubject>();
+  for (const [itemId, view] of requests) subjects.set(itemId, approvalSubject(view, lists));
+  return subjects;
+}
+
+/**
+ * The request read of each approval item of My work, by item identifier, where the reader may view approval requests:
+ * its value and whether it may be approved in bulk (access-and-approvals 9.9; S1-F05-T02), and what names its subject.
+ */
+export function useApprovalRequests(items: readonly WorkItem[]): ReadonlyMap<string, ApprovalRequestView> {
   const viewable = useViewable();
   const approvals = items.filter((item) => item.kind === 'approval');
   const requests = useQueries({
@@ -66,11 +78,10 @@ export function useApprovalSubjects(items: readonly WorkItem[]): ReadonlyMap<str
       enabled: viewable('access.approval_request'),
     })),
   });
-  const lists = useSubjectLists();
-  const subjects = new Map<string, ApprovalSubject>();
+  const views = new Map<string, ApprovalRequestView>();
   approvals.forEach((item, index) => {
     const view: ApprovalRequestView | undefined = requests[index]?.data;
-    if (view !== undefined) subjects.set(item.id, approvalSubject(view, lists));
+    if (view !== undefined) views.set(item.id, view);
   });
-  return subjects;
+  return views;
 }

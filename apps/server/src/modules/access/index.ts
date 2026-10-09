@@ -25,7 +25,9 @@ export type { Decider, EffectOptions, Prepared, Preparer } from './commands/acce
 export type { FreshCode, FreshCodeRefusal } from './commands/fresh-code.js';
 export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
-export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked } from './events.js';
+export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked, standInChanged } from './events.js';
+export type { BatchInput, BatchOutcome } from './commands/bulk.js';
+export type { BatchItemInput } from './commands/decide.js';
 export { accessApprovalRules } from './domain/approval-rules.js';
 export type {
   ApprovalRule,

@@ -1,7 +1,7 @@
 import { uuidv7, type Paise } from '@apparel-os/domain';
 import type { AccessActionType } from '@apparel-os/schemas';
 import { and, eq, ne } from 'drizzle-orm';
-import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, scopeFactsOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import {
   approvalLimitChange,
@@ -14,6 +14,7 @@ import {
   roleAssignmentWithdrawalChange,
   roleVersionChange,
   settingVersionChange,
+  standInGrantChange,
 } from '../db/schema.js';
 import { accessApprovalRules, type ApprovalRule } from '../domain/approval-rules.js';
 import type { RecordFacts } from '../domain/scope.js';
@@ -78,6 +79,12 @@ export async function preparersOf(
           .select({ userId: approvalLimitChange.changedByUserId })
           .from(approvalLimitChange)
           .where(eq(approvalLimitChange.approvalLimitId, versionId));
+      // A stand-in grant is a dated row, its own version too (S1-F05-T02).
+      case 'access.stand_in_grant.change':
+        return context.tx
+          .select({ userId: standInGrantChange.changedByUserId })
+          .from(standInGrantChange)
+          .where(eq(standInGrantChange.standInGrantId, versionId));
       default:
         throw new CommandDefect(`No approval rule for action type ${actionType}`);
     }
@@ -295,6 +302,14 @@ async function openRequest(
       recordId: requestId,
       versionId: request.document.versionId,
     },
+    // The document's scope facts, so `inbox` routes the item by its Site and keeps its facts (11.1; S1-F05-T02).
+    scope: scopeFactsOf({
+      legalEntityId: request.facts?.legalEntityId,
+      siteId: request.facts?.siteId,
+      storeId: request.facts?.storeId,
+      businessUnitId: request.facts?.businessUnitId,
+      brandId: request.facts?.brandId,
+    }),
     payload: {
       requestId,
       actionType: request.actionType,
