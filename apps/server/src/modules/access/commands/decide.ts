@@ -1,5 +1,12 @@
-import { uuidv7 } from '@apparel-os/domain';
-import type { AccessActionType, MissingItem, RecordTypeDeclaration } from '@apparel-os/schemas';
+import { paise, uuidv7 } from '@apparel-os/domain';
+import type {
+  AccessActionType,
+  ApprovalValue,
+  LimitStanding,
+  MissingItem,
+  MoneyBasis,
+  RecordTypeDeclaration,
+} from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   CommandDefect,
@@ -13,11 +20,16 @@ import {
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { DECISION_EVIDENCE_KIND, type DecisionEvidence } from '../contracts/decision-evidence.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
+import { authorityOf, offeredTo, type Authority, type LimitedValue, type LimitRow } from '../domain/approval-limits.js';
 import type { ApprovalRule, DocumentEffect } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
+import { scopeCoversMove } from '../domain/scope.js';
 import { approvalDecided } from '../events.js';
-import { authorise } from '../queries/authorise.js';
-import { identityTarget, reliedAuthority } from './authority.js';
+import { userNames } from '../queries/access-records.js';
+import { assignmentsInForce } from '../queries/assignments.js';
+import { authorise, authorisingAssignments } from '../queries/authorise.js';
+import { limitsInForce, type ApprovalLimitChanges } from './approval-limits.js';
+import { identityTarget, limitTarget, reliedAuthority } from './authority.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
@@ -106,6 +118,29 @@ function scopeOf(request: RequestRow): AuditScope {
   return scopeFactsOf({ legalEntityId, siteId, storeId, businessUnitId, brandId });
 }
 
+/** The refusals of a person who would decide a valued request but for their limit (9.3; S1-F05-T01). */
+const LIMIT_CODES: ReadonlySet<string> = new Set([
+  'access.no-approval-limit',
+  'access.above-approval-limit',
+  'access.unknown-value-not-covered',
+]);
+
+/** A valued request's value on its basis, Unknown unless known (PRD-ACS-016, PRD-MOD-015). */
+function valueOf(request: RequestRow): LimitedValue {
+  return request.valueKind === 'known' && request.valueAmount !== null
+    ? { kind: 'known', amountPaise: paise(request.valueAmount) }
+    : { kind: 'unknown' };
+}
+
+/** A request's value as the approval panel shows it, with its basis (PRD-ACS-015). */
+function shownValue(request: RequestRow): ApprovalValue {
+  if (request.valueKind === 'none' || request.valueBasis === null) return { kind: 'none' };
+  const basis = request.valueBasis as MoneyBasis;
+  return request.valueKind === 'known' && request.valueAmount !== null
+    ? { kind: 'known', basis, amount: paise(request.valueAmount) }
+    : { kind: 'unknown', basis };
+}
+
 /** Another module's document: Decide changes nothing of it (module-map 6.2; access-and-approvals 9.5, 9.8). */
 const MODULE_DOCUMENT: DocumentHandler = {
   targets: () => Promise.resolve([]),
@@ -145,6 +180,8 @@ export class Approvals {
       readonly users: UserChanges;
       readonly settings: ApprovalSettingsChanges;
       readonly securitySettings: SecuritySettingsChanges;
+      /** Approval limits: their changes, decided here like any access change (9.2, 9.11; S1-F05-T01). */
+      readonly limits: ApprovalLimitChanges;
       readonly keys?: OrganisationKeys | undefined;
       /** Every approval rule of the composition: access's own and the modules' (access-and-approvals 8). */
       readonly rules: ReadonlyMap<string, ApprovalRule>;
@@ -154,8 +191,19 @@ export class Approvals {
       readonly evidence?: DecisionEvidence | undefined;
     },
   ) {
-    const { changes, users, settings, securitySettings } = dependencies;
+    const { changes, users, settings, securitySettings, limits } = dependencies;
     this.handlers = new Map<AccessActionType, DocumentHandler>([
+      [
+        'access.approval_limit.change',
+        {
+          // The limit, and those its approval ends on its start, exclusively at step 0: a decision relying on one of
+          // them locks it shared (code-house-rules 8.2; S1-F05-T01).
+          authorityTargets: (c, v) => limits.authorityTargets(c, v),
+          targets: () => Promise.resolve([]),
+          approve: (c, d, v) => limits.approve(c, d, v, HELD),
+          reject: (c, d, v) => limits.reject(c, d, v, HELD),
+        },
+      ],
       [
         'access.role.change',
         {
@@ -349,15 +397,23 @@ export class Approvals {
   /**
    * Who may decide (access-and-approvals 9.3): a person, never a service identity (PRD-SEC-018); Active today; holding
    * one assignment in force that grants approve on the request's record type, covering its facts (PRD-ACS-001,
-   * PRD-ACS-004); and none of its preparers, through any role (PRD-ACS-006, POL-02.08). An access change has no value,
-   * so no limit applies (9.3, DM-8). Answers the assignment relied on, or the refusal.
+   * PRD-ACS-004); none of its preparers, through any role (PRD-ACS-006, POL-02.08); and, for a value on a basis, a
+   * limit through that same assignment that covers it, or explicit authority over Unknown value (9.2; POL-02.09,
+   * PRD-ACS-016; S1-F05-T01). An action with no value, or no value limit, needs only approve (DM-8). Answers the
+   * assignment and the limit relied on, or the refusal.
    */
   private async eligibility(
     context: TransactionContext,
     actor: DecidingActor,
     request: RequestRow,
   ): Promise<
-    | { kind: 'eligible'; roleAssignmentId: string; alsoRelied: readonly string[] }
+    | {
+        kind: 'eligible';
+        roleAssignmentId: string;
+        alsoRelied: readonly string[];
+        /** The limit relied on, for a value on a basis (9.5). */
+        limit?: LimitRow;
+      }
     | { kind: 'refused'; refusal: CommandRefusal }
   > {
     if (actor.kind !== 'user') {
@@ -388,29 +444,38 @@ export class Approvals {
     // business unit's first mapping (structure-and-masters 3.4; product owner, 8 Oct 2026).
     const decidesWith =
       (await this.handlerOf(request.actionType).decidesWith?.(context, request.documentVersionId)) ?? [];
-    const relied: string[] = [];
-    for (const recordType of [rule.recordType, ...decidesWith.map((each) => this.ruleOf(each).recordType)]) {
-      // Covering the document's scope facts, which the request froze (9.3; RR-435).
+    const notEligible = (refusal: CommandRefusal) =>
+      ({
+        kind: 'refused',
+        refusal: {
+          kind: refusal.kind === 'unavailable' ? 'unavailable' : 'not-authorised',
+          code: refusal.kind === 'unavailable' ? refusal.code : 'access.not-eligible',
+          missing: [...refusal.missing],
+        },
+      }) as const;
+    // Covering the document's scope facts, which the request froze (9.3; RR-435). Every assignment that does, since a
+    // valued request's limit must come through the assignment that grants approve (PRD-ACS-004).
+    const covering = await authorisingAssignments(context, this.dependencies.registry, {
+      actorId: actor.id,
+      action: 'approve',
+      recordType: rule.recordType,
+      ...requestFacts(request),
+    });
+    if (covering.kind === 'refused') return notEligible(covering.refusal);
+    const alsoRelied: string[] = [];
+    for (const recordType of decidesWith.map((each) => this.ruleOf(each).recordType)) {
       const authorised = await authorise(context, this.dependencies.registry, {
         actorId: actor.id,
         action: 'approve',
         recordType,
         ...requestFacts(request),
       });
-      if (authorised.kind === 'refused') {
-        return {
-          kind: 'refused',
-          refusal: {
-            kind: authorised.refusal.kind === 'unavailable' ? 'unavailable' : 'not-authorised',
-            code: authorised.refusal.kind === 'unavailable' ? authorised.refusal.code : 'access.not-eligible',
-            missing: [...authorised.refusal.missing],
-          },
-        };
-      }
-      relied.push(authorised.roleAssignmentId);
+      if (authorised.kind === 'refused') return notEligible(authorised.refusal);
+      alsoRelied.push(authorised.roleAssignmentId);
     }
-    const [roleAssignmentId, ...alsoRelied] = relied;
-    if (roleAssignmentId === undefined) throw new CommandDefect('Eligibility relied on no assignment');
+    const first = covering.assignments[0];
+    if (first === undefined) throw new CommandDefect('Eligibility relied on no assignment');
+    let roleAssignmentId = first.assignmentId;
     const preparers = new Set([
       ...(await storedPreparers(context, request.id)),
       // An access change's preparers are read again from its change rows; another module's are those it named (9.1).
@@ -426,20 +491,125 @@ export class Approvals {
         },
       };
     }
-    // A value on a basis needs a limit of the approver's that covers it, or explicit authority over Unknown value;
-    // a missing limit grants nothing (9.2, 9.3; POL-02.09, POL-02.15, PRD-ACS-016). Approval limits arrive with S1-F05,
-    // so until then no approver is eligible for a request with a value basis.
-    if (rule.value !== 'none') {
-      return {
-        kind: 'refused',
-        refusal: {
-          kind: 'not-authorised',
-          code: 'access.no-approval-limit',
-          missing: [{ kind: 'approval-limit', actionType: rule.actionType, basis: rule.value }],
-        },
-      };
+    // A value on a basis needs a limit of the approver's that covers it, through the same assignment, or explicit
+    // authority over Unknown value; a missing limit grants nothing (9.2, 9.3; POL-02.09, POL-02.15, PRD-ACS-016).
+    if (rule.value === 'none') return { kind: 'eligible', roleAssignmentId, alsoRelied };
+    const authority = await this.limitAuthority(context, actor.id, request, covering.assignments);
+    if (authority.kind !== 'covered') {
+      const missing = [{ kind: 'approval-limit', actionType: rule.actionType, basis: rule.value }];
+      const code = {
+        'no-limit': 'access.no-approval-limit',
+        above: 'access.above-approval-limit',
+        'unknown-not-covered': 'access.unknown-value-not-covered',
+      }[authority.kind];
+      return { kind: 'refused', refusal: { kind: 'not-authorised', code, missing } };
     }
-    return { kind: 'eligible', roleAssignmentId, alsoRelied };
+    roleAssignmentId = authority.assignmentId;
+    return { kind: 'eligible', roleAssignmentId, alsoRelied, limit: authority.limit };
+  }
+
+  /**
+   * One approver's authority for a valued request (9.2, 9.3): the limits of its action type in force today that apply
+   * through each assignment granting approve and covering the request's facts, a role's limit only where its scope
+   * covers them too (5.3), and the lowest that covers the value (DEC-043).
+   */
+  private async limitAuthority(
+    context: TransactionContext,
+    actorId: string,
+    request: RequestRow,
+    assignments: readonly { readonly assignmentId: string; readonly roleId: string }[],
+  ): Promise<Authority> {
+    const date = await context.businessDate();
+    if (date.kind === 'not-set') return { kind: 'no-limit' };
+    const rule = this.ruleOf(request.actionType);
+    const declaration = this.dependencies.registry.get(rule.recordType);
+    if (declaration === undefined) throw new CommandDefect(`Record type ${rule.recordType} is not declared`);
+    const { facts, movesTo } = requestFacts(request);
+    const limits = await limitsInForce(context, date.date, request.actionType);
+    return authorityOf(
+      actorId,
+      assignments,
+      limits,
+      (scope) => scopeCoversMove(scope, declaration, actorId, facts, movesTo).covered,
+      valueOf(request),
+    );
+  }
+
+  /**
+   * To whom a valued request is offered now (9.4; DEC-043): of every person eligible for it (9.3), those whose limit
+   * relied on is the lowest that covers its value, explicit unlimited authority after every finite limit; for an
+   * Unknown value, everyone with explicit authority over Unknown. Worked out at each read, so a limit change applies as
+   * soon as it is in force. A request with no value is offered to everyone eligible.
+   */
+  private async offeredFor(context: TransactionContext, request: RequestRow): Promise<string[]> {
+    const date = await context.businessDate();
+    if (date.kind === 'not-set') return [];
+    const rule = this.ruleOf(request.actionType);
+    const actors = [
+      ...new Set(
+        (await assignmentsInForce(context, date.date))
+          .filter((assignment) =>
+            assignment.permissions.some(
+              (permission) =>
+                permission.kind === 'action' &&
+                permission.recordType === rule.recordType &&
+                permission.action === 'approve',
+            ),
+          )
+          .map((assignment) => assignment.actorId),
+      ),
+    ].sort();
+    const candidates: { actorId: string; authority: Authority }[] = [];
+    for (const actorId of actors) {
+      const eligible = await this.eligibility(context, { kind: 'user', id: actorId }, request);
+      if (eligible.kind !== 'eligible') continue;
+      candidates.push({
+        actorId,
+        authority:
+          eligible.limit === undefined
+            ? { kind: 'no-limit' }
+            : { kind: 'covered', assignmentId: eligible.roleAssignmentId, limit: eligible.limit },
+      });
+    }
+    if (rule.value === 'none') return candidates.map((candidate) => candidate.actorId);
+    return offeredTo(candidates, valueOf(request));
+  }
+
+  /**
+   * Where the reader stands against a valued request, for the approval panel's limit bar (design-language 10.14;
+   * 9.2 to 9.4): within their limit, under unlimited or Unknown authority, or short of it, with an approver it is
+   * offered to now, or none, which the panel shows as "No approver set up". Undefined for a request with no value.
+   */
+  private async standing(
+    context: TransactionContext,
+    actor: DecidingActor,
+    request: RequestRow,
+  ): Promise<LimitStanding | undefined> {
+    const rule = this.ruleOf(request.actionType);
+    if (rule.value === 'none' || request.state !== 'Awaiting approval') return undefined;
+    const covering = await authorisingAssignments(context, this.dependencies.registry, {
+      actorId: actor.id,
+      action: 'approve',
+      recordType: rule.recordType,
+      ...requestFacts(request),
+    });
+    const authority =
+      covering.kind === 'refused'
+        ? ({ kind: 'no-limit' } as const)
+        : await this.limitAuthority(context, actor.id, request, covering.assignments);
+    if (authority.kind === 'covered') {
+      if (request.valueKind === 'unknown') return { kind: 'unknown-covered' };
+      return authority.limit.amount === null
+        ? { kind: 'unlimited' }
+        : { kind: 'within', limit: authority.limit.amount };
+    }
+    const others = (await this.offeredFor(context, request)).filter((id) => id !== actor.id);
+    const names = await userNames(context);
+    const next = others.map((id) => names.get(id) ?? id).sort()[0] ?? null;
+    if (authority.kind === 'above' && authority.highest.amount !== null) {
+      return { kind: 'above', limit: authority.highest.amount, next };
+    }
+    return { kind: authority.kind === 'unknown-not-covered' ? 'unknown-not-covered' : 'no-limit', next };
   }
 
   /** The reason versions in force today of a kind (access-and-approvals 9.5). */
@@ -541,12 +711,21 @@ export class Approvals {
       .select()
       .from(approvalRequest)
       .where(and(inArray(approvalRequest.id, [...requestIds]), eq(approvalRequest.state, 'Awaiting approval')));
-    const eligible: string[] = [];
+    const listed: string[] = [];
     for (const row of rows) {
-      if ((await this.eligibility(context, { kind: 'user', id: userId }, row)).kind === 'eligible')
-        eligible.push(row.id);
+      const eligible = await this.eligibility(context, { kind: 'user', id: userId }, row);
+      if (this.ruleOf(row.actionType).value === 'none') {
+        if (eligible.kind === 'eligible') listed.push(row.id);
+        continue;
+      }
+      // A valued request is offered only to the eligible approvers with the lowest limit that covers it (9.4). While
+      // no limit covers it, it stays Awaiting approval with those who would decide it but for the limit, so it is not
+      // hidden: their panel says "No approver set up" and Approve stays disabled (design-language 10.14).
+      const offered = await this.offeredFor(context, row);
+      const shortOfLimit = eligible.kind === 'refused' && LIMIT_CODES.has(eligible.refusal.code);
+      if (offered.includes(userId) || (offered.length === 0 && shortOfLimit)) listed.push(row.id);
     }
-    return eligible;
+    return listed;
   }
 
   /** Authorise for a replayed decision: the same actor, still eligible (code-house-rules 12.4, CH-14). */
@@ -600,6 +779,8 @@ export class Approvals {
     await context.lock(LOCK_STEP.authority, [
       ...(held?.targets ?? []),
       ...alsoHeld.flatMap((each) => each.targets),
+      // The approval limit relied on, shared (9.5; S1-F05-T01).
+      ...(relied.kind === 'eligible' && relied.limit !== undefined ? [limitTarget(relied.limit.id, 'shared')] : []),
       ...((await handler.authorityTargets?.(context, found.documentVersionId)) ?? []),
     ]);
     await context.lock(LOCK_STEP.document, [
@@ -617,7 +798,8 @@ export class Approvals {
     if (
       relied.kind !== 'eligible' ||
       relied.roleAssignmentId !== eligible.roleAssignmentId ||
-      relied.alsoRelied.join() !== eligible.alsoRelied.join()
+      relied.alsoRelied.join() !== eligible.alsoRelied.join() ||
+      relied.limit?.id !== eligible.limit?.id
     ) {
       return refused('conflict', 'kernel.stale-version');
     }
@@ -685,6 +867,8 @@ export class Approvals {
         valueAmount: request.valueAmount,
         evidenceAttachmentIds,
         decidedAt: context.startedAt,
+        // The limit relied on, which the recheck under a posting's locks uses (9.5, 9.7; RR-435).
+        approvalLimitId: eligible.limit?.id ?? null,
       });
       await context.tx.update(approvalRequest).set({ state: outcome }).where(eq(approvalRequest.id, request.id));
     };
@@ -752,6 +936,7 @@ export class Approvals {
     } else if (decision?.reasonText != null) {
       reason = { kind: 'free-text', text: decision.reasonText };
     }
+    const standing = await this.standing(context, actor, request);
     return {
       id: request.id,
       actionType: request.actionType,
@@ -761,7 +946,7 @@ export class Approvals {
         recordId: request.documentRecordId,
         versionId: request.documentVersionId,
       },
-      value: { kind: 'none' as const },
+      value: shownValue(request),
       preparers: await storedPreparers(context, request.id),
       state: request.state as 'Awaiting approval' | 'Approved' | 'Rejected' | 'Superseded' | 'Withdrawn',
       requestedAt: request.recordedAt.toISOString(),
@@ -779,6 +964,7 @@ export class Approvals {
             },
           }),
       decidable: await this.decidable(context, actor, request),
+      ...(standing === undefined ? {} : { limit: standing }),
       asOf: context.startedAt.toISOString(),
     };
   }

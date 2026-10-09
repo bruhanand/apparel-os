@@ -15,6 +15,7 @@ import { GeographyScreen, OrganisationStructureScreen } from './organisation/Str
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
 import { ExceptionRulesScreen } from './exceptions/ExceptionRulesScreen';
 import { FailedJobsScreen } from './operations/FailedJobsScreen';
+import { ApprovalLimitsScreen } from './setup/ApprovalLimitsScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
 import { ReasonsScreen } from './setup/ReasonsScreen';
 import { RolesScreen } from './setup/RolesScreen';
@@ -94,6 +95,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <AssignmentsScreen />;
     case 'setup.reason-codes':
       return <ReasonsScreen />;
+    case 'setup.approval-limits':
+      return <ApprovalLimitsScreen />;
     case 'setup.security-settings':
       return <SecuritySettingsScreen />;
     case 'setup.organisation-structure':

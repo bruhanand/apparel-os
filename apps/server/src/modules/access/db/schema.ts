@@ -359,6 +359,38 @@ export const approvalRuleSettingVersionChange = access.table('approval_rule_sett
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
+/**
+ * An approval limit: for one action type, held by a role within a scope or by a named user through one assignment;
+ * a dated row, its own version (access-and-approvals 9.2, 13.1; code-house-rules 7.3; migration 0040).
+ */
+export const approvalLimit = access.table('approval_limit', {
+  id: uuid('id').primaryKey(),
+  actionType: text('action_type').notNull(),
+  basis: text('basis').notNull(),
+  holderKind: text('holder_kind').notNull(),
+  roleId: uuid('role_id'),
+  scope: jsonb('scope'),
+  scopeKey: text('scope_key'),
+  appUserId: uuid('app_user_id'),
+  roleAssignmentId: uuid('role_assignment_id'),
+  holderKey: text('holder_key').notNull(),
+  amount: bigint('amount', { mode: 'number' }),
+  unlimited: boolean('unlimited').notNull(),
+  coversUnknown: boolean('covers_unknown').notNull(),
+  origin: text('origin').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  decision: text('decision').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Who changed a limit: its preparers (access-and-approvals 9.1). */
+export const approvalLimitChange = access.table('approval_limit_change', {
+  id: uuid('id').primaryKey(),
+  approvalLimitId: uuid('approval_limit_id').notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
 /** An approval request: one document version and action type (access-and-approvals 9.1, 9.6). */
 export const approvalRequest = access.table('approval_request', {
   id: uuid('id').primaryKey(),
@@ -413,6 +445,8 @@ export const approvalDecision = access.table('approval_decision', {
   evidenceAttachmentIds: uuid('evidence_attachment_ids').array().notNull(),
   decidedAt: at('decided_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The approval limit the decision relied on, for a value on a basis (9.5, 9.7; 0040); null for none. */
+  approvalLimitId: uuid('approval_limit_id'),
 });
 
 /**

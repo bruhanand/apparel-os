@@ -8,7 +8,9 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import { approvalDecision, approvalRequest, approvalUse } from '../db/schema.js';
+import { limitCovers } from '../domain/approval-limits.js';
 import type { ApprovalRule } from '../domain/approval-rules.js';
+import { limitById } from './approval-limits.js';
 import { storedPreparers, type ApprovalDocument, type RequestValue } from './request-approval.js';
 
 // The use of an approval decision by a posting (access-and-approvals 9.7, 9.8; module-map 4.3 "Verify under lock",
@@ -87,10 +89,12 @@ export async function approvalLockTargets(context: TransactionContext, decisionI
  * (PRD-ACS-006); and the value under the lock is within the approved amount (DEC-066), with no tolerance (DEC-105).
  * Answers the refusal, or undefined when the decision may be used. Reads only.
  *
+ * The value under the lock is also within the limit the decision relied on (9.7; RR-435; S1-F05-T01). A decision on
+ * an Unknown value used for a value now known is refused for renewed approval: authority over Unknown does not cover
+ * a known value (product owner, 8 Oct 2026).
+ *
  * Not yet: a version the decision carried to (9.6, `approval_carry`), which arrives with the first document whose
- * later step posts it; and the limit the decision relied on (9.7), which arrives with approval limits (S1-F05). Until
- * then no decision on a value basis can be made (Decide refuses with `access.no-approval-limit`); a decision on an
- * Unknown value used for a value now known is refused for renewed approval, since no limit can be checked.
+ * later step posts it.
  */
 export async function verifyUnderLock(
   context: TransactionContext,
@@ -129,6 +133,13 @@ export async function verifyUnderLock(
   if (check.value.kind === 'known' && check.value.amountPaise < 0) {
     throw new CommandDefect(`A value on ${rule.actionType}'s basis is never below zero (PRD-MOD-014)`);
   }
+  // The limit the decision relied on (9.7; RR-435): the value under the lock within it, as the approver's authority
+  // was judged when they decided. A limit row is never changed but to end it, so its amount is the one relied on.
+  const limit = decision.approvalLimitId === null ? undefined : await limitById(context, decision.approvalLimitId);
+  if (decision.approvalLimitId !== null && limit === undefined) {
+    throw new CommandDefect(`Approval decision ${decision.id} relied on a limit that does not exist`);
+  }
+  if (check.value.kind === 'known' && limit !== undefined && !limitCovers(limit, check.value)) return exceeded;
   if (decision.valueKind === 'known') {
     if (check.value.kind !== 'known' || decision.valueAmount === null) return exceeded;
     // The amount decided, read back as whole paise (PRD-MOD-014); no tolerance above it (DEC-105).

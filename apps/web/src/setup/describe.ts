@@ -1,5 +1,6 @@
-import type { AssignmentScope, Permission } from '@apparel-os/schemas';
+import type { ApprovalLimitRecord, AssignmentScope, Permission } from '@apparel-os/schemas';
 import { isMessageId, t } from '../messages/catalogue';
+import { formatPaise } from './format';
 
 // How the access setup screens and the approval panel name record types, permissions and scopes
 // (access-and-approvals 4.1, 5.1; design-language 10.3; code-house-rules 12.13).
@@ -42,4 +43,23 @@ export function scopeText(scope: AssignmentScope): string {
     place: dimensionText(scope.place),
     brand: dimensionText(scope.brand),
   });
+}
+
+/**
+ * An approval limit's authority on its basis in words (access-and-approvals 9.2; PRD-ACS-015): "₹2,000.00 on cost",
+ * "No upper limit on cost", or no value authority; authority over an unknown value is stated apart (PRD-ACS-016).
+ */
+export function limitText(limit: ApprovalLimitRecord): string {
+  const value =
+    limit.limit.kind === 'amount'
+      ? formatPaise(limit.limit.amount)
+      : t(limit.limit.kind === 'unlimited' ? 'limits.unlimited' : 'limits.no-value-authority');
+  return t('limits.limit-with-basis', { limit: value, basis: t(`approval.basis.${limit.basis}`) });
+}
+
+/** Who holds an approval limit: a role within a scope, or a named person through one assignment (9.2; POL-02.15). */
+export function limitHolderText(limit: ApprovalLimitRecord): string {
+  return limit.holder.kind === 'role'
+    ? t('limits.holder.role', { role: limit.holder.role.code, scope: scopeText(limit.holder.scope) })
+    : t('limits.holder.individual', { name: limit.holder.name ?? limit.holder.userId, role: limit.holder.role.code });
 }

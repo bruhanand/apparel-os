@@ -82,6 +82,27 @@ export async function authoriseEach(
   return { kind: 'checked', each: facts.map((each) => authoriseFacts(granting, request, each, undefined)) };
 }
 
+/**
+ * Every assignment in force that Authorise would accept for the request, not only the first: for who may decide a
+ * valued request, whose approve and limit must come through one assignment (access-and-approvals 9.3; PRD-ACS-004;
+ * S1-F05-T01). Answers them, or Authorise's refusal when none is.
+ */
+export async function authorisingAssignments(
+  context: TransactionContext,
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  request: AuthoriseRequest,
+): Promise<Refused | { readonly kind: 'allowed'; readonly assignments: readonly AssignmentInForce[] }> {
+  const granting = await grantingAssignments(context, registry, request);
+  if (granting.kind === 'refused') return granting;
+  const facts = request.facts ?? {};
+  const allowed = granting.assignments.filter(
+    (assignment) =>
+      authoriseFacts({ ...granting, assignments: [assignment] }, request, facts, request.movesTo).kind === 'allowed',
+  );
+  if (allowed.length === 0) return authoriseFacts(granting, request, facts, request.movesTo) as Refused;
+  return { kind: 'allowed', assignments: allowed };
+}
+
 type Refused = Extract<Authorisation, { kind: 'refused' }>;
 
 interface Granting {

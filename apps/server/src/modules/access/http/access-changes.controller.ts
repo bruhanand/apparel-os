@@ -177,6 +177,22 @@ export class AccessChangesController {
     );
   }
 
+  @ApiRoute(routes.prepareApprovalLimit)
+  async prepareApprovalLimit(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareApprovalLimit>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const content = requestContentOf(routes.prepareApprovalLimit, input);
+    return this.run(
+      routes.prepareApprovalLimit,
+      'access.prepare-approval-limit',
+      user,
+      input.idempotencyKey,
+      content,
+      (c, p) => this.access.prepareApprovalLimit(c, p, input.body),
+    );
+  }
+
   @ApiRoute(routes.prepareSecuritySettingVersion)
   async prepareSecuritySettingVersion(
     @RouteInput() input: RouteInputOf<typeof routes.prepareSecuritySettingVersion>,

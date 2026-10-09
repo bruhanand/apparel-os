@@ -30,9 +30,11 @@ import {
   type ScopeMembers,
   ORGANISATION_KEYS,
   ORGANISATION_KEYS_VARIABLE,
+  type ApprovalRule,
   type DecisionEvidence,
   type ModuleApprovals,
 } from '../../src/modules/access/index.js';
+import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
@@ -245,6 +247,11 @@ export async function startAccessApp(
     readonly fileStoreEnvironment?: Record<string, string>;
     /** Record types beside the declared ones, for a test-only record type (code-house-rules 11.4). */
     readonly extraRecordTypes?: readonly RecordTypeDeclaration[];
+    /**
+     * Synthetic approval rules beside the modules' own, for a test-only action type (code-house-rules 11.4;
+     * access-and-approvals 9.8a): accepted only in the test composition, which they bring with them (S1-F05-T01).
+     */
+    readonly extraApprovalRules?: readonly ApprovalRule[];
     /** Exception types beside the module's own, for a test-only raising module (code-house-rules 11.4). */
     readonly exceptionTypes?: readonly ExceptionTypeRegistration[];
     /** The live-update stream's timing; SYNTHETIC, short enough for a test to sit through (12.12). */
@@ -270,8 +277,9 @@ export async function startAccessApp(
   if (options.exceptionTypes !== undefined) {
     builder = builder.overrideProvider(EXCEPTION_TYPES).useValue(options.exceptionTypes);
   }
-  if (options.extraRecordTypes !== undefined) {
-    const registry = [...permissionRegistry, ...options.extraRecordTypes];
+  if (options.extraRecordTypes !== undefined || options.extraApprovalRules !== undefined) {
+    const registry = [...permissionRegistry, ...(options.extraRecordTypes ?? [])];
+    const extraRules = options.extraApprovalRules ?? [];
     builder = builder.overrideProvider(ACCESS).useFactory({
       // With the modules' approval rules and decision effects, as the application builds it (9.8b).
       factory: (
@@ -285,7 +293,8 @@ export async function startAccessApp(
           audit,
           keys,
           registry,
-          approvalRules: modules.rules,
+          approvalRules: [...modules.rules, ...extraRules],
+          ...(extraRules.length === 0 ? {} : { composition: TEST_COMPOSITION }),
           documentEffects: modules.effects,
           scopeMembers,
           decisionEvidence,

@@ -4,6 +4,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import {
+  approvalLimitChange,
   approvalReasonVersionChange,
   approvalRequest,
   approvalRequestPreparer,
@@ -71,6 +72,12 @@ export async function preparersOf(
           .select({ userId: settingVersionChange.changedByUserId })
           .from(settingVersionChange)
           .where(eq(settingVersionChange.settingVersionId, versionId));
+      // A limit is a dated row, its own version (code-house-rules 7.3).
+      case 'access.approval_limit.change':
+        return context.tx
+          .select({ userId: approvalLimitChange.changedByUserId })
+          .from(approvalLimitChange)
+          .where(eq(approvalLimitChange.approvalLimitId, versionId));
       default:
         throw new CommandDefect(`No approval rule for action type ${actionType}`);
     }

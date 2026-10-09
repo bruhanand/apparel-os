@@ -79,6 +79,117 @@ function valueText(view: ApprovalRequestView): string {
   }
 }
 
+/** The decision codes a valued request's limit block says in its own words, so the panel does not repeat them. */
+const limitCodes: ReadonlySet<string> = new Set([
+  'access.no-approval-limit',
+  'access.above-approval-limit',
+  'access.unknown-value-not-covered',
+]);
+
+/**
+ * The limit bar of a valued request (design-language 10.14; access-and-approvals 9.2 to 9.4; PRD-ACS-015,
+ * POL-02.09): a 10 px track, the reader's limit in the tint with an accent edge, and the value's marker, accent inside
+ * the limit and warning outside; the scale on the value's basis, in money.
+ */
+function LimitBar({ value, limit }: { value: number; limit: number }) {
+  const top = Math.max(value, limit, 1);
+  const inside = value <= limit;
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="relative h-[10px] w-full rounded-full bg-sunken"
+        role="img"
+        aria-label={t('approval.limit.scale', { limit: formatPaise(limit) })}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-l-full border-r-2 border-accent bg-tint"
+          style={{ width: `${String((limit / top) * 100)}%` }}
+        />
+        <div
+          className={`absolute top-[-4px] h-[18px] w-[4px] rounded-sm ${inside ? 'bg-accent' : 'bg-w-fg'}`}
+          style={{ left: `calc(${String((value / top) * 100)}% - 2px)` }}
+        />
+      </div>
+      <span className="text-caption text-text-2">{t('approval.limit.scale', { limit: formatPaise(limit) })}</span>
+    </div>
+  );
+}
+
+/**
+ * Where the reader stands against a valued request, beside the approve action (design-language 10.14 states): within
+ * the limit, no upper limit or Unknown authority, which may approve; above the limit, no limit, or an Unknown value
+ * not covered, which name the next approver the request is offered to; and "No approver set up" when nobody is.
+ * Approve stays disabled in those, and there is no action to send it on: it waits for an approver whose limit covers
+ * it (access-and-approvals 9.4; DEC-116).
+ */
+function LimitBlock({ view }: { view: ApprovalRequestView }) {
+  const standing = view.limit;
+  if (standing === undefined) return null;
+  const value = view.value.kind === 'known' ? view.value.amount : undefined;
+  const limit = standing.kind === 'within' || standing.kind === 'above' ? standing.limit : undefined;
+  const covered = standing.kind === 'within' || standing.kind === 'unlimited' || standing.kind === 'unknown-covered';
+  // The preparer is stopped whatever their limit (PRD-ACS-006): the panel's Preparer banner says so.
+  const preparer = view.decidable.kind === 'unavailable' && view.decidable.code === 'access.self-preparation';
+  const allowed = covered && !preparer;
+  const next = 'next' in standing ? standing.next : null;
+  const message = (() => {
+    if (preparer) return null;
+    if (allowed) {
+      if (standing.kind === 'within') return <Banner tone="success" role="status" message="approval.limit.within" />;
+      if (standing.kind === 'unlimited')
+        return <Banner tone="success" role="status" message="approval.limit.unlimited" />;
+      return <Banner tone="success" role="status" message="approval.limit.unknown-covered" />;
+    }
+    if (next === null) {
+      return (
+        <Banner tone="warning" role="status" message="approval.limit.no-approver.title">
+          <span>{t('approval.limit.no-approver')}</span>
+        </Banner>
+      );
+    }
+    const text =
+      standing.kind === 'above'
+        ? t('approval.limit.above', { amount: formatPaise((value ?? 0) - standing.limit), next })
+        : standing.kind === 'no-limit'
+          ? t('approval.limit.no-limit', { next })
+          : t('approval.limit.unknown-not-covered', { next });
+    return (
+      <Banner
+        tone="warning"
+        role="status"
+        message={codeMessage(limitCodeOf(standing.kind as 'above' | 'no-limit' | 'unknown-not-covered'))}
+      >
+        <span>{text}</span>
+      </Banner>
+    );
+  })();
+  return (
+    <div className="flex flex-col gap-2" data-testid="approval-limit">
+      <span className="text-label font-semibold text-text-2">{t('approval.limit')}</span>
+      {limit !== undefined && value !== undefined && <LimitBar value={value} limit={limit} />}
+      {message}
+      {!allowed && (
+        <div className="flex justify-end">
+          <Button
+            variant="primary"
+            label="approval.approve"
+            disabled
+            reason={preparer ? 'missing.preparer' : 'approval.limit.approve-disabled'}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function limitCodeOf(kind: 'above' | 'no-limit' | 'unknown-not-covered'): string {
+  return {
+    above: 'access.above-approval-limit',
+    'no-limit': 'access.no-approval-limit',
+    'unknown-not-covered': 'access.unknown-value-not-covered',
+  }[kind];
+}
+
 const decisionFormSchema = (reason: 'listed' | 'free-text') =>
   z.object({
     outcome: z.enum(['approve', 'reject']),
@@ -287,8 +398,9 @@ export function ApprovalPanelView({
           <span className="text-kpi font-semibold tabular-nums">{valueText(view)}</span>
         </div>
         {facts}
-        {shown === 'decide' && <Banner tone="success" message="approval.can-decide" />}
-        {shown === 'unavailable' && view.decidable.kind === 'unavailable' && (
+        <LimitBlock view={view} />
+        {shown === 'decide' && view.limit === undefined && <Banner tone="success" message="approval.can-decide" />}
+        {shown === 'unavailable' && view.decidable.kind === 'unavailable' && !limitCodes.has(view.decidable.code) && (
           <Banner
             tone={view.decidable.code === 'access.self-preparation' ? 'danger' : 'warning'}
             role="status"
@@ -379,6 +491,7 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
     'listRoleAssignments',
     'listApprovalReasonRecords',
     'listApprovalReasons',
+    'listApprovalLimits',
     ...ORGANISATION_READS,
   ]);
   if (request.isPending) return <LoadingState rows={4} />;

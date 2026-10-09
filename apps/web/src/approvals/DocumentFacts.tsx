@@ -6,9 +6,10 @@ import { readQuery } from '../api/query';
 import { t, type MessageId } from '../messages/catalogue';
 import { PersonaChip } from '../shell/AppShell';
 import { useSession } from '../shell/session';
-import { permissionText, scopeText } from '../setup/describe';
+import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatDate } from '../setup/format';
 import { MasterFacts } from '../organisation/MasterFacts';
+import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
 // section 5 step 6), read through the same lists the access setup screens use, where the reader's role assignments
@@ -156,6 +157,28 @@ function SettingFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/** An approval limit: its action, holder, limit on its basis, Unknown authority and dates (9.2; S1-F05-T01). */
+function LimitFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'listApprovalLimits', {}),
+    enabled: useViewable('access.approval_limit'),
+  });
+  const limit = query.data?.limits.find((each) => each.id === view.document.recordId);
+  if (limit === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="limits.action-type">{actionTitle(limit.actionType)}</Fact>
+      <Fact label="limits.holder">{limitHolderText(limit)}</Fact>
+      <Fact label="limits.limit">{limitText(limit)}</Fact>
+      <Fact label="limits.unknown-value">
+        {t(limit.coversUnknown ? 'limits.unknown.covered' : 'limits.unknown.not-covered')}
+      </Fact>
+      <Fact label="dates.label">{dates(limit.validFrom, limit.validTo)}</Fact>
+      <Fact label="rules.origin">{t(`rules.origin.${limit.origin}`)}</Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -171,6 +194,8 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <ReasonFacts view={view} />;
     case 'access.setting.change':
       return <SettingFacts view={view} />;
+    case 'access.approval_limit.change':
+      return <LimitFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;

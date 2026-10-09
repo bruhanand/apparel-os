@@ -2,6 +2,8 @@ import { partyNames, rolesHeld, type PartyNames, type RoleHeldQuestion } from '.
 import {
   permissionRegistry,
   registryByCode,
+  type ApprovalLimitDraft,
+  type ApprovalLimitList,
   type ApprovalReasonDraft,
   type ApprovalReasonVersionDraft,
   type ApprovalRuleSettingDraft,
@@ -35,6 +37,7 @@ import {
   type Prepared,
   type Preparer,
 } from './commands/access-changes.js';
+import { ApprovalLimitChanges, listApprovalLimits } from './commands/approval-limits.js';
 import { ApprovalSettingsChanges } from './commands/approval-settings.js';
 import {
   approvalLockTargets,
@@ -217,6 +220,18 @@ export interface AccessInterface {
   /** The essential security settings, each with its versions and the one in force now (design-language 10.19). */
   securitySettings(context: TransactionContext): Promise<SecuritySettings>;
   /**
+   * Prepares an approval limit (access-and-approvals 9.2, 9.11; POL-02.07, POL-02.09, POL-02.15): for an action type
+   * whose rule has a money basis, held by a role within a scope or a named user through one assignment, for a
+   * different authorised person to approve (S1-F05-T01).
+   */
+  prepareApprovalLimit(
+    context: TransactionContext,
+    preparer: Preparer,
+    draft: ApprovalLimitDraft,
+  ): Promise<Prepared<{ limitId: string; requestId: string }>>;
+  /** Every approval limit with its basis, and the action types a limit can be set for (9.2, 14). */
+  listApprovalLimits(context: TransactionContext): Promise<ApprovalLimitList>;
+  /**
    * Request approval of another module's document under the rule it declares (access-and-approvals 8, 9.1; module-map
    * 4.3), in the preparing command's transaction. Returns the request's identifier.
    */
@@ -363,6 +378,7 @@ export class Access implements AccessInterface {
   private readonly settings: ApprovalSettingsChanges;
   private readonly securitySettingChanges: SecuritySettingsChanges;
   private readonly approvals: Approvals;
+  private readonly limits: ApprovalLimitChanges;
   private readonly rules: ReadonlyMap<string, ApprovalRule>;
 
   constructor(private readonly dependencies: AccessDependencies) {
@@ -376,6 +392,7 @@ export class Access implements AccessInterface {
     this.users = new UserChanges(dependencies.audit);
     this.settings = new ApprovalSettingsChanges(dependencies.audit);
     this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit);
+    this.limits = new ApprovalLimitChanges(dependencies.audit, this.rules, this.changes);
     this.approvals = new Approvals({
       audit: dependencies.audit,
       registry: this.registry,
@@ -383,6 +400,7 @@ export class Access implements AccessInterface {
       users: this.users,
       settings: this.settings,
       securitySettings: this.securitySettingChanges,
+      limits: this.limits,
       keys: dependencies.keys,
       rules: this.rules,
       effects: effectsOf(dependencies.documentEffects ?? new Map(), this.rules),
@@ -514,6 +532,16 @@ export class Access implements AccessInterface {
 
   securitySettings(context: TransactionContext) {
     return securitySettings(context);
+  }
+
+  prepareApprovalLimit(context: TransactionContext, preparer: Preparer, draft: ApprovalLimitDraft) {
+    return this.limits.prepare(context, preparer, draft);
+  }
+
+  async listApprovalLimits(context: TransactionContext): Promise<ApprovalLimitList> {
+    const date = await context.businessDate();
+    if (date.kind === 'not-set') throw new CommandDefect('Listing approval limits needs today (code-house-rules 9)');
+    return listApprovalLimits(context, date.date, this.rules);
   }
 
   requestApproval(context: TransactionContext, request: ModuleApprovalRequest) {

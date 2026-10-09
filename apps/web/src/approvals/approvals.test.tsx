@@ -234,3 +234,91 @@ describe('the approval panel', () => {
     expect(superseded).not.toContain('one-time-code');
   });
 });
+
+// S1-F05-T01: the panel's value, basis and limit bar, with its states (design-language 10.14; access-and-approvals
+// 9.2 to 9.4; PRD-ACS-015, PRD-ACS-016, POL-02.09; DEC-116). Every limit and value here is SYNTHETIC.
+describe('the limit states (design-language 10.14)', () => {
+  type Money = Extract<ApprovalRequestView['value'], { kind: 'known' }>['amount'];
+  /** A SYNTHETIC amount in paise, as the view's schema gives it. */
+  const money = (amount: number) => amount as Money;
+  const valued = (overrides: Partial<ApprovalRequestView>): ApprovalRequestView =>
+    view({
+      actionType: 'test-syn-approvals.approve-booking',
+      value: { kind: 'known', basis: 'cost', amount: money(150_000) },
+      ...overrides,
+    });
+  const notCovered = (code: string) =>
+    ({ kind: 'unavailable', code, missing: [{ kind: 'approval-limit' }] }) as ApprovalRequestView['decidable'];
+  /** The disabled Approve beside the limit, as rendered. */
+  const disabledApprove = (html: string) => /<button[^>]*disabled=""[^>]*>Approve<\/button>/.test(html);
+
+  it('PRD-ACS-015 within the limit: the value with its basis, the bar, and Approve', () => {
+    const html = render(valued({ limit: { kind: 'within', limit: money(200_000) } }));
+    expect(text(html)).toContain('₹1,500.00 (cost)');
+    expect(text(html)).toContain('Your limit up to ₹2,000.00');
+    expect(text(html)).toContain('Within your limit. You didn’t prepare this, so you can approve.');
+    expect(html).toContain('one-time-code');
+    expect(disabledApprove(html)).toBe(false);
+  });
+
+  it('POL-02.09 above the limit: how far, who can approve it, Approve disabled and no send-on action', () => {
+    const html = render(
+      valued({
+        limit: { kind: 'above', limit: money(100_000), next: 'SYNTHETIC Owner' },
+        decidable: notCovered('access.above-approval-limit'),
+      }),
+    );
+    expect(text(html)).toContain('Above your limit by ₹500.00. SYNTHETIC Owner can approve this.');
+    expect(disabledApprove(html)).toBe(true);
+    expect(text(html)).not.toMatch(/Send to/);
+    expect(html).not.toContain('one-time-code');
+  });
+
+  it('POL-02.09 above every limit: "No approver set up", with Approve disabled', () => {
+    const html = render(
+      valued({
+        limit: { kind: 'above', limit: money(100_000), next: null },
+        decidable: notCovered('access.above-approval-limit'),
+      }),
+    );
+    expect(text(html)).toContain('No approver set up');
+    expect(text(html)).toContain('No one is set up to approve this amount yet.');
+    expect(disabledApprove(html)).toBe(true);
+    expect(text(html)).not.toMatch(/Send to/);
+  });
+
+  it('PRD-ACS-016 an Unknown value is never shown as zero, and needs authority over an unknown value', () => {
+    const unknown = { kind: 'unknown', basis: 'cost' } as const;
+    const refused = render(
+      valued({
+        value: unknown,
+        limit: { kind: 'unknown-not-covered', next: 'SYNTHETIC Owner' },
+        decidable: notCovered('access.unknown-value-not-covered'),
+      }),
+    );
+    expect(text(refused)).toContain('Not known yet (cost)');
+    expect(text(refused)).not.toContain('₹0.00 (cost)');
+    expect(text(refused)).toContain('Only an approver whose authority covers an unknown value can approve this.');
+    expect(disabledApprove(refused)).toBe(true);
+    const covered = render(valued({ value: unknown, limit: { kind: 'unknown-covered' } }));
+    expect(text(covered)).toContain('Your authority covers an unknown value, so you can approve.');
+    expect(disabledApprove(covered)).toBe(false);
+  });
+
+  it('POL-02.09 explicit unlimited authority shows no upper limit', () => {
+    const html = render(valued({ limit: { kind: 'unlimited' } }));
+    expect(text(html)).toContain('No upper limit (set in policy 2)');
+  });
+
+  it('PRD-ACS-006 the preparer is stopped, whatever their limit', () => {
+    const html = render(
+      valued({
+        limit: { kind: 'within', limit: money(200_000) },
+        decidable: { kind: 'unavailable', code: 'access.self-preparation', missing: [{ kind: 'preparer' }] },
+      }),
+    );
+    expect(text(html)).toContain('You prepared or changed this version');
+    expect(text(html)).not.toContain('Within your limit');
+    expect(disabledApprove(html)).toBe(true);
+  });
+});

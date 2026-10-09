@@ -41,6 +41,12 @@ export const screens = {
     need: view('access.role_assignment'),
   },
   'setup.reason-codes': { section: 'setup', path: '/setup/reason-codes', need: view('access.approval_reason') },
+  // Approval limits (access-and-approvals 9.2, 14; S1-F05-T01).
+  'setup.approval-limits': {
+    section: 'setup',
+    path: '/setup/approval-limits',
+    need: view('access.approval_limit'),
+  },
   // The essential security settings (design-language 10.19; DEC-118, RR-334; S1-F01-T25).
   'setup.security-settings': {
     section: 'setup',
@@ -78,7 +84,8 @@ export const screenIds = Object.keys(screens) as ScreenId[];
  * persona's home screen belongs to a later stage. The menu keeps the order of ui-blueprint "Menus by persona".
  */
 export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; menu: readonly ScreenId[] }>> = {
-  'P-OWN': { home: 'my-work', menu: ['my-work', 'setup.policy-readiness'] },
+  // The Owner's Setup is "Policy readiness · Approval limits · Approve changes" (ui-blueprint).
+  'P-OWN': { home: 'my-work', menu: ['my-work', 'setup.policy-readiness', 'setup.approval-limits'] },
   'P-ADM': {
     home: 'setup.policy-readiness',
     menu: [
@@ -87,6 +94,7 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.roles',
       'setup.role-assignments',
       'setup.reason-codes',
+      'setup.approval-limits',
       'setup.security-settings',
       'setup.organisation-structure',
       'setup.geography',

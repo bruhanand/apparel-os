@@ -492,11 +492,12 @@ export class AccessChanges {
    * scope contract's implementation that answers its type. A dimension whose members no implementation answers is
    * unavailable (`access.scope-members-not-available`), such as brands until S1-F03; a member that does not exist, is
    * not of the type named or is in force on no day of the assignment's dates is refused, each named
-   * (`access.scope-member-not-found`; PRD-UXP-003).
+   * (`access.scope-member-not-found`; PRD-UXP-003). A role's approval limit within a scope is checked the same way
+   * (9.2; S1-F05-T01).
    */
-  private async checkMembers(
+  async checkMembers(
     context: TransactionContext,
-    draft: RoleAssignmentDraft,
+    draft: Pick<RoleAssignmentDraft, 'scope' | 'validFrom' | 'validTo'>,
   ): Promise<CommandRefusal | undefined> {
     if (draft.scope.kind !== 'dimensions') return undefined;
     const selected = membersByDimension(draft.scope).filter((row) => row.kind === 'selected');

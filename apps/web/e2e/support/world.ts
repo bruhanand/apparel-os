@@ -95,6 +95,20 @@ export interface SyntheticWorld {
     readonly reasonId: string;
   };
   /**
+   * The approval limits journey (S1-F05-T01): an Admin who prepares approval limits, a person who approves them, and
+   * the approver of a test-only booking action, through a role the form names as `roleOption`, with two SYNTHETIC
+   * booking requests waiting; `actionOption` names the action type in the limit form.
+   */
+  readonly limits: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly bookingApprover: EnrolledUser;
+    readonly roleOption: string;
+    readonly actionOption: string;
+    readonly reasonId: string;
+  };
+  /**
    * The organisation structure journey (S1-F02-T01), in the security settings Organisation: an approved synthetic
    * Area, an Admin who may prepare the structure and an approver who may approve it.
    */

@@ -63,7 +63,7 @@ export async function latestRequests(
 }
 
 /** The fields every version shows: dates, state and latest request. */
-function versionView(
+export function versionView(
   row: { id: string; decision: string; start: string; end: string | null },
   today: string,
   requests: LatestRequests,
@@ -293,7 +293,7 @@ export async function listAssignments(context: TransactionContext, today: string
 }
 
 /** Each user's display name, from the latest version recorded. */
-async function userNames(context: TransactionContext): Promise<Map<string, string>> {
+export async function userNames(context: TransactionContext): Promise<Map<string, string>> {
   const rows = await context.tx
     .select({ userId: appUserVersion.appUserId, name: appUserVersion.displayName })
     .from(appUserVersion)

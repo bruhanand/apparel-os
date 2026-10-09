@@ -353,6 +353,22 @@
       "why": "The preparers of a rule setting version; only access code reads it"
     },
     {
+      "table": "access.approval_limit",
+      "class": "unscoped",
+      "marks": ["versions", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 9.2, 9.3, 13.1; code-house-rules 6.3, 7.3 (overlap key: action type, holder_key)",
+      "why": "Read by who may decide and My work's routing before any scope applies (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.approval_limit_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.1, 13.1; code-house-rules 7.2",
+      "why": "The preparers of an approval limit; only access code reads it"
+    },
+    {
       "table": "access.approval_request",
       "class": "unscoped",
       "marks": ["locked"],

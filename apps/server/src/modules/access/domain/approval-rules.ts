@@ -1,12 +1,13 @@
-import type { AccessActionType, FieldClass, RecordTypeDeclaration } from '@apparel-os/schemas';
+import type { AccessActionType, FieldClass, MoneyBasis, RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { CommandRefusal, Composition, LockTarget, TransactionContext } from '../../../kernel/index.js';
 
 /**
  * The value basis of an approval rule (access-and-approvals 8, 9.2; PRD-ACS-015; DM-8, DEC-105): none, as for an
- * access change, or cost, as for the stock actions of domain-model section 5. A later module adds its basis here when
- * its rule needs one.
+ * access change or an offer, which has no value limit; or a money basis: cost, as for the stock actions of
+ * domain-model section 5, bill value, documented valuation, the amount paid, a day-close cash difference or the
+ * period's net pay. A request on a money basis is decided only within a limit (9.2, 9.3).
  */
-export type ValueBasis = 'none' | 'cost';
+export type ValueBasis = 'none' | MoneyBasis;
 
 /**
  * The fixed parts of one approval rule, kept in code (access-and-approvals 8; domain-model section 5): the module that
@@ -60,6 +61,8 @@ export const accessApprovalRules: ReadonlyMap<string, ApprovalRule> = new Map(
     rule('access.approval_rule_setting.change', 'access.approval_rule_setting'),
     // The essential security settings (3.3; POL-02.06, POL-02.07; DEC-118, RR-334).
     rule('access.setting.change', 'access.setting'),
+    // Approval limits (9.2; POL-02.07, POL-02.09, POL-02.15; S1-F05-T01).
+    rule('access.approval_limit.change', 'access.approval_limit'),
   ].map((each) => [each.actionType, each]),
 );
 

@@ -10,6 +10,8 @@ import {
 } from './common.js';
 import { evidenceListSchema } from './files.js';
 import { errorCodeSchema, missingItemSchema, type ErrorCode } from './errors.js';
+import { assignmentScopeSchema } from './roles.js';
+import { settingOriginSchema } from './settings.js';
 
 // Approval requests and decisions (access-and-approvals 9.1, 9.3, 9.5, 9.6; PRD-ACS-006, PRD-ACS-007, PRD-ACS-010),
 // and the access changes S1-F01-T13 adds: user versions, approve and reject reasons, approval rule settings
@@ -27,10 +29,16 @@ export const accessActionTypeSchema = z.enum([
   'access.approval_reason.change',
   'access.approval_rule_setting.change',
   'access.setting.change',
+  // An approval limit (access-and-approvals 9.2, 9.11; POL-02.07, POL-02.09, POL-02.15; S1-F05-T01).
+  'access.approval_limit.change',
 ]);
 export type AccessActionType = z.infer<typeof accessActionTypeSchema>;
 
-/** The money bases of PRD-ACS-015 and DEC-105 (DM-8). Quantity and discount-percentage bases arrive with S1-F05. */
+/**
+ * The money bases of PRD-ACS-015 and DEC-105 (DM-8). A quantity with its unit and a discount percentage where
+ * configured arrive with the first approval rule that declares such a basis (access-and-approvals 9.2; stage 4's
+ * configured exceptional discount), since no request can carry such a value before then.
+ */
 export const moneyBasisSchema = z.enum([
   'cost',
   'bill-value',
@@ -39,6 +47,7 @@ export const moneyBasisSchema = z.enum([
   'cash-difference',
   'net-pay',
 ]);
+export type MoneyBasis = z.infer<typeof moneyBasisSchema>;
 
 /**
  * The value of a request on its basis (PRD-ACS-015). "none" is an action whose approval has no value, such as an
@@ -87,6 +96,28 @@ export const decidableSchema = z.discriminatedUnion('kind', [
 ]);
 
 /**
+ * Where the reader stands against a valued request, for the limit bar of the approval panel (design-language 10.14;
+ * access-and-approvals 9.2 to 9.4; PRD-ACS-015, PRD-ACS-016, POL-02.09). `limit` is the reader's limit on the value's
+ * basis, in paise; `next` the display name of an approver the request is offered to now (9.4), or null when nobody is
+ * set up to approve it, which the panel shows as "No approver set up". Worked out at the read, so a limit change
+ * applies as soon as it is in force. Absent for an action with no value (DM-8).
+ *
+ * - `within`: the reader's limit covers the value; `unlimited`: the reader's explicit unlimited authority does.
+ * - `unknown-covered`: the value is Unknown and the reader holds explicit authority over Unknown value.
+ * - `above`: the reader's limits fall short of the value; `no-limit`: the reader holds no limit for the action;
+ *   `unknown-not-covered`: the value is Unknown and the reader's authority does not cover it.
+ */
+export const limitStandingSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('within'), limit: paiseSchema }),
+  z.strictObject({ kind: z.literal('unlimited') }),
+  z.strictObject({ kind: z.literal('unknown-covered') }),
+  z.strictObject({ kind: z.literal('above'), limit: paiseSchema, next: z.string().min(1).nullable() }),
+  z.strictObject({ kind: z.literal('no-limit'), next: z.string().min(1).nullable() }),
+  z.strictObject({ kind: z.literal('unknown-not-covered'), next: z.string().min(1).nullable() }),
+]);
+export type LimitStanding = z.infer<typeof limitStandingSchema>;
+
+/**
  * An approval request as the approval panel reads it: bound to one document version (PRD-ACS-007), with every
  * user who recorded a change in that version as a preparer (DEC-105, GC3-1), none of whom may decide it
  * (PRD-ACS-006, POL-02.08), its decision once decided, and whether the reader may decide it.
@@ -112,6 +143,8 @@ export const approvalRequestViewSchema = z.strictObject({
     })
     .optional(),
   decidable: decidableSchema,
+  /** Where the reader stands against the value, for a request with a value on a basis (9.2 to 9.4). */
+  limit: limitStandingSchema.optional(),
   asOf: z.iso.datetime({ offset: true }),
 });
 export type ApprovalRequestView = z.infer<typeof approvalRequestViewSchema>;
@@ -164,6 +197,9 @@ export const decisionRefusalCodes = [
   'access.approval-not-open',
   'access.approval-superseded',
   'access.user-not-approved',
+  'access.no-approval-limit',
+  'access.above-approval-limit',
+  'access.unknown-value-not-covered',
 ] as const satisfies readonly ErrorCode[];
 export type DecisionRefusal = (typeof decisionRefusalCodes)[number];
 
@@ -248,3 +284,57 @@ export const approvalReasonsInForceSchema = z.strictObject({
     }),
   ),
 });
+
+/**
+ * The authority of an approval limit (access-and-approvals 9.2; POL-02.09, POL-02.15, PRD-ACS-016): a value in paise
+ * on the action's basis, explicit unlimited authority, or no value authority, with explicit authority over Unknown
+ * value stated apart (`coversUnknown`). A limit grants something: a value, unlimited, or Unknown.
+ */
+export const limitAuthoritySchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('amount'), amount: paiseSchema }),
+  z.strictObject({ kind: z.literal('unlimited') }),
+  z.strictObject({ kind: z.literal('none') }),
+]);
+export type LimitAuthority = z.infer<typeof limitAuthoritySchema>;
+
+/** Who holds a limit: an approver role within a scope, or a named user through one assignment (9.2; POL-02.15). */
+export const limitHolderSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('role'), roleId: idSchema, scope: assignmentScopeSchema }),
+  z.strictObject({ kind: z.literal('individual'), userId: idSchema, roleAssignmentId: idSchema }),
+]);
+
+/**
+ * A new approval limit (access-and-approvals 9.2, 9.11; POL-02.07, POL-02.09, POL-02.15): for one action type whose
+ * rule has a value basis, held by a role within a scope or by a named user through one of their assignments, with its
+ * authority and dates, half-open [validFrom, validTo). Its basis is the rule's (PRD-ACS-015), never chosen here. A
+ * limit replacing one of the same action type and holder is a new limit from its start; the one it follows ends there
+ * when it is approved (code-house-rules 7.3). A start in the past and an approved limit of the same action type and
+ * holder starting on or after its start are refused by `access`, which knows today.
+ */
+export const approvalLimitDraftSchema = z
+  .strictObject({
+    actionType: z.string().min(1),
+    holder: limitHolderSchema,
+    limit: limitAuthoritySchema,
+    coversUnknown: z.boolean(),
+    /** Where the limit came from: KDPS's answer, the test setup, or synthetic (code-house-rules 11.1, 12.14). */
+    origin: settingOriginSchema,
+    validFrom: businessDateSchema,
+    validTo: businessDateSchema.optional(),
+  })
+  .refine((draft) => draft.limit.kind !== 'none' || draft.coversUnknown, {
+    message: 'A limit grants a value, unlimited authority or authority over Unknown value',
+    path: ['limit'],
+  })
+  .refine((draft) => draft.validTo === undefined || draft.validTo > draft.validFrom, {
+    message: 'A limit ends after it starts',
+    path: ['validTo'],
+  })
+  .refine((draft) => draft.holder.kind !== 'role' || draft.holder.scope.kind === 'dimensions', {
+    message: "A role's limit is within a scope of legal entity, place and brand",
+    path: ['holder', 'scope'],
+  });
+export type ApprovalLimitDraft = z.infer<typeof approvalLimitDraftSchema>;
+
+/** What preparing a limit answers. */
+export const approvalLimitPreparedSchema = z.strictObject({ limitId: idSchema, requestId: idSchema });

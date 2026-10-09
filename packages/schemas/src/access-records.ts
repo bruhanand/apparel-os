@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { businessDateSchema, displayNameSchema, idSchema, personasHeldSchema } from './common.js';
-import { approvalRequestStateSchema } from './approvals.js';
+import { approvalRequestStateSchema, limitAuthoritySchema, moneyBasisSchema } from './approvals.js';
 import { assignmentScopeSchema, permissionSchema } from './roles.js';
+import { settingOriginSchema } from './settings.js';
 
 // The reads behind the access setup screens (access-and-approvals 2.1, 4, 5, 9.5, 14; S1-F01-T16; RR-326): users,
 // roles, role assignments and approve and reject reasons, each with every version and the state the screen shows
@@ -111,3 +112,44 @@ export const reasonRecordSchema = z.strictObject({
 export type ReasonRecord = z.infer<typeof reasonRecordSchema>;
 export const reasonListSchema = z.strictObject({ asOf, reasons: z.array(reasonRecordSchema) });
 export type ReasonList = z.infer<typeof reasonListSchema>;
+
+/**
+ * An approval limit (access-and-approvals 9.2, 14; POL-02.09, POL-02.15; S1-F05-T01): its action type and the basis
+ * beside it (PRD-ACS-015), its holder, a role within a scope or a named user through one assignment, its authority,
+ * with explicit authority over Unknown value apart (PRD-ACS-016), its dates and state. Each row is its own version
+ * (code-house-rules 7.3).
+ */
+export const approvalLimitRecordSchema = z.strictObject({
+  ...versionFields,
+  actionType: z.string().min(1),
+  basis: moneyBasisSchema,
+  holder: z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('role'),
+      role: z.strictObject({ id: idSchema, code: z.string().min(1) }),
+      scope: assignmentScopeSchema,
+    }),
+    z.strictObject({
+      kind: z.literal('individual'),
+      userId: idSchema,
+      name: z.string().min(1).nullable(),
+      roleAssignmentId: idSchema,
+      role: z.strictObject({ id: idSchema, code: z.string().min(1) }),
+    }),
+  ]),
+  limit: limitAuthoritySchema,
+  coversUnknown: z.boolean(),
+  origin: settingOriginSchema,
+});
+export type ApprovalLimitRecord = z.infer<typeof approvalLimitRecordSchema>;
+
+/**
+ * Setup › Approval limits (access-and-approvals 14): every limit, newest first, and the action types a limit can be
+ * set for, those whose approval rule has a value basis, each with its basis (8; DM-8). An empty list grants nothing.
+ */
+export const approvalLimitListSchema = z.strictObject({
+  asOf,
+  actionTypes: z.array(z.strictObject({ actionType: z.string().min(1), basis: moneyBasisSchema })),
+  limits: z.array(approvalLimitRecordSchema),
+});
+export type ApprovalLimitList = z.infer<typeof approvalLimitListSchema>;

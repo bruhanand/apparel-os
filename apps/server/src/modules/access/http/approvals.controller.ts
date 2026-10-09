@@ -94,6 +94,31 @@ export class ApprovalsController {
     return view;
   }
 
+  // Setup › Approval limits (access-and-approvals 9.2, 14; S1-F05-T01): the guard has run Authorise for view.
+  @ApiRoute(routes.listApprovalLimits)
+  async listApprovalLimits(@SignedIn() user: SignedInUser) {
+    const answer = await this.runner.read(
+      {
+        commandName: 'access.list-approval-limits',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      async (context) =>
+        (await context.businessDate()).kind === 'not-set'
+          ? undefined
+          : { listed: await this.access.listApprovalLimits(context) },
+    );
+    if (answer === undefined) {
+      throw new ApiRefusal({
+        kind: 'unavailable',
+        code: 'access.business-date-not-set',
+        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+      });
+    }
+    return answer.listed;
+  }
+
   @ApiRoute(routes.listSecuritySettings)
   async listSecuritySettings(@SignedIn() user: SignedInUser) {
     return this.runner.read(

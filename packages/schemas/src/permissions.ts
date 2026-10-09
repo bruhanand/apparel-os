@@ -73,6 +73,9 @@ const accessRecordTypes = [
   declare('access.role_assignment', PREPARED, NONE),
   declare('access.approval_rule_setting', PREPARED, NONE),
   declare('access.approval_reason', PREPARED, NONE),
+  // Approval limits (9.2; S1-F05-T01): create prepares a limit, a new one or one replacing another from its start;
+  // approve decides it. A limit is never edited in place, so edit is not declared.
+  declare('access.approval_limit', ['view', 'create', 'approve'], NONE),
   // The essential security settings: edit prepares a new version, approve decides it; no setting is created or
   // removed through a permission, since a required setting is never left unset (3.3; DEC-118, RR-334; S1-F01-T25).
   declare('access.setting', ['view', 'edit', 'approve'], NONE),

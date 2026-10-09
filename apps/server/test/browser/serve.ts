@@ -2,8 +2,13 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { uuidv7 } from '@apparel-os/domain';
-import { setupRequestSchema, type PersonaId } from '@apparel-os/schemas';
+import { paise, uuidv7 } from '@apparel-os/domain';
+import {
+  permissionRegistry,
+  setupRequestSchema,
+  type PersonaId,
+  type RecordTypeDeclaration,
+} from '@apparel-os/schemas';
 import {
   CommandRunner,
   CommandTimedOut,
@@ -18,11 +23,14 @@ import {
   type JobRegistry,
 } from '../../src/kernel/index.js';
 import {
+  Access,
   approvalDecided,
   approvalRequested,
   ORGANISATION_KEYS_VARIABLE,
   runSetupStep,
+  type ApprovalRule,
 } from '../../src/modules/access/index.js';
+import { TEST_COMPOSITION } from '../support/composition.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../../src/modules/access/commands/job-identities.js';
 // The codes of the two roles the setup step creates, so the journey assigns exactly those roles (9.11).
@@ -33,7 +41,7 @@ import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
-import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
+import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
 import { syntheticWorkerSettings } from '../fixtures/worker-settings.js';
 import {
   codeFor,
@@ -115,6 +123,32 @@ const syntheticAlwaysFails = defineConsumer({
   authorises: { action: 'view', recordType: 'kernel.outbox_event' },
   handle: (context) => Promise.reject(new CommandTimedOut('statement', '57014', context.correlationId)),
 });
+
+/**
+ * The approval limits journey's test-only action type: booking approval on its value at cost (DM-8, DEC-105), since
+ * bookings arrive in stage 2 (S1-F05-T01; code-house-rules 11.4). SYNTHETIC, so accepted only in this test composition.
+ */
+const LIMITS_MODULE = syntheticIdentifier('limits');
+const LIMITS_BOOKING_TYPE = `${LIMITS_MODULE}.booking`;
+const LIMITS_BOOKING = `${LIMITS_MODULE}.approve-booking`;
+const limitsBookingType: RecordTypeDeclaration = {
+  code: LIMITS_BOOKING_TYPE,
+  actions: ['view', 'approve'],
+  scopeFacts: { legalEntity: false, place: false, brand: false },
+  subject: false,
+  fieldClasses: [],
+  serviceOnly: false,
+};
+const limitsBookingRule: ApprovalRule = {
+  actionType: LIMITS_BOOKING,
+  module: LIMITS_MODULE,
+  recordType: LIMITS_BOOKING_TYPE,
+  independent: true,
+  value: 'cost',
+  freeTextReason: false,
+  decisionEvidenceClasses: [],
+  synthetic: true,
+};
 
 function required(name: string): string {
   const value = process.env[name];
@@ -657,6 +691,62 @@ await runner.run(
       payload: { recordId: failingRecord },
     }),
 );
+// The approval limits journey (approval-limits.spec.ts; S1-F05-T01), in the settings Organisation: an Admin who
+// prepares approval limits; a person who approves them; and an approver of a test-only valued action type, booking
+// approval on its value at cost (DM-8, DEC-105; code-house-rules 11.4), through a SYNTHETIC role that holds no limit
+// yet. Two SYNTHETIC requests of it wait: one the journey's limit covers, one above every limit. Who holds which limit
+// is KDPS's (V-02, RR-065); every limit, value and holder here is SYNTHETIC.
+const limitsAdmin = await provisionUser('BROWSER-LIMITS-ADMIN', 'P-ADM', [
+  { recordType: 'access.approval_limit', action: 'view' },
+  { recordType: 'access.approval_limit', action: 'create' },
+  { recordType: 'access.role', action: 'view' },
+  { recordType: 'access.role_assignment', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const limitsApprover = await provisionUser('BROWSER-LIMITS-APPROVER', 'P-OWN', [
+  { recordType: 'access.approval_limit', action: 'view' },
+  { recordType: 'access.approval_limit', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const limitsReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+const bookingRole = {
+  code: syntheticCode('JOURNEY-BOOKING-APPROVER'),
+  name: syntheticName('Journey Booking Approver'),
+};
+await writeSyntheticRole(settingsDatabase, {
+  ...bookingRole,
+  authorities: [
+    { recordType: LIMITS_BOOKING_TYPE, action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+});
+const bookingApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-BOOKING-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await assignSyntheticRole(settingsDatabase, { kind: 'user', id: bookingApprover.id }, bookingRole.code);
+const fixtureAccess = new Access({
+  audit: new Audit(fixtureLog.logger),
+  registry: [...permissionRegistry, limitsBookingType],
+  approvalRules: [limitsBookingRule],
+  composition: TEST_COMPOSITION,
+});
+/** A SYNTHETIC booking whose approval the exceptions journey's user requests, with its value at cost in rupees. */
+const bookingRequested = (rupees: number) =>
+  fixtureCommand((context) =>
+    fixtureAccess.requestApproval(context, {
+      actionType: LIMITS_BOOKING,
+      document: { module: LIMITS_MODULE, recordType: LIMITS_BOOKING_TYPE, recordId: uuidv7(), versionId: uuidv7() },
+      value: { kind: 'known', amountPaise: paise(rupees * 100) },
+      preparers: [exceptionsOps.id],
+      requestedBy: { userId: exceptionsOps.id, roleAssignmentId: crypto.randomUUID() },
+    }),
+  );
+await bookingRequested(1_500);
+await bookingRequested(5_000_000);
 await fixtureRouter.close();
 
 /** How a journey signs a user in: login, name, password and authenticator secret. */
@@ -679,7 +769,16 @@ const app = await startAccessApp(
     AOS_ENVIRONMENT: 'local',
     AOS_DEMO_SIGN_IN: JSON.stringify([{ organisationCode: settingsCode, login: demoUser.login, label: demoLabel }]),
   },
-  { origin, port, webApp, fileStoreEnvironment: fileStore.environment, exceptionTypes: [syntheticMismatch] },
+  {
+    origin,
+    port,
+    webApp,
+    fileStoreEnvironment: fileStore.environment,
+    exceptionTypes: [syntheticMismatch],
+    // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
+    extraRecordTypes: [limitsBookingType],
+    extraApprovalRules: [limitsBookingRule],
+  },
 );
 
 // The evidence journey's exception rule change, prepared through the API by its Admin once the server listens, so
@@ -784,6 +883,17 @@ writeFileSync(
       organisationCode: settingsCode,
       viewer: credentialsOf(operationsViewer),
       jobKind: syntheticAlwaysFails.name,
+    },
+    // S1-F05-T01: the Admin who prepares a limit for the booking approver's role, the person who approves it, and the
+    // booking approver, with how the forms name the role and the action type.
+    limits: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(limitsAdmin),
+      approver: credentialsOf(limitsApprover),
+      bookingApprover: credentialsOf(bookingApprover),
+      roleOption: `${bookingRole.code} · ${bookingRole.name}`,
+      actionOption: `${LIMITS_BOOKING} · limited on cost`,
+      reasonId: limitsReasonId,
     },
     // S1-F08-T03: the Operations user who owns the evidence exception, by its code, and the approver who decides the
     // rule change with evidence, with the reason they give.

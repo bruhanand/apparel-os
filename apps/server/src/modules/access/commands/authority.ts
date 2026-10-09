@@ -19,12 +19,14 @@ import { userInForce } from '../queries/users.js';
 // one, such as disabling a user or withdrawing an assignment, locks it exclusively at the same step. The lock target is
 // the identity row, not its versions. The role the assignment grants joins the step (DEC-118, RR-360): shared when
 // relied on, exclusive when a decision makes a version of it take effect, and under the locks the command rechecks
-// the role's version in force. Approval limits and stand-in grants join the step with S1-F05.
+// the role's version in force. The approval limit a decision relies on joins the step (S1-F05-T01); stand-in grants
+// join it with S1-F05-T02.
 
 const APP_USER = lockTable('access', 'app_user');
 const SERVICE_IDENTITY = lockTable('access', 'service_identity');
 const ROLE_ASSIGNMENT = lockTable('access', 'role_assignment');
 const ROLE = lockTable('access', 'role');
+const APPROVAL_LIMIT = lockTable('access', 'approval_limit');
 
 /** An actor whose authority a command relies on or changes (access-and-approvals 2.1, 2.3). */
 export interface AuthorityActor {
@@ -45,6 +47,14 @@ export function assignmentTarget(assignmentId: string, mode: LockMode): LockTarg
 /** A role, as a step-0 lock target (DEC-118, RR-360). */
 export function roleTarget(roleId: string, mode: LockMode): LockTarget {
   return { table: ROLE, id: roleId, mode };
+}
+
+/**
+ * An approval limit, as a step-0 lock target (access-and-approvals 9.5; S1-F05-T01): shared by a decision relying on
+ * it, exclusive by the decision that approves it or a limit that ends it, so the two never pass each other.
+ */
+export function limitTarget(limitId: string, mode: LockMode): LockTarget {
+  return { table: APPROVAL_LIMIT, id: limitId, mode };
 }
 
 /**

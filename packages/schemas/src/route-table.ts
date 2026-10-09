@@ -39,6 +39,8 @@ import {
 } from './roles.js';
 import { secretRegistry } from './secret.js';
 import {
+  approvalLimitDraftSchema,
+  approvalLimitPreparedSchema,
   approvalReasonDraftSchema,
   approvalReasonPreparedSchema,
   approvalReasonsInForceSchema,
@@ -76,7 +78,13 @@ import {
   securitySettingsSchema,
   securitySettingVersionDraftSchema,
 } from './security-settings.js';
-import { assignmentListSchema, reasonListSchema, roleListSchema, userListSchema } from './access-records.js';
+import {
+  approvalLimitListSchema,
+  assignmentListSchema,
+  reasonListSchema,
+  roleListSchema,
+  userListSchema,
+} from './access-records.js';
 import {
   accessHistoryPageSchema,
   accessHistoryQuerySchema,
@@ -856,6 +864,38 @@ export const routes = {
     response: approvalRuleSettingPreparedSchema,
     codes: [...PREPARE_CODES, 'access.rule-setting-not-found'],
   }),
+  // Approval limits (access-and-approvals 9.2, 9.11, 14; POL-02.07, POL-02.09, POL-02.15; S1-F05-T01): every limit
+  // with its basis beside it, and a new one prepared for a different authorised person to approve.
+  listApprovalLimits: defineRoute({
+    method: 'GET',
+    path: '/api/access/approval-limits',
+    access: { kind: 'action', action: 'view', recordType: 'access.approval_limit' },
+    command: false,
+    response: approvalLimitListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareApprovalLimit: defineRoute({
+    method: 'POST',
+    path: '/api/access/approval-limits',
+    access: { kind: 'action', action: 'create', recordType: 'access.approval_limit' },
+    command: true,
+    body: approvalLimitDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: approvalLimitPreparedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'access.action-type-not-declared',
+      'access.action-type-not-limited',
+      'access.role-not-found',
+      'access.assignment-not-found',
+      'access.assignment-not-of-user',
+      'access.scope-members-not-available',
+      'access.scope-member-not-found',
+      'access.limit-overlaps',
+    ],
+  }),
   // The essential security settings (access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118, RR-334): each
   // with its versions and the one in force, and a new version prepared for a different authorised person to approve.
   listSecuritySettings: defineRoute({
@@ -925,6 +965,11 @@ export const routes = {
       'access.assignment-overlaps',
       'access.version-overlaps',
       'access.not-withdrawable',
+      // Approval limits (access-and-approvals 9.2, 9.3; S1-F05-T01).
+      'access.no-approval-limit',
+      'access.above-approval-limit',
+      'access.unknown-value-not-covered',
+      'access.limit-overlaps',
       'organisation.record-not-found',
       'organisation.starts-in-past',
       'organisation.version-overlaps',

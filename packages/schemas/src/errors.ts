@@ -237,8 +237,21 @@ export const accessApprovalCodes = declareCodes({
   'access.reason-not-found': 'not-found',
   'access.rule-setting-not-found': 'not-found',
   'access.setting-not-found': 'not-found',
-  // A request with a value basis needs an approver whose limit covers it; limits arrive with S1-F05 (9.2, 9.3).
+  // A request with a value on a basis needs an approver whose limit covers it, through the assignment that grants
+  // approve; a missing limit grants nothing (9.2, 9.3; POL-02.09, POL-02.15, PRD-ACS-016; S1-F05-T01):
+  // `access.no-approval-limit`: the decider holds no limit in force for the action through a covering assignment;
+  // `access.above-approval-limit`: their limits fall short of the value; `access.unknown-value-not-covered`: the value
+  // is Unknown and no limit of theirs gives explicit authority over Unknown value.
   'access.no-approval-limit': 'not-authorised',
+  'access.above-approval-limit': 'not-authorised',
+  'access.unknown-value-not-covered': 'not-authorised',
+  // Preparing an approval limit (9.2; S1-F05-T01): an action type whose rule has no value basis takes no limit; an
+  // individual limit names an assignment of that user; an approved limit of the same action type and holder starting
+  // on or after the new one's start is refused as overlapping (code-house-rules 7.3).
+  'access.action-type-not-limited': 'refused',
+  'access.assignment-not-of-user': 'refused',
+  'access.limit-overlaps': 'refused',
+  'access.approval-limit-not-found': 'not-found',
   // Verify under lock and Record use (access-and-approvals 9.7, 9.8; DEC-066, DEC-097; S1-F10-T02).
   'access.approval-decision-not-found': 'not-found',
   'access.approval-not-for-document': 'refused',

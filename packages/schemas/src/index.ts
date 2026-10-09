@@ -114,6 +114,11 @@ export type {
 
 export {
   accessActionTypeSchema,
+  approvalLimitDraftSchema,
+  approvalLimitPreparedSchema,
+  limitAuthoritySchema,
+  limitHolderSchema,
+  limitStandingSchema,
   approvalReasonDraftSchema,
   approvalReasonPreparedSchema,
   approvalReasonsInForceSchema,
@@ -135,6 +140,10 @@ export {
 } from './approvals.js';
 export type {
   AccessActionType,
+  ApprovalLimitDraft,
+  LimitAuthority,
+  LimitStanding,
+  MoneyBasis,
   ApprovalReasonDraft,
   ApprovalReasonVersionDraft,
   ApprovalRequestView,
@@ -255,6 +264,8 @@ export type {
 } from './history.js';
 
 export {
+  approvalLimitListSchema,
+  approvalLimitRecordSchema,
   assignmentListSchema,
   assignmentRecordSchema,
   reasonListSchema,
@@ -266,6 +277,8 @@ export {
   userRecordSchema,
 } from './access-records.js';
 export type {
+  ApprovalLimitList,
+  ApprovalLimitRecord,
   AssignmentList,
   AssignmentRecord,
   ReasonList,
