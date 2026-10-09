@@ -42,6 +42,36 @@ export function staleReads(message: LiveMessage): Stale {
   }
 }
 
+/** What the stream needs of an EventSource. */
+export interface LiveSource {
+  readonly readyState: number;
+  addEventListener(type: string, listener: (event: MessageEvent<string>) => void): void;
+}
+
+/** EventSource's CLOSED state: the browser will not reconnect by itself. */
+const CLOSED = 2;
+
+/**
+ * Follows one stream (code-house-rules 12.12 "As built"; deployment.md section 5). Every open, the first and each
+ * reconnect, makes every read stale: the server answers only once it knows where the stream starts, so whatever
+ * committed before then is in these reads, and nothing between a stream's end and the next is lost, with or without
+ * `Last-Event-ID`. Each message makes its record's reads stale. A stream closed for good, as when the session ended
+ * or locked, makes My work stale, whose read tells the shell which.
+ */
+export function followStream(source: LiveSource, markStale: (stale: Stale) => void): void {
+  source.addEventListener('open', () => {
+    markStale({ kind: 'everything' });
+  });
+  const onMessage = (event: MessageEvent<string>) => {
+    const message = parseMessage(event.data);
+    if (message !== null) markStale(staleReads(message));
+  };
+  for (const type of FOLLOWED_TYPES) source.addEventListener(type, onMessage);
+  source.addEventListener('error', () => {
+    if (source.readyState === CLOSED) markStale({ kind: 'reads', reads: [{ route: 'listMyWork' }] });
+  });
+}
+
 /** A message's data as the stream sent it, or null for one the schema refuses. */
 export function parseMessage(data: string): LiveMessage | null {
   try {

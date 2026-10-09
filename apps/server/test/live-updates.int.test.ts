@@ -1,8 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { paise, uuidv7 } from '@apparel-os/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   CommandRunner,
+  defineEvent,
   newCorrelationId,
   OrganisationRouter,
   type RoutedOrganisation,
@@ -55,6 +57,10 @@ const SYNTHETIC_AMOUNT = 987_654_321;
 const SITE = '01900000-0000-7000-8000-0000000f4001';
 const OTHER_SITE = '01900000-0000-7000-8000-0000000f4002';
 const ACTOR = '01900000-0000-7000-8000-0000000f4a01';
+/** SYNTHETIC: a heartbeat too far off to matter, so only the outbox notification and the stream's own checks act. */
+const SYNTHETIC_SLOW_LIVE = { heartbeatMs: 600_000, streamMs: 600_000 };
+/** A SYNTHETIC event no reader may view, published only to commit an identifier above another. */
+const unrelated = defineEvent({ type: 'kernel.synthetic-unrelated', version: 1, payload: z.object({}) });
 
 type Enrolled = SyntheticUser & { factorSecret: Buffer };
 
@@ -78,12 +84,13 @@ let reader: Enrolled;
 let outsider: Enrolled;
 let admin: Enrolled;
 let readerB: Enrolled;
+let keys: Record<string, string>;
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('live');
   const [a, b] = world.organisations;
   databaseA = a.database;
-  const keys = syntheticKeysEnvironment(world);
+  keys = syntheticKeysEnvironment(world);
   for (const database of [a.database, b.database]) {
     await createTestExceptionsSchema(database);
     await writeSyntheticSetting(database, 'access.sign-in-throttling', SYNTHETIC_THROTTLING);
@@ -215,7 +222,13 @@ async function signIn(user: Enrolled, organisationCode = world.organisations[0].
 
 async function raiseOne(): Promise<{ exceptionId: string }> {
   const documentId = await run((context) => writeTestDocument(context));
-  const input: RaiseInput = {
+  const raised = await run((context) => exceptions.raiseInOwnCommand(context, raiseInput(documentId)));
+  if (raised.kind !== 'done') throw new Error(`The synthetic exception was refused: ${raised.refusal.code}`);
+  return { exceptionId: raised.value.exceptionId };
+}
+
+function raiseInput(documentId: string): RaiseInput {
+  return {
     raisingEvent: `${TEST_EXCEPTIONS_MODULE}.live:${documentId}`,
     typeCode: syntheticMismatch.code,
     facts: { siteId: SITE, storeId: null, businessUnitId: null, brandId: null },
@@ -223,9 +236,22 @@ async function raiseOne(): Promise<{ exceptionId: string }> {
     exposure: { kind: 'known', amount: paise(SYNTHETIC_AMOUNT) },
     raisedBy: { kind: 'user', id: ACTOR },
   };
-  const raised = await run((context) => exceptions.raiseInOwnCommand(context, input));
-  if (raised.kind !== 'done') throw new Error(`The synthetic exception was refused: ${raised.refusal.code}`);
-  return { exceptionId: raised.value.exceptionId };
+}
+
+/** Whether a message is an event about one record. */
+const about = (recordId: string) => (message: { data: { kind: string } & Record<string, unknown> }) =>
+  message.data.kind === 'event' && (message.data.subject as { recordId: string }).recordId === recordId;
+
+/** Whether the stream ended within `ms`. */
+async function endsWithin(stream: { ended: Promise<void> }, ms: number): Promise<boolean> {
+  return Promise.race([
+    stream.ended.then(() => true),
+    new Promise<boolean>((resolve) => {
+      setTimeout(() => {
+        resolve(false);
+      }, ms);
+    }),
+  ]);
 }
 
 describe('the live-update stream (code-house-rules 12.12)', () => {
@@ -363,5 +389,101 @@ describe('the live-update stream (code-house-rules 12.12)', () => {
     const refused = await openLiveStream(api.baseUrl, '');
     expect(refused.status).toBe(401);
     expect(refused.body).toMatchObject({ error: { code: 'access.not-signed-in' } });
+  });
+
+  it('code-house-rules 12.12 an event made before the stream opened that commits after it still reaches it', async () => {
+    const cookie = await signIn(owner);
+    const documentId = await run((context) => writeTestDocument(context));
+    let made!: () => void;
+    const madeIt = new Promise<void>((resolve) => {
+      made = resolve;
+    });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // The exception's event gets its identifier now, and commits only after the stream has opened.
+    const pending = run(async (context) => {
+      const raised = await exceptions.raiseInOwnCommand(context, raiseInput(documentId));
+      made();
+      await released;
+      return raised;
+    });
+    await madeIt;
+    // A later identifier commits first, so the outbox's latest event at open is above the one in flight.
+    await run((context) =>
+      context.publish(unrelated, {
+        subject: { module: 'kernel', recordType: 'kernel.synthetic_record', recordId: uuidv7() },
+        scope: {},
+        payload: {},
+      }),
+    );
+    const stream = await openLiveStream(api.baseUrl, cookie);
+    try {
+      release();
+      const raised = await pending;
+      if (raised.kind !== 'done') throw new Error(`The synthetic exception was refused: ${raised.refusal.code}`);
+      await stream.waitFor(about(raised.value.exceptionId));
+    } finally {
+      release();
+      stream.close();
+    }
+  });
+});
+
+describe('the stream without its heartbeat (code-house-rules 12.12)', () => {
+  let slow: AccessTestApp;
+
+  beforeAll(async () => {
+    slow = await startAccessApp(world, keys, {
+      clock,
+      exceptionTypes: [syntheticMismatch],
+      liveSettings: SYNTHETIC_SLOW_LIVE,
+    });
+  });
+
+  afterAll(async () => {
+    await (slow as AccessTestApp | undefined)?.close();
+  });
+
+  it('code-house-rules 12.12 after its outbox connection is lost, the next stream listens again', async () => {
+    const first = await openLiveStream(slow.baseUrl, await signIn(owner));
+    const superuser = await connect(databaseA, 'superuser');
+    try {
+      const { exceptionId: before } = await raiseOne();
+      await first.waitFor(about(before));
+      // The LISTEN connection is cut, as a network fault or a database restart would.
+      const cut = await superuser.query<{ cut: boolean }>(
+        `select pg_terminate_backend(pid) as cut from pg_stat_activity
+          where datname = current_database() and query ilike 'listen %'`,
+      );
+      expect(cut.rows.length).toBeGreaterThan(0);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const second = await openLiveStream(slow.baseUrl, await signIn(owner));
+      try {
+        const { exceptionId: after } = await raiseOne();
+        await second.waitFor(about(after), 10_000);
+      } finally {
+        second.close();
+      }
+    } finally {
+      first.close();
+      await superuser.end();
+    }
+  });
+
+  it('PRD-SEC-008 PRD-ACS-017 a session that locks gets no further event, without waiting for the heartbeat', async () => {
+    const stream = await openLiveStream(slow.baseUrl, await signIn(owner));
+    try {
+      const { exceptionId: before } = await raiseOne();
+      await stream.waitFor(about(before));
+      // Past the SYNTHETIC idle limit the session is locked (access-and-approvals 3.3).
+      clock.advance(SYNTHETIC_LIMITS.idleLockSeconds + 1);
+      const { exceptionId: after } = await raiseOne();
+      expect(await endsWithin(stream, 10_000)).toBe(true);
+      expect(stream.messages.some(about(after))).toBe(false);
+    } finally {
+      stream.close();
+    }
   });
 });

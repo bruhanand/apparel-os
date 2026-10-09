@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyIsStale, parseMessage, staleReads } from './invalidation';
+import { followStream, keyIsStale, parseMessage, staleReads, type Stale } from './invalidation';
 
 // S1-F08-T04: what a live update makes stale (code-house-rules 12.12; deployment.md section 5). Identifiers are
 // SYNTHETIC.
@@ -40,5 +40,46 @@ describe('live updates in the browser (code-house-rules 12.12)', () => {
     expect(parseMessage('{"kind":"event","type":"x","subject":{"recordId":"1"},"name":"n"}')).toBeNull();
     expect(parseMessage('not json')).toBeNull();
     expect(parseMessage('{"kind":"resync"}')).toEqual({ kind: 'resync' });
+  });
+});
+
+describe('the browser’s stream (code-house-rules 12.12; deployment.md section 5)', () => {
+  /** A SYNTHETIC EventSource: the test opens it and sends its messages. */
+  function fakeSource() {
+    const listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>();
+    return {
+      readyState: 1,
+      addEventListener(type: string, listener: (event: MessageEvent<string>) => void) {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      },
+      emit(type: string, data: string) {
+        for (const listener of listeners.get(type) ?? []) listener({ data } as MessageEvent<string>);
+      },
+    };
+  }
+
+  it('deployment.md 5 every open, the first and each reconnect, reads everything on screen again', () => {
+    const source = fakeSource();
+    const stale: Stale[] = [];
+    followStream(source, (each) => stale.push(each));
+    source.emit('open', '');
+    source.emit('open', '');
+    expect(stale).toEqual([{ kind: 'everything' }, { kind: 'everything' }]);
+  });
+
+  it('a message makes its record’s reads stale', () => {
+    const source = fakeSource();
+    const stale: Stale[] = [];
+    followStream(source, (each) => stale.push(each));
+    source.emit(
+      'exceptions.raised',
+      JSON.stringify({
+        kind: 'event',
+        type: 'exceptions.raised',
+        subject: { module: 'exceptions', recordType: 'exceptions.exception', recordId: EXCEPTION },
+      }),
+    );
+    expect(stale).toHaveLength(1);
+    expect(keyIsStale(stale[0] ?? { kind: 'reads', reads: [] }, ['listMyWork', {}])).toBe(true);
   });
 });

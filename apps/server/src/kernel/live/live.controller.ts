@@ -31,14 +31,17 @@ export class LiveController {
     const header = request.headers['last-event-id'];
     const lastEventId =
       typeof header === 'string' ? (UUID.safeParse(header).success ? header.toLowerCase() : NEVER_HELD) : undefined;
-    response.status(200);
-    response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    response.setHeader('Connection', 'keep-alive');
-    // No proxy holds the stream back (Railway's edge passes it through).
-    response.setHeader('X-Accel-Buffering', 'no');
-    response.flushHeaders();
     let open = true;
     const sink: StreamSink = {
+      begin: () => {
+        if (response.headersSent) return;
+        response.status(200);
+        response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        response.setHeader('Connection', 'keep-alive');
+        // No proxy holds the stream back (Railway's edge passes it through).
+        response.setHeader('X-Accel-Buffering', 'no');
+        response.flushHeaders();
+      },
       send: (message: SseMessage) => {
         if (!open) return;
         const data = JSON.stringify(z.encode(routes.openLiveUpdates.response, message.data));

@@ -1,4 +1,4 @@
-import { asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lte } from 'drizzle-orm';
 import type { LiveMessage } from '@apparel-os/schemas';
 import { Client, type ClientConfig, type Pool } from 'pg';
 import { newCorrelationId } from '../command-runner/correlation.js';
@@ -46,6 +46,8 @@ export interface SseMessage {
 
 /** Where the stream writes: the HTTP response, through the controller. */
 export interface StreamSink {
+  /** Sends the status and headers, once the stream knows where it starts, so the browser's open comes after that. */
+  begin(): void;
   send(message: SseMessage): void;
   comment(text: string): void;
   retry(ms: number): void;
@@ -56,8 +58,6 @@ interface Subscriber {
   readonly session: SignedInSession;
   readonly sink: StreamSink;
   readonly access: SessionAccess;
-  /** Events at or below this identifier were in the outbox when the stream opened, or were sent before it reopened. */
-  readonly start: string;
   cursor: string;
   readonly sent: Map<string, number>;
   reading: boolean;
@@ -69,6 +69,8 @@ interface Subscriber {
 interface Follower {
   readonly subscribers: Set<Subscriber>;
   client: Client | undefined;
+  /** A LISTEN is being set up, so no second one starts beside it. */
+  listening: boolean;
 }
 
 /** The smallest identifier UUIDv7 can give at an instant: the floor of the look back. */
@@ -91,11 +93,14 @@ const NOTHING = '00000000-0000-0000-0000-000000000000';
  *   effective grants covering its scope facts (`SessionAccess.mayView`; access-and-approvals 7.2; PRD-SEC-005).
  *   Nothing is cached, so a changed assignment counts from the next event (`PRD-SEC-005`).
  * - **Identifiers only.** A message carries the event's identity, type and subject (PRD-SEC-006).
- * - **Reconnecting.** With `Last-Event-ID`, the events after it are sent; an identifier the outbox does not hold gets
- *   `resync` (deployment.md section 5).
- * - **Revocation and lock.** An event that revokes the session ends the stream at once; the heartbeat ends it when the
- *   session is no longer open: revoked, ended, locked or its user no longer Active (access-and-approvals 3.3;
- *   PRD-SEC-008). The browser opens it again after an unlock.
+ * - **Opening and reconnecting.** The stream answers only once it knows where it starts, so whatever committed before
+ *   that is in the reads the browser makes again at every open (12.12 "As built"). With `Last-Event-ID`, the events
+ *   after it are sent; an identifier the outbox does not hold gets `resync` (deployment.md section 5). The events
+ *   already committed within the look back are taken as seen, so one made earlier that commits later is still sent.
+ * - **Revocation and lock.** An event that revokes the session ends the stream at once; so does finding the session
+ *   no longer open (revoked, ended, locked or its user no longer Active) before a batch is sent, and the heartbeat
+ *   checks it with nothing to send (access-and-approvals 3.3; PRD-SEC-008). The browser opens it again after an
+ *   unlock.
  */
 export class LiveUpdates {
   private readonly audiences = new Map<string, LiveAudience>();
@@ -120,10 +125,11 @@ export class LiveUpdates {
   /** Opens one stream for a session; resolves once it is open and its first messages, if any, are sent. */
   async open(session: SignedInSession, access: SessionAccess, sink: StreamSink, lastEventId?: string): Promise<void> {
     if (this.closing) {
+      sink.begin();
       sink.end();
       return;
     }
-    let start: { cursor: string; resync: boolean };
+    let start: { cursor: string; resync: boolean; seen: readonly string[] };
     try {
       start = await this.start(session, lastEventId);
     } catch (error) {
@@ -137,21 +143,23 @@ export class LiveUpdates {
         'The live stream could not open; the browser reconnects',
         'LiveUpdates',
       );
+      sink.begin();
       sink.end();
       return;
     }
+    const at = this.now();
     const subscriber: Subscriber = {
       session,
       sink,
       access,
-      start: start.cursor,
       cursor: start.cursor,
-      sent: new Map(),
+      sent: new Map(start.seen.map((id) => [id, at])),
       reading: false,
       again: false,
       ended: false,
       timers: [],
     };
+    sink.begin();
     sink.retry(RECONNECT_MS);
     if (start.resync)
       sink.send({
@@ -171,22 +179,40 @@ export class LiveUpdates {
     this.wake(subscriber);
   }
 
-  /** Where a stream starts: after `Last-Event-ID` while the outbox holds it, otherwise after the latest event. */
+  /**
+   * Where a stream starts: after `Last-Event-ID` while the outbox holds it, otherwise after the latest event. The events
+   * already committed between the look back's floor and that point are seen: the browser's reads at this open, or the
+   * stream before it, hold them. One made earlier that commits later is not among them, so the look back sends it.
+   */
   private start(
     session: SignedInSession,
     lastEventId: string | undefined,
-  ): Promise<{ cursor: string; resync: boolean }> {
+  ): Promise<{ cursor: string; resync: boolean; seen: readonly string[] }> {
     return this.read(session, async (context) => {
       const latest = (
         await context.tx.select({ id: outboxEvent.id }).from(outboxEvent).orderBy(desc(outboxEvent.id)).limit(1)
       )[0]?.id;
-      if (lastEventId === undefined) return { cursor: latest ?? NOTHING, resync: false };
-      const held = await context.tx
-        .select({ id: outboxEvent.id })
-        .from(outboxEvent)
-        .where(eq(outboxEvent.id, lastEventId));
-      if (held.length > 0) return { cursor: lastEventId, resync: false };
-      return { cursor: latest ?? NOTHING, resync: true };
+      let cursor = latest ?? NOTHING;
+      let resync = false;
+      if (lastEventId !== undefined) {
+        const held = await context.tx
+          .select({ id: outboxEvent.id })
+          .from(outboxEvent)
+          .where(eq(outboxEvent.id, lastEventId));
+        if (held.length > 0) cursor = lastEventId;
+        else resync = true;
+      }
+      const floor = uuidv7Floor(this.now() - LOOKBACK_MS);
+      const seen =
+        cursor > floor
+          ? (
+              await context.tx
+                .select({ id: outboxEvent.id })
+                .from(outboxEvent)
+                .where(and(gt(outboxEvent.id, floor), lte(outboxEvent.id, cursor)))
+            ).map((row) => row.id)
+          : [];
+      return { cursor, resync, seen };
     });
   }
 
@@ -225,6 +251,13 @@ export class LiveUpdates {
   private async heartbeat(subscriber: Subscriber): Promise<void> {
     if (subscriber.ended) return;
     subscriber.sink.comment('heartbeat');
+    if (!(await this.stillOpen(subscriber))) return;
+    this.ensureListening(subscriber.session.organisation);
+    this.wake(subscriber);
+  }
+
+  /** Whether the stream's session is still open; when it is not, or cannot be checked, the stream ends. */
+  private async stillOpen(subscriber: Subscriber): Promise<boolean> {
     try {
       const open = await this.runner.read(
         {
@@ -235,16 +268,12 @@ export class LiveUpdates {
         },
         (context) => subscriber.access.stillOpen(context, subscriber.session.sessionId),
       );
-      if (!open) {
-        this.end(subscriber);
-        return;
-      }
+      if (open) return true;
     } catch (error) {
       this.log('warn', subscriber, error, 'The live stream could not check its session; it ends');
-      this.end(subscriber);
-      return;
     }
-    this.wake(subscriber);
+    this.end(subscriber);
+    return false;
   }
 
   /** Reads and sends what is new, once at a time per stream; a wake while reading reads once more after. */
@@ -276,7 +305,7 @@ export class LiveUpdates {
     for (;;) {
       if (subscriber.ended) return;
       const floor = uuidv7Floor(this.now() - LOOKBACK_MS);
-      const lower = maxId(subscriber.start, minId(subscriber.cursor, floor));
+      const lower = minId(subscriber.cursor, floor);
       const more = await this.read(subscriber.session, async (context) => {
         const rows = await context.tx
           .select()
@@ -305,6 +334,8 @@ export class LiveUpdates {
         }
         return { out, ends, full: rows.length === READ_BATCH };
       });
+      // A session locked, suspended or past its limits since the heartbeat gets nothing more (PRD-SEC-008).
+      if (more.out.length > 0 && !(await this.stillOpen(subscriber))) return;
       for (const message of more.out) subscriber.sink.send(message);
       if (more.ends) {
         this.end(subscriber);
@@ -338,25 +369,34 @@ export class LiveUpdates {
     );
   }
 
-  /** Follows the Organisation's outbox while a stream is open there: LISTEN on a connection of its own (12.8). */
+  /**
+   * Follows the Organisation's outbox while a stream is open there: LISTEN on a connection of its own (12.8). A
+   * follower that lost its connection, or never got one, listens again at the next stream opened or heartbeat there.
+   */
   private async follow(subscriber: Subscriber): Promise<void> {
     const organisation = subscriber.session.organisation;
     let follower = this.followers.get(organisation.organisationCode);
     if (follower === undefined) {
-      follower = { subscribers: new Set(), client: undefined };
+      follower = { subscribers: new Set(), client: undefined, listening: false };
       this.followers.set(organisation.organisationCode, follower);
-      follower.subscribers.add(subscriber);
-      await this.listen(organisation, follower);
-      return;
     }
     follower.subscribers.add(subscriber);
+    if (follower.client === undefined && !follower.listening) await this.listen(organisation, follower);
+  }
+
+  /** Listens again where a follower has no connection and none is being made. */
+  private ensureListening(organisation: RoutedOrganisation): void {
+    const follower = this.followers.get(organisation.organisationCode);
+    if (follower === undefined || follower.client !== undefined || follower.listening) return;
+    void this.listen(organisation, follower);
   }
 
   private async listen(organisation: RoutedOrganisation, follower: Follower): Promise<void> {
+    follower.listening = true;
     const pool = organisation.db.$client as Pool & { options: ClientConfig };
     const client = new Client(pool.options);
     client.on('error', () => {
-      // The heartbeat still reads the outbox; the next stream opened here listens again.
+      // The heartbeat still reads the outbox and listens again; so does the next stream opened here.
       if (follower.client === client) follower.client = undefined;
       client.end().catch(() => undefined);
     });
@@ -372,10 +412,12 @@ export class LiveUpdates {
       this.logger.structured(
         'warn',
         { organisationCode: organisation.organisationCode, error: errorName(error) },
-        'The live stream could not listen for the outbox; the heartbeat reads it',
+        'The live stream could not listen for the outbox; the heartbeat reads it and listens again',
         'LiveUpdates',
       );
       await client.end().catch(() => undefined);
+    } finally {
+      follower.listening = false;
     }
   }
 
@@ -427,10 +469,6 @@ function liveEventOf(row: typeof outboxEvent.$inferSelect): LiveEvent {
 
 function minId(a: string, b: string): string {
   return a < b ? a : b;
-}
-
-function maxId(a: string, b: string): string {
-  return a > b ? a : b;
 }
 
 /** The error's class name only: a message can hold a value (code-house-rules 12.11). */
