@@ -52,6 +52,10 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'audit.delete_after_retention',
     'audit.ensure_partitions',
     'audit.seal_block',
+    // imports-and-opening-data 11: the record an attachment belongs to, SECURITY DEFINER, and whether the transaction
+    // names a record its owning module admitted the actor to (migration 0039; RR-452).
+    'files_imports.attached_record',
+    'files_imports.record_admitted',
     // structure-and-masters 3.5: what a location version would break in the nesting of locations (S1-F02-T02 review).
     'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).
