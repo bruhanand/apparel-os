@@ -413,6 +413,10 @@ export const numberingCodes = declareCodes({
  *
  * - `exceptions.no-exception-code-series`: no Open series of the exception-code kind, so an operation that would raise
  *   a numbered exception is unavailable; `missing` names the series (DEC-116).
+ * - `exceptions.exception-code-series-paused`: the exception-code series is Paused, so the same is unavailable until it
+ *   is released; `missing` names the series (numbering-and-audit 3.7).
+ * - `exceptions.exception-code-series-exhausted`: the series' next number no longer fits its format, so the same is
+ *   unavailable until a new series is defined; `missing` names the series (numbering-and-audit 3.5).
  * - `exceptions.no-routing`: no routing in force for the type at the Site, so an operation whose exceptions would have
  *   no owner is unavailable; `missing` names the type and the Site (POL-02.16).
  * - `exceptions.type-not-registered`: no module registers the type (12.1).
@@ -429,6 +433,8 @@ export const numberingCodes = declareCodes({
  */
 export const exceptionsCodes = declareCodes({
   'exceptions.no-exception-code-series': 'unavailable',
+  'exceptions.exception-code-series-paused': 'unavailable',
+  'exceptions.exception-code-series-exhausted': 'unavailable',
   'exceptions.no-routing': 'unavailable',
   'exceptions.type-not-registered': 'refused',
   'exceptions.link-not-for-type': 'refused',

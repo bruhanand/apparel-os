@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { ExceptionExposure, ExceptionLink } from '@apparel-os/schemas';
 import { and, desc, eq, inArray, lt } from 'drizzle-orm';
-import { LOCK_STEP, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, LOCK_STEP, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditActor, AuditInterface } from '../../audit/index.js';
 import type { InboxInterface } from '../../inbox/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
@@ -65,7 +65,7 @@ export interface RaiseDependencies {
 /**
  * The lock target of the exception-code series, for the raising command's one call at step 8 (stock-ledger 10.3;
  * code-house-rules 8.2), or the refusal while no Open series exists: the operation that would raise is unavailable,
- * naming the missing series (12.1; DEC-116).
+ * naming the series and why: none is defined, or it is Paused (12.1; DEC-116; PRD-UXP-003).
  */
 export async function codeSeriesTarget(
   context: TransactionContext,
@@ -75,8 +75,25 @@ export async function codeSeriesTarget(
     kind: EXCEPTION_CODE_KIND.kind,
     scopeKey: EXCEPTION_CODE_SCOPE_KEY,
   });
-  if (series?.state !== 'Open') return refused('unavailable', 'exceptions.no-exception-code-series', [MISSING_SERIES]);
+  if (series === undefined) return refused('unavailable', 'exceptions.no-exception-code-series', [MISSING_SERIES]);
+  if (series.state === 'Paused') {
+    return refused('unavailable', 'exceptions.exception-code-series-paused', [MISSING_SERIES]);
+  }
   return done(numbering.seriesLockTarget(series.seriesId));
+}
+
+/**
+ * Allocate's refusal on the held exception-code series, as the raise's: Paused, or used up (numbering-and-audit 3.5,
+ * 3.7). Any other cannot happen on the live series the command holds, for a new exception: a defect.
+ */
+function allocateRefusal<Value>(code: string): Outcome<Value> {
+  if (code === 'numbering.series-paused') {
+    return refused('unavailable', 'exceptions.exception-code-series-paused', [MISSING_SERIES]);
+  }
+  if (code === 'numbering.series-exhausted') {
+    return refused('unavailable', 'exceptions.exception-code-series-exhausted', [MISSING_SERIES]);
+  }
+  throw new CommandDefect(`Allocate refused the exception-code series: ${code}`);
 }
 
 /**
@@ -123,9 +140,7 @@ export async function raise(
     documentType: EXCEPTION_RECORD_TYPE,
     documentId: exceptionId,
   });
-  if (allocated.kind === 'refused') {
-    return refused('unavailable', 'exceptions.no-exception-code-series', [MISSING_SERIES]);
-  }
+  if (allocated.kind === 'refused') return allocateRefusal(allocated.refusal.code);
   const typeId = await ensureType(context, type);
   const earlier = await earlierException(
     context,

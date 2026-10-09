@@ -1108,6 +1108,10 @@ export const englishIndia = {
   'record-type.exceptions.exception_routing': 'Exception rule',
   'approval.action.exceptions.exception_routing.change': 'Exception rule change',
   'error.exceptions.no-exception-code-series': 'Exceptions cannot be raised yet: no exception-code series is open.',
+  'error.exceptions.exception-code-series-paused':
+    'Exceptions cannot be raised now: the exception-code series is paused. Release it to go on.',
+  'error.exceptions.exception-code-series-exhausted':
+    'Exceptions cannot be raised now: the exception-code series has used every number its format allows. Define a new series.',
   'error.exceptions.no-routing': 'Exceptions of this type have no owner here yet: no exception rule is in force.',
   'error.exceptions.type-not-registered': 'No part of the system raises exceptions of this type.',
   'error.exceptions.link-not-for-type': 'An exception of this type cannot be about that kind of record.',

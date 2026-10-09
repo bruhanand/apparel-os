@@ -1766,6 +1766,8 @@ export const routes = {
       'exceptions.type-not-registered',
       'exceptions.link-not-for-type',
       'exceptions.no-exception-code-series',
+      'exceptions.exception-code-series-paused',
+      'exceptions.exception-code-series-exhausted',
       'exceptions.no-routing',
     ],
   }),

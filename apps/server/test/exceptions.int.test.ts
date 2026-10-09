@@ -28,6 +28,7 @@ import { jobIdentities } from '../src/modules/access/commands/job-identities.js'
 import { Audit } from '../src/modules/audit/index.js';
 import {
   EXCEPTION_CODE_KIND,
+  EXCEPTION_CODE_SCOPE_KEY,
   Exceptions,
   EXCEPTIONS_IDENTITY,
   exceptionsConsumers,
@@ -36,6 +37,7 @@ import {
 } from '../src/modules/exceptions/index.js';
 import { Inbox } from '../src/modules/inbox/index.js';
 import { Numbering } from '../src/modules/numbering/index.js';
+import { syntheticCode } from './fixtures/synthetic.js';
 import { SYNTHETIC_RETRY, SYNTHETIC_TEST_SPEED } from './fixtures/worker-settings.js';
 import {
   codeFor,
@@ -759,6 +761,72 @@ describe('a second Organisation (PRD-ACS-020)', () => {
     expect(summary.body).toMatchObject({ rows: [] });
     expect(await run((context) => exceptions.available(context, syntheticMismatch.code, SITE), routedB)).toMatchObject({
       code: 'exceptions.no-exception-code-series',
+    });
+  });
+});
+
+describe('the exception-code series names why it cannot number (access-and-approvals 12.1; S1-F08 review)', () => {
+  const live = () =>
+    run(async (context) => {
+      const series = await numbering.liveSeries(context, {
+        kind: EXCEPTION_CODE_KIND.kind,
+        scopeKey: EXCEPTION_CODE_SCOPE_KEY,
+      });
+      if (series === undefined) throw new Error('no live exception-code series');
+      return series.seriesId;
+    });
+  const change = (seriesId: string, how: 'pause' | 'release' | 'close') =>
+    run(async (context) => {
+      await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(seriesId)]);
+      const changed = await numbering[how](context, seriesId);
+      if (changed.kind !== 'done') throw new Error(changed.refusal.code);
+    });
+  const raiseOn = async () => {
+    const documentId = await run((context) => writeTestDocument(context));
+    return run((context) => exceptions.raiseInOwnCommand(context, mismatchOn(documentId)));
+  };
+  const SERIES = [{ kind: 'number-series', numberedKind: 'exceptions.exception-code' }];
+
+  it('PRD-UXP-003 a paused series is named as paused, not as missing', async () => {
+    const seriesId = await live();
+    await change(seriesId, 'pause');
+    try {
+      expect(await run((context) => exceptions.available(context, syntheticMismatch.code, SITE))).toEqual({
+        kind: 'unavailable',
+        code: 'exceptions.exception-code-series-paused',
+        missing: SERIES,
+      });
+      expect(await raiseOn()).toMatchObject({
+        kind: 'refused',
+        refusal: { kind: 'unavailable', code: 'exceptions.exception-code-series-paused', missing: SERIES },
+      });
+    } finally {
+      await change(seriesId, 'release');
+    }
+  });
+
+  it('PRD-UXP-003 a series whose numbers no longer fit its format is named as used up, not as missing', async () => {
+    await change(await live(), 'close');
+    // A SYNTHETIC format one digit wide: nine numbers, then none.
+    const code = syntheticCode('EXCEPTION-CODE-NARROW');
+    await run(async (context) => {
+      const format = await numbering.defineFormatVersion(context, code, [
+        { kind: 'text', text: 'SYN-EY-' },
+        { kind: 'sequence', width: 1 },
+      ]);
+      if (format.kind !== 'done') throw new Error(format.refusal.code);
+      const series = await numbering.defineSeries(context, {
+        kind: EXCEPTION_CODE_KIND.kind,
+        scopeKey: EXCEPTION_CODE_SCOPE_KEY,
+        displayScopeKey: EXCEPTION_CODE_SCOPE_KEY,
+        formatCode: code,
+      });
+      if (series.kind !== 'done') throw new Error(series.refusal.code);
+    });
+    for (let i = 1; i <= 9; i += 1) expect((await raiseOn()).kind).toBe('done');
+    expect(await raiseOn()).toMatchObject({
+      kind: 'refused',
+      refusal: { kind: 'unavailable', code: 'exceptions.exception-code-series-exhausted', missing: SERIES },
     });
   });
 });

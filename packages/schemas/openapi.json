@@ -17412,6 +17412,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "exceptions.exception-code-series-exhausted",
+              "exceptions.exception-code-series-paused",
               "exceptions.no-exception-code-series",
               "exceptions.no-routing"
             ]
