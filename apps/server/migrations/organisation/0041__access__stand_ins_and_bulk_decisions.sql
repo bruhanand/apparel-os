@@ -70,17 +70,28 @@ create table access.stand_in_grant_change (
 create index stand_in_grant_change_grant on access.stand_in_grant_change (stand_in_grant_id);
 create index stand_in_grant_change_user on access.stand_in_grant_change (changed_by_user_id);
 
--- A batch of bulk decisions (access-and-approvals 9.9, 13.1; PRD-ACS-019): the approver, the requests selected, and
--- when, recorded in its own transaction with the one fresh authenticator code the selection takes (3.3); each item's
--- decision names it. An entry, never changed.
+-- A batch of bulk decisions (access-and-approvals 9.9, 13.1; PRD-ACS-019): the approver and when, recorded in its own
+-- transaction with the one fresh authenticator code the selection takes (3.3); each item's decision names it. An
+-- entry, never changed.
 create table access.bulk_decision_batch (
   id uuid primary key,
   approver_user_id uuid not null references access.app_user (id),
-  approval_request_ids uuid[] not null,
-  recorded_at timestamptz not null default now(),
-  constraint bulk_decision_batch_items check (pg_catalog.cardinality(approval_request_ids) > 0)
+  recorded_at timestamptz not null default now()
 );
 create index bulk_decision_batch_approver on access.bulk_decision_batch (approver_user_id);
+
+-- An item a batch admitted (9.9; PRD-ACS-007): the request and the document version the approver reviewed, which the
+-- item's decision must still match. An item refused when the batch is opened (not found, off the allowlist, named
+-- twice, or at another version) is not admitted and goes to individual review. Written with its batch, never changed.
+create table access.bulk_decision_batch_item (
+  id uuid primary key,
+  bulk_decision_batch_id uuid not null references access.bulk_decision_batch (id),
+  approval_request_id uuid not null references access.approval_request (id),
+  document_version_id uuid not null,
+  recorded_at timestamptz not null default now(),
+  constraint bulk_decision_batch_item_once unique (bulk_decision_batch_id, approval_request_id)
+);
+create index bulk_decision_batch_item_request on access.bulk_decision_batch_item (approval_request_id);
 
 -- The stand-in grant a decision relied on, where it was one (access-and-approvals 9.5, 10), and the bulk batch it was
 -- made in (9.9). Null for every decision recorded before, as for one made directly. Adding a column with no value edits
@@ -104,6 +115,10 @@ create trigger refuse_row_change before update or delete on access.bulk_decision
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on access.bulk_decision_batch
   for each statement execute function kernel.refuse_change();
+create trigger refuse_row_change before update or delete on access.bulk_decision_batch_item
+  for each row execute function kernel.refuse_change();
+create trigger refuse_truncate before truncate on access.bulk_decision_batch_item
+  for each statement execute function kernel.refuse_change();
 
 -- The runtime role's privileges (code-house-rules 5.2). A grant is locked as an authority row (8.2), which needs
 -- UPDATE, as its guard allows anyway.
@@ -111,3 +126,4 @@ grant select, insert, update on access.stand_in_grant to aos_runtime;
 grant select, insert on access.stand_in_grant_action to aos_runtime;
 grant select, insert on access.stand_in_grant_change to aos_runtime;
 grant select, insert on access.bulk_decision_batch to aos_runtime;
+grant select, insert on access.bulk_decision_batch_item to aos_runtime;

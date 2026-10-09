@@ -492,7 +492,15 @@ export const standInGrantChange = access.table('stand_in_grant_change', {
 export const bulkDecisionBatch = access.table('bulk_decision_batch', {
   id: uuid('id').primaryKey(),
   approverUserId: uuid('approver_user_id').notNull(),
-  approvalRequestIds: uuid('approval_request_ids').array().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An item a bulk batch admitted, with the version the approver reviewed (9.9; PRD-ACS-007; migration 0041). */
+export const bulkDecisionBatchItem = access.table('bulk_decision_batch_item', {
+  id: uuid('id').primaryKey(),
+  bulkDecisionBatchId: uuid('bulk_decision_batch_id').notNull(),
+  approvalRequestId: uuid('approval_request_id').notNull(),
+  documentVersionId: uuid('document_version_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

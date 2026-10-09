@@ -1,12 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   dueRuleSchema,
+  SETUP_PAGE_CAP,
   type ExceptionParty,
   type MissingItem,
   type WorkItemRoutingDraft,
   type WorkItemRoutingList,
 } from '@apparel-os/schemas';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import {
   LOCK_STEP,
   lockTable,
@@ -283,12 +284,18 @@ export async function listRouting(
   actionTypes: readonly { readonly actionType: string; readonly module: string }[],
   names: (parties: readonly ExceptionParty[]) => Promise<(string | null)[]>,
   requests: (versionIds: readonly string[]) => Promise<ReadonlyMap<string, LatestRequest>>,
+  page: { readonly after?: string | undefined; readonly limit?: number | undefined } = {},
 ): Promise<Omit<WorkItemRoutingList, 'asOf'>> {
   const date = await context.businessDate();
-  const routings = await context.tx
+  const size = page.limit ?? SETUP_PAGE_CAP;
+  const read = await context.tx
     .select()
     .from(workItemRouting)
-    .orderBy(asc(workItemRouting.actionType), asc(workItemRouting.id));
+    .where(page.after === undefined ? undefined : gt(workItemRouting.id, page.after))
+    .orderBy(asc(workItemRouting.id))
+    .limit(size + 1);
+  const routings = read.slice(0, size);
+  const next = read.length > size ? (routings.at(-1)?.id ?? null) : null;
   const versions =
     routings.length === 0
       ? []
@@ -342,5 +349,6 @@ export async function listRouting(
             ],
       ),
     })),
+    next,
   };
 }

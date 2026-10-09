@@ -38,6 +38,7 @@ import { capturingLogger } from './support/jobs.js';
 import { writeSyntheticSites } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F05-T02: due times and escalation for approvals and tasks (access-and-approvals 9.4, 11.1, 11.3, 13.2, 15 test
 // 20a; module-map 4.8; PRD-ACS-010; GC3-8, DEC-105). Routing is prepared and approved through the HTTP API; the inbox's
@@ -52,6 +53,7 @@ const SYNTHETIC_LIMITS = { idleLockSeconds: 3600, absoluteSeconds: 7200 };
 const SYNTHETIC_DUE = { format: 'elapsed-minutes-v1', minutes: 60 } as const;
 const SITE = '01900000-0000-7000-8000-0000000f5001';
 const OTHER_SITE = '01900000-0000-7000-8000-0000000f5002';
+const THIRD_SITE = '01900000-0000-7000-8000-0000000f5003';
 
 const MODULE = syntheticIdentifier('routing');
 const BOOKING_TYPE = `${MODULE}.booking`;
@@ -134,7 +136,7 @@ beforeAll(async () => {
     })
   ).assignmentId;
   approveReasonId = await writeSyntheticReason(database, 'approve');
-  await writeSyntheticSites(database, [SITE, OTHER_SITE]);
+  await writeSyntheticSites(database, [SITE, OTHER_SITE, THIRD_SITE]);
   clock = new SyntheticClock();
   api = await startAccessApp(world, keys, {
     clock,
@@ -303,9 +305,9 @@ async function bookingAt(siteId: string): Promise<DeliveredEvent<Record<string, 
 const publish = inboxConsumers.find((each) => each.name === 'inbox.publish-approval');
 const escalate = inboxJobKinds.find((each) => each.name === 'inbox.escalate-overdue');
 
-async function received(event: DeliveredEvent<Record<string, unknown>>) {
+async function received(event: DeliveredEvent<Record<string, unknown>>, at: Date = clock.now()) {
   if (publish === undefined) throw new Error('no consumer');
-  await run((context) => publish.handle(context, event, { logger: log.logger }));
+  await run((context) => publish.handle(context, event, { logger: log.logger }), at);
   const [item] = await rows<{ id: string; due_at: Date | null; site_id: string | null }>(
     'select id, due_at, site_id from inbox.work_item where owner_record_id = $1',
     [event.subject.recordId],
@@ -408,6 +410,60 @@ describe('task and approval routing (access-and-approvals 9.4, 11.3; GC3-8, DEC-
     expect((await myWork(bookingApprover)).map((each) => each.id)).toContain(item.id);
   });
 
+  it('PRD-MOD-010 an item delivered after a routing change takes the version in force when it was requested', async () => {
+    const first = await prepare({
+      actionType: BOOKING,
+      siteId: THIRD_SITE,
+      escalation: { kind: 'user', userId: recipient.id },
+    })();
+    expect((await decide(approver, first)).status).toBe(200);
+    const tomorrow = new Date(clock.now().getTime() + 86_400_000).toISOString().slice(0, 10);
+    const second = await prepare({
+      actionType: BOOKING,
+      siteId: THIRD_SITE,
+      escalation: { kind: 'user', userId: recipient.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 120 },
+      validFrom: tomorrow,
+    })();
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect((await decide(approver, second)).status).toBe(200);
+    const event = await bookingAt(THIRD_SITE);
+    // Delivered a day late, when the second version is in force: the first, in force when it was requested, applies.
+    const item = await received(event, new Date(event.eventTime.getTime() + 86_400_000));
+    expect(item.due_at?.getTime()).toBe(event.eventTime.getTime() + 60 * 60_000);
+  });
+
+  it('PRD-INT-008 code-house-rules 10.3 two overlapping escalation runs escalate an approval once', async () => {
+    const event = await bookingAt(SITE);
+    const item = await received(event);
+    if (escalate === undefined) throw new Error('no job kind');
+    const job = escalate;
+    const after = new Date(event.eventTime.getTime() + 61 * 60_000);
+    const held = gate();
+    const escalatedFirst = gate();
+    let firstPid = 0;
+    const first = run(async (context) => {
+      firstPid = await backendPid(context);
+      const answer = await job.run(context, { logger: log.logger });
+      escalatedFirst.open();
+      await held.wait;
+      return answer;
+    }, after);
+    await escalatedFirst.wait;
+    const second = run((context) => job.run(context, { logger: log.logger }), after);
+    await waitUntilAnyWaitingForLock(database, [firstPid]);
+    held.open();
+    expect(((await first) as { escalated: number }).escalated).toBeGreaterThanOrEqual(1);
+    expect(await second).toMatchObject({ escalated: 0 });
+    expect(await rows('select id from inbox.work_item_escalation where work_item_id = $1', [item.id])).toHaveLength(1);
+    expect(
+      await rows('select id from inbox.work_item_actor where work_item_id = $1 and user_id = $2', [
+        item.id,
+        recipient.id,
+      ]),
+    ).toHaveLength(1);
+  });
+
   it('PRD-ACS-010 test 20a a task past its due time escalates the same way', async () => {
     const owner = await writeSyntheticUser(database, world.organisations[0].code, keys, { label: 'TASK-OWNER' });
     const recordId = uuidv7();
@@ -436,5 +492,22 @@ describe('task and approval routing (access-and-approvals 9.4, 11.3; GC3-8, DEC-
         task?.id,
       ]),
     ).toEqual([{ user_id: owner.id }, { user_id: recipient.id }]);
+  });
+});
+
+describe('the list of routings (code-house-rules 12.1)', () => {
+  it('PRD-PRF-004 is read a page at a time by a cursor', async () => {
+    const cookie = await cookieOf(admin);
+    const all = workItemRoutingListSchema.parse((await get('/api/inbox/routing', cookie)).body);
+    expect(all.routings.length).toBeGreaterThan(1);
+    expect(all.next).toBeNull();
+    const first = workItemRoutingListSchema.parse((await get('/api/inbox/routing?limit=1', cookie)).body);
+    expect(first.routings.map((each) => each.id)).toEqual([all.routings[0]?.id]);
+    expect(first.next).toBe(all.routings[0]?.id);
+    const second = workItemRoutingListSchema.parse(
+      (await get(`/api/inbox/routing?limit=1&after=${first.next ?? ''}`, cookie)).body,
+    );
+    expect(second.routings.map((each) => each.id)).toEqual([all.routings[1]?.id]);
+    expect((await get('/api/inbox/routing?limit=101', cookie)).status).toBe(400);
   });
 });

@@ -263,6 +263,9 @@ export const accessApprovalCodes = declareCodes({
   // `access.stand-in-wider-than-authority`: on some day of its dates, an action, its scope or its limit goes beyond what
   // the person stood in for may decide through one assignment; `missing` names the action and the day.
   'access.stand-in-for-self': 'refused',
+  // A grant is approved by someone other than its preparer, the stand-in and the person stood in for (product owner,
+  // 9 Oct 2026); `missing` names the person as `stand-in-party`.
+  'access.stand-in-party': 'refused',
   'access.stand-in-wider-than-authority': 'refused',
   'access.stand-in-grant-not-found': 'not-found',
   // An approved grant of the same stand-in, person stood in for and exact scope overlaps its dates (code-house-rules 7.3).
@@ -270,6 +273,10 @@ export const accessApprovalCodes = declareCodes({
   // Bulk approval (9.9; PRD-ACS-011, PRD-ACS-019, POL-02.19; S1-F05-T02): `access.bulk-not-allowed`: an item's action
   // type is not on the allowlist in force today, so nothing is decided; `missing` names the action type.
   'access.bulk-not-allowed': 'refused',
+  // Bulk approval's items (9.9): a request named more than once in one selection goes to individual review each time;
+  // a selection with no item is refused as a whole.
+  'access.bulk-item-duplicated': 'refused',
+  'access.bulk-selection-empty': 'refused',
 });
 
 /**

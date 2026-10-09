@@ -43,6 +43,23 @@ describe('a grant is never wider than its giver (access-and-approvals 10)', () =
     expect(scopeWithin(ALL, atSites('a'))).toBe(false);
   });
 
+  it('PRD-ACS-021 a Store or unit is within a selected Site or Store that covers it on the day, as the place tree expands it', () => {
+    const atStore = (type: 'store' | 'business-unit', id: string): AssignmentScope => ({
+      ...ALL,
+      place: { kind: 'selected', members: [{ type, id }] },
+    });
+    const expansions = new Map([['site:a', { storeIds: ['s1'], businessUnitIds: ['u1'] }]]);
+    expect(scopeWithin(atStore('store', 's1'), atSites('a'), expansions)).toBe(true);
+    expect(scopeWithin(atStore('business-unit', 'u1'), atSites('a'), expansions)).toBe(true);
+    expect(scopeWithin(atStore('store', 's2'), atSites('a'), expansions)).toBe(false);
+    // Without the expansion, only the same member is within.
+    expect(scopeWithin(atStore('store', 's1'), atSites('a'))).toBe(false);
+    // A Site is never within a Store.
+    const storeExpansions = new Map([['store:s1', { storeIds: [], businessUnitIds: ['u1'] }]]);
+    expect(scopeWithin(atSites('a'), atStore('store', 's1'), storeExpansions)).toBe(false);
+    expect(scopeWithin(atStore('business-unit', 'u1'), atStore('store', 's1'), storeExpansions)).toBe(true);
+  });
+
   it('PRD-ACS-005 an empty dimension is within nothing, and nothing is within one', () => {
     const empty: AssignmentScope = { ...ALL, brand: { kind: 'empty' } };
     expect(scopeWithin(empty, ALL)).toBe(false);

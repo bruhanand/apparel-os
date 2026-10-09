@@ -2,7 +2,7 @@ import type { ApprovalRequestView } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../api';
-import { readQuery } from '../api/query';
+import { allPagesQuery, readQuery } from '../api/query';
 import { t, type MessageId } from '../messages/catalogue';
 import { PersonaChip } from '../shell/AppShell';
 import { useSession } from '../shell/session';
@@ -160,7 +160,7 @@ function SettingFacts({ view }: { view: ApprovalRequestView }) {
 /** An approval limit: its action, holder, limit on its basis, Unknown authority and dates (9.2; S1-F05-T01). */
 function LimitFacts({ view }: { view: ApprovalRequestView }) {
   const query = useQuery({
-    ...readQuery(api, 'listApprovalLimits', {}),
+    ...allPagesQuery(api, 'listApprovalLimits'),
     enabled: useViewable('access.approval_limit'),
   });
   const limit = query.data?.limits.find((each) => each.id === view.document.recordId);

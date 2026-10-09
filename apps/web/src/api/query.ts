@@ -60,3 +60,42 @@ export function createQueryClient(onSessionRefused: (refused: 'locked' | 'ended'
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } },
   });
 }
+
+/** The paged setup lists a screen reads whole, and the field each keeps its rows in (code-house-rules 12.1). */
+const PAGED_ROWS = {
+  listApprovalLimits: 'limits',
+  listStandInGrants: 'grants',
+  listWorkItemRouting: 'routings',
+} as const;
+type PagedName = keyof typeof PAGED_ROWS;
+
+/**
+ * The query options of a paged setup list read whole: page after page by the cursor the server gives, each within its
+ * cap, until the last, the rows joined in order (code-house-rules 12.1 "Reads"). For a screen that shows or looks up
+ * every row; a refusal is thrown as ApiFailure.
+ */
+export function allPagesQuery<K extends PagedName>(client: ApiClient<Table>, name: K) {
+  type Data = Awaited<ReturnType<ReturnType<typeof readQuery<K>>['queryFn']>>;
+  type Page = Record<string, unknown> & { readonly next: string | null };
+  const read = async (after: string | undefined): Promise<Page> => {
+    const input = { query: after === undefined ? {} : { after } } as CallInput<Table[K]>;
+    const result = await client.call(name, input);
+    if (result.ok) return result.data;
+    throw new ApiFailure(result.status, result.error);
+  };
+  return {
+    queryKey: [name, 'all'] as const,
+    queryFn: async (): Promise<Data> => {
+      const field = PAGED_ROWS[name];
+      const first = await read(undefined);
+      const rows = [...(first[field] as readonly unknown[])];
+      let next = first.next;
+      while (next !== null) {
+        const page = await read(next);
+        rows.push(...(page[field] as readonly unknown[]));
+        next = page.next;
+      }
+      return { ...first, [field]: rows, next: null } as unknown as Data;
+    },
+  };
+}

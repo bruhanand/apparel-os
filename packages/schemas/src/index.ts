@@ -14,9 +14,11 @@ export {
   personaIdSchema,
   personasHeldSchema,
   recordVersionRefSchema,
+  SETUP_PAGE_CAP,
+  setupPageQuerySchema,
   totpCodeSchema,
 } from './common.js';
-export type { PersonaId, RecordVersionRef } from './common.js';
+export type { PersonaId, RecordVersionRef, SetupPageQuery } from './common.js';
 
 export {
   databaseNameSchema,

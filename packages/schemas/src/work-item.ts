@@ -101,5 +101,7 @@ export const workItemRoutingListSchema = z.strictObject({
       ),
     }),
   ),
+  /** The cursor of the next page, or null on the last (code-house-rules 12.1). */
+  next: idSchema.nullable(),
 });
 export type WorkItemRoutingList = z.infer<typeof workItemRoutingListSchema>;

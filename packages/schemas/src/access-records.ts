@@ -151,5 +151,7 @@ export const approvalLimitListSchema = z.strictObject({
   asOf,
   actionTypes: z.array(z.strictObject({ actionType: z.string().min(1), basis: moneyBasisSchema })),
   limits: z.array(approvalLimitRecordSchema),
+  /** The cursor of the next page, or null on the last (code-house-rules 12.1). */
+  next: idSchema.nullable(),
 });
 export type ApprovalLimitList = z.infer<typeof approvalLimitListSchema>;

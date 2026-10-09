@@ -99,6 +99,28 @@ describe('the authority of one approver (access-and-approvals 9.2, 9.3)', () => 
     });
   });
 
+  it('access-and-approvals 9.2 an individual limit replaces the role limits of that user for that action through every assignment', () => {
+    const second = { assignmentId: '01900000-0000-7000-8000-00000000c002', roleId: OTHER_ROLE };
+    const otherRole = {
+      ...roleLimit('L1', { amount: paise(100_000) }),
+      holder: { kind: 'role' as const, roleId: OTHER_ROLE, scope: ALL },
+    };
+    const individual: LimitRow = {
+      id: 'L2',
+      holder: { kind: 'individual', userId: USER, roleAssignmentId: ASSIGNMENT.assignmentId },
+      amount: paise(1_000),
+      unlimited: false,
+      coversUnknown: false,
+    };
+    // The other assignment's role limit would cover the value, but the user's individual limit replaces it.
+    expect(authorityOf(USER, [ASSIGNMENT, second], [otherRole, individual], coversAll, known(50))).toEqual({
+      kind: 'above',
+      highest: individual,
+    });
+    // Through the other assignment alone, the individual limit still replaces the role's, and gives nothing there.
+    expect(authorityOf(USER, [second], [otherRole, individual], coversAll, known(5))).toEqual({ kind: 'no-limit' });
+  });
+
   it('DEC-043 of several limits that cover, the lowest is relied on; explicit unlimited authority comes after', () => {
     const second = { assignmentId: '01900000-0000-7000-8000-00000000c002', roleId: OTHER_ROLE };
     const high = roleLimit('L1', { amount: paise(100_000) });

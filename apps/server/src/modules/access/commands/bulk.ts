@@ -1,9 +1,16 @@
-import { paise, uuidv7 } from '@apparel-os/domain';
-import { bulkTotals, type ApprovalValue, type BulkTotal, type MissingItem, type MoneyBasis } from '@apparel-os/schemas';
+import { uuidv7 } from '@apparel-os/domain';
+import { bulkTotals, type BulkTotal, type MissingItem } from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
-import { approvalRequest, approvalRuleSetting, approvalRuleSettingVersion, bulkDecisionBatch } from '../db/schema.js';
+import {
+  approvalRequest,
+  approvalRuleSetting,
+  approvalRuleSettingVersion,
+  bulkDecisionBatch,
+  bulkDecisionBatchItem,
+} from '../db/schema.js';
+import { approvalValueOf } from './request-approval.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { checkFreshCode, takeFreshCode } from './fresh-code.js';
 
@@ -40,8 +47,9 @@ const notAllowed = (actionTypes: readonly string[]): CommandRefusal => ({
 });
 
 /**
- * Whether an item may be decided under a batch (9.9): the batch is the approver's and names the request, and the
- * request's action type is still on the allowlist today. Answers the refusal, or undefined.
+ * Whether an item may be decided under a batch (9.9): the batch is the approver's and admitted the request, the
+ * request is still at the version the batch bound it to (PRD-ACS-007), and its action type is still on the allowlist
+ * today. Answers the refusal, or undefined.
  */
 export async function batchRefusal(
   context: TransactionContext,
@@ -49,28 +57,44 @@ export async function batchRefusal(
   approverUserId: string,
   request: RequestRow,
 ): Promise<CommandRefusal | undefined> {
-  const [batch] = await context.tx.select().from(bulkDecisionBatch).where(eq(bulkDecisionBatch.id, batchId));
-  if (batch?.approverUserId !== approverUserId || !batch.approvalRequestIds.includes(request.id)) {
+  const [admitted] = await context.tx
+    .select({ approverUserId: bulkDecisionBatch.approverUserId, versionId: bulkDecisionBatchItem.documentVersionId })
+    .from(bulkDecisionBatchItem)
+    .innerJoin(bulkDecisionBatch, eq(bulkDecisionBatch.id, bulkDecisionBatchItem.bulkDecisionBatchId))
+    .where(
+      and(
+        eq(bulkDecisionBatchItem.bulkDecisionBatchId, batchId),
+        eq(bulkDecisionBatchItem.approvalRequestId, request.id),
+      ),
+    );
+  if (admitted?.approverUserId !== approverUserId) {
     return { kind: 'not-authorised', code: 'access.not-eligible', missing: [{ kind: 'bulk-batch' }] };
+  }
+  if (admitted.versionId !== request.documentVersionId) {
+    return { kind: 'conflict', code: 'kernel.stale-version', missing: [] };
   }
   if (!(await bulkAllowedToday(context, request.actionType))) return notAllowed([request.actionType]);
   return undefined;
 }
 
-/** A request's value on its basis, as the totals read it (PRD-ACS-015, PRD-MOD-015). */
-function valueOf(row: RequestRow): ApprovalValue {
-  if (row.valueKind === 'none' || row.valueBasis === null) return { kind: 'none' };
-  const basis = row.valueBasis as MoneyBasis;
-  return row.valueKind === 'known' && row.valueAmount !== null
-    ? { kind: 'known', basis, amount: paise(row.valueAmount) }
-    : { kind: 'unknown', basis };
+/** An item of the selection not admitted to the batch, by its place in the selection: it goes to individual review. */
+export interface RefusedItem {
+  readonly index: number;
+  readonly requestId: string;
+  readonly code: string;
+  readonly missing: MissingItem[];
 }
 
-/** What opening a batch answers: the batch, and the selection's totals by basis (9.9; PRD-ACS-019). */
+/** What opening a batch answers: the batch, the totals of the items it admitted by basis, and those it did not (9.9). */
 export type BatchOutcome =
   | {
       readonly kind: 'success';
-      readonly answer: { readonly batchId: string; readonly totals: BulkTotal[]; readonly noValueCount: number };
+      readonly answer: {
+        readonly batchId: string;
+        readonly totals: BulkTotal[];
+        readonly noValueCount: number;
+        readonly refused: RefusedItem[];
+      };
     }
   | { readonly kind: 'refusal'; readonly refusal: CommandRefusal; readonly causedBySecret: boolean };
 
@@ -82,11 +106,14 @@ export interface BatchInput {
 }
 
 /**
- * Opens a batch (9.9): every item's request exists, and every action type among them is on the allowlist today,
- * otherwise nothing is decided and the refusal names each action type that is not (POL-02.19); the reason is an approve
- * reason in force (POL-02.23); the fresh code is taken (3.3). Records the batch and its audit record, and answers the
- * totals of the selection by basis, Unknown counted apart and never as zero (PRD-ACS-019, PRD-MOD-015). Nothing is
- * decided here: each item is decided in its own transaction after.
+ * Opens a batch (9.9). Only a problem of the whole selection refuses it, and then nothing is decided: no items, no
+ * business date, an approve reason not in force (POL-02.23) or the fresh code refused (3.3). Each item is admitted or
+ * goes to individual review with its reason while the others go on: a request named more than once (each time,
+ * `access.bulk-item-duplicated`), not found (`access.approval-request-not-found`), of an action type off the allowlist
+ * today (`access.bulk-not-allowed`, naming it; POL-02.19), or no longer at the version named (`kernel.stale-version`;
+ * PRD-ACS-007). Records the batch with each admitted item and the version reviewed, and its audit record, and answers
+ * the totals of the admitted items by basis, Unknown counted apart and never as zero (PRD-ACS-019, PRD-MOD-015).
+ * Nothing is decided here: each admitted item is decided in its own transaction after.
  */
 export async function openBatch(
   context: TransactionContext,
@@ -107,16 +134,28 @@ export async function openBatch(
       missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
     });
   }
-  const ids = input.items.map((item) => item.requestId);
+  if (input.items.length === 0) return refused({ kind: 'refused', code: 'access.bulk-selection-empty', missing: [] });
+  const ids = [...new Set(input.items.map((item) => item.requestId))];
   const rows = await context.tx.select().from(approvalRequest).where(inArray(approvalRequest.id, ids));
-  if (rows.length !== ids.length)
-    return refused({ kind: 'not-found', code: 'access.approval-request-not-found', missing: [] });
-  const actionTypes = [...new Set(rows.map((row) => row.actionType))].sort();
-  const disallowed = [];
-  for (const actionType of actionTypes) {
-    if (!(await bulkAllowedToday(context, actionType))) disallowed.push(actionType);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const allowed = new Map<string, boolean>();
+  for (const actionType of new Set(rows.map((row) => row.actionType))) {
+    allowed.set(actionType, await bulkAllowedToday(context, actionType));
   }
-  if (disallowed.length > 0) return refused(notAllowed(disallowed));
+  const named = new Map<string, number>();
+  for (const item of input.items) named.set(item.requestId, (named.get(item.requestId) ?? 0) + 1);
+  const refusedItems: RefusedItem[] = [];
+  const admitted: { readonly row: RequestRow; readonly versionId: string }[] = [];
+  input.items.forEach((item, index) => {
+    const row = byId.get(item.requestId);
+    const refuse = (refusal: Pick<CommandRefusal, 'code' | 'missing'>) =>
+      refusedItems.push({ index, requestId: item.requestId, code: refusal.code, missing: [...refusal.missing] });
+    if ((named.get(item.requestId) ?? 0) > 1) refuse({ code: 'access.bulk-item-duplicated', missing: [] });
+    else if (row === undefined) refuse({ code: 'access.approval-request-not-found', missing: [] });
+    else if (allowed.get(row.actionType) !== true) refuse(notAllowed([row.actionType]));
+    else if (row.documentVersionId !== item.versionId) refuse({ code: 'kernel.stale-version', missing: [] });
+    else admitted.push({ row, versionId: item.versionId });
+  });
   const reasons = await dependencies.approveReasons();
   if (reasons.length === 0) {
     return refused({
@@ -133,18 +172,37 @@ export async function openBatch(
   const codeRefused = await takeFreshCode(await checkFreshCode(context, keys, approverUserId, input.totpCode));
   if (codeRefused !== undefined) return { kind: 'refusal', ...codeRefused };
   const batchId = uuidv7();
-  await context.tx.insert(bulkDecisionBatch).values({ id: batchId, approverUserId, approvalRequestIds: ids });
+  await context.tx.insert(bulkDecisionBatch).values({ id: batchId, approverUserId });
+  if (admitted.length > 0) {
+    await context.tx.insert(bulkDecisionBatchItem).values(
+      admitted.map(({ row, versionId }) => ({
+        id: uuidv7(),
+        bulkDecisionBatchId: batchId,
+        approvalRequestId: row.id,
+        documentVersionId: versionId,
+      })),
+    );
+  }
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: approverUserId },
     record: { module: 'access', type: 'bulk_decision_batch', id: batchId, versionId: batchId },
     operation: 'open-bulk-decision-batch',
-    changes: [{ kind: 'value', field: 'requests', before: null, after: ids }],
+    changes: [
+      {
+        kind: 'value',
+        field: 'items',
+        before: null,
+        after: admitted.map(({ row, versionId }) => ({ requestId: row.id, versionId })),
+      },
+    ],
     source: { kind: 'screen' },
   });
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const values = ids.flatMap((id) => {
-    const row = byId.get(id);
-    return row === undefined ? [] : [valueOf(row)];
-  });
-  return { kind: 'success', answer: { batchId, ...bulkTotals(values) } };
+  return {
+    kind: 'success',
+    answer: {
+      batchId,
+      ...bulkTotals(admitted.map(({ row }) => approvalValueOf(row))),
+      refused: refusedItems,
+    },
+  };
 }

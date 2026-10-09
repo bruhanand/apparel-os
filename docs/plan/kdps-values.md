@@ -12,7 +12,7 @@
 | RR-055 | GC3-6; KDPS Owner 54 | How long a fresh authenticator code stays fresh for protected actions | KDPS Owner | S1-F01 | Live S1 | Yes: until set, every protected action asks again |
 | RR-056 | `POL-02.23`; KDPS Owner 45; GC3-12 | The approve and reject reason list. Deciding is unavailable until a list is in force; the first list is approved with a free-text reason (`DEC-104`) | KDPS Owner, Admin | S1-F01 | Live S1; on `kdps-test` the first list is a test setting | Yes, a labelled synthetic list |
 | RR-057 | MM-8; KDPS Owner 49 | Who approves Site readiness and each business unit's activity | KDPS Owner | S1-F04 | Live S1 | Yes |
-| RR-058 | GC3-8; KDPS Owner 52 | Due times and escalation recipients for approvals and tasks, per action type and Site | KDPS Owner, Admin | S1-F05 | Live S1 | Yes: items carry no due time until set |
+| RR-058 | GC3-8; KDPS Owner 52 | Due times and escalation recipients for approvals and tasks, per action type and Site, and whether a due time counts calendar or working hours (the builders' `elapsed-minutes-v1` counts calendar minutes, for synthetic work only; access-and-approvals 9.4) | KDPS Owner, Admin | S1-F05 | Live S1 | Yes: items carry no due time until set |
 | RR-059 | Alignment report B-9; KDPS Owner 5; `POL-02.19`, `POL-02.20` | The bulk-approval allowlist; named stand-ins, scopes, limits and periods | KDPS Owner, Admin | S1-F05 | Live S1 | Yes: an empty allowlist allows nothing |
 | RR-060 | GC5-1; Accounts 14 | Start and end of the financial year for yearly series | Accounts, CA | S1-F08, S1-F09, S1-F12 | Live S1; bills in S4 | Yes |
 | RR-061 | GC4-1; Accounts 15 | The periods of each book inside the financial year | Accounts, CA | S1-F09 | Live S2 (first live posting) | Yes |

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
-import { readQuery } from '../api/query';
+import { allPagesQuery, readQuery } from '../api/query';
 import { actionTitle } from '../approvals/subject';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/StandardStates';
@@ -211,7 +211,7 @@ function WorkRuleForm({ list }: { list: WorkItemRoutingList }) {
 /** The approvals and tasks tab. */
 export function WorkRoutingTab() {
   const timeZone = useTimeZone();
-  const query = useQuery(readQuery(api, 'listWorkItemRouting', {}));
+  const query = useQuery(allPagesQuery(api, 'listWorkItemRouting'));
   const [adding, setAdding] = useState(false);
   return (
     <div className="flex flex-col gap-4">

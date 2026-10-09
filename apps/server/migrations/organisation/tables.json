@@ -401,6 +401,14 @@
       "why": "Links the decisions of one bulk approval; read with them by access; only access code reads it"
     },
     {
+      "table": "access.bulk_decision_batch_item",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 9.9, 13.1",
+      "why": "The items a bulk approval admitted, each with the version reviewed; read by access when each is decided; only access code reads it"
+    },
+    {
       "table": "access.approval_request",
       "class": "unscoped",
       "marks": ["locked"],
@@ -435,7 +443,7 @@
     {
       "table": "inbox.work_item",
       "class": "unscoped",
-      "marks": [],
+      "marks": ["locked"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "access-and-approvals 11, 13.2; module-map 4.8",
       "why": "My work needs no permission (access-and-approvals 9.11, 11.2), so no grant can admit its reader through row-level security; who may act is checked when the list is read; only inbox code reads it"

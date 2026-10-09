@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
-import { readQuery } from '../api/query';
+import { allPagesQuery, readQuery } from '../api/query';
 import { actionTitle } from '../approvals/subject';
 import { describedBy, FormField } from '../forms/FormField';
 import { withStartDateChecks } from '../forms/start-date';
@@ -59,7 +59,7 @@ function GrantFormFields() {
   const today = useBusinessToday();
   const usersGranted = useGranted('access.user', 'view');
   const users = useQuery({ ...readQuery(api, 'listUsers', {}), enabled: usersGranted });
-  const grants = useQuery(readQuery(api, 'listStandInGrants', {}));
+  const grants = useQuery(allPagesQuery(api, 'listStandInGrants'));
   const structure = useQuery(readQuery(api, 'readMasterLists', { query: { date: today } }));
   const submission = useSubmission('prepareStandInGrant', READS);
   const form = useForm<GrantForm>({

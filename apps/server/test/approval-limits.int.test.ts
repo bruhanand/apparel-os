@@ -685,3 +685,16 @@ describe('the recheck under the locks (access-and-approvals 9.7; test 15; DEC-06
     expect(await check(100_001)).toMatchObject({ code: 'access.approval-value-exceeded' });
   });
 });
+
+describe('the list of limits (code-house-rules 12.1)', () => {
+  it('PRD-PRF-004 is read a page at a time by a cursor, newest first', async () => {
+    const all = await as(admin.id, (c) => access.listApprovalLimits(c));
+    expect(all.limits.length).toBeGreaterThan(1);
+    expect(all.next).toBeNull();
+    const first = await as(admin.id, (c) => access.listApprovalLimits(c, { limit: 1 }));
+    expect(first.limits.map((each) => each.id)).toEqual([all.limits[0]?.id]);
+    expect(first.next).toBe(all.limits[0]?.id);
+    const second = await as(admin.id, (c) => access.listApprovalLimits(c, { after: first.next ?? '', limit: 1 }));
+    expect(second.limits.map((each) => each.id)).toEqual([all.limits[1]?.id]);
+  });
+});

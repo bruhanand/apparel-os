@@ -15,7 +15,7 @@ import {
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
-import { idSchema, totpCodeSchema } from './common.js';
+import { idSchema, setupPageQuerySchema, totpCodeSchema } from './common.js';
 import {
   credentialResetRequestSchema,
   credentialResetResponseSchema,
@@ -881,6 +881,7 @@ export const routes = {
     path: '/api/access/approval-limits',
     access: { kind: 'action', action: 'view', recordType: 'access.approval_limit' },
     command: false,
+    query: setupPageQuerySchema,
     response: approvalLimitListSchema,
     codes: HISTORY_CODES,
   }),
@@ -913,6 +914,7 @@ export const routes = {
     path: '/api/access/stand-in-grants',
     access: { kind: 'action', action: 'view', recordType: 'access.stand_in_grant' },
     command: false,
+    query: setupPageQuerySchema,
     response: standInGrantListSchema,
     codes: HISTORY_CODES,
   }),
@@ -994,6 +996,7 @@ export const routes = {
       'access.reason-not-in-force',
       'access.not-eligible',
       'access.self-preparation',
+      'access.stand-in-party',
       'access.authenticator-code-refused',
       'access.enrolment-not-started',
       'access.approval-not-open',
@@ -1041,8 +1044,7 @@ export const routes = {
       'access.session-locked',
       'access.sign-in-incomplete',
       'access.business-date-not-set',
-      'access.approval-request-not-found',
-      'access.bulk-not-allowed',
+      'access.bulk-selection-empty',
       'access.no-reason-list-in-force',
       'access.reason-not-in-force',
       'access.not-eligible',
@@ -1103,6 +1105,7 @@ export const routes = {
     path: '/api/inbox/routing',
     access: { kind: 'action', action: 'view', recordType: 'inbox.work_item_routing' },
     command: false,
+    query: setupPageQuerySchema,
     response: workItemRoutingListSchema,
     codes: HISTORY_CODES,
   }),

@@ -4,16 +4,23 @@ import type { AssignmentScope } from '@apparel-os/schemas';
 // Approval limits: who may decide a valued request and to whom it is offered (access-and-approvals 9.2, 9.3, 9.4;
 // POL-02.09, POL-02.15, PRD-ACS-015, PRD-ACS-016; DEC-043). Pure: no database, no clock.
 
+/**
+ * Authority over a value on a basis, as a limit or a stand-in grant's action states it (9.2, 10; PRD-ACS-016): an
+ * amount in paise, or null when it states none (PRD-MOD-014); explicit unlimited authority; and explicit authority over
+ * Unknown value, apart.
+ */
+export interface ValueAuthority {
+  readonly amount: Paise | null;
+  readonly unlimited: boolean;
+  readonly coversUnknown: boolean;
+}
+
 /** One approval limit in force today for the request's action type, as the database keeps it (13.1). */
-export interface LimitRow {
+export interface LimitRow extends ValueAuthority {
   readonly id: string;
   readonly holder:
     | { readonly kind: 'role'; readonly roleId: string; readonly scope: AssignmentScope }
     | { readonly kind: 'individual'; readonly userId: string; readonly roleAssignmentId: string };
-  /** The limit on the rule's basis, in paise, or null when it states no value (PRD-MOD-014). */
-  readonly amount: Paise | null;
-  readonly unlimited: boolean;
-  readonly coversUnknown: boolean;
 }
 
 /** An assignment in force that grants approve on the request's record type and covers its facts (9.3). */
@@ -37,9 +44,10 @@ export type Authority =
   | { readonly kind: 'unknown-not-covered' };
 
 /**
- * The limits that apply through one assignment (9.2): the user's individual limits naming that assignment, which
- * replace the role's for the user and action; otherwise the limits of the assignment's role whose scope covers the
- * request's facts (`covers`, as Authorise matches a scope; 5.3).
+ * The limits that apply through one assignment (9.2): where the user holds an individual limit for the action, through
+ * any assignment, it replaces every role limit of theirs for that action, so only their individual limits naming this
+ * assignment apply through it, so another role never lifts it (the narrower reading of S1-F05-T01); otherwise the limits
+ * of the assignment's role whose scope covers the request's facts (`covers`, as Authorise matches a scope; 5.3).
  */
 export function limitsThrough(
   actorId: string,
@@ -47,13 +55,12 @@ export function limitsThrough(
   limits: readonly LimitRow[],
   covers: (scope: AssignmentScope) => boolean,
 ): LimitRow[] {
-  const individual = limits.filter(
-    (limit) =>
-      limit.holder.kind === 'individual' &&
-      limit.holder.userId === actorId &&
-      limit.holder.roleAssignmentId === assignment.assignmentId,
-  );
-  if (individual.length > 0) return individual;
+  const individual = limits.filter((limit) => limit.holder.kind === 'individual' && limit.holder.userId === actorId);
+  if (individual.length > 0) {
+    return individual.filter(
+      (limit) => limit.holder.kind === 'individual' && limit.holder.roleAssignmentId === assignment.assignmentId,
+    );
+  }
   return limits.filter(
     (limit) => limit.holder.kind === 'role' && limit.holder.roleId === assignment.roleId && covers(limit.holder.scope),
   );
@@ -63,7 +70,7 @@ export function limitsThrough(
  * Whether a limit covers a value (9.2, 9.3): a known value at most its amount, or any known value under explicit
  * unlimited authority; an Unknown value only under explicit authority over Unknown (PRD-ACS-016).
  */
-export function limitCovers(limit: LimitRow, value: LimitedValue): boolean {
+export function limitCovers(limit: ValueAuthority, value: LimitedValue): boolean {
   if (value.kind === 'unknown') return limit.coversUnknown;
   return limit.unlimited || (limit.amount !== null && value.amountPaise <= limit.amount);
 }

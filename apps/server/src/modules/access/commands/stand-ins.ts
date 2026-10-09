@@ -1,4 +1,5 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
+import { SETUP_PAGE_CAP } from '@apparel-os/schemas';
 import type {
   AssignmentScope,
   LimitAuthority,
@@ -10,7 +11,7 @@ import type {
   StandInGrantList,
   StandInGrantRecord,
 } from '@apparel-os/schemas';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import {
   lockTable,
   sqlStateOf,
@@ -24,7 +25,8 @@ import { standInGrant, standInGrantAction, standInGrantChange } from '../db/sche
 import { limitsThrough } from '../domain/approval-limits.js';
 import type { ApprovalRule } from '../domain/approval-rules.js';
 import { scopeKeyOf } from '../domain/scope.js';
-import { limitGivesAction, scopeWithin, type GrantAction } from '../domain/stand-ins.js';
+import { limitGivesAction, placeKey, scopeWithin, type GrantAction, type PlaceCover } from '../domain/stand-ins.js';
+import type { ScopeMembers } from '../contracts/scope-members.js';
 import { standInChanged } from '../events.js';
 import { assignmentsInForce } from '../queries/assignments.js';
 import { latestRequests, userNames, versionView } from '../queries/access-records.js';
@@ -54,6 +56,12 @@ const EXCLUSION_VIOLATION = '23P01';
 /** A stand-in grant, as a step-0 lock target (code-house-rules 8.2 "Authority first"). */
 export function grantTarget(grantId: string, mode: LockMode): LockTarget {
   return { table: STAND_IN_GRANT, id: grantId, mode };
+}
+
+/** A page of a setup list (code-house-rules 12.1): after the record `after` names, at most `limit` (the cap). */
+export interface SetupPage {
+  readonly after?: string | undefined;
+  readonly limit?: number | undefined;
 }
 
 /** A grant in force for one action type, as who may decide reads it (9.3, 10). */
@@ -120,12 +128,16 @@ export async function grantsInForce(
  */
 async function widerRefusal(
   context: TransactionContext,
-  rules: ReadonlyMap<string, ApprovalRule>,
-  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  dependencies: {
+    readonly rules: ReadonlyMap<string, ApprovalRule>;
+    readonly registry: ReadonlyMap<string, RecordTypeDeclaration>;
+    readonly scopeMembers: readonly ScopeMembers[];
+  },
   draft: Pick<StandInGrantDraft, 'forUserId' | 'scope' | 'validFrom' | 'validTo'> & {
     readonly actions: readonly GrantAction[];
   },
 ): Promise<CommandRefusal | undefined> {
+  const { rules, registry, scopeMembers } = dependencies;
   const actionTypes = sql.join(
     draft.actions.map((action) => sql`${action.actionType}`),
     sql`, `,
@@ -152,6 +164,12 @@ async function widerRefusal(
     for (const action of draft.actions) {
       const rule = rules.get(action.actionType);
       if (rule === undefined) return { kind: 'refused', code: 'access.action-type-not-declared', missing: [] };
+      const limits = rule.value === 'none' ? [] : await limitsInForce(context, day, action.actionType);
+      // The places the giver's assignments and limits select, expanded on the day (5.2; PRD-ACS-021).
+      const covers = await placeCovers(context, scopeMembers, day, [
+        ...assignments.map((assignment) => assignment.scope),
+        ...limits.flatMap((limit) => (limit.holder.kind === 'role' ? [limit.holder.scope] : [])),
+      ]);
       const covering = assignments.filter(
         (assignment) =>
           assignment.permissions.some(
@@ -161,14 +179,13 @@ async function widerRefusal(
               permission.action === 'approve',
           ) &&
           registry.has(rule.recordType) &&
-          scopeWithin(draft.scope, assignment.scope),
+          scopeWithin(draft.scope, assignment.scope, covers),
       );
-      const limits = rule.value === 'none' ? [] : await limitsInForce(context, day, action.actionType);
       const given = covering.some(
         (assignment) =>
           rule.value === 'none' ||
-          limitsThrough(draft.forUserId, assignment, limits, (scope) => scopeWithin(draft.scope, scope)).some((limit) =>
-            limitGivesAction(limit, action),
+          limitsThrough(draft.forUserId, assignment, limits, (scope) => scopeWithin(draft.scope, scope, covers)).some(
+            (limit) => limitGivesAction(limit, action),
           ),
       );
       if (!given) {
@@ -178,6 +195,30 @@ async function widerRefusal(
     }
   }
   return undefined;
+}
+
+/**
+ * The Stores and business units each selected Site and Store of the scopes covers on a day, through the scope
+ * contract's place expansion (access-and-approvals 5.1, 5.2; structure-and-masters 3.9), keyed by `placeKey`. A place
+ * no implementation expands is left out, and is then matched only by itself (10).
+ */
+async function placeCovers(
+  context: TransactionContext,
+  scopeMembers: readonly ScopeMembers[],
+  day: string,
+  scopes: readonly AssignmentScope[],
+): Promise<Map<string, PlaceCover>> {
+  const covers = new Map<string, PlaceCover>();
+  for (const scope of scopes) {
+    if (scope.kind !== 'dimensions' || scope.place.kind !== 'selected') continue;
+    for (const member of scope.place.members) {
+      if (member.type === 'business-unit' || covers.has(placeKey(member))) continue;
+      const expander = scopeMembers.find((each) => each.answers.includes(member.type) && each.expand !== undefined);
+      const expanded = await expander?.expand?.(context, member, day);
+      if (expanded !== undefined) covers.set(placeKey(member), expanded);
+    }
+  }
+  return covers;
 }
 
 /** The actions of a draft, with their limits, as the domain reads them. */
@@ -199,15 +240,22 @@ export async function listStandInGrants(
   context: TransactionContext,
   todayDate: string,
   rules: ReadonlyMap<string, ApprovalRule>,
+  page: SetupPage = {},
 ): Promise<Omit<StandInGrantList, 'asOf'>> {
-  const grants = await context.tx
+  const size = page.limit ?? SETUP_PAGE_CAP;
+  const read = await context.tx
     .select({
       grant: standInGrant,
       start: sql<string>`lower(${standInGrant.validDuring})::text`,
       end: sql<string>`upper(${standInGrant.validDuring})::text`,
     })
     .from(standInGrant)
-    .orderBy(desc(standInGrant.recordedAt), desc(standInGrant.id));
+    .where(page.after === undefined ? undefined : lt(standInGrant.id, page.after))
+    // Newest first: an identifier is a UUIDv7, in the order the grants were recorded (PRD-MOD-008).
+    .orderBy(desc(standInGrant.id))
+    .limit(size + 1);
+  const grants = read.slice(0, size);
+  const next = read.length > size ? (grants.at(-1)?.grant.id ?? null) : null;
   const actions =
     grants.length === 0
       ? []
@@ -259,6 +307,7 @@ export async function listStandInGrants(
         requestId: dated.request?.id ?? null,
       };
     }),
+    next,
   };
 }
 
@@ -268,7 +317,13 @@ export class StandInGrantChanges {
     /** Every approval rule of the composition: a grant gives approval actions only (10). */
     private readonly rules: ReadonlyMap<string, ApprovalRule>,
     private readonly registry: ReadonlyMap<string, RecordTypeDeclaration>,
+    /** The scope contract's implementations, whose place expansion the never-wider check uses (5.2, 10). */
+    private readonly scopeMembers: readonly ScopeMembers[] = [],
   ) {}
+
+  private get widerDependencies() {
+    return { rules: this.rules, registry: this.registry, scopeMembers: this.scopeMembers };
+  }
 
   /**
    * Records a stand-in grant (access-and-approvals 10, 9.11; PRD-ACS-018, POL-02.20): two different people, each with
@@ -293,7 +348,7 @@ export class StandInGrantChanges {
     for (const action of draft.actions) {
       if (!this.rules.has(action.actionType)) return refusal('refused', 'access.action-type-not-declared');
     }
-    const wider = await widerRefusal(context, this.rules, this.registry, { ...draft, actions: actionsOf(draft) });
+    const wider = await widerRefusal(context, this.widerDependencies, { ...draft, actions: actionsOf(draft) });
     if (wider !== undefined) return { kind: 'refusal', refusal: wider };
     const scopeKey = scopeKeyOf(draft.scope);
     const range = rangeOf(draft.validFrom, draft.validTo);
@@ -372,6 +427,15 @@ export class StandInGrantChanges {
     return rows.length > 0;
   }
 
+  /** The two people a grant names, neither of whom approves it (10; product owner, 9 Oct 2026; GC3-7). */
+  async partiesOf(context: TransactionContext, grantId: string): Promise<string[]> {
+    const [found] = await context.tx
+      .select({ standIn: standInGrant.standInUserId, forUser: standInGrant.forUserId })
+      .from(standInGrant)
+      .where(eq(standInGrant.id, grantId));
+    return found === undefined ? [] : [found.standIn, found.forUser];
+  }
+
   /** The authority row a decision on a grant locks at step 0, exclusively (code-house-rules 8.2). */
   authorityTargets(grantId: string): LockTarget[] {
     return [grantTarget(grantId, 'exclusive')];
@@ -406,7 +470,7 @@ export class StandInGrantChanges {
     const actions = (
       await context.tx.select().from(standInGrantAction).where(eq(standInGrantAction.standInGrantId, grantId))
     ).map(actionOf);
-    const wider = await widerRefusal(context, this.rules, this.registry, {
+    const wider = await widerRefusal(context, this.widerDependencies, {
       forUserId: grant.forUserId,
       scope: grant.scope as AssignmentScope,
       validFrom: start,

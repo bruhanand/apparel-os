@@ -59,7 +59,8 @@ export interface InboxInterface {
   close(context: TransactionContext, module: string, recordId: string, state: string): Promise<void>;
   /**
    * Escalate (11.3; PRD-ACS-010): adds the recipient to the open item of the owner's record, keeps every actor it
-   * has, and records the escalation. Refuses, as a defect of the owner, a record with no open item.
+   * has, and records the escalation, once per item: an item already escalated is left as it is (migration 0043).
+   * Refuses, as a defect of the owner, a record with no open item.
    */
   escalate(context: TransactionContext, module: string, recordId: string, recipient: ItemActor): Promise<void>;
 }
@@ -133,22 +134,30 @@ export class Inbox implements InboxInterface {
         .limit(1)
     )[0];
     if (item === undefined) throw new CommandDefect('Escalate names a record with no open work item (11.3)');
+    // Once per item, so once per raise or reopen of an exception (migration 0043): an item already escalated gets no
+    // second recipient. The owner locks its record first (code-house-rules 8.2).
+    const recorded = await context.tx
+      .insert(workItemEscalation)
+      .values({
+        id: uuidv7(),
+        workItemId: item.id,
+        recipientUserId: 'userId' in recipient ? recipient.userId : null,
+        recipientRoleId: 'roleId' in recipient ? recipient.roleId : null,
+        escalatedAt: context.startedAt,
+      })
+      .onConflictDoNothing()
+      .returning({ id: workItemEscalation.id });
+    if (recorded.length === 0) return;
     await context.tx.insert(workItemActor).values(actorRow(item.id, recipient));
-    await context.tx.insert(workItemEscalation).values({
-      id: uuidv7(),
-      workItemId: item.id,
-      recipientUserId: 'userId' in recipient ? recipient.userId : null,
-      recipientRoleId: 'roleId' in recipient ? recipient.roleId : null,
-      escalatedAt: context.startedAt,
-    });
     await announceItems(context, [item.id]);
   }
 }
 
 /**
- * The due time and routing version of a task or an approval received now (9.4, 11.1; S1-F05-T02): from the routing in
- * force today for its action type at its Site, a null Site being its own key, never a fallback; undefined, so no due
- * time, while none is in force (RR-058; no default).
+ * The due time and routing version of a task or an approval (9.4, 11.1; S1-F05-T02): from the routing in force on the
+ * business date of when it was requested, for its action type at its Site, a null Site being its own key, never a
+ * fallback, so an item delivered late takes the version in force when it was requested; undefined, so no due time,
+ * while none was in force (RR-058; no default).
  */
 export async function routedDue(
   context: TransactionContext,
@@ -156,7 +165,7 @@ export async function routedDue(
   siteId: string | null,
   receivedAt: Date = context.startedAt,
 ): Promise<{ readonly dueAt: Date | null; readonly versionId: string } | undefined> {
-  const date = await context.businessDate();
+  const date = await context.businessDate(receivedAt);
   if (date.kind === 'not-set') return undefined;
   const version = await routingInForce(context, actionType, siteId, date.date);
   if (version === undefined) return undefined;

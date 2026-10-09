@@ -15,7 +15,13 @@ import {
   type RoutedOrganisation,
   type TransactionContext,
 } from '../src/kernel/index.js';
-import { Access, type ApprovalRule, type DecisionInput, type Preparer } from '../src/modules/access/index.js';
+import {
+  Access,
+  type ApprovalRule,
+  type DecisionInput,
+  type Preparer,
+  type ScopeMembers,
+} from '../src/modules/access/index.js';
 // The access module's own key reader, so the fresh-code check opens the synthetic factor secrets (11.2).
 import { OrganisationKeys } from '../src/modules/access/domain/organisation-keys.js';
 import { Audit } from '../src/modules/audit/index.js';
@@ -74,6 +80,20 @@ const rule = (actionType: string, recordType: string, value: ApprovalRule['value
 });
 const RULES = [rule(BOOKING, BOOKING_TYPE, 'cost'), rule(OFFER, OFFER_TYPE, 'none')];
 
+/** A SYNTHETIC place tree, as the scope contract expands it: one Site covering one Store (access-and-approvals 5.2). */
+const TREE_SITE = '01900000-0000-7000-8000-0000000f6001';
+const TREE_STORE = '01900000-0000-7000-8000-0000000f6002';
+const syntheticPlaces: ScopeMembers = {
+  answers: ['site', 'store', 'business-unit'],
+  notFound: () => Promise.resolve([]),
+  expand: (_context, place) =>
+    Promise.resolve(
+      place.type === 'site' && place.id === TREE_SITE
+        ? { storeIds: [TREE_STORE], businessUnitIds: [] }
+        : { storeIds: [], businessUnitIds: place.type === 'business-unit' ? [place.id] : [] },
+    ),
+};
+
 const ALL_MEMBERS: AssignmentScope = {
   kind: 'dimensions',
   legalEntity: { kind: 'all' },
@@ -130,6 +150,7 @@ beforeAll(async () => {
     registry: REGISTRY,
     approvalRules: RULES,
     composition: TEST_COMPOSITION,
+    scopeMembers: [syntheticPlaces],
   });
   const enrolled = (label: string) =>
     writeSyntheticUser(database, routed.organisationCode, keysEnvironment, { label, enrolled: true });
@@ -354,8 +375,9 @@ async function bulk(user: SyntheticUser, items: readonly { requestId: string; ve
     access.openBulkBatch(c, actor, { items, reason: { kind: 'listed', reasonId: approveReason }, totpCode }),
   );
   if (batch.kind !== 'success') return { batch, items: [] };
+  const refused = new Set(batch.answer.refused.map((each) => each.index));
   const outcomes = [];
-  for (const item of items) {
+  for (const item of items.filter((_, index) => !refused.has(index))) {
     outcomes.push(
       await as(user.id, (c) =>
         access.decideInBatch(c, actor, {
@@ -472,6 +494,27 @@ describe('stand-in grants (access-and-approvals 10; tests 18, 18a; PRD-ACS-018, 
     expect(await wider({})).toMatchObject({ kind: 'success' });
   });
 
+  it('PRD-ACS-021 a grant for a Store is within the giver’s selected Site that covers it; one for another Store is not', async () => {
+    const atSite = await bareUser('TREE-SITE-APPROVER');
+    await grantSynthetic(database, { kind: 'user', id: atSite.id }, [{ recordType: OFFER_TYPE, action: 'approve' }], {
+      registry: REGISTRY,
+      scope: { ...ALL_MEMBERS, place: { kind: 'selected', members: [{ type: 'site', id: TREE_SITE }] } },
+    });
+    const standIn = await bareUser('STAND-IN-TREE');
+    const atStore = (id: string) =>
+      grant({
+        standInUserId: standIn.id,
+        forUserId: atSite.id,
+        actions: [{ actionType: OFFER, limit: { kind: 'none' }, coversUnknown: false }],
+        scope: { ...ALL_MEMBERS, place: { kind: 'selected', members: [{ type: 'store', id }] } },
+      });
+    expect(await atStore(uuidv7())).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.stand-in-wider-than-authority' },
+    });
+    expect(await atStore(TREE_STORE)).toMatchObject({ kind: 'success' });
+  });
+
   it('PRD-MOD-010 two approved grants of one stand-in, giver and scope never overlap in time', async () => {
     const owner = await approver();
     await bookingLimit(owner, 1_000);
@@ -521,6 +564,131 @@ describe('stand-in grants (access-and-approvals 10; tests 18, 18a; PRD-ACS-018, 
     ).toMatchObject({ kind: 'refusal', refusal: { code: 'access.self-preparation' } });
   });
 
+  it('GC3-7 a grant is approved by someone other than its preparer, the stand-in and the person stood in for (product owner, 9 Oct 2026)', async () => {
+    const owner = await approver();
+    await bookingLimit(owner, 1_000);
+    // Both people named hold approve on stand-in grants, so only the rule of this test refuses them.
+    await grantSynthetic(database, { kind: 'user', id: owner.user.id }, [
+      { recordType: 'access.stand_in_grant', action: 'approve' },
+    ]);
+    const standIn = await bareUser('STAND-IN-PARTY');
+    await grantSynthetic(database, { kind: 'user', id: standIn.id }, [
+      { recordType: 'access.stand_in_grant', action: 'approve' },
+    ]);
+    const prepared = await grant({ standInUserId: standIn.id, forUserId: owner.user.id });
+    if (prepared.kind !== 'success') throw new Error(prepared.refusal.code);
+    const decision = { requestId: prepared.answer.requestId, versionId: prepared.answer.grantId, outcome: 'approve' };
+    for (const party of [standIn, owner.user]) {
+      expect(await decide(party, { ...decision, outcome: 'approve' })).toMatchObject({
+        kind: 'refusal',
+        refusal: { code: 'access.stand-in-party', missing: [{ kind: 'stand-in-party', userId: party.id }] },
+      });
+    }
+    expect(await decide(changeApprover, { ...decision, outcome: 'approve' })).toMatchObject({ kind: 'success' });
+  });
+
+  it('PRD-ACS-018 RR-462 grants do not chain: a stand-in gives nothing on to another person', async () => {
+    const owner = await approver();
+    await bookingLimit(owner, 1_000);
+    const standIn = await bareUser('STAND-IN-CHAIN-1');
+    const next = await bareUser('STAND-IN-CHAIN-2');
+    await approvedGrant({ standInUserId: standIn.id, forUserId: owner.user.id });
+    // A grant from the stand-in is wider than their own authority, which comes from no assignment of theirs.
+    expect(await grant({ standInUserId: next.id, forUserId: standIn.id })).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.stand-in-wider-than-authority' },
+    });
+    const { requestId, document } = await booking({ kind: 'known', rupees: 10 });
+    expect(await offered(next, requestId)).toBe(false);
+    expect(await decide(next, { requestId, versionId: document.versionId, outcome: 'approve' })).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.not-eligible' },
+    });
+  });
+
+  it('PRD-ACS-006 RR-462 a stand-in never decides a request the person stood in for prepared', async () => {
+    const owner = await approver();
+    await bookingLimit(owner, 1_000);
+    const ownerPreparing = await grantSynthetic(
+      database,
+      { kind: 'user', id: owner.user.id },
+      [{ recordType: BOOKING_TYPE, action: 'create' }],
+      { registry: REGISTRY },
+    );
+    const standIn = await bareUser('STAND-IN-GIVER-PREPARED');
+    await approvedGrant({ standInUserId: standIn.id, forUserId: owner.user.id });
+    const theirs = await requested(
+      BOOKING,
+      BOOKING_TYPE,
+      { kind: 'known', rupees: 10 },
+      { user: owner.user, assignmentId: ownerPreparing.assignmentId },
+    );
+    expect(await offered(standIn, theirs.requestId)).toBe(false);
+    expect(
+      await decide(standIn, { requestId: theirs.requestId, versionId: theirs.document.versionId, outcome: 'approve' }),
+    ).toMatchObject({ kind: 'refusal', refusal: { code: 'access.not-eligible' } });
+  });
+
+  it('PRD-ACS-018 RR-462 an access change may be delegated: a stand-in decides it through a grant', async () => {
+    const standIn = await bareUser('STAND-IN-ACCESS');
+    const limitApprover = await bareUser('LIMIT-APPROVER');
+    await grantSynthetic(database, { kind: 'user', id: limitApprover.id }, [
+      { recordType: 'access.approval_limit', action: 'approve' },
+    ]);
+    const grantId = await approvedGrant({
+      standInUserId: standIn.id,
+      forUserId: limitApprover.id,
+      actions: [{ actionType: 'access.approval_limit.change', limit: { kind: 'none' }, coversUnknown: false }],
+    });
+    const holder = await approver();
+    const prepared = await as(admin.id, (c) =>
+      access.prepareApprovalLimit(c, adminPreparer, {
+        actionType: BOOKING,
+        holder: { kind: 'role', roleId: holder.roleId, scope: ALL_MEMBERS },
+        limit: { kind: 'amount', amount: paise(100) },
+        coversUnknown: false,
+        origin: 'synthetic',
+        validFrom: today(),
+      }),
+    );
+    if (prepared.kind !== 'success') throw new Error(prepared.refusal.code);
+    expect(
+      await decide(standIn, {
+        requestId: prepared.answer.requestId,
+        versionId: prepared.answer.limitId,
+        outcome: 'approve',
+      }),
+    ).toMatchObject({ kind: 'success' });
+    expect(await decisionOf(prepared.answer.requestId)).toMatchObject({
+      stand_in_grant_id: grantId,
+      approver_user_id: standIn.id,
+    });
+  });
+
+  it('code-house-rules 12.4 a stand-in replays a decision only through a grant that still covers its scope and value', async () => {
+    const owner = await approver();
+    await bookingLimit(owner, 1_000);
+    const standIn = await bareUser('STAND-IN-REPLAY');
+    await approvedGrant({ standInUserId: standIn.id, forUserId: owner.user.id, validTo: dayFrom(1) });
+    // A later grant of the same people, from tomorrow, whose limit is below the value decided.
+    await approvedGrant({
+      standInUserId: standIn.id,
+      forUserId: owner.user.id,
+      validFrom: dayFrom(1),
+      validTo: dayFrom(3),
+      actions: [{ actionType: BOOKING, limit: { kind: 'amount', amount: paise(5_000) }, coversUnknown: false }],
+    });
+    const { requestId, document } = await booking({ kind: 'known', rupees: 100 });
+    expect(await decide(standIn, { requestId, versionId: document.versionId, outcome: 'approve' })).toMatchObject({
+      kind: 'success',
+    });
+    const replay = () =>
+      as(standIn.id, (c) => access.decisionReplayAccess(c, { kind: 'user', id: standIn.id }, requestId));
+    expect(await replay()).toMatchObject({ kind: 'allowed' });
+    offsetMs += 86_400_000;
+    expect(await replay()).toMatchObject({ kind: 'refused' });
+  });
+
   it('PRD-ACS-018 a grant expires by itself: once ended, the stand-in no longer sees or decides the covered items', async () => {
     const owner = await approver();
     await bookingLimit(owner, 1_000);
@@ -541,15 +709,61 @@ describe('stand-in grants (access-and-approvals 10; tests 18, 18a; PRD-ACS-018, 
 });
 
 describe('bulk approval (access-and-approvals 9.9; test 17; PRD-ACS-011, PRD-ACS-019, POL-02.19)', () => {
-  it('POL-02.19 an action type not on the allowlist is refused, and nothing is decided', async () => {
+  it('POL-02.19 9.9 an item off the allowlist, not found or named twice goes to individual review; the others go on', async () => {
     const holder = await approver();
+    await bookingLimit(holder, 1_000);
+    const first = await booking({ kind: 'known', rupees: 10 });
+    const twice = await booking({ kind: 'known', rupees: 20 });
     const offer = await requested(OFFER, OFFER_TYPE, { kind: 'none' });
-    const result = await bulk(holder.user, [{ requestId: offer.requestId, versionId: offer.document.versionId }]);
-    expect(result.batch).toMatchObject({
-      kind: 'refusal',
-      refusal: { code: 'access.bulk-not-allowed', missing: [{ kind: 'bulk-allowlist', actionType: OFFER }] },
+    const item = ({ requestId, document }: { requestId: string; document: { versionId: string } }) => ({
+      requestId,
+      versionId: document.versionId,
     });
+    const missing = { requestId: uuidv7(), versionId: uuidv7() };
+    const result = await bulk(holder.user, [item(first), item(offer), missing, item(twice), item(twice)]);
+    expect(result.batch).toMatchObject({
+      kind: 'success',
+      answer: {
+        totals: [{ basis: 'cost', known: 1_000, knownCount: 1, unknownCount: 0 }],
+        refused: [
+          { index: 1, requestId: offer.requestId, code: 'access.bulk-not-allowed' },
+          { index: 2, requestId: missing.requestId, code: 'access.approval-request-not-found' },
+          { index: 3, requestId: twice.requestId, code: 'access.bulk-item-duplicated' },
+          { index: 4, requestId: twice.requestId, code: 'access.bulk-item-duplicated' },
+        ],
+      },
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ kind: 'success', answer: { outcome: 'Approved' } });
     expect(await decisionOf(offer.requestId)).toBeUndefined();
+    expect(await decisionOf(twice.requestId)).toBeUndefined();
+  });
+
+  it('PRD-ACS-007 the batch binds each item to the version reviewed; an item at another version goes to individual review', async () => {
+    const holder = await approver();
+    await bookingLimit(holder, 1_000);
+    const current = await booking({ kind: 'known', rupees: 10 });
+    const stale = await booking({ kind: 'known', rupees: 20 });
+    const result = await bulk(holder.user, [
+      { requestId: current.requestId, versionId: current.document.versionId },
+      { requestId: stale.requestId, versionId: uuidv7() },
+    ]);
+    expect(result.batch).toMatchObject({
+      kind: 'success',
+      answer: { refused: [{ index: 1, requestId: stale.requestId, code: 'kernel.stale-version' }] },
+    });
+    const batchId = result.batch.kind === 'success' ? result.batch.answer.batchId : '';
+    expect(
+      (
+        await asOwner((c) =>
+          c.query(
+            `select approval_request_id, document_version_id from access.bulk_decision_batch_item
+             where bulk_decision_batch_id = $1`,
+            [batchId],
+          ),
+        )
+      ).rows,
+    ).toEqual([{ approval_request_id: current.requestId, document_version_id: current.document.versionId }]);
   });
 
   it('PRD-ACS-019 PRD-MOD-015 each item is its own decision; a failing one goes to individual review; Unknown is never added as zero', async () => {
@@ -641,8 +855,12 @@ describe('the bulk route (code-house-rules 12.1, 12.4; access-and-approvals 9.9)
     expect(signedIn.status).toBe(200);
     const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
     const key = uuidv7();
+    const missing = { requestId: uuidv7(), versionId: uuidv7() };
     const body = JSON.stringify({
-      items: [known, unknown].map(({ requestId, document }) => ({ requestId, versionId: document.versionId })),
+      items: [
+        ...[known, unknown].map(({ requestId, document }) => ({ requestId, versionId: document.versionId })),
+        missing,
+      ],
       reason: { kind: 'listed', reasonId: approveReason },
       totpCode: freshCode(holder.user),
     });
@@ -660,6 +878,7 @@ describe('the bulk route (code-house-rules 12.1, 12.4; access-and-approvals 9.9)
       items: [
         { requestId: known.requestId, outcome: 'Approved' },
         { requestId: unknown.requestId, outcome: 'individual-review', code: 'access.unknown-value-not-covered' },
+        { requestId: missing.requestId, outcome: 'individual-review', code: 'access.approval-request-not-found' },
       ],
     });
     const again = await send();
@@ -669,5 +888,18 @@ describe('the bulk route (code-house-rules 12.1, 12.4; access-and-approvals 9.9)
       c.query('select id from access.approval_decision where approval_request_id = $1', [known.requestId]),
     );
     expect(decisions.rows).toHaveLength(1);
+  });
+});
+
+describe('the list of grants (code-house-rules 12.1)', () => {
+  it('PRD-PRF-004 is read a page at a time by a cursor, newest first', async () => {
+    const all = await as(admin.id, (c) => access.listStandInGrants(c));
+    expect(all.grants.length).toBeGreaterThan(1);
+    expect(all.next).toBeNull();
+    const first = await as(admin.id, (c) => access.listStandInGrants(c, { limit: 1 }));
+    expect(first.grants.map((each) => each.id)).toEqual([all.grants[0]?.id]);
+    expect(first.next).toBe(all.grants[0]?.id);
+    const second = await as(admin.id, (c) => access.listStandInGrants(c, { after: first.next ?? '', limit: 1 }));
+    expect(second.grants.map((each) => each.id)).toEqual([all.grants[1]?.id]);
   });
 });

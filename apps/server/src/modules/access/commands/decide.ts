@@ -1,12 +1,5 @@
-import { paise, uuidv7 } from '@apparel-os/domain';
-import type {
-  AccessActionType,
-  ApprovalValue,
-  LimitStanding,
-  MissingItem,
-  MoneyBasis,
-  RecordTypeDeclaration,
-} from '@apparel-os/schemas';
+import { uuidv7 } from '@apparel-os/domain';
+import type { AccessActionType, LimitStanding, MissingItem, RecordTypeDeclaration } from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   CommandDefect,
@@ -31,14 +24,14 @@ import { authorise, authorisingAssignments } from '../queries/authorise.js';
 import { limitsInForce, type ApprovalLimitChanges } from './approval-limits.js';
 import { identityTarget, limitTarget, reliedAuthority } from './authority.js';
 import { batchRefusal, bulkAllowedToday, openBatch, type BatchInput, type BatchOutcome } from './bulk.js';
-import { grantsInForce, grantTarget, type StandInGrantChanges } from './stand-ins.js';
+import { grantsInForce, grantTarget, type GrantInForce, type StandInGrantChanges } from './stand-ins.js';
 import { grantActionCovers, type GrantAction } from '../domain/stand-ins.js';
 import { userInForce } from '../queries/users.js';
 import type { AccessChanges, Decider, Prepared } from './access-changes.js';
 import type { ApprovalSettingsChanges } from './approval-settings.js';
 import type { SecuritySettingsChanges } from './security-settings.js';
 import { checkFreshCode, takeFreshCode } from './fresh-code.js';
-import { preparersOf, requestFacts, storedPreparers } from './request-approval.js';
+import { approvalValueOf, preparersOf, requestFacts, storedPreparers } from './request-approval.js';
 import type { UserChanges } from './user-changes.js';
 
 // Deciding an approval request (access-and-approvals 9.3, 9.5, 9.6; module-map 6.2 flow A; PRD-ACS-006,
@@ -125,6 +118,11 @@ interface DocumentHandler {
   targets(context: TransactionContext, versionId: string): Promise<LockTarget[]>;
   /** The action types of other documents the decision decides with it, whose approve the decider needs too. */
   decidesWith?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /**
+   * The people the document names who may not decide it besides its preparers, such as the two people of a stand-in
+   * grant (access-and-approvals 10; product owner, 9 Oct 2026).
+   */
+  parties?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   /** A check of the document's own, under the locks, before the code is taken. */
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
   approve(context: TransactionContext, decider: Decider, versionId: string): Promise<Prepared<unknown>>;
@@ -156,18 +154,8 @@ const LIMIT_CODES: ReadonlySet<string> = new Set([
 
 /** A valued request's value on its basis, Unknown unless known (PRD-ACS-016, PRD-MOD-015). */
 function valueOf(request: RequestRow): LimitedValue {
-  return request.valueKind === 'known' && request.valueAmount !== null
-    ? { kind: 'known', amountPaise: paise(request.valueAmount) }
-    : { kind: 'unknown' };
-}
-
-/** A request's value as the approval panel shows it, with its basis (PRD-ACS-015). */
-function shownValue(request: RequestRow): ApprovalValue {
-  if (request.valueKind === 'none' || request.valueBasis === null) return { kind: 'none' };
-  const basis = request.valueBasis as MoneyBasis;
-  return request.valueKind === 'known' && request.valueAmount !== null
-    ? { kind: 'known', basis, amount: paise(request.valueAmount) }
-    : { kind: 'unknown', basis };
+  const value = approvalValueOf(request);
+  return value.kind === 'known' ? { kind: 'known', amountPaise: value.amount } : { kind: 'unknown' };
 }
 
 /** Another module's document: Decide changes nothing of it (module-map 6.2; access-and-approvals 9.5, 9.8). */
@@ -230,6 +218,8 @@ export class Approvals {
           // The grant, exclusively at step 0: a decision relying on it locks it shared (code-house-rules 8.2).
           authorityTargets: (_c, v) => Promise.resolve(standIns.authorityTargets(v)),
           targets: () => Promise.resolve([]),
+          // Neither the stand-in nor the person stood in for approves the grant (product owner, 9 Oct 2026; GC3-7).
+          parties: (c, v) => standIns.partiesOf(c, v),
           approve: (c, d, v) => standIns.approve(c, d, v, HELD),
           reject: (c, d, v) => standIns.reject(c, d, v, HELD),
         },
@@ -473,30 +463,70 @@ export class Approvals {
   ): Promise<Eligibility | undefined> {
     const date = await context.businessDate();
     if (date.kind === 'not-set') return undefined;
+    for (const grant of await this.grantsCovering(context, date.date, actor.id, request)) {
+      const independence = await this.independenceRefusal(context, actor.id, request);
+      if (independence !== undefined) return independence;
+      const giver = await this.eligibility(context, { kind: 'user', id: grant.forUserId }, request, 'own-assignments');
+      if (giver.kind !== 'eligible') continue;
+      return { ...giver, standIn: { grantId: grant.id, forUserId: grant.forUserId, action: grant.action } };
+    }
+    return undefined;
+  }
+
+  /**
+   * The Approved grants to a person in force on a date for the request's action type whose scope covers the request's
+   * facts as an assignment's would (5.3) and whose limit covers its value on the rule's basis (9.2, 10), first by
+   * identifier.
+   */
+  private async grantsCovering(
+    context: TransactionContext,
+    date: string,
+    actorId: string,
+    request: RequestRow,
+  ): Promise<GrantInForce[]> {
     const rule = this.ruleOf(request.actionType);
     const declaration = this.dependencies.registry.get(rule.recordType);
     if (declaration === undefined) throw new CommandDefect(`Record type ${rule.recordType} is not declared`);
     const { facts, movesTo } = requestFacts(request);
-    for (const grant of await grantsInForce(context, date.date, actor.id, request.actionType)) {
-      if (!scopeCoversMove(grant.scope, declaration, actor.id, facts, movesTo).covered) continue;
-      if (rule.value !== 'none' && !grantActionCovers(grant.action, valueOf(request))) continue;
-      const preparers = new Set([
-        ...(await storedPreparers(context, request.id)),
-        ...(rule.module === 'access' ? await preparersOf(context, request.actionType, request.documentVersionId) : []),
-      ]);
-      if (preparers.has(actor.id)) {
-        return {
+    return (await grantsInForce(context, date, actorId, request.actionType)).filter(
+      (grant) =>
+        scopeCoversMove(grant.scope, declaration, actorId, facts, movesTo).covered &&
+        (rule.value === 'none' || grantActionCovers(grant.action, valueOf(request))),
+    );
+  }
+
+  /**
+   * Independence (access-and-approvals 9.3; PRD-ACS-006, POL-02.08): the decider is none of the request's preparers,
+   * through any role, an access change's read again from its change rows and another module's those it named (9.1);
+   * nor one of the people its document names as parties, such as the two people of a stand-in grant (10; product owner,
+   * 9 Oct 2026). Answers the refusal, or undefined.
+   */
+  private async independenceRefusal(
+    context: TransactionContext,
+    actorId: string,
+    request: RequestRow,
+  ): Promise<Eligibility | undefined> {
+    const rule = this.ruleOf(request.actionType);
+    const preparers = new Set([
+      ...(await storedPreparers(context, request.id)),
+      ...(rule.module === 'access' ? await preparersOf(context, request.actionType, request.documentVersionId) : []),
+    ]);
+    if (preparers.has(actorId)) {
+      return {
+        kind: 'refused',
+        refusal: { kind: 'refused', code: 'access.self-preparation', missing: [{ kind: 'preparer', userId: actorId }] },
+      };
+    }
+    const parties = (await this.handlerOf(request.actionType).parties?.(context, request.documentVersionId)) ?? [];
+    if (parties.includes(actorId)) {
+      return {
+        kind: 'refused',
+        refusal: {
           kind: 'refused',
-          refusal: {
-            kind: 'refused',
-            code: 'access.self-preparation',
-            missing: [{ kind: 'preparer', userId: actor.id }],
-          },
-        };
-      }
-      const giver = await this.eligibility(context, { kind: 'user', id: grant.forUserId }, request, 'own-assignments');
-      if (giver.kind !== 'eligible') continue;
-      return { ...giver, standIn: { grantId: grant.id, forUserId: grant.forUserId, action: grant.action } };
+          code: 'access.stand-in-party',
+          missing: [{ kind: 'stand-in-party', userId: actorId }],
+        },
+      };
     }
     return undefined;
   }
@@ -567,21 +597,8 @@ export class Approvals {
     const first = covering.assignments[0];
     if (first === undefined) throw new CommandDefect('Eligibility relied on no assignment');
     let roleAssignmentId = first.assignmentId;
-    const preparers = new Set([
-      ...(await storedPreparers(context, request.id)),
-      // An access change's preparers are read again from its change rows; another module's are those it named (9.1).
-      ...(rule.module === 'access' ? await preparersOf(context, request.actionType, request.documentVersionId) : []),
-    ]);
-    if (preparers.has(actor.id)) {
-      return {
-        kind: 'refused',
-        refusal: {
-          kind: 'refused',
-          code: 'access.self-preparation',
-          missing: [{ kind: 'preparer', userId: actor.id }],
-        },
-      };
-    }
+    const independence = await this.independenceRefusal(context, actor.id, request);
+    if (independence !== undefined) return independence;
     // A value on a basis needs a limit of the approver's that covers it, through the same assignment, or explicit
     // authority over Unknown value; a missing limit grants nothing (9.2, 9.3; POL-02.09, POL-02.15, PRD-ACS-016).
     if (rule.value === 'none') return { kind: 'eligible', roleAssignmentId, alsoRelied };
@@ -632,13 +649,18 @@ export class Approvals {
    * Unknown value, everyone with explicit authority over Unknown. Worked out at each read, so a limit change applies as
    * soon as it is in force. A request with no value is offered to everyone eligible.
    */
-  private async offeredFor(context: TransactionContext, request: RequestRow): Promise<string[]> {
+  private async offeredFor(
+    context: TransactionContext,
+    request: RequestRow,
+    /** Every assignment in force today, when the caller has read them already for several requests. */
+    inForce?: Awaited<ReturnType<typeof assignmentsInForce>>,
+  ): Promise<string[]> {
     const date = await context.businessDate();
     if (date.kind === 'not-set') return [];
     const rule = this.ruleOf(request.actionType);
     const actors = [
       ...new Set(
-        (await assignmentsInForce(context, date.date))
+        (inForce ?? (await assignmentsInForce(context, date.date)))
           .filter((assignment) =>
             assignment.permissions.some(
               (permission) =>
@@ -810,6 +832,9 @@ export class Approvals {
       .from(approvalRequest)
       .where(and(inArray(approvalRequest.id, [...requestIds]), eq(approvalRequest.state, 'Awaiting approval')));
     const listed: string[] = [];
+    // Every assignment in force today, read once for all the requests My work lists (11.2).
+    const date = await context.businessDate();
+    const inForce = date.kind === 'set' ? await assignmentsInForce(context, date.date) : [];
     for (const row of rows) {
       const eligible = await this.eligibility(context, { kind: 'user', id: userId }, row);
       if (this.ruleOf(row.actionType).value === 'none') {
@@ -819,7 +844,7 @@ export class Approvals {
       // A valued request is offered only to the eligible approvers with the lowest limit that covers it (9.4). While
       // no limit covers it, it stays Awaiting approval with those who would decide it but for the limit, so it is not
       // hidden: their panel says "No approver set up" and Approve stays disabled (design-language 10.14).
-      const offered = await this.offeredFor(context, row);
+      const offered = await this.offeredFor(context, row, inForce);
       const shortOfLimit = eligible.kind === 'refused' && LIMIT_CODES.has(eligible.refusal.code);
       // A stand-in sees what the grant covers of what the person stood in for is offered (10; PRD-ACS-010).
       const standingIn =
@@ -841,9 +866,10 @@ export class Approvals {
       ...requestFacts(request),
     });
     if (authorised.kind === 'allowed') return authorised;
-    // A stand-in's replay, while a grant of theirs for the action type is still in force (10; S1-F05-T02).
+    // A stand-in's replay, while a grant of theirs in force still covers the request's scope facts and its value, as
+    // the decision needed (10; code-house-rules 12.4; S1-F05-T02).
     const date = await context.businessDate();
-    if (date.kind === 'set' && (await grantsInForce(context, date.date, actor.id, request.actionType)).length > 0) {
+    if (date.kind === 'set' && (await this.grantsCovering(context, date.date, actor.id, request)).length > 0) {
       return { kind: 'allowed' } as const;
     }
     return authorised;
@@ -1116,7 +1142,7 @@ export class Approvals {
         recordId: request.documentRecordId,
         versionId: request.documentVersionId,
       },
-      value: shownValue(request),
+      value: approvalValueOf(request),
       preparers: await storedPreparers(context, request.id),
       state: request.state as 'Awaiting approval' | 'Approved' | 'Rejected' | 'Superseded' | 'Withdrawn',
       requestedAt: request.recordedAt.toISOString(),

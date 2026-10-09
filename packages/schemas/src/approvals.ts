@@ -202,6 +202,7 @@ export const decisionRefusalCodes = [
   'access.reason-not-in-force',
   'access.not-eligible',
   'access.self-preparation',
+  'access.stand-in-party',
   'access.authenticator-code-refused',
   'access.approval-not-open',
   'access.approval-superseded',
@@ -210,6 +211,7 @@ export const decisionRefusalCodes = [
   'access.above-approval-limit',
   'access.unknown-value-not-covered',
   'access.bulk-not-allowed',
+  'access.bulk-item-duplicated',
 ] as const satisfies readonly ErrorCode[];
 export type DecisionRefusal = (typeof decisionRefusalCodes)[number];
 
@@ -415,6 +417,8 @@ export const standInGrantListSchema = z.strictObject({
   asOf: z.iso.datetime({ offset: true }),
   actionTypes: z.array(z.strictObject({ actionType: z.string().min(1), basis: moneyBasisSchema.nullable() })),
   grants: z.array(standInGrantRecordSchema),
+  /** The cursor of the next page, or null on the last (code-house-rules 12.1). */
+  next: idSchema.nullable(),
 });
 export type StandInGrantList = z.infer<typeof standInGrantListSchema>;
 
@@ -423,17 +427,12 @@ export type StandInGrantList = z.infer<typeof standInGrantListSchema>;
  * the request and the version the approver reviewed (PRD-ACS-007); one reason from the list in force and one fresh
  * authenticator code cover the whole selection (3.3; S1-F05-T02).
  */
-export const bulkDecisionRequestSchema = z
-  .strictObject({
-    items: z.array(z.strictObject({ requestId: idSchema, versionId: idSchema })).min(1),
-    reason: z.strictObject({ kind: z.literal('listed'), reasonId: idSchema }),
-    comment: z.string().min(1).optional(),
-    totpCode: totpCodeSchema,
-  })
-  .refine((body) => new Set(body.items.map((item) => item.requestId)).size === body.items.length, {
-    message: 'Each request once',
-    path: ['items'],
-  });
+export const bulkDecisionRequestSchema = z.strictObject({
+  items: z.array(z.strictObject({ requestId: idSchema, versionId: idSchema })).min(1),
+  reason: z.strictObject({ kind: z.literal('listed'), reasonId: idSchema }),
+  comment: z.string().min(1).optional(),
+  totpCode: totpCodeSchema,
+});
 export type BulkDecisionRequest = z.infer<typeof bulkDecisionRequestSchema>;
 
 /**

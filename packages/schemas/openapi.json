@@ -1123,6 +1123,7 @@
               "access.reason-not-in-force",
               "access.self-preparation",
               "access.stand-in-overlaps",
+              "access.stand-in-party",
               "access.stand-in-wider-than-authority",
               "access.starts-in-past",
               "access.user-not-approved",
@@ -1485,19 +1486,6 @@
               "access.not-eligible"
             ]
           },
-          "404": {
-            "description": "The error envelope (code-house-rules 12.3)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "x-error-codes": [
-              "access.approval-request-not-found"
-            ]
-          },
           "409": {
             "description": "The error envelope (code-house-rules 12.3)",
             "content": {
@@ -1522,7 +1510,7 @@
               }
             },
             "x-error-codes": [
-              "access.bulk-not-allowed",
+              "access.bulk-selection-empty",
               "access.enrolment-not-started",
               "access.reason-not-in-force"
             ]
@@ -2655,7 +2643,27 @@
           "action": "view",
           "recordType": "access.approval_limit"
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -3146,12 +3154,25 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "asOf",
                     "actionTypes",
-                    "limits"
+                    "limits",
+                    "next"
                   ],
                   "additionalProperties": false
                 }
@@ -11766,7 +11787,27 @@
           "action": "view",
           "recordType": "access.stand_in_grant"
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -12231,12 +12272,25 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "asOf",
                     "actionTypes",
-                    "grants"
+                    "grants",
+                    "next"
                   ],
                   "additionalProperties": false
                 }
@@ -14923,7 +14977,27 @@
           "action": "view",
           "recordType": "inbox.work_item_routing"
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -15151,12 +15225,25 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "asOf",
                     "actionTypes",
-                    "routings"
+                    "routings",
+                    "next"
                   ],
                   "additionalProperties": false
                 }

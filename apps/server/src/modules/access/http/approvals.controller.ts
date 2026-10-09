@@ -1,4 +1,4 @@
-import { routes } from '@apparel-os/schemas';
+import { routes, type ErrorCode, type MissingItem, type SetupPageQuery } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -18,6 +18,11 @@ import {
 import type { AccessInterface } from '../access.js';
 import { ACCESS } from '../tokens.js';
 import { SignedIn, type SignedInUser } from './authenticate.guard.js';
+
+/** A setup list's page as the route's query gives it (code-house-rules 12.1). */
+function pageOf(query: SetupPageQuery) {
+  return { after: query.after, limit: query.limit === undefined ? undefined : Number(query.limit) };
+}
 
 /**
  * Approvals (access-and-approvals 9.3, 9.5; code-house-rules 12.1; S1-F01-T13): the approval panel's read of a
@@ -79,9 +84,10 @@ export class ApprovalsController {
   /**
    * Bulk approval (access-and-approvals 9.9; code-house-rules 12.1, 12.4; PRD-ACS-011, PRD-ACS-019, POL-02.19;
    * S1-F05-T02): the one route that runs several commands. First the batch, in a command of its own under the request's
-   * key, with the one fresh code; then each item its own decision in its own transaction, under the same key with the
-   * item's request added to its operation, so a resent request replays what was done and runs what was not. An item
-   * refused goes to individual review, with its reason; the others go on.
+   * key, with the one fresh code; then each item it admitted its own decision in its own transaction, under the same
+   * key with the item's request added to its operation, so a resent request replays what was done and runs what was
+   * not. An item the batch did not admit, or refused when decided, goes to individual review with its reason; the
+   * others go on.
    */
   @ApiRoute(routes.decideApprovalsInBulk)
   async decideInBulk(
@@ -114,9 +120,25 @@ export class ApprovalsController {
       },
     });
     if (batch.kind !== 'success') return commandAnswer(batch);
-    const opened = batch.answer as unknown as { batchId: string; totals: JsonValue; noValueCount: number };
+    const opened = batch.answer as unknown as {
+      batchId: string;
+      totals: JsonValue;
+      noValueCount: number;
+      refused: { index: number; requestId: string; code: ErrorCode; missing: MissingItem[] }[];
+    };
     const items = [];
-    for (const item of body.items) {
+    for (const [index, item] of body.items.entries()) {
+      // An item the batch did not admit goes to individual review with its reason (9.9).
+      const notAdmitted = opened.refused.find((each) => each.index === index);
+      if (notAdmitted !== undefined) {
+        items.push({
+          requestId: item.requestId,
+          outcome: 'individual-review' as const,
+          code: notAdmitted.code,
+          missing: notAdmitted.missing,
+        });
+        continue;
+      }
       // The item's request added to the operation, as a command name allows it (12.4; command-runner).
       const decided = await this.helper.run(request(`access.decide-in-bulk.item-${item.requestId}`), {
         key: input.idempotencyKey,
@@ -162,7 +184,10 @@ export class ApprovalsController {
 
   // Stand-in grants (access-and-approvals 10, 14; S1-F05-T02): the guard has run Authorise for view.
   @ApiRoute(routes.listStandInGrants)
-  async listStandInGrants(@SignedIn() user: SignedInUser) {
+  async listStandInGrants(
+    @RouteInput() input: RouteInputOf<typeof routes.listStandInGrants>,
+    @SignedIn() user: SignedInUser,
+  ) {
     const answer = await this.runner.read(
       {
         commandName: 'access.list-stand-in-grants',
@@ -173,7 +198,7 @@ export class ApprovalsController {
       async (context) =>
         (await context.businessDate()).kind === 'not-set'
           ? undefined
-          : { listed: await this.access.listStandInGrants(context) },
+          : { listed: await this.access.listStandInGrants(context, pageOf(input.query)) },
     );
     if (answer === undefined) {
       throw new ApiRefusal({
@@ -205,7 +230,10 @@ export class ApprovalsController {
 
   // Setup › Approval limits (access-and-approvals 9.2, 14; S1-F05-T01): the guard has run Authorise for view.
   @ApiRoute(routes.listApprovalLimits)
-  async listApprovalLimits(@SignedIn() user: SignedInUser) {
+  async listApprovalLimits(
+    @RouteInput() input: RouteInputOf<typeof routes.listApprovalLimits>,
+    @SignedIn() user: SignedInUser,
+  ) {
     const answer = await this.runner.read(
       {
         commandName: 'access.list-approval-limits',
@@ -216,7 +244,7 @@ export class ApprovalsController {
       async (context) =>
         (await context.businessDate()).kind === 'not-set'
           ? undefined
-          : { listed: await this.access.listApprovalLimits(context) },
+          : { listed: await this.access.listApprovalLimits(context, pageOf(input.query)) },
     );
     if (answer === undefined) {
       throw new ApiRefusal({

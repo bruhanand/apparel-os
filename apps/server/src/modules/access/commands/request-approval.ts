@@ -1,5 +1,5 @@
-import { uuidv7, type Paise } from '@apparel-os/domain';
-import type { AccessActionType } from '@apparel-os/schemas';
+import { paise, uuidv7, type Paise } from '@apparel-os/domain';
+import type { AccessActionType, ApprovalValue, MoneyBasis } from '@apparel-os/schemas';
 import { and, eq, ne } from 'drizzle-orm';
 import { CommandDefect, scopeFactsOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
@@ -319,6 +319,22 @@ async function openRequest(
     },
   });
   return requestId;
+}
+
+/**
+ * A request's value as it binds to it, with its basis (9.1; PRD-ACS-015, PRD-ACS-016): none, Unknown, never zero
+ * (PRD-MOD-015), or known in whole paise. The approval panel shows it and bulk approval totals it (9.9).
+ */
+export function approvalValueOf(request: {
+  readonly valueKind: string;
+  readonly valueBasis: string | null;
+  readonly valueAmount: number | null;
+}): ApprovalValue {
+  if (request.valueKind === 'none' || request.valueBasis === null) return { kind: 'none' };
+  const basis = request.valueBasis as MoneyBasis;
+  return request.valueKind === 'known' && request.valueAmount !== null
+    ? { kind: 'known', basis, amount: paise(request.valueAmount) }
+    : { kind: 'unknown', basis };
 }
 
 /** The preparers a request bound to when it was requested (9.1). */

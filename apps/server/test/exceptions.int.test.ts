@@ -38,6 +38,7 @@ import {
 import { Inbox } from '../src/modules/inbox/index.js';
 import { Numbering } from '../src/modules/numbering/index.js';
 import { syntheticCode } from './fixtures/synthetic.js';
+import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 import { SYNTHETIC_RETRY, SYNTHETIC_TEST_SPEED } from './fixtures/worker-settings.js';
 import {
   codeFor,
@@ -620,6 +621,48 @@ describe('raising and closing (access-and-approvals 12.1, 12.3; test 21)', () =>
       to: { party: { kind: 'user', userId: escalation.id } },
     });
     expect(view.mayAct).toBe(true);
+  });
+
+  it('PRD-INT-008 code-house-rules 10.3 two overlapping escalation runs escalate an exception once', async () => {
+    const document = await run((context) => writeTestDocument(context));
+    const raised = await run((context) =>
+      exceptions.raiseInOwnCommand(
+        context,
+        mismatchOn(document, { raisingEvent: `${TEST_EXCEPTIONS_MODULE}.overlap:${document}` }),
+      ),
+    );
+    if (raised.kind !== 'done') throw new Error(raised.refusal.code);
+    const later = new Date(Date.now() + 2 * 3600_000);
+    const escalate = (context: TransactionContext) =>
+      exceptions.escalateOverdue(context, { actor: { kind: 'service-identity', id: ACTOR } });
+    const held = gate();
+    const escalatedFirst = gate();
+    let firstPid = 0;
+    const first = run(
+      async (context) => {
+        firstPid = await backendPid(context);
+        const count = await escalate(context);
+        escalatedFirst.open();
+        await held.wait;
+        return count;
+      },
+      routedA,
+      later,
+    );
+    await escalatedFirst.wait;
+    const second = run(escalate, routedA, later);
+    await waitUntilAnyWaitingForLock(databaseA, [firstPid]);
+    held.open();
+    expect(await first).toBeGreaterThanOrEqual(1);
+    expect(await second).toBe(0);
+    expect(
+      await rows(
+        databaseA,
+        `select e.id from inbox.work_item_escalation e join inbox.work_item i on i.id = e.work_item_id
+         where i.owner_record_id = $1`,
+        [raised.value.exceptionId],
+      ),
+    ).toHaveLength(1);
   });
 });
 

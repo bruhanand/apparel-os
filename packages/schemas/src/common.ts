@@ -80,3 +80,25 @@ export const recordVersionRefSchema = z.strictObject({
   versionId: idSchema,
 });
 export type RecordVersionRef = z.infer<typeof recordVersionRefSchema>;
+
+/**
+ * The largest page of an approval setup list, approval limits, stand-in grants and task and approval routing: a
+ * technical cap the builders set (code-house-rules 12.1 "Reads"), not a KDPS value. A longer list is read page by page
+ * with the cursor.
+ */
+export const SETUP_PAGE_CAP = 100;
+
+/**
+ * A page of an approval setup list (code-house-rules 12.1): records by identifier, starting after the record `after`
+ * names, at most `limit` of them (the cap when left out). The cursor is the last record's identifier, opaque to the
+ * screen, which only hands back the `next` it was given.
+ */
+export const setupPageQuerySchema = z.strictObject({
+  after: idSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= SETUP_PAGE_CAP, { message: `At most ${String(SETUP_PAGE_CAP)}` })
+    .optional(),
+});
+export type SetupPageQuery = z.infer<typeof setupPageQuerySchema>;

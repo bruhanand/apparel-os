@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
-import { readQuery } from '../api/query';
+import { allPagesQuery, readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
 import { actionTitle } from '../approvals/subject';
 import { Button } from '../components/Button';
@@ -396,7 +396,7 @@ function LimitDrawer({ limit, onClose }: { limit: ApprovalLimitRecord; onClose: 
 /** Setup › Approval limits. */
 export function ApprovalLimitsScreen() {
   const timeZone = useTimeZone();
-  const query = useQuery(readQuery(api, 'listApprovalLimits', {}));
+  const query = useQuery(allPagesQuery(api, 'listApprovalLimits'));
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-4">

@@ -1,4 +1,5 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
+import { SETUP_PAGE_CAP } from '@apparel-os/schemas';
 import type {
   ApprovalLimitDraft,
   ApprovalLimitList,
@@ -8,7 +9,7 @@ import type {
   MoneyBasis,
   SettingOrigin,
 } from '@apparel-os/schemas';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { sqlStateOf, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { approvalLimit, approvalLimitChange, role, roleAssignment } from '../db/schema.js';
@@ -28,6 +29,7 @@ import {
   type Preparer,
 } from './access-changes.js';
 import { limitTarget } from './authority.js';
+import type { SetupPage } from './stand-ins.js';
 import { requestApproval } from './request-approval.js';
 
 // Approval limits (access-and-approvals 9.2, 9.11, 13.1; code-house-rules 7.3; POL-02.07, POL-02.09, POL-02.15,
@@ -102,8 +104,10 @@ export async function listApprovalLimits(
   context: TransactionContext,
   todayDate: string,
   rules: ReadonlyMap<string, ApprovalRule>,
+  page: SetupPage = {},
 ): Promise<ApprovalLimitList> {
-  const rows = await context.tx
+  const size = page.limit ?? SETUP_PAGE_CAP;
+  const read = await context.tx
     .select({
       limit: approvalLimit,
       roleCode: role.code,
@@ -112,7 +116,12 @@ export async function listApprovalLimits(
     })
     .from(approvalLimit)
     .leftJoin(role, eq(role.id, approvalLimit.roleId))
-    .orderBy(desc(approvalLimit.recordedAt), desc(approvalLimit.id));
+    .where(page.after === undefined ? undefined : lt(approvalLimit.id, page.after))
+    // Newest first: an identifier is a UUIDv7, in the order the limits were recorded (PRD-MOD-008).
+    .orderBy(desc(approvalLimit.id))
+    .limit(size + 1);
+  const rows = read.slice(0, size);
+  const next = read.length > size ? (rows.at(-1)?.limit.id ?? null) : null;
   const assignmentIds = rows.flatMap((row) =>
     row.limit.roleAssignmentId === null ? [] : [row.limit.roleAssignmentId],
   );
@@ -161,6 +170,7 @@ export async function listApprovalLimits(
         origin: limit.origin as SettingOrigin,
       };
     }),
+    next,
   };
 }
 

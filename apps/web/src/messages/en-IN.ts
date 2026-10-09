@@ -1321,6 +1321,10 @@ export const englishIndia = {
   'error.access.stand-in-for-self': 'A person can’t stand in for themselves.',
   'error.access.stand-in-wider-than-authority':
     'This goes beyond what the person stood in for may approve on those dates: the action, its scope or its limit.',
+  'error.access.bulk-item-duplicated': 'This request was chosen more than once, so review it on its own.',
+  'error.access.bulk-selection-empty': 'Choose at least one request to approve.',
+  'error.access.stand-in-party':
+    'You are the stand-in or the person stood in for in this grant, so another person must decide it.',
   'error.access.stand-in-grant-not-found': 'This stand-in grant was not found.',
   'error.access.stand-in-overlaps':
     'An approved grant for the same stand-in, person and scope already covers some of these dates.',
@@ -1333,6 +1337,7 @@ export const englishIndia = {
   'error.inbox.site-not-found': 'That Site does not exist, or is not in force from the first day given.',
   'missing.stand-in-authority': 'The authority of the person stood in for, for this action, on every day of the grant.',
   'missing.bulk-allowlist': 'Bulk approval allowed for this kind of approval.',
+  'missing.stand-in-party': 'You are named in this stand-in grant.',
   'missing.bulk-batch': 'This item’s bulk approval, started by you.',
   'bulk.label': 'Bulk approval',
   'bulk.select': 'Select {name} for bulk approval',

@@ -44,7 +44,10 @@ export class RoutingController {
   ) {}
 
   @ApiRoute(routes.listWorkItemRouting)
-  async listWorkItemRouting(@SignedIn() user: SignedInUser): Promise<WorkItemRoutingList> {
+  async listWorkItemRouting(
+    @RouteInput() input: RouteInputOf<typeof routes.listWorkItemRouting>,
+    @SignedIn() user: SignedInUser,
+  ): Promise<WorkItemRoutingList> {
     return this.runner.read(this.request(user, 'inbox.list-routing'), async (context) => ({
       asOf: context.startedAt.toISOString(),
       ...(await listRouting(
@@ -52,6 +55,10 @@ export class RoutingController {
         this.access.approvalActionTypes(),
         (parties) => this.names(context, parties),
         (versionIds) => this.access.approvalRequestsOf(context, versionIds),
+        {
+          after: input.query.after,
+          limit: input.query.limit === undefined ? undefined : Number(input.query.limit),
+        },
       )),
     }));
   }
