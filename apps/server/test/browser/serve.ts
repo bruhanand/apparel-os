@@ -58,12 +58,21 @@ import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { IMPORT_BATCH_KIND } from '../../src/modules/files-imports/index.js';
 import {
+  SYNTHETIC_PRODUCT_COLUMNS,
+  SYNTHETIC_PRODUCT_LAYOUT,
   SYNTHETIC_PRODUCT_LAYOUT_CODE,
+  SYNTHETIC_PRODUCT_MAPPING,
   SYNTHETIC_PRODUCT_MAPPING_CODE,
   syntheticProductFileName,
   syntheticProductWorkbook,
+  syntheticWorkbook,
 } from '../fixtures/imports.js';
-import { defineSyntheticImportBatchSeries, writeSyntheticProductLayout } from '../support/imports.js';
+import { withParts } from '../fixtures/workbook-parts.js';
+import {
+  defineSyntheticImportBatchSeries,
+  writeSyntheticLayout,
+  writeSyntheticProductLayout,
+} from '../support/imports.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
@@ -1360,6 +1369,105 @@ writeFileSync(
   ),
 );
 
+// The intake refusal journeys (S1-F06-T02; imports-and-opening-data 9.3, 11): a Booking user of their own whose
+// workbook holding a macro project is refused before it is stored, then stores a clean copy; and a Booking user who
+// is not granted the class cost, who stages a file of a Confirmed layout with a cost column and sees cost masked.
+// The costed layout reads a sheet of its own, so the intake journey's file still matches one saved layout. Every
+// value is SYNTHETIC.
+const intakeGrants = [
+  { recordType: 'files_imports.stored_file', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'view' as const },
+  { recordType: 'files_imports.import_batch', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'edit' as const },
+  { recordType: 'files_imports.layout', action: 'view' as const },
+  { recordType: 'files_imports.mapping', action: 'view' as const },
+  ...productViews,
+];
+const refusalBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-REFUSAL-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: refusalBooking.id }, intakeGrants, {
+  fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const refusalClean = await syntheticProductWorkbook(
+  [
+    {
+      'Style code': syntheticCode(`JOURNEY-REFUSAL-STYLE-${intakeSuffix}`),
+      'SKU code': syntheticCode(`JOURNEY-REFUSAL-SKU-${intakeSuffix}`),
+      'Brand code': intakeBrand.code,
+      'Category code': intakeCategory.code,
+      Size: undefined,
+      'Stock unit': 'piece',
+      Purpose: 'merchandise',
+    },
+  ],
+  `REFUSAL-${intakeSuffix}`,
+);
+const refusalMacroFile = join(dirname(worldFile), syntheticProductFileName('journey-macro'));
+writeFileSync(
+  refusalMacroFile,
+  withParts(refusalClean, { 'xl/vbaProject.bin': Buffer.from('SYNTHETIC macro project') }),
+);
+const refusalCleanFile = join(dirname(worldFile), syntheticProductFileName('journey-clean'));
+writeFileSync(refusalCleanFile, refusalClean);
+
+const costReader = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-COST-READER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: costReader.id }, intakeGrants, {
+  fieldClasses: fieldClassSchema.options
+    .filter((fieldClass) => fieldClass !== 'cost')
+    .map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const costedSheet = 'SYNTHETIC Costed Products';
+const costedLayoutCode = syntheticCode('JOURNEY-COSTED-LAYOUT');
+const costedMappingCode = syntheticCode('JOURNEY-COSTED-MAPPING');
+await writeSyntheticLayout(
+  postingDatabase,
+  {
+    layoutCode: costedLayoutCode,
+    mappingCode: costedMappingCode,
+    structure: {
+      ...SYNTHETIC_PRODUCT_LAYOUT,
+      sheet: costedSheet,
+      columns: [
+        ...SYNTHETIC_PRODUCT_LAYOUT.columns,
+        { name: 'Cost', required: false, type: 'money', restrictedClass: 'cost' },
+      ],
+    },
+    fields: SYNTHETIC_PRODUCT_MAPPING,
+  },
+  postingFixture.preparer.id,
+  postingFixture.approver.id,
+);
+const costStyle = syntheticCode(`JOURNEY-COST-STYLE-${intakeSuffix}`);
+const costValue = `${String(100_000 + randomBytes(2).readUInt16BE(0))}.37`;
+const costFile = join(dirname(worldFile), syntheticProductFileName('journey-costed'));
+writeFileSync(
+  costFile,
+  await syntheticWorkbook({
+    sheet: costedSheet,
+    header: [...SYNTHETIC_PRODUCT_COLUMNS, 'Cost'],
+    rows: [
+      [
+        costStyle,
+        syntheticCode(`JOURNEY-COST-SKU-${intakeSuffix}`),
+        intakeBrand.code,
+        intakeCategory.code,
+        null,
+        'piece',
+        'merchandise',
+        Number(costValue),
+      ],
+    ],
+    marker: `COSTED-${intakeSuffix}`,
+  }),
+);
+
 // The bank details journey's people (S1-F03-T03): a person who prepares a supplier's bank-detail change, holding the
 // class bank-details to write it, and a different person who approves it from My work and shows the details with the
 // class to read them. Who holds which is KDPS's (V-01, RR-064).
@@ -1969,6 +2077,18 @@ writeFileSync(
       confirmer: credentialsOf(intakeConfirmer),
       brandCode: intakeBrand.code,
       today: postingFixture.today(),
+      refusal: {
+        booking: credentialsOf(refusalBooking),
+        macroFilePath: refusalMacroFile,
+        cleanFilePath: refusalCleanFile,
+      },
+      cost: {
+        reader: credentialsOf(costReader),
+        filePath: costFile,
+        layoutOption: `${costedLayoutCode} version 1 · ${costedMappingCode} version 1 (Confirmed)`,
+        styleCode: costStyle,
+        costValue,
+      },
     },
     bankDetails: {
       organisationCode: settingsCode,

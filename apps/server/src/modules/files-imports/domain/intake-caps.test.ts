@@ -47,7 +47,10 @@ describe('intakeCapsFromEnvironment', () => {
 
   it('refuses an uploaded-size cap the import route cannot carry to its named check', () => {
     expect(() =>
-      intakeCapsFromEnvironment({ ...SYNTHETIC_CAPS, AOS_INTAKE_MAX_UPLOAD_BYTES: String(IMPORT_UPLOAD_CEILING_BYTES + 1) }),
+      intakeCapsFromEnvironment({
+        ...SYNTHETIC_CAPS,
+        AOS_INTAKE_MAX_UPLOAD_BYTES: String(IMPORT_UPLOAD_CEILING_BYTES + 1),
+      }),
     ).toThrow('AOS_INTAKE_MAX_UPLOAD_BYTES');
     expect(
       intakeCapsFromEnvironment({ ...SYNTHETIC_CAPS, AOS_INTAKE_MAX_UPLOAD_BYTES: String(IMPORT_UPLOAD_CEILING_BYTES) })

@@ -9,7 +9,12 @@ import {
 } from '@apparel-os/schemas';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COMMAND_RUNNER, ORGANISATION_ROUTER, type CommandRunner, type OrganisationRouter } from '../src/kernel/index.js';
+import {
+  COMMAND_RUNNER,
+  ORGANISATION_ROUTER,
+  type CommandRunner,
+  type OrganisationRouter,
+} from '../src/kernel/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import {
   SYNTHETIC_PRODUCT_COLUMNS,
@@ -20,12 +25,7 @@ import {
 } from './fixtures/imports.js';
 import { INTAKE_CAPS_ENVIRONMENT } from './fixtures/intake-caps.js';
 import { syntheticCode, syntheticFileName } from './fixtures/synthetic.js';
-import {
-  RELATIONSHIP,
-  SYNTHETIC_EXTERNAL_LINK_PART,
-  withParts,
-  withRelationship,
-} from './fixtures/workbook-parts.js';
+import { RELATIONSHIP, SYNTHETIC_EXTERNAL_LINK_PART, withParts, withRelationship } from './fixtures/workbook-parts.js';
 import {
   codeFor,
   startAccessApp,
@@ -137,7 +137,11 @@ async function kept(): Promise<{ files: number; receipts: number; batches: numbe
   try {
     const count = async (table: string) =>
       Number((await client.query<{ n: string }>(`select count(*) as n from files_imports.${table}`)).rows[0]?.n);
-    return { files: await count('stored_file'), receipts: await count('file_receipt'), batches: await count('import_batch') };
+    return {
+      files: await count('stored_file'),
+      receipts: await count('file_receipt'),
+      batches: await count('import_batch'),
+    };
   } finally {
     await client.end();
   }
@@ -193,7 +197,10 @@ beforeAll(async () => {
   minio = await startTestFileStore();
   keysEnvironment = syntheticKeysEnvironment(world);
   const organisation = world.organisations[0];
-  await writeSyntheticSetting(organisation.database, 'access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 });
+  await writeSyntheticSetting(organisation.database, 'access.sign-in-throttling', {
+    failureLimit: 50,
+    windowSeconds: 600,
+  });
   await writeSyntheticSetting(organisation.database, 'access.password-rules', { minimumLength: 12 });
   await writeSyntheticSetting(organisation.database, 'access.office-session-limits', {
     idleLockSeconds: 1800,
@@ -304,7 +311,12 @@ async function startOn(stored: { storedFileId: string; receiptId: string }, cook
 
 describe('GC-6 17 test 1, XLSX part: safety at intake (imports-and-opening-data 9.2, 9.3; PRD-SEC-011)', () => {
   it('PRD-IMP-001 reads an XLSX named .xls, from its content', async () => {
-    const answer = await upload(api, preparer.cookie, await productFile([productRow(next('STYLE'))]), 'SYNTHETIC-x.xls');
+    const answer = await upload(
+      api,
+      preparer.cookie,
+      await productFile([productRow(next('STYLE'))]),
+      'SYNTHETIC-x.xls',
+    );
     expect(answer.status).toBe(200);
     expect(importFileStoredSchema.parse(answer.body).format).toBe('xlsx');
   });
@@ -320,7 +332,9 @@ describe('GC-6 17 test 1, XLSX part: safety at intake (imports-and-opening-data 
 
   it('PRD-SEC-011 refuses a macro, an embedded object and an unapproved link before storing', async () => {
     const plain = await productFile([productRow(next('STYLE'))]);
-    expect(await refused(api, preparer.cookie, withParts(plain, { 'xl/vbaProject.bin': randomBytes(64) }))).toMatchObject({
+    expect(
+      await refused(api, preparer.cookie, withParts(plain, { 'xl/vbaProject.bin': randomBytes(64) })),
+    ).toMatchObject({
       code: 'files-imports.workbook-active-content',
       missing: [{ kind: 'active-content', found: 'macros' }],
     });
@@ -464,27 +478,41 @@ describe('GC-6 17 test 25: restricted columns (imports-and-opening-data 11; PRD-
       missing: [{ kind: 'customer-contact-column', sheet: CONTACT_SHEET, column: 'Customer phone' }],
     });
     // A clean upload, the same file without the column, is stored.
-    expect((await upload(testSetup, intake.cookie, await salesFile(['Bill', 'Amount'], [next('BILL'), 100]))).status).toBe(
-      200,
-    );
+    expect(
+      (await upload(testSetup, intake.cookie, await salesFile(['Bill', 'Amount'], [next('BILL'), 100]))).status,
+    ).toBe(200);
     // A file no Confirmed layout recognises cannot be known to hold no contact column.
     expect(
-      await refused(testSetup, intake.cookie, await salesFile(['Bill', 'Amount', 'Mobile'], [next('BILL'), 100, phone])),
+      await refused(
+        testSetup,
+        intake.cookie,
+        await salesFile(['Bill', 'Amount', 'Mobile'], [next('BILL'), 100, phone]),
+      ),
     ).toMatchObject({
       code: 'files-imports.layout-needed-on-test-setup',
       missing: [{ kind: 'unrecognised-sheet', sheet: CONTACT_SHEET }],
     });
     // The same file is not checked for contact columns in local work, where synthetic contact tests run.
     expect(
-      (await upload(api, preparer.cookie, await salesFile(['Bill', 'Amount', 'Customer phone'], [next('BILL'), 1, phone])))
-        .status,
+      (
+        await upload(
+          api,
+          preparer.cookie,
+          await salesFile(['Bill', 'Amount', 'Customer phone'], [next('BILL'), 1, phone]),
+        )
+      ).status,
     ).toBe(200);
     // PRD-SEC-014: no log holds the refused file's contact value.
     expect(testSetup.logText()).not.toContain(phone);
   });
 
   it('PRD-ACS-008 PRD-SEC-014: a reader without the cost class sees cost masked; no log holds the cost value', async () => {
-    const reader = await signedIn(api, 'NOCOST', IMPORTER, ALL_CLASSES.filter((each) => each !== 'cost'));
+    const reader = await signedIn(
+      api,
+      'NOCOST',
+      IMPORTER,
+      ALL_CLASSES.filter((each) => each !== 'cost'),
+    );
     const cost = `${String(randomInt(100_000, 999_999))}.37`;
     const withCost = await productFile(
       [[...productRow(next('STYLE')), Number(cost)]],

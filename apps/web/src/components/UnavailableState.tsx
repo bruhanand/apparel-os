@@ -117,6 +117,28 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'layout-column' && item.column !== undefined) {
     return t('missing.layout-column.named', { column: item.column });
   }
+  return intakeText(item);
+}
+
+/** What an intake refusal names (imports-and-opening-data 9.3, 11; PRD-UXP-003; S1-F06-T02). */
+function intakeText(item: MissingItem): string | undefined {
+  const named = `missing.${item.kind}.${item.found ?? item.cap ?? ''}`;
+  if ((item.kind === 'active-content' || item.kind === 'unapproved-link') && isMessageId(named)) return t(named);
+  if (item.kind === 'unapproved-link' && item.found !== undefined) {
+    return t('missing.unapproved-link.named', { found: item.found });
+  }
+  if (item.kind === 'intake-cap' && isMessageId(named) && item.limit !== undefined) {
+    return t(named, { limit: item.limit });
+  }
+  if (item.kind === 'reader-error' && item.error !== undefined) {
+    return t('missing.reader-error.named', { error: item.error });
+  }
+  if (item.kind === 'customer-contact-column' && item.column !== undefined && item.sheet !== undefined) {
+    return t('missing.customer-contact-column.named', { column: item.column, sheet: item.sheet });
+  }
+  if (item.kind === 'unrecognised-sheet' && item.sheet !== undefined) {
+    return t('missing.unrecognised-sheet.named', { sheet: item.sheet });
+  }
   return undefined;
 }
 

@@ -30,7 +30,11 @@ export const INTAKE_CAP_VARIABLES = {
   maxProcessingMs: 'AOS_INTAKE_MAX_PROCESSING_MS',
 } as const satisfies Record<keyof IntakeCaps, string>;
 
-const whole = z.string().regex(/^[1-9][0-9]*$/).transform(Number).pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
+const whole = z
+  .string()
+  .regex(/^[1-9][0-9]*$/)
+  .transform(Number)
+  .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
 
 const capsSchema = z.strictObject({
   [INTAKE_CAP_VARIABLES.maxUploadBytes]: whole.pipe(z.number().max(IMPORT_UPLOAD_CEILING_BYTES)),

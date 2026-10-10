@@ -142,7 +142,11 @@ function activeContent(found: string): WorkbookSafety {
 }
 
 function unapprovedLink(found: string): WorkbookSafety {
-  return { kind: 'refused', code: 'files-imports.workbook-unapproved-link', missing: [{ kind: 'unapproved-link', found }] };
+  return {
+    kind: 'refused',
+    code: 'files-imports.workbook-unapproved-link',
+    missing: [{ kind: 'unapproved-link', found }],
+  };
 }
 
 /** Whether a part's content is kept for the checks: the content types, the relationships and custom XML parts. */
@@ -164,9 +168,7 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
   if (
     names.some(
       (name) =>
-        name.endsWith('vbaproject.bin') ||
-        name.startsWith('xl/macrosheets/') ||
-        name.startsWith('xl/dialogsheets/'),
+        name.endsWith('vbaproject.bin') || name.startsWith('xl/macrosheets/') || name.startsWith('xl/dialogsheets/'),
     ) ||
     /macroEnabled|vbaProject|macrosheet/i.test(contentTypes) ||
     relationshipNamed('vbaproject')
@@ -176,7 +178,11 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
   if (names.some((name) => name.startsWith('xl/activex/'))) return activeContent('active-controls');
   if (names.some((name) => name.startsWith('xl/embeddings/'))) return activeContent('embedded-objects');
   if (names.some((name) => name.startsWith('xl/externallinks/')) || relationshipNamed('externallink')) {
-    return { kind: 'refused', code: 'files-imports.workbook-depends-on-another', missing: [{ kind: 'self-contained-copy' }] };
+    return {
+      kind: 'refused',
+      code: 'files-imports.workbook-depends-on-another',
+      missing: [{ kind: 'self-contained-copy' }],
+    };
   }
   const external = relationships.find((each) => each.external && lower(typeName(each.type)) !== 'hyperlink');
   if (external !== undefined) return unapprovedLink(typeName(external.type));

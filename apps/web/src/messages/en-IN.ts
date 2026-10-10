@@ -223,7 +223,8 @@ export const englishIndia = {
   'error.access.assignment-not-found': 'This role assignment was not found.',
   'error.access.not-withdrawable':
     'Only an approved role assignment that has not started yet can be withdrawn. End a started one early instead.',
-  'error.files-imports.type-not-allowed': 'This file is not a PDF, JPEG or PNG, so it was not stored.',
+  'error.files-imports.type-not-allowed':
+    'This file is not of a type allowed here, so it was not stored: an Excel workbook (.xlsx) for an import, a PDF, JPEG or PNG for evidence.',
   'error.files-imports.file-too-large': 'This file is over the size limit, so it was not stored.',
   'error.files-imports.active-content':
     'This PDF holds scripts, embedded files or launch actions, so it was not stored. Send a plain copy.',
@@ -2181,6 +2182,32 @@ export const englishIndia = {
     'Publishing imports is available only with synthetic data until the remaining import controls are built.',
   'error.files-imports.document-refused': 'A document of this batch was refused, so nothing was published.',
   'error.files-imports.required-value-unknown': 'A required value is empty in the file.',
+  'error.files-imports.workbook-active-content':
+    'This workbook holds macros, controls or embedded objects, so it was not stored. Save it as a plain Excel workbook (.xlsx) without them and upload it again.',
+  'error.files-imports.workbook-depends-on-another':
+    'This workbook takes values from another workbook, so it was not stored. Save a self-contained copy, with the values in it, and upload that.',
+  'error.files-imports.workbook-unapproved-link':
+    'This workbook fetches data or pictures from outside the file, so it was not stored. Remove the connection or linked picture and upload it again.',
+  'error.files-imports.over-intake-cap':
+    'This file is over a limit for intake, so it was not stored, and nothing was cut to fit. Split it into smaller files and upload them.',
+  'error.files-imports.customer-contact-columns':
+    'On the test setup no customer names or phone numbers are kept, so this file was not stored. Upload it again without the columns named.',
+  'error.files-imports.layout-needed-on-test-setup':
+    'On the test setup a file is stored only when a confirmed saved layout recognises each sheet that holds data. Propose the layout under Saved layouts, have it confirmed, then upload the file again.',
+  'missing.active-content.macros': 'Macros.',
+  'missing.active-content.active-controls': 'Active controls.',
+  'missing.active-content.embedded-objects': 'Embedded objects.',
+  'missing.self-contained-copy': 'A self-contained copy of the workbook.',
+  'missing.unapproved-link.named': 'A link outside the file: {found}.',
+  'missing.unapproved-link.data-connection': 'A data connection.',
+  'missing.intake-cap.uploaded-size': 'The size limit: {limit} bytes.',
+  'missing.intake-cap.expanded-size': 'The limit on the unpacked size: {limit} bytes.',
+  'missing.intake-cap.rows': 'The row limit: {limit} rows.',
+  'missing.intake-cap.parser-memory': 'The reading memory limit: {limit} MiB.',
+  'missing.intake-cap.processing-time': 'The reading time limit: {limit} milliseconds.',
+  'missing.reader-error.named': 'The reader could not read it: {error}.',
+  'missing.customer-contact-column.named': 'The column {column} on sheet {sheet}.',
+  'missing.unrecognised-sheet.named': 'The sheet {sheet}, which no confirmed saved layout recognises.',
   'error.merchandise.import-style-differs': 'This row names another style, brand or category than its document.',
   'error.merchandise.import-value-not-accepted': 'This value is not one the product master accepts.',
   'error.merchandise.import-document-empty': 'This document has no rows.',

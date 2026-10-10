@@ -16,9 +16,7 @@ describe('publishLimitRefusal', () => {
       expect(publishLimitRefusal(name)).toEqual({
         kind: 'unavailable',
         code: 'files-imports.publishing-limited',
-        missing: [
-          { kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' },
-        ],
+        missing: [{ kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' }],
       });
     }
   });

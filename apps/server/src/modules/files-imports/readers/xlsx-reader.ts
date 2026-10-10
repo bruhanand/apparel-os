@@ -7,9 +7,7 @@ import type { CellType, Grid, GridCell, GridNote, GridRow, GridSheet, SheetState
 // (PRD-SEC-011; GC6-17). Errors stay errors (J-1). A cell it cannot read is noted and the file goes on (A-11).
 
 export type XlsxRead =
-  | { readonly kind: 'read'; readonly grid: Grid }
-  | { readonly kind: 'unreadable' }
-  | { readonly kind: 'too-many-rows' };
+  { readonly kind: 'read'; readonly grid: Grid } | { readonly kind: 'unreadable' } | { readonly kind: 'too-many-rows' };
 
 /** Thrown inside a sheet's walk when the rows read pass the row cap, so the walk stops there. */
 class TooManyRows extends Error {}

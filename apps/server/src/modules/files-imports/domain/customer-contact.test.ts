@@ -72,7 +72,10 @@ describe('checkCustomerContact (RR-203)', () => {
   it('accepts a clean upload: the same layout, without the contact column, and other classes', () => {
     const file = grid(sheet('SYNTHETIC Sales', ['Bill', 'Amount']));
     expect(checkCustomerContact(file, [withContact])).toEqual({ kind: 'accepted' });
-    const costed = version('02', [{ name: 'Bill', required: true }, { name: 'Cost', restrictedClass: 'cost' }]);
+    const costed = version('02', [
+      { name: 'Bill', required: true },
+      { name: 'Cost', restrictedClass: 'cost' },
+    ]);
     expect(checkCustomerContact(grid(sheet('SYNTHETIC Sales', ['Bill', 'Cost'])), [costed])).toEqual({
       kind: 'accepted',
     });
@@ -80,8 +83,16 @@ describe('checkCustomerContact (RR-203)', () => {
 
   it('refuses a file no Confirmed version fits, since its classes cannot be known; Proposed and Rejected count for nothing', () => {
     const file = grid(sheet('SYNTHETIC Sales', ['Bill', 'Amount', 'Mobile']));
-    const proposed = version('03', [{ name: 'Bill', required: true }, { name: 'Amount' }, { name: 'Mobile' }], 'Proposed');
-    const rejected = version('04', [{ name: 'Bill', required: true }, { name: 'Amount' }, { name: 'Mobile' }], 'Rejected');
+    const proposed = version(
+      '03',
+      [{ name: 'Bill', required: true }, { name: 'Amount' }, { name: 'Mobile' }],
+      'Proposed',
+    );
+    const rejected = version(
+      '04',
+      [{ name: 'Bill', required: true }, { name: 'Amount' }, { name: 'Mobile' }],
+      'Rejected',
+    );
     // The Confirmed version does not know the column Mobile, so it does not fit (6.5, A-4).
     expect(checkCustomerContact(file, [withContact, proposed, rejected])).toEqual({
       kind: 'refused',

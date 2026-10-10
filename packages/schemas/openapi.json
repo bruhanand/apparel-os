@@ -2857,7 +2857,11 @@
               }
             },
             "x-error-codes": [
-              "files-imports.file-unreadable"
+              "files-imports.file-unreadable",
+              "files-imports.over-intake-cap",
+              "files-imports.workbook-active-content",
+              "files-imports.workbook-depends-on-another",
+              "files-imports.workbook-unapproved-link"
             ]
           },
           "500": {
@@ -68641,7 +68645,11 @@
               "files-imports.file-unreadable",
               "files-imports.layout-not-matched",
               "files-imports.layout-version-rejected",
-              "files-imports.no-import-handler"
+              "files-imports.no-import-handler",
+              "files-imports.over-intake-cap",
+              "files-imports.workbook-active-content",
+              "files-imports.workbook-depends-on-another",
+              "files-imports.workbook-unapproved-link"
             ]
           },
           "500": {
@@ -69178,7 +69186,14 @@
             },
             "x-error-codes": [
               "access.starts-in-past",
-              "files-imports.type-not-allowed"
+              "files-imports.customer-contact-columns",
+              "files-imports.file-unreadable",
+              "files-imports.layout-needed-on-test-setup",
+              "files-imports.over-intake-cap",
+              "files-imports.type-not-allowed",
+              "files-imports.workbook-active-content",
+              "files-imports.workbook-depends-on-another",
+              "files-imports.workbook-unapproved-link"
             ]
           },
           "500": {

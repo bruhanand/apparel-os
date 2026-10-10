@@ -11,8 +11,7 @@ import type { WorkbookWorkerRequest } from './workbook-worker.js';
 // and every later read of the stored file (Start an import, Detect a layout), so a cap holds wherever the file is read.
 
 export type WorkbookRead =
-  | { readonly kind: 'read'; readonly grid: Grid }
-  | Extract<WorkbookSafety, { readonly kind: 'refused' }>;
+  { readonly kind: 'read'; readonly grid: Grid } | Extract<WorkbookSafety, { readonly kind: 'refused' }>;
 
 function overCap(cap: 'parser-memory' | 'processing-time', limit: number): WorkbookRead {
   return {
@@ -51,10 +50,19 @@ export function readWorkbook(bytes: Buffer, caps: IntakeCaps): Promise<WorkbookR
     worker.once('error', (error: Error & { code?: string }) => {
       if (error.code === 'ERR_WORKER_OUT_OF_MEMORY') settle(overCap('parser-memory', caps.maxParserMemoryMb));
       // Anything else the reader threw is a workbook it could not read; the error itself may quote the file.
-      else settle({ kind: 'refused', code: 'files-imports.file-unreadable', missing: [{ kind: 'reader-error', error: 'workbook-not-read' }] });
+      else
+        settle({
+          kind: 'refused',
+          code: 'files-imports.file-unreadable',
+          missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
+        });
     });
     worker.once('exit', () => {
-      settle({ kind: 'refused', code: 'files-imports.file-unreadable', missing: [{ kind: 'reader-error', error: 'workbook-not-read' }] });
+      settle({
+        kind: 'refused',
+        code: 'files-imports.file-unreadable',
+        missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
+      });
     });
     const request: WorkbookWorkerRequest = {
       bytes: new Uint8Array(bytes),

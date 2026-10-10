@@ -88,7 +88,8 @@ export function withParts(
   const parts = partsOf(workbook);
   for (const [name, change] of Object.entries(changes)) {
     if (change === null) parts.delete(name);
-    else if (typeof change === 'function') parts.set(name, Buffer.from(change(parts.get(name)?.toString('utf8') ?? '')));
+    else if (typeof change === 'function')
+      parts.set(name, Buffer.from(change(parts.get(name)?.toString('utf8') ?? '')));
     else parts.set(name, typeof change === 'string' ? Buffer.from(change, 'utf8') : change);
   }
   return zipOf(parts);
