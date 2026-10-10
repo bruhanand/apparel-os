@@ -189,7 +189,7 @@ export interface SyntheticWorld {
     readonly fitName: string;
   };
   /**
-   * The file intake journey (S1-F06-T01), in the security settings Organisation: a Booking user who imports the
+   * The file intake journey (S1-F06-T01), in the posting maps journey's Organisation: a Booking user who imports the
    * SYNTHETIC product file the server of the journeys wrote, the saved layout's option as the screen names it, and the
    * style and SKU codes the file holds.
    */

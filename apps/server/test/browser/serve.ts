@@ -609,23 +609,6 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
-// The file intake journey's catalogue, saved layout and batch code series (S1-F06-T01; its people and file are below):
-// a SYNTHETIC category with no size set, the one SYNTHETIC layout and mapping, proposed by the fixture person, and an
-// Open series of the import-batch kind with a SYNTHETIC format (numbering-and-audit 3.5).
-const intakeCategory = { code: syntheticCode('JOURNEY-INTAKE-CAT'), name: syntheticName('Journey Intake Category') };
-recordedCatalogue(
-  await structureFixture.asPreparerDo((c, p) =>
-    structureFixture.catalogue.prepareCategory(c, p, {
-      ...intakeCategory,
-      identityAttributeIds: [],
-      validFrom: structureFixture.today(),
-    }),
-  ),
-);
-await writeSyntheticProductLayout(settingsDatabase, structureFixture.preparer.id);
-await structureFixture.run(structureFixture.preparer.id, (c) =>
-  defineSyntheticImportBatchSeries(c, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
-);
 // The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
 // its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
 const readinessEntity = await approved(structureFixture, (c, p) =>
@@ -702,6 +685,33 @@ const postingFixture = await structureSetup({
   // The journey's SYNTHETIC event kinds, declared in the test composition only (books-and-posting 7.1; DEC-112 H2).
   eventKinds: POSTING_JOURNEY_KINDS,
 });
+// The file intake journey's catalogue, saved layout and batch code series (S1-F06-T01; its person and file are below),
+// in this Organisation, so the product proposal it publishes reaches no other journey's My work: a SYNTHETIC brand and
+// a category with no size set, the one SYNTHETIC layout and mapping, proposed by the fixture person, and an Open series
+// of the import-batch kind with a SYNTHETIC format (numbering-and-audit 3.5).
+const intakeBrand = { code: syntheticCode('JOURNEY-INTAKE-BRAND'), name: syntheticName('Journey Intake Brand') };
+const intakeCategory = { code: syntheticCode('JOURNEY-INTAKE-CAT'), name: syntheticName('Journey Intake Category') };
+const intakeRecorded = (outcome: { kind: 'success' } | { kind: 'refusal'; refusal: { code: string } }) => {
+  if (outcome.kind !== 'success') throw new Error(`The synthetic catalogue was refused: ${outcome.refusal.code}`);
+};
+intakeRecorded(
+  await postingFixture.asPreparerDo((c, p) =>
+    postingFixture.catalogue.prepareBrand(c, p, { ...intakeBrand, aliases: [], validFrom: postingFixture.today() }),
+  ),
+);
+intakeRecorded(
+  await postingFixture.asPreparerDo((c, p) =>
+    postingFixture.catalogue.prepareCategory(c, p, {
+      ...intakeCategory,
+      identityAttributeIds: [],
+      validFrom: postingFixture.today(),
+    }),
+  ),
+);
+await writeSyntheticProductLayout(postingDatabase, postingFixture.preparer.id);
+await postingFixture.run(postingFixture.preparer.id, (c) =>
+  defineSyntheticImportBatchSeries(c, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
+);
 const postingGeography = await approvedGeography(postingFixture, 'POSTING');
 const postingEntity = await approved(postingFixture, (c, p) =>
   postingFixture.organisation.prepareLegalEntity(c, p, {
@@ -1264,19 +1274,19 @@ const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-B
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 
-// The file intake journey (file-intake.spec.ts; S1-F06-T01), in the settings Organisation: a Booking user who uploads
-// the SYNTHETIC product file, stages it with the one SYNTHETIC saved layout and mapping, validates and publishes it.
-// Its SYNTHETIC category has no size set, so the file's one SKU has an Unknown size; the brand is the products
-// journey's. The batch code series has a SYNTHETIC format (numbering-and-audit 3.5). The importer holds every
+// The file intake journey (file-intake.spec.ts; S1-F06-T01), in the posting maps journey's Organisation, where its
+// catalogue, layout and series are recorded above: a Booking user who uploads the SYNTHETIC product file, stages it
+// with the one SYNTHETIC saved layout and mapping, validates and publishes it. Its SYNTHETIC category has no size set,
+// so the file's one SKU has an Unknown size. The importer holds every
 // restricted class, since a file whose layout is not confirmed counts as holding them all (imports-and-opening-data
 // 11). Every value is SYNTHETIC.
-const intakeBooking = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+const intakeBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
   label: 'BROWSER-INTAKE-BOOKING',
   enrolled: true,
   personas: ['P-BKG'],
 });
 await grantSynthetic(
-  settingsDatabase,
+  postingDatabase,
   { kind: 'user', id: intakeBooking.id },
   [
     { recordType: 'files_imports.stored_file', action: 'create' },
@@ -1301,7 +1311,7 @@ writeFileSync(
       {
         'Style code': intakeStyle,
         'SKU code': intakeSku,
-        'Brand code': productsBrand.code,
+        'Brand code': intakeBrand.code,
         'Category code': intakeCategory.code,
         Size: undefined,
         'Stock unit': 'piece',
@@ -1910,7 +1920,7 @@ writeFileSync(
       fitName: productsFit.name,
     },
     fileIntake: {
-      organisationCode: settingsCode,
+      organisationCode: postingCode,
       booking: credentialsOf(intakeBooking),
       filePath: intakeFile,
       // How the screen names the saved layout and mapping (intake.layout.option).
