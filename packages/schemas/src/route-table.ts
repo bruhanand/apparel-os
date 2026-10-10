@@ -40,7 +40,6 @@ import {
 import { secretRegistry } from './secret.js';
 import {
   taxRuleCaEvidenceDraftSchema,
-  taxRuleCaEvidenceRecordedSchema,
   goodsClassificationDraftSchema,
   goodsClassificationVersionDraftSchema,
   priceBasisDraftSchema,
@@ -3580,7 +3579,9 @@ export const routes = {
     method: 'POST',
     path: '/api/finance/period-reopenings/{reopeningId}/withdraw',
     params: z.strictObject({ reopeningId: idSchema }),
-    access: { kind: 'action', action: 'cancel', recordType: 'finance.period_reopening' },
+    // RR-489 (product owner, 10 Oct 2026): the requester withdraws their own with no permission; the command
+    // Authorises cancel on `finance.period_reopening` for anyone else (books-and-posting 4.3).
+    access: { kind: 'own' },
     command: true,
     body: z.strictObject({}),
     secretFields: [],
@@ -3750,7 +3751,7 @@ export const routes = {
     secretFields: [],
     restrictedFields: [],
     shows: 'nothing',
-    response: taxRuleCaEvidenceRecordedSchema,
+    response: caEvidenceRecordedSchema,
     codes: TAX_RULE_CA_EVIDENCE_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;

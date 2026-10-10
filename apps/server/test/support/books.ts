@@ -145,6 +145,7 @@ export function syntheticBooks(setup: StructureSetup, geography: { stateId: stri
             bookId,
             code: syntheticCode(next(code)),
             nature,
+            origin: 'synthetic',
             name: syntheticName(`Account ${code}`),
             validFrom: setup.today(),
           }),
@@ -252,6 +253,23 @@ export async function postIn(
   await context.lock(LOCK_STEP.numberSeries, held.seriesTargets);
   hooks.atStep8?.(performance.now() - started);
   return setup.books.post(context, request);
+}
+
+/**
+ * The SYNTHETIC caller of Reverse (9.1, 9.4), in the transaction given: plan before any lock, hold the period at step
+ * 7 and the journal series at step 8, then reverse.
+ */
+export async function reverseIn(
+  setup: StructureSetup,
+  context: TransactionContext,
+  request: { readonly journalId: string; readonly businessDate: string; readonly actorId: string },
+) {
+  const plan = await setup.books.planReversal(context, request);
+  if (plan.kind === 'refused') return plan;
+  const held = await setup.books.holdReversal(context, plan);
+  if (held.kind === 'refused') return held;
+  await context.lock(LOCK_STEP.numberSeries, held.seriesTargets);
+  return setup.books.reverse(context, { ...request, actor: { kind: 'user', id: request.actorId } });
 }
 
 export const postDocument = (setup: StructureSetup, request: PostRequest) =>

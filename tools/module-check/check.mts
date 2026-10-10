@@ -91,7 +91,9 @@ const SAME_TIER_CALLS: Readonly<Record<string, readonly string[]>> = {
   // The parties part reads brands through the catalogue's interface, one module (4.12; S1-F03-T03).
   'merchandise/parties': ['organisation', 'merchandise/catalogue'],
   'finance/books': ['organisation', 'exceptions'],
-  'finance/tax-rules': ['organisation', 'exceptions'],
+  // The tax rules part records and checks the CA's evidence, and shares the version lines and route plumbing,
+  // through the books part's interface (4.14; product owner, 10 Oct 2026, RR-486).
+  'finance/tax-rules': ['organisation', 'exceptions', 'finance/books'],
   // Tier 4 (section 5)
   'merchandise/pt': ['receiving'],
   receiving: ['booking'],

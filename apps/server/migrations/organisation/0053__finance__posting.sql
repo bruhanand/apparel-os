@@ -141,7 +141,9 @@ alter table finance.ca_approval_evidence_cover
   add column posting_map_version_id uuid references finance.posting_map_version (id);
 alter table finance.ca_approval_evidence_cover drop constraint ca_approval_evidence_cover_one;
 alter table finance.ca_approval_evidence_cover add constraint ca_approval_evidence_cover_one
-  check (pg_catalog.num_nonnulls(account_version_id, book_setting_version_id, posting_map_version_id) = 1);
+  check (pg_catalog.num_nonnulls(account_version_id, book_setting_version_id, goods_classification_version_id,
+    tax_rate_rule_version_id, registration_tax_applicability_version_id, price_basis_version_id,
+    rounding_rule_version_id, posting_map_version_id) = 1);
 alter table finance.ca_approval_evidence_cover add constraint ca_approval_evidence_cover_map
   unique (ca_approval_evidence_id, posting_map_version_id);
 create index ca_approval_evidence_cover_map_version on finance.ca_approval_evidence_cover (posting_map_version_id);
@@ -149,9 +151,11 @@ create index ca_approval_evidence_cover_map_version on finance.ca_approval_evide
 -- A journal (5.1; PRD-LED-001, PRD-LED-004, PRD-MOD-008 to PRD-MOD-011, PRD-ACP-013): one book, its accounting and
 -- business dates, the event kind, the source document, the map version applied, its number from the book's journal
 -- series, the actor and the journal it reverses. Never changed (5.3): insert only, a trigger refuses every change. A
--- reversal names the journal it reverses, once, in the same book. Its period guard refuses a date in no period of the
--- book (S1-F09-T03 adds Locked). Unscoped: it carries no amount and is read only by finance code, through its lines,
--- which carry the scope facts (12; books-and-posting 13.1 "As built").
+-- reversal names the journal it reverses, once, in the same book. Its period guard, which refuses a date in no period
+-- of the book and a Locked period, is 0054's, with the period events it reads. Unscoped: it carries no amount and is
+-- read only by finance code, through its lines, which carry the scope facts (12; books-and-posting 13.1 "As built").
+-- `written_in` is the transaction that wrote it, which its lines must share, so its balance is checked once, at that
+-- transaction's commit (5.2).
 create table finance.journal (
   id uuid primary key,
   book_id uuid not null,
@@ -173,6 +177,7 @@ create table finance.journal (
   on_behalf_of_user_id uuid,
   occurred_at timestamptz not null,
   recorded_at timestamptz not null default now(),
+  written_in xid8 not null default pg_catalog.pg_current_xact_id(),
   constraint journal_number check (number <> ''),
   constraint journal_number_in_book unique (book_id, number),
   constraint journal_allocation_once unique (number_allocation_id),
@@ -189,30 +194,19 @@ create trigger refuse_row_change before update or delete on finance.journal
 create trigger refuse_truncate before truncate on finance.journal
   for each statement execute function kernel.refuse_change();
 
--- The last guard on a journal (13.1): its accounting date lies in the period it names, of its own book; a reversal
--- reverses a journal of the same book. S1-F09-T03 adds the Locked period.
-create function finance.guard_journal() returns trigger
+-- Whatever an insert names, a journal is written in the transaction writing it (5.2): its lines must share it.
+create function finance.stamp_journal() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
 begin
-  if not exists (select 1 from finance.financial_period p
-                 where p.id = new.financial_period_id and p.book_id = new.book_id
-                   and p.dates @> new.accounting_date) then
-    raise exception 'a journal''s accounting date lies in a period of its book (books-and-posting 4.1, 13.1)'
-      using errcode = 'AO012';
-  end if;
-  if new.reverses_journal_id is not null
-     and not exists (select 1 from finance.journal j where j.id = new.reverses_journal_id and j.book_id = new.book_id) then
-    raise exception 'a reversal reverses a journal of the same book (books-and-posting 5.3, 13.1)'
-      using errcode = 'AO013';
-  end if;
+  new.written_in := pg_catalog.pg_current_xact_id();
   return new;
 end;
 $$;
-revoke execute on function finance.guard_journal() from public;
-create trigger guard_journal before insert on finance.journal
-  for each row execute function finance.guard_journal();
+revoke execute on function finance.stamp_journal() from public;
+create trigger stamp_journal before insert on finance.journal
+  for each row execute function finance.stamp_journal();
 
 -- A journal line (5.1; PRD-LED-001, POL-09.11, PRD-MOD-014): an account of the journal's book, a side, an amount in
 -- paise above zero, and the line's scope facts: the book's legal entity, the business unit with its Site and Store,
@@ -245,7 +239,8 @@ create trigger refuse_row_change before update or delete on finance.journal_line
 create trigger refuse_truncate before truncate on finance.journal_line
   for each statement execute function kernel.refuse_change();
 
--- A line's account belongs to its journal's book (13.1).
+-- A line's account belongs to its journal's book (13.1), and a line is written with its journal, in the transaction
+-- that wrote it, so the journal's one balance check at commit sees every line (5.2).
 create function finance.check_journal_line_account() returns trigger
   language plpgsql
   set search_path = pg_catalog
@@ -256,6 +251,11 @@ begin
     raise exception 'a journal line''s account belongs to the journal''s book (books-and-posting 13.1)'
       using errcode = 'AO014';
   end if;
+  if not exists (select 1 from finance.journal j
+                 where j.id = new.journal_id and j.written_in = pg_catalog.pg_current_xact_id()) then
+    raise exception 'a journal line is written with its journal, in the same transaction (books-and-posting 5.2)'
+      using errcode = 'AO015';
+  end if;
   return new;
 end;
 $$;
@@ -264,17 +264,17 @@ create trigger check_journal_line_account before insert on finance.journal_line
   for each row execute function finance.check_journal_line_account();
 
 -- Balanced at commit (5.2; PRD-LED-004, PRD-MOD-013, POL-09.13): each journal has at least two lines and its debits
--- equal its credits, checked by a deferred constraint trigger, so a journal that does not balance never commits, even
--- written past the service. SECURITY DEFINER, named here and in books-and-posting 5.2 (code-house-rules 5.2): a
--- poster's row-level security may hide lines of other places, and the balance is of every line of the journal.
+-- equal its credits, checked once for each journal by a deferred constraint trigger on the journal, so a journal that
+-- does not balance never commits, even written past the service; its lines are all written in its transaction (the
+-- line trigger above), so none comes after the check. SECURITY DEFINER, named here and in books-and-posting 5.2
+-- (code-house-rules 5.2): a poster's row-level security may hide lines of other places, and the balance is of every
+-- line of the journal.
 create function finance.check_journal_balanced() returns trigger
   language plpgsql
   security definer
   set search_path = pg_catalog, pg_temp
 as $$
 declare
-  -- The trigger's argument names the row's column that names the journal.
-  journal uuid := (pg_catalog.to_jsonb(new) ->> tg_argv[0])::uuid;
   lines bigint;
   debits numeric;
   credits numeric;
@@ -283,7 +283,7 @@ begin
          coalesce(sum(l.amount_paise) filter (where l.side = 'debit'), 0),
          coalesce(sum(l.amount_paise) filter (where l.side = 'credit'), 0)
     into lines, debits, credits
-    from finance.journal_line l where l.journal_id = journal;
+    from finance.journal_line l where l.journal_id = new.id;
   if lines < 2 or debits <> credits then
     raise exception 'a journal has at least two lines and its debits equal its credits (books-and-posting 5.2)'
       using errcode = 'AO015';
@@ -294,10 +294,7 @@ $$;
 revoke execute on function finance.check_journal_balanced() from public;
 create constraint trigger check_journal_balanced after insert on finance.journal
   deferrable initially deferred
-  for each row execute function finance.check_journal_balanced('id');
-create constraint trigger check_journal_balanced after insert on finance.journal_line
-  deferrable initially deferred
-  for each row execute function finance.check_journal_balanced('journal_id');
+  for each row execute function finance.check_journal_balanced();
 
 -- Where each line came from (8.3; PRD-LED-004, PRD-LED-008): one row per source module, item key and component, its
 -- signed amount, the journal line it went into, and the hash of the item's whole content, by which a replay is the
@@ -353,6 +350,28 @@ as $$
 $$;
 revoke execute on function finance.lines_hidden(uuid, date, date) from public;
 grant execute on function finance.lines_hidden(uuid, date, date) to aos_runtime;
+
+-- Every line of a journal not yet reversed, for its reversal (9.1, 9.4; PRD-LED-004, PRD-MOD-011): a reversal is the
+-- whole journal on opposite sides, whatever the reverser may see of journals, as Post writes the lines of a money
+-- effect whatever its actor may read (12 "As built"). SECURITY DEFINER, named in books-and-posting 9.1 and
+-- code-house-rules 5.2: it answers nothing for a journal already reversed, and Reverse is its only caller.
+create function finance.lines_to_reverse(reversed uuid)
+  returns table (account_id uuid, side text, amount_paise bigint, legal_entity_id uuid, site_id uuid, store_id uuid,
+                 business_unit_id uuid, brand_id uuid, mapping_version_id uuid)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $$
+  select l.account_id, l.side, l.amount_paise, l.legal_entity_id, l.site_id, l.store_id, l.business_unit_id,
+         l.brand_id, l.mapping_version_id
+    from finance.journal_line l
+   where l.journal_id = lines_to_reverse.reversed
+     and not exists (select 1 from finance.journal r where r.reverses_journal_id = lines_to_reverse.reversed)
+   order by l.id
+$$;
+revoke execute on function finance.lines_to_reverse(uuid) from public;
+grant execute on function finance.lines_to_reverse(uuid) to aos_runtime;
 
 -- Runtime grants (code-house-rules 5.2). Identity rows a change or a posting locks grant UPDATE (id) only; version
 -- rows take the changes their guard allows; everything else is insert only.

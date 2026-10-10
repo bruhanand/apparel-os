@@ -1,13 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { PERIOD_REOPENING_TYPE, type NamedCorrection } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { LOCK_STEP } from '../src/kernel/index.js';
 import type { PostRequest, PostResult } from '../src/modules/finance/books/index.js';
 import { syntheticKeysEnvironment } from './support/access.js';
 import {
   postDocument,
   postIn,
   recorded,
+  reverseIn,
   syntheticBooks,
   syntheticDocument,
   SYNTHETIC_DOCUMENT_TYPE,
@@ -84,8 +84,9 @@ async function reopened(periodId: string, corrections: NamedCorrection[]) {
   return asked;
 }
 
+/** The requester withdraws their own reopening, holding no cancel (RR-489; product owner, 10 Oct 2026). */
 const withdraw = (reopeningId: string) =>
-  setup.asPreparerDo((c, p) => setup.books.withdrawReopening(c, p, reopeningId));
+  setup.run(setup.preparer.id, (c) => setup.books.withdrawReopening(c, { userId: setup.preparer.id }, reopeningId));
 
 function posted(result: PostResult) {
   if (result.kind !== 'posted') throw new Error(`Not posted: ${JSON.stringify(result)}`);
@@ -299,6 +300,64 @@ describe('Request and approve a reopening (books-and-posting 4.3, 15 test 11; PR
   });
 });
 
+describe('Withdrawing a reopening (books-and-posting 4.3 step 4; PRD-LED-020; RR-489, product owner, 10 Oct 2026)', () => {
+  it('PRD-LED-020 RR-489 the requester withdraws a reopening still awaiting its decision, holding no cancel; its request is Withdrawn and can no longer be decided', async () => {
+    const b = await books.book(1);
+    const [p1] = b.periods;
+    recorded(await lock(p1?.id ?? ''));
+    const x = syntheticDocument(setup, b, { businessDate: setup.today() });
+    const pending = recorded(await requestReopening(p1?.id ?? '', [correctionOf(x)]));
+    expect(await withdraw(pending.reopeningId)).toEqual({
+      kind: 'success',
+      answer: { reopeningId: pending.reopeningId },
+    });
+    const requests = await setup.run(setup.preparer.id, (c) =>
+      setup.access.approvalRequestsOf(c, [pending.reopeningId]),
+    );
+    expect(requests.get(pending.reopeningId)).toMatchObject({ id: pending.requestId, state: 'Withdrawn' });
+    expect(await setup.decide(pending.requestId, pending.reopeningId)).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'access.approval-not-open' },
+    });
+    expect(await states(b)).toEqual(['Locked']);
+    expect((await periodClose(b))[0]?.reopenings).toMatchObject([{ id: pending.reopeningId, state: 'Withdrawn' }]);
+    expect(await postDocument(setup, x)).toMatchObject(lockedRefusal(p1?.id));
+    expect(await withdraw(pending.reopeningId)).toMatchObject({ refusal: { code: 'finance.reopening-not-in-force' } });
+  });
+
+  it('PRD-LED-020 RR-489 anyone but the requester needs cancel to withdraw, pending or in force', async () => {
+    const b = await books.book(1);
+    const [p1] = b.periods;
+    recorded(await lock(p1?.id ?? ''));
+    const pending = recorded(
+      await requestReopening(p1?.id ?? '', [
+        correctionOf(syntheticDocument(setup, b, { businessDate: setup.today() })),
+      ]),
+    );
+    const other = await setup.anotherApprover(`WITHDRAWER-${pending.reopeningId.slice(-6).toUpperCase()}`);
+    const by = (cancelHeldThrough?: string) =>
+      setup.run(other.id, (c) =>
+        setup.books.withdrawReopening(
+          c,
+          { userId: other.id, ...(cancelHeldThrough === undefined ? {} : { cancelHeldThrough }) },
+          pending.reopeningId,
+        ),
+      );
+    expect(await by()).toMatchObject({
+      kind: 'refusal',
+      refusal: {
+        code: 'access.not-authorised',
+        missing: [{ kind: 'permission', action: 'cancel', recordType: PERIOD_REOPENING_TYPE }],
+      },
+    });
+    const cancel = await grantSynthetic(database, { kind: 'user', id: other.id }, [
+      { recordType: PERIOD_REOPENING_TYPE, action: 'cancel' },
+    ]);
+    expect(await by(cancel.assignmentId)).toMatchObject({ kind: 'success' });
+    expect((await periodClose(b))[0]?.reopenings).toMatchObject([{ state: 'Withdrawn' }]);
+  });
+});
+
 describe('Postings in a Reopened period (books-and-posting 4.3, 15 test 12; PRD-LED-020; DEC-107)', () => {
   it('PRD-LED-020 books-and-posting 15 test 12 a named correction posts once; any other posting is refused; when the last one posts the period shows Locked', async () => {
     const b = await books.book(1);
@@ -342,7 +401,6 @@ describe('Postings in a Reopened period (books-and-posting 4.3, 15 test 12; PRD-
     recorded(await lock(p1?.id ?? ''));
     const x = syntheticDocument(setup, b, { businessDate: setup.today() });
     const pending = recorded(await requestReopening(p1?.id ?? '', [correctionOf(x)]));
-    expect(await withdraw(pending.reopeningId)).toMatchObject({ refusal: { code: 'finance.reopening-not-in-force' } });
     decided(await setup.decide(pending.requestId, pending.reopeningId));
     expect(await states(b)).toEqual(['Reopened']);
     recorded(await withdraw(pending.reopeningId));
@@ -374,13 +432,13 @@ describe('Postings in a Reopened period (books-and-posting 4.3, 15 test 12; PRD-
     const [journal] = posted(await postDocument(setup, x));
     recorded(await lock(p1?.id ?? ''));
     const reverse = () =>
-      setup.run(setup.preparer.id, async (context) => {
-        const request = { journalId: journal?.journalId ?? '', businessDate: setup.day(1) };
-        const plan = await setup.books.planReversal(context, request);
-        if (plan.kind === 'refused') return plan;
-        await context.lock(LOCK_STEP.numberSeries, await setup.books.holdReversal(context, plan));
-        return setup.books.reverse(context, { ...request, actor: { kind: 'user', id: setup.preparer.id } });
-      });
+      setup.run(setup.preparer.id, (context) =>
+        reverseIn(setup, context, {
+          journalId: journal?.journalId ?? '',
+          businessDate: setup.day(1),
+          actorId: setup.preparer.id,
+        }),
+      );
     expect(await reverse()).toMatchObject({ kind: 'refused', refusal: { code: 'finance.period-locked' } });
     await reopened(p1?.id ?? '', [correctionOf(x)]);
     expect(await reverse()).toMatchObject({ kind: 'reversed' });

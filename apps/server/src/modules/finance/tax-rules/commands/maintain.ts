@@ -8,8 +8,8 @@ import { uuidv7 } from '@apparel-os/domain';
 import {
   TAX_RULE_CHANGE,
   TAX_RULE_TYPE,
+  type CaEvidenceRecorded,
   type TaxRuleCaEvidenceDraft,
-  type TaxRuleCaEvidenceRecorded,
   type GoodsClassificationDraft,
   type GoodsClassificationVersionDraft,
   type PriceBasisDraft,
@@ -22,8 +22,6 @@ import {
 } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
 import {
-  LOCK_STEP,
-  lockTable,
   UNIQUE_VIOLATION,
   withSavepoint,
   type CommandRefusal,
@@ -47,19 +45,17 @@ import {
   taxRateRule,
   taxRateRuleVersion,
   taxRateSlab,
-  taxRuleCaEvidence,
 } from '../db/schema.js';
 import {
-  KIND_TABLES,
   approvedOn,
-  lockRecord,
-  recordItem,
+  recordCaEvidence,
   refused,
   staleToken,
   today,
-  versionHead,
+  type EvidenceVersions,
   type Outcome,
-} from './lines.js';
+} from '../../books/index.js';
+import { KIND_TABLES, lineOf, lockRecord, recordItem, recordLock, versionHead } from './lines.js';
 import { classificationUsable } from './classification.js';
 
 // Maintain tax rules (shared-calculations 3.3, 10.1, 10.3; module-map 4.14 "Maintain accounts, maps and rules";
@@ -74,8 +70,29 @@ type Json = ValueChange['after'];
 const value = (field: string, after: Json): ValueChange => ({ kind: 'value', field, before: null, after });
 const from = (start: string) => `[${start},)`;
 
-/** What a piece of the CA's evidence is, as files-imports keeps it: it carries no restricted class (10.1). */
-export const CA_EVIDENCE = { kind: 'finance.ca-approval', restrictedClasses: [] } as const;
+/** How the CA's evidence finds the tax-rule versions it names, with their records' locks (RR-486). */
+const taxRuleVersions: EvidenceVersions<TaxRuleCaEvidenceDraft['versions'][number]> = {
+  async find(context, refs) {
+    const found = [];
+    for (const ref of refs) {
+      const head = await versionHead(context, ref.kind, ref.versionId);
+      found.push(
+        head === undefined
+          ? undefined
+          : {
+              kind: ref.kind,
+              recordType: TAX_RULE_TYPE,
+              recordId: head.ownerId,
+              versionId: ref.versionId,
+              decision: head.decision,
+              lock: recordLock(ref.kind, head.ownerId),
+            },
+      );
+    }
+    return found;
+  },
+  missing: (ref) => ({ kind: 'version', recordType: TAX_RULE_TYPE, versionId: ref.versionId }),
+};
 
 export interface MaintainDependencies {
   readonly audit: AuditInterface;
@@ -148,9 +165,9 @@ export class TaxRulesMaintenance {
     if (!(await lockRecord(context, kind, recordId))) {
       return refused('not-found', 'finance.record-not-found', [recordItem(recordId)]);
     }
-    const stale = await staleToken(context, kind, recordId, draft.versionToken);
+    const stale = await staleToken(context, lineOf(kind, recordId), draft.versionToken);
     if (stale !== undefined) return { kind: 'refusal', refusal: stale };
-    const overlap = await approvedOn(context, kind, recordId, draft.validFrom);
+    const overlap = await approvedOn(context, lineOf(kind, recordId), draft.validFrom);
     if (overlap !== undefined) return { kind: 'refusal', refusal: overlap };
     const versionId = uuidv7();
     const changes = await write(versionId);
@@ -496,104 +513,18 @@ export class TaxRulesMaintenance {
     );
   }
 
-  // The CA's evidence (10.1; books-and-posting 6.3, GC4-2; POL-10.05; DEC-116).
+  // The CA's evidence (10.1; books-and-posting 6.3, GC4-2; POL-10.05; DEC-116; RR-486).
 
   /**
-   * Records the CA's evidence for a named set of versions awaiting approval, before a different authorised Accounts
-   * user decides them: a stored file attached to each through files-imports (S1-F06-T05), or a reference naming what the
-   * evidence is, who gave it, its date and where it is kept. Each version takes its own row, under its record's lock.
+   * Records the CA's evidence for a named set of tax-rule versions awaiting approval, before a different authorised
+   * Accounts user decides them, as the one record of `finance` the books part keeps (RR-486, product owner, 10 Oct
+   * 2026): this part finds its versions and their records' locks; the books part records the evidence.
    */
-  async recordCaEvidence(
+  recordCaEvidence(
     context: TransactionContext,
     recorder: Preparer,
     draft: TaxRuleCaEvidenceDraft,
-  ): Promise<Outcome<TaxRuleCaEvidenceRecorded>> {
-    const heads = [];
-    for (const each of draft.versions) {
-      const head = await versionHead(context, each.kind, each.versionId);
-      if (head === undefined) {
-        return refused('not-found', 'finance.record-not-found', [
-          { kind: 'version', recordType: TAX_RULE_TYPE, recordId: each.versionId, versionId: each.versionId },
-        ]);
-      }
-      heads.push({ ...each, ownerId: head.ownerId });
-    }
-    // Every record named, in one step-1 call, so the lock order holds (code-house-rules 8.2).
-    const locked = await context.lock(
-      LOCK_STEP.document,
-      heads.map((head) => ({
-        table: lockTable('finance', KIND_TABLES[head.kind].identity),
-        id: head.ownerId,
-        mode: 'exclusive' as const,
-      })),
-    );
-    if (locked.missing.length > 0) {
-      return refused(
-        'not-found',
-        'finance.record-not-found',
-        locked.missing.map((each) => recordItem(each.id)),
-      );
-    }
-    const evidenceIds: string[] = [];
-    for (const head of heads) {
-      // Rechecked under the lock: a version decided meanwhile takes no evidence.
-      const now = await versionHead(context, head.kind, head.versionId);
-      if (now?.decision !== 'Awaiting approval') {
-        return refused('refused', 'finance.version-not-awaiting', [
-          { kind: 'version', recordType: TAX_RULE_TYPE, recordId: head.ownerId, versionId: head.versionId },
-        ]);
-      }
-      const evidence = draft.evidence;
-      let attachmentId: string | null = null;
-      if (evidence.kind === 'file') {
-        const attached = await this.dependencies.files.attach(context, {
-          storedFileId: evidence.file.storedFileId,
-          fileReceiptId: evidence.file.fileReceiptId,
-          record: { module: 'finance', type: TAX_RULE_TYPE, id: head.ownerId, versionId: head.versionId },
-          evidence: CA_EVIDENCE,
-          scope: {},
-          attachedBy: { kind: 'user', id: recorder.userId },
-          roleAssignmentId: recorder.roleAssignmentId,
-        });
-        attachmentId = attached.attachmentId;
-      }
-      const id = uuidv7();
-      const column = KIND_TABLES[head.kind].evidence;
-      await context.tx.insert(taxRuleCaEvidence).values({
-        id,
-        goodsClassificationVersionId: column === taxRuleCaEvidence.goodsClassificationVersionId ? head.versionId : null,
-        taxRateRuleVersionId: column === taxRuleCaEvidence.taxRateRuleVersionId ? head.versionId : null,
-        registrationTaxApplicabilityVersionId:
-          column === taxRuleCaEvidence.registrationTaxApplicabilityVersionId ? head.versionId : null,
-        priceBasisVersionId: column === taxRuleCaEvidence.priceBasisVersionId ? head.versionId : null,
-        roundingRuleVersionId: column === taxRuleCaEvidence.roundingRuleVersionId ? head.versionId : null,
-        evidenceKind: evidence.kind,
-        attachmentId,
-        referenceWhat: evidence.kind === 'reference' ? evidence.what : null,
-        referenceGivenBy: evidence.kind === 'reference' ? evidence.givenBy : null,
-        referenceGivenOn: evidence.kind === 'reference' ? evidence.givenOn : null,
-        referenceKeptAt: evidence.kind === 'reference' ? evidence.keptAt : null,
-        recordedByUserId: recorder.userId,
-      });
-      await this.audit(
-        context,
-        recorder,
-        { type: KIND_TABLES[head.kind].identity, id: head.ownerId, versionId: head.versionId },
-        'record-ca-evidence',
-        [
-          value('caEvidence', id),
-          evidence.kind === 'file'
-            ? value('attachment', attachmentId)
-            : value('reference', {
-                what: evidence.what,
-                givenBy: evidence.givenBy,
-                givenOn: evidence.givenOn,
-                keptAt: evidence.keptAt,
-              }),
-        ],
-      );
-      evidenceIds.push(id);
-    }
-    return { kind: 'success', answer: { evidenceIds } };
+  ): Promise<Outcome<CaEvidenceRecorded>> {
+    return recordCaEvidence(context, this.dependencies, recorder, draft, taxRuleVersions);
   }
 }

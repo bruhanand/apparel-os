@@ -126,6 +126,7 @@ const prepareAccount = (bookId: string, code: string, nature: 'asset' | 'liabili
       bookId,
       code: syntheticCode(code),
       nature,
+      origin: 'synthetic',
       name: syntheticName(`Account ${code}`),
       validFrom: setup.today(),
     }),
@@ -282,6 +283,7 @@ describe('book settings (books-and-posting 2.2, 2.3; PRD-LED-014, PRD-LED-015, P
           bookId,
           code: syntheticCode('PAST'),
           nature: 'asset',
+          origin: 'synthetic',
           name: syntheticName('Past account'),
           validFrom: setup.day(-1),
         }),
@@ -369,6 +371,7 @@ describe('the chart of accounts (books-and-posting 3.1; PRD-LED-001)', () => {
         setup.books.prepareAccountVersion(c, p, account.recordId, {
           name: syntheticName('Account SYN-CLM'),
           retired: true,
+          origin: 'synthetic',
           validFrom: setup.day(1),
           versionToken: account.versionId,
         }),

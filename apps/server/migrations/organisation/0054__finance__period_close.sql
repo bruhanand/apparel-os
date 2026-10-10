@@ -1,8 +1,7 @@
 -- Lock and reopening of financial periods (books-and-posting 4.1 to 4.5, 9.1, 13.1; module-map 4.14; PRD-LED-009,
 -- PRD-LED-019, PRD-LED-020, PRD-INT-003; DEC-106, DEC-107; S1-F09-T03). Runs as aos_migration, which owns everything it
--- creates (code-house-rules 5.1). Compatible with the version running: it adds tables and replaces the journal's
--- period guard with one that also refuses a Locked period, which no period is until this version locks one
--- (code-house-rules 4.2). Who may lock, request, approve and withdraw is KDPS's (V-01); nothing here names anyone.
+-- creates (code-house-rules 5.1). Compatible with the version running: it adds tables and the journal's period guard,
+-- which refuses a Locked period, which no period is until this version locks one (code-house-rules 4.2). Who may lock, request, approve and withdraw is KDPS's (V-01); nothing here names anyone.
 
 -- A request to reopen a Locked period (4.3 step 1; PRD-LED-019): the period, its reason and its requester, frozen when
 -- made, since adding a correction is a new request. Its decision and its withdrawal are period events (below), so the
@@ -44,9 +43,9 @@ create trigger refuse_row_change before update or delete on finance.period_reope
 create trigger refuse_truncate before truncate on finance.period_reopening_source
   for each statement execute function kernel.refuse_change();
 
--- What happens to a period (4.1, 4.2, 4.3): it is locked, once; a reopening of it is approved or rejected, once; an
--- approved one is withdrawn, once. With the reopenings and their uses, the source of the state projection (Open,
--- Locked, Reopened; DM-4). Append-only. The approver of a reopening is never its requester (PRD-LED-019), which access
+-- What happens to a period (4.1, 4.2, 4.3): it is locked, once; a reopening of it is approved or rejected, once; one
+-- not rejected is withdrawn, once, awaiting its decision or approved (RR-489). With the reopenings and their uses, the
+-- source of the state projection (Open, Locked, Reopened; DM-4). Append-only. The approver of a reopening is never its requester (PRD-LED-019), which access
 -- checks before the decision and the trigger below checks again as the last guard.
 create table finance.period_event (
   id uuid primary key,
@@ -77,7 +76,7 @@ create trigger refuse_truncate before truncate on finance.period_event
   for each statement execute function kernel.refuse_change();
 
 -- A reopening's event names a reopening of the same period; its approval is by someone other than its requester
--- (PRD-LED-019, DEC-106); only an approved reopening is withdrawn (4.3 step 4).
+-- (PRD-LED-019, DEC-106); a rejected reopening is never withdrawn, nor a withdrawn one decided (4.3 step 4; RR-489).
 create function finance.check_period_event() returns trigger
   language plpgsql
   set search_path = pg_catalog
@@ -98,9 +97,15 @@ begin
       using errcode = 'AO017';
   end if;
   if new.kind = 'reopening-withdrawn'
-     and not exists (select 1 from finance.period_event e
-                     where e.period_reopening_id = new.period_reopening_id and e.kind = 'reopening-approved') then
-    raise exception 'only an approved reopening is withdrawn (books-and-posting 4.3)'
+     and exists (select 1 from finance.period_event e
+                 where e.period_reopening_id = new.period_reopening_id and e.kind = 'reopening-rejected') then
+    raise exception 'a rejected reopening is not withdrawn (books-and-posting 4.3)'
+      using errcode = 'AO017';
+  end if;
+  if new.kind in ('reopening-approved', 'reopening-rejected')
+     and exists (select 1 from finance.period_event e
+                 where e.period_reopening_id = new.period_reopening_id and e.kind = 'reopening-withdrawn') then
+    raise exception 'a withdrawn reopening is not decided (books-and-posting 4.3)'
       using errcode = 'AO017';
   end if;
   return new;
@@ -126,10 +131,11 @@ create trigger refuse_row_change before update or delete on finance.period_reope
 create trigger refuse_truncate before truncate on finance.period_reopening_use
   for each statement execute function kernel.refuse_change();
 
--- The last guard on a journal (13.1), as 0053 wrote it, and now: a journal into a Locked period is refused unless an
--- approved reopening of the period, not withdrawn, names its source as a correction not yet used (PRD-LED-009,
--- PRD-LED-020). Post writes a correction's use after its journals, so every journal of that posting passes here.
-create or replace function finance.guard_journal() returns trigger
+-- The last guard on a journal (13.1): its accounting date lies in the period it names, of its own book; a reversal
+-- reverses a journal of the same book; and a journal into a Locked period is refused unless an approved reopening of
+-- the period, not withdrawn, names its source as a correction not yet used (PRD-LED-009, PRD-LED-020). Post writes a
+-- correction's use after its journals, so every journal of that posting passes here.
+create function finance.guard_journal() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
@@ -165,6 +171,9 @@ begin
   return new;
 end;
 $$;
+revoke execute on function finance.guard_journal() from public;
+create trigger guard_journal before insert on finance.journal
+  for each row execute function finance.guard_journal();
 
 -- Runtime grants (code-house-rules 5.2): insert and read only; UPDATE (id) on the reopening, which Decide and a
 -- withdrawal lock.

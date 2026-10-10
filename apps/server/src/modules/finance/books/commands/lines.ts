@@ -1,51 +1,41 @@
 import type { MissingItem } from '@apparel-os/schemas';
-import { and, asc, eq, gt, max, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, max, sql, type AnyColumn } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
 import { accountVersion, bookSettingVersion, postingMapVersion } from '../db/schema.js';
 
-// The version lines of the books part (structure-and-masters 2.2; code-house-rules 7.3; books-and-posting 6.3;
-// S1-F09-T01): the rows of one record's effective-dated versions, an account's or a book setting's. What every change
-// and decision of them shares, through Drizzle's query builder over the part's own table definitions (3.4).
+// The version lines of `finance` (structure-and-masters 2.2; code-house-rules 7.3; books-and-posting 6.3;
+// shared-calculations 10.1, 10.3; S1-F09-T01, S1-F09-T04): the rows of one record's effective-dated versions, whichever
+// part of `finance` keeps them. What every change and decision of them shares, through Drizzle's query builder over
+// the owning part's own table definitions (3.4). The tax rules part uses them through the books part's interface
+// (module-map 4.14; product owner, 10 Oct 2026, RR-486).
 
 /**
- * The version tables of the books part. They share the version columns (db/schema.ts), so a line reads either through
- * the shape of one; only those shared columns are named through it.
+ * A version table of `finance`. Every one shares the version columns (`id`, `valid_during`, `decision`), so a line
+ * reads any of them through the shape of one; only those shared columns are named through it.
  */
-const tables = {
-  account_version: accountVersion,
-  book_setting_version: bookSettingVersion as unknown as typeof accountVersion,
-  posting_map_version: postingMapVersion as unknown as typeof accountVersion,
-} as const;
+type VersionTable = typeof accountVersion;
 
-/** One record's line of versions: its table, the record type it is read as, and the condition naming its rows. */
+/** One record's line of versions: its version table, the column naming the record, and the record it is read as. */
 export interface Line {
-  readonly table: keyof typeof tables;
+  readonly table: VersionTable;
+  readonly owner: AnyColumn;
   readonly recordType: string;
   readonly recordId: string;
-  readonly where: SQL;
 }
 
-export function accountLine(recordType: string, accountId: string): Line {
-  return { table: 'account_version', recordType, recordId: accountId, where: eq(accountVersion.accountId, accountId) };
+/** The line of a record's versions in `table`, a version table of `finance`, whose `owner` column names the record. */
+export function versionLine(table: object, owner: AnyColumn, recordType: string, recordId: string): Line {
+  return { table: table as VersionTable, owner, recordType, recordId };
 }
 
-export function settingLine(recordType: string, settingId: string): Line {
-  return {
-    table: 'book_setting_version',
-    recordType,
-    recordId: settingId,
-    where: eq(bookSettingVersion.bookSettingId, settingId),
-  };
-}
+export const accountLine = (recordType: string, accountId: string) =>
+  versionLine(accountVersion, accountVersion.accountId, recordType, accountId);
 
-export function mapLine(recordType: string, mapId: string): Line {
-  return {
-    table: 'posting_map_version',
-    recordType,
-    recordId: mapId,
-    where: eq(postingMapVersion.postingMapId, mapId),
-  };
-}
+export const settingLine = (recordType: string, settingId: string) =>
+  versionLine(bookSettingVersion, bookSettingVersion.bookSettingId, recordType, settingId);
+
+export const mapLine = (recordType: string, mapId: string) =>
+  versionLine(postingMapVersion, postingMapVersion.postingMapId, recordType, mapId);
 
 export type Outcome<Answer> =
   | { readonly kind: 'success'; readonly answer: Answer }
@@ -70,18 +60,22 @@ export async function today(context: TransactionContext): Promise<string | Comma
   };
 }
 
+/** The newest version of a line, its version token (code-house-rules 12.7), or undefined while it has none. */
+export async function newestVersion(context: TransactionContext, line: Line): Promise<string | undefined> {
+  const [row] = await context.tx
+    .select({ id: max(sql<string>`${line.table.id}::text`) })
+    .from(line.table)
+    .where(eq(line.owner, line.recordId));
+  return row?.id ?? undefined;
+}
+
 /** The refusal of a change made on a stale screen, naming the newest version (12.7), or undefined. */
 export async function staleToken(
   context: TransactionContext,
   line: Line,
   token: string | undefined,
 ): Promise<CommandRefusal | undefined> {
-  const table = tables[line.table];
-  const [row] = await context.tx
-    .select({ id: max(sql<string>`${table.id}::text`) })
-    .from(table)
-    .where(line.where);
-  const newest = row?.id ?? undefined;
+  const newest = await newestVersion(context, line);
   if (newest === undefined || newest === token) return undefined;
   return {
     kind: 'conflict',
@@ -90,17 +84,23 @@ export async function staleToken(
   };
 }
 
-/** The refusal while another approved version of the line starts on the date (2.2). */
+/** The refusal while another approved version of the line starts on the date: they never overlap (2.2). */
 export async function approvedOn(
   context: TransactionContext,
   line: Line,
   start: string,
 ): Promise<CommandRefusal | undefined> {
-  const table = tables[line.table];
+  const table = line.table;
   const [same] = await context.tx
     .select({ id: table.id })
     .from(table)
-    .where(and(line.where, eq(table.decision, 'Approved'), sql`lower(${table.validDuring}) = ${start}::date`))
+    .where(
+      and(
+        eq(line.owner, line.recordId),
+        eq(table.decision, 'Approved'),
+        sql`lower(${table.validDuring}) = ${start}::date`,
+      ),
+    )
     .limit(1);
   return same === undefined
     ? undefined
@@ -121,18 +121,19 @@ export async function takeEffect(
   versionId: string,
   start: string,
 ): Promise<void> {
-  const table = tables[line.table];
+  const table = line.table;
+  const ofRecord = eq(line.owner, line.recordId);
   const lower = sql`lower(${table.validDuring})`;
   const [next] = await context.tx
     .select({ start: sql<string>`${lower}::text` })
     .from(table)
-    .where(and(line.where, eq(table.decision, 'Approved'), gt(lower, sql`${start}::date`)))
+    .where(and(ofRecord, eq(table.decision, 'Approved'), gt(lower, sql`${start}::date`)))
     .orderBy(asc(lower))
     .limit(1);
   await context.tx
     .update(table)
     .set({ validDuring: sql`daterange(${lower}, ${start}::date)` })
-    .where(and(line.where, eq(table.decision, 'Approved'), sql`${table.validDuring} @> ${start}::date`));
+    .where(and(ofRecord, eq(table.decision, 'Approved'), sql`${table.validDuring} @> ${start}::date`));
   await context.tx
     .update(table)
     .set({ decision: 'Approved', validDuring: sql`daterange(${start}::date, ${next?.start ?? null}::date)` })

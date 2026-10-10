@@ -1,6 +1,6 @@
 -- The tax rules part of finance: goods classifications, rate and value rules with their slabs, registration
--- applicability with its components, the price basis and the rounding rules, each effective-dated, and the CA's
--- evidence of each version (shared-calculations 3.3, 10.1, 10.3; module-map 4.14; PRD-TAX-005, PRD-MOD-010,
+-- applicability with its components, the price basis and the rounding rules, each effective-dated, and the cover of
+-- the CA's evidence for each version (shared-calculations 3.3, 10.1, 10.3; module-map 4.14; PRD-TAX-005, PRD-MOD-010,
 -- PRD-MOD-014, PRD-MOD-015; POL-10.02, POL-10.05; GC4-2, GC7-1 to GC7-3, GC7-8, DEC-105, DEC-112, DEC-116;
 -- S1-F09-T04). Runs as aos_migration, which owns everything it creates (code-house-rules 5.1). Compatible with the
 -- version running: it only adds (code-house-rules 4.2). No rate, slab, component, price basis, rounding rule or date
@@ -322,48 +322,39 @@ create index rounding_rule_version_prepared_by on finance.rounding_rule_version 
 create trigger guard_version_change before update on finance.rounding_rule_version
   for each row execute function finance.guard_version_change();
 
--- The CA's evidence of one tax-rule version (10.1; books-and-posting 6.3, GC4-2; POL-10.05; DEC-116): a stored file
--- attached through files-imports, or a reference naming what the evidence is, who gave it, its date and where it is
--- kept. One piece of evidence covering a named set of versions is one row for each. Exactly one version is named.
-create table finance.tax_rule_ca_evidence (
-  id uuid primary key,
-  goods_classification_version_id uuid references finance.goods_classification_version (id),
-  tax_rate_rule_version_id uuid references finance.tax_rate_rule_version (id),
-  registration_tax_applicability_version_id uuid references finance.registration_tax_applicability_version (id),
-  price_basis_version_id uuid references finance.price_basis_version (id),
-  rounding_rule_version_id uuid references finance.rounding_rule_version (id),
-  evidence_kind text not null,
-  attachment_id uuid,
-  reference_what text,
-  reference_given_by text,
-  reference_given_on date,
-  reference_kept_at text,
-  recorded_by_user_id uuid not null,
-  recorded_at timestamptz not null default now(),
-  constraint tax_rule_ca_evidence_one_version check (pg_catalog.num_nonnulls(
-    goods_classification_version_id, tax_rate_rule_version_id, registration_tax_applicability_version_id,
-    price_basis_version_id, rounding_rule_version_id) = 1),
-  constraint tax_rule_ca_evidence_kind check (
-    (evidence_kind = 'file' and attachment_id is not null and reference_what is null and reference_given_by is null
-       and reference_given_on is null and reference_kept_at is null)
-    or (evidence_kind = 'reference' and attachment_id is null and reference_what <> '' and reference_given_by <> ''
-       and reference_given_on is not null and reference_kept_at <> ''))
-);
-create index tax_rule_ca_evidence_classification on finance.tax_rule_ca_evidence (goods_classification_version_id);
-create index tax_rule_ca_evidence_rate_rule on finance.tax_rule_ca_evidence (tax_rate_rule_version_id);
-create index tax_rule_ca_evidence_applicability
-  on finance.tax_rule_ca_evidence (registration_tax_applicability_version_id);
-create index tax_rule_ca_evidence_price_basis on finance.tax_rule_ca_evidence (price_basis_version_id);
-create index tax_rule_ca_evidence_rounding on finance.tax_rule_ca_evidence (rounding_rule_version_id);
-create index tax_rule_ca_evidence_recorded_by on finance.tax_rule_ca_evidence (recorded_by_user_id);
-create trigger refuse_row_change before update or delete on finance.tax_rule_ca_evidence
-  for each row execute function kernel.refuse_change();
-create trigger refuse_truncate before truncate on finance.tax_rule_ca_evidence
-  for each statement execute function kernel.refuse_change();
+-- The CA's evidence of a tax-rule version is the books part's one record, `finance.ca_approval_evidence` with its cover
+-- (0051; books-and-posting 6.3, GC4-2; POL-10.05; DEC-116; RR-486, product owner, 10 Oct 2026): its cover names a
+-- tax-rule version of any kind beside an account or book-setting version, exactly one version a cover.
+alter table finance.ca_approval_evidence_cover
+  add column goods_classification_version_id uuid references finance.goods_classification_version (id),
+  add column tax_rate_rule_version_id uuid references finance.tax_rate_rule_version (id),
+  add column registration_tax_applicability_version_id uuid
+    references finance.registration_tax_applicability_version (id),
+  add column price_basis_version_id uuid references finance.price_basis_version (id),
+  add column rounding_rule_version_id uuid references finance.rounding_rule_version (id);
+alter table finance.ca_approval_evidence_cover drop constraint ca_approval_evidence_cover_one;
+alter table finance.ca_approval_evidence_cover add constraint ca_approval_evidence_cover_one
+  check (pg_catalog.num_nonnulls(account_version_id, book_setting_version_id, goods_classification_version_id,
+    tax_rate_rule_version_id, registration_tax_applicability_version_id, price_basis_version_id,
+    rounding_rule_version_id) = 1);
+alter table finance.ca_approval_evidence_cover
+  add constraint ca_approval_evidence_cover_classification unique (ca_approval_evidence_id, goods_classification_version_id),
+  add constraint ca_approval_evidence_cover_rate_rule unique (ca_approval_evidence_id, tax_rate_rule_version_id),
+  add constraint ca_approval_evidence_cover_applicability
+    unique (ca_approval_evidence_id, registration_tax_applicability_version_id),
+  add constraint ca_approval_evidence_cover_price_basis unique (ca_approval_evidence_id, price_basis_version_id),
+  add constraint ca_approval_evidence_cover_rounding unique (ca_approval_evidence_id, rounding_rule_version_id);
+create index ca_approval_evidence_cover_classification_version
+  on finance.ca_approval_evidence_cover (goods_classification_version_id);
+create index ca_approval_evidence_cover_rate_rule_version on finance.ca_approval_evidence_cover (tax_rate_rule_version_id);
+create index ca_approval_evidence_cover_applicability_version
+  on finance.ca_approval_evidence_cover (registration_tax_applicability_version_id);
+create index ca_approval_evidence_cover_price_basis_version on finance.ca_approval_evidence_cover (price_basis_version_id);
+create index ca_approval_evidence_cover_rounding_version on finance.ca_approval_evidence_cover (rounding_rule_version_id);
 
 -- Runtime grants (code-house-rules 5.2). An identity row is append-only and locked: a change locks it at step 1, so two
 -- changes to one record never pass each other (8.2), hence UPDATE on its identifier only (7.1). A version row takes the
--- changes its guard allows. The rows frozen with a version and the evidence are append-only.
+-- changes its guard allows. The rows frozen with a version are append-only.
 grant select, insert on finance.goods_classification to aos_runtime;
 grant update (id) on finance.goods_classification to aos_runtime;
 grant select, insert, update on finance.goods_classification_version to aos_runtime;
@@ -381,4 +372,3 @@ grant select, insert, update on finance.price_basis_version to aos_runtime;
 grant select, insert on finance.rounding_rule to aos_runtime;
 grant update (id) on finance.rounding_rule to aos_runtime;
 grant select, insert, update on finance.rounding_rule_version to aos_runtime;
-grant select, insert on finance.tax_rule_ca_evidence to aos_runtime;

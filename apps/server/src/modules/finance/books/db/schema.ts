@@ -6,6 +6,7 @@ import type {
   SettingOrigin,
   VoucherModel,
 } from '@apparel-os/schemas';
+import { sql } from 'drizzle-orm';
 import { bigint, boolean, customType, date, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the books part's tables (code-house-rules 3.4). They mirror the reviewed migration
@@ -18,6 +19,9 @@ const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' 
 
 /** A half-open range of business dates, `[start, end)`, read and written as PostgreSQL's text form (7.3). */
 const daterange = customType<{ data: string; driverData: string }>({ dataType: () => 'daterange' });
+
+/** A transaction identifier, as PostgreSQL's `xid8` (books-and-posting 5.2). */
+const xid8 = customType<{ data: string; driverData: string }>({ dataType: () => 'xid8' });
 
 /** A version's decision (code-house-rules 7.3; structure-and-masters 2.3). */
 export type Decision = 'Awaiting approval' | 'Approved' | 'Rejected';
@@ -57,6 +61,8 @@ export const accountVersion = finance.table('account_version', {
   accountId: uuid('account_id').notNull(),
   name: text('name').notNull(),
   retired: boolean('retired').notNull(),
+  /** Whose value it is (code-house-rules 12.14; RR-487, product owner, 10 Oct 2026). */
+  origin: text('origin').$type<SettingOrigin>().notNull(),
 });
 export const caApprovalEvidence = finance.table('ca_approval_evidence', {
   id: uuid('id').primaryKey(),
@@ -79,6 +85,12 @@ export const caApprovalEvidenceCover = finance.table('ca_approval_evidence_cover
   recordedAt: at('recorded_at').notNull().defaultNow(),
   /** A posting map version the evidence covers (0053; S1-F09-T02). */
   postingMapVersionId: uuid('posting_map_version_id'),
+  /** A tax-rule version of each kind the evidence covers (0052; RR-486, product owner, 10 Oct 2026). */
+  goodsClassificationVersionId: uuid('goods_classification_version_id'),
+  taxRateRuleVersionId: uuid('tax_rate_rule_version_id'),
+  registrationTaxApplicabilityVersionId: uuid('registration_tax_applicability_version_id'),
+  priceBasisVersionId: uuid('price_basis_version_id'),
+  roundingRuleVersionId: uuid('rounding_rule_version_id'),
 });
 
 // The posting half (migrations/organisation/0053; books-and-posting 4.1, 5, 6, 8, 13.1; S1-F09-T02).
@@ -137,6 +149,10 @@ export const journal = finance.table('journal', {
   onBehalfOfUserId: uuid('on_behalf_of_user_id'),
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The transaction that wrote it, set by its trigger; its lines share it (books-and-posting 5.2). Never read. */
+  writtenIn: xid8('written_in')
+    .notNull()
+    .default(sql`pg_catalog.pg_current_xact_id()`),
 });
 export const journalLine = finance.table('journal_line', {
   id: uuid('id').primaryKey(),

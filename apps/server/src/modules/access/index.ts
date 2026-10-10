@@ -43,6 +43,7 @@ export type { PartyNames, RoleHeldQuestion } from './queries/parties.js';
 export { permissionHolders } from './queries/holders.js';
 export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } from './commands/approval-use.js';
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
+export type { WithdrawnDocument } from './commands/withdraw-request.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
 export type { RecordFacts, UncoveredFact } from './domain/scope.js';
 export { SCOPE_MEMBERS } from './contracts/scope-members.js';

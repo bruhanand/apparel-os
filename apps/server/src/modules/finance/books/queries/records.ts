@@ -1,16 +1,9 @@
 import type { AccountRecord, BookSettingRecord, CaEvidenceView, CostSettingInForce } from '@apparel-os/schemas';
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import type { LatestRequest } from '../../../access/index.js';
-import {
-  account,
-  accountVersion,
-  bookSetting,
-  bookSettingVersion,
-  caApprovalEvidence,
-  caApprovalEvidenceCover,
-  type Decision,
-} from '../db/schema.js';
+import { account, accountVersion, bookSetting, bookSettingVersion, type Decision } from '../db/schema.js';
+import { caEvidenceOf } from '../commands/ca-evidence.js';
 import { versionState } from '../domain/kinds.js';
 import { datesOf } from '../commands/lines.js';
 
@@ -62,48 +55,7 @@ export const tokenOf = (rows: readonly VersionRow[]) =>
     .at(-1);
 
 /** The CA's evidence covering each version named (6.3), by version. */
-export async function evidenceOf(
-  context: TransactionContext,
-  versionIds: readonly string[],
-): Promise<ReadonlyMap<string, CaEvidenceView[]>> {
-  const found = new Map<string, CaEvidenceView[]>();
-  if (versionIds.length === 0) return found;
-  const rows = await context.tx
-    .select({
-      accountVersionId: caApprovalEvidenceCover.accountVersionId,
-      bookSettingVersionId: caApprovalEvidenceCover.bookSettingVersionId,
-      postingMapVersionId: caApprovalEvidenceCover.postingMapVersionId,
-      attachmentId: caApprovalEvidenceCover.attachmentId,
-      evidence: caApprovalEvidence,
-    })
-    .from(caApprovalEvidenceCover)
-    .innerJoin(caApprovalEvidence, eq(caApprovalEvidence.id, caApprovalEvidenceCover.caApprovalEvidenceId))
-    .where(
-      or(
-        inArray(caApprovalEvidenceCover.accountVersionId, [...versionIds]),
-        inArray(caApprovalEvidenceCover.bookSettingVersionId, [...versionIds]),
-        inArray(caApprovalEvidenceCover.postingMapVersionId, [...versionIds]),
-      ),
-    )
-    .orderBy(asc(caApprovalEvidence.id));
-  for (const row of rows) {
-    const versionId = row.accountVersionId ?? row.bookSettingVersionId ?? row.postingMapVersionId ?? '';
-    const e = row.evidence;
-    const view: CaEvidenceView =
-      e.kind === 'file'
-        ? { id: e.id, kind: 'file', attachmentId: row.attachmentId ?? '' }
-        : {
-            id: e.id,
-            kind: 'reference',
-            what: e.referenceWhat ?? '',
-            givenBy: e.referenceGivenBy ?? '',
-            givenOn: e.referenceGivenOn ?? '',
-            keptAt: e.referenceKeptAt ?? '',
-          };
-    found.set(versionId, [...(found.get(versionId) ?? []), view]);
-  }
-  return found;
-}
+export const evidenceOf = caEvidenceOf;
 
 async function accountsOf(
   context: TransactionContext,
@@ -141,6 +93,7 @@ async function accountsOf(
         ...versionView(row, today, latest.get(row.id), evidence.get(row.id) ?? []),
         name: row.name,
         retired: row.retired,
+        origin: row.origin,
       })),
     };
   });

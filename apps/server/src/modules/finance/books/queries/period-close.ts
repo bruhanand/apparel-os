@@ -13,8 +13,9 @@ type Requests = (ids: readonly string[]) => Promise<ReadonlyMap<string, LatestRe
 /** A reopening's state (4.3): from its decision, its withdrawal and whether a correction is still to post. */
 function stateOf(events: ReadonlySet<string>, corrections: readonly { postedJournalId?: string }[]): ReopeningState {
   if (events.has('reopening-rejected')) return 'Rejected';
-  if (!events.has('reopening-approved')) return 'Awaiting approval';
+  // Withdrawn while awaiting its decision or in force (4.3 step 4; RR-489).
   if (events.has('reopening-withdrawn')) return 'Withdrawn';
+  if (!events.has('reopening-approved')) return 'Awaiting approval';
   return corrections.every((each) => each.postedJournalId !== undefined) ? 'Completed' : 'In force';
 }
 

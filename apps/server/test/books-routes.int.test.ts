@@ -203,6 +203,7 @@ describe('accounts and settings through the routes, with the CA evidence as a fi
       bookId,
       code: syntheticCode('INV'),
       nature: 'asset',
+      origin: 'synthetic',
       name: syntheticName('Stock in cost pools'),
       validFrom: today(),
     });
@@ -366,6 +367,10 @@ describe('lock and reopening through the routes (books-and-posting 4.2, 4.3, 14;
     expect(close.periods).toMatchObject([
       { id: periodId, state: 'Reopened', reopenings: [{ id: reopeningId, state: 'In force' }] },
     ]);
+    // RR-489: anyone but the requester needs cancel; the approver holds none here.
+    expect((await post(approver, `/api/finance/period-reopenings/${reopeningId}/withdraw`, {})).body).toMatchObject({
+      error: { code: 'access.not-authorised' },
+    });
     const withdrawn = await post(preparer, `/api/finance/period-reopenings/${reopeningId}/withdraw`, {});
     expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
     const after = periodCloseSchema.parse((await get(preparer, `/api/finance/books/${book}/period-close`)).body);

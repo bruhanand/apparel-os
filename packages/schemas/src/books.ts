@@ -46,18 +46,26 @@ export type VoucherModel = z.infer<typeof voucherModelSchema>;
 export const bookSettingKindSchema = z.enum(['cost', 'voucher-model']);
 export type BookSettingKind = z.infer<typeof bookSettingKindSchema>;
 
-/** A new account in a book, with its first version (3.1): its code unique in the book, its nature fixed. */
+/**
+ * A new account in a book, with its first version (3.1): its code unique in the book, its nature fixed, and where its
+ * value came from (code-house-rules 12.14; RR-487, product owner, 10 Oct 2026), with no default.
+ */
 export const accountDraftSchema = z.strictObject({
   bookId: idSchema,
   code: masterCodeSchema,
   nature: accountNatureSchema,
   name: textSchema,
+  origin: settingOriginSchema,
   ...validFrom,
 });
-/** A later version of an account: its name, and whether it is retired from the start (3.1). The nature never changes. */
+/**
+ * A later version of an account: its name, and whether it is retired from the start (3.1), with its origin (RR-487).
+ * The nature never changes.
+ */
 export const accountVersionDraftSchema = z.strictObject({
   name: textSchema,
   retired: z.boolean(),
+  origin: settingOriginSchema,
   ...validFrom,
   ...versionToken,
 });
@@ -100,7 +108,7 @@ export type CoveredVersion = z.infer<typeof coveredVersionSchema>;
 /**
  * The CA's approval evidence (6.3; POL-09.01; GC4-2): a stored file attached to each version it covers (S1-F06-T05), or
  * a reference naming what the evidence is, who gave it, its date and where it is kept. One piece may cover a named set
- * of versions, and says which.
+ * of versions, and says which. The same for every version of `finance`, a tax-rule version's included (RR-486).
  */
 export const caEvidenceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('file'), file: evidenceFileSchema }),
@@ -162,7 +170,9 @@ export const accountRecordSchema = z.strictObject({
   code: masterCodeSchema,
   nature: accountNatureSchema,
   versionToken: idSchema.optional(),
-  versions: z.array(z.strictObject({ ...versionView, name: z.string(), retired: z.boolean() })),
+  versions: z.array(
+    z.strictObject({ ...versionView, name: z.string(), retired: z.boolean(), origin: settingOriginSchema }),
+  ),
 });
 export type AccountRecord = z.infer<typeof accountRecordSchema>;
 export const accountListSchema = z.strictObject({ asOf, records: z.array(accountRecordSchema) });

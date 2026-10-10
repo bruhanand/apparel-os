@@ -14,6 +14,7 @@ import type { AuditChange, AuditInterface } from '../../../audit/index.js';
 import { financialPeriod, periodEvent, periodReopening, periodReopeningSource } from '../db/schema.js';
 import { periodLocked, periodReopened } from '../events.js';
 import { openCorrections, PERIOD_TABLE, periodById, type PeriodRow } from '../queries/periods.js';
+import { byText } from '../domain/order.js';
 import { refused, type Outcome } from './lines.js';
 
 // Lock a period, request, approve and withdraw a reopening (books-and-posting 4.2, 4.3, 4.5, 9.1; PRD-LED-009,
@@ -27,10 +28,10 @@ import { refused, type Outcome } from './lines.js';
 export const REOPENING_TABLE = lockTable('finance', 'period_reopening');
 
 type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const value = (field: string, after: ValueChange['after']): ValueChange => ({
+const value = (field: string, after: ValueChange['after'], before: ValueChange['before'] = null): ValueChange => ({
   kind: 'value',
   field,
-  before: null,
+  before,
   after,
 });
 
@@ -46,20 +47,20 @@ const notFound = (recordType: string, recordId: string) =>
 
 export interface PeriodCloseDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'requestApproval'>;
+  readonly access: Pick<AccessInterface, 'requestApproval' | 'requestLockTargets' | 'withdrawRequest'>;
 }
 
 async function auditBy(
   context: TransactionContext,
   audit: AuditInterface,
-  preparer: Preparer,
+  preparer: { readonly userId: string; readonly roleAssignmentId?: string },
   record: { readonly type: string; readonly id: string },
   operation: string,
   changes: readonly AuditChange[],
 ): Promise<void> {
   await audit.record(context, {
     actor: { kind: 'user', id: preparer.userId },
-    roleAssignmentId: preparer.roleAssignmentId,
+    ...(preparer.roleAssignmentId === undefined ? {} : { roleAssignmentId: preparer.roleAssignmentId }),
     record: { module: 'finance', ...record },
     operation,
     changes,
@@ -117,7 +118,7 @@ export async function lockPeriod(
     occurredAt: context.startedAt,
   });
   await auditBy(context, dependencies.audit, preparer, { type: 'financial_period', id: period.id }, 'lock-period', [
-    { kind: 'value', field: 'state', before: 'Open', after: 'Locked' },
+    value('state', 'Locked', 'Open'),
   ]);
   await context.publish(periodLocked, {
     subject: { module: 'finance', recordType: FINANCIAL_PERIOD_TYPE, recordId: period.id },
@@ -130,7 +131,7 @@ export async function lockPeriod(
 function distinct(corrections: readonly NamedCorrection[]): NamedCorrection[] {
   const seen = new Map<string, NamedCorrection>();
   for (const each of corrections) seen.set(`${each.module}|${each.recordType}|${each.recordId}`, each);
-  return [...seen.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, each]) => each);
+  return [...seen.entries()].sort(([a], [b]) => byText(a, b)).map(([, each]) => each);
 }
 
 /**
@@ -190,7 +191,9 @@ export async function requestReopening(
       ),
     ],
   );
-  // The reopening is its own version: adding a correction is a new request (4.3 step 2).
+  // The reopening is its own version: adding a correction is a new request (4.3 step 2). Request approval takes no
+  // lock step after step 7 (code-house-rules 8.2): it inserts the request, and the only rows it changes, an open
+  // request on an earlier version of the same document, cannot exist for a reopening written just now.
   const requestId = await dependencies.access.requestApproval(context, {
     actionType: PERIOD_REOPENING_APPROVAL,
     document: { module: 'finance', recordType: PERIOD_REOPENING_TYPE, recordId: reopeningId, versionId: reopeningId },
@@ -219,46 +222,98 @@ async function reopeningOf(context: TransactionContext, reopeningId: string) {
 }
 
 /**
- * Withdraw a reopening in force (4.3 step 4; PRD-LED-020): approved, not withdrawn, with a correction still to post.
- * The period row is taken exclusively at step 7, as for its approval, so a posting in flight on the correction ends
- * first and one after sees the period Locked again (4.5). **Design choice.**
+ * Who withdraws a reopening (4.3 step 4; RR-489, product owner, 10 Oct 2026): its requester, who needs no permission
+ * for their own; anyone else holds cancel on `finance.period_reopening`, through the assignment named, which the
+ * caller has authorised and holds at step 0.
+ */
+export interface Withdrawer {
+  readonly userId: string;
+  readonly cancelHeldThrough?: string;
+}
+
+/** The requester of a reopening, read before any lock: it is frozen when the reopening is requested. */
+export async function reopeningRequester(context: TransactionContext, reopeningId: string) {
+  const [row] = await context.tx
+    .select({ userId: periodReopening.requestedByUserId })
+    .from(periodReopening)
+    .where(eq(periodReopening.id, reopeningId));
+  return row?.userId;
+}
+
+const reopeningDocument = (reopeningId: string) =>
+  ({
+    module: 'finance',
+    recordType: PERIOD_REOPENING_TYPE,
+    recordId: reopeningId,
+    versionId: reopeningId,
+    actionType: PERIOD_REOPENING_APPROVAL,
+  }) as const;
+
+/**
+ * Withdraw a reopening (4.3 step 4; PRD-LED-020; RR-489, product owner, 10 Oct 2026): one still awaiting its decision,
+ * whose request `access` then closes as Withdrawn, or one in force (approved, not withdrawn, a correction still to
+ * post). Its requester may withdraw it at any time without cancel; anyone else needs cancel. The reopening and its
+ * open request are locked at step 1, as Decide locks them, so a decision and a withdrawal never pass each other; one
+ * in force takes the period row exclusively at step 7, as its approval does, so a posting in flight on the correction
+ * ends first and one after sees the period Locked again (4.5). **Design choice.**
  */
 export async function withdrawReopening(
   context: TransactionContext,
   dependencies: PeriodCloseDependencies,
-  preparer: Preparer,
+  by: Withdrawer,
   reopeningId: string,
 ): Promise<Outcome<{ reopeningId: string }>> {
+  const document = reopeningDocument(reopeningId);
+  const requests = await dependencies.access.requestLockTargets(context, document);
   const locked = await context.lock(LOCK_STEP.document, [
     { table: REOPENING_TABLE, id: reopeningId, mode: 'exclusive' },
+    ...requests,
   ]);
-  if (locked.missing.length > 0) return notFound(PERIOD_REOPENING_TYPE, reopeningId);
+  if (locked.missing.some((each) => each.id === reopeningId)) return notFound(PERIOD_REOPENING_TYPE, reopeningId);
   const reopening = await reopeningOf(context, reopeningId);
   if (reopening === undefined) return notFound(PERIOD_REOPENING_TYPE, reopeningId);
-  const period = await holdExclusively(context, reopening.financialPeriodId);
-  if (period === undefined) return notFound(FINANCIAL_PERIOD_TYPE, reopening.financialPeriodId);
-  const open = await openCorrections(context, eq(periodReopening.id, reopeningId));
-  if (!reopening.approved || reopening.withdrawn || open.length === 0) {
-    return refused('refused', 'finance.reopening-not-in-force', [
-      { kind: 'record', recordType: PERIOD_REOPENING_TYPE, recordId: reopeningId },
+  // RR-489: the requester withdraws their own; anyone else holds cancel.
+  if (reopening.requestedByUserId !== by.userId && by.cancelHeldThrough === undefined) {
+    return refused('not-authorised', 'access.not-authorised', [
+      { kind: 'permission', action: 'cancel', recordType: PERIOD_REOPENING_TYPE },
     ]);
+  }
+  const notInForce = refused<{ reopeningId: string }>('refused', 'finance.reopening-not-in-force', [
+    { kind: 'record', recordType: PERIOD_REOPENING_TYPE, recordId: reopeningId },
+  ]);
+  if (reopening.withdrawn || (reopening.decided && !reopening.approved)) return notInForce;
+  const actor = {
+    userId: by.userId,
+    ...(by.cancelHeldThrough === undefined ? {} : { roleAssignmentId: by.cancelHeldThrough }),
+  };
+  let period: PeriodRow | undefined;
+  let before: string;
+  if (reopening.approved) {
+    period = await holdExclusively(context, reopening.financialPeriodId);
+    if (period === undefined) return notFound(FINANCIAL_PERIOD_TYPE, reopening.financialPeriodId);
+    if ((await openCorrections(context, eq(periodReopening.id, reopeningId))).length === 0) return notInForce;
+    before = 'In force';
+  } else {
+    // Still awaiting its decision: its request is withdrawn with it, under the lock taken above.
+    if ((await dependencies.access.withdrawRequest(context, document, actor)) === 'not-open') return notInForce;
+    before = 'Awaiting approval';
   }
   await context.tx.insert(periodEvent).values({
     id: uuidv7(),
-    financialPeriodId: period.id,
+    financialPeriodId: reopening.financialPeriodId,
     kind: 'reopening-withdrawn',
     periodReopeningId: reopeningId,
-    byUserId: preparer.userId,
-    roleAssignmentId: preparer.roleAssignmentId,
+    byUserId: by.userId,
+    roleAssignmentId: by.cancelHeldThrough ?? null,
     occurredAt: context.startedAt,
   });
   await auditBy(
     context,
     dependencies.audit,
-    preparer,
+    actor,
     { type: 'period_reopening', id: reopeningId },
     'withdraw-reopening',
-    [{ kind: 'value', field: 'state', before: 'In force', after: 'Withdrawn' }],
+    [value('state', 'Withdrawn', before)],
   );
   return { kind: 'success', answer: { reopeningId } };
 }

@@ -240,6 +240,10 @@ Every request and every job step goes through steps 1 to 3, which are steps 1 an
 - One open request per document version and action type. **Design choice.**
 - `access` publishes the request to My work through the outbox (module-map section 3, rule 6).
 
+### 9.1a Withdrawing a request on the owning module's behalf
+
+- **As built** (product owner, 10 Oct 2026, RR-489; S1-F09 review fixes). **Design choice** of the mechanism. An owning module may withdraw the open request on its own document version, as `finance` · books does for a reopening its requester withdraws while it awaits its decision (books-and-posting 4.3). `access` offers two operations: `requestLockTargets`, the open request on that document version and action type, which the owning module locks exclusively at step 1 in the same call as its own document, as Decide locks them (code-house-rules 8.2), so a decision and a withdrawal never pass each other; and `withdrawRequest`, which under that lock sets the request's state to Withdrawn (`approval_request`, as DEC-117 does for a pending assignment), writes the audit record `withdraw-approval-request` with the person withdrawing and the assignment they relied on, if any, and publishes `access.approval-decided` with the state Withdrawn, so `inbox` closes the item. It answers `not-open` when no request on that version awaits a decision. No decision is recorded: who may withdraw is the owning module's rule, not an approval. A request of an access change, or of a rule of another module, is refused as a defect.
+
 ### 9.2 Approval limits
 
 - A limit is set for one action type, either for an approver role within a scope or for a named individual (`POL-02.09`, `POL-02.15`). It states its basis from the action's rule (`PRD-ACS-015`): cost, bill value, documented valuation, the amount paid, the difference of a day-close cash variance or the period's net pay, in paise (DM-8, DEC-105); a quantity with its unit; or a discount percentage where configured. The basis is shown beside the limit (`PRD-ACS-015`, `POL-02.09`).

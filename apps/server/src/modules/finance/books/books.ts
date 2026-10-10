@@ -6,20 +6,18 @@ import type { FilesImportsInterface } from '../../files-imports/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { BooksMaintenance } from './commands/maintain.js';
 import { preparePostingMap } from './commands/maps.js';
-import { lockPeriod, requestReopening, withdrawReopening } from './commands/period-close.js';
-import { definePeriod } from './commands/periods.js';
 import {
-  checkPostable,
-  holdPeriods,
-  holdReversal,
-  planReversal,
-  post,
-  reverse,
-  type ItemCheck,
-  type PostRequest,
-  type ReversalPlan,
-  type ReverseRequest,
-} from './commands/post.js';
+  lockPeriod,
+  reopeningRequester,
+  requestReopening,
+  withdrawReopening,
+  type Withdrawer,
+} from './commands/period-close.js';
+import { definePeriod } from './commands/periods.js';
+import { checkPostable, holdPeriods } from './commands/posting/check.js';
+import { post } from './commands/posting/post.js';
+import { holdReversal, planReversal, reverse } from './commands/posting/reverse.js';
+import type { ItemCheck, PostRequest, ReversalPlan, ReverseRequest } from './commands/posting/types.js';
 import type { BookHeldStock } from './contracts/book-held-stock.js';
 import type { PostingEventKind } from './domain/posting.js';
 import { dimensionsOn } from './queries/dimensions.js';
@@ -31,7 +29,10 @@ import { accountRecord, accountsOfBook, costSettingOn, settingsOfBook } from './
 
 export interface BooksDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'requestApproval' | 'approvalRequestsOf'>;
+  readonly access: Pick<
+    AccessInterface,
+    'requestApproval' | 'approvalRequestsOf' | 'requestLockTargets' | 'withdrawRequest'
+  >;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   /** The "has this book held stock?" implementation `stock` gives, or undefined while none answers (2.2). */
   readonly bookHeldStock?: BookHeldStock | undefined;
@@ -62,6 +63,10 @@ export class Books extends BooksMaintenance {
 
   private readonly requests = (context: TransactionContext) => (ids: readonly string[]) =>
     this.readers.approvalRequestsOf(context, ids);
+
+  private get closing() {
+    return { audit: this.dependencies.audit, access: this.readers };
+  }
 
   private get posting() {
     return { kinds: this.kinds, numbering: this.numbering };
@@ -147,17 +152,25 @@ export class Books extends BooksMaintenance {
 
   /** Lock a period (4.2; PRD-LED-009): it waits for the postings in flight in it (4.5). */
   lockPeriod(context: TransactionContext, preparer: Preparer, periodId: string) {
-    return lockPeriod(context, this.dependencies, preparer, periodId);
+    return lockPeriod(context, this.closing, preparer, periodId);
   }
 
   /** Request a reopening of a Locked period, naming its corrections (4.3; PRD-LED-019, PRD-LED-020). */
   requestReopening(context: TransactionContext, preparer: Preparer, periodId: string, draft: ReopeningDraft) {
-    return requestReopening(context, this.dependencies, preparer, periodId, draft);
+    return requestReopening(context, this.closing, preparer, periodId, draft);
   }
 
-  /** Withdraw a reopening in force (4.3 step 4; PRD-LED-020). */
-  withdrawReopening(context: TransactionContext, preparer: Preparer, reopeningId: string) {
-    return withdrawReopening(context, this.dependencies, preparer, reopeningId);
+  /**
+   * Withdraw a reopening awaiting its decision or in force (4.3 step 4; PRD-LED-020): its requester without cancel,
+   * anyone else holding cancel (RR-489, product owner, 10 Oct 2026).
+   */
+  withdrawReopening(context: TransactionContext, by: Withdrawer, reopeningId: string) {
+    return withdrawReopening(context, this.closing, by, reopeningId);
+  }
+
+  /** Who requested a reopening, or undefined: a route asks it before authorising a withdrawal (RR-489). */
+  reopeningRequester(context: TransactionContext, reopeningId: string) {
+    return reopeningRequester(context, reopeningId);
   }
 
   /** Money › Period close: each period's state and its reopenings with their named corrections (14). */
@@ -192,7 +205,7 @@ export class Books extends BooksMaintenance {
     return planReversal(context, this.numbering, request);
   }
 
-  /** Holds a reversal's period at step 7; answers its series for the caller's step 8. */
+  /** Holds a reversal's period at step 7; answers its series for the caller's step 8, or the refusal. */
   holdReversal(context: TransactionContext, plan: Extract<ReversalPlan, { kind: 'reversible' }>) {
     return holdReversal(context, this.numbering, plan);
   }

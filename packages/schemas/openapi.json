@@ -3777,6 +3777,14 @@
                                 },
                                 "retired": {
                                   "type": "boolean"
+                                },
+                                "origin": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kdps",
+                                    "test-setup",
+                                    "synthetic"
+                                  ]
                                 }
                               },
                               "required": [
@@ -3785,7 +3793,8 @@
                                 "state",
                                 "caEvidence",
                                 "name",
-                                "retired"
+                                "retired",
+                                "origin"
                               ],
                               "additionalProperties": false
                             }
@@ -28635,6 +28644,14 @@
                     "type": "string",
                     "pattern": "\\S"
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -28646,6 +28663,7 @@
                   "code",
                   "nature",
                   "name",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -29052,6 +29070,14 @@
                   "retired": {
                     "type": "boolean"
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -29066,6 +29092,7 @@
                 "required": [
                   "name",
                   "retired",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -40800,6 +40827,14 @@
                               },
                               "retired": {
                                 "type": "boolean"
+                              },
+                              "origin": {
+                                "type": "string",
+                                "enum": [
+                                  "kdps",
+                                  "test-setup",
+                                  "synthetic"
+                                ]
                               }
                             },
                             "required": [
@@ -40808,7 +40843,8 @@
                               "state",
                               "caEvidence",
                               "name",
-                              "retired"
+                              "retired",
+                              "origin"
                             ],
                             "additionalProperties": false
                           }
@@ -59229,17 +59265,14 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "evidenceIds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "format": "uuid",
-                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
-                      }
+                    "evidenceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                     }
                   },
                   "required": [
-                    "evidenceIds"
+                    "evidenceId"
                   ],
                   "additionalProperties": false
                 }
@@ -63016,9 +63049,7 @@
       "post": {
         "operationId": "withdrawReopening",
         "x-access": {
-          "kind": "action",
-          "action": "cancel",
-          "recordType": "finance.period_reopening"
+          "kind": "own"
         },
         "parameters": [
           {

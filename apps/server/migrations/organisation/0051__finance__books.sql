@@ -124,11 +124,14 @@ create table finance.account_version (
   account_id uuid not null references finance.account (id),
   name text not null,
   retired boolean not null,
+  -- Whose value it is, as for a setting version (code-house-rules 12.14; RR-487, product owner, 10 Oct 2026).
+  origin text not null,
   valid_during daterange not null,
   decision text not null,
   prepared_by_user_id uuid not null,
   recorded_at timestamptz not null default now(),
   constraint account_version_name check (name <> ''),
+  constraint account_version_origin check (origin in ('kdps', 'test-setup', 'synthetic')),
   constraint account_version_decision check (decision in ('Awaiting approval', 'Approved', 'Rejected')),
   constraint account_version_starts
     check (not pg_catalog.lower_inf(valid_during) and not pg_catalog.isempty(valid_during)),
@@ -169,6 +172,8 @@ create trigger refuse_truncate before truncate on finance.ca_approval_evidence
 
 -- A version the evidence names (6.3: "one piece of evidence may cover a named set of versions if it says which"): an
 -- account version or a book-setting version, each named once by a piece, with the file's attachment to that version.
+-- One record for all of `finance`: 0052 adds the tax-rule versions and 0053 the posting map versions (RR-486, product
+-- owner, 10 Oct 2026).
 create table finance.ca_approval_evidence_cover (
   id uuid primary key,
   ca_approval_evidence_id uuid not null references finance.ca_approval_evidence (id),
@@ -176,7 +181,8 @@ create table finance.ca_approval_evidence_cover (
   book_setting_version_id uuid references finance.book_setting_version (id),
   attachment_id uuid,
   recorded_at timestamptz not null default now(),
-  constraint ca_approval_evidence_cover_one check ((account_version_id is null) <> (book_setting_version_id is null)),
+  constraint ca_approval_evidence_cover_one
+    check (pg_catalog.num_nonnulls(account_version_id, book_setting_version_id) = 1),
   constraint ca_approval_evidence_cover_account unique (ca_approval_evidence_id, account_version_id),
   constraint ca_approval_evidence_cover_setting unique (ca_approval_evidence_id, book_setting_version_id)
 );

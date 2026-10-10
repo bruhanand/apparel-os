@@ -15,10 +15,10 @@ import {
   taxRateRule,
   taxRateRuleVersion,
   taxRateSlab,
-  taxRuleCaEvidence,
   type Decision,
 } from '../db/schema.js';
-import { KIND_TABLES, datesOf } from '../commands/lines.js';
+import { caEvidenceOf, datesOf } from '../../books/index.js';
+import { KIND_TABLES } from '../commands/lines.js';
 import { versionState } from '../domain/kinds.js';
 
 // Read tax rules (shared-calculations 10.2; module-map 4.14 "Read tax rules"; S1-F09-T04): for a business date, a tax
@@ -356,13 +356,8 @@ async function recordsOf(
   const versions = await versionsOf(context, kind, ids);
   const versionIds = versions.map((row) => row.id);
   const latest = await requests(versionIds);
-  const evidence =
-    versionIds.length === 0
-      ? []
-      : await context.tx
-          .select({ versionId: sql<string>`${KIND_TABLES[kind].evidence}::text` })
-          .from(taxRuleCaEvidence)
-          .where(inArray(KIND_TABLES[kind].evidence, versionIds));
+  // The CA's evidence is the one record of `finance` the books part keeps (books-and-posting 6.3; RR-486).
+  const evidence = await caEvidenceOf(context, versionIds);
   return ids.flatMap((id) => {
     const key = keys.get(id);
     if (key === undefined) return [];
@@ -398,7 +393,7 @@ async function recordsOf(
             }),
             origin: row.origin,
             ...(request === undefined ? {} : { request: { id: request.id, state: request.state } }),
-            caEvidence: evidence.filter((each) => each.versionId === row.id).length,
+            caEvidence: evidence.get(row.id)?.length ?? 0,
             content: row.content,
           };
         }),

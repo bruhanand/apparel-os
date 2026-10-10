@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { paise } from '@apparel-os/domain';
 import {
   applyMap,
   checkEventKinds,
@@ -82,8 +83,8 @@ describe('a map applied to an item (6.1, 6.2)', () => {
     const applied = applyMap(
       MAP,
       [
-        { component: 'to-pool', amount: -40_000 },
-        { component: 'to-dispatch', amount: 0 },
+        { component: 'to-pool', amount: paise(-40_000) },
+        { component: 'to-dispatch', amount: paise(0) },
       ],
       DIMENSIONS,
       ALL,
@@ -98,22 +99,24 @@ describe('a map applied to an item (6.1, 6.2)', () => {
   });
 
   it('POL-09.12 refuses with the failed condition: an account not in force, a missing dimension', () => {
-    expect(applyMap(MAP, [{ component: 'to-pool', amount: 100 }], DIMENSIONS, new Set([PUR]))).toEqual({
+    expect(applyMap(MAP, [{ component: 'to-pool', amount: paise(100) }], DIMENSIONS, new Set([PUR]))).toEqual({
       kind: 'refused',
       refusal: { code: 'finance.map-account-not-in-force', accountId: INV },
     });
-    expect(applyMap(MAP, [{ component: 'to-dispatch', amount: 100 }], DIMENSIONS, ALL)).toEqual({
+    expect(applyMap(MAP, [{ component: 'to-dispatch', amount: paise(100) }], DIMENSIONS, ALL)).toEqual({
       kind: 'refused',
       refusal: { code: 'finance.missing-dimension', dimension: 'store', component: 'to-dispatch' },
     });
-    expect(applyMap(MAP, [{ component: 'to-pool', amount: 100 }], { ...DIMENSIONS, brandId: null }, ALL)).toEqual({
+    expect(
+      applyMap(MAP, [{ component: 'to-pool', amount: paise(100) }], { ...DIMENSIONS, brandId: null }, ALL),
+    ).toEqual({
       kind: 'refused',
       refusal: { code: 'finance.missing-dimension', dimension: 'brand', component: 'to-pool' },
     });
   });
 
   it('POL-09.13 refuses lines that would not balance', () => {
-    expect(applyMap(MAP.slice(0, 1), [{ component: 'to-pool', amount: 100 }], DIMENSIONS, ALL)).toEqual({
+    expect(applyMap(MAP.slice(0, 1), [{ component: 'to-pool', amount: paise(100) }], DIMENSIONS, ALL)).toEqual({
       kind: 'refused',
       refusal: { code: 'finance.journal-unbalanced' },
     });
@@ -122,8 +125,8 @@ describe('a map applied to an item (6.1, 6.2)', () => {
 
 describe('a journal’s lines (8.2)', () => {
   it('PRD-LED-004 sums lines by account, side, business unit, Store and brand, keeping their parts', () => {
-    const one = applyMap(MAP, [{ component: 'to-pool', amount: 100_000 }], DIMENSIONS, ALL);
-    const two = applyMap(MAP, [{ component: 'to-pool', amount: 78_000 }], DIMENSIONS, ALL);
+    const one = applyMap(MAP, [{ component: 'to-pool', amount: paise(100_000) }], DIMENSIONS, ALL);
+    const two = applyMap(MAP, [{ component: 'to-pool', amount: paise(78_000) }], DIMENSIONS, ALL);
     if (one.kind !== 'lines' || two.kind !== 'lines') throw new Error('refused');
     const summed = sumLines([...one.lines, ...two.lines]);
     expect(summed.map((line) => [line.accountId, line.side, line.amount, line.parts.length])).toEqual([

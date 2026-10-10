@@ -29,3 +29,4 @@ Tax-rule tables and migration in `finance`; Maintain and Read tax rules on its `
 - 10.1 says a style's HSN must name a classification in force, but `merchandise` does not call `finance` (module-map 4.12). Until a design places that check, the calculation's refusal of a line with no classification in force (5.8) is the check.
 - The validity check that keeps selling unavailable until these records are valid (10.1, `PRD-SEC-017`) belongs with selling (stage 4); nothing here enables an operation.
 - Tax configuration is API only in stage 1; Setup › Tax configuration is designed and built before the first live posting in stage 2 (product owner, 6 Oct 2026, DEC-116).
+- Review fixes (S1-F09 review, 10 Oct 2026): `finance.tax_rule_ca_evidence` is removed; the tax rules part records and checks the CA's evidence in the books part's one record, `finance.ca_approval_evidence`, through the books part's interface (RR-486, product owner), and its route answers `{ evidenceId }`.

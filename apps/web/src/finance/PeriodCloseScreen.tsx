@@ -19,7 +19,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
-import { useTimeZone } from '../shell/session';
+import { useSession, useTimeZone } from '../shell/session';
 import { formatDate } from '../setup/format';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
@@ -30,7 +30,8 @@ import { BookPicker } from './BookPicker';
 // PRD-LED-020; DEC-106, DEC-107; S1-F09-T03): each period of a book with its state, locked in date order by an
 // authorised Accounts user; a reopening of a Locked period requested with its reason and the corrections it names,
 // decided by a different authorised person from My work; the reopenings with their named corrections and which have
-// posted; and the withdrawal of one in force. Who may lock, request, approve and withdraw is KDPS's (V-01).
+// posted; and the withdrawal of one awaiting its decision or in force (RR-489). Who may lock, request, approve and
+// withdraw is KDPS's (V-01).
 
 const READS = ['readPeriodClose', 'listPeriods', 'listMyWork'] as const;
 
@@ -140,10 +141,18 @@ function ReopeningForm({ period }: { period: PeriodCloseRow }) {
   );
 }
 
-/** A reopening: its reason, state, request and named corrections, which have posted (14); withdrawn while in force. */
+/**
+ * A reopening: its reason, state, request and named corrections, which have posted (14); withdrawn while awaiting its
+ * decision or in force, by its requester or a person holding cancel (RR-489).
+ */
 function Reopening({ reopening, onOpenApproval }: { reopening: ReopeningView; onOpenApproval: (id: string) => void }) {
   const timeZone = useTimeZone();
   const withdrawal = useSubmission('withdrawReopening', READS);
+  const { session } = useSession();
+  const userId = session.state === 'signed-out' ? undefined : session.user.userId;
+  const withdraw = () => {
+    void withdrawal.submit({ params: { reopeningId: reopening.id }, body: {} });
+  };
   return (
     <li
       aria-label={t('period-close.reopening', { at: formatDateTime(reopening.requestedAt, timeZone) })}
@@ -182,16 +191,18 @@ function Reopening({ reopening, onOpenApproval }: { reopening: ReopeningView; on
             }}
           />
         )}
-        {reopening.state === 'In force' && (
-          <GrantedButton
-            label="period-close.withdraw"
-            recordType={PERIOD_REOPENING_TYPE}
-            action="cancel"
-            onClick={() => {
-              void withdrawal.submit({ params: { reopeningId: reopening.id }, body: {} });
-            }}
-          />
-        )}
+        {(reopening.state === 'In force' || reopening.state === 'Awaiting approval') &&
+          // RR-489 (product owner, 10 Oct 2026): the requester withdraws their own; anyone else needs cancel.
+          (reopening.requestedByUserId === userId ? (
+            <Button variant="secondary" label="period-close.withdraw" onClick={withdraw} />
+          ) : (
+            <GrantedButton
+              label="period-close.withdraw"
+              recordType={PERIOD_REOPENING_TYPE}
+              action="cancel"
+              onClick={withdraw}
+            />
+          ))}
       </div>
     </li>
   );

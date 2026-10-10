@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
 import { recordStateSchema } from './access-records.js';
 import { businessDateSchema, idSchema } from './common.js';
-import { evidenceFileSchema } from './files.js';
+import { caEvidenceSchema } from './books.js';
 import { masterCodeSchema } from './organisation.js';
 import { settingOriginSchema } from './settings.js';
 
@@ -136,16 +136,7 @@ export const taxRuleCaEvidenceDraftSchema = z.strictObject({
     .refine((list) => new Set(list.map((each) => each.versionId)).size === list.length, {
       message: 'Each is given once',
     }),
-  evidence: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('file'), file: evidenceFileSchema }),
-    z.strictObject({
-      kind: z.literal('reference'),
-      what: textSchema,
-      givenBy: textSchema,
-      givenOn: businessDateSchema,
-      keptAt: textSchema,
-    }),
-  ]),
+  evidence: caEvidenceSchema,
 });
 
 export type GoodsClassificationDraft = z.infer<typeof goodsClassificationDraftSchema>;
@@ -159,8 +150,6 @@ export type TaxRuleCaEvidenceDraft = z.infer<typeof taxRuleCaEvidenceDraftSchema
 /** What a change answers: the record and its version, and the approval request. */
 export const taxRuleChangedSchema = z.strictObject({ recordId: idSchema, versionId: idSchema, requestId: idSchema });
 export type TaxRuleChanged = z.infer<typeof taxRuleChangedSchema>;
-export const taxRuleCaEvidenceRecordedSchema = z.strictObject({ evidenceIds: z.array(idSchema) });
-export type TaxRuleCaEvidenceRecorded = z.infer<typeof taxRuleCaEvidenceRecordedSchema>;
 
 // Read tax rules (10.2): the rules in force on a date, each with its version, in the shapes the calculations take.
 

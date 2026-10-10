@@ -1,25 +1,18 @@
-import { routes, TAX_RULE_TYPE, type CommandRoute, type MasterPageQuery } from '@apparel-os/schemas';
+import { routes, TAX_RULE_TYPE, type MasterPageQuery } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
   ApiRoute,
   COMMAND_RUNNER,
-  CommandDefect,
-  commandAnswer,
   IDEMPOTENCY_HELPER,
-  requestContentOf,
   RouteInput,
-  type CommandOutcome,
   type CommandRunner,
   type IdempotencyHelper,
-  type JsonValue,
-  type ReplayAuthorisation,
   type RouteInputOf,
-  type TransactionContext,
 } from '../../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type Preparer, type SignedInUser } from '../../../access/index.js';
-import type { Outcome } from '../commands/lines.js';
+import { ACCESS, SignedIn, type AccessInterface, type SignedInUser } from '../../../access/index.js';
 import type { TaxRulesInterface } from '../tax-rules.js';
+import { FinanceRoutes } from '../../books/index.js';
 import { TAX_RULES } from '../tokens.js';
 
 /**
@@ -30,12 +23,16 @@ import { TAX_RULES } from '../tokens.js';
  */
 @Controller()
 export class TaxRulesController {
+  private readonly routes: FinanceRoutes;
+
   constructor(
-    @Inject(IDEMPOTENCY_HELPER) private readonly helper: IdempotencyHelper,
-    @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
-    @Inject(ACCESS) private readonly access: AccessInterface,
+    @Inject(IDEMPOTENCY_HELPER) helper: IdempotencyHelper,
+    @Inject(COMMAND_RUNNER) runner: CommandRunner,
+    @Inject(ACCESS) access: AccessInterface,
     @Inject(TAX_RULES) private readonly taxRules: TaxRulesInterface,
-  ) {}
+  ) {
+    this.routes = new FinanceRoutes(helper, runner, access, 'tax rules');
+  }
 
   @ApiRoute(routes.listTaxRuleRecords)
   listTaxRuleRecords(
@@ -43,7 +40,7 @@ export class TaxRulesController {
     @SignedIn() user: SignedInUser,
   ) {
     const page = pageOf(input.query);
-    return this.read(user, 'finance.list-tax-rule-records', async (context, today) => {
+    return this.routes.read(user, 'finance.list-tax-rule-records', async (context, today) => {
       const found = await this.taxRules.listRecords(context, input.params.kind, today, page);
       return { asOf: context.startedAt.toISOString(), records: found.records, next: found.next };
     });
@@ -55,7 +52,7 @@ export class TaxRulesController {
     @SignedIn() user: SignedInUser,
   ) {
     const { kind, recordId } = input.params;
-    const answer = await this.read(user, 'finance.read-tax-rule-record', async (context, today) => ({
+    const answer = await this.routes.read(user, 'finance.read-tax-rule-record', async (context, today) => ({
       asOf: context.startedAt.toISOString(),
       record: await this.taxRules.readRecord(context, kind, recordId, today),
     }));
@@ -73,7 +70,7 @@ export class TaxRulesController {
   @ApiRoute(routes.readTaxRules)
   readTaxRules(@RouteInput() input: RouteInputOf<typeof routes.readTaxRules>, @SignedIn() user: SignedInUser) {
     const { date, taxRegistrationId, classifications } = input.query;
-    return this.read(user, 'finance.read-tax-rules', async (context) => ({
+    return this.routes.read(user, 'finance.read-tax-rules', async (context) => ({
       asOf: context.startedAt.toISOString(),
       rules: await this.taxRules.readTaxRules(context, {
         date,
@@ -88,7 +85,7 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareGoodsClassification>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(
+    return this.routes.command(
       routes.prepareGoodsClassification,
       'finance.prepare-goods-classification',
       user,
@@ -102,7 +99,7 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareGoodsClassificationVersion>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(
+    return this.routes.command(
       routes.prepareGoodsClassificationVersion,
       'finance.prepare-goods-classification-version',
       user,
@@ -116,8 +113,12 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareTaxRateRule>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.prepareTaxRateRule, 'finance.prepare-tax-rate-rule-version', user, input, (c, p) =>
-      this.taxRules.prepareRateRule(c, p, input.body),
+    return this.routes.command(
+      routes.prepareTaxRateRule,
+      'finance.prepare-tax-rate-rule-version',
+      user,
+      input,
+      (c, p) => this.taxRules.prepareRateRule(c, p, input.body),
     );
   }
 
@@ -126,7 +127,7 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareRegistrationApplicability>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(
+    return this.routes.command(
       routes.prepareRegistrationApplicability,
       'finance.prepare-registration-applicability-version',
       user,
@@ -140,7 +141,7 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.preparePriceBasis>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.preparePriceBasis, 'finance.prepare-price-basis-version', user, input, (c, p) =>
+    return this.routes.command(routes.preparePriceBasis, 'finance.prepare-price-basis-version', user, input, (c, p) =>
       this.taxRules.preparePriceBasis(c, p, input.body),
     );
   }
@@ -150,8 +151,12 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareRoundingRule>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.prepareRoundingRule, 'finance.prepare-rounding-rule-version', user, input, (c, p) =>
-      this.taxRules.prepareRoundingRule(c, p, input.body),
+    return this.routes.command(
+      routes.prepareRoundingRule,
+      'finance.prepare-rounding-rule-version',
+      user,
+      input,
+      (c, p) => this.taxRules.prepareRoundingRule(c, p, input.body),
     );
   }
 
@@ -161,84 +166,13 @@ export class TaxRulesController {
     @RouteInput() input: RouteInputOf<typeof routes.recordTaxRuleCaEvidence>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.recordTaxRuleCaEvidence, 'finance.record-tax-rule-ca-evidence', user, input, (c, p) =>
-      this.taxRules.recordCaEvidence(c, p, input.body),
+    return this.routes.command(
+      routes.recordTaxRuleCaEvidence,
+      'finance.record-tax-rule-ca-evidence',
+      user,
+      input,
+      (c, p) => this.taxRules.recordCaEvidence(c, p, input.body),
     );
-  }
-
-  private async read<Answer>(
-    user: SignedInUser,
-    commandName: string,
-    work: (context: TransactionContext, today: string) => Promise<Answer>,
-  ): Promise<Answer> {
-    const answer = await this.runner.read(
-      {
-        commandName,
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      async (context) => {
-        const date = await context.businessDate();
-        return date.kind === 'not-set' ? undefined : { read: await work(context, date.date) };
-      },
-    );
-    if (answer === undefined) {
-      throw new ApiRefusal({
-        kind: 'unavailable',
-        code: 'access.business-date-not-set',
-        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-      });
-    }
-    return answer.read;
-  }
-
-  private async command<R extends CommandRoute & { access: { kind: 'action' } }, Answer extends object>(
-    route: R,
-    commandName: string,
-    user: SignedInUser,
-    input: RouteInputOf<R>,
-    work: (context: TransactionContext, preparer: Preparer) => Promise<Outcome<Answer>>,
-  ) {
-    const { action, recordType } = route.access;
-    const need = { actorId: user.userId, action, recordType };
-    const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.access.authorise(context, need);
-      if (authorised.kind === 'allowed') return { kind: 'allowed' };
-      return {
-        kind: 'refused',
-        refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-      };
-    };
-    const answer = await this.helper.run(
-      {
-        commandName,
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      {
-        key: input.idempotencyKey,
-        content: requestContentOf(route, input),
-        authoriseReplay,
-        work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          const roleAssignmentId = user.roleAssignmentId;
-          if (roleAssignmentId === undefined) throw new CommandDefect('A tax rules command ran without Authorise');
-          // Step 0 (code-house-rules 8.2): the assignment Authorise found, held and rechecked under the locks.
-          const held = await this.access.holdAuthority(context, { kind: 'user', id: user.userId }, roleAssignmentId, {
-            action,
-            recordType,
-          });
-          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-          const outcome = await work(context, { userId: user.userId, roleAssignmentId });
-          if (outcome.kind === 'success') {
-            return { kind: 'success', answer: { ...outcome.answer } as Record<string, JsonValue>, shows: 'nothing' };
-          }
-          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
-        },
-      },
-    );
-    return commandAnswer(answer);
   }
 }
 

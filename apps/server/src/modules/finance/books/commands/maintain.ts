@@ -4,7 +4,6 @@ import {
   ACCOUNT_TYPE,
   BOOK_SETTING_CHANGE,
   BOOK_SETTING_TYPE,
-  CA_APPROVAL_EVIDENCE_TYPE,
   POSTING_MAP_TYPE,
   type AccountDraft,
   type AccountVersionDraft,
@@ -12,10 +11,11 @@ import {
   type CaEvidenceDraft,
   type CaEvidenceRecorded,
   type CoveredVersion,
+  type SettingOrigin,
   type FinanceChanged,
   type MissingItem,
 } from '@apparel-os/schemas';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   LOCK_STEP,
   lockTable,
@@ -34,10 +34,10 @@ import {
   accountVersion,
   bookSetting,
   bookSettingVersion,
-  caApprovalEvidence,
-  caApprovalEvidenceCover,
   postingMapVersion,
+  type Decision,
 } from '../db/schema.js';
+import { recordCaEvidence, type CoveredKind, type EvidenceTarget, type EvidenceVersions } from './ca-evidence.js';
 import { costChangeRefusal } from './cost-change.js';
 import { accountLine, approvedOn, refused, settingLine, staleToken, today, type Outcome } from './lines.js';
 
@@ -57,8 +57,57 @@ const bookItem = (bookId: string): MissingItem => ({
   recordId: bookId,
 });
 
-/** What the CA's evidence, as an attached file, carries: no restricted class (6.3; imports-and-opening-data 11). */
-export const CA_APPROVAL_EVIDENCE_KIND = { kind: 'finance.ca-approval', restrictedClasses: [] } as const;
+/** The books part's versions the CA's evidence may name (6.3): each kind's table, record column and identity row. */
+const COVERED = {
+  [ACCOUNT_TYPE]: { kind: 'account', versions: accountVersion, owner: accountVersion.accountId, identity: 'account' },
+  [BOOK_SETTING_TYPE]: {
+    kind: 'book-setting',
+    versions: bookSettingVersion,
+    owner: bookSettingVersion.bookSettingId,
+    identity: 'book_setting',
+  },
+  [POSTING_MAP_TYPE]: {
+    kind: 'posting-map',
+    versions: postingMapVersion,
+    owner: postingMapVersion.postingMapId,
+    identity: 'posting_map',
+  },
+} as const satisfies Record<
+  CoveredVersion['recordType'],
+  { readonly kind: CoveredKind; readonly identity: string; readonly versions: object; readonly owner: object }
+>;
+
+/** How the CA's evidence finds the books part's versions it names (ca-evidence.ts). */
+const booksVersions: EvidenceVersions<CoveredVersion> = {
+  async find(context, refs) {
+    const found = new Map<string, EvidenceTarget>();
+    for (const [recordType, line] of Object.entries(COVERED)) {
+      const ids = refs.filter((each) => each.recordType === recordType).map((each) => each.versionId);
+      if (ids.length === 0) continue;
+      const versions = line.versions as unknown as typeof accountVersion;
+      const rows = await context.tx
+        .select({
+          id: versions.id,
+          ownerId: sql<string>`${line.owner}::text`,
+          decision: sql<Decision>`${versions.decision}`,
+        })
+        .from(versions)
+        .where(inArray(versions.id, ids));
+      for (const row of rows) {
+        found.set(row.id, {
+          kind: line.kind,
+          recordType,
+          recordId: row.ownerId,
+          versionId: row.id,
+          decision: row.decision,
+          lock: { table: lockTable('finance', line.identity), id: row.ownerId, mode: 'exclusive' },
+        });
+      }
+    }
+    return refs.map((each) => found.get(each.versionId));
+  },
+  missing: (ref) => ({ kind: 'version', recordType: ref.recordType, versionId: ref.versionId }),
+};
 
 export interface MaintainDependencies {
   readonly audit: AuditInterface;
@@ -133,7 +182,12 @@ export class BooksMaintenance {
     context: TransactionContext,
     preparer: Preparer,
     accountId: string,
-    draft: { readonly name: string; readonly retired: boolean; readonly validFrom: string },
+    draft: {
+      readonly name: string;
+      readonly retired: boolean;
+      readonly origin: SettingOrigin;
+      readonly validFrom: string;
+    },
   ): Promise<string> {
     const versionId = uuidv7();
     await context.tx.insert(accountVersion).values({
@@ -141,6 +195,7 @@ export class BooksMaintenance {
       accountId,
       name: draft.name,
       retired: draft.retired,
+      origin: draft.origin,
       validDuring: from(draft.validFrom),
       decision: 'Awaiting approval',
       preparedByUserId: preparer.userId,
@@ -174,6 +229,7 @@ export class BooksMaintenance {
       value('nature', draft.nature),
       value('name', draft.name),
       value('retired', false),
+      value('origin', draft.origin),
       value('validFrom', draft.validFrom),
     ]);
     const requestId = await this.request(context, preparer, ACCOUNT_CHANGE, ACCOUNT_TYPE, accountId, versionId);
@@ -203,6 +259,7 @@ export class BooksMaintenance {
     await this.audit(context, preparer, { type: 'account', id: accountId, versionId }, 'prepare-account-version', [
       value('name', draft.name),
       value('retired', draft.retired),
+      value('origin', draft.origin),
       value('validFrom', draft.validFrom),
     ]);
     const requestId = await this.request(context, preparer, ACCOUNT_CHANGE, ACCOUNT_TYPE, accountId, versionId);
@@ -288,164 +345,17 @@ export class BooksMaintenance {
     return { kind: 'success', answer: { recordId: setting.id, versionId, requestId } };
   }
 
-  // The CA's approval evidence (6.3; POL-09.01; DEC-112, GC4-2).
-
-  /** Each version named, with the record it versions and its decision; undefined for one that does not exist. */
-  private async coveredVersions(context: TransactionContext, versions: readonly CoveredVersion[]) {
-    const accountIds = versions.filter((each) => each.recordType === ACCOUNT_TYPE).map((each) => each.versionId);
-    const settingIds = versions.filter((each) => each.recordType === BOOK_SETTING_TYPE).map((each) => each.versionId);
-    const accounts =
-      accountIds.length === 0
-        ? []
-        : await context.tx
-            .select({ id: accountVersion.id, ownerId: accountVersion.accountId, decision: accountVersion.decision })
-            .from(accountVersion)
-            .where(inArray(accountVersion.id, accountIds));
-    const settings =
-      settingIds.length === 0
-        ? []
-        : await context.tx
-            .select({
-              id: bookSettingVersion.id,
-              ownerId: bookSettingVersion.bookSettingId,
-              decision: bookSettingVersion.decision,
-            })
-            .from(bookSettingVersion)
-            .where(inArray(bookSettingVersion.id, settingIds));
-    const mapIds = versions.filter((each) => each.recordType === POSTING_MAP_TYPE).map((each) => each.versionId);
-    const maps =
-      mapIds.length === 0
-        ? []
-        : await context.tx
-            .select({
-              id: postingMapVersion.id,
-              ownerId: postingMapVersion.postingMapId,
-              decision: postingMapVersion.decision,
-            })
-            .from(postingMapVersion)
-            .where(inArray(postingMapVersion.id, mapIds));
-    const rowsOf = { [ACCOUNT_TYPE]: accounts, [BOOK_SETTING_TYPE]: settings, [POSTING_MAP_TYPE]: maps };
-    return versions.map((each) => {
-      const found = rowsOf[each.recordType].find((row) => row.id === each.versionId);
-      return { ...each, found };
-    });
-  }
+  // The CA's approval evidence (6.3; POL-09.01; DEC-112, GC4-2; RR-486).
 
   /**
-   * Record the CA's approval evidence (6.3): a stored file, attached to each version it covers so it opens from each
-   * (S1-F06-T05), or a reference naming what it is, who gave it, its date and where it is kept. One piece names the set
-   * of versions it covers, each awaiting its decision, under their records' locks so no decision passes it.
+   * Record the CA's approval evidence (6.3) for a named set of the books part's versions, each awaiting its decision,
+   * through the one record of `finance` (ca-evidence.ts): a stored file attached to each, or a reference.
    */
-  async recordCaEvidence(
+  recordCaEvidence(
     context: TransactionContext,
     preparer: Preparer,
     draft: CaEvidenceDraft,
   ): Promise<Outcome<CaEvidenceRecorded>> {
-    const named = await this.coveredVersions(context, draft.versions);
-    const unknown = named.filter((each) => each.found === undefined);
-    if (unknown.length > 0) {
-      return refused(
-        'not-found',
-        'finance.record-not-found',
-        unknown.map((each) => ({ kind: 'version', recordType: each.recordType, versionId: each.versionId })),
-      );
-    }
-    const owners = (recordType: string) => [
-      ...new Set(named.filter((each) => each.recordType === recordType).map((each) => each.found?.ownerId ?? '')),
-    ];
-    const accounts = owners(ACCOUNT_TYPE);
-    const settings = owners(BOOK_SETTING_TYPE);
-    const postingMaps = owners(POSTING_MAP_TYPE);
-    // Step 1 (code-house-rules 8.2): the records versioned, so a decision of one waits for, or comes before, this.
-    const locked = await context.lock(LOCK_STEP.document, [
-      ...accounts.map((id) => ({ table: lockTable('finance', 'account'), id, mode: 'exclusive' as const })),
-      ...settings.map((id) => ({ table: lockTable('finance', 'book_setting'), id, mode: 'exclusive' as const })),
-      ...postingMaps.map((id) => ({ table: lockTable('finance', 'posting_map'), id, mode: 'exclusive' as const })),
-    ]);
-    if (locked.missing.length > 0) throw new Error('A record of a version named could not be locked');
-    const under = await this.coveredVersions(context, draft.versions);
-    const decided = under.filter((each) => each.found?.decision !== 'Awaiting approval');
-    if (decided.length > 0) {
-      return refused(
-        'refused',
-        'finance.version-not-awaiting',
-        decided.map((each) => ({
-          kind: 'version',
-          recordType: each.recordType,
-          recordId: each.found?.ownerId ?? '',
-          versionId: each.versionId,
-        })),
-      );
-    }
-    const evidenceId = uuidv7();
-    const evidence = draft.evidence;
-    await context.tx.insert(caApprovalEvidence).values({
-      id: evidenceId,
-      kind: evidence.kind,
-      storedFileId: evidence.kind === 'file' ? evidence.file.storedFileId : null,
-      fileReceiptId: evidence.kind === 'file' ? evidence.file.fileReceiptId : null,
-      referenceWhat: evidence.kind === 'reference' ? evidence.what : null,
-      referenceGivenBy: evidence.kind === 'reference' ? evidence.givenBy : null,
-      referenceGivenOn: evidence.kind === 'reference' ? evidence.givenOn : null,
-      referenceKeptAt: evidence.kind === 'reference' ? evidence.keptAt : null,
-      recordedByUserId: preparer.userId,
-    });
-    const covers: { versionId: string; attachmentId: string | null }[] = [];
-    for (const each of under) {
-      let attachmentId: string | null = null;
-      if (evidence.kind === 'file') {
-        const attached = await this.dependencies.files.attach(context, {
-          storedFileId: evidence.file.storedFileId,
-          fileReceiptId: evidence.file.fileReceiptId,
-          record: {
-            module: 'finance',
-            type: each.recordType,
-            id: each.found?.ownerId ?? '',
-            versionId: each.versionId,
-          },
-          evidence: CA_APPROVAL_EVIDENCE_KIND,
-          scope: {},
-          attachedBy: { kind: 'user', id: preparer.userId },
-          roleAssignmentId: preparer.roleAssignmentId,
-        });
-        attachmentId = attached.attachmentId;
-      }
-      await context.tx.insert(caApprovalEvidenceCover).values({
-        id: uuidv7(),
-        caApprovalEvidenceId: evidenceId,
-        accountVersionId: each.recordType === ACCOUNT_TYPE ? each.versionId : null,
-        bookSettingVersionId: each.recordType === BOOK_SETTING_TYPE ? each.versionId : null,
-        postingMapVersionId: each.recordType === POSTING_MAP_TYPE ? each.versionId : null,
-        attachmentId,
-      });
-      covers.push({ versionId: each.versionId, attachmentId });
-    }
-    await this.audit(
-      context,
-      preparer,
-      { type: CA_APPROVAL_EVIDENCE_TYPE.replace('finance.', ''), id: evidenceId },
-      'record-ca-approval-evidence',
-      [
-        value('kind', evidence.kind),
-        value(
-          'versions',
-          draft.versions.map((each) => ({ ...each })),
-        ),
-        ...(evidence.kind === 'file'
-          ? [
-              value(
-                'attachments',
-                covers.map((each) => each.attachmentId ?? ''),
-              ),
-            ]
-          : [
-              value('what', evidence.what),
-              value('givenBy', evidence.givenBy),
-              value('givenOn', evidence.givenOn),
-              value('keptAt', evidence.keptAt),
-            ]),
-      ],
-    );
-    return { kind: 'success', answer: { evidenceId } };
+    return recordCaEvidence(context, this.dependencies, preparer, draft, booksVersions);
   }
 }

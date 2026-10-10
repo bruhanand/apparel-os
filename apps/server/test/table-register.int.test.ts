@@ -63,6 +63,8 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'files_imports.record_admitted',
     // books-and-posting 12: whether a book's lines include any the reader cannot see, SECURITY DEFINER (S1-F09-T02).
     'finance.lines_hidden',
+    // books-and-posting 9.1: every line of a journal for its reversal, whatever the reverser sees, SECURITY DEFINER.
+    'finance.lines_to_reverse',
     // structure-and-masters 3.5: what a location version would break in the nesting of locations (S1-F02-T02 review).
     'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).

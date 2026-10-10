@@ -2096,6 +2096,7 @@ export const englishIndia = {
   'history.operation.approve-reopening': 'Reopening approved',
   'history.operation.reject-reopening': 'Reopening rejected',
   'history.operation.withdraw-reopening': 'Reopening withdrawn',
+  'history.operation.record-ca-approval-evidence': 'CA approval evidence recorded',
   'error.finance.period-locked':
     'The date lies in a Locked period. Only a correction that an approved reopening names can be posted into it.',
   'error.finance.period-not-open': 'This period is locked already.',

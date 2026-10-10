@@ -1592,14 +1592,6 @@
       "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
     },
     {
-      "table": "finance.tax_rule_ca_evidence",
-      "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "shared-calculations 10.1; books-and-posting 6.3; code-house-rules 7.1",
-      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
-    },
-    {
       "table": "finance.book_setting",
       "class": "unscoped",
       "marks": ["append-only", "locked"],
@@ -1644,7 +1636,7 @@
       "class": "unscoped",
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
-      "design": "books-and-posting 6.3; code-house-rules 7.1",
+      "design": "books-and-posting 6.3; shared-calculations 10.1 (RR-486); code-house-rules 7.1",
       "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
     },
     {

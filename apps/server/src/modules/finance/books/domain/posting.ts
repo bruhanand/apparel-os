@@ -1,5 +1,7 @@
+import { addPaise, paise, type Paise } from '@apparel-os/domain';
 import type { PostingSide } from '@apparel-os/schemas';
 import { PRODUCTION_COMPOSITION, type Composition } from '../../../../kernel/index.js';
+import { byText } from './order.js';
 
 // The posting rules of the books part as plain functions (books-and-posting 6, 7, 8.2, 9; code-house-rules 2): the
 // posting event kinds the posting modules declare, a map version applied to an item, and an item's lines summed into a
@@ -95,12 +97,12 @@ export interface ItemDimensions {
 /** One line an item makes, before lines are summed (8.2). */
 export interface ItemLine extends ItemDimensions {
   readonly component: string;
-  /** The component's signed amount, as the item carried it (8.3). */
-  readonly signedAmount: number;
+  /** The component's signed amount in paise, as the item carried it (8.3; PRD-MOD-014). */
+  readonly signedAmount: Paise;
   readonly accountId: string;
   readonly side: PostingSide;
-  /** Above zero (5.1). */
-  readonly amount: number;
+  /** In paise, above zero (5.1). */
+  readonly amount: Paise;
 }
 
 export type ApplyRefusal =
@@ -117,7 +119,7 @@ export type ApplyRefusal =
  */
 export function applyMap(
   lines: readonly MapLine[],
-  components: readonly { readonly component: string; readonly amount: number }[],
+  components: readonly { readonly component: string; readonly amount: Paise }[],
   dimensions: ItemDimensions,
   accountsInForce: ReadonlySet<string>,
 ):
@@ -144,7 +146,7 @@ export function applyMap(
         signedAmount: amount,
         accountId: line.accountId,
         side: amount > 0 ? line.side : otherSide(line.side),
-        amount: Math.abs(amount),
+        amount: paise(Math.abs(amount)),
       });
     }
   }
@@ -152,13 +154,13 @@ export function applyMap(
   return { kind: 'lines', lines: made };
 }
 
-/** Debits equal credits (5.2; POL-09.13). */
-export function balances(lines: readonly { readonly side: PostingSide; readonly amount: number }[]): boolean {
-  let debits = 0;
-  let credits = 0;
+/** Debits equal credits, in whole paise (5.2; POL-09.13; PRD-MOD-014). */
+export function balances(lines: readonly { readonly side: PostingSide; readonly amount: Paise }[]): boolean {
+  let debits = paise(0);
+  let credits = paise(0);
   for (const line of lines) {
-    if (line.side === 'debit') debits += line.amount;
-    else credits += line.amount;
+    if (line.side === 'debit') debits = addPaise(debits, line.amount);
+    else credits = addPaise(credits, line.amount);
   }
   return debits === credits;
 }
@@ -167,7 +169,8 @@ export function balances(lines: readonly { readonly side: PostingSide; readonly 
 export interface SummedLine {
   readonly accountId: string;
   readonly side: PostingSide;
-  readonly amount: number;
+  /** In paise, above zero (5.1). */
+  readonly amount: Paise;
   readonly dimensions: ItemDimensions;
   readonly parts: readonly ItemLine[];
 }
@@ -177,18 +180,18 @@ export interface SummedLine {
  * has one mapping version on one accounting date, so its lines share it.
  */
 export function sumLines(lines: readonly ItemLine[]): SummedLine[] {
-  const byKey = new Map<string, { line: ItemLine; amount: number; parts: ItemLine[] }>();
+  const byKey = new Map<string, { line: ItemLine; amount: Paise; parts: ItemLine[] }>();
   for (const line of lines) {
     const key = [line.accountId, line.side, line.businessUnitId, line.storeId ?? '', line.brandId ?? ''].join('|');
     const found = byKey.get(key);
     if (found === undefined) byKey.set(key, { line, amount: line.amount, parts: [line] });
     else {
-      found.amount += line.amount;
+      found.amount = addPaise(found.amount, line.amount);
       found.parts.push(line);
     }
   }
   return [...byKey.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .sort(([a], [b]) => byText(a, b))
     .map(([, { line, amount, parts }]) => ({
       accountId: line.accountId,
       side: line.side,

@@ -320,7 +320,7 @@ describe('what is read (shared-calculations 10.2; code-house-rules 12.14)', () =
         evidence: { kind: 'file', file },
       }),
     );
-    expect(recorded(evidence).evidenceIds).toHaveLength(2);
+    expect(recorded(evidence)).toEqual({ evidenceId: expect.any(String) as unknown });
     for (const each of [first, second]) {
       expect(await setup.decide(each.requestId, each.versionId)).toMatchObject({ kind: 'success' });
     }

@@ -1,5 +1,5 @@
 import type { SettingOrigin } from '@apparel-os/schemas';
-import { bigint, boolean, customType, date, numeric, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, customType, numeric, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the tax rules part's tables (code-house-rules 3.4). They mirror the reviewed migration
 // (migrations/organisation/0052) and never create or change a table; an integration test compares each with the
@@ -98,21 +98,4 @@ export const roundingRuleVersion = finance.table('rounding_rule_version', {
   unitPaise: bigint('unit_paise', { mode: 'number' }).notNull(),
   mode: text('mode').$type<'half-up' | 'half-to-even' | 'up' | 'down'>().notNull(),
   level: text('level').$type<'line' | 'bill'>(),
-});
-
-export const taxRuleCaEvidence = finance.table('tax_rule_ca_evidence', {
-  id: uuid('id').primaryKey(),
-  goodsClassificationVersionId: uuid('goods_classification_version_id'),
-  taxRateRuleVersionId: uuid('tax_rate_rule_version_id'),
-  registrationTaxApplicabilityVersionId: uuid('registration_tax_applicability_version_id'),
-  priceBasisVersionId: uuid('price_basis_version_id'),
-  roundingRuleVersionId: uuid('rounding_rule_version_id'),
-  evidenceKind: text('evidence_kind').$type<'file' | 'reference'>().notNull(),
-  attachmentId: uuid('attachment_id'),
-  referenceWhat: text('reference_what'),
-  referenceGivenBy: text('reference_given_by'),
-  referenceGivenOn: date('reference_given_on', { mode: 'string' }),
-  referenceKeptAt: text('reference_kept_at'),
-  recordedByUserId: uuid('recorded_by_user_id').notNull(),
-  recordedAt: at('recorded_at').notNull().defaultNow(),
 });

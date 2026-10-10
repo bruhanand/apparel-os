@@ -1,27 +1,21 @@
-import { routes, type CommandRoute } from '@apparel-os/schemas';
+import { PERIOD_REOPENING_TYPE, routes } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
   ApiRoute,
   COMMAND_RUNNER,
-  CommandDefect,
-  commandAnswer,
   IDEMPOTENCY_HELPER,
-  requestContentOf,
   RouteInput,
-  type CommandOutcome,
   type CommandRunner,
   type IdempotencyHelper,
-  type JsonValue,
-  type ReplayAuthorisation,
   type RouteInputOf,
   type TransactionContext,
 } from '../../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type Preparer, type SignedInUser } from '../../../access/index.js';
+import { ACCESS, SignedIn, type AccessInterface, type SignedInUser } from '../../../access/index.js';
 import type { BooksInterface } from '../books.js';
-import type { Outcome } from '../commands/lines.js';
 import { recordOf } from '../queries/periods.js';
 import { BOOKS } from '../tokens.js';
+import { FinanceRoutes } from './finance-routes.js';
 
 /**
  * The routes of the books part (books-and-posting 9.1; module-map 4.14; code-house-rules 12.1; S1-F09-T01), API only
@@ -31,17 +25,21 @@ import { BOOKS } from '../tokens.js';
  */
 @Controller()
 export class BooksController {
+  private readonly routes: FinanceRoutes;
+
   constructor(
-    @Inject(IDEMPOTENCY_HELPER) private readonly helper: IdempotencyHelper,
-    @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
+    @Inject(IDEMPOTENCY_HELPER) helper: IdempotencyHelper,
+    @Inject(COMMAND_RUNNER) runner: CommandRunner,
     @Inject(ACCESS) private readonly access: AccessInterface,
     @Inject(BOOKS) private readonly books: BooksInterface,
-  ) {}
+  ) {
+    this.routes = new FinanceRoutes(helper, runner, access, 'books');
+  }
 
   // The chart of accounts (3.1).
   @ApiRoute(routes.listAccounts)
   listAccounts(@RouteInput() input: RouteInputOf<typeof routes.listAccounts>, @SignedIn() user: SignedInUser) {
-    return this.read(user, 'finance.list-accounts', async (context, today) => ({
+    return this.routes.read(user, 'finance.list-accounts', async (context, today) => ({
       asOf: context.startedAt.toISOString(),
       records: await this.books.listAccounts(context, input.params.bookId, today),
     }));
@@ -50,7 +48,7 @@ export class BooksController {
   @ApiRoute(routes.readAccount)
   async readAccount(@RouteInput() input: RouteInputOf<typeof routes.readAccount>, @SignedIn() user: SignedInUser) {
     const accountId = input.params.accountId;
-    const answer = await this.read(user, 'finance.read-account', async (context, today) => ({
+    const answer = await this.routes.read(user, 'finance.read-account', async (context, today) => ({
       asOf: context.startedAt.toISOString(),
       record: await this.books.readAccount(context, accountId, today),
     }));
@@ -66,7 +64,7 @@ export class BooksController {
 
   @ApiRoute(routes.prepareAccount)
   prepareAccount(@RouteInput() input: RouteInputOf<typeof routes.prepareAccount>, @SignedIn() user: SignedInUser) {
-    return this.command(routes.prepareAccount, 'finance.prepare-account', user, input, (c, p) =>
+    return this.routes.command(routes.prepareAccount, 'finance.prepare-account', user, input, (c, p) =>
       this.books.prepareAccount(c, p, input.body),
     );
   }
@@ -76,7 +74,7 @@ export class BooksController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareAccountVersion>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.prepareAccountVersion, 'finance.prepare-account-version', user, input, (c, p) =>
+    return this.routes.command(routes.prepareAccountVersion, 'finance.prepare-account-version', user, input, (c, p) =>
       this.books.prepareAccountVersion(c, p, input.params.accountId, input.body),
     );
   }
@@ -84,7 +82,7 @@ export class BooksController {
   // Book settings (2.2, 2.3).
   @ApiRoute(routes.listBookSettings)
   listBookSettings(@RouteInput() input: RouteInputOf<typeof routes.listBookSettings>, @SignedIn() user: SignedInUser) {
-    return this.read(user, 'finance.list-book-settings', async (context, today) => ({
+    return this.routes.read(user, 'finance.list-book-settings', async (context, today) => ({
       asOf: context.startedAt.toISOString(),
       records: await this.books.listSettings(context, input.params.bookId, today),
     }));
@@ -95,7 +93,7 @@ export class BooksController {
     @RouteInput() input: RouteInputOf<typeof routes.prepareBookSetting>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.prepareBookSetting, 'finance.prepare-book-setting-version', user, input, (c, p) =>
+    return this.routes.command(routes.prepareBookSetting, 'finance.prepare-book-setting-version', user, input, (c, p) =>
       this.books.prepareBookSetting(c, p, input.params.bookId, input.body),
     );
   }
@@ -104,7 +102,7 @@ export class BooksController {
   @ApiRoute(routes.readCostSetting)
   readCostSetting(@RouteInput() input: RouteInputOf<typeof routes.readCostSetting>, @SignedIn() user: SignedInUser) {
     const bookId = input.params.bookId;
-    return this.read(user, 'finance.read-cost-setting', async (context) => ({
+    return this.routes.read(user, 'finance.read-cost-setting', async (context) => ({
       asOf: context.startedAt.toISOString(),
       bookId,
       setting: await this.books.costSettingOn(context, bookId, input.query.date),
@@ -114,7 +112,7 @@ export class BooksController {
   // The CA's approval evidence (6.3).
   @ApiRoute(routes.recordCaEvidence)
   recordCaEvidence(@RouteInput() input: RouteInputOf<typeof routes.recordCaEvidence>, @SignedIn() user: SignedInUser) {
-    return this.command(routes.recordCaEvidence, 'finance.record-ca-approval-evidence', user, input, (c, p) =>
+    return this.routes.command(routes.recordCaEvidence, 'finance.record-ca-approval-evidence', user, input, (c, p) =>
       this.books.recordCaEvidence(c, p, input.body),
     );
   }
@@ -122,7 +120,7 @@ export class BooksController {
   // Periods (4.1; S1-F09-T02).
   @ApiRoute(routes.listPeriods)
   listPeriods(@RouteInput() input: RouteInputOf<typeof routes.listPeriods>, @SignedIn() user: SignedInUser) {
-    return this.read(user, 'finance.list-periods', async (context) => ({
+    return this.routes.read(user, 'finance.list-periods', async (context) => ({
       asOf: context.startedAt.toISOString(),
       records: await this.books.listPeriods(context, input.params.bookId),
     }));
@@ -130,7 +128,7 @@ export class BooksController {
 
   @ApiRoute(routes.definePeriod)
   definePeriod(@RouteInput() input: RouteInputOf<typeof routes.definePeriod>, @SignedIn() user: SignedInUser) {
-    return this.command(routes.definePeriod, 'finance.define-period', user, input, (c, p) =>
+    return this.routes.command(routes.definePeriod, 'finance.define-period', user, input, (c, p) =>
       this.books.definePeriod(c, p, input.params.bookId, input.body),
     );
   }
@@ -140,7 +138,7 @@ export class BooksController {
   @ApiRoute(routes.readPeriodClose)
   readPeriodClose(@RouteInput() input: RouteInputOf<typeof routes.readPeriodClose>, @SignedIn() user: SignedInUser) {
     const { bookId } = input.params;
-    return this.read(user, 'finance.read-period-close', async (context) => ({
+    return this.routes.read(user, 'finance.read-period-close', async (context) => ({
       asOf: context.startedAt.toISOString(),
       bookId,
       periods: await this.books.periodClose(context, bookId),
@@ -149,14 +147,14 @@ export class BooksController {
 
   @ApiRoute(routes.lockPeriod)
   lockPeriod(@RouteInput() input: RouteInputOf<typeof routes.lockPeriod>, @SignedIn() user: SignedInUser) {
-    return this.command(routes.lockPeriod, 'finance.lock-period', user, input, (c, p) =>
+    return this.routes.command(routes.lockPeriod, 'finance.lock-period', user, input, (c, p) =>
       this.books.lockPeriod(c, p, input.params.periodId),
     );
   }
 
   @ApiRoute(routes.requestReopening)
   requestReopening(@RouteInput() input: RouteInputOf<typeof routes.requestReopening>, @SignedIn() user: SignedInUser) {
-    return this.command(routes.requestReopening, 'finance.request-reopening', user, input, (c, p) =>
+    return this.routes.command(routes.requestReopening, 'finance.request-reopening', user, input, (c, p) =>
       this.books.requestReopening(c, p, input.params.periodId, input.body),
     );
   }
@@ -164,7 +162,7 @@ export class BooksController {
   @ApiRoute(routes.readReopening)
   async readReopening(@RouteInput() input: RouteInputOf<typeof routes.readReopening>, @SignedIn() user: SignedInUser) {
     const { reopeningId } = input.params;
-    const answer = await this.read(user, 'finance.read-reopening', async (context) => ({
+    const answer = await this.routes.read(user, 'finance.read-reopening', async (context) => ({
       asOf: context.startedAt.toISOString(),
       found: await this.books.readReopening(context, reopeningId),
     }));
@@ -183,15 +181,28 @@ export class BooksController {
     @RouteInput() input: RouteInputOf<typeof routes.withdrawReopening>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.withdrawReopening, 'finance.withdraw-reopening', user, input, (c, p) =>
-      this.books.withdrawReopening(c, p, input.params.reopeningId),
+    // RR-489 (product owner, 10 Oct 2026): the requester withdraws their own without cancel; anyone else holds cancel.
+    const reopeningId = input.params.reopeningId;
+    return this.routes.ownOrHeld(
+      routes.withdrawReopening,
+      'finance.withdraw-reopening',
+      user,
+      input,
+      { action: 'cancel', recordType: PERIOD_REOPENING_TYPE },
+      async (context) => (await this.books.reopeningRequester(context, reopeningId)) === user.userId,
+      (context, heldThrough) =>
+        this.books.withdrawReopening(
+          context,
+          { userId: user.userId, ...(heldThrough === undefined ? {} : { cancelHeldThrough: heldThrough }) },
+          reopeningId,
+        ),
     );
   }
 
   // Posting maps (6, 14; S1-F09-T02).
   @ApiRoute(routes.listPostingMaps)
   listPostingMaps(@RouteInput() input: RouteInputOf<typeof routes.listPostingMaps>, @SignedIn() user: SignedInUser) {
-    return this.read(user, 'finance.list-posting-maps', async (context, today) => ({
+    return this.routes.read(user, 'finance.list-posting-maps', async (context, today) => ({
       asOf: context.startedAt.toISOString(),
       on: input.query.on,
       eventKinds: this.books.eventKinds().map((each) => ({
@@ -208,7 +219,7 @@ export class BooksController {
     @RouteInput() input: RouteInputOf<typeof routes.preparePostingMap>,
     @SignedIn() user: SignedInUser,
   ) {
-    return this.command(routes.preparePostingMap, 'finance.prepare-posting-map-version', user, input, (c, p) =>
+    return this.routes.command(routes.preparePostingMap, 'finance.prepare-posting-map-version', user, input, (c, p) =>
       this.books.preparePostingMap(c, p, input.body),
     );
   }
@@ -220,7 +231,7 @@ export class BooksController {
     @SignedIn() user: SignedInUser,
   ) {
     const { bookId } = input.params;
-    const answer = await this.read(user, 'finance.read-trial-balance', async (context) => {
+    const answer = await this.routes.read(user, 'finance.read-trial-balance', async (context) => {
       await this.mayReadJournals(context, user);
       return { balance: await this.books.trialBalance(context, bookId, input.query.periodId) };
     });
@@ -237,7 +248,7 @@ export class BooksController {
   @ApiRoute(routes.readLedger)
   async readLedger(@RouteInput() input: RouteInputOf<typeof routes.readLedger>, @SignedIn() user: SignedInUser) {
     const { accountId } = input.params;
-    const answer = await this.read(user, 'finance.read-ledger', async (context) => {
+    const answer = await this.routes.read(user, 'finance.read-ledger', async (context) => {
       await this.mayReadJournals(context, user);
       return { ledger: await this.books.ledger(context, accountId, input.query.from, input.query.to) };
     });
@@ -263,80 +274,5 @@ export class BooksController {
       [],
     );
     if (checked.kind === 'refused') throw new ApiRefusal({ ...checked.refusal, missing: [...checked.refusal.missing] });
-  }
-
-  private async read<Answer>(
-    user: SignedInUser,
-    commandName: string,
-    work: (context: TransactionContext, today: string) => Promise<Answer>,
-  ): Promise<Answer> {
-    const answer = await this.runner.read(
-      {
-        commandName,
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      async (context) => {
-        const date = await context.businessDate();
-        return date.kind === 'not-set' ? undefined : { read: await work(context, date.date) };
-      },
-    );
-    if (answer === undefined) {
-      throw new ApiRefusal({
-        kind: 'unavailable',
-        code: 'access.business-date-not-set',
-        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-      });
-    }
-    return answer.read;
-  }
-
-  private async command<R extends CommandRoute & { access: { kind: 'action' } }, Answer extends object>(
-    route: R,
-    commandName: string,
-    user: SignedInUser,
-    input: RouteInputOf<R>,
-    work: (context: TransactionContext, preparer: Preparer) => Promise<Outcome<Answer>>,
-  ) {
-    const { action, recordType } = route.access;
-    const need = { actorId: user.userId, action, recordType };
-    const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.access.authorise(context, need);
-      if (authorised.kind === 'allowed') return { kind: 'allowed' };
-      return {
-        kind: 'refused',
-        refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-      };
-    };
-    const answer = await this.helper.run(
-      {
-        commandName,
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      {
-        key: input.idempotencyKey,
-        content: requestContentOf(route, input),
-        authoriseReplay,
-        work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          const roleAssignmentId = user.roleAssignmentId;
-          if (roleAssignmentId === undefined) throw new CommandDefect('A books command ran without Authorise');
-          // Step 0 (code-house-rules 8.2): the assignment Authorise found, held and rechecked under the locks.
-          const held = await this.access.holdAuthority(context, { kind: 'user', id: user.userId }, roleAssignmentId, {
-            action,
-            recordType,
-          });
-          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-          const outcome = await work(context, { userId: user.userId, roleAssignmentId });
-          if (outcome.kind === 'success') {
-            return { kind: 'success', answer: { ...outcome.answer } as Record<string, JsonValue>, shows: 'nothing' };
-          }
-          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
-        },
-      },
-    );
-    return commandAnswer(answer);
   }
 }

@@ -33,6 +33,7 @@ import {
   type StructureSetup,
 } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
+import { reverseIn } from './support/books.js';
 import { connect } from './support/postgres.js';
 
 // S1-F09-T02: periods, posting maps, Check postable, Hold periods, Post, Reverse, the policy 9 check and the trial
@@ -231,6 +232,7 @@ async function book(on: StructureSetup = setup, geography = { stateId, areaId })
           bookId,
           code: syntheticCode(`${code}-${String(counter)}`),
           nature,
+          origin: 'synthetic',
           name: syntheticName(`Account ${code}`),
           validFrom: on.today(),
         }),
@@ -461,6 +463,7 @@ describe('posting maps and their approval (books-and-posting 6, 15 test 15a; POL
           bookId: b.bookId,
           code: syntheticCode('CLM'),
           nature: 'asset',
+          origin: 'synthetic',
           name: syntheticName('Account CLM'),
           validFrom: setup.today(),
         }),
@@ -618,6 +621,7 @@ describe('Post (books-and-posting 8, 9.1 to 9.3; PRD-LED-003, PRD-LED-004, PRD-M
         setup.books.prepareAccountVersion(c, p, b.accounts.TRN, {
           name: syntheticName('Account TRN'),
           retired: true,
+          origin: 'synthetic',
           validFrom: setup.day(1),
           ...(token === undefined ? {} : { versionToken: token }),
         }),
@@ -702,6 +706,25 @@ describe('journals never change (books-and-posting 5.2, 5.3, 9.4; 15 tests 2 and
     }
   });
 
+  it('POL-09.13 books-and-posting 5.2 a journal is checked once at commit: no line joins it in a later transaction', async () => {
+    const b = await book();
+    await mapInForce(b);
+    const [journal] = posted(await postDocument(document([item(b, { pool: 5_000 })])));
+    const client = await connect(world.organisations[0].database, 'runtime');
+    try {
+      await expect(
+        client.query(
+          `insert into finance.journal_line (id, journal_id, account_id, side, amount_paise, legal_entity_id, site_id,
+             store_id, business_unit_id, brand_id, mapping_version_id)
+           values ($1, $2, $3, 'debit', 1, $4, $5, $6, $7, null, $8)`,
+          [uuidv7(), journal?.journalId, b.accounts.INV, b.legalEntityId, b.siteId, b.storeId, b.storeUnit, uuidv7()],
+        ),
+      ).rejects.toThrow(/written with its journal, in the same transaction/);
+    } finally {
+      await client.end();
+    }
+  });
+
   it('PRD-LED-004 PRD-MOD-011 books-and-posting 15 test 3 the runtime role cannot change a journal or a line; a reversal is linked, at most once', async () => {
     const b = await book();
     const map = await mapInForce(b);
@@ -722,17 +745,10 @@ describe('journals never change (books-and-posting 5.2, 5.3, 9.4; 15 tests 2 and
     }
     const reverse = () =>
       setup.run(setup.preparer.id, async (context) => {
-        const plan = await setup.books.planReversal(context, {
+        return reverseIn(setup, context, {
           journalId: journal?.journalId ?? '',
           businessDate: setup.day(2),
-        });
-        if (plan.kind === 'refused') return plan;
-        const series = await setup.books.holdReversal(context, plan);
-        await context.lock(LOCK_STEP.numberSeries, series);
-        return setup.books.reverse(context, {
-          journalId: journal?.journalId ?? '',
-          businessDate: setup.day(2),
-          actor: { kind: 'user', id: setup.preparer.id },
+          actorId: setup.preparer.id,
         });
       });
     const reversal = await reverse();
@@ -807,6 +823,20 @@ describe('the policy gate (books-and-posting 11, 15 test 15; PRD-SEC-017, PRD-UX
       postingConfigurationCheck.check(c, { subject: VALUE_IN.kind, siteId: null, businessUnitId: b.storeUnit }),
     );
     expect(check).toEqual({ kind: 'valid' });
+    // RR-487 (product owner, 10 Oct 2026): the account versions in force are policy 9's values too, with their origin
+    // and their preparer, who cannot validate them (DM-6; code-house-rules 12.14).
+    const values = await setup.run(setup.preparer.id, (c) => postingConfigurationCheck.values(c));
+    const accounts = await setup.run(setup.preparer.id, (c) => setup.books.listAccounts(c, b.bookId, setup.today()));
+    for (const account of accounts) {
+      expect(values).toContainEqual(
+        expect.objectContaining({
+          key: account.versions[0]?.id,
+          origin: 'synthetic',
+          enteredBy: [setup.preparer.id],
+        }),
+      );
+    }
+    expect(accounts[0]?.versions[0]?.origin).toBe('synthetic');
   });
 });
 
@@ -867,6 +897,58 @@ describe('the trial balance and the ledger (books-and-posting 12, 15 test 18; PR
     );
     expect(ledger).toMatchObject({ partial: true, openingPaise: 0, closingPaise: 100_000 });
     expect(ledger?.lines.map((line) => [line.businessUnitId, line.amountPaise])).toEqual([[b.storeUnit, 100_000]]);
+  });
+
+  it('PRD-LED-004 PRD-MOD-011 books-and-posting 9.4 a reverser who sees only part of a journal reverses all of it', async () => {
+    const b = await book();
+    await mapInForce(b, setup, mapOf(b.accounts));
+    const [journal] = posted(
+      await postDocument(
+        document([item(b, { pool: 70_000 }), item(b, { pool: 30_000 }, { businessUnitId: b.warehouse })]),
+      ),
+    );
+    const database = world.organisations[0].database;
+    const reverser = await writeSyntheticUser(database, world.organisations[0].code, syntheticKeysEnvironment(world), {
+      label: next('REVERSER'),
+      enrolled: true,
+    });
+    // SYNTHETIC: view on journals at the Store only, so the warehouse's lines are hidden from the reverser (12).
+    await grantSynthetic(database, { kind: 'user', id: reverser.id }, [{ recordType: JOURNAL_TYPE, action: 'view' }], {
+      scope: {
+        kind: 'dimensions',
+        legalEntity: { kind: 'all' },
+        place: { kind: 'selected', members: [{ type: 'store', id: b.storeId }] },
+        brand: { kind: 'all' },
+      },
+    });
+    const seen = await setup.run(reverser.id, (c) => setup.books.trialBalance(c, b.bookId, b.periodId));
+    expect(seen?.partial).toBe(true);
+    const reversal = await setup.run(reverser.id, (context) =>
+      reverseIn(setup, context, {
+        journalId: journal?.journalId ?? '',
+        businessDate: setup.day(1),
+        actorId: reverser.id,
+      }),
+    );
+    if (reversal.kind !== 'reversed') throw new Error(`not reversed: ${JSON.stringify(reversal)}`);
+    const unitLines = async (journalId: string) => {
+      const client = await connect(database, 'migration');
+      try {
+        const result = await client.query<{ account_id: string; side: string; amount: string; unit: string }>(
+          `select account_id, side, amount_paise::text as amount, business_unit_id as unit from finance.journal_line
+           where journal_id = $1 order by account_id, business_unit_id, side`,
+          [journalId],
+        );
+        return result.rows.map((row) => [row.account_id, row.unit, row.side, Number(row.amount)]);
+      } finally {
+        await client.end();
+      }
+    };
+    const original = await unitLines(journal?.journalId ?? '');
+    expect(original).toHaveLength(4);
+    expect(await unitLines(reversal.journal.journalId)).toEqual(
+      original.map(([account, unit, side, amount]) => [account, unit, side === 'debit' ? 'credit' : 'debit', amount]),
+    );
   });
 });
 

@@ -89,9 +89,9 @@ export const postingConfigurationCheck: ValidityCheck = {
     }
     return missing.length === 0 ? { kind: 'valid' } : { kind: 'invalid', missing };
   },
-  // Policy 9's values held here (DM-6): every approved cost, voucher-model and posting map version in force now or
-  // later, with its origin and its preparer, who cannot validate it. Accounts carry no origin yet (books-and-posting
-  // 11 "As built").
+  // Policy 9's values held here (DM-6): every approved cost, voucher-model, account and posting map version in force
+  // now or later, with its origin and its preparer, who cannot validate it (books-and-posting 11 "As built"; RR-487,
+  // product owner, 10 Oct 2026).
   async values(context) {
     const date = await today(context);
     if (typeof date !== 'string') return [];
@@ -115,19 +115,30 @@ export const postingConfigurationCheck: ValidityCheck = {
       })
       .from(postingMapVersion)
       .where(and(eq(postingMapVersion.decision, 'Approved'), later(postingMapVersion.validDuring)));
-    return [...settings, ...maps].map((row) => ({
+    const accounts = await context.tx
+      .select({
+        id: accountVersion.id,
+        validDuring: accountVersion.validDuring,
+        origin: accountVersion.origin,
+        preparedBy: accountVersion.preparedByUserId,
+      })
+      .from(accountVersion)
+      .where(and(eq(accountVersion.decision, 'Approved'), later(accountVersion.validDuring)));
+    return [...settings, ...accounts, ...maps].map((row) => ({
       key: row.id,
       version: row.validDuring,
       origin: row.origin,
       enteredBy: [row.preparedBy],
     }));
   },
-  // Every change of a setting or a map locks its identity row (maintain.ts, maps.ts).
+  // Every change of a setting, an account or a map locks its identity row (maintain.ts, maps.ts).
   async locks(context) {
     const settings = await context.tx.select({ id: bookSetting.id }).from(bookSetting);
+    const accounts = await context.tx.select({ id: account.id }).from(account);
     const maps = await context.tx.select({ id: postingMap.id }).from(postingMap);
     return [
       ...settings.map((row) => ({ table: lockTable('finance', 'book_setting'), id: row.id, mode: 'shared' as const })),
+      ...accounts.map((row) => ({ table: lockTable('finance', 'account'), id: row.id, mode: 'shared' as const })),
       ...maps.map((row) => ({ table: lockTable('finance', 'posting_map'), id: row.id, mode: 'shared' as const })),
     ];
   },

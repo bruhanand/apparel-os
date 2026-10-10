@@ -52,6 +52,7 @@ import {
   type ApprovalUseRecord,
 } from './commands/approval-use.js';
 import { requestModuleApproval, type ModuleApprovalRequest } from './commands/request-approval.js';
+import { requestLockTargets, withdrawRequest, type WithdrawnDocument } from './commands/withdraw-request.js';
 import { approvalRulesOf, effectsOf, type ApprovalRule, type DocumentEffect } from './domain/approval-rules.js';
 import { latestRequests, type LatestRequest } from './queries/access-records.js';
 import { holdAuthority, type AuthorityActor, type HeldNeed } from './commands/authority.js';
@@ -265,6 +266,21 @@ export interface AccessInterface {
    * 4.3), in the preparing command's transaction. Returns the request's identifier.
    */
   requestApproval(context: TransactionContext, request: ModuleApprovalRequest): Promise<string>;
+  /**
+   * The rows an owning module locks with its document at step 1 before withdrawing its request: the open request on
+   * the document version (access-and-approvals 9.1a; RR-489).
+   */
+  requestLockTargets(context: TransactionContext, document: WithdrawnDocument): Promise<LockTarget[]>;
+  /**
+   * Withdraw a request on behalf of the owning module (access-and-approvals 9.1a; module-map 4.3; RR-489): the open
+   * request on the document version becomes Withdrawn, under the lock taken through requestLockTargets. The owning
+   * module decides who may withdraw. Answers `not-open` when none awaits a decision.
+   */
+  withdrawRequest(
+    context: TransactionContext,
+    document: WithdrawnDocument,
+    by: { readonly userId: string; readonly roleAssignmentId?: string },
+  ): Promise<'withdrawn' | 'not-open'>;
   /** The rows a posting locks with its document at step 1: the decision's request (stock-ledger 10.3; 9.7). */
   approvalLockTargets(context: TransactionContext, decisionId: string): Promise<LockTarget[]>;
   /**
@@ -610,6 +626,22 @@ export class Access implements AccessInterface {
 
   requestApproval(context: TransactionContext, request: ModuleApprovalRequest) {
     return requestModuleApproval(context, this.dependencies.audit, this.rules, request);
+  }
+
+  requestLockTargets(context: TransactionContext, document: WithdrawnDocument) {
+    return requestLockTargets(context, document);
+  }
+
+  withdrawRequest(
+    context: TransactionContext,
+    document: WithdrawnDocument,
+    by: { readonly userId: string; readonly roleAssignmentId?: string },
+  ) {
+    const rule = this.rules.get(document.actionType);
+    if (rule === undefined || rule.module === 'access' || rule.module !== document.module) {
+      throw new CommandDefect(`No approval rule of ${document.module} for action type ${document.actionType}`);
+    }
+    return withdrawRequest(context, this.dependencies.audit, document, by);
   }
 
   approvalLockTargets(context: TransactionContext, decisionId: string) {
