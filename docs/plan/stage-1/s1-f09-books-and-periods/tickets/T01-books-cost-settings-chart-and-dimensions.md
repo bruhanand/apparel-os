@@ -1,6 +1,6 @@
 # S1-F09-T01 — Books, cost settings, chart of accounts and dimensions
 
-Status: blocked
+Status: done
 Blocked by: S1-F02-T02, S1-F06-T05 (stored files, for the CA's evidence)
 Feature: [S1-F09 Books, posting maps, periods and tax-rule records](../../spec.md)
 
@@ -34,3 +34,4 @@ The `finance` module, books part, with its first migration ([books-and-posting.m
 - As built (S1-F09-T01): module `finance` · books with migration 0051 (`finance.book_setting`, `book_setting_version`, `account`, `account_version`, `ca_approval_evidence`, `ca_approval_evidence_cover`); routes under `/api/finance/` (accounts, a book's settings, Read the cost setting on a date, record CA approval evidence); `booksApprovals` handed to `access`; `dimensionsOn` for Post. The CA's evidence is the books part's own record, recorded before the decision against the set of versions it names; Decide's effect refuses `finance.no-ca-evidence` without it (books-and-posting 6.3 "As built for accounts and settings"). Tests: `apps/server/test/books.int.test.ts`, `books-routes.int.test.ts`.
 - Beyond the ticket: the composition root hands `stock` · ledger's existing `BookStockHistory` to `finance` under `BOOK_HELD_STOCK`, since it already exists (S1-F10-T01); `organisation` exports `accountingBookExists` and `mappingOn` for `finance`; the web message catalogue names the new record types, action types and codes.
 - Review fixes (S1-F09 review, 10 Oct 2026): account versions record their origin and the policy 9 check reports them for validation (RR-487, product owner); the CA's evidence is one record for all of `finance`, recorded through `commands/ca-evidence.ts` (RR-486, product owner); the version lines, decision checks and route plumbing the tax rules part shares are exported from the books part's index.
+- Closed 10 Oct 2026 on `s1/f09-books-and-periods` (commit `7506d8b`), reviewed with `/code-review` with the feature's other tickets; review fixes `732ff78`; no blocking finding left. Product owner answers of 10 Oct 2026: one CA evidence record for all of `finance` (RR-486); account versions record their origin (RR-487).

@@ -1,6 +1,6 @@
 # S1-F09-T04 — Tax-rule records
 
-Status: blocked
+Status: done
 Blocked by: S1-F02-T01 (tax registrations); S1-F06-T05 (stored files, for the CA's evidence)
 Feature: [S1-F09 Books, posting maps, periods and tax-rule records](../../spec.md)
 
@@ -30,3 +30,5 @@ Tax-rule tables and migration in `finance`; Maintain and Read tax rules on its `
 - The validity check that keeps selling unavailable until these records are valid (10.1, `PRD-SEC-017`) belongs with selling (stage 4); nothing here enables an operation.
 - Tax configuration is API only in stage 1; Setup › Tax configuration is designed and built before the first live posting in stage 2 (product owner, 6 Oct 2026, DEC-116).
 - Review fixes (S1-F09 review, 10 Oct 2026): `finance.tax_rule_ca_evidence` is removed; the tax rules part records and checks the CA's evidence in the books part's one record, `finance.ca_approval_evidence`, through the books part's interface (RR-486, product owner), and its route answers `{ evidenceId }`.
+- Closed 10 Oct 2026 on `s1/f09-books-and-periods` (commits `2a69549`, `369d448`), reviewed with `/code-review` with the feature's other tickets; review fixes `732ff78`; no blocking finding left.
+- Beyond the ticket: a record read and list (for version tokens) with a routes test; the `finance.code-taken` and `finance.record-not-found` messages made generic; a setting-origin column on each version, checked through `configuration`; module-map 4.14 "Uses" lists `files-imports`.

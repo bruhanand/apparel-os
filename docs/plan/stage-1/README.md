@@ -28,7 +28,7 @@ Updated 7 Oct 2026.
 | `S1-F08` Number series and exceptions | Done 9 Oct 2026: gapless number series (T01), exceptions in My work (T02), evidence files on exceptions and approval decisions (T03), live updates and the failed-jobs view (T04). Open: RR-449 (no screen defines number formats or series yet), RR-453, RR-454, RR-455, RR-456 |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
-Next: books and periods (`S1-F09`). `S1-F03` (product and party masters) and `S1-F04` (policy readiness and activation) are done, 10 Oct 2026. `S1-F02-T04` (configurable classifications and grouping kinds) is done, 9 Oct 2026. `S1-F05` (approval authority) is done, 9 Oct 2026. `S1-F08` (number series and exceptions) is done, 9 Oct 2026. `S1-F02` (organisation structure: T01 legal entities, Sites and Stores; T02 business units, verified mappings and locations; T03 scope by place, 9 Oct 2026) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
+Next: stock ledger part 2 (`S1-F10` T03 onwards). `S1-F09` (books, posting maps, periods and tax-rule records) is done, 10 Oct 2026. `S1-F03` (product and party masters) and `S1-F04` (policy readiness and activation) are done, 10 Oct 2026. `S1-F02-T04` (configurable classifications and grouping kinds) is done, 9 Oct 2026. `S1-F05` (approval authority) is done, 9 Oct 2026. `S1-F08` (number series and exceptions) is done, 9 Oct 2026. `S1-F02` (organisation structure: T01 legal entities, Sites and Stores; T02 business units, verified mappings and locations; T03 scope by place, 9 Oct 2026) and stock ledger part 1 (`S1-F10` T01, T02) are done, merged into `main` and deployed to `dev` on 8 Oct 2026. The build order is in the [stage spec](spec.md).
 
 ## 3. Scope
 
@@ -189,10 +189,10 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F03-T03 Parties, agreements and bank details](s1-f03-product-and-party-masters/tickets/T03-parties-agreements-and-bank-details.md) | blocked | F06-T05, F03-T01 |
 | [F04-T01 Policy readiness and the Available check](s1-f04-policy-readiness/tickets/T01-policy-readiness-and-the-available-check.md) | blocked | F01-T13, F01-T16, F06-T05 |
 | [F04-T02 Readiness checks and unit activation](s1-f04-policy-readiness/tickets/T02-readiness-checks-and-unit-activation.md) | blocked | F02-T02, F03-T02, F04-T01 |
-| [F09-T01 Books, cost settings, chart of accounts and dimensions](s1-f09-books-and-periods/tickets/T01-books-cost-settings-chart-and-dimensions.md) | blocked | F06-T05, F02-T02 |
-| [F09-T02 Posting maps, Post, open periods and trial balance](s1-f09-books-and-periods/tickets/T02-posting-maps-post-open-periods-and-trial-balance.md) | blocked | F06-T05, F02-T03, F08-T01, F04-T01, F09-T01 |
-| [F09-T03 Period lock and reopening](s1-f09-books-and-periods/tickets/T03-period-lock-and-reopening.md) | blocked | F09-T02 |
-| [F09-T04 Tax-rule records](s1-f09-books-and-periods/tickets/T04-tax-rule-records.md) | blocked | F06-T05, F02-T01 |
+| [F09-T01 Books, cost settings, chart of accounts and dimensions](s1-f09-books-and-periods/tickets/T01-books-cost-settings-chart-and-dimensions.md) | done | F06-T05, F02-T02 |
+| [F09-T02 Posting maps, Post, open periods and trial balance](s1-f09-books-and-periods/tickets/T02-posting-maps-post-open-periods-and-trial-balance.md) | done | F06-T05, F02-T03, F08-T01, F04-T01, F09-T01 |
+| [F09-T03 Period lock and reopening](s1-f09-books-and-periods/tickets/T03-period-lock-and-reopening.md) | done | F09-T02 |
+| [F09-T04 Tax-rule records](s1-f09-books-and-periods/tickets/T04-tax-rule-records.md) | done | F06-T05, F02-T01 |
 | [F10-T03 Valuation and hand-off to Post](s1-f10-stock-ledger/tickets/T03-hand-off-to-post.md) | blocked | F10-T02, F08-T02, F09-T02 |
 | [F10-T04 Harness and the story under four combinations](s1-f10-stock-ledger/tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | F10-T03, F02-T03, F08-T01, F08-T02, F05-T01, F03-T02, F09-T03 |
 | [F10-T06 Scenarios G2 to G13 with G10a](s1-f10-stock-ledger/tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked | F10-T04, F08-T02 |
