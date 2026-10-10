@@ -1,6 +1,6 @@
 # S1-F06-T03 — Layouts, mappings and the validation report
 
-Status: blocked
+Status: done
 Blocked by: S1-F06-T01; S1-F02-T02 (the `organisation` Maintain operations the `organisation` handler calls); S1-F02-T03 (place scope, for test 26); S1-F04-T01 (capability controls, for the AI part of test 11)
 Feature: [S1-F06 File intake and a synthetic master import](../../spec.md)
 
@@ -37,3 +37,9 @@ Layouts found by structure, versioned and independently confirmed; every staged 
 - RR-197 (GC6-4): the KDPS Owner names who may confirm layout and mapping versions; live use waits for it. Tests use labelled synthetic confirmers.
 - RR-134 (GC6-13): which rounding rule each money column uses stays with Accounts; until named, such values stay Unknown.
 - The colour tags of class E-1 stay source words (GC-6 6.3).
+
+- Built 10 Oct 2026 on `s1/f06-t03`, from `s1/f06-file-intake-2`. As built in GC-6 3.3, 5, 6.3, 6.4, 6.5, 8, 11, 13.1, 13.2, 13.3, 15.1 and 16, access-and-approvals 9.1a and structure-and-masters 7. Migrations 0057 (`files-imports`: proposals of layouts and mappings, mapping rules and their versions, batch versions and submission, excluded documents, scope columns of documents and rows, values entered by a person, row issues, control totals) and 0058 (pg_trgm, for the handler's suggestions). Tests: GC-6 17 tests 11, 12, 13 and 26 in `apps/server/test/imports-review.int.test.ts`, with detection, the Store handler and the superseded request; journeys `file-intake.spec.ts` (extended) and `import-rules.spec.ts`. No job kind and no outbox consumer is added; the event `files-imports.mapping-confirmed` is emitted with no consumer.
+- The three T01 follow-ups: (a) masking and the exclusion of encrypted columns are built (GC-6 11 "As built"); (b) row issues are kept by Validate in the validation report; (c) staging stays in the request, since this ticket's sections do not require the job of 3.3, which comes with the caps (`S1-F06-T02`) or the 10,000-line measurement (`S2-F13`).
+- Choices made while building, each written in the design: the import classes `required`, `rule`, `calculation` and `handler` beside the 60 of 8.3; a rule's attribute is `<target>.<field>` and its target the field's value (a code); a word no rule maps stays Supplied for the handler to check; Warnings are marked seen by whoever holds edit on the batch while it is Validated, and Submit refuses unseen ones; a batch version changes with each entry or exclusion, and Publish needs the version submitted; `access` gains Supersede a request; the import handler registry is provided by the composition root; the AI-suggestion refusal names the capability `ai-gateway.drafts`; trigram suggestions at similarity 0.3 or more, five at most.
+- Beyond the ticket, kept small: Detect a layout returns each sheet's first row, so the screen fills a proposed layout's columns from the file; a `labelParams` option on the shared Button and GrantedButton; the approval panel's facts for the three confirmations; batch versions superseding the approval of a synthetic approval-reviewed handler, proved in tests only (no stage 1 handler requires one).
+- Still open, for the product owner: Publish authorises the handler's own permission without per-document scope facts, so a Store-scoped preparer cannot publish Stores; layout and mapping versions are edited as JSON on screen; the report split by Store waits for documents that name Stores; who confirms stays RR-197.
