@@ -489,6 +489,7 @@ Only its stage 1 part. **Uses:** all lower tiers.
 
 - A billing device is registered online. `access` holds the device identity; `pos` holds its Store, its tax registrations and its offline authority; `numbering` holds its bill series (`PRD-OFF-002`, `PRD-POS-020`).
 - One exclusively authorised offline counter per Store (`PRD-OFF-001`). Offline is designed in stage 1 and enabled only under the signed Offline operation policy (policy 16, DEC-051). The detailed design is GC-8, [offline-counter.md](../pos/offline-counter.md) (sections 3 to 5 and 11 approved by the product owner, 6 Oct 2026; sections 6 to 10 Draft): there `pos` records the business units a device bills for, and its tax registrations follow from their mappings (offline-counter 3.1).
+- **As built** (`S1-F12-T01`). The stage 1 part of `pos` exists, at tier 4: register a billing device, enrol it, read the devices with their units and series, and define every Active device's missing series for the approving change of DEC-117. It calls `access` (device identity, key, proof, the fresh code, Authorise), `numbering` (the `pos.bill` kind, its series, the bill-number format and the financial year it keeps), `organisation` (the Store's place, units and their mappings) and `audit`, all downward. Revocation, retirement, replacement, unit changes and the devices check are `S1-F12-T02` (offline-counter 3.6, 4.3a).
 
 ## 5. Later-stage modules in outline
 

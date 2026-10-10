@@ -1,6 +1,6 @@
 # S1-F12-T01 — Register and enrol a billing device
 
-Status: blocked
+Status: in-progress
 Blocked by: S1-F02-T02 (Stores and their whole-store and brand-counter units); S1-F08-T01 (number series); S1-F01-T09 (session kinds and the fresh-code check); S1-F11-T10 (`apps/counter` exists, with its Playwright run)
 Feature: [S1-F12 Billing devices and device bill series](../../spec.md)
 
@@ -41,3 +41,7 @@ A device enrolled before the format and year exist gets its series when the appr
 - GC8-8: the KDPS Owner confirms the fresh code at enrolment for live use (it adds to the GC3-6 list).
 - Live gates: the financial-year dates (GC5-1, RR-060), the bill-number format (V-40, RR-101), and policy 2 for live session limits.
 - Every stage 1 device is an online till. The offline counter designation and GC-8 sections 6 to 10 stay Draft for `S4-F11`.
+- **Built** on `s1/f12-t01` (10 Oct 2026); as built in offline-counter 3.6 and 4.3a, numbering-and-audit 3.3 and 5.1, access-and-approvals 2.4, 3.3 and 13.1, module-map 4.17. The design text step needed no change: sections 3 to 5 and 11 were already marked approved, with `apps/counter`, the fresh code and 12.1 aligned with 4.1 and test 8.
+- **Settled with the code, beyond the ticket's words** (design choices, each written into the design): the bill-number format and the financial year's dates are kept by `numbering` (`numbering.kind_format`, `numbering.financial_year`), which every yearly series follows; the challenge is a public command on the sign-in path, names no device and has no lifetime; a device proof that fails gets the one sign-in refusal; the shared POS session limits are the setting `access.shared-pos-session-limits` (RR-303); a new access record kind `device-enrolled`; `organisation`'s unit head now carries its Store.
+- **Not built here** (proposed open items): the approved change, with its route and screen, that defines the bill-number format or a financial year and calls `defineMissingSeries` in its transaction (DEC-117; `pos.defineMissingSeries` exists and is tested); changing `access.shared-pos-session-limits` on Setup › Security settings; a lifetime for device challenges; serving `apps/counter` at `/counter/` from the `app` service (RR-420), without which the counter pages are reachable only from `vite preview`.
+
