@@ -125,6 +125,11 @@ export const syntheticCaller: CallerRegistration = {
         'supplier-return-departure',
         'supplier-handover',
         'supplier-rejection-return',
+        // S1-F10-T06.
+        'disposal',
+        'count-difference',
+        'reversal',
+        'piece-correction',
       ],
       importKinds: ['none'],
     },
