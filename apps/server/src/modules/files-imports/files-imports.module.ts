@@ -23,6 +23,7 @@ import { NUMBERING, NumberingModule, type NumberingInterface } from '../numberin
 import type { ImportDependencies } from './commands/import-common.js';
 import { IMPORT_HANDLERS, type ImportHandlers } from './contracts/import-handlers.js';
 import { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
+import { intakeCapsFromEnvironment, type IntakeCaps } from './domain/intake-caps.js';
 import { FilesImports } from './files-imports.js';
 import { FILE_STORE, FILE_STORE_ENVIRONMENT, type FileStoreHandle } from './file-store/file-store.js';
 import { fileStoreFromEnvironment, S3FileStore } from './file-store/s3-file-store.js';
@@ -36,6 +37,8 @@ export const FILES_IMPORTS = 'files-imports.FilesImports';
  * process's, unless a test gives others. It decides the publishing limit of S1-F06-T01.
  */
 export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
+/** The token of the caps at intake, read at start from the same variables (9.3; code-house-rules 12.14; S1-F06-T02). */
+const INTAKE_CAPS = 'files-imports.IntakeCaps';
 
 /**
  * The files-imports module (module-map 4.7): tier 1, uses `access`, `audit`, `numbering` and `kernel`. It holds the
@@ -44,13 +47,20 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
  * through the handlers the target modules register at start under IMPORT_HANDLERS, which the composition root provides,
  * as the import handler contract is one a lower module defines and higher ones implement (S1-F06-T01, S1-F06-T03). Batch codes come from
  * `numbering` (GC9-9). The file store is read from the environment at start: with none set, storing and reading a file
- * are unavailable and say so (nothing is on by default; code-house-rules 12.14).
+ * are unavailable and say so (nothing is on by default; code-house-rules 12.14). The caps at intake are read at start
+ * too, and a missing one stops the service (S1-F06-T02).
  */
 @Module({
   imports: [CommandRunnerModule, LoggingModule, AccessModule, AccessContractsModule, AuditModule, NumberingModule],
   controllers: [FilesController, ImportsController],
   providers: [
     { provide: FILES_IMPORTS_ENVIRONMENT, useValue: process.env },
+    // A missing or malformed cap stops the service at start (code-house-rules 12.14).
+    {
+      provide: INTAKE_CAPS,
+      useFactory: (env: Readonly<Record<string, string | undefined>>): IntakeCaps => intakeCapsFromEnvironment(env),
+      inject: [FILES_IMPORTS_ENVIRONMENT],
+    },
     {
       provide: IMPORT_DEPENDENCIES,
       useFactory: (
@@ -64,6 +74,7 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
         numbering: NumberingInterface,
         handlers: ImportHandlers,
         env: Readonly<Record<string, string | undefined>>,
+        caps: IntakeCaps,
       ): ImportDependencies => ({
         runner,
         helper,
@@ -75,6 +86,7 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
         numbering,
         handlers,
         environment: deploymentEnvironmentFromEnvironment(env),
+        caps,
       }),
       inject: [
         COMMAND_RUNNER,
@@ -87,6 +99,7 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
         NUMBERING,
         IMPORT_HANDLERS,
         FILES_IMPORTS_ENVIRONMENT,
+        INTAKE_CAPS,
       ],
     },
     { provide: FILE_STORE_ENVIRONMENT, useValue: process.env },
@@ -105,14 +118,37 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
     {
       provide: STORE_FILE_DEPENDENCIES,
       useFactory: (
+        runner: CommandRunner,
         helper: IdempotencyHelper,
         access: AccessInterface,
         audit: AuditInterface,
         keys: OrganisationKeys,
         fileStore: FileStoreHandle,
         logger: StructuredLogger,
-      ) => ({ helper, access, audit, keys, fileStore, logger }),
-      inject: [IDEMPOTENCY_HELPER, ACCESS, AUDIT, ORGANISATION_KEYS, FILE_STORE, LOGGER],
+        env: Readonly<Record<string, string | undefined>>,
+        caps: IntakeCaps,
+      ) => ({
+        runner,
+        helper,
+        access,
+        audit,
+        keys,
+        fileStore,
+        logger,
+        environment: deploymentEnvironmentFromEnvironment(env),
+        caps,
+      }),
+      inject: [
+        COMMAND_RUNNER,
+        IDEMPOTENCY_HELPER,
+        ACCESS,
+        AUDIT,
+        ORGANISATION_KEYS,
+        FILE_STORE,
+        LOGGER,
+        FILES_IMPORTS_ENVIRONMENT,
+        INTAKE_CAPS,
+      ],
     },
     {
       provide: READ_ATTACHED_DEPENDENCIES,

@@ -548,7 +548,7 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(await rows(1, 'select id from files_imports.import_batch')).toEqual([]);
   });
 
-  it('PRD-SEC-017 PRD-UXP-003: on kdps-test Publish answers unavailable naming the missing controls, and writes nothing', async () => {
+  it('PRD-SEC-017 PRD-UXP-003: on kdps-test Publish answers unavailable naming the missing control, and writes nothing', async () => {
     const bytes = await syntheticProductWorkbook([productRow(next('STYLE'), next('SKU'))], next('LIMIT'));
     const stored = importFileStoredSchema.parse(
       (await upload(preparer.cookie, bytes, syntheticProductFileName('limit'))).body,
@@ -570,11 +570,7 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(errorOf(answer)).toMatchObject({
       kind: 'unavailable',
       code: 'files-imports.publishing-limited',
-      missing: [
-        { kind: 'publishing-control', control: 'intake-refusals-and-caps', ticket: 'S1-F06-T02' },
-        { kind: 'publishing-control', control: 'confirmed-layouts-and-validation-report', ticket: 'S1-F06-T03' },
-        { kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' },
-      ],
+      missing: [{ kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' }],
     });
     expect(await rows(0, 'select id from merchandise.product_proposal')).toEqual(proposalsBefore);
     expect(await rows(0, 'select id from files_imports.import_outcome where batch_id = $1', [batchId])).toEqual([]);

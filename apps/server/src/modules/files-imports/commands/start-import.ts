@@ -32,7 +32,7 @@ import type { Grid, GridNote } from '../domain/grid.js';
 import type { RuleInForce } from '../domain/rules.js';
 import { stage, type SheetSummary, type StagedDocumentDraft, type StagedRowDraft } from '../domain/staging.js';
 import { fileStoreNotConfigured } from '../file-store/file-store.js';
-import { readXlsx } from '../readers/xlsx-reader.js';
+import { readWorkbook } from '../readers/workbook-read.js';
 import {
   classesHeld,
   layoutStructureSchema,
@@ -189,7 +189,10 @@ interface StagedFile {
   readonly notes: readonly GridNote[];
 }
 
-/** The stored workbook, fetched, decrypted, checked against its hash and read into the grid (9.1; 8.3). */
+/**
+ * The stored workbook, fetched, decrypted, checked against its hash and read into the grid under the caps at intake
+ * in force (9.1, 9.3; 8.3): a file stored under looser caps is refused here as at intake, naming the cap.
+ */
 export async function storedGrid(
   deps: ImportDependencies,
   organisationCode: string,
@@ -199,8 +202,8 @@ export async function storedGrid(
   const sealed = await deps.fileStore.store.get(file.objectKey);
   const bytes = openFile(deps.keys, organisationCode, file.contentHash, file.scheme, sealed);
   if (contentHashOf(bytes) !== file.contentHash) throw new CommandDefect('A stored file does not match its hash');
-  const read = await readXlsx(bytes);
-  if (read.kind === 'unreadable') refuse({ kind: 'refused', code: 'files-imports.file-unreadable', missing: [] });
+  const read = await readWorkbook(bytes, deps.caps);
+  if (read.kind === 'refused') refuse({ kind: 'refused', code: read.code, missing: [...read.missing] });
   return read.grid;
 }
 

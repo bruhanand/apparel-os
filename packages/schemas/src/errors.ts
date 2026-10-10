@@ -506,6 +506,23 @@ export const inboxCodes = declareCodes({
  *   an approval decision of that version (3.1 step 8, 13.1).
  * - `files-imports.version-not-confirmed`: Publish needs the batch's layout and mapping versions Confirmed (6.4).
  * - `files-imports.not-a-warning`: only a Warning is marked seen (8.2).
+ *
+ * Intake refusals and caps (S1-F06-T02; imports-and-opening-data 9.3, 11; PRD-SEC-011; DEC-112 GC6-3, GC6-5,
+ * GC6-6). Each is answered before anything is stored; a stored file read again later answers the same:
+ *
+ * - `files-imports.file-unreadable` also refuses a damaged workbook at intake; `missing` names the reader's error as a
+ *   word (`reader-error`), never its message, which may quote the file.
+ * - `files-imports.workbook-active-content`: macros, active controls or embedded objects; `missing` names which.
+ * - `files-imports.workbook-depends-on-another`: the workbook depends on data in another workbook; `missing` asks
+ *   for a self-contained copy (A-9). Nothing is stripped and no linked value is trusted.
+ * - `files-imports.workbook-unapproved-link`: a link that fetches something, such as an external image or object, or
+ *   a data connection; an ordinary hyperlink is not one (GC6-17). `missing` names it.
+ * - `files-imports.over-intake-cap`: over a cap at intake (uploaded size, expanded size, rows, parser memory,
+ *   processing time); `missing` names the cap and its limit. Nothing is truncated.
+ * - `files-imports.customer-contact-columns`: on the test setup, the file has columns its Confirmed layout marks as
+ *   customer contact (section 11; DEC-052); `missing` names them. Upload it again without them.
+ * - `files-imports.layout-needed-on-test-setup`: on the test setup, a sheet of the file that holds cells fits no
+ *   Confirmed layout version, so its columns cannot be known to hold no customer contact; `missing` names it.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -527,6 +544,12 @@ export const filesImportsCodes = declareCodes({
   'files-imports.batch-not-validated': 'refused',
   'files-imports.publishing-limited': 'unavailable',
   'files-imports.document-refused': 'refused',
+  'files-imports.workbook-active-content': 'refused',
+  'files-imports.workbook-depends-on-another': 'refused',
+  'files-imports.workbook-unapproved-link': 'refused',
+  'files-imports.over-intake-cap': 'refused',
+  'files-imports.customer-contact-columns': 'refused',
+  'files-imports.layout-needed-on-test-setup': 'refused',
   'files-imports.layout-code-taken': 'refused',
   'files-imports.mapping-code-taken': 'refused',
   'files-imports.mapping-not-found': 'not-found',

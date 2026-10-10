@@ -32,6 +32,7 @@ import {
   stagedRow,
   stagedValueEntry,
 } from '../db/schema.js';
+import type { IntakeCaps } from '../domain/intake-caps.js';
 import type { EffectiveValue } from '../domain/report.js';
 import type { FileStoreHandle } from '../file-store/file-store.js';
 
@@ -51,6 +52,8 @@ export interface ImportDependencies {
   readonly handlers: ImportHandlers;
   /** The environment's name, for the publishing limit of S1-F06-T01. */
   readonly environment: DeploymentEnvironment;
+  /** The caps at intake, which every read of a stored workbook keeps to (9.3; S1-F06-T02). */
+  readonly caps: IntakeCaps;
 }
 
 /** The person a route found: who, in which Organisation, under which request. */

@@ -97,4 +97,18 @@ describe('checkEvidenceFile', () => {
   it('DEC-117 does not mistake a longer name for active content', () => {
     expect(checkEvidenceFile(pdf('/JSONish true /Launcher 1'))).toEqual({ kind: 'accepted', format: 'pdf' });
   });
+
+  it('RR-434 refuses a PDF with a stream behind a filter the check cannot open, rather than trusting it', () => {
+    for (const filter of ['/LZWDecode', '/ASCII85Decode', '/ASCIIHexDecode', '/RunLengthDecode', '[/A85 /FlateDecode]']) {
+      const body = `/SYNTHETIC 2 0 R >>\nendobj\n2 0 obj\n<< /Filter ${filter} /Length 4 >>\nstream\nSYNT\nendstream`;
+      expect(checkEvidenceFile(pdf(body))).toEqual({ kind: 'refused', code: 'files-imports.pdf-not-inspectable' });
+    }
+  });
+
+  it('RR-434 accepts streams behind the image filters, which hold no PDF objects, and zlib streams it checks', () => {
+    for (const filter of ['/DCTDecode', '/JPXDecode', '/CCITTFaxDecode', '/JBIG2Decode', '/FlateDecode', '[/FlateDecode]', '/Fl']) {
+      const body = `/SYNTHETIC 2 0 R >>\nendobj\n2 0 obj\n<< /Filter ${filter} /Length 4 >>\nstream\nSYNT\nendstream`;
+      expect(checkEvidenceFile(pdf(body))).toEqual({ kind: 'accepted', format: 'pdf' });
+    }
+  });
 });

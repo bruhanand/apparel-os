@@ -30,6 +30,35 @@ export async function writeSyntheticProductLayout(
   proposedByUserId: string,
   confirmedByUserId?: string,
 ): Promise<SyntheticProductLayout> {
+  const confirmed = confirmedByUserId !== undefined;
+  return writeSyntheticLayout(
+    database,
+    {
+      layoutCode: confirmed ? `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED` : SYNTHETIC_PRODUCT_LAYOUT_CODE,
+      mappingCode: confirmed ? `${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED` : SYNTHETIC_PRODUCT_MAPPING_CODE,
+      structure: SYNTHETIC_PRODUCT_LAYOUT,
+      fields: SYNTHETIC_PRODUCT_MAPPING,
+    },
+    proposedByUserId,
+    confirmedByUserId,
+  );
+}
+
+/**
+ * Writes a SYNTHETIC layout and its `merchandise` mapping with the structure and fields given, one version each,
+ * Proposed, or Confirmed by the different person named (S1-F06-T02).
+ */
+export async function writeSyntheticLayout(
+  database: string,
+  layout: {
+    readonly layoutCode: string;
+    readonly mappingCode: string;
+    readonly structure: unknown;
+    readonly fields: unknown;
+  },
+  proposedByUserId: string,
+  confirmedByUserId?: string,
+): Promise<SyntheticProductLayout> {
   const state = confirmedByUserId === undefined ? 'Proposed' : 'Confirmed';
   const decided = [confirmedByUserId ?? null, confirmedByUserId === undefined ? null : new Date()];
   const layoutId = uuidv7();
@@ -42,31 +71,23 @@ export async function writeSyntheticProductLayout(
     await owner.query(
       `insert into files_imports.layout (id, code, source, document_type, kinds)
        values ($1, $2, $3, 'product-master', array['create'])`,
-      [
-        layoutId,
-        state === 'Proposed' ? SYNTHETIC_PRODUCT_LAYOUT_CODE : `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED`,
-        SYNTHETIC_LAYOUT_SOURCE,
-      ],
+      [layoutId, layout.layoutCode, SYNTHETIC_LAYOUT_SOURCE],
     );
     await owner.query(
       `insert into files_imports.layout_version (id, layout_id, version, structure, state, proposed_by_user_id,
          decided_by_user_id, decided_at)
        values ($1, $2, 1, $3, $4, $5, $6, $7)`,
-      [layoutVersionId, layoutId, JSON.stringify(SYNTHETIC_PRODUCT_LAYOUT), state, proposedByUserId, ...decided],
+      [layoutVersionId, layoutId, JSON.stringify(layout.structure), state, proposedByUserId, ...decided],
     );
     await owner.query(
       `insert into files_imports.mapping (id, code, layout_version_id, target) values ($1, $2, $3, 'merchandise')`,
-      [
-        mappingId,
-        state === 'Proposed' ? SYNTHETIC_PRODUCT_MAPPING_CODE : `${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED`,
-        layoutVersionId,
-      ],
+      [mappingId, layout.mappingCode, layoutVersionId],
     );
     await owner.query(
       `insert into files_imports.mapping_version (id, mapping_id, version, fields, state, proposed_by_user_id,
          decided_by_user_id, decided_at)
        values ($1, $2, 1, $3, $4, $5, $6, $7)`,
-      [mappingVersionId, mappingId, JSON.stringify(SYNTHETIC_PRODUCT_MAPPING), state, proposedByUserId, ...decided],
+      [mappingVersionId, mappingId, JSON.stringify(layout.fields), state, proposedByUserId, ...decided],
     );
     await owner.query('commit');
   } catch (error) {
