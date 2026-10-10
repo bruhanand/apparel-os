@@ -82,7 +82,6 @@ import {
 import type { RecordFacts } from './domain/scope.js';
 import { ownAccess, type OwnAccess } from './queries/own-access.js';
 import {
-  deviceLockTarget,
   devicesById,
   endDevice,
   enrolDevice,
@@ -183,8 +182,6 @@ export interface AccessInterface {
     by: DeviceActor,
     draft: { readonly code: string; readonly label: string },
   ): Promise<DeviceOutcome<{ readonly deviceId: string }>>;
-  /** The device row as a lock target, for the enrolment's own-record step (code-house-rules 8.2). */
-  deviceLockTarget(deviceId: string): LockTarget;
   /**
    * Enrol a device whose row the command holds (offline-counter 3.2): binds its public key once after checking its
    * signature over an unused challenge; Active; writes the `device-enrolled` access record (PRD-OFF-010).
@@ -577,10 +574,6 @@ export class Access implements AccessInterface {
     draft: { readonly code: string; readonly label: string },
   ) {
     return registerDevice(context, this.dependencies.audit, by, draft);
-  }
-
-  deviceLockTarget(deviceId: string): LockTarget {
-    return deviceLockTarget(deviceId);
   }
 
   enrolDevice(

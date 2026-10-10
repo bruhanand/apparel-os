@@ -143,6 +143,7 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
   it('DEC-117 the change that defines the bill format and the financial year gives every Active device its missing series, once', async () => {
     const today = w.clock.now().toISOString().slice(0, 10);
     const first = await w.inChange(async (context) => {
+      await w.holdDevices(context);
       done(await w.numbering.defineFormatVersion(context, w.billFormatCode, BILL_FORMAT));
       done(await w.numbering.setKindFormat(context, BILL_KIND.kind, w.billFormatCode, 'synthetic'));
       done(
@@ -165,7 +166,7 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
     );
     expect(first.answer.definedSeriesIds.sort()).toEqual(device?.series.map((each) => each.seriesId).sort());
     // A repeat defines nothing twice and leaves each series as it is (retry-safe).
-    const again = await w.inChange((context) => w.pos.defineMissingSeries(context, today));
+    const again = await w.defineMissingSeries(today);
     expect(again).toEqual({ kind: 'success', answer: { definedSeriesIds: [] } });
     expect((await w.listed(w.admin)).find((each) => each.deviceId === early.deviceId)?.series).toEqual(device?.series);
   });

@@ -14,6 +14,7 @@ import { inboxConsumers, inboxJobKinds } from './modules/inbox/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { mappingChanged } from './modules/organisation/index.js';
 import { posConsumers } from './modules/pos/index.js';
+import { composedNumbering } from './numbered-kinds.js';
 
 /**
  * Everything the worker runs (code-house-rules 12.8, 12.9): the event types the units declare, their consumers and
@@ -27,7 +28,7 @@ import { posConsumers } from './modules/pos/index.js';
 export const jobRegistry: JobRegistry = {
   events: [approvalRequested, approvalDecided, assignmentChanged, sessionRevoked, jobFailed, mappingChanged],
   // `pos` defines a billing device's series when a unit's mapping changes (offline-counter 4.3; S1-F12-T02).
-  consumers: [...inboxConsumers, ...exceptionsConsumers, ...posConsumers],
+  consumers: [...inboxConsumers, ...exceptionsConsumers, ...posConsumers(composedNumbering())],
   // The escalation of overdue tasks and approvals (access-and-approvals 11.3; S1-F05-T02).
   jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds, ...inboxJobKinds],
 };

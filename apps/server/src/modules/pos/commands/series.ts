@@ -1,6 +1,7 @@
 import type { DeviceSeries, SeriesMissing } from '@apparel-os/schemas';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import { deviceLockTarget } from '../../access/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { mappingOn, taxRegistrationCodes } from '../../organisation/index.js';
 import { billingDeviceUnit } from '../db/schema.js';
@@ -62,6 +63,13 @@ export async function defineDeviceSeries(
   device: { readonly deviceId: string; readonly code: string },
   date: string,
 ): Promise<SeriesOutcome<DeviceSeriesAnswer>> {
+  // The caller holds the device row and read its state under it, so no revocation or retirement, which holds the row
+  // exclusively and closes every live series it finds, can pass between them (code-house-rules 8.1, 8.2; S1-F12
+  // review).
+  const target = deviceLockTarget(device.deviceId);
+  if (context.heldLock(target.table, target.id)?.mode !== 'exclusive') {
+    throw new CommandDefect("Defining a device's series holds the device row (8.2)");
+  }
   const { registrationIds, unmapped } = await registrationsOn(context, device.deviceId, date);
   const missing: SeriesMissing[] = [];
   const format = await numbering.kindFormatOf(context, BILL_KIND.kind);

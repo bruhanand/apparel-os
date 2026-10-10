@@ -7,8 +7,20 @@ import {
   type MissingItem,
 } from '@apparel-os/schemas';
 import { asc, eq, inArray } from 'drizzle-orm';
-import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
-import { freshCodeRefusal, takeFreshCode, type AccessInterface, type RecordFacts } from '../../access/index.js';
+import {
+  LOCK_STEP,
+  lockTable,
+  type CommandRefusal,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../kernel/index.js';
+import {
+  deviceLockTarget,
+  freshCodeRefusal,
+  takeFreshCode,
+  type AccessInterface,
+  type RecordFacts,
+} from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { businessUnitHeads, businessUnitInForce, type OrganisationInterface } from '../../organisation/index.js';
@@ -31,7 +43,6 @@ export interface PosDependencies {
     | 'authoriseEach'
     | 'holdAuthority'
     | 'registerDevice'
-    | 'deviceLockTarget'
     | 'enrolDevice'
     | 'endDevice'
     | 'devices'
@@ -39,6 +50,17 @@ export interface PosDependencies {
   >;
   readonly organisation: Pick<OrganisationInterface, 'placeFacts' | 'placeFactsOf'>;
   readonly numbering: NumberingInterface;
+}
+
+/**
+ * The rows of billing devices as lock targets, exclusive, at step 1 of a command that changes them or their series
+ * (code-house-rules 8.2): the device row of `access` and the billing device row of `pos`, for each device.
+ */
+export function billingDeviceLockTargets(deviceIds: readonly string[]): LockTarget[] {
+  return deviceIds.flatMap((deviceId) => [
+    deviceLockTarget(deviceId),
+    { table: BILLING_DEVICE, id: deviceId, mode: 'exclusive' as const },
+  ]);
 }
 
 /** Who acts: the user, the assignment Authorise used, and where from (numbering-and-audit 4.1, 5.2). */
@@ -203,10 +225,7 @@ export async function enrolBillingDevice(
   today: string,
 ): Promise<Outcome<DeviceEnrolled> & { readonly causedBySecret?: boolean }> {
   const { access } = dependencies;
-  await context.lock(LOCK_STEP.document, [
-    access.deviceLockTarget(deviceId),
-    { table: BILLING_DEVICE, id: deviceId, mode: 'exclusive' },
-  ]);
+  await context.lock(LOCK_STEP.document, billingDeviceLockTargets([deviceId]));
   const code = await access.checkFreshCode(context, by.userId, enrolment.totpCode);
   const codeRefused = freshCodeRefusal(code);
   if (codeRefused !== undefined) {
@@ -252,10 +271,20 @@ export async function enrolBillingDevice(
 }
 
 /**
+ * The lock targets of every billing device, for the step 1 call of the change that then defines their missing series
+ * (DEC-117; code-house-rules 8.2): that change locks its own record at step 1 too, so it passes these in the same call.
+ */
+export async function missingSeriesLockTargets(context: TransactionContext): Promise<LockTarget[]> {
+  const rows = await context.tx.select({ id: billingDevice.id }).from(billingDevice).orderBy(asc(billingDevice.id));
+  return billingDeviceLockTargets(rows.map((row) => row.id));
+}
+
+/**
  * Define the missing series of every Active billing device for the financial year of the date (offline-counter 4.1;
  * DEC-117): what an approved change that defines the bill-number format or the financial year's dates calls in its own
- * transaction. Retry-safe: a repeat defines nothing twice, and it never replaces, renumbers or resets an existing
- * series. Answers the series it defined.
+ * transaction, holding every device's rows from missingSeriesLockTargets at step 1, so a revocation or retirement in
+ * progress is waited for and a device it ends gets no series (8.2; S1-F12 review). Retry-safe: a repeat defines
+ * nothing twice, and it never replaces, renumbers or resets an existing series. Answers the series it defined.
  */
 export async function defineMissingSeries(
   context: TransactionContext,

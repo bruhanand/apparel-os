@@ -13,7 +13,7 @@ import { billingDeviceUnit } from '../db/schema.js';
 import { BILL_KIND, BILLING_DEVICE_TYPE, billScopeKey } from '../domain/kinds.js';
 import { deviceEnded } from '../events.js';
 import {
-  BILLING_DEVICE,
+  billingDeviceLockTargets,
   deviceStore,
   refused,
   registerBillingDevice,
@@ -53,10 +53,7 @@ export async function endBillingDevice(
   ending: DeviceEnding,
 ): Promise<Outcome<BillingDeviceEnded>> {
   const { access, numbering } = dependencies;
-  await context.lock(LOCK_STEP.document, [
-    access.deviceLockTarget(deviceId),
-    { table: BILLING_DEVICE, id: deviceId, mode: 'exclusive' },
-  ]);
+  await context.lock(LOCK_STEP.document, billingDeviceLockTargets([deviceId]));
   const storeId = await deviceStore(context, deviceId);
   if (storeId === undefined) return refused('not-found', 'access.device-not-found');
   const live = (await numbering.seriesOfScopePrefix(context, BILL_KIND.kind, deviceScopePrefix(deviceId))).filter(
@@ -167,10 +164,7 @@ export async function changeBillingDeviceUnits(
   today: string,
 ): Promise<Outcome<BillingDeviceUnitsChanged>> {
   const { access } = dependencies;
-  await context.lock(LOCK_STEP.document, [
-    access.deviceLockTarget(deviceId),
-    { table: BILLING_DEVICE, id: deviceId, mode: 'exclusive' },
-  ]);
+  await context.lock(LOCK_STEP.document, billingDeviceLockTargets([deviceId]));
   const storeId = await deviceStore(context, deviceId);
   const device = (await access.devices(context, [deviceId])).get(deviceId);
   if (storeId === undefined || device === undefined) return refused('not-found', 'access.device-not-found');

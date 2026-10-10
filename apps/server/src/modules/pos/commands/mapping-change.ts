@@ -1,9 +1,10 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { LOCK_STEP, type TransactionContext } from '../../../kernel/index.js';
 import { devicesById } from '../../access/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { mappingVersionStart } from '../../organisation/index.js';
 import { billingDeviceUnit } from '../db/schema.js';
+import { billingDeviceLockTargets } from './devices.js';
 import { defineDeviceSeries, type SeriesOutcome } from './series.js';
 
 /**
@@ -31,6 +32,9 @@ export async function defineSeriesForMapping(
       ),
     )
     .orderBy(asc(billingDeviceUnit.billingDeviceId));
+  // The devices' rows at step 1, before their state is read, so a revocation or retirement in progress is waited for
+  // and a device it ends gets no series (code-house-rules 8.1, 8.2; S1-F12 review).
+  await context.lock(LOCK_STEP.document, billingDeviceLockTargets(rows.map((row) => row.deviceId)));
   const devices = await devicesById(
     context,
     rows.map((row) => row.deviceId),

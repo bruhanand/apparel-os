@@ -294,6 +294,19 @@ export class DevicesWorld {
     return this.setup.run(this.admin.id, work);
   }
 
+  /** Holds every billing device's rows at step 1, as the change that defines their missing series does (DEC-117). */
+  async holdDevices(context: TransactionContext): Promise<void> {
+    await context.lock(LOCK_STEP.document, await this.pos.missingSeriesLockTargets(context));
+  }
+
+  /** Defines the missing series of every Active device for the date's financial year, in a change of its own. */
+  defineMissingSeries(date: string) {
+    return this.inChange(async (context) => {
+      await this.holdDevices(context);
+      return this.pos.defineMissingSeries(context, date);
+    });
+  }
+
   async listed(user: SyntheticUser) {
     const call = await this.get(this.cookies.get(user.id) ?? '', '/api/pos/billing-devices');
     expect(call.status).toBe(200);

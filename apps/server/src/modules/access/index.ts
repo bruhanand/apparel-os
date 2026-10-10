@@ -36,6 +36,8 @@ export {
 } from './events.js';
 // A device's state, for the devices readiness check that site-lifecycle runs (offline-counter 11; S1-F12-T02).
 export { devicesById } from './commands/devices.js';
+// The device row as a lock target, for `pos` defining a device's series with no instance of access (S1-F12 review).
+export { deviceLockTarget } from './commands/devices.js';
 export type { BatchInput, BatchOutcome } from './commands/bulk.js';
 export type { BatchItemInput } from './commands/decide.js';
 export { accessApprovalRules } from './domain/approval-rules.js';

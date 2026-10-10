@@ -3,6 +3,7 @@ import { devicePublicKeySchema, type DeviceProof, type DevicePublicKey, type Dev
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
+  LOCK_STEP,
   lockTable,
   type CommandRefusal,
   type LockTarget,
@@ -230,8 +231,14 @@ export async function endDevice(
  * Check a device's proof at sign-in (offline-counter 3.3, 3.4; POL-02.18): the device exists, is Active with its key
  * bound, and signed this unused challenge for a sign-in in this Organisation; the challenge is then used. Answers
  * whether it holds; a device that is unknown, not Active, or whose key did not sign it, is no proof.
+ *
+ * The sign-in relies on the device, so it holds the device row in shared mode at step 1 before reading its state and
+ * key, and keeps it until it commits the session it starts (code-house-rules 8.1, 8.2): a revocation or retirement,
+ * which holds the row exclusively, either commits first, and the device is then no longer Active here, or waits until
+ * the session is committed and revokes it with the others (PRD-SEC-008; S1-F12 review).
  */
 export async function proveDeviceForSignIn(context: TransactionContext, proof: DeviceProof): Promise<boolean> {
+  await context.lock(LOCK_STEP.document, [{ table: DEVICE, id: proof.deviceId, mode: 'shared' }]);
   const [row] = await context.tx
     .select({ publicKey: device.publicKey })
     .from(device)

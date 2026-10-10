@@ -129,7 +129,7 @@ describe('a unit’s mapping changing to another registration (offline-counter 4
       [mapping.versionId],
     );
     expect(outbox).toBeDefined();
-    const consumer = posConsumers.find((each) => each.name === 'pos.define-series-for-mapping');
+    const consumer = posConsumers(w.numbering).find((each) => each.name === 'pos.define-series-for-mapping');
     const deliver = () =>
       w.inChange((context) =>
         (consumer?.handle ?? (() => Promise.reject(new Error('No consumer'))))(

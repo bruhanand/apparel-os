@@ -16,16 +16,16 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
+import { numberedKinds } from './numbered-kinds.js';
 import { decisionEvidence, FilesImportsModule, policyEvidence } from './modules/files-imports/index.js';
 import {
-  EXCEPTION_CODE_KIND,
   EXCEPTION_TYPES,
   ExceptionsModule,
   routingApprovals,
   type ExceptionTypeRegistration,
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
-import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
+import { NUMBERED_KINDS } from './modules/numbering/index.js';
 import {
   CONFIGURATION,
   ConfigurationModule,
@@ -34,7 +34,7 @@ import {
   type ConfigurationInterface,
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
-import { BILL_KIND, PosModule } from './modules/pos/index.js';
+import { PosModule } from './modules/pos/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -59,7 +59,6 @@ import {
   BooksModule,
   booksApprovals,
   checkEventKinds,
-  JOURNAL_KIND,
   POSTING_EVENT_KINDS,
   type BookHeldStock,
   type PostingEventKind,
@@ -137,7 +136,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // S1-F09-T02) and the bill, per billing device and tax registration (offline-counter 4.1; S1-F12-T01).
     {
       provide: NUMBERED_KINDS,
-      useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND, BILL_KIND] satisfies readonly NumberedKind[],
+      useValue: numberedKinds,
     },
     // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
     // its kinds of 7.2 with S1-F10.

@@ -8,8 +8,9 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOCK_STEP } from '../src/kernel/index.js';
 import { syntheticName } from './fixtures/synthetic.js';
-import { DevicesWorld, errorOf, nextCode } from './support/billing-devices.js';
+import { DevicesWorld, done, errorOf, nextCode } from './support/billing-devices.js';
 import { connect } from './support/postgres.js';
+import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F12-T02: the end of a device's life and the change of its units, through the whole application on real
 // PostgreSQL (offline-counter 3.5, 4.4, 12.1, 14.1 tests 3, 5, 6 and 10; numbering-and-audit 7 test 4;
@@ -243,5 +244,113 @@ describe('changing a device’s units (offline-counter 12.1, 4.3)', () => {
     } finally {
       await owner.end();
     }
+  });
+});
+
+describe('a revocation and the commands that rely on the device (code-house-rules 8.1, 8.2)', () => {
+  /** The device Admin, as a route gives `pos` its actor (numbering-and-audit 4.1). */
+  const actor = () => ({ userId: w.admin.id, roleAssignmentId: w.adminAssignmentId, networkAddress: '10.9.12.1' });
+
+  /** Revokes the device through `pos` and holds the transaction open, after its writes, until the test lets it go. */
+  function heldRevocation(deviceId: string) {
+    const held = gate();
+    const release = gate();
+    let pid = 0;
+    const revoking = w.inChange(async (context) => {
+      const facts = await w.pos.deviceFacts(context, deviceId, w.setup.today());
+      if (facts === undefined) throw new Error('No such device');
+      const ended = await w.pos.endBillingDevice(context, actor(), facts, deviceId, 'revoke');
+      pid = await backendPid(context);
+      held.open();
+      await release.wait;
+      return ended;
+    });
+    return { revoking, held: held.wait, release: release.open, pid: () => pid };
+  }
+
+  it('PRD-SEC-008 PRD-OFF-010 a device sign-in waits for a revocation in progress, then is refused: no session outlives it', async () => {
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    const proof = await w.proof(device.deviceId, device.key);
+    const revocation = heldRevocation(device.deviceId);
+    await revocation.held;
+    const signingIn = w.signIn(w.cashier, proof);
+    await waitUntilAnyWaitingForLock(w.database, [revocation.pid()]);
+    revocation.release();
+    expect((await revocation.revoking).kind).toBe('success');
+    expect(errorOf(await signingIn).code).toBe('access.sign-in-refused');
+    expect(
+      await w.query(`select id from access.session where device_id = $1 and state in ('In force', 'Locked')`, [
+        device.deviceId,
+      ]),
+    ).toEqual([]);
+  });
+
+  it('PRD-OFF-010 an enrolment waits for a revocation in progress, then is refused: a Revoked device binds no key', async () => {
+    const device = await w.registered([w.stores.wholeStore]);
+    const revocation = heldRevocation(device.deviceId);
+    await revocation.held;
+    const enrolling = w.enrol(device.deviceId, await w.newKey());
+    await waitUntilAnyWaitingForLock(w.database, [revocation.pid()]);
+    revocation.release();
+    expect((await revocation.revoking).kind).toBe('success');
+    expect(errorOf(await enrolling).code).toBe('access.device-already-enrolled');
+    const [row] = await w.query<{ key: unknown }>(`select public_key as key from access.device where id = $1`, [
+      device.deviceId,
+    ]);
+    expect(row).toEqual({ key: null });
+  });
+
+  it('PRD-LIF-015 DEC-117 defining the missing series waits for a revocation in progress, and defines none for the Revoked device', async () => {
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    // A second SYNTHETIC year, for which no device holds a series yet.
+    const later = w.setup.day(320);
+    await w.inChange(async (context) =>
+      done(
+        await w.numbering.defineFinancialYear(context, {
+          label: `${w.year}-NEXT`,
+          firstDay: w.setup.day(301),
+          lastDay: w.setup.day(600),
+          origin: 'synthetic',
+        }),
+      ),
+    );
+    const revocation = heldRevocation(device.deviceId);
+    await revocation.held;
+    const defining = w.defineMissingSeries(later);
+    await waitUntilAnyWaitingForLock(w.database, [revocation.pid()]);
+    revocation.release();
+    expect((await revocation.revoking).kind).toBe('success');
+    expect((await defining).kind).toBe('success');
+    const live = await w.query<{ id: string }>(
+      `select id from numbering.series where kind = 'pos.bill' and scope_key like $1 and state <> 'Closed'`,
+      [`device:${device.deviceId};%`],
+    );
+    expect(live).toEqual([]);
+  });
+
+  it('PRD-ACS-013 PRD-SEC-007 PRD-INT-004 GC-8 test 10 a revocation commits with its records or not at all', async () => {
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    const onDevice = await w.signIn(w.cashier, await w.proof(device.deviceId, device.key));
+    await expect(
+      w.inChange(async (context) => {
+        const facts = await w.pos.deviceFacts(context, device.deviceId, w.setup.today());
+        if (facts === undefined) throw new Error('No such device');
+        expect((await w.pos.endBillingDevice(context, actor(), facts, device.deviceId, 'revoke')).kind).toBe('success');
+        throw new Error('SYNTHETIC failure after the revocation');
+      }),
+    ).rejects.toThrow(/SYNTHETIC failure/);
+    expect((await w.listed(w.admin)).find((each) => each.deviceId === device.deviceId)).toMatchObject({
+      state: 'Active',
+      series: [{ state: 'Open' }],
+    });
+    expect((await w.get(onDevice.cookie, '/api/access/session')).status).toBe(200);
+    const [row] = await w.query<{ versions: string; access: string; audits: string; events: string }>(
+      `select (select count(*) from access.device_version v where v.device_id = $1 and v.state = 'Revoked') as versions,
+              (select count(*) from audit.access_record r where r.device_id = $1 and r.kind = 'device-revoked') as access,
+              (select count(*) from audit.audit_record a where a.record_id = $1 and a.operation = 'revoke-billing-device') as audits,
+              (select count(*) from kernel.outbox_event o where o.subject_record_id = $1 and o.event_type = 'access.device-revoked') as events`,
+      [device.deviceId],
+    );
+    expect(row).toEqual({ versions: '0', access: '0', audits: '0', events: '0' });
   });
 });

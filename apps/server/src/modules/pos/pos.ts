@@ -14,6 +14,7 @@ import {
   defineMissingSeries,
   deviceStore,
   enrolBillingDevice,
+  missingSeriesLockTargets,
   registerBillingDevice,
   storeFacts,
   type Actor,
@@ -103,7 +104,15 @@ export class Pos {
     return unitDevicesCheck(context, businessUnitId, date);
   }
 
-  /** Define the missing series of every Active device for the date's financial year; retry-safe (4.1; DEC-117). */
+  /** Every billing device's rows, for the step 1 lock call of the change that defines their missing series (DEC-117). */
+  missingSeriesLockTargets(context: TransactionContext) {
+    return missingSeriesLockTargets(context);
+  }
+
+  /**
+   * Define the missing series of every Active device for the date's financial year; retry-safe (4.1; DEC-117). The
+   * caller holds missingSeriesLockTargets at step 1.
+   */
   defineMissingSeries(context: TransactionContext, date: string) {
     return defineMissingSeries(context, this.dependencies, date);
   }
