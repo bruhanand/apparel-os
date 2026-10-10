@@ -186,12 +186,21 @@ export const importFileStoredSchema = z.strictObject({
 });
 export type ImportFileStored = z.infer<typeof importFileStoredSchema>;
 
-/** A proposal's decision: who proposed it, and who decided it and when, once decided (6.4). */
+/**
+ * A proposal's decision: who proposed it, and who decided it and when, once decided (6.4); and its latest approval
+ * request, for the approval panel, with its state (access-and-approvals 9.1, 9.6).
+ */
 const proposalFacts = {
   state: importVersionStateSchema,
   proposedByUserId: idSchema,
   decidedByUserId: idSchema.optional(),
   decidedAt: asOf.optional(),
+  request: z
+    .strictObject({
+      id: idSchema,
+      state: z.enum(['Awaiting approval', 'Approved', 'Rejected', 'Superseded', 'Withdrawn']),
+    })
+    .optional(),
 };
 
 /** The layout versions with their mapping versions, proposed and confirmed (6.1, 6.2, 6.4; 14). */
@@ -356,6 +365,11 @@ export const layoutDetectionSchema = z.strictObject({
       missing: z.array(missingItemSchema),
     }),
   ),
+  /**
+   * Each sheet's name and the text of its first row, which a preparer proposing a new version reads as the header
+   * (6.1): structure the uploader handed in, never a value the layout keeps.
+   */
+  sheets: z.array(z.strictObject({ name: z.string(), firstRow: z.array(z.string()) })),
 });
 export type LayoutDetection = z.infer<typeof layoutDetectionSchema>;
 

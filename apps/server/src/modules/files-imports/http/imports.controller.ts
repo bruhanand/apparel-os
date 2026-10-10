@@ -97,7 +97,11 @@ export class ImportsController {
   async listMappingRules(@SignedIn() user: SignedInUser) {
     const answer = await this.imports.runner.read(this.request('files-imports.list-mapping-rules', user), async (c) => {
       const today = await c.businessDate();
-      return mappingRuleList(c, today.kind === 'set' ? today.date : c.startedAt.toISOString().slice(0, 10));
+      return mappingRuleList(
+        this.imports,
+        c,
+        today.kind === 'set' ? today.date : c.startedAt.toISOString().slice(0, 10),
+      );
     });
     return routeAnswer(answer, { replayed: false });
   }

@@ -79,6 +79,10 @@ export async function detectLayout(
     compatible: [...found.compatible],
     ...(found.proposed === undefined ? {} : { proposed: found.proposed }),
     incompatible: found.incompatible.map((each) => ({ ...each, missing: [...each.missing] })),
+    sheets: grid.sheets.map((sheet) => ({
+      name: sheet.name,
+      firstRow: (sheet.rows[0]?.cells ?? []).map((cell) => (cell.type === 'error' ? '' : cell.text.trim())),
+    })),
   };
 }
 

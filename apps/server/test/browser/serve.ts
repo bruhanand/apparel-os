@@ -708,7 +708,8 @@ intakeRecorded(
     }),
   ),
 );
-await writeSyntheticProductLayout(postingDatabase, postingFixture.preparer.id);
+// Confirmed by a different person from its proposer, so the journey's batch may publish (6.4; S1-F06-T03).
+await writeSyntheticProductLayout(postingDatabase, postingFixture.preparer.id, postingFixture.approver.id);
 await postingFixture.run(postingFixture.preparer.id, (c) =>
   defineSyntheticImportBatchSeries(c, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
 );
@@ -1296,9 +1297,31 @@ await grantSynthetic(
     ...productViews,
     { recordType: 'merchandise.product_proposal', action: 'create' },
     { recordType: 'access.approval_request', action: 'view' },
+    // Layouts, mappings and mapping rules, proposed by the Booking user (S1-F06-T03).
+    { recordType: 'files_imports.layout', action: 'view' },
+    { recordType: 'files_imports.layout', action: 'create' },
+    { recordType: 'files_imports.mapping', action: 'view' },
+    { recordType: 'files_imports.mapping', action: 'create' },
+    { recordType: 'files_imports.mapping_rule', action: 'view' },
+    { recordType: 'files_imports.mapping_rule', action: 'create' },
   ],
   { fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })) },
 );
+// A different person who confirms them from My work (6.4; POL-02.07; S1-F06-T03). Who confirms is KDPS's (RR-197).
+const intakeConfirmer = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-INTAKE-CONFIRMER',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: intakeConfirmer.id }, [
+  { recordType: 'files_imports.layout', action: 'view' },
+  { recordType: 'files_imports.layout', action: 'approve' },
+  { recordType: 'files_imports.mapping', action: 'view' },
+  { recordType: 'files_imports.mapping', action: 'approve' },
+  { recordType: 'files_imports.mapping_rule', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
 const intakeSuffix = randomBytes(3).toString('hex').toUpperCase();
 const intakeStyle = syntheticCode(`JOURNEY-INTAKE-STYLE-${intakeSuffix}`);
 const intakeSku = syntheticCode(`JOURNEY-INTAKE-SKU-${intakeSuffix}`);
@@ -1924,9 +1947,12 @@ writeFileSync(
       booking: credentialsOf(intakeBooking),
       filePath: intakeFile,
       // How the screen names the saved layout and mapping (intake.layout.option).
-      layoutOption: `${SYNTHETIC_PRODUCT_LAYOUT_CODE} version 1 · ${SYNTHETIC_PRODUCT_MAPPING_CODE} version 1 (Proposed)`,
+      layoutOption: `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED version 1 · ${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED version 1 (Confirmed)`,
       styleCode: intakeStyle,
       skuCode: intakeSku,
+      confirmer: credentialsOf(intakeConfirmer),
+      brandCode: intakeBrand.code,
+      today: postingFixture.today(),
     },
     bankDetails: {
       organisationCode: settingsCode,

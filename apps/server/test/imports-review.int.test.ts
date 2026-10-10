@@ -582,7 +582,9 @@ describe('layouts and mappings proposed, detected and confirmed (imports-and-ope
     const before = await start(stored, versions);
     const kept = await read(before);
     // The next mapping version leaves the size unmapped.
-    const { size: _size, ...withoutSize } = PRODUCT_MAPPING.fields;
+    const withoutSize = Object.fromEntries(
+      Object.entries(PRODUCT_MAPPING.fields).filter(([field]) => field !== 'size'),
+    );
     const second = ok(
       await call(preparer, 'POST', '/api/files-imports/mapping-versions', {
         mapping: { mappingId: versions.mappingId },

@@ -1,10 +1,8 @@
 import {
   IMPORT_BATCH_TYPE,
-  type DocumentPreview,
-  type ImportBatchRead,
   type ImportFileStored,
-  type ImportLayoutList,
-  type StagedRow,
+  type LayoutDetection,
+  type LayoutStructure,
 } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -12,60 +10,25 @@ import { api } from '../api';
 import { useSubmission } from '../api/command';
 import { readQuery } from '../api/query';
 import { Banner } from '../components/Banner';
-import { codeText, EmptyState } from '../components/StandardStates';
+import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { missingText } from '../components/UnavailableState';
-import { AsOf } from '../history/AsOf';
-import { formatDateTime } from '../history/format';
-import { isMessageId, t } from '../messages/catalogue';
-import { useTimeZone } from '../shell/session';
-import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th } from '../setup/parts';
-import { recordTypeName } from '../setup/describe';
+import { t } from '../messages/catalogue';
+import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner } from '../setup/parts';
+import { RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
+import { BatchRead } from './BatchView';
 import { base64Of, sizeText } from './Evidence';
+import { MappingRules, ProposeLayoutForm, SavedLayouts } from './SavedLayouts';
 
-// Setup › File intake and saved layouts (imports-and-opening-data 3.1, 13.1, 16; ui-blueprint Setup; design-language
-// 10.10; S1-F06-T01): a preparer uploads an XLSX file, which the server checks from its content and keeps encrypted;
-// the stored file shows with its earlier batches; a batch is started with a saved layout and mapping, which reads and
-// stages the file; its staged rows show each original cell beside its normalised value and origin; Validate and
-// Publish. As built for the tracer: one file at a time, the saved layouts listed but not proposed or confirmed here,
-// which S1-F06-T03 adds with the validation report.
+// Setup › File intake and saved layouts (imports-and-opening-data 3.1, 6.5, 13.1, 14, 16; ui-blueprint Setup;
+// design-language 10.10; S1-F06-T01, S1-F06-T03): a preparer uploads an XLSX file, which the server checks from its
+// content and keeps encrypted; the stored file shows with its earlier batches and the saved layout versions its
+// structure matches, one proposed, several to choose from, or none, when the preparer proposes a new version from the
+// file's header; a batch is started with a matching layout and mapping; the batch, its staged rows and its validation
+// report follow (BatchView). The saved layouts and the mapping rules, with their proposals, have tabs of their own.
 
 const XLSX_ACCEPT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const BATCH_READS = ['readImportBatch'] as const;
-
-/** A target field's name as the screen writes it, or the field's code where the catalogue has none. */
-function fieldName(field: string): string {
-  const id = `intake.field.${field}`;
-  return isMessageId(id) ? t(id) : field;
-}
-
-/** One layout version and mapping version a batch may start with. */
-interface LayoutChoice {
-  readonly key: string;
-  readonly layoutVersionId: string;
-  readonly mappingVersionId: string;
-  readonly target: string;
-  readonly label: string;
-}
-
-function choicesOf(list: ImportLayoutList): LayoutChoice[] {
-  return list.layouts.flatMap((layout) =>
-    layout.mappings.map((mapping) => ({
-      key: `${layout.layoutVersionId}|${mapping.mappingVersionId}`,
-      layoutVersionId: layout.layoutVersionId,
-      mappingVersionId: mapping.mappingVersionId,
-      target: mapping.target,
-      label: t('intake.layout.option', {
-        layout: layout.layoutCode,
-        layoutVersion: layout.version,
-        mapping: mapping.mappingCode,
-        mappingVersion: mapping.version,
-        state: layout.state,
-      }),
-    })),
-  );
-}
 
 /** Upload: the file is checked from its content and stored before anything else (9.2, 9.3; PRD-IMP-002). */
 function Upload({ onStored }: { onStored: (stored: ImportFileStored) => void }) {
@@ -113,10 +76,41 @@ function Upload({ onStored }: { onStored: (stored: ImportFileStored) => void }) 
   );
 }
 
-/** The stored file, its earlier batches, and Start an import with a saved layout and mapping (7.2, 13.1). */
+/** A layout version proposed from the first sheet's first row: every named column, the first the reference (6.1). */
+function structureFrom(detection: LayoutDetection): LayoutStructure {
+  const sheet = detection.sheets.find((each) => each.firstRow.some((text) => text !== '')) ?? detection.sheets[0];
+  const names = (sheet?.firstRow ?? []).filter((text) => text !== '');
+  return {
+    shape: 'layout-version/1',
+    format: 'xlsx',
+    sheet: sheet?.name ?? '',
+    headerRow: 1,
+    dataStartRow: 2,
+    columns: names.map((name, at) => ({ name, required: at === 0 })),
+    documentReference: names[0] ?? '',
+  };
+}
+
+/** One compatible layout version and one of its mapping versions, which a batch may start with. */
+interface Choice {
+  readonly key: string;
+  readonly layoutVersionId: string;
+  readonly mappingVersionId: string;
+  readonly target: string;
+  readonly label: string;
+}
+
+/** The stored file, its earlier batches, the layouts it matches, and Start an import (6.5, 7.2, 13.1). */
 function StoredFile({ stored, onOpen }: { stored: ImportFileStored; onOpen: (batchId: string) => void }) {
+  const detection = useQuery(
+    readQuery(api, 'detectImportLayout', {
+      params: { storedFileId: stored.storedFileId },
+      query: { fileReceiptId: stored.receiptId },
+    }),
+  );
   const layouts = useQuery(readQuery(api, 'listImportLayouts', {}));
   const [choice, setChoice] = useState('');
+  const [proposing, setProposing] = useState(false);
   const start = useSubmission('startImport', []);
   return (
     <Card title="intake.stored.title">
@@ -147,236 +141,132 @@ function StoredFile({ stored, onOpen }: { stored: ImportFileStored; onOpen: (bat
           ))}
         </ul>
       )}
-      <ListRead query={layouts} what="intake.layouts.what">
-        {(list) => {
-          const choices = choicesOf(list);
-          if (choices.length === 0)
-            return <EmptyState title="intake.layouts.none.title" body="intake.layouts.none.body" />;
-          const chosen = choices.find((each) => each.key === choice);
-          return (
-            <div className="flex flex-col gap-3">
-              <SubmissionBanner state={start.state} done="intake.start.done" />
-              <label className="flex flex-col gap-1" htmlFor="intake-layout">
-                <span className="text-body-sm font-semibold">{t('intake.layout')}</span>
-                <select
-                  id="intake-layout"
-                  className={inputClass}
-                  value={choice}
-                  onChange={(event) => {
-                    setChoice(event.target.value);
-                  }}
-                >
-                  <option value="">{t('intake.layout.choose')}</option>
-                  {choices.map((each) => (
-                    <option key={each.key} value={each.key}>
-                      {each.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div>
-                <GrantedButton
-                  label="intake.start"
-                  recordType={IMPORT_BATCH_TYPE}
-                  action="create"
-                  onClick={() => {
-                    if (chosen === undefined) return;
-                    void (async () => {
-                      const started = await start.submit({
-                        body: {
-                          storedFileId: stored.storedFileId,
-                          fileReceiptId: stored.receiptId,
-                          kind: 'create',
-                          target: chosen.target,
-                          layoutVersionId: chosen.layoutVersionId,
-                          mappingVersionId: chosen.mappingVersionId,
-                        },
-                      });
-                      if (started !== undefined) onOpen(started.batchId);
-                    })();
-                  }}
-                />
-              </div>
-            </div>
-          );
-        }}
+      <ListRead query={detection} what="intake.detection.what">
+        {(found) => (
+          <ListRead query={layouts} what="intake.layouts.what">
+            {(list) => {
+              const compatible = new Set(found.compatible.map((each) => each.layoutVersionId));
+              const choices: Choice[] = list.layouts
+                .filter((layout) => compatible.has(layout.layoutVersionId))
+                .flatMap((layout) =>
+                  layout.mappings
+                    .filter((mapping) => mapping.state !== 'Rejected')
+                    .map((mapping) => ({
+                      key: `${layout.layoutVersionId}|${mapping.mappingVersionId}`,
+                      layoutVersionId: layout.layoutVersionId,
+                      mappingVersionId: mapping.mappingVersionId,
+                      target: mapping.target,
+                      label: t('intake.layout.option', {
+                        layout: layout.layoutCode,
+                        layoutVersion: layout.version,
+                        mapping: mapping.mappingCode,
+                        mappingVersion: mapping.version,
+                        state: layout.state,
+                      }),
+                    })),
+                );
+              const proposed = choices.find((each) => each.layoutVersionId === found.proposed);
+              const selected = choice === '' && proposed !== undefined ? proposed.key : choice;
+              const chosen = choices.find((each) => each.key === selected);
+              return (
+                <div className="flex flex-col gap-3">
+                  {found.compatible.length === 0 ? (
+                    <EmptyState title="intake.detection.none.title" body="intake.detection.none.body">
+                      <GrantedButton
+                        label="intake.propose.layout.from-file"
+                        recordType="files_imports.layout"
+                        action="create"
+                        onClick={() => {
+                          setProposing(true);
+                        }}
+                      />
+                    </EmptyState>
+                  ) : (
+                    <Banner
+                      tone="info"
+                      role="status"
+                      message={found.proposed === undefined ? 'intake.detection.choose' : 'intake.detection.one'}
+                    />
+                  )}
+                  {found.incompatible.length > 0 && (
+                    <details className="text-body-sm">
+                      <summary>{t('intake.detection.incompatible', { count: found.incompatible.length })}</summary>
+                      <ul className="m-0 flex list-none flex-col gap-1 p-0 pt-2">
+                        {found.incompatible.map((each) => (
+                          <li key={each.layoutVersionId}>
+                            {t('intake.layout.version', { code: each.layoutCode, version: each.version })}:{' '}
+                            {each.missing.map(missingText).join(' ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {choices.length > 0 && (
+                    <>
+                      <SubmissionBanner state={start.state} done="intake.start.done" />
+                      <label className="flex flex-col gap-1" htmlFor="intake-layout">
+                        <span className="text-body-sm font-semibold">{t('intake.layout')}</span>
+                        <select
+                          id="intake-layout"
+                          className={inputClass}
+                          value={selected}
+                          onChange={(event) => {
+                            setChoice(event.target.value);
+                          }}
+                        >
+                          <option value="">{t('intake.layout.choose')}</option>
+                          {choices.map((each) => (
+                            <option key={each.key} value={each.key}>
+                              {each.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div>
+                        <GrantedButton
+                          label="intake.start"
+                          recordType={IMPORT_BATCH_TYPE}
+                          action="create"
+                          onClick={() => {
+                            if (chosen === undefined) return;
+                            void (async () => {
+                              const started = await start.submit({
+                                body: {
+                                  storedFileId: stored.storedFileId,
+                                  fileReceiptId: stored.receiptId,
+                                  kind: 'create',
+                                  target: chosen.target,
+                                  layoutVersionId: chosen.layoutVersionId,
+                                  mappingVersionId: chosen.mappingVersionId,
+                                },
+                              });
+                              if (started !== undefined) onOpen(started.batchId);
+                            })();
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {proposing && (
+                    <RecordDrawer
+                      title={t('intake.propose.layout')}
+                      onClose={() => {
+                        setProposing(false);
+                      }}
+                      details={<ProposeLayoutForm start={structureFrom(found)} />}
+                    />
+                  )}
+                </div>
+              );
+            }}
+          </ListRead>
+        )}
       </ListRead>
     </Card>
   );
 }
 
-/** What the handler works out a document would create, or the issues that stop it (13.2). */
-function Preview({ preview }: { preview: DocumentPreview }) {
-  if (preview.kind === 'would-create') {
-    return (
-      <ul aria-label={t('intake.preview')} className="m-0 flex list-none flex-col gap-1 p-0 text-body-sm">
-        {preview.records.map((record) => (
-          <li key={record.recordType}>
-            {t('intake.preview.would-create', { what: recordTypeName(record.recordType) })}{' '}
-            <span className="font-mono">{record.codes.join(', ')}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  return (
-    <ul aria-label={t('intake.issues')} className="m-0 flex list-none flex-col gap-1 p-0 text-body-sm text-danger">
-      {preview.issues.map((issue, index) => (
-        <li key={index}>
-          {codeText(issue.code)}
-          {issue.field !== undefined && issue.rowNumber !== undefined && (
-            <> {t('intake.issue.at', { field: fieldName(issue.field), row: issue.rowNumber })}</>
-          )}
-          {(issue.missing ?? []).map((item, at) => (
-            <span key={at}> {missingText(item)}</span>
-          ))}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** A staged row: each field's normalised value with the cell it came from, or Unknown (section 5; design-language 10.10). */
-function RowValues({ row, fields }: { row: StagedRow; fields: readonly string[] }) {
-  return (
-    <tr className="h-10 border-t border-border align-top">
-      <td className="px-3 font-mono">
-        {row.rowNumber}
-        {row.hidden && <span className="ml-1 text-caption text-text-2">{t('intake.row.hidden')}</span>}
-      </td>
-      {fields.map((field) => {
-        const value = row.values[field];
-        return (
-          <td key={field} className="px-3">
-            {value === undefined || value.kind === 'unknown' ? (
-              <span className="text-text-2">{t('intake.value.unknown')}</span>
-            ) : (
-              <span className="flex flex-col">
-                <span>{value.value}</span>
-                <span className="text-caption text-text-2">
-                  {t('intake.value.supplied', { ref: value.origin.ref, raw: value.origin.text })}
-                </span>
-              </span>
-            )}
-          </td>
-        );
-      })}
-    </tr>
-  );
-}
-
-function Batch({ read }: { read: ImportBatchRead }) {
-  const timeZone = useTimeZone();
-  const validate = useSubmission('validateImport', BATCH_READS);
-  const publish = useSubmission('publishImport', BATCH_READS);
-  const { batch } = read;
-  const fields = [
-    ...new Set(read.documents.flatMap((document) => document.rows.flatMap((row) => Object.keys(row.values)))),
-  ];
-  return (
-    <section aria-label={t('intake.batch', { code: batch.code })} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="m-0 text-h2 font-semibold">{t('intake.batch', { code: batch.code })}</h2>
-        <StatusBadge state={stateIdOf(batch.state)} />
-        <AsOf asOf={read.asOf} timeZone={timeZone} />
-      </div>
-      <p className="m-0 text-body-sm text-text-2">
-        {t('intake.batch.started', { at: formatDateTime(batch.startedAt, timeZone), target: batch.target })}
-      </p>
-      {batch.readerNotes.length > 0 && <Banner tone="warning" role="status" message="intake.batch.notes" />}
-      <SubmissionBanner state={validate.state} done="intake.validate.done" />
-      <SubmissionBanner state={publish.state} done="intake.publish.done" />
-      <div className="flex flex-wrap gap-2">
-        {batch.state === 'Staged' && (
-          <GrantedButton
-            label="intake.validate"
-            recordType={IMPORT_BATCH_TYPE}
-            action="edit"
-            onClick={() => {
-              void validate.submit({ params: { batchId: batch.batchId }, body: {} });
-            }}
-          />
-        )}
-        {batch.state === 'Validated' && (
-          <GrantedButton
-            label="intake.publish"
-            recordType={IMPORT_BATCH_TYPE}
-            action="edit"
-            variant="primary"
-            onClick={() => {
-              void publish.submit({ params: { batchId: batch.batchId }, body: {} });
-            }}
-          />
-        )}
-      </div>
-      {read.documents.map((document) => (
-        <Card key={document.documentId}>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 text-h3 font-semibold">{t('intake.document', { reference: document.reference })}</h3>
-            <StatusBadge state={stateIdOf(document.state)} />
-          </div>
-          {document.preview !== undefined && <Preview preview={document.preview} />}
-          <div className="overflow-x-auto rounded-card border border-border">
-            <table
-              className="w-full border-collapse text-body"
-              aria-label={t('intake.rows', { reference: document.reference })}
-            >
-              <thead>
-                <tr>
-                  <Th label="intake.row" />
-                  {fields.map((field) => (
-                    <th
-                      key={field}
-                      scope="col"
-                      className="h-10 bg-sunken px-3 text-left text-body-sm font-semibold text-text-2"
-                    >
-                      {fieldName(field)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {document.rows.map((row) => (
-                  <RowValues key={row.stagedRowId} row={row} fields={fields} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ))}
-      {read.ignoredRows.length > 0 && (
-        <p className="m-0 text-body-sm text-text-2">{t('intake.ignored', { count: read.ignoredRows.length })}</p>
-      )}
-      {read.outcomes.length > 0 && (
-        <Card title="intake.outcomes">
-          <ul className="m-0 flex list-none flex-col gap-1 p-0 text-body-sm">
-            {read.outcomes.map((outcome) => (
-              <li key={outcome.outcomeId}>
-                {t(outcome.result === 'published' ? 'intake.outcome.published' : 'intake.outcome.failed', {
-                  at: formatDateTime(outcome.attemptedAt, timeZone),
-                  read: outcome.counts.rowsRead,
-                  accepted: outcome.counts.rowsAccepted,
-                })}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </section>
-  );
-}
-
-function BatchRead({ batchId }: { batchId: string }) {
-  const query = useQuery(readQuery(api, 'readImportBatch', { params: { batchId } }));
-  return (
-    <ListRead query={query} what="intake.batch.what">
-      {(read) => <Batch read={read} />}
-    </ListRead>
-  );
-}
-
-/** Setup › File intake and saved layouts. */
-export function FileIntakeScreen() {
+function Intake() {
   const [stored, setStored] = useState<ImportFileStored | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
   return (
@@ -390,6 +280,45 @@ export function FileIntakeScreen() {
       {stored !== null && <StoredFile stored={stored} onOpen={setBatchId} />}
       {batchId !== null && <BatchRead batchId={batchId} />}
       {stored === null && batchId === null && <EmptyState title="intake.empty.title" body="intake.empty.body" />}
+    </div>
+  );
+}
+
+const TABS = ['intake', 'layouts', 'rules'] as const;
+type Tab = (typeof TABS)[number];
+
+/** Setup › File intake and saved layouts. */
+export function FileIntakeScreen() {
+  const [tab, setTab] = useState<Tab>('intake');
+  return (
+    <div className="flex flex-col gap-4">
+      <div role="tablist" aria-label={t('intake.tabs')} className="flex flex-wrap gap-2 border-b border-border">
+        {TABS.map((each) => (
+          <button
+            key={each}
+            type="button"
+            role="tab"
+            id={`intake-tab-${each}`}
+            aria-selected={tab === each}
+            aria-controls="intake-tab-panel"
+            className={
+              tab === each
+                ? 'h-9 border-b-2 border-accent px-3 font-semibold text-text'
+                : 'h-9 px-3 text-text-2 hover:text-accent'
+            }
+            onClick={() => {
+              setTab(each);
+            }}
+          >
+            {t(`intake.tab.${each}`)}
+          </button>
+        ))}
+      </div>
+      <div id="intake-tab-panel" role="tabpanel" aria-labelledby={`intake-tab-${tab}`}>
+        {tab === 'intake' && <Intake />}
+        {tab === 'layouts' && <SavedLayouts />}
+        {tab === 'rules' && <MappingRules />}
+      </div>
     </div>
   );
 }

@@ -200,6 +200,11 @@ export interface SyntheticWorld {
     readonly layoutOption: string;
     readonly styleCode: string;
     readonly skuCode: string;
+    /** A different person who confirms layouts, mappings and mapping rules (S1-F06-T03). */
+    readonly confirmer: EnrolledUser;
+    /** The SYNTHETIC brand code a mapping rule may target, and today as a business date. */
+    readonly brandCode: string;
+    readonly today: string;
   };
   /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's

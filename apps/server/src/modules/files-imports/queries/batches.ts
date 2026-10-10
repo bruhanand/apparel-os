@@ -14,6 +14,7 @@ import {
 } from '@apparel-os/schemas';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { ApiRefusal, type TransactionContext } from '../../../kernel/index.js';
+import type { LatestRequest } from '../../access/index.js';
 import {
   attachment,
   controlTotal,
@@ -311,10 +312,17 @@ async function mayReadLayouts(deps: Pick<ImportDependencies, 'access'>, context:
   }
 }
 
-const decided = (row: { decidedByUserId: string | null; decidedAt: Date | null }) => ({
-  ...(row.decidedByUserId === null ? {} : { decidedByUserId: row.decidedByUserId }),
-  ...(row.decidedAt === null ? {} : { decidedAt: row.decidedAt.toISOString() }),
-});
+const decided = (
+  row: { id: string; decidedByUserId: string | null; decidedAt: Date | null },
+  requests: ReadonlyMap<string, LatestRequest>,
+) => {
+  const request = requests.get(row.id);
+  return {
+    ...(row.decidedByUserId === null ? {} : { decidedByUserId: row.decidedByUserId }),
+    ...(row.decidedAt === null ? {} : { decidedAt: row.decidedAt.toISOString() }),
+    ...(request === undefined ? {} : { request: { id: request.id, state: request.state } }),
+  };
+};
 
 /**
  * The layout versions with their mapping versions, by layout code and version, each with its structure or fields, its
@@ -336,6 +344,10 @@ export async function layoutList(
     .from(mappingVersion)
     .innerJoin(mapping, eq(mapping.id, mappingVersion.mappingId))
     .orderBy(asc(mapping.code), asc(mappingVersion.version));
+  const requests = await deps.access.approvalRequestsOf(context, [
+    ...versions.map((row) => row.version.id),
+    ...mappings.map((row) => row.version.id),
+  ]);
   return {
     asOf: context.startedAt.toISOString(),
     layouts: versions.map((row) => ({
@@ -348,7 +360,7 @@ export async function layoutList(
       version: row.version.version,
       state: row.version.state,
       proposedByUserId: row.version.proposedByUserId,
-      ...decided(row.version),
+      ...decided(row.version, requests),
       structure: parsedOrDefect(layoutStructureSchema, row.version.structure, 'layout version'),
       mappings: mappings
         .filter((each) => each.mapping.layoutVersionId === row.version.id)
@@ -360,7 +372,7 @@ export async function layoutList(
           version: each.version.version,
           state: each.version.state,
           proposedByUserId: each.version.proposedByUserId,
-          ...decided(each.version),
+          ...decided(each.version, requests),
           fields: parsedOrDefect(mappingFieldsSchema, each.version.fields, 'mapping version'),
         })),
     })),
@@ -376,9 +388,17 @@ function datesOf(range: string): { validFrom: string; validTo?: string } {
 }
 
 /** The mapping rules with their versions, proposers and confirmers, each marked in force today (14). */
-export async function mappingRuleList(context: TransactionContext, today: string): Promise<MappingRuleList> {
+export async function mappingRuleList(
+  deps: Pick<ImportDependencies, 'access'>,
+  context: TransactionContext,
+  today: string,
+): Promise<MappingRuleList> {
   const rules = await context.tx.select().from(mappingRule).orderBy(asc(mappingRule.attribute), asc(mappingRule.word));
   const versions = await context.tx.select().from(mappingRuleVersion).orderBy(asc(mappingRuleVersion.id));
+  const requests = await deps.access.approvalRequestsOf(
+    context,
+    versions.map((version) => version.id),
+  );
   return {
     asOf: context.startedAt.toISOString(),
     rules: rules.map((rule) => ({
@@ -404,7 +424,7 @@ export async function mappingRuleList(context: TransactionContext, today: string
               (dates.validTo === undefined || today < dates.validTo),
             state: version.state,
             proposedByUserId: version.proposedByUserId,
-            ...decided(version),
+            ...decided(version, requests),
           };
         }),
     })),
