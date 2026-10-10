@@ -97,6 +97,12 @@ export const screens = {
     path: '/setup/policy-readiness',
     need: view('configuration.policy_status'),
   },
+  // Site opening and closure › Readiness (ui-blueprint Setup; module-map 4.16; S1-F04-T02).
+  'setup.site-opening': {
+    section: 'setup',
+    path: '/setup/site-opening-and-closure',
+    need: view('site_lifecycle.readiness_record'),
+  },
 } as const satisfies Record<string, Screen>;
 
 export type ScreenId = keyof typeof screens;
@@ -133,7 +139,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   'P-CHA': { home: null, menu: [] },
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
   'P-BKG': { home: null, menu: ['setup.products'] },
-  'P-OPS': { home: 'my-work', menu: ['my-work'] },
+  // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
+  'P-OPS': { home: 'my-work', menu: ['my-work', 'setup.site-opening'] },
   'P-WHS': { home: null, menu: ['my-work'] },
   'P-BRM': { home: null, menu: [] },
   'P-STM': { home: null, menu: ['my-work'] },

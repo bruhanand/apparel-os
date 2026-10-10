@@ -1462,6 +1462,30 @@
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "structure-and-masters 4.3, 6.2",
       "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "site_lifecycle.activation",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1, 8.2; PRD-LIF-001",
+      "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the unit's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
+    },
+    {
+      "table": "site_lifecycle.readiness_record",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1; PRD-LIF-002",
+      "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the unit's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
+    },
+    {
+      "table": "site_lifecycle.zero_stock_declaration",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1; PRD-LIF-003, DEC-117",
+      "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the unit's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
     }
   ]
 }

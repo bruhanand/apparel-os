@@ -39,6 +39,8 @@ export type {
 } from './domain/approval-rules.js';
 export type { LatestRequest } from './queries/access-records.js';
 export type { PartyNames, RoleHeldQuestion } from './queries/parties.js';
+// Who holds a permission at a place, for the users-and-access readiness check (module-map 4.16; S1-F04-T02).
+export { permissionHolders } from './queries/holders.js';
 export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } from './commands/approval-use.js';
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';

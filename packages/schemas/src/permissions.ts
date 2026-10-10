@@ -278,6 +278,18 @@ const configurationRecordTypes = [
   declare('configuration.capability', ['view', 'edit'], NONE),
 ] as const;
 
+/**
+ * `site-lifecycle`: readiness and activation (module-map 4.16; domain-model 3.6, section 5; S1-F04-T02). Create on a
+ * readiness record runs the checks for a business unit and asks for its activation; approve on it approves the
+ * activity, by a different person from the one who ran them (MM-8, DEC-105). Create on the zero-stock declaration
+ * records that a unit genuinely holds no stock (PRD-LIF-003). Both carry the unit's place, so a role assignment's place
+ * scope decides where (5.3). Who holds them is KDPS's (KDPS Owner, question 49).
+ */
+const siteLifecycleRecordTypes = [
+  declare('site_lifecycle.readiness_record', ['view', 'create', 'approve'], PLACE),
+  declare('site_lifecycle.zero_stock_declaration', ['view', 'create'], PLACE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -290,6 +302,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...exceptionsRecordTypes,
   ...merchandiseRecordTypes,
   ...configurationRecordTypes,
+  ...siteLifecycleRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -303,7 +316,8 @@ export type RecordTypeCode =
   | (typeof organisationRecordTypes)[number]['code']
   | (typeof exceptionsRecordTypes)[number]['code']
   | (typeof merchandiseRecordTypes)[number]['code']
-  | (typeof configurationRecordTypes)[number]['code'];
+  | (typeof configurationRecordTypes)[number]['code']
+  | (typeof siteLifecycleRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

@@ -300,6 +300,22 @@ export const configurationCodes = declareCodes({
 });
 
 /**
+ * The codes of `site-lifecycle` (module-map 4.16; domain-model 3.6; PRD-LIF-001 to PRD-LIF-003; S1-F04-T02).
+ *
+ * - `site-lifecycle.check-failed`: a readiness check fails; `missing` names each check and what it lacks.
+ * - `site-lifecycle.unit-not-found`: no business unit has that identifier.
+ * - `site-lifecycle.record-not-found`: no readiness record has that identifier.
+ * - A run that a later run for the unit and activity replaced answers `kernel.stale-version` (12.7).
+ * - `site-lifecycle.activity-already-granted`: the unit holds the activity already.
+ */
+export const siteLifecycleCodes = declareCodes({
+  'site-lifecycle.check-failed': 'refused',
+  'site-lifecycle.unit-not-found': 'not-found',
+  'site-lifecycle.record-not-found': 'not-found',
+  'site-lifecycle.activity-already-granted': 'refused',
+});
+
+/**
  * The codes of `inbox` (access-and-approvals 9.4, 11.3; module-map 4.8; S1-F05-T02): routing of approvals and tasks.
  *
  * - `inbox.action-type-not-routable`: no approval rule, or registered task, has the action type.
@@ -638,6 +654,7 @@ export const errorCodes = {
   ...inboxCodes,
   ...merchandiseCodes,
   ...configurationCodes,
+  ...siteLifecycleCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

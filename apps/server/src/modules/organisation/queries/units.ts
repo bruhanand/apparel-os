@@ -1,8 +1,9 @@
 import type { BusinessUnitKind } from '@apparel-os/schemas';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { inForceOn } from '../commands/common.js';
-import { businessUnit } from '../db/schema.js';
+import { businessUnit, location, locationVersion } from '../db/schema.js';
+import { mappingOn } from './records.js';
 
 // What another module reads of a business unit through `organisation`'s interface (module-map 4.11, section 3;
 // structure-and-masters 3.3): `merchandise` keeps a unit's brand coverage and checks the unit's kind here
@@ -31,4 +32,65 @@ export async function businessUnitHeads(
 /** Whether a unit has an approved version in force on a date (structure-and-masters 2.2). */
 export function businessUnitInForce(context: TransactionContext, unitId: string, date: string): Promise<boolean> {
   return inForceOn(context, 'business_unit', unitId, date);
+}
+
+/**
+ * Answer readiness checks (module-map 4.11; structure-and-masters 3.7, 3.8; PRD-LIF-002, POL-10.08; S1-F04-T02): a
+ * unit's kind and place, whether its mapping is in force and verified on the date, and how many of its locations are
+ * in force and not retired then. Undefined for a unit that does not exist. `site-lifecycle` asks it.
+ */
+export interface UnitReadinessAnswer {
+  readonly businessUnitId: string;
+  readonly kind: BusinessUnitKind;
+  readonly siteId: string;
+  readonly storeId: string | null;
+  readonly mapping:
+    | { readonly state: 'none' }
+    | { readonly state: 'unverified' | 'verified'; readonly mappingVersionId: string; readonly legalEntityId: string };
+  readonly locationsInForce: number;
+}
+
+export async function unitReadiness(
+  context: TransactionContext,
+  unitId: string,
+  date: string,
+): Promise<UnitReadinessAnswer | undefined> {
+  const [unit] = await context.tx
+    .select({
+      id: businessUnit.id,
+      kind: businessUnit.kind,
+      siteId: businessUnit.siteId,
+      storeId: businessUnit.storeId,
+    })
+    .from(businessUnit)
+    .where(eq(businessUnit.id, unitId));
+  if (unit === undefined) return undefined;
+  const mapping = await mappingOn(context, unitId, date);
+  const [counted] = await context.tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(location)
+    .innerJoin(locationVersion, eq(locationVersion.locationId, location.id))
+    .where(
+      and(
+        eq(location.businessUnitId, unitId),
+        eq(locationVersion.decision, 'Approved'),
+        eq(locationVersion.retired, false),
+        sql`${locationVersion.validDuring} @> ${date}::date`,
+      ),
+    );
+  return {
+    businessUnitId: unit.id,
+    kind: unit.kind,
+    siteId: unit.siteId,
+    storeId: unit.storeId,
+    mapping:
+      mapping === undefined
+        ? { state: 'none' }
+        : {
+            state: mapping.verification === undefined ? 'unverified' : 'verified',
+            mappingVersionId: mapping.mappingVersionId,
+            legalEntityId: mapping.legalEntityId,
+          },
+    locationsInForce: counted?.count ?? 0,
+  };
 }

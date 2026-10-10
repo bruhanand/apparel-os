@@ -26,7 +26,14 @@ import {
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
 import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
-import { ConfigurationModule, ConfigurationTimezoneModule, POLICY_EVIDENCE } from './modules/configuration/index.js';
+import {
+  CONFIGURATION,
+  ConfigurationModule,
+  ConfigurationTimezoneModule,
+  POLICY_EVIDENCE,
+  type ConfigurationInterface,
+} from './modules/configuration/index.js';
+import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -74,7 +81,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     { provide: SUPPLIER_ROLES, useValue: partiesSupplierRoles satisfies SupplierRoles },
     {
       provide: MODULE_APPROVALS,
-      useFactory: (audit: AuditInterface, locationInUse: LocationInUse) =>
+      useFactory: (audit: AuditInterface, locationInUse: LocationInUse, configuration: ConfigurationInterface) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
           routingApprovals(audit),
@@ -84,8 +91,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           catalogueApprovals(audit),
           // Bank-detail changes and agreement versions (structure-and-masters 5.1, 5.2; S1-F03-T03).
           partiesApprovals(audit),
+          // An activity's approval, which writes the grant into configuration (module-map 4.16; S1-F04-T02).
+          siteLifecycleApprovals(audit, configuration),
         ),
-      inject: [AUDIT, LOCATION_IN_USE],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
@@ -141,6 +150,8 @@ export class ModuleApprovalsModule {}
     CatalogueModule,
     PartiesModule,
     StockLedgerModule,
+    // Readiness checks and unit activation (module-map 4.16; S1-F04-T02).
+    SiteLifecycleModule,
   ],
 })
 export class AppModule {}

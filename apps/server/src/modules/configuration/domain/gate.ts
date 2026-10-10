@@ -1,4 +1,4 @@
-import type { Activity, MissingItem, PolicyNumber, SettingOrigin } from '@apparel-os/schemas';
+import type { Activity, MissingItem, PermissionAction, PolicyNumber, SettingOrigin } from '@apparel-os/schemas';
 import { PRODUCTION_COMPOSITION, type Composition, type TransactionContext } from '../../../kernel/index.js';
 
 // What the policy gate asks of the other modules (module-map 4.4, section 3 rule 6; domain-model 3.6, DM-6;
@@ -22,6 +22,24 @@ export interface GatedOperation {
   readonly activity: Activity | null;
   /** The validity checks it needs, each with the subject it asks about, such as an exception type it raises. */
   readonly checks: readonly { readonly check: string; readonly subject?: string }[];
+  /**
+   * For an operation with an activity: the people it needs at the unit, which the users-and-access readiness check
+   * reads (domain-model 3.6; PRD-ACS-006; DEC-116; S1-F04-T02). None declared needs none.
+   */
+  readonly needs?: ActivityNeeds;
+}
+
+/**
+ * The permissions an operation needs someone at the unit to hold, and its independently approved actions, each with
+ * the permission that prepares it and the record type approve is held on (access-and-approvals 8, 9.3; PRD-ACS-006).
+ */
+export interface ActivityNeeds {
+  readonly permissions?: readonly { readonly action: PermissionAction; readonly recordType: string }[];
+  readonly approvals?: readonly {
+    readonly actionType: string;
+    readonly prepare: { readonly action: PermissionAction; readonly recordType: string };
+    readonly approveRecordType: string;
+  }[];
 }
 
 /** One configured value a module holds, as it reports it for validation and for its origin (DM-6; 12.14). */

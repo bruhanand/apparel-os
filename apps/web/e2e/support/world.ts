@@ -210,6 +210,14 @@ export interface SyntheticWorld {
     readonly operation: string;
     readonly capability: string;
   };
+  /** S1-F04-T02: the readiness journey's Operations user and approver, the approve reason, and the unit's option. */
+  readonly readiness: {
+    readonly organisationCode: string;
+    readonly operations: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly unitOption: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

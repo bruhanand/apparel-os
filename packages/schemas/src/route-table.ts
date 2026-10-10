@@ -262,6 +262,16 @@ import {
   policyValidationDraftSchema,
   policyValidationRecordedSchema,
 } from './policy-readiness.js';
+import {
+  activationRequestedSchema,
+  readinessRanSchema,
+  readinessRecordParamsSchema,
+  unitActivityParamsSchema,
+  unitParamsSchema,
+  unitReadinessSchema,
+  zeroStockDeclarationRequestSchema,
+  zeroStockDeclaredSchema,
+} from './site-lifecycle.js';
 
 // The route table (code-house-rules 12.1, 12.2). The server, the web app's typed client and the OpenAPI document are
 // all made from it, so they cannot drift apart (PRD Stack: API).
@@ -492,6 +502,13 @@ const HISTORY_CODES = [
 const POLICY_STATUS_CODES = [
   ...PREPARE_CODES,
   'configuration.origin-not-allowed',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes a readiness read or command can answer (module-map 4.16; S1-F04-T02). */
+const READINESS_CODES = [...HISTORY_CODES, 'site-lifecycle.unit-not-found'] as const satisfies readonly ErrorCode[];
+const READINESS_COMMAND_CODES = [
+  ...READINESS_CODES,
+  'kernel.cross-site-request',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes a read of an exception can answer (access-and-approvals 12, 14; S1-F08-T02). */
@@ -1277,6 +1294,11 @@ export const routes = {
       ...ORGANISATION_STRUCTURE_RULE_CODES,
       // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01).
       ...CATALOGUE_DECISION_CODES,
+      // An activity's approval (module-map 4.16; S1-F04-T02).
+      'site-lifecycle.record-not-found',
+      'site-lifecycle.unit-not-found',
+      'site-lifecycle.check-failed',
+      'site-lifecycle.activity-already-granted',
       'kernel.stale-version',
       'kernel.cross-site-request',
     ],
@@ -3175,6 +3197,77 @@ export const routes = {
       'access.sign-in-incomplete',
       'configuration.operation-not-found',
     ],
+  }),
+  // Readiness and unit activation (module-map 4.16; domain-model 3.6; PRD-LIF-001 to PRD-LIF-003; S1-F04-T02). The
+  // records carry the unit's place, so each route authorises in its command with the unit's facts (5.3; RR-296).
+  readUnitReadiness: defineRoute({
+    method: 'GET',
+    path: '/api/site-lifecycle/units/{businessUnitId}/readiness',
+    params: unitParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: 'site_lifecycle.readiness_record', authorisedIn: 'command' },
+    command: false,
+    response: unitReadinessSchema,
+    codes: READINESS_CODES,
+  }),
+  runReadinessChecks: defineRoute({
+    method: 'POST',
+    path: '/api/site-lifecycle/units/{businessUnitId}/readiness/{activity}/runs',
+    params: unitActivityParamsSchema,
+    access: {
+      kind: 'action',
+      action: 'create',
+      recordType: 'site_lifecycle.readiness_record',
+      authorisedIn: 'command',
+    },
+    command: true,
+    body: noBodySchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: readinessRanSchema,
+    codes: READINESS_COMMAND_CODES,
+  }),
+  requestActivation: defineRoute({
+    method: 'POST',
+    path: '/api/site-lifecycle/readiness-records/{readinessRecordId}/activation-request',
+    params: readinessRecordParamsSchema,
+    access: {
+      kind: 'action',
+      action: 'create',
+      recordType: 'site_lifecycle.readiness_record',
+      authorisedIn: 'command',
+    },
+    command: true,
+    body: noBodySchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: activationRequestedSchema,
+    codes: [
+      ...READINESS_COMMAND_CODES,
+      'site-lifecycle.record-not-found',
+      'site-lifecycle.check-failed',
+      'kernel.stale-version',
+      'site-lifecycle.activity-already-granted',
+    ],
+  }),
+  declareZeroStock: defineRoute({
+    method: 'POST',
+    path: '/api/site-lifecycle/units/{businessUnitId}/zero-stock-declaration',
+    params: unitParamsSchema,
+    access: {
+      kind: 'action',
+      action: 'create',
+      recordType: 'site_lifecycle.zero_stock_declaration',
+      authorisedIn: 'command',
+    },
+    command: true,
+    body: zeroStockDeclarationRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: zeroStockDeclaredSchema,
+    codes: READINESS_COMMAND_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

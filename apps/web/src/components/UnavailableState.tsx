@@ -25,7 +25,7 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'scope' && isMessageId(fact) && (item.factCode ?? item.factId) !== undefined) {
     return t('missing.scope.named', { type: t(fact), code: item.factCode ?? item.factId ?? '' });
   }
-  const gate = gateText(item);
+  const gate = gateText(item) ?? readinessText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
@@ -69,6 +69,29 @@ function gateText(item: MissingItem): string | undefined {
   }
   if (item.kind === 'origin' && item.origin !== undefined) {
     return t('missing.origin.named', { origin: named('origin', item.origin) });
+  }
+  return undefined;
+}
+
+/**
+ * The text of a readiness check's item (module-map 4.16; S1-F04-T02): the check that fails, a mapping not verified,
+ * the permission nobody at the unit holds, the action fewer than two people can prepare and approve. Undefined for any
+ * other item, whose text is its kind's.
+ */
+function readinessText(item: MissingItem): string | undefined {
+  if (item.kind === 'readiness-check' && item.check !== undefined) {
+    return t('missing.readiness-check.named', { check: named('readiness.check', item.check) });
+  }
+  if (item.kind === 'mapping' && item.lacks === 'verification') return t('missing.mapping.verification');
+  const action = `action.${item.action ?? ''}`;
+  if (item.kind === 'permission-holder' && item.recordType !== undefined && isMessageId(action)) {
+    return t('missing.permission-holder.named', {
+      action: t(action),
+      recordType: named('record-type', item.recordType),
+    });
+  }
+  if (item.kind === 'approval-people' && item.actionType !== undefined) {
+    return t('missing.approval-people.named', { actionType: named('approval.action', item.actionType) });
   }
   return undefined;
 }

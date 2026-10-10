@@ -558,6 +558,66 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
+// The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
+// its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
+const readinessEntity = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareLegalEntity(c, p, {
+    code: syntheticCode('JOURNEY-READY-LE'),
+    legalName: syntheticName('Journey Ready Entity'),
+    validFrom: structureFixture.today(),
+  }),
+);
+const readinessRegistration = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareTaxRegistration(c, p, {
+    code: syntheticCode('JOURNEY-READY-GSTIN'),
+    legalEntityId: readinessEntity.recordId,
+    registrationNumber: 'SYNTHETIC-GSTIN-READY',
+    stateId: structureGeography.state.recordId,
+    validityFrom: structureFixture.today(),
+    validFrom: structureFixture.today(),
+  }),
+);
+const readinessBook = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareAccountingBook(c, p, {
+    code: syntheticCode('JOURNEY-READY-BK'),
+    legalEntityId: readinessEntity.recordId,
+    name: syntheticName('Journey Ready Book'),
+    validFrom: structureFixture.today(),
+  }),
+);
+const readinessSite = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-READY-SITE'),
+    name: syntheticName('Journey Ready Site'),
+    physicalKind: 'regional-warehouse',
+    areaId: structureGeography.area.recordId,
+    addresses: [syntheticName('1 Ready Road')],
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const readinessUnit = { code: syntheticCode('JOURNEY-READY-UNIT'), name: syntheticName('Journey Ready Unit') };
+const readinessUnitAnswer = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareBusinessUnit(c, p, {
+    ...readinessUnit,
+    siteId: readinessSite.recordId,
+    kind: 'warehouse',
+    legalEntityId: readinessEntity.recordId,
+    taxRegistrationId: readinessRegistration.recordId,
+    accountingBookId: readinessBook.recordId,
+    validFrom: structureFixture.today(),
+  }),
+);
+await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareLocation(c, p, {
+    code: syntheticCode('JOURNEY-READY-LOC'),
+    siteId: readinessSite.recordId,
+    businessUnitId: readinessUnitAnswer.recordId,
+    name: syntheticName('Journey Ready Floor'),
+    kind: 'floor',
+    validFrom: structureFixture.today(),
+  }),
+);
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -1102,6 +1162,71 @@ const policyValidator = await provisionUser('BROWSER-POLICY-VALIDATOR', 'P-ACC',
   { recordType: 'files_imports.stored_file', action: 'create' },
 ]);
 
+// The readiness journey (site-readiness.spec.ts; S1-F04-T02), in the settings Organisation: a test-only module's
+// SYNTHETIC receiving operation governed by policy 4, needing someone at the unit to run the checks and two different
+// people to prepare and approve them; policy 4 Signed and validated as SYNTHETIC fixtures, since that journey is
+// S1-F04-T01's; the unit's mapping verified as a fixture, since that journey is S1-F02-T02's (code-house-rules 11.2);
+// an Operations user who runs the checks and declares the unit holds no stock; and a different approver.
+const READINESS_GATE = syntheticIdentifier('readiness');
+const readinessOperation: GatedOperation = {
+  code: `${READINESS_GATE}.receive-synthetic`,
+  policy: 4,
+  capability: `${READINESS_GATE}.synthetic-receiving`,
+  activity: 'receiving',
+  checks: [],
+  needs: {
+    permissions: [{ action: 'create', recordType: 'site_lifecycle.readiness_record' }],
+    approvals: [
+      {
+        actionType: `${READINESS_GATE}.synthetic-receipt`,
+        prepare: { action: 'create', recordType: 'site_lifecycle.readiness_record' },
+        approveRecordType: 'site_lifecycle.readiness_record',
+      },
+    ],
+  },
+};
+{
+  const owner = await connect(settingsDatabase, 'migration');
+  try {
+    await owner.query(
+      `insert into organisation.business_unit_mapping_verification
+         (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
+       select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
+        where business_unit_id = $4 and decision = 'Approved'`,
+      [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
+    );
+    await owner.query(
+      `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
+         evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
+       values ($1, 4, 'SYNTHETIC signatory', current_date, 'synthetic', array[$2::uuid], $3, $4, now())`,
+      [uuidv7(), uuidv7(), uuidv7(), uuidv7()],
+    );
+    await owner.query(
+      `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
+         evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
+       values ($1, 4, 'synthetic', '{}', array[$2::uuid], $3, $4, now())`,
+      [uuidv7(), uuidv7(), uuidv7(), uuidv7()],
+    );
+  } finally {
+    await owner.end();
+  }
+}
+const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
+  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+  { recordType: 'site_lifecycle.readiness_record', action: 'create' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
+  // The unit list the screen chooses from (structure-and-masters 8).
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
+const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
+  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+  { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
@@ -1124,7 +1249,7 @@ const app = await startAccessApp(
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
-    gatedOperations: [policyOperation],
+    gatedOperations: [policyOperation, readinessOperation],
     validityChecks: [policyValuesCheck],
   },
 );
@@ -1291,6 +1416,15 @@ writeFileSync(
       validator: credentialsOf(policyValidator),
       operation: policyOperation.code,
       capability: policyOperation.capability,
+    },
+    // S1-F04-T02: the Operations user who runs the checks, the approver who decides from My work, the reason they
+    // give, and how the screen names the unit.
+    readiness: {
+      organisationCode: settingsCode,
+      operations: credentialsOf(readinessOps),
+      approver: credentialsOf(readinessApprover),
+      reasonId: readinessReasonId,
+      unitOption: `${readinessUnit.code} · ${readinessUnit.name}`,
     },
     journey: {
       organisationCode: journeyCode,

@@ -521,3 +521,4 @@ export * from './products.js';
 
 // Policy readiness and the Available check (module-map 4.4; S1-F04-T01).
 export * from './policy-readiness.js';
+export * from './site-lifecycle.js';

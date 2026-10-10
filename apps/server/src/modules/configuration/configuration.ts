@@ -17,6 +17,12 @@ import {
   type Outcome,
   type Recorder,
 } from './commands/policy-status.js';
+import {
+  grantActivity,
+  grantedActivities,
+  type ActivityGranter,
+  type ActivityGrantRequest,
+} from './commands/activity-grants.js';
 import type { PolicyEvidence } from './contracts/policy-evidence.js';
 import { GateRegistry, type GatedOperation, type ValidityCheck } from './domain/gate.js';
 import type { DeploymentEnvironment } from './domain/origins.js';
@@ -132,6 +138,26 @@ export interface ConfigurationInterface {
     capability: string,
     on: boolean,
   ): Promise<Outcome<{ capability: string; on: boolean }>>;
+  /**
+   * What a policy itself lacks now: its signature, its validated values, a value of an origin not accepted here; empty
+   * when Signed and validated. The required-policies readiness check asks it for each policy an activity's operations
+   * need (domain-model 3.6; DEC-116; S1-F04-T02).
+   */
+  policyMissing(context: TransactionContext, policy: PolicyNumber): Promise<MissingItem[]>;
+  /**
+   * Grant an activity (module-map 4.4): `site-lifecycle` only, in the transaction of the decision approving it, with
+   * its audit record and `configuration.activity-changed` (PRD-LIF-001; S1-F04-T02).
+   */
+  grantActivity(
+    context: TransactionContext,
+    by: ActivityGranter,
+    grant: ActivityGrantRequest,
+  ): Promise<{ grantId: string }>;
+  /** The activities granted now at a business unit, or at each unit of a Site (structure-and-masters 3.7). */
+  grantedActivities(
+    context: TransactionContext,
+    place: { readonly siteId: string; readonly businessUnitId?: string | undefined },
+  ): ReturnType<typeof grantedActivities>;
 }
 
 /** The next action an unavailable operation names: open Setup › Policy readiness (design-language 10.17). */
@@ -270,5 +296,20 @@ export class Configuration implements ConfigurationInterface {
 
   switchCapability(context: TransactionContext, by: Recorder, capability: string, on: boolean) {
     return switchCapability(context, this.statusDependencies, by, capability, on);
+  }
+
+  async policyMissing(context: TransactionContext, policy: PolicyNumber): Promise<MissingItem[]> {
+    return policyMissing(context, this.reading, policy, await policyValues(context, this.registry, policy));
+  }
+
+  grantActivity(context: TransactionContext, by: ActivityGranter, grant: ActivityGrantRequest) {
+    return grantActivity(context, this.dependencies.audit, by, grant);
+  }
+
+  grantedActivities(
+    context: TransactionContext,
+    place: { readonly siteId: string; readonly businessUnitId?: string | undefined },
+  ) {
+    return grantedActivities(context, place);
   }
 }
