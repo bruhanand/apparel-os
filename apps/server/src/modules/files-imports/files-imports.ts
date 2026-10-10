@@ -1,6 +1,7 @@
 import type { TransactionContext } from '../../kernel/index.js';
 import type { DecisionEvidence } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
+import type { PolicyEvidence } from '../configuration/index.js';
 import { attach, type Attached, type AttachRequest } from './commands/attach.js';
 import type { AttachedRecordReaders } from './contracts/record-readers.js';
 
@@ -24,6 +25,15 @@ export interface FilesImportsInterface {
  */
 export function decisionEvidence(audit: AuditInterface): DecisionEvidence {
   return { attach: (context, request) => attach(context, audit, request) };
+}
+
+/**
+ * The policy-evidence contract `configuration` defines (module-map 4.4, section 3 rule 6; DEC-116; S1-F04-T01),
+ * implemented by Attach: a signature's or a validation's files, which belong to the Organisation as a whole, so carry
+ * no scope fact. The composition root hands it to `configuration`, which never depends on files-imports.
+ */
+export function policyEvidence(audit: AuditInterface): PolicyEvidence {
+  return { attach: (context, request) => attach(context, audit, { ...request, scope: {} }) };
 }
 
 export class FilesImports implements FilesImportsInterface {

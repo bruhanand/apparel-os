@@ -16,7 +16,7 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
-import { decisionEvidence, FilesImportsModule } from './modules/files-imports/index.js';
+import { decisionEvidence, FilesImportsModule, policyEvidence } from './modules/files-imports/index.js';
 import {
   EXCEPTION_CODE_KIND,
   EXCEPTION_TYPES,
@@ -26,7 +26,7 @@ import {
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
 import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
-import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
+import { ConfigurationModule, ConfigurationTimezoneModule, POLICY_EVIDENCE } from './modules/configuration/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -99,6 +99,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
+    // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;
+    // S1-F04-T01).
+    { provide: POLICY_EVIDENCE, useFactory: (audit: AuditInterface) => policyEvidence(audit), inject: [AUDIT] },
   ],
   exports: [
     MODULE_APPROVALS,
@@ -109,6 +112,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     NUMBERED_KINDS,
     EXCEPTION_TYPES,
     DECISION_EVIDENCE,
+    POLICY_EVIDENCE,
   ],
 })
 export class ModuleApprovalsModule {}
@@ -126,6 +130,8 @@ export class ModuleApprovalsModule {}
     // The idempotency helper with the contracts access implements (RR-248), global for every module's commands.
     idempotencyModuleWith(AccessContractsModule),
     ModuleApprovalsModule,
+    // The policy gate, with the policy status, capabilities and activity grants (module-map 4.4; S1-F04-T01).
+    ConfigurationModule,
     OrganisationModule,
     AuditModule,
     AccessModule,

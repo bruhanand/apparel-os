@@ -481,6 +481,38 @@
       "why": "Read by the command runner for every command, before any actor is set, to work out the business date (code-house-rules 6.3, 9); the timezone belongs to the Organisation, not to a place"
     },
     {
+      "table": "configuration.policy_signature",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.4; domain-model 3.6; code-house-rules 7.1, 12.14; DEC-092",
+      "why": "The policy status, its validations and the capabilities belong to the Organisation as a whole: their record types carry no scope fact, so the permission on the record type decides (access-and-approvals 5.3); only configuration code reads them"
+    },
+    {
+      "table": "configuration.policy_validation",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.4; domain-model 3.6, DM-6; code-house-rules 7.1; DEC-105, DEC-116",
+      "why": "The policy status, its validations and the capabilities belong to the Organisation as a whole: their record types carry no scope fact, so the permission on the record type decides (access-and-approvals 5.3); only configuration code reads them"
+    },
+    {
+      "table": "configuration.capability_change",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.4; domain-model 3.6; PRD-SEC-017",
+      "why": "The policy status, its validations and the capabilities belong to the Organisation as a whole: their record types carry no scope fact, so the permission on the record type decides (access-and-approvals 5.3); only configuration code reads them"
+    },
+    {
+      "table": "configuration.activity_grant",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.4, 4.16; domain-model 3.6; PRD-LIF-001; code-house-rules 6.3",
+      "why": "Read by the policy gate for every request of every actor, as Authorise reads its own tables, so no actor's scope may hide a grant (code-house-rules 6.3); only configuration code reads it"
+    },
+    {
       "table": "access.setup_record",
       "class": "unscoped",
       "marks": ["append-only"],

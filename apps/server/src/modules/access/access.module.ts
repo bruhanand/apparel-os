@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { sessionAccess } from './queries/session-access.js';
 import {
@@ -19,6 +19,8 @@ import {
   type SessionProbe,
 } from '../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
+import { securitySettingsCheck } from './queries/validity.js';
 import { Access } from './access.js';
 import { CredentialResets } from './commands/credential-reset.js';
 import { OwnCredentials } from './commands/own-credentials.js';
@@ -31,6 +33,7 @@ import { AccessChangesController } from './http/access-changes.controller.js';
 import { AccessRecordsController } from './http/access-records.controller.js';
 import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
+import { PolicyReadinessController } from './http/policy-readiness.controller.js';
 import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS } from './tokens.js';
@@ -110,6 +113,8 @@ export class AccessJobIdentitiesModule {}
     ApprovalsController,
     SessionsController,
     HistoryController,
+    // Setup › Policy readiness and Check availability, for `configuration`, which calls no one (S1-F04-T01).
+    PolicyReadinessController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
@@ -132,6 +137,7 @@ export class AccessJobIdentitiesModule {}
         modules: ModuleApprovals,
         scopeMembers: readonly ScopeMembers[] | undefined,
         decisionEvidence: DecisionEvidence | undefined,
+        configuration: ConfigurationInterface,
       ) =>
         new Access({
           audit,
@@ -140,6 +146,7 @@ export class AccessJobIdentitiesModule {}
           documentEffects: modules.effects,
           scopeMembers: scopeMembers ?? [],
           decisionEvidence,
+          origins: configuration,
         }),
       // And the decision-evidence contract files-imports implements, where provided (9.5; S1-F08-T03).
       inject: [
@@ -148,6 +155,8 @@ export class AccessJobIdentitiesModule {}
         MODULE_APPROVALS,
         { token: SCOPE_MEMBERS, optional: true },
         { token: DECISION_EVIDENCE, optional: true },
+        // Which origins of a setting version this environment accepts (code-house-rules 12.14; RR-401).
+        CONFIGURATION,
       ],
     },
     {
@@ -196,4 +205,11 @@ export class AccessJobIdentitiesModule {}
   ],
   exports: [ACCESS],
 })
-export class AccessModule {}
+export class AccessModule implements OnModuleInit {
+  constructor(@Inject(CONFIGURATION) private readonly configuration: ConfigurationInterface) {}
+
+  /** The essential security settings, as policy 2's values, go to the policy gate (DM-6; RR-252; S1-F04-T01). */
+  onModuleInit(): void {
+    this.configuration.registerCheck(securitySettingsCheck);
+  }
+}

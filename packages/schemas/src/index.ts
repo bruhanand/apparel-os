@@ -518,3 +518,6 @@ export * from './parties.js';
 
 // Product proposals, external codes and Read a SKU (structure-and-masters 4.2, 4.3, 4.7; S1-F03-T02).
 export * from './products.js';
+
+// Policy readiness and the Available check (module-map 4.4; S1-F04-T01).
+export * from './policy-readiness.js';

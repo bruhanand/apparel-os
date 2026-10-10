@@ -38,6 +38,13 @@ import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import {
+  CONFIGURATION,
+  CONFIGURATION_ENVIRONMENT,
+  type ConfigurationInterface,
+  type GatedOperation,
+  type ValidityCheck,
+} from '../../src/modules/configuration/index.js';
 // The access module's own helpers, used only to write the fewest rows a test needs until the setup step and the user
 // commands exist (code-house-rules 11.2): the factor secret is sealed exactly as the module seals it.
 import { sealFactorSecret } from '../../src/modules/access/domain/factor-secret.js';
@@ -256,6 +263,14 @@ export async function startAccessApp(
     readonly exceptionTypes?: readonly ExceptionTypeRegistration[];
     /** The live-update stream's timing; SYNTHETIC, short enough for a test to sit through (12.12). */
     readonly liveSettings?: LiveSettings;
+    /**
+     * The environment's name, AOS_ENVIRONMENT (code-house-rules 12.14): `local` unless a test asks for another, as
+     * tests run as local work.
+     */
+    readonly environment?: string;
+    /** Synthetic policy-dependent operations and validity checks, for a test-only module (S1-F04-T01). */
+    readonly gatedOperations?: readonly GatedOperation[];
+    readonly validityChecks?: readonly ValidityCheck[];
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -288,6 +303,7 @@ export async function startAccessApp(
         modules: ModuleApprovals,
         scopeMembers: ScopeMembers[],
         decisionEvidence: DecisionEvidence,
+        configuration: ConfigurationInterface,
       ) =>
         new Access({
           audit,
@@ -298,8 +314,9 @@ export async function startAccessApp(
           documentEffects: modules.effects,
           scopeMembers,
           decisionEvidence,
+          origins: configuration,
         }),
-      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, SCOPE_MEMBERS, DECISION_EVIDENCE],
+      inject: [AUDIT, ORGANISATION_KEYS, MODULE_APPROVALS, SCOPE_MEMBERS, DECISION_EVIDENCE, CONFIGURATION],
     });
   }
   const moduleRef = await builder
@@ -315,7 +332,12 @@ export async function startAccessApp(
     .useValue(keysEnvironment)
     .overrideProvider(ORGANISATION_TIMEZONE_SOURCE)
     .useValue(options.timezone ?? syntheticTimezone)
+    .overrideProvider(CONFIGURATION_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
     .compile();
+  const configuration = moduleRef.get<ConfigurationInterface>(CONFIGURATION);
+  for (const check of options.validityChecks ?? []) configuration.registerCheck(check, TEST_COMPOSITION);
+  for (const operation of options.gatedOperations ?? []) configuration.registerOperation(operation, TEST_COMPOSITION);
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
   if (options.webApp !== undefined) serveWebApp(app, options.webApp);

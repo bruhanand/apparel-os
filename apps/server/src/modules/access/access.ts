@@ -32,6 +32,7 @@ import {
 } from '../../kernel/index.js';
 import type { DecisionEvidence } from './contracts/decision-evidence.js';
 import type { AuditInterface } from '../audit/index.js';
+import type { ConfigurationInterface } from '../configuration/index.js';
 import {
   AccessChanges,
   type Decider,
@@ -391,6 +392,12 @@ export interface AccessDependencies {
    * it, a decision given evidence is a defect of the composition.
    */
   readonly decisionEvidence?: DecisionEvidence | undefined;
+  /**
+   * Which origins of a setting version this environment accepts: `configuration`'s answer (code-house-rules 12.14;
+   * RR-252, RR-401; S1-F04-T01). The application always gives it; a test that builds `access` on its own and leaves it
+   * out accepts every origin.
+   */
+  readonly origins?: Pick<ConfigurationInterface, 'originRefusal'> | undefined;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */
@@ -420,7 +427,7 @@ export class Access implements AccessInterface {
     this.changes = new AccessChanges(dependencies.audit, this.registry, dependencies.scopeMembers);
     this.users = new UserChanges(dependencies.audit);
     this.settings = new ApprovalSettingsChanges(dependencies.audit, this.rules);
-    this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit);
+    this.securitySettingChanges = new SecuritySettingsChanges(dependencies.audit, dependencies.origins);
     this.limits = new ApprovalLimitChanges(dependencies.audit, this.rules, this.changes);
     this.standIns = new StandInGrantChanges(dependencies.audit, this.rules, this.registry, dependencies.scopeMembers);
     this.approvals = new Approvals({

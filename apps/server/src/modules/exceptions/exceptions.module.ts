@@ -9,6 +9,7 @@ import {
 } from '../../kernel/index.js';
 import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
 import {
   ATTACHED_RECORD_READERS,
   FILES_IMPORTS,
@@ -23,6 +24,7 @@ import { Exceptions } from './exceptions.js';
 import { ExceptionsController } from './http/exceptions.controller.js';
 import { EXCEPTION_RECORD_TYPE } from './domain/types.js';
 import { exceptionsOfJobs, mayViewException } from './queries/admission.js';
+import { exceptionCodeSeriesCheck, exceptionRoutingCheck } from './queries/validity.js';
 import { EXCEPTION_TYPES, EXCEPTIONS } from './tokens.js';
 
 /**
@@ -62,12 +64,15 @@ export class ExceptionsModule implements OnModuleInit {
   constructor(
     @Inject(ACCESS) private readonly access: AccessInterface,
     @Inject(ATTACHED_RECORD_READERS) private readonly readers: AttachedRecordReaders,
+    @Inject(CONFIGURATION) private readonly configuration: ConfigurationInterface,
+    @Inject(NUMBERING) private readonly numbering: NumberingInterface,
     @Optional() @Inject(LIVE_UPDATES) private readonly live: LiveUpdates | null,
   ) {}
 
   /**
    * An exception's live updates, and its evidence files, go to whoever may view it, its owner included (12.4 "As
-   * built"; 12.12; imports-and-opening-data 11; product owner, 9 Oct 2026, RR-452).
+   * built"; 12.12; imports-and-opening-data 11; product owner, 9 Oct 2026, RR-452). Its validity checks go to the
+   * policy gate.
    */
   onModuleInit(): void {
     const mayView = (context: TransactionContext, actorId: string, exceptionId: string) =>
@@ -76,5 +81,9 @@ export class ExceptionsModule implements OnModuleInit {
       mayView(context, actorId, event.subject.recordId),
     );
     this.readers.register([EXCEPTION_RECORD_TYPE], { mayRead: mayView });
+    // The Available answers of S1-F08-T02, for the operations that raise a numbered exception (module-map 4.4,
+    // 4.13; DEC-116; POL-02.16; S1-F04-T01).
+    this.configuration.registerCheck(exceptionCodeSeriesCheck(this.numbering));
+    this.configuration.registerCheck(exceptionRoutingCheck);
   }
 }

@@ -198,6 +198,18 @@ export interface SyntheticWorld {
     readonly approver: EnrolledUser;
     readonly supplierCode: string;
   };
+  /**
+   * The policy readiness journey (S1-F04-T01), in the security settings Organisation: the Admin who records policy 14
+   * as Signed and switches its capability on, the person who validates its values without having entered them, and
+   * the SYNTHETIC operation it governs, with its capability.
+   */
+  readonly policyReadiness: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    readonly validator: EnrolledUser;
+    readonly operation: string;
+    readonly capability: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

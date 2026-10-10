@@ -25,17 +25,67 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'scope' && isMessageId(fact) && (item.factCode ?? item.factId) !== undefined) {
     return t('missing.scope.named', { type: t(fact), code: item.factCode ?? item.factId ?? '' });
   }
+  const gate = gateText(item);
+  if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
 }
 
+/** A policy's number and name, as Policy readiness shows it: "Policy 14 · Opening and cutover". */
+export function policyTitle(policy: string): string {
+  const name = `policy.name.${policy}`;
+  return t('policy.title', { number: policy, name: isMessageId(name) ? t(name) : '' });
+}
+
+/** A name from the catalogue under a prefix, or the code itself where it has none, as for a synthetic one. */
+function named(prefix: string, code: string): string {
+  const id = `${prefix}.${code}`;
+  return isMessageId(id) ? t(id) : code;
+}
+
+/**
+ * The text of a policy gate's item (module-map 4.4; design-language 10.17; S1-F04-T01): the policy by number and name
+ * and what it lacks, its signature or its validated values; the capability that is off; the activity not granted at
+ * its place; a value whose origin this environment does not accept. Undefined for any other item.
+ */
+function gateText(item: MissingItem): string | undefined {
+  if (
+    item.kind === 'policy' &&
+    item.policy !== undefined &&
+    (item.lacks === 'signature' || item.lacks === 'validation')
+  ) {
+    return t(`missing.policy.${item.lacks}`, { policy: policyTitle(item.policy) });
+  }
+  if (item.kind === 'validator' && item.policy !== undefined) {
+    return t('missing.validator', { policy: policyTitle(item.policy) });
+  }
+  if (item.kind === 'capability' && item.capability !== undefined) {
+    return t('missing.capability.named', { capability: named('capability', item.capability) });
+  }
+  if (item.kind === 'activity' && item.activity !== undefined) {
+    const activity = named('activity', item.activity);
+    if (item.placeType === undefined || item.placeId === undefined) return t('missing.activity.nowhere', { activity });
+    return t('missing.activity.named', { activity, place: named('place-type', item.placeType), id: item.placeId });
+  }
+  if (item.kind === 'origin' && item.origin !== undefined) {
+    return t('missing.origin.named', { origin: named('origin', item.origin) });
+  }
+  return undefined;
+}
+
 /** The kinds of missing item a policy or setting gate names (design-language 10.17). */
-const gateKinds: ReadonlySet<string> = new Set(['policy', 'setting', 'capability']);
+const gateKinds: ReadonlySet<string> = new Set(['policy', 'setting', 'capability', 'activity', 'origin']);
+
+/** Where the banner points: the first policy it names on Setup › Policy readiness, or the screen itself. */
+export function policyReadinessHref(missing: readonly MissingItem[]): string {
+  const policy = missing.find((item) => item.kind === 'policy' && item.policy !== undefined)?.policy;
+  return policy === undefined ? '/setup/policy-readiness' : `/setup/policy-readiness?policy=${policy}`;
+}
 
 /**
  * Unavailable (PRD-UXP-003, PRD-SEC-017). Where a policy, setting or capability is missing, it is Live action
  * unavailable (design-language 10.17): an Attention banner that names each thing the server listed as missing and
- * points to Setup › Policy readiness. Where only the person's role assignments fall short, it is Not available to you
+ * links to the policy on Setup › Policy readiness (S1-F04-T01). Where only the person's role assignments fall short, it is Not available to you
  * (design-language 10.17 "Missing permission", as built): the same banner naming the missing permission or scope and
  * saying who to ask, with no policy link, since no policy is involved. The action itself stays visible and disabled.
  */
@@ -60,7 +110,9 @@ export function UnavailableState({ missing }: { missing: readonly MissingItem[] 
           <li key={index}>{missingText(item)}</li>
         ))}
       </ul>
-      <span className="text-accent underline">{t('unavailable.policy-readiness')}</span>
+      <a href={policyReadinessHref(missing)} className="text-accent underline">
+        {t('unavailable.policy-readiness')}
+      </a>
     </Banner>
   );
 }

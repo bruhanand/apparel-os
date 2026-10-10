@@ -402,6 +402,172 @@
         }
       }
     },
+    "/api/access/availability": {
+      "get": {
+        "operationId": "checkAvailability",
+        "x-access": {
+          "kind": "own"
+        },
+        "parameters": [
+          {
+            "name": "operation",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+            }
+          },
+          {
+            "name": "siteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "businessUnitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "operation": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 19
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "unavailable"
+                      ]
+                    },
+                    "missing": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "operation",
+                    "policy",
+                    "state",
+                    "missing"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "configuration.operation-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/exceptions/exceptions/{exceptionId}/close": {
       "post": {
         "operationId": "closeException",
@@ -44239,6 +44405,361 @@
         }
       }
     },
+    "/api/access/policy-readiness": {
+      "get": {
+        "operationId": "readPolicyReadiness",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "configuration.policy_status"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "policies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "policy": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 19
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "Open",
+                              "Signed"
+                            ]
+                          },
+                          "signature": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "signatureId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "signatory": {
+                                    "type": "string"
+                                  },
+                                  "signedOn": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                  },
+                                  "origin": {
+                                    "type": "string",
+                                    "enum": [
+                                      "kdps",
+                                      "synthetic"
+                                    ]
+                                  },
+                                  "recordedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "evidence": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "signatureId",
+                                  "signatory",
+                                  "signedOn",
+                                  "origin",
+                                  "recordedAt",
+                                  "evidence"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "validation": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "validationId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "origin": {
+                                    "type": "string",
+                                    "enum": [
+                                      "kdps",
+                                      "synthetic"
+                                    ]
+                                  },
+                                  "validatedBy": {
+                                    "type": "string"
+                                  },
+                                  "validatedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  },
+                                  "evidence": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                    }
+                                  },
+                                  "current": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "validationId",
+                                  "origin",
+                                  "validatedBy",
+                                  "validatedAt",
+                                  "evidence",
+                                  "current"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "values": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "check": {
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "type": "string"
+                                },
+                                "origin": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kdps",
+                                    "test-setup",
+                                    "synthetic"
+                                  ]
+                                },
+                                "enteredByYou": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "check",
+                                "key",
+                                "origin",
+                                "enteredByYou"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "missing": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "operations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "operation": {
+                                  "type": "string"
+                                },
+                                "capability": {
+                                  "type": "string"
+                                },
+                                "capabilityOn": {
+                                  "type": "boolean"
+                                },
+                                "activity": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "receiving",
+                                        "movement",
+                                        "selling"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "available",
+                                    "unavailable"
+                                  ]
+                                },
+                                "missing": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              },
+                              "required": [
+                                "operation",
+                                "capability",
+                                "capabilityOn",
+                                "activity",
+                                "state",
+                                "missing"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "policy",
+                          "state",
+                          "signature",
+                          "validation",
+                          "values",
+                          "missing",
+                          "operations"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "policies"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/merchandise/product-proposals/{proposalId}": {
       "get": {
         "operationId": "readProductProposal",
@@ -49611,6 +50132,419 @@
         }
       }
     },
+    "/api/access/policy-readiness/{policyNumber}/signature": {
+      "post": {
+        "operationId": "recordPolicySignature",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "configuration.policy_status"
+        },
+        "parameters": [
+          {
+            "name": "policyNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[1-9]|1[0-9])$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signatureId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "signatureId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "configuration.origin-not-allowed"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "signatory": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "signedOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "synthetic"
+                    ]
+                  },
+                  "evidence": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "signatory",
+                  "signedOn",
+                  "origin",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access/policy-readiness/{policyNumber}/validation": {
+      "post": {
+        "operationId": "recordPolicyValidation",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "configuration.policy_validation"
+        },
+        "parameters": [
+          {
+            "name": "policyNumber",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[1-9]|1[0-9])$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "validationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "validationId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "configuration.origin-not-allowed",
+              "configuration.validator-entered-values"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "synthetic"
+                    ]
+                  },
+                  "evidence": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "origin",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/exceptions/exceptions/{exceptionId}/reopen": {
       "post": {
         "operationId": "reopenException",
@@ -51592,6 +52526,191 @@
                   "sourceSystem",
                   "originalName",
                   "contentBase64"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access/capabilities/{capability}/switch": {
+      "post": {
+        "operationId": "switchCapability",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "configuration.capability"
+        },
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "capability": {
+                      "type": "string"
+                    },
+                    "on": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "capability",
+                    "on"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "configuration.capability-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "on"
                 ],
                 "additionalProperties": false
               }

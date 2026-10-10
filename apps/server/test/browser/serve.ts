@@ -36,6 +36,7 @@ import { jobIdentities } from '../../src/modules/access/commands/job-identities.
 // The codes of the two roles the setup step creates, so the journey assigns exactly those roles (9.11).
 import { FIRST_ADMIN_ROLE, FIRST_APPROVER_ROLE } from '../../src/modules/access/domain/first-roles.js';
 import { Audit } from '../../src/modules/audit/index.js';
+import type { GatedOperation, ValidityCheck } from '../../src/modules/configuration/index.js';
 import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
@@ -1066,6 +1067,41 @@ const credentialsOf = (user: SyntheticUser) => ({
   factorSecretHex: user.factorSecret?.toString('hex') ?? '',
 });
 
+// The policy readiness journey (policy-readiness.spec.ts; S1-F04-T01), in the settings Organisation: a test-only
+// module's SYNTHETIC business-effect operation governed by policy 14, with a validity check whose one SYNTHETIC value a
+// person of its own entered (code-house-rules 11.4; DM-6); an Admin who records policy 14 as Signed with a SYNTHETIC
+// file and switches the capability on; and a person holding the validate permission who did not enter the value.
+const POLICY_GATE = syntheticIdentifier('gate');
+const policyEnterer = await provisionUser('BROWSER-POLICY-ENTERER', 'P-ADM', [
+  { recordType: 'configuration.policy_status', action: 'view' },
+]);
+const policyValuesCheck: ValidityCheck = {
+  code: `${POLICY_GATE}.synthetic-values`,
+  policy: 14,
+  check: () => Promise.resolve({ kind: 'valid' }),
+  values: () => Promise.resolve([{ key: 'syn-browser-value', origin: 'synthetic', enteredBy: [policyEnterer.id] }]),
+};
+const policyOperation: GatedOperation = {
+  code: `${POLICY_GATE}.post-synthetic-effect`,
+  policy: 14,
+  capability: `${POLICY_GATE}.synthetic-effect`,
+  activity: null,
+  checks: [{ check: policyValuesCheck.code }],
+};
+const policyAdmin = await provisionUser('BROWSER-POLICY-ADMIN', 'P-ADM', [
+  { recordType: 'configuration.policy_status', action: 'view' },
+  { recordType: 'configuration.policy_status', action: 'create' },
+  { recordType: 'configuration.policy_validation', action: 'view' },
+  { recordType: 'configuration.capability', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const policyValidator = await provisionUser('BROWSER-POLICY-VALIDATOR', 'P-ACC', [
+  { recordType: 'configuration.policy_status', action: 'view' },
+  { recordType: 'configuration.policy_validation', action: 'view' },
+  { recordType: 'configuration.policy_validation', action: 'create' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
@@ -1087,6 +1123,9 @@ const app = await startAccessApp(
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
+    // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
+    gatedOperations: [policyOperation],
+    validityChecks: [policyValuesCheck],
   },
 );
 
@@ -1244,6 +1283,14 @@ writeFileSync(
       code: evidenceException.value.code,
       approver: credentialsOf(evidenceApprover),
       reasonId: evidenceReasonId,
+    },
+    // S1-F04-T01: the Admin who records policy 14 as Signed, the person who validates its values, and the operation.
+    policyReadiness: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(policyAdmin),
+      validator: credentialsOf(policyValidator),
+      operation: policyOperation.code,
+      capability: policyOperation.capability,
     },
     journey: {
       organisationCode: journeyCode,

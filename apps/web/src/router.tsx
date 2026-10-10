@@ -24,6 +24,7 @@ import { ApprovalLimitsScreen } from './setup/ApprovalLimitsScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
 import { ReasonsScreen } from './setup/ReasonsScreen';
 import { RolesScreen } from './setup/RolesScreen';
+import { PolicyReadinessScreen } from './setup/PolicyReadinessScreen';
 import { SecuritySettingsScreen } from './setup/SecuritySettingsScreen';
 import { UsersScreen } from './setup/UsersScreen';
 import { AppShell, type RenderLink } from './shell/AppShell';
@@ -122,6 +123,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <ExceptionRulesScreen />;
     case 'setup.operations':
       return <FailedJobsScreen />;
+    case 'setup.policy-readiness':
+      return <PolicyReadinessScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

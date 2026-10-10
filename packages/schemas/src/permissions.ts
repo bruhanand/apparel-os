@@ -264,6 +264,20 @@ const merchandiseRecordTypes = [
   declareWithFields('merchandise.agreement', ['view', 'create', 'edit', 'approve'], NONE, ['margin']),
 ] as const;
 
+/**
+ * `configuration`: the policy gate (module-map 4.4; domain-model 3.6; S1-F04-T01). The policy status is the readiness
+ * of the 19 policies: view reads Setup › Policy readiness, create records a policy as Signed with its evidence
+ * (DEC-092). Create on the validation is the validate permission of DM-6: it records a policy's real values as
+ * validated, by a person who did not enter them (DEC-105, DEC-116). Edit on a capability switches it on or off for the
+ * Organisation (PRD-SEC-017). They belong to the Organisation as a whole, so they carry no scope fact. Who holds them
+ * is KDPS's (V-01).
+ */
+const configurationRecordTypes = [
+  declare('configuration.policy_status', ['view', 'create'], NONE),
+  declare('configuration.policy_validation', ['view', 'create'], NONE),
+  declare('configuration.capability', ['view', 'edit'], NONE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -275,6 +289,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...organisationRecordTypes,
   ...exceptionsRecordTypes,
   ...merchandiseRecordTypes,
+  ...configurationRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -287,7 +302,8 @@ export type RecordTypeCode =
   | (typeof stockRecordTypes)[number]['code']
   | (typeof organisationRecordTypes)[number]['code']
   | (typeof exceptionsRecordTypes)[number]['code']
-  | (typeof merchandiseRecordTypes)[number]['code'];
+  | (typeof merchandiseRecordTypes)[number]['code']
+  | (typeof configurationRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

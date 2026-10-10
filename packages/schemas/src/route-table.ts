@@ -249,6 +249,19 @@ import {
   termsInForceQuerySchema,
   termsInForceSchema,
 } from './parties.js';
+import {
+  availabilityQuerySchema,
+  availabilitySchema,
+  capabilityParamSchema,
+  capabilitySwitchedSchema,
+  capabilitySwitchSchema,
+  policyNumberParamSchema,
+  policyReadinessSchema,
+  policySignatureDraftSchema,
+  policySignatureRecordedSchema,
+  policyValidationDraftSchema,
+  policyValidationRecordedSchema,
+} from './policy-readiness.js';
 
 // The route table (code-house-rules 12.1, 12.2). The server, the web app's typed client and the OpenAPI document are
 // all made from it, so they cannot drift apart (PRD Stack: API).
@@ -473,6 +486,12 @@ const HISTORY_CODES = [
   'access.sign-in-incomplete',
   'access.not-authorised',
   'access.business-date-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes a policy-status command can answer (module-map 4.4; DM-6; code-house-rules 12.14; S1-F04-T01). */
+const POLICY_STATUS_CODES = [
+  ...PREPARE_CODES,
+  'configuration.origin-not-allowed',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes a read of an exception can answer (access-and-approvals 12, 14; S1-F08-T02). */
@@ -3088,6 +3107,74 @@ export const routes = {
     shows: 'nothing',
     response: partyChangedSchema,
     codes: AGREEMENT_CHANGE_CODES,
+  }),
+  // Setup › Policy readiness (module-map 4.4; domain-model 3.6; ui-blueprint; S1-F04-T01): the 19 policies, Signed,
+  // validated, configured and what is blocked. Served by `access`, which uses `configuration`, as the history of
+  // `audit` is: `configuration` calls no one (module-map section 3, rule 6). Not policy-gated: it is how a policy gets
+  // configured (DEC-116).
+  readPolicyReadiness: defineRoute({
+    method: 'GET',
+    path: '/api/access/policy-readiness',
+    access: { kind: 'action', action: 'view', recordType: 'configuration.policy_status' },
+    command: false,
+    response: policyReadinessSchema,
+    codes: HISTORY_CODES,
+  }),
+  recordPolicySignature: defineRoute({
+    method: 'POST',
+    path: '/api/access/policy-readiness/{policyNumber}/signature',
+    params: policyNumberParamSchema,
+    access: { kind: 'action', action: 'create', recordType: 'configuration.policy_status' },
+    command: true,
+    body: policySignatureDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: policySignatureRecordedSchema,
+    codes: POLICY_STATUS_CODES,
+  }),
+  recordPolicyValidation: defineRoute({
+    method: 'POST',
+    path: '/api/access/policy-readiness/{policyNumber}/validation',
+    params: policyNumberParamSchema,
+    access: { kind: 'action', action: 'create', recordType: 'configuration.policy_validation' },
+    command: true,
+    body: policyValidationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: policyValidationRecordedSchema,
+    codes: [...POLICY_STATUS_CODES, 'configuration.validator-entered-values'],
+  }),
+  switchCapability: defineRoute({
+    method: 'POST',
+    path: '/api/access/capabilities/{capability}/switch',
+    params: capabilityParamSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'configuration.capability' },
+    command: true,
+    body: capabilitySwitchSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: capabilitySwitchedSchema,
+    codes: [...PREPARE_CODES, 'configuration.capability-not-found'],
+  }),
+  // Check availability (module-map 4.4; design-language 10.17; PRD-UXP-003): whether an operation is available here
+  // and now, naming what is missing, for a screen to show its gated action enabled or disabled with the banner. Every
+  // signed-in user may ask it; it names only policies, capabilities, settings and places, never a restricted value.
+  checkAvailability: defineRoute({
+    method: 'GET',
+    path: '/api/access/availability',
+    query: availabilityQuerySchema,
+    access: { kind: 'own' },
+    command: false,
+    response: availabilitySchema,
+    codes: [
+      'access.not-signed-in',
+      'access.session-locked',
+      'access.sign-in-incomplete',
+      'configuration.operation-not-found',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

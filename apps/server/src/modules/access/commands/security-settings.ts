@@ -3,6 +3,7 @@ import type { SecuritySettingVersionDraft } from '@apparel-os/schemas';
 import { eq, sql } from 'drizzle-orm';
 import { CommandDefect, lockTable, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import { setting, settingVersion, settingVersionChange } from '../db/schema.js';
 import { SETTING_FORMATS, SETTING_SCHEMAS, type AccessSettingKey } from '../domain/sign-in-rules.js';
 import { INSTANT_TEXT } from '../queries/security-settings.js';
@@ -23,7 +24,8 @@ import { requestApproval } from './request-approval.js';
 // with a fresh code (Decide, 9.5). It takes effect at the moment of its decision, dated like a user version, or from
 // the start of a later business day under the Organisation's timezone; never earlier. A required setting is never
 // removed: no version ends without another following it, and a rejection changes nothing in force. Validation for live
-// use by a person who did not enter the values (V-04, DM-6) stays with S1-F04.
+// use by a person who did not enter the values (V-04, DM-6) is policy 2's, through the policy gate (queries/validity.ts;
+// S1-F04-T01).
 
 const SETTING = lockTable('access', 'setting');
 const SETTING_VERSION = lockTable('access', 'setting_version');
@@ -50,13 +52,18 @@ function isSettingKey(key: string): key is AccessSettingKey {
 }
 
 export class SecuritySettingsChanges {
-  constructor(private readonly audit: AuditInterface) {}
+  constructor(
+    private readonly audit: AuditInterface,
+    private readonly origins?: Pick<ConfigurationInterface, 'originRefusal'>,
+  ) {}
 
   /**
    * Prepares a new version of one essential security setting and requests its approval, in one transaction (9.1).
    * Refused while the Organisation's timezone is not set, and for a start date that is not later than today: a version
-   * never starts in the past (code-house-rules 7.3). A request open on an earlier version of the same setting is
-   * Superseded (9.6). The setting's row is written with its first version, for an Organisation set up without it.
+   * never starts in the past (code-house-rules 7.3), and for an origin this environment does not accept: synthetic
+   * outside local work, tests and `dev`, test-setup outside `kdps-test` (code-house-rules 12.14; RR-401). A request
+   * open on an earlier version of the same setting is Superseded (9.6). The setting's row is written with its first
+   * version, for an Organisation set up without it.
    */
   async prepare(
     context: TransactionContext,
@@ -71,6 +78,8 @@ export class SecuritySettingsChanges {
     }
     const startsOn = draft.takesEffect.kind === 'from-date' ? draft.takesEffect.date : null;
     if (startsOn !== null && startsOn <= date.date) return refusal('refused', 'access.starts-in-past');
+    const notAccepted = this.origins?.originRefusal(context, draft.origin);
+    if (notAccepted !== undefined) return { kind: 'refusal', refusal: notAccepted };
     const value = SETTING_SCHEMAS[draft.setting].parse(draft.value);
     // A second first preparation waits here at the setting's unique key for the first, then finds its row: the
     // insert does nothing and the read below, a statement of its own, sees the row committed (code-house-rules 8.1).

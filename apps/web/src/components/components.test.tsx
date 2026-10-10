@@ -76,9 +76,26 @@ describe('UnavailableState (design-language 10.17; PRD-UXP-003)', () => {
       />,
     );
     expect(text(html)).toBe(
-      '! Live action unavailable 2 things are missing The policy it depends on is not signed, or its values are not configured. None of your role assignments covers the record’s scope. See Setup › Policy readiness',
+      '! Live action unavailable 2 things are missing Policy 2 · Permissions and approvals is not signed. None of your role assignments covers the record’s scope. See Setup › Policy readiness',
     );
     expect(html).toContain('bg-w-bg');
+  });
+
+  it('PRD-SEC-017 names the policy by number and name, what it lacks, and links to it on Policy readiness (S1-F04-T01)', () => {
+    const html = renderToStaticMarkup(
+      <UnavailableState
+        missing={[
+          { kind: 'capability', capability: 'test-syn-gate.feature' },
+          { kind: 'policy', policy: '14', lacks: 'signature' },
+          { kind: 'policy', policy: '14', lacks: 'validation' },
+          { kind: 'activity', activity: 'receiving', placeType: 'site', placeId: 'x' },
+        ]}
+      />,
+    );
+    expect(text(html)).toBe(
+      '! Live action unavailable 4 things are missing The capability test-syn-gate.feature is switched off. Policy 14 · Opening and cutover is not signed. Policy 14 · Opening and cutover: its real values are not validated by a person who did not enter them. Receiving is not granted to the Site x. See Setup › Policy readiness',
+    );
+    expect(html).toContain('href="/setup/policy-readiness?policy=14"');
   });
 
   it('PRD-UXP-003 names the place a scope stops short of, by its code (S1-F02-T03)', () => {

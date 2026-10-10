@@ -280,6 +280,26 @@ export const accessApprovalCodes = declareCodes({
 });
 
 /**
+ * The codes of `configuration` (module-map 4.4; access-and-approvals 7.1 step 2; code-house-rules 12.3, 12.14;
+ * PRD-SEC-017, PRD-UXP-003; S1-F04-T01): the policy gate and the policy status behind it.
+ *
+ * - `configuration.operation-unavailable`: Available refuses a policy-dependent operation, naming in `missing` the
+ *   capability, the policy and what it lacks, the configured records, or the activity and the place.
+ * - `configuration.operation-not-found`: no module declared an operation of that code.
+ * - `configuration.capability-not-found`: no declared operation uses a capability of that code.
+ * - `configuration.origin-not-allowed`: a value of that origin is not accepted in this environment: synthetic outside
+ *   local work, tests and `dev`, or on an Organisation that is not synthetic; test-setup outside `kdps-test` (12.14).
+ * - `configuration.validator-entered-values`: the person validating a policy's values entered some of them (DM-6).
+ */
+export const configurationCodes = declareCodes({
+  'configuration.operation-unavailable': 'unavailable',
+  'configuration.operation-not-found': 'not-found',
+  'configuration.capability-not-found': 'not-found',
+  'configuration.origin-not-allowed': 'refused',
+  'configuration.validator-entered-values': 'refused',
+});
+
+/**
  * The codes of `inbox` (access-and-approvals 9.4, 11.3; module-map 4.8; S1-F05-T02): routing of approvals and tasks.
  *
  * - `inbox.action-type-not-routable`: no approval rule, or registered task, has the action type.
@@ -617,6 +637,7 @@ export const errorCodes = {
   ...exceptionsCodes,
   ...inboxCodes,
   ...merchandiseCodes,
+  ...configurationCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
