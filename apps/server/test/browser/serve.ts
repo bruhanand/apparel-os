@@ -1307,6 +1307,20 @@ await grantSynthetic(
   ],
   { fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })) },
 );
+// The mapping rule journey's own Booking user, so the two journeys never share an authenticator (S1-F06-T03).
+const ruleBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-RULE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: ruleBooking.id }, [
+  { recordType: 'files_imports.import_batch', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'create' },
+  // Approve too, so the panel refuses their own proposal as their own, not for a missing permission (POL-02.07).
+  { recordType: 'files_imports.mapping_rule', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
 // A different person who confirms them from My work (6.4; POL-02.07; S1-F06-T03). Who confirms is KDPS's (RR-197).
 const intakeConfirmer = await writeSyntheticUser(postingDatabase, postingCode, keys, {
   label: 'BROWSER-INTAKE-CONFIRMER',
@@ -1321,6 +1335,7 @@ await grantSynthetic(postingDatabase, { kind: 'user', id: intakeConfirmer.id }, 
   { recordType: 'files_imports.mapping_rule', action: 'view' },
   { recordType: 'files_imports.mapping_rule', action: 'approve' },
   { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
 ]);
 const intakeSuffix = randomBytes(3).toString('hex').toUpperCase();
 const intakeStyle = syntheticCode(`JOURNEY-INTAKE-STYLE-${intakeSuffix}`);
@@ -1950,6 +1965,7 @@ writeFileSync(
       layoutOption: `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED version 1 · ${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED version 1 (Confirmed)`,
       styleCode: intakeStyle,
       skuCode: intakeSku,
+      ruleBooking: credentialsOf(ruleBooking),
       confirmer: credentialsOf(intakeConfirmer),
       brandCode: intakeBrand.code,
       today: postingFixture.today(),

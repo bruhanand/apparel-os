@@ -200,6 +200,8 @@ export interface SyntheticWorld {
     readonly layoutOption: string;
     readonly styleCode: string;
     readonly skuCode: string;
+    /** A Booking user of the mapping rule journey, apart from the intake one, so each signs in on its own. */
+    readonly ruleBooking: EnrolledUser;
     /** A different person who confirms layouts, mappings and mapping rules (S1-F06-T03). */
     readonly confirmer: EnrolledUser;
     /** The SYNTHETIC brand code a mapping rule may target, and today as a business date. */

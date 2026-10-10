@@ -39,7 +39,7 @@ test('PRD-IMP-008 POL-02.07 a Booking user proposes a mapping rule; their own co
   const confirmer = await confirmerContext.newPage();
   try {
     await test.step('the Booking user proposes a rule mapping a word to the brand', async () => {
-      await signedIn(booking, world.organisationCode, world.booking);
+      await signedIn(booking, world.organisationCode, world.ruleBooking);
       await openRules(booking);
       await booking.getByRole('button', { name: 'Propose a mapping rule' }).click();
       const drawer = booking.getByRole('dialog', { name: 'Propose a mapping rule' });
