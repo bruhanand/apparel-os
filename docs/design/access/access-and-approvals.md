@@ -61,6 +61,7 @@ It fixes no person, role holder, scope, limit, allowlist, reason, owner or due t
 - A cloned or restored device cannot continue the identity (`PRD-OFF-010`). How a device proves its identity is the offline counter design (GC-8).
 - Offline delegation has a bounded expiry instead of instant revocation (`PRD-SEC-008`, `PRD-OFF-003`).
 - **As built** (`S1-F12-T01`). `access` registers a device for its owning module (`pos`, for a billing device), Setting up, enrols it by binding its public key once after checking its signature over a one-time challenge, Active, and checks its proof at sign-in; registration and enrolment write the `device-registered` and `device-enrolled` access records. The records, the challenge and the signed text are offline-counter 3.6.
+- **As built** (`S1-F12-T02`). `access` ends a device for its owning module, Revoked (lost) or Ended (retired), both final; in the same transaction it revokes every session bound to the device, of whichever user, so each one's next request is not signed in (15 test 5), and writes the `device-revoked` or `device-ended` access record; revocation publishes `access.device-revoked` (offline-counter 3.7).
 
 ## 3. Sign-in and sessions
 

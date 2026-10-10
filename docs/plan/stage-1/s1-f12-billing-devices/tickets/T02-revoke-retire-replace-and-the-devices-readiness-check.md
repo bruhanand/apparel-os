@@ -1,6 +1,6 @@
 # S1-F12-T02 — Revoke, retire, replace and the devices readiness check
 
-Status: blocked
+Status: in-progress
 Blocked by: S1-F12-T01; S1-F04-T02 (the readiness checks this ticket adds the devices check to)
 Feature: [S1-F12 Billing devices and device bill series](../../spec.md)
 
@@ -32,3 +32,8 @@ The end of a device's life, its series following its units and their mappings, a
 - Test 8 follows the product owner's answer of 6 Oct 2026 (DEC-116): enrolment without a format or financial-year dates succeeds and defines no series, and this check fails naming what is missing.
 - Revoking or retiring an offline counter (pause, queue reconciliation, release) and releasing a lost counter's protected quantity (GC8-1) are stage 4 (`S4-F11`).
 - Live gates as in S1-F12-T01: RR-060, RR-101 (V-40).
+- **Built** on `s1/f12-t02` (10 Oct 2026); as built in offline-counter 3.7 and 5.2, module-map 4.16 and 4.17, access-and-approvals 2.4, numbering-and-audit 5.1, deployment.md section 3. GC-8 14.1 tests 3, 5, 6, 7, 8 (the check's part; enrolment's part is T01's), 9, 10 and 12, numbering-and-audit 7 test 4 for device series and access-and-approvals 15 test 5 for devices pass (`apps/server/test/billing-devices.int.test.ts`, `apps/web/e2e/billing-devices.spec.ts`).
+- **Also built here** (RR-420, assigned to `S1-F12`): the `app` service serves `apps/counter/dist` at `/counter/`, with its own cache rules, `/counter/golden/` refused, and the content security policy checked in the devices journey, which enrols a device in the counter on the one origin. RR-420 closed.
+- **Settled with the code, beyond the ticket's words** (each written into the design): the devices check is a unit's check (`devices`, selling only), not the Site's, correcting module-map 4.16's as-built note, which placed it among the Site's shared checks; every Active device listing the unit needs the Open series (offline-counter 11's "each such device", which the ticket words as "at least one ... and has"); devices Setting up do not count; a device Setting up may be revoked or retired; a retirement revokes the device's sessions as a revocation does; a replacement registers the new device in the same transaction with `replaces_device_id` (migration 0060) and needs both create and edit; unit changes are dated rows ended earlier (migration 0060's guard), one change per start date (`pos.unit-change-scheduled`); `numbering` gained a read of series by scope-key prefix; a new access record kind `device-ended` (migration 0059); `organisation` exports `mappingVersionStart`; the `pos` service identity and the consumer `pos.define-series-for-mapping`.
+- **Not built here**: the "not available yet" answer the ticket says this check replaces never existed in `S1-F04-T02`'s code (it had no devices check at all), so nothing was replaced. Revoking an offline counter, and releasing a lost counter's protected quantity (GC8-1), stay `S4-F11`.
+- **Deploy notes** (for the go-ahead to merge): the `dev` worker's `AOS_WORKER_SETTINGS` needs a retry entry for `pos.define-series-for-mapping` before the worker deploys, and `add-service-identities` must run for each `dev` Organisation after the deploy to give it the `pos` identity (railway-roles-runbook).

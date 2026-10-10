@@ -157,7 +157,7 @@ The access record logs sign-ins, permission changes and sensitive access (`PRD-S
 
 - sign-in attempts and their outcome, a test sign-in of `local` and `dev` as its own kind, `demo-sign-in` ([access-and-approvals.md](../access/access-and-approvals.md) 3.4; DEC-121); sign-out; a session locked, ended or revoked;
 - enrolment and reset of the second factor; password changes and resets, including the platform operator's recovery of a first user's password or authenticator, with how the person's identity was verified ([access-and-approvals.md](../access/access-and-approvals.md) 3.2; DEC-116);
-- device registration, enrolment (`device-enrolled`, offline-counter 3.6; `S1-F12-T01`) and revocation;
+- device registration, enrolment (`device-enrolled`, offline-counter 3.6; `S1-F12-T01`), revocation and retirement (`device-ended`, offline-counter 3.7; `S1-F12-T02`);
 - permission changes, each pointing to its audit record ([access-and-approvals.md](../access/access-and-approvals.md) 9.11);
 - sensitive access: showing an encrypted field unmasked, and an export that includes any restricted field. **Design choice.**
 
