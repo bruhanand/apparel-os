@@ -10,7 +10,7 @@ export type { FileStore, FileStoreHandle } from './file-store/file-store.js';
 export { FILE_STORE_VARIABLES } from './file-store/s3-file-store.js';
 // The import handler contract the target modules implement and register at start (imports-and-opening-data 13.2;
 // module-map 4.7; S1-F06-T01), and the batch code kind the composition root hands to `numbering` (GC9-9).
-export { IMPORT_HANDLERS, ImportHandlers } from './contracts/import-handlers.js';
+export { IMPORT_HANDLERS, ImportHandlers, knownValue } from './contracts/import-handlers.js';
 export type {
   HandlerDocument,
   HandlerPublished,
@@ -18,7 +18,13 @@ export type {
   ImportField,
   ImportHandler,
   ImportPublisher,
+  ImportReview,
   ImportSource,
 } from './contracts/import-handlers.js';
 export type { StagedValue, SuppliedOrigin } from './domain/staging.js';
+export type { EffectiveValue } from './domain/report.js';
+// The approval rules and decision effects of layout, mapping and mapping rule versions (imports-and-opening-data 6.4;
+// S1-F06-T03), and the event a confirmation emits (13.3).
+export { filesImportsApprovals } from './commands/effects.js';
+export { mappingConfirmed } from './events.js';
 export { IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY } from './domain/batch-code.js';

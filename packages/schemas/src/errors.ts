@@ -471,6 +471,41 @@ export const inboxCodes = declareCodes({
  *   `missing` names are built (S1-F06-T01; PRD-SEC-017).
  * - `files-imports.document-refused`: the target's handler refused a document at publishing; `missing` names the
  *   document and the handler's reason.
+ *
+ * Layouts, mappings, mapping rules and the validation report (S1-F06-T03; imports-and-opening-data 3.2, 5, 6, 8,
+ * 13.1, 13.2):
+ *
+ * - `files-imports.layout-code-taken` / `files-imports.mapping-code-taken`: another layout or mapping has the code.
+ * - `files-imports.mapping-not-found`: the mapping named does not exist.
+ * - `files-imports.mapping-field-unknown`: the mapping fills a field the target's handler does not have; `missing`
+ *   names it.
+ * - `files-imports.mapping-column-unknown`: the mapping reads a column its layout version does not name, or one it
+ *   ignores; `missing` names it.
+ * - `files-imports.mapping-encrypted-column`: the mapping fills a field from a column of an encrypted class that the
+ *   field does not hold (section 11); `missing` names the column and class.
+ * - `files-imports.rule-attribute-unknown`: no handler of the attribute's target has that field.
+ * - `files-imports.rule-target-refused`: the handler that owns the target does not accept it (6.3); `missing` says why.
+ * - `files-imports.rule-scope-not-found`: the layout a layout-scope rule names does not exist.
+ * - `files-imports.rule-conflict`: a Confirmed version of the same rule, in force on overlapping dates, has another
+ *   target (6.3, 15.1); `missing` names it.
+ * - `files-imports.proposal-not-found` / `files-imports.proposal-not-open`: the version decided does not exist, or is
+ *   no longer Proposed.
+ * - `files-imports.layout-version-rejected`: a batch never starts with a Rejected layout or mapping version (6.4).
+ * - `files-imports.batch-not-open`: the batch is Published or Failed, and is never edited (3.2).
+ * - `files-imports.staged-row-not-found` / `files-imports.document-not-found` / `files-imports.issue-not-found`: not
+ *   of this batch, or not visible to the reader.
+ * - `files-imports.field-unknown`: the target's handler has no such field.
+ * - `files-imports.document-not-staged`: the document is published, so it is neither excluded nor put back.
+ * - `files-imports.ai-suggestions-unavailable`: AI drafts arrive with the AI gateway, switched off by default as a
+ *   capability control (section 5; DEC-105, PRD-SEC-017); `missing` names the capability.
+ * - `files-imports.not-validated-at-this-version`: the batch's report is not of its current version; validate again.
+ * - `files-imports.blocking-issues-remain` / `files-imports.warnings-not-seen`: Submit for review refuses a batch with
+ *   Blocking issues, or with Warnings nobody marked seen (8.2, 13.1); `missing` counts them.
+ * - `files-imports.already-submitted`: the batch version is already submitted.
+ * - `files-imports.review-missing`: Publish needs the batch version submitted, and where its handler requires one,
+ *   an approval decision of that version (3.1 step 8, 13.1).
+ * - `files-imports.version-not-confirmed`: Publish needs the batch's layout and mapping versions Confirmed (6.4).
+ * - `files-imports.not-a-warning`: only a Warning is marked seen (8.2).
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -492,6 +527,33 @@ export const filesImportsCodes = declareCodes({
   'files-imports.batch-not-validated': 'refused',
   'files-imports.publishing-limited': 'unavailable',
   'files-imports.document-refused': 'refused',
+  'files-imports.layout-code-taken': 'refused',
+  'files-imports.mapping-code-taken': 'refused',
+  'files-imports.mapping-not-found': 'not-found',
+  'files-imports.mapping-field-unknown': 'refused',
+  'files-imports.mapping-column-unknown': 'refused',
+  'files-imports.mapping-encrypted-column': 'refused',
+  'files-imports.rule-attribute-unknown': 'refused',
+  'files-imports.rule-target-refused': 'refused',
+  'files-imports.rule-scope-not-found': 'not-found',
+  'files-imports.rule-conflict': 'refused',
+  'files-imports.proposal-not-found': 'not-found',
+  'files-imports.proposal-not-open': 'refused',
+  'files-imports.layout-version-rejected': 'refused',
+  'files-imports.batch-not-open': 'refused',
+  'files-imports.staged-row-not-found': 'not-found',
+  'files-imports.document-not-found': 'not-found',
+  'files-imports.issue-not-found': 'not-found',
+  'files-imports.field-unknown': 'refused',
+  'files-imports.document-not-staged': 'refused',
+  'files-imports.ai-suggestions-unavailable': 'unavailable',
+  'files-imports.not-validated-at-this-version': 'refused',
+  'files-imports.blocking-issues-remain': 'refused',
+  'files-imports.warnings-not-seen': 'refused',
+  'files-imports.already-submitted': 'refused',
+  'files-imports.review-missing': 'refused',
+  'files-imports.version-not-confirmed': 'refused',
+  'files-imports.not-a-warning': 'refused',
 });
 
 /**

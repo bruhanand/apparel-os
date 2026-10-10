@@ -1,11 +1,18 @@
-import type { FieldClass, ImportBatchState, ImportKind } from '@apparel-os/schemas';
-import { bigint, boolean, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type {
+  FieldClass,
+  ImportBatchState,
+  ImportKind,
+  IssueSeverity,
+  MappingRuleScope,
+  ValueSuggestion,
+} from '@apparel-os/schemas';
+import { bigint, boolean, customType, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { GridCell, GridNote } from '../domain/grid.js';
 import type { OutcomeCounts, OutcomeDocument } from '../domain/outcome.js';
-import type { StagedRowDraft, StagedValue } from '../domain/staging.js';
+import type { SheetSummary, StagedRowDraft, StagedValue } from '../domain/staging.js';
 
 // Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0024, 0055) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0024, 0055, 0057) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
@@ -13,6 +20,15 @@ const filesImports = pgSchema('files_imports');
 type VersionState = 'Proposed' | 'Confirmed' | 'Rejected';
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+const daterange = customType<{ data: string; driverData: string }>({ dataType: () => 'daterange' });
+
+/** The scope facts a batch's documents, rows, entries, issues and totals copy from their batch (15.1; 0057). */
+const scopeColumns = () => ({
+  legalEntityId: uuid('legal_entity_id'),
+  siteId: uuid('site_id'),
+  storeId: uuid('store_id'),
+  businessUnitId: uuid('business_unit_id'),
+});
 
 /** One row for each distinct content; the object it names is encrypted and written once (imports 15.1). */
 export const storedFile = filesImports.table('stored_file', {
@@ -134,6 +150,15 @@ export const importBatch = filesImports.table('import_batch', {
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The batch version: a new one when a value is entered or a document excluded or put back (3.2; 0057). */
+  versionId: uuid('version_id').notNull(),
+  /** The version submitted for review, which Publish needs (13.1). */
+  submittedVersionId: uuid('submitted_version_id'),
+  /** The sheets the reader found, with their state and row counts (8.1). */
+  sheets: jsonb('sheets').$type<SheetSummary[]>().notNull(),
+  /** The supplier or brand the file comes from, whose mapping rules apply (6.3). */
+  sourceSupplierId: uuid('source_supplier_id'),
+  sourceBrandId: uuid('source_brand_id'),
 });
 
 /** A document inside a batch: the unit of publishing (2). */
@@ -144,6 +169,9 @@ export const importDocument = filesImports.table('import_document', {
   state: text('state').$type<'Staged' | 'Published'>().notNull(),
   publishedAt: at('published_at'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** Excluded from publishing, while Staged (3.2; 0057). */
+  excluded: boolean('excluded').notNull(),
+  ...scopeColumns(),
 });
 
 /** One row of the file with every original cell and its normalised values (section 5). */
@@ -153,10 +181,94 @@ export const stagedRow = filesImports.table('staged_row', {
   documentId: uuid('document_id'),
   sheet: text('sheet').notNull(),
   rowNumber: integer('row_number').notNull(),
-  role: text('role').$type<StagedRowDraft['role']>().notNull(),
+  /** A row's role; `ignored` is a row of a batch staged before S1-F06-T03 gave rows their roles (6.6). */
+  role: text('role').$type<StagedRowDraft['role'] | 'ignored'>().notNull(),
   hidden: boolean('hidden').notNull(),
   cells: jsonb('cells').$type<GridCell[]>().notNull(),
   values: jsonb('values').$type<Record<string, StagedValue>>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+  ...scopeColumns(),
+});
+
+/** A mapping rule: one source word of one attribute in one scope (6.3; 0057). */
+export const mappingRule = filesImports.table('mapping_rule', {
+  id: uuid('id').primaryKey(),
+  attribute: text('attribute').notNull(),
+  scopeKind: text('scope_kind').$type<MappingRuleScope['kind']>().notNull(),
+  scopeId: uuid('scope_id'),
+  word: text('word').notNull(),
+  normalisedWord: text('normalised_word').notNull(),
+  caseSensitive: boolean('case_sensitive').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A mapping rule's versions: a target for its dates, Proposed, Confirmed or Rejected (6.3, 6.4). */
+export const mappingRuleVersion = filesImports.table('mapping_rule_version', {
+  id: uuid('id').primaryKey(),
+  mappingRuleId: uuid('mapping_rule_id').notNull(),
+  target: text('target').notNull(),
+  validDuring: daterange('valid_during').notNull(),
+  state: text('state').$type<VersionState>().notNull(),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id'),
+  decidedAt: at('decided_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A value entered by a person in a staged row (section 5; 0057). */
+export const stagedValueEntry = filesImports.table('staged_value_entry', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  stagedRowId: uuid('staged_row_id').notNull(),
+  field: text('field').notNull(),
+  value: text('value').notNull(),
+  reason: text('reason').notNull(),
+  suggestion: jsonb('suggestion').$type<ValueSuggestion>(),
+  batchVersionId: uuid('batch_version_id').notNull(),
+  enteredByUserId: uuid('entered_by_user_id').notNull(),
+  enteredAt: at('entered_at').notNull(),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A row issue of the validation report (8.2; 0057). */
+export const rowIssue = filesImports.table('row_issue', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  batchVersionId: uuid('batch_version_id').notNull(),
+  runAt: at('run_at').notNull(),
+  documentId: uuid('document_id'),
+  stagedRowId: uuid('staged_row_id'),
+  sheet: text('sheet'),
+  rowNumber: integer('row_number'),
+  columnLetters: text('column_letters'),
+  field: text('field'),
+  class: text('class').notNull(),
+  severity: text('severity').$type<IssueSeverity>().notNull(),
+  code: text('code').notNull(),
+  correction: text('correction').notNull(),
+  rule: text('rule').notNull(),
+  original: jsonb('original').$type<string>(),
+  restrictedClass: text('restricted_class').$type<FieldClass>(),
+  missing: jsonb('missing').$type<{ kind: string; [field: string]: string }[]>().notNull(),
+  seenByUserId: uuid('seen_by_user_id'),
+  seenAt: at('seen_at'),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A control total reported against the sum of the lines (8.1; 0057). */
+export const controlTotal = filesImports.table('control_total', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  batchVersionId: uuid('batch_version_id').notNull(),
+  runAt: at('run_at').notNull(),
+  sheet: text('sheet').notNull(),
+  rowNumber: integer('row_number').notNull(),
+  columnName: text('column_name').notNull(),
+  reported: text('reported'),
+  summed: text('summed'),
+  ...scopeColumns(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

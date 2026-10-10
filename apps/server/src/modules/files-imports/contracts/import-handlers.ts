@@ -1,16 +1,16 @@
-import type { DocumentPreview, ImportKind, PermissionAction } from '@apparel-os/schemas';
+import type { DocumentPreview, ImportKind, PermissionAction, ValueSuggestion } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
-import type { StagedValue } from '../domain/staging.js';
+import type { EffectiveValue } from '../domain/report.js';
 
 // The import handler contract (imports-and-opening-data 13.2; module-map 4.7 "Register an import handler", section 3
 // rule 6; structure-and-masters 7). files-imports never writes another module's records (PRD-MOD-002): a target
 // module registers a handler at start, and Publish hands it the reviewed rows in the transaction it is given. A contract
 // files-imports defines and the target module implements: files-imports never depends on that module.
 //
-// As built for the tracer (S1-F06-T01): the record type, the kinds and effects, the fields of a staged row, the
-// permission its publish needs, a preview that writes nothing, and publish. Reference checks, suggestions, mapping-rule
-// checks and the review a handler requires are S1-F06-T03's; the scope of its source identity and governed revisions
-// S1-F06-T04's.
+// As built (S1-F06-T01, S1-F06-T03): the record type, the kinds and effects, the fields of a staged row, the
+// permission its publish needs, the review it requires, a preview that writes nothing and runs its reference checks,
+// suggestions from its own records, the check of a mapping rule whose target it owns, and publish. The scope of its
+// source identity and governed revisions are S1-F06-T04's.
 
 /** One field of the handler's staged row: its name and whether a document needs it known (PRD-MOD-015). */
 export interface ImportField {
@@ -18,13 +18,27 @@ export interface ImportField {
   readonly required: boolean;
 }
 
-/** A staged row as the handler is given it: its values, each Supplied with its origin or Unknown. */
+/**
+ * A staged row as the handler is given it: its values, each with its origin (Supplied, Calculated, Mapped, Entered by a
+ * person) or Unknown. A person's entry stands for the value staged from the file (section 5).
+ */
 export interface HandlerRow {
   readonly stagedRowId: string;
   readonly sheet: string;
   readonly rowNumber: number;
-  readonly values: Readonly<Record<string, StagedValue>>;
+  readonly values: Readonly<Record<string, EffectiveValue>>;
 }
+
+/** The value a handler reads from a staged value: the known text, or undefined when Unknown (PRD-MOD-015). */
+export function knownValue(value: EffectiveValue | undefined): string | undefined {
+  return value === undefined || value.kind === 'unknown' ? undefined : value.value;
+}
+
+/**
+ * The review a handler requires (3.1 step 8, 13.2): the preparer's submission after the preview, where the records it
+ * creates have their own approvals; or an approval rule in `access` bound to the exact batch version.
+ */
+export type ImportReview = { readonly kind: 'submission' } | { readonly kind: 'approval'; readonly actionType: string };
 
 /** One document of a batch, with its data rows. */
 export interface HandlerDocument {
@@ -71,6 +85,18 @@ export interface ImportHandler {
    * checks as a person's change (structure-and-masters 7; module-map section 3, rule 8).
    */
   readonly publishNeeds: { readonly action: PermissionAction; readonly recordType: string };
+  /** The review it requires (3.1 step 8). */
+  readonly review: ImportReview;
+  /**
+   * Exact or close matches for a field's value from its own records, for a person to accept (section 5; PRD-IMP-009):
+   * codes through Resolve a code, words by trigram search. None where the field has none.
+   */
+  suggestions(context: TransactionContext, field: string, value: string | undefined): Promise<ValueSuggestion[]>;
+  /**
+   * The check of a mapping rule's target for one of its fields (6.3): undefined when it accepts the target, the
+   * refusal otherwise; `files-imports.rule-attribute-unknown` for a field that takes no rule.
+   */
+  checkRuleTarget(context: TransactionContext, field: string, target: string): Promise<CommandRefusal | undefined>;
   /** What the document would create, worked out without writing; or the issues that stop it (3.1 step 7). */
   preview(context: TransactionContext, document: HandlerDocument): Promise<DocumentPreview>;
   /** Writes its records in the transaction it is given, whole or not at all (PRD-IMP-012). */
@@ -96,6 +122,11 @@ export class ImportHandlers {
   for(target: string, kind: ImportKind): ImportHandler | undefined {
     const handler = this.handlers.get(target);
     return handler?.kinds.includes(kind) === true ? handler : undefined;
+  }
+
+  /** The handler of a target, whatever kind it accepts. */
+  ofTarget(target: string): ImportHandler | undefined {
+    return this.handlers.get(target);
   }
 }
 

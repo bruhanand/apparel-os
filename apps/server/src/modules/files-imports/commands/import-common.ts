@@ -1,6 +1,14 @@
-import { fieldClassSchema, type DocumentPreview, type FieldClass } from '@apparel-os/schemas';
-import { asc, eq } from 'drizzle-orm';
-import { z } from 'zod';
+import {
+  fieldClassSchema,
+  layoutStructureSchema,
+  mappingFieldsSchema,
+  type DocumentPreview,
+  type FieldClass,
+  type LayoutStructure,
+  type StagedValueView,
+} from '@apparel-os/schemas';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import type { z } from 'zod';
 import {
   CommandDefect,
   scopeFactsOf,
@@ -16,12 +24,20 @@ import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import type { HandlerDocument, ImportHandler, ImportHandlers } from '../contracts/import-handlers.js';
-import { importBatch, importDocument, stagedRow } from '../db/schema.js';
-import type { LayoutStructure, MappingFields } from '../domain/staging.js';
+import {
+  importBatch,
+  importDocument,
+  layoutVersion,
+  mappingVersion,
+  stagedRow,
+  stagedValueEntry,
+} from '../db/schema.js';
+import type { EffectiveValue } from '../domain/report.js';
 import type { FileStoreHandle } from '../file-store/file-store.js';
 
-// What the import commands share (imports-and-opening-data 3.1, 13.1, 13.2; S1-F06-T01): their dependencies, the
-// batch as its reader may see it, its documents for the handler, and the preview of a document.
+// What the import commands share (imports-and-opening-data 3.1, 5, 11, 13.1, 13.2; S1-F06-T01, S1-F06-T03): their
+// dependencies, the batch as its reader may see it, its documents for the handler with each value a person entered
+// standing for the value staged from the file, and the preview of a document.
 
 export interface ImportDependencies {
   readonly runner: CommandRunner;
@@ -44,30 +60,7 @@ export interface ImportActor {
   readonly correlationId: string;
 }
 
-/** The stored layout structure, checked when read (6.1); a row that fails it is a defect, never data. */
-export const layoutStructureSchema: z.ZodType<LayoutStructure> = z.strictObject({
-  shape: z.literal('layout-version/1'),
-  format: z.literal('xlsx'),
-  sheet: z.string().min(1),
-  headerRow: z.number().int().positive(),
-  dataStartRow: z.number().int().positive(),
-  columns: z
-    .array(
-      z.strictObject({
-        name: z.string().min(1),
-        required: z.boolean(),
-        restrictedClass: fieldClassSchema.optional(),
-      }),
-    )
-    .min(1),
-  documentReference: z.string().min(1),
-});
-
-/** The stored mapping fields, checked when read (6.2). */
-export const mappingFieldsSchema: z.ZodType<MappingFields> = z.strictObject({
-  shape: z.literal('mapping-version/1'),
-  fields: z.record(z.string(), z.strictObject({ column: z.string().min(1), transform: z.literal('text') })),
-});
+export { layoutStructureSchema, mappingFieldsSchema };
 
 export function parsedOrDefect<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   const parsed = schema.safeParse(value);
@@ -103,17 +96,86 @@ export function factsOfBatch(batch: BatchRow): AuditScope {
   });
 }
 
+/** The scope columns a batch's documents, rows, entries, issues and totals copy from it (15.1). */
+export function scopeColumnsOf(batch: {
+  readonly legalEntityId: string | null;
+  readonly siteId: string | null;
+  readonly storeId: string | null;
+  readonly businessUnitId: string | null;
+}) {
+  return {
+    legalEntityId: batch.legalEntityId,
+    siteId: batch.siteId,
+    storeId: batch.storeId,
+    businessUnitId: batch.businessUnitId,
+  };
+}
+
 export const BATCH_NOT_FOUND: CommandRefusal<'not-found'> = {
   kind: 'not-found',
   code: 'files-imports.batch-not-found',
   missing: [],
 };
 
-export interface LoadedDocument extends HandlerDocument {
-  readonly state: 'Staged' | 'Published';
+/** The layout and mapping versions a batch was started with, as stored, and their states now. */
+export async function versionsOf(context: TransactionContext, batch: BatchRow) {
+  const [layout] = await context.tx.select().from(layoutVersion).where(eq(layoutVersion.id, batch.layoutVersionId));
+  const [mapping] = await context.tx.select().from(mappingVersion).where(eq(mappingVersion.id, batch.mappingVersionId));
+  if (layout === undefined || mapping === undefined)
+    throw new CommandDefect('A batch names a version that is not there');
+  return {
+    layout,
+    mapping,
+    structure: parsedOrDefect(layoutStructureSchema, layout.structure, 'layout version'),
+    fields: parsedOrDefect(mappingFieldsSchema, mapping.fields, 'mapping version'),
+  };
 }
 
-/** A batch's documents with their data rows, in the file's order. */
+export type EntryRow = typeof stagedValueEntry.$inferSelect;
+
+/** A value a person entered, as its reader is served it, standing for the value staged from the file (section 5). */
+export function enteredView(entry: EntryRow, staged: EffectiveValue | undefined): StagedValueView {
+  return {
+    kind: 'entered',
+    value: entry.value,
+    entry: {
+      entryId: entry.id,
+      enteredByUserId: entry.enteredByUserId,
+      enteredAt: entry.enteredAt.toISOString(),
+      reason: entry.reason,
+      ...(entry.suggestion === null ? {} : { suggestion: entry.suggestion }),
+    },
+    staged: staged === undefined || staged.kind === 'entered' ? { kind: 'unknown' } : staged,
+  };
+}
+
+/** The latest entry of each field of each row, by the entries' order (UUIDv7, so time order). */
+export function latestEntries(entries: readonly EntryRow[]): Map<string, Map<string, EntryRow>> {
+  const byRow = new Map<string, Map<string, EntryRow>>();
+  for (const entry of [...entries].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    const fields = byRow.get(entry.stagedRowId) ?? new Map<string, EntryRow>();
+    fields.set(entry.field, entry);
+    byRow.set(entry.stagedRowId, fields);
+  }
+  return byRow;
+}
+
+/** A row's values with each entered value standing for the staged one (section 5). */
+export function effectiveValues(
+  values: Readonly<Record<string, EffectiveValue>>,
+  entries: ReadonlyMap<string, EntryRow> | undefined,
+): Record<string, EffectiveValue> {
+  const result: Record<string, EffectiveValue> = { ...values };
+  for (const [field, entry] of entries ?? []) result[field] = { kind: 'entered', value: entry.value };
+  return result;
+}
+
+export interface LoadedDocument extends HandlerDocument {
+  readonly state: 'Staged' | 'Published';
+  readonly excluded: boolean;
+}
+
+/** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
 export async function documentsOf(context: TransactionContext, batchId: string): Promise<LoadedDocument[]> {
   const documents = await context.tx
     .select()
@@ -123,16 +185,41 @@ export async function documentsOf(context: TransactionContext, batchId: string):
   const rows = await context.tx
     .select()
     .from(stagedRow)
-    .where(eq(stagedRow.batchId, batchId))
+    .where(and(eq(stagedRow.batchId, batchId), eq(stagedRow.role, 'data')))
     .orderBy(asc(stagedRow.sheet), asc(stagedRow.rowNumber));
+  const entries = latestEntries(await entriesOf(context, batchId));
   return documents.map((document) => ({
     documentId: document.id,
     reference: document.reference,
     state: document.state,
+    excluded: document.excluded,
     rows: rows
       .filter((row) => row.documentId === document.id)
-      .map((row) => ({ stagedRowId: row.id, sheet: row.sheet, rowNumber: row.rowNumber, values: row.values })),
+      .map((row) => ({
+        stagedRowId: row.id,
+        sheet: row.sheet,
+        rowNumber: row.rowNumber,
+        values: effectiveValues(row.values, entries.get(row.id)),
+      })),
   }));
+}
+
+/** Every value entered in a batch's rows. */
+export async function entriesOf(context: TransactionContext, batchId: string): Promise<EntryRow[]> {
+  return context.tx
+    .select()
+    .from(stagedValueEntry)
+    .where(eq(stagedValueEntry.batchId, batchId))
+    .orderBy(asc(stagedValueEntry.id));
+}
+
+/** The staged rows named, of the batch. */
+export async function rowsNamed(context: TransactionContext, batchId: string, ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  return context.tx
+    .select()
+    .from(stagedRow)
+    .where(and(eq(stagedRow.batchId, batchId), inArray(stagedRow.id, [...ids])));
 }
 
 /**

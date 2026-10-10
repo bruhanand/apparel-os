@@ -21,7 +21,7 @@ import {
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ImportDependencies } from './commands/import-common.js';
-import { IMPORT_HANDLERS, ImportHandlers } from './contracts/import-handlers.js';
+import { IMPORT_HANDLERS, type ImportHandlers } from './contracts/import-handlers.js';
 import { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
 import { FilesImports } from './files-imports.js';
 import { FILE_STORE, FILE_STORE_ENVIRONMENT, type FileStoreHandle } from './file-store/file-store.js';
@@ -41,7 +41,8 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
  * The files-imports module (module-map 4.7): tier 1, uses `access`, `audit`, `numbering` and `kernel`. It holds the
  * stored files, their receipts and the attachments that link a file to a record of any module as evidence
  * (S1-F06-T05), and imports: the import upload, layouts and mappings, batches with their staged rows, and publishing
- * through the handlers the target modules register at start under IMPORT_HANDLERS (S1-F06-T01). Batch codes come from
+ * through the handlers the target modules register at start under IMPORT_HANDLERS, which the composition root provides,
+ * as the import handler contract is one a lower module defines and higher ones implement (S1-F06-T01, S1-F06-T03). Batch codes come from
  * `numbering` (GC9-9). The file store is read from the environment at start: with none set, storing and reading a file
  * are unavailable and say so (nothing is on by default; code-house-rules 12.14).
  */
@@ -50,8 +51,6 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
   controllers: [FilesController, ImportsController],
   providers: [
     { provide: FILES_IMPORTS_ENVIRONMENT, useValue: process.env },
-    // The target modules' import handlers, which they register with at start (13.2; module-map 4.7).
-    { provide: IMPORT_HANDLERS, useFactory: () => new ImportHandlers() },
     {
       provide: IMPORT_DEPENDENCIES,
       useFactory: (
@@ -139,7 +138,7 @@ export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
       ],
     },
   ],
-  exports: [FILES_IMPORTS, ATTACHED_RECORD_READERS, IMPORT_HANDLERS],
+  exports: [FILES_IMPORTS, ATTACHED_RECORD_READERS],
 })
 export class FilesImportsModule implements OnApplicationShutdown {
   constructor(@Inject(FILE_STORE) private readonly fileStore: FileStoreHandle) {}

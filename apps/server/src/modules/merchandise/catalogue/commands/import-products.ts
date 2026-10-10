@@ -5,13 +5,14 @@ import {
   stockUnitSchema,
   type DocumentPreview,
   type ProductProposalDraft,
+  type ValueSuggestion,
 } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
-import type { TransactionContext } from '../../../../kernel/index.js';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
-import type { HandlerDocument, HandlerRow, ImportHandler } from '../../../files-imports/index.js';
-import { brand, category } from '../db/schema.js';
+import { knownValue, type HandlerDocument, type HandlerRow, type ImportHandler } from '../../../files-imports/index.js';
+import { brand, brandVersion, category, categoryVersion } from '../db/schema.js';
 import type { StoredProposal } from '../domain/products.js';
 import { today } from './common.js';
 import { proposalRefusal } from './product-rules.js';
@@ -22,8 +23,12 @@ import { proposeProduct } from './products.js';
 // S1-F06-T01). A document is one style with its SKUs, one staged row for each SKU; it arrives as a product proposal
 // through the catalogue's own Propose a product, so the same checks and the same confirmation by a different person
 // apply (DM-5). Identity is never filled from a guess (PRD-IMP-009): the brand and category are found by their exact
-// codes, and every value comes from the file. As built for the tracer: no attribute values, suggestions or mapping-rule
-// checks, which are S1-F06-T03's.
+// codes, and every value comes from the file, a confirmed mapping rule or a person's entry. As built with S1-F06-T03:
+// the review is the preparer's submission, since each proposal is confirmed by a different person; suggestions for the
+// brand and category codes come from the catalogue's own brands and categories, exact by code or close by trigram over
+// their codes and names (PRD Stack: Search), and for the stock unit and purpose from the values the catalogue accepts;
+// a mapping rule may target a brand or category code that exists, or a stock unit or purpose the catalogue accepts.
+// The handler has no attribute value field yet, so no vocabulary word is searched or mapped (structure-and-masters 4.1).
 
 /** The fields of the handler's staged row. Size is optional: absent, it is Unknown (4.1). */
 const FIELDS = [
@@ -39,8 +44,60 @@ const FIELDS = [
 type Issue = Extract<DocumentPreview, { kind: 'issues' }>['issues'][number];
 
 function valueOf(row: HandlerRow, field: string): string | undefined {
-  const value = row.values[field];
-  return value?.kind === 'supplied' ? value.value : undefined;
+  return knownValue(row.values[field]);
+}
+
+/** The trigram similarity below which a code or name is no close match (PRD Stack: Search). A builder's choice. */
+const CLOSE = 0.3;
+const MOST = 5;
+
+/**
+ * Exact or close matches for a brand or category code (section 5; PRD-IMP-009): the record whose code is the value;
+ * else those whose code or approved name is most like it by trigram similarity.
+ */
+async function codeSuggestions(
+  context: TransactionContext,
+  kind: 'brand' | 'category',
+  value: string | undefined,
+): Promise<ValueSuggestion[]> {
+  if (value === undefined || value === '') return [];
+  const identity = kind === 'brand' ? brand : category;
+  const version = kind === 'brand' ? brandVersion : categoryVersion;
+  const owner = kind === 'brand' ? brandVersion.brandId : categoryVersion.categoryId;
+  const exact = await context.tx.select({ code: identity.code }).from(identity).where(eq(identity.code, value));
+  if (exact.length > 0) return exact.map((row) => ({ kind: 'exact', value: row.code }));
+  const score = sql<number>`greatest(public.similarity(${identity.code}, ${value}), public.similarity(${version.name}, ${value}))`;
+  const rows = await context.tx
+    .select({ code: identity.code, name: version.name, score })
+    .from(identity)
+    .innerJoin(version, and(eq(owner, identity.id), eq(version.decision, 'Approved')))
+    .where(sql`${score} >= ${CLOSE}`)
+    .orderBy(desc(score), identity.code);
+  const seen = new Set<string>();
+  const suggestions: ValueSuggestion[] = [];
+  for (const row of rows) {
+    if (seen.has(row.code) || suggestions.length === MOST) continue;
+    seen.add(row.code);
+    suggestions.push({ kind: 'close', value: row.code, label: row.name });
+  }
+  return suggestions;
+}
+
+/** Exact or close matches among the values the catalogue accepts, such as the stock units (section 5). */
+function optionSuggestions(options: readonly string[], value: string | undefined): ValueSuggestion[] {
+  if (value === undefined || value === '') return [];
+  const said = value.toLowerCase();
+  const exact = options.filter((option) => option.toLowerCase() === said);
+  if (exact.length > 0) return exact.map((option) => ({ kind: 'exact', value: option }));
+  return options
+    .filter((option) => option.includes(said) || said.includes(option) || option.startsWith(said.slice(0, 3)))
+    .slice(0, MOST)
+    .map((option) => ({ kind: 'close', value: option }));
+}
+
+/** Whether a code names a brand or category of the catalogue. */
+async function codeExists(context: TransactionContext, kind: 'brand' | 'category', code: string): Promise<boolean> {
+  return (await idOfCode(context, kind === 'brand' ? brand : category, code)) !== undefined;
 }
 
 async function idOfCode(
@@ -126,6 +183,46 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
     effects: 'master-records',
     fields: FIELDS,
     publishNeeds: { action: 'create', recordType: PRODUCT_PROPOSAL_TYPE },
+    // Each proposal is confirmed by a different person, so the preparer's submission is the review (13.2).
+    review: { kind: 'submission' },
+    async suggestions(context, field, value) {
+      switch (field) {
+        case 'brandCode':
+          return codeSuggestions(context, 'brand', value);
+        case 'categoryCode':
+          return codeSuggestions(context, 'category', value);
+        case 'stockUnit':
+          return optionSuggestions(stockUnitSchema.options, value);
+        case 'purpose':
+          return optionSuggestions(skuPurposeSchema.options, value);
+        default:
+          return [];
+      }
+    },
+    async checkRuleTarget(context, field, target): Promise<CommandRefusal | undefined> {
+      const missing = [{ kind: 'rule-target', field, target }];
+      switch (field) {
+        case 'brandCode':
+        case 'categoryCode':
+          return (await codeExists(context, field === 'brandCode' ? 'brand' : 'category', target))
+            ? undefined
+            : { kind: 'refused', code: 'merchandise.record-not-found', missing };
+        case 'stockUnit':
+          return stockUnitSchema.safeParse(target).success
+            ? undefined
+            : { kind: 'refused', code: 'merchandise.import-value-not-accepted', missing };
+        case 'purpose':
+          return skuPurposeSchema.safeParse(target).success
+            ? undefined
+            : { kind: 'refused', code: 'merchandise.import-value-not-accepted', missing };
+        default:
+          return {
+            kind: 'refused',
+            code: 'files-imports.rule-attribute-unknown',
+            missing: [{ kind: 'rule-attribute', field }],
+          };
+      }
+    },
     async preview(context, document) {
       const drafted = await draftOf(context, document);
       if ('issues' in drafted) return { kind: 'issues', issues: drafted.issues };

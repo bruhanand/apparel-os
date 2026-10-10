@@ -5,7 +5,8 @@
 
 export { canonicalJson } from './canonical.js';
 export { type EffectiveDates, type IsoDate, isInForce } from './dates.js';
-export { type DecimalString, parseDecimal } from './numbers/decimal.js';
+export { type DecimalString, isDecimal, parseDecimal } from './numbers/decimal.js';
+export { type ImportedPaise, rupeesToPaise, sumDecimals } from './numbers/imported.js';
 export {
   type RoundingMode,
   type RoundingRule,

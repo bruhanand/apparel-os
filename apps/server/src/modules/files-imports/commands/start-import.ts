@@ -19,6 +19,7 @@ import {
   fileReceipt,
   importBatch,
   importDocument,
+  layout as layoutTable,
   layoutVersion,
   mapping,
   mappingVersion,
@@ -27,8 +28,9 @@ import {
 } from '../db/schema.js';
 import { IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY, MISSING_BATCH_SERIES } from '../domain/batch-code.js';
 import { contentHashOf, openFile } from '../domain/file-seal.js';
-import type { GridNote } from '../domain/grid.js';
-import { stage, type StagedDocumentDraft, type StagedRowDraft } from '../domain/staging.js';
+import type { Grid, GridNote } from '../domain/grid.js';
+import type { RuleInForce } from '../domain/rules.js';
+import { stage, type SheetSummary, type StagedDocumentDraft, type StagedRowDraft } from '../domain/staging.js';
 import { fileStoreNotConfigured } from '../file-store/file-store.js';
 import { readXlsx } from '../readers/xlsx-reader.js';
 import {
@@ -36,19 +38,22 @@ import {
   layoutStructureSchema,
   mappingFieldsSchema,
   parsedOrDefect,
+  scopeColumnsOf,
   type ImportActor,
   type ImportDependencies,
 } from './import-common.js';
+import { rulesInForce } from './proposals.js';
 
 // Start an import, with Map and stage (imports-and-opening-data 3.1 steps 3 to 5, 13.1, 15.1; PRD-IMP-003,
 // PRD-IMP-006, PRD-IMP-010; GC9-9; S1-F06-T01).
 //
 // In this order, so no outside call runs inside a transaction (code-house-rules 8.3): a read of the stored file, its
 // receipt, the layout and mapping versions and the target's handler; the object fetched, decrypted and checked
-// against its hash; the workbook read into the grid and staged in memory; then one transaction that holds the
-// authority, takes the batch code series, allocates the code, writes the batch, its documents and staged rows, links
-// the file to the batch, and records the audit record. As built for the tracer the work runs in the request; a large
-// file runs as a job on the worker (3.3), with S1-F06-T03 or later.
+// against its hash; the workbook read into the grid and staged in memory, with the Confirmed mapping rules in force
+// today in the batch's scopes (6.3); then one transaction that holds the authority, takes the batch code series,
+// allocates the code, writes the batch, its documents and staged rows with its scope facts, links the file to the
+// batch, and records the audit record. A Proposed layout or mapping version may stage and preview a batch; a Rejected
+// one never (6.4). The work runs in the request; a large file staged as a job on the worker (3.3) comes later.
 
 export interface StartImportInput {
   readonly actor: ImportActor;
@@ -67,6 +72,37 @@ function refuse(refusal: CommandRefusal<string>): never {
   });
 }
 
+/**
+ * The file must be an XLSX file this person handed in, under the receipt named (13.1). Starting an import on a file
+ * someone else handed in would let its content be staged and shown outside the receipt's own hand-in.
+ */
+export async function handedInFile(
+  context: TransactionContext,
+  userId: string,
+  storedFileId: string,
+  fileReceiptId: string,
+): Promise<{ readonly objectKey: string; readonly contentHash: string; readonly scheme: string }> {
+  const [file] = await context.tx
+    .select({
+      objectKey: storedFile.objectKey,
+      contentHash: storedFile.contentHash,
+      scheme: storedFile.encryptionScheme,
+      format: storedFile.format,
+    })
+    .from(storedFile)
+    .innerJoin(fileReceipt, eq(fileReceipt.storedFileId, storedFile.id))
+    .where(
+      and(
+        eq(storedFile.id, storedFileId),
+        eq(fileReceipt.id, fileReceiptId),
+        eq(fileReceipt.receivedByKind, 'user'),
+        eq(fileReceipt.receivedById, userId),
+      ),
+    );
+  if (file?.format !== 'xlsx') refuse({ kind: 'not-found', code: 'files-imports.import-file-not-found', missing: [] });
+  return { objectKey: file.objectKey, contentHash: file.contentHash, scheme: file.scheme };
+}
+
 interface Planned {
   readonly objectKey: string;
   readonly contentHash: string;
@@ -75,6 +111,8 @@ interface Planned {
   readonly classes: FieldClass[];
   readonly layout: ReturnType<typeof layoutStructureSchema.parse>;
   readonly mapping: ReturnType<typeof mappingFieldsSchema.parse>;
+  readonly layoutId: string;
+  readonly rules: readonly RuleInForce[];
 }
 
 /** The read before any outside call: what the request names, as this person may use it. */
@@ -88,37 +126,19 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       actor: { kind: 'actor', actorId: input.actor.userId },
     },
     async (context) => {
-      // The file must be an XLSX file this person handed in, under the receipt named (13.1). Starting an import on a
-      // file someone else handed in would let its content be staged and shown outside the receipt's own hand-in.
-      const [file] = await context.tx
-        .select({
-          objectKey: storedFile.objectKey,
-          contentHash: storedFile.contentHash,
-          scheme: storedFile.encryptionScheme,
-          format: storedFile.format,
-        })
-        .from(storedFile)
-        .innerJoin(fileReceipt, eq(fileReceipt.storedFileId, storedFile.id))
-        .where(
-          and(
-            eq(storedFile.id, body.storedFileId),
-            eq(fileReceipt.id, body.fileReceiptId),
-            eq(fileReceipt.receivedByKind, 'user'),
-            eq(fileReceipt.receivedById, input.actor.userId),
-          ),
-        );
-      if (file?.format !== 'xlsx') {
-        refuse({ kind: 'not-found', code: 'files-imports.import-file-not-found', missing: [] });
-      }
+      const file = await handedInFile(context, input.actor.userId, body.storedFileId, body.fileReceiptId);
       const [versions] = await context.tx
         .select({
+          layoutId: layoutTable.id,
           layoutState: layoutVersion.state,
+          mappingState: mappingVersion.state,
           structure: layoutVersion.structure,
           fields: mappingVersion.fields,
         })
         .from(mappingVersion)
         .innerJoin(mapping, eq(mapping.id, mappingVersion.mappingId))
         .innerJoin(layoutVersion, eq(layoutVersion.id, mapping.layoutVersionId))
+        .innerJoin(layoutTable, eq(layoutTable.id, layoutVersion.layoutId))
         .where(
           and(
             eq(mappingVersion.id, body.mappingVersionId),
@@ -127,6 +147,10 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
           ),
         );
       if (versions === undefined) refuse({ kind: 'not-found', code: 'files-imports.layout-not-found', missing: [] });
+      // A Rejected version never stages a batch (6.4).
+      if (versions.layoutState === 'Rejected' || versions.mappingState === 'Rejected') {
+        refuse({ kind: 'refused', code: 'files-imports.layout-version-rejected', missing: [] });
+      }
       if (deps.handlers.for(body.target, body.kind) === undefined) {
         refuse({
           kind: 'refused',
@@ -135,7 +159,17 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
         });
       }
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
+      const date = await context.businessDate();
+      if (date.kind !== 'set') {
+        refuse({
+          kind: 'unavailable',
+          code: 'access.business-date-not-set',
+          missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+        });
+      }
       return {
+        layoutId: versions.layoutId,
+        rules: await rulesInForce(context, date.date),
         objectKey: file.objectKey,
         contentHash: file.contentHash,
         scheme: file.scheme,
@@ -150,27 +184,37 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
 
 interface StagedFile {
   readonly documents: readonly StagedDocumentDraft[];
-  readonly ignored: readonly StagedRowDraft[];
+  readonly others: readonly StagedRowDraft[];
+  readonly sheets: readonly SheetSummary[];
   readonly notes: readonly GridNote[];
+}
+
+/** The stored workbook, fetched, decrypted, checked against its hash and read into the grid (9.1; 8.3). */
+export async function storedGrid(
+  deps: ImportDependencies,
+  organisationCode: string,
+  file: { readonly objectKey: string; readonly contentHash: string; readonly scheme: string },
+): Promise<Grid> {
+  if (deps.fileStore.kind === 'not-configured') throw fileStoreNotConfigured();
+  const sealed = await deps.fileStore.store.get(file.objectKey);
+  const bytes = openFile(deps.keys, organisationCode, file.contentHash, file.scheme, sealed);
+  if (contentHashOf(bytes) !== file.contentHash) throw new CommandDefect('A stored file does not match its hash');
+  const read = await readXlsx(bytes);
+  if (read.kind === 'unreadable') refuse({ kind: 'refused', code: 'files-imports.file-unreadable', missing: [] });
+  return read.grid;
 }
 
 /** Fetches, decrypts, checks, reads and stages the file, outside any transaction (code-house-rules 8.3). */
 async function staged(deps: ImportDependencies, input: StartImportInput, planned: Planned): Promise<StagedFile> {
-  if (deps.fileStore.kind === 'not-configured') throw fileStoreNotConfigured();
-  const sealed = await deps.fileStore.store.get(planned.objectKey);
-  const bytes = openFile(
-    deps.keys,
-    input.actor.organisation.organisationCode,
-    planned.contentHash,
-    planned.scheme,
-    sealed,
-  );
-  if (contentHashOf(bytes) !== planned.contentHash) throw new CommandDefect('A stored file does not match its hash');
-  const read = await readXlsx(bytes);
-  if (read.kind === 'unreadable') refuse({ kind: 'refused', code: 'files-imports.file-unreadable', missing: [] });
-  const result = stage(read.grid, planned.layout, planned.mapping);
+  const grid = await storedGrid(deps, input.actor.organisation.organisationCode, planned);
+  const source = input.body.source ?? {};
+  const result = stage(grid, planned.layout, planned.mapping, {
+    target: input.body.target,
+    rules: planned.rules,
+    scopes: { layoutId: planned.layoutId, supplierId: source.supplierId, brandId: source.brandId },
+  });
   if (result.kind === 'refused') refuse({ kind: 'refused', code: result.code, missing: [...result.missing] });
-  return { documents: result.documents, ignored: result.ignored, notes: read.grid.notes };
+  return { documents: result.documents, others: result.others, sheets: result.sheets, notes: grid.notes };
 }
 
 export async function startImport(
@@ -287,6 +331,12 @@ async function record(
     };
   }
   const scope = body.scope ?? {};
+  const columns = scopeColumnsOf({
+    legalEntityId: scope.legalEntityId ?? null,
+    siteId: scope.siteId ?? null,
+    storeId: scope.storeId ?? null,
+    businessUnitId: scope.businessUnitId ?? null,
+  });
   await context.tx.insert(importBatch).values({
     id: batchId,
     code: allocated.value.formattedText,
@@ -301,10 +351,12 @@ async function record(
     readerNotes: [...file.notes],
     startedByUserId: input.actor.userId,
     startedAt: context.startedAt,
-    legalEntityId: scope.legalEntityId ?? null,
-    siteId: scope.siteId ?? null,
-    storeId: scope.storeId ?? null,
-    businessUnitId: scope.businessUnitId ?? null,
+    ...columns,
+    versionId: uuidv7(),
+    submittedVersionId: null,
+    sheets: [...file.sheets],
+    sourceSupplierId: body.source?.supplierId ?? null,
+    sourceBrandId: body.source?.brandId ?? null,
   });
   const rows: (typeof stagedRow.$inferInsert)[] = [];
   const asRow = (row: StagedRowDraft, documentId: string | null) => ({
@@ -317,15 +369,16 @@ async function record(
     hidden: row.hidden,
     cells: [...row.cells],
     values: { ...row.values },
+    ...columns,
   });
   for (const document of file.documents) {
     const documentId = uuidv7();
     await context.tx
       .insert(importDocument)
-      .values({ id: documentId, batchId, reference: document.reference, state: 'Staged' });
+      .values({ id: documentId, batchId, reference: document.reference, state: 'Staged', excluded: false, ...columns });
     for (const row of document.rows) rows.push(asRow(row, documentId));
   }
-  for (const row of file.ignored) rows.push(asRow(row, null));
+  for (const row of file.others) rows.push(asRow(row, null));
   // Staging writes rows in sets (9.4).
   const SET = 500;
   for (let at = 0; at < rows.length; at += SET) await context.tx.insert(stagedRow).values(rows.slice(at, at + SET));
@@ -368,7 +421,7 @@ async function record(
       code: allocated.value.formattedText,
       state: 'Staged',
       documentCount: file.documents.length,
-      rowCount: dataRows + file.ignored.length,
+      rowCount: dataRows + file.others.length,
     },
     shows: 'nothing',
   };
