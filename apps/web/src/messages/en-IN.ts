@@ -1948,4 +1948,22 @@ export const englishIndia = {
   'readiness.facts.checks': 'Checks',
   'readiness.facts.zero-stock': 'Zero opening stock',
   'readiness.facts.zero-stock.none': 'Not relied on',
+  // The books part of finance (books-and-posting 2, 3, 6.3; S1-F09-T01): API only in stage 1, named for history and
+  // approvals (DEC-116).
+  'record-type.finance.account': 'Account',
+  'record-type.finance.book_setting': 'Book setting',
+  'record-type.finance.ca_approval_evidence': 'CA approval evidence',
+  'approval.action.finance.account.change': 'Account version',
+  'approval.action.finance.book_setting.change': 'Book setting version',
+  'error.finance.record-not-found': 'The book, account, setting or version named does not exist.',
+  'error.finance.code-taken': 'This book already has an account with this code.',
+  'error.finance.starts-in-past': 'A version starts today or later, never on a past date.',
+  'error.finance.version-overlaps': 'Another approved version of this record starts on the same date.',
+  'error.finance.no-ca-evidence':
+    'The CA’s approval evidence is not attached or referenced for this version yet, so it cannot take effect.',
+  'error.finance.version-not-awaiting': 'A version named is no longer awaiting its decision.',
+  'error.finance.cost-change-after-stock':
+    'This book has held stock, so its cost formula or pool mode cannot change until the CA says how value is divided at the change.',
+  'error.finance.book-stock-unanswered':
+    'Whether this book has held stock cannot be answered yet, so its cost formula or pool mode cannot change.',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

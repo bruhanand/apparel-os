@@ -303,6 +303,32 @@ export const configurationCodes = declareCodes({
 });
 
 /**
+ * The codes of `finance` · books (books-and-posting 2.2, 3.1, 6.3; S1-F09-T01).
+ *
+ * - `finance.record-not-found`: the book, account, setting or version named does not exist.
+ * - `finance.code-taken`: the book already has an account with that code (3.1).
+ * - `finance.starts-in-past`: a version never starts on a past date (6.3; GC2-7, DEC-105).
+ * - `finance.version-overlaps`: another approved version of the record starts on the same date (6.3).
+ * - `finance.no-ca-evidence`: the version has no CA approval evidence attached or referenced, so a decision gives it
+ *   no effect (6.3; POL-09.01; DEC-112, GC4-2).
+ * - `finance.version-not-awaiting`: CA evidence names a version that is no longer awaiting its decision (6.3).
+ * - `finance.cost-change-after-stock`: the version changes the formula or pool mode of a book that has held stock,
+ *   refused until the CA says how value is divided at the change; `missing` names SL-6 (2.2; stock-ledger 7.12).
+ * - `finance.book-stock-unanswered`: no implementation of "has this book held stock?" answers, so a formula or pool
+ *   change is refused (2.2; DEC-116).
+ */
+export const financeBooksCodes = declareCodes({
+  'finance.record-not-found': 'not-found',
+  'finance.code-taken': 'refused',
+  'finance.starts-in-past': 'refused',
+  'finance.version-overlaps': 'refused',
+  'finance.no-ca-evidence': 'refused',
+  'finance.version-not-awaiting': 'refused',
+  'finance.cost-change-after-stock': 'refused',
+  'finance.book-stock-unanswered': 'unavailable',
+});
+
+/**
  * The codes of `site-lifecycle` (module-map 4.16; domain-model 3.6; PRD-LIF-001 to PRD-LIF-003; S1-F04-T02).
  *
  * - `site-lifecycle.check-failed`: a readiness check fails; `missing` names each check and what it lacks.
@@ -665,6 +691,7 @@ export const errorCodes = {
   ...merchandiseCodes,
   ...configurationCodes,
   ...siteLifecycleCodes,
+  ...financeBooksCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

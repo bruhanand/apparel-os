@@ -1,7 +1,10 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
+  ACCOUNT_TYPE,
   AGREEMENT_TYPE,
   BANK_DETAILS_TYPE,
+  BOOK_SETTING_TYPE,
+  CA_APPROVAL_EVIDENCE_TYPE,
   BRAND_SUPPLIER_LINK_TYPE,
   PARTY_TYPE,
   catalogueKinds,
@@ -43,6 +46,7 @@ import {
   type StockPresence,
 } from '../../src/modules/merchandise/catalogue/index.js';
 import { Parties, partiesApprovals, partiesSupplierRoles } from '../../src/modules/merchandise/parties/index.js';
+import { Books, booksApprovals, type BookHeldStock } from '../../src/modules/finance/books/index.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
@@ -63,6 +67,8 @@ export interface StructureSetup {
   readonly catalogue: Catalogue;
   /** The parties part, composed with `access` and the synthetic keys as the application composes it (S1-F03-T03). */
   readonly parties: Parties;
+  /** finance · books, composed with `access` as the application composes it (S1-F09-T01). */
+  readonly books: Books;
   readonly preparer: SyntheticUser;
   readonly approver: SyntheticUser;
   readonly asPreparer: Preparer;
@@ -114,6 +120,8 @@ export async function structureSetup(options: {
   readonly locationInUse?: LocationInUse;
   /** The stock-presence implementation, as the composition root hands it over; none answers when left out. */
   readonly stockPresence?: StockPresence;
+  /** The "has this book held stock?" implementation; none answers when left out (books-and-posting 2.2). */
+  readonly bookHeldStock?: BookHeldStock;
 }): Promise<StructureSetup> {
   const log = capturingLogger();
   const router = new OrganisationRouter(
@@ -127,13 +135,19 @@ export async function structureSetup(options: {
   const structure = organisationApprovals(audit, options.locationInUse);
   const catalogueModule = catalogueApprovals(audit);
   const partiesModule = partiesApprovals(audit);
+  const booksModule = booksApprovals(audit, options.bookHeldStock);
   const keys = OrganisationKeys.fromEnvironment(options.keysEnvironment);
   const access = new Access({
     origins: localOrigins,
     audit,
     keys,
-    approvalRules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules],
-    documentEffects: new Map([...structure.effects, ...catalogueModule.effects, ...partiesModule.effects]),
+    approvalRules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules, ...booksModule.rules],
+    documentEffects: new Map([
+      ...structure.effects,
+      ...catalogueModule.effects,
+      ...partiesModule.effects,
+      ...booksModule.effects,
+    ]),
     scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
   });
   // The catalogue's contracts as the composition root hands them over (S1-F03-T02): supplier roles from the parties
@@ -145,6 +159,7 @@ export async function structureSetup(options: {
     stockPresence: options.stockPresence,
   });
   const parties = new Parties({ audit, access, files: new FilesImports(audit), keys });
+  const books = new Books({ audit, access, files: new FilesImports(audit), bookHeldStock: options.bookHeldStock });
   const organisation = new Organisation({
     audit,
     access,
@@ -168,6 +183,10 @@ export async function structureSetup(options: {
     BANK_DETAILS_TYPE,
     BRAND_SUPPLIER_LINK_TYPE,
     AGREEMENT_TYPE,
+    // The books part's types (S1-F09-T01).
+    ACCOUNT_TYPE,
+    BOOK_SETTING_TYPE,
+    CA_APPROVAL_EVIDENCE_TYPE,
   ];
   const declared = new Map(permissionRegistry.map((each) => [each.code, each.actions]));
   const grants = (actions: readonly PermissionAction[]) => [
@@ -208,6 +227,7 @@ export async function structureSetup(options: {
     organisation,
     catalogue,
     parties,
+    books,
     preparer,
     approver,
     asPreparer,

@@ -290,6 +290,19 @@ const siteLifecycleRecordTypes = [
   declare('site_lifecycle.zero_stock_declaration', ['view', 'create'], PLACE),
 ] as const;
 
+/**
+ * `finance` · books (books-and-posting 2, 3, 6.3; module-map 4.14; S1-F09-T01). An account and a book setting are
+ * prepared by an authorised Accounts user (create or edit) and decided by a different one (approve), with the CA's
+ * approval evidence (POL-09.01; DEC-112, GC4-2). Create on the CA's approval evidence records it against the versions
+ * it covers. They belong to the Organisation's books as a whole, so they carry no scope fact for now: the permission on
+ * the type decides (5.3). **Design choice**; who holds them is KDPS's (V-01).
+ */
+const financeRecordTypes = [
+  declare('finance.account', ['view', 'create', 'edit', 'approve'], NONE),
+  declare('finance.book_setting', ['view', 'edit', 'approve'], NONE),
+  declare('finance.ca_approval_evidence', ['view', 'create'], NONE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -303,6 +316,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...merchandiseRecordTypes,
   ...configurationRecordTypes,
   ...siteLifecycleRecordTypes,
+  ...financeRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -317,7 +331,8 @@ export type RecordTypeCode =
   | (typeof exceptionsRecordTypes)[number]['code']
   | (typeof merchandiseRecordTypes)[number]['code']
   | (typeof configurationRecordTypes)[number]['code']
-  | (typeof siteLifecycleRecordTypes)[number]['code'];
+  | (typeof siteLifecycleRecordTypes)[number]['code']
+  | (typeof financeRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

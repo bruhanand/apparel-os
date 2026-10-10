@@ -522,3 +522,6 @@ export * from './products.js';
 // Policy readiness and the Available check (module-map 4.4; S1-F04-T01).
 export * from './policy-readiness.js';
 export * from './site-lifecycle.js';
+
+// The books part of finance (books-and-posting 2, 3, 6.3; S1-F09-T01).
+export * from './books.js';

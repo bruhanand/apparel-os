@@ -11,8 +11,16 @@ export type { LocationInUse } from './contracts/location-in-use.js';
 export { actionTypeOf, masterKinds, organisationApprovalRules, recordTypeOf } from './domain/kinds.js';
 export type { MasterKind } from './domain/kinds.js';
 export type { InForce, PageRequest, RecordPage, RecordView, Structure, UnitMapping } from './queries/records.js';
+export { mappingOn } from './queries/records.js';
 export { mappingChanged, structureChanged } from './events.js';
 export { isPlaceScoped, organisationScopeMembers, placeScopedKinds } from './queries/scope.js';
 export type { PlaceFacts, PlaceScopedKind } from './queries/scope.js';
-export { businessUnitHeads, businessUnitInForce, siteExists, unitLocationIds, unitReadiness } from './queries/units.js';
+export {
+  accountingBookExists,
+  businessUnitHeads,
+  businessUnitInForce,
+  siteExists,
+  unitLocationIds,
+  unitReadiness,
+} from './queries/units.js';
 export type { BusinessUnitHead, UnitReadinessAnswer } from './queries/units.js';
