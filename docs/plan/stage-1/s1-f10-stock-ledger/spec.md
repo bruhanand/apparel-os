@@ -126,6 +126,6 @@ Steps 1 and 2 of the earlier plan are done: the ledger interface and tables are 
 | [S1-F10-T04 — Harness and the story under four combinations](tickets/T04-harness-driver-fixtures-and-scenario-files.md) | in-progress | T03; S1-F02-T03, S1-F03-T02, S1-F05-T01, S1-F08-T01, S1-F08-T02 |
 | [S1-F10-T05 — Four-combination matrix](tickets/T05-four-combination-matrix.md) | merged → T04 | — |
 | [S1-F10-T06 — Scenarios G2 to G13 with G10a](tickets/T06-scenarios-g2-to-g13-with-g10a.md) | in-progress | T04; S1-F08-T02 |
-| [S1-F10-T07 — Failure, concurrency, large posting and acceptance](tickets/T07-failure-and-concurrency-suites.md) | blocked | T06; S1-F08-T02 |
+| [S1-F10-T07 — Failure, concurrency, large posting and acceptance](tickets/T07-failure-and-concurrency-suites.md) | in-progress | T06; S1-F08-T02 |
 | [S1-F10-T08 — Large-posting job](tickets/T08-large-posting-job.md) | merged → T07 | — |
 | [S1-F10-T09 — Acceptance evidence](tickets/T09-acceptance-evidence.md) | merged → T07 | — |
