@@ -43,6 +43,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F05-T02: stand-in grants and bulk approval (access-and-approvals 9.3, 9.5, 9.9, 10, 13.1, 15 tests 17, 18, 18a;
 // PRD-ACS-011, PRD-ACS-018, PRD-ACS-019, POL-02.19, POL-02.20, PRD-MOD-015; GC3-7, DEC-105). Bookings arrive in stage 2,
@@ -145,6 +146,7 @@ beforeAll(async () => {
   routed = found.organisation;
   keysEnvironment = syntheticKeysEnvironment(world);
   access = new Access({
+    origins: localOrigins,
     audit: new Audit(log.logger),
     keys: OrganisationKeys.fromEnvironment(keysEnvironment),
     registry: REGISTRY,

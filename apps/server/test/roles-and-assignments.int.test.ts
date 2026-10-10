@@ -37,6 +37,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl, sqlState } from './support/postgres.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F01-T11: roles, role assignments, scope, effective grants, Authorise and row-level security
 // (access-and-approvals 4, 5, 7, 13.1, 15 tests 5a, 5b, 6, 9, 10, 11; code-house-rules 6.2, 7.3; DEC-112, CH-7;
@@ -77,7 +78,7 @@ let router: OrganisationRouter;
 let routed: RoutedOrganisation;
 const log = capturingLogger();
 const audit = new Audit(log.logger);
-const access = new Access({ audit, registry: REGISTRY });
+const access = new Access({ origins: localOrigins, audit, registry: REGISTRY });
 let admin: SyntheticUser;
 let approver: SyntheticUser;
 

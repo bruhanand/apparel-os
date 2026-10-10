@@ -6,7 +6,7 @@ import type {
   PolicySignatureDraft,
   PolicyValidationDraft,
 } from '@apparel-os/schemas';
-import { CommandDefect, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, LOCK_STEP, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import type { PolicyEvidence } from '../contracts/policy-evidence.js';
 import { capabilityChange, policySignature, policyValidation } from '../db/schema.js';
@@ -101,9 +101,10 @@ export async function recordSignature(
 /**
  * Records a policy's real values as validated, with the evidence (DM-6; DEC-105, DEC-116): by a person holding the
  * validate permission, which the caller authorised, who entered none of the values the policy's checks report now.
- * The person who recorded Signed may validate. The validation covers exactly the values configured now; once they
- * change it covers them no longer (module-map 4.4 "As built"). A synthetic validation is refused where a synthetic
- * Signed record is.
+ * The person who recorded Signed may validate. The validation covers exactly the values configured now, by identity
+ * and version; once one is added, changed or ended it covers them no longer (module-map 4.4 "As built"; RR-478). It is
+ * refused while no module reports a value of the policy (RR-480), and the rows a change of the values locks are held
+ * shared while it is recorded. A synthetic validation is refused where a synthetic Signed record is.
  */
 export async function recordValidation(
   context: TransactionContext,
@@ -114,7 +115,22 @@ export async function recordValidation(
 ): Promise<Outcome<{ validationId: string }>> {
   const refused = originRefusal(dependencies.environment, context, draft.origin);
   if (refused !== undefined) return { kind: 'refusal', refusal: refused };
+  // What a change of the values locks, shared, before they are read: none changes before the insert (S1-F04 review S3).
+  const locks = [];
+  for (const check of dependencies.registry.checksOfPolicy(policy)) locks.push(...(await check.locks(context)));
+  if (locks.length > 0) await context.lock(LOCK_STEP.document, locks);
   const values = await policyValues(context, dependencies.registry, policy);
+  // Fail closed: with no values reported, a validation would cover nothing (RR-480; S1-F04 review S1).
+  if (values.length === 0) {
+    return {
+      kind: 'refusal',
+      refusal: {
+        kind: 'refused',
+        code: 'configuration.no-values-to-validate',
+        missing: [{ kind: 'policy', policy: String(policy), lacks: 'values' }],
+      },
+    };
+  }
   if (values.some((value) => value.enteredBy.includes(validator.userId))) {
     return {
       kind: 'refusal',

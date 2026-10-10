@@ -39,6 +39,7 @@ import { writeSyntheticSites } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
 import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F05-T02: due times and escalation for approvals and tasks (access-and-approvals 9.4, 11.1, 11.3, 13.2, 15 test
 // 20a; module-map 4.8; PRD-ACS-010; GC3-8, DEC-105). Routing is prepared and approved through the HTTP API; the inbox's
@@ -151,6 +152,7 @@ beforeAll(async () => {
   if (!found.routed) throw new Error('not routed');
   routed = found.organisation;
   fixtureAccess = new Access({
+    origins: localOrigins,
     audit: new Audit(log.logger),
     registry,
     approvalRules: [bookingRule],

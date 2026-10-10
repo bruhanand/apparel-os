@@ -44,6 +44,7 @@ import { grantSynthetic } from './grants.js';
 import { capturingLogger } from './jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './organisations.js';
 import { databaseUrl } from './postgres.js';
+import { localOrigins } from './origins.js';
 
 // S1-F10-T02: the test composition of the stock ledger (stock-ledger 13.2, 15.3; DEC-112, H2 and H4). A synthetic
 // caller playing a document's owning module, synthetic approval rules, and stand-ins of the `organisation` and
@@ -251,6 +252,7 @@ export class StockWorld {
     this.keysEnvironment = syntheticKeysEnvironment(this.world);
     const audit = new Audit(this.log.logger);
     this.access = new Access({
+      origins: localOrigins,
       audit,
       keys: OrganisationKeys.fromEnvironment(this.keysEnvironment),
       registry: testRegistry,

@@ -1,7 +1,9 @@
 import {
+  ACTIVITY_APPROVAL,
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
   PRODUCT_CONFIRMATION,
+  SITE_READINESS_APPROVAL,
   VOCABULARY_CONFIRMATION,
   type ApprovalRequestView,
 } from '@apparel-os/schemas';
@@ -9,13 +11,15 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../api';
 import { allPagesQuery, readQuery } from '../api/query';
-import { t, type MessageId } from '../messages/catalogue';
+import { isMessageId, t, type MessageId } from '../messages/catalogue';
 import { PersonaChip } from '../shell/AppShell';
-import { useSession } from '../shell/session';
+import { useSession, useTimeZone } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatDate } from '../setup/format';
 import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
+import { formatDateTime } from '../history/format';
+import { missingText } from '../components/UnavailableState';
 import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
@@ -296,6 +300,54 @@ function AgreementFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A readiness run put forward for approval: a Site's shared readiness or a unit's activity, each check with its state
+ * and what it lacked, and the zero opening-stock declaration its stock plan relied on, which the approver approves
+ * with it (module-map 4.16; PRD-LIF-001 to PRD-LIF-003; RR-483; product owner, 10 Oct 2026).
+ */
+function ReadinessFacts({ view }: { view: ApprovalRequestView }) {
+  const timeZone = useTimeZone();
+  const query = useQuery({
+    ...readQuery(api, 'readReadinessRecord', { params: { readinessRecordId: view.document.versionId } }),
+    enabled: useViewable('site_lifecycle.readiness_record'),
+  });
+  const read = query.data;
+  if (read === undefined) return null;
+  const { record } = read;
+  const activity = `activity.${record.activity}`;
+  return (
+    <Facts>
+      <Fact label="readiness.facts.activity">{isMessageId(activity) ? t(activity) : record.activity}</Fact>
+      <Fact label="readiness.facts.place">
+        {t(record.businessUnitId === null ? 'readiness.facts.place.site' : 'readiness.facts.place.unit')}
+      </Fact>
+      <Fact label="readiness.facts.checks">
+        <ul className="m-0 list-none p-0">
+          {record.checks.map((check) => {
+            const name = `readiness.check.${check.check}`;
+            return (
+              <li key={check.check}>
+                {isMessageId(name) ? t(name) : check.check} · {t(`readiness.state.${check.state}`)}
+                {check.missing.length > 0 && ` · ${check.missing.map(missingText).join(' ')}`}
+              </li>
+            );
+          })}
+        </ul>
+      </Fact>
+      {record.businessUnitId !== null && (
+        <Fact label="readiness.facts.zero-stock">
+          {read.zeroStockDeclaration === null
+            ? t('readiness.facts.zero-stock.none')
+            : t('readiness.stock-plan.declared', {
+                name: read.zeroStockDeclaration.declaredBy,
+                at: formatDateTime(read.zeroStockDeclaration.declaredAt, timeZone),
+              })}
+        </Fact>
+      )}
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -321,6 +373,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <BankDetailsFacts view={view} />;
     case AGREEMENT_CHANGE:
       return <AgreementFacts view={view} />;
+    case SITE_READINESS_APPROVAL:
+    case ACTIVITY_APPROVAL:
+      return <ReadinessFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;

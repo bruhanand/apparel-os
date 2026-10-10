@@ -52,7 +52,7 @@ function gateText(item: MissingItem): string | undefined {
   if (
     item.kind === 'policy' &&
     item.policy !== undefined &&
-    (item.lacks === 'signature' || item.lacks === 'validation')
+    (item.lacks === 'signature' || item.lacks === 'validation' || item.lacks === 'values')
   ) {
     return t(`missing.policy.${item.lacks}`, { policy: policyTitle(item.policy) });
   }
@@ -75,10 +75,13 @@ function gateText(item: MissingItem): string | undefined {
 
 /**
  * The text of a readiness check's item (module-map 4.16; S1-F04-T02): the check that fails, a mapping not verified,
- * the permission nobody at the unit holds, the action fewer than two people can prepare and approve. Undefined for any
- * other item, whose text is its kind's.
+ * the permission nobody at the unit holds, the action fewer than two people can prepare and approve, the Site not made
+ * ready for the activity. Undefined for any other item, whose text is its kind's.
  */
 function readinessText(item: MissingItem): string | undefined {
+  if (item.kind === 'site-readiness' && item.activity !== undefined) {
+    return t('missing.site-readiness.named', { activity: named('activity', item.activity) });
+  }
   if (item.kind === 'readiness-check' && item.check !== undefined) {
     return t('missing.readiness-check.named', { check: named('readiness.check', item.check) });
   }

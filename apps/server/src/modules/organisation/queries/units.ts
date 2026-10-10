@@ -2,7 +2,7 @@ import type { BusinessUnitKind } from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { inForceOn } from '../commands/common.js';
-import { businessUnit, location, locationVersion } from '../db/schema.js';
+import { businessUnit, location, locationVersion, site } from '../db/schema.js';
 import { mappingOn } from './records.js';
 
 // What another module reads of a business unit through `organisation`'s interface (module-map 4.11, section 3;
@@ -93,4 +93,23 @@ export async function unitReadiness(
           },
     locationsInForce: counted?.count ?? 0,
   };
+}
+
+/** Whether a Site exists, for its shared readiness (module-map 4.16; PRD-LIF-001). */
+export async function siteExists(context: TransactionContext, siteId: string): Promise<boolean> {
+  const [row] = await context.tx.select({ id: site.id }).from(site).where(eq(site.id, siteId));
+  return row !== undefined;
+}
+
+/**
+ * Every location of a unit, retired or not, for asking the stock ledger whether it holds stock at the unit through the
+ * location-in-use contract (structure-and-masters 3.5; PRD-LIF-003; RR-483).
+ */
+export async function unitLocationIds(context: TransactionContext, unitId: string): Promise<string[]> {
+  const rows = await context.tx
+    .select({ id: location.id })
+    .from(location)
+    .where(eq(location.businessUnitId, unitId))
+    .orderBy(location.id);
+  return rows.map((row) => row.id);
 }

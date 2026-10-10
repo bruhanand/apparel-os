@@ -25,10 +25,16 @@ import { SITE_LIFECYCLE } from '../tokens.js';
 /** Finds the facts of the record a route acts on, in its transaction; undefined when it does not exist. */
 type FactsOf = (context: TransactionContext) => Promise<RecordFacts | undefined>;
 
+const recordNotFound = (readinessRecordId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'site-lifecycle.record-not-found',
+  missing: [{ kind: 'record', recordType: 'site_lifecycle.readiness_record', recordId: readinessRecordId }],
+});
+
 /**
  * Setup › Site opening and closure › Readiness (module-map 4.16; ui-blueprint; code-house-rules 12.1; S1-F04-T02).
- * Its record types carry the unit's place, so the guard Authenticates only and each route authorises in its
- * transaction with the unit's facts (access-and-approvals 5.3, 7.1 step 3; RR-296); each command runs under its
+ * Its record types carry the Site's or the unit's place, so the guard Authenticates only and each route authorises in
+ * its transaction with the place's facts (access-and-approvals 5.3, 7.1 step 3; RR-296); each command runs under its
  * idempotency key and holds its authority at step 0 (8.2). None is policy-gated: readiness is how an activity gets
  * configured (DEC-116). The approval itself is decided through `access`'s Decide, from My work. No rule lives here.
  */
@@ -88,6 +94,59 @@ export class ReadinessController {
     );
   }
 
+  @ApiRoute(routes.readReadinessRecord)
+  async readReadinessRecord(
+    @RouteInput() input: RouteInputOf<typeof routes.readReadinessRecord>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { readinessRecordId } = input.params;
+    const answer = await this.runner.read(
+      {
+        commandName: 'site-lifecycle.read-readiness-record',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      async (context) => {
+        const authorised = await this.authoriseIn(
+          context,
+          user,
+          'view',
+          routes.readReadinessRecord.access.recordType,
+          (c) => this.lifecycle.recordFacts(c, readinessRecordId),
+          recordNotFound(readinessRecordId),
+        );
+        if (authorised.kind === 'refused') return { refused: authorised.refusal };
+        const read = await this.lifecycle.readinessRecord(context, readinessRecordId);
+        if (read.kind === 'refusal') return { refused: read.refusal };
+        return { asOf: context.startedAt.toISOString(), ...read.answer };
+      },
+    );
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
+  }
+
+  @ApiRoute(routes.runSiteReadinessChecks)
+  runSiteReadinessChecks(
+    @RouteInput() input: RouteInputOf<typeof routes.runSiteReadinessChecks>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { siteId, activity } = input.params;
+    return this.command(
+      routes.runSiteReadinessChecks,
+      'site-lifecycle.run-site-readiness-checks',
+      user,
+      input,
+      (c) => this.lifecycle.siteFacts(c, siteId),
+      (c, actor) => this.lifecycle.runSiteReadiness(c, actor, siteId, activity),
+      {
+        kind: 'not-found',
+        code: 'site-lifecycle.site-not-found',
+        missing: [{ kind: 'record', recordType: 'organisation.site', recordId: siteId }],
+      },
+    );
+  }
+
   @ApiRoute(routes.requestActivation)
   requestActivation(
     @RouteInput() input: RouteInputOf<typeof routes.requestActivation>,
@@ -101,11 +160,7 @@ export class ReadinessController {
       input,
       (c) => this.lifecycle.recordFacts(c, readinessRecordId),
       (c, actor) => this.lifecycle.requestActivation(c, actor, readinessRecordId),
-      {
-        kind: 'not-found',
-        code: 'site-lifecycle.record-not-found',
-        missing: [{ kind: 'record', recordType: 'site_lifecycle.readiness_record', recordId: readinessRecordId }],
-      },
+      recordNotFound(readinessRecordId),
     );
   }
 

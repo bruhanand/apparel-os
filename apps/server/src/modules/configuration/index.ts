@@ -23,10 +23,7 @@ export type {
   ValiditySubject,
 } from './domain/gate.js';
 export { SYNTHETIC_GATE_PREFIX } from './domain/gate.js';
-export { deploymentEnvironmentOf, ENVIRONMENT_VARIABLE } from './domain/origins.js';
-export type { DeploymentEnvironment } from './domain/origins.js';
 export { POLICY_EVIDENCE } from './contracts/policy-evidence.js';
 export type { PolicyEvidence, PolicyEvidenceLink } from './contracts/policy-evidence.js';
 export { activityChanged, capabilityChanged, policyStatusChanged } from './events.js';
-export { ACTIVITY_GRANTER } from './commands/activity-grants.js';
-export type { ActivityGranter, ActivityGrantRequest } from './commands/activity-grants.js';
+export type { ActivityGranter, ActivityGrantRequest, ActivityGrantWriter } from './commands/activity-grants.js';

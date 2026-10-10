@@ -2,13 +2,15 @@ import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import {
   availabilitySchema,
+  readinessRecordReadSchema,
   unitReadinessSchema,
   type Availability,
   type BusinessUnitDraft,
   type UnitReadiness,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { GatedOperation } from '../src/modules/configuration/index.js';
+import type { GatedOperation, ValidityCheck } from '../src/modules/configuration/index.js';
+import type { LocationInUse } from '../src/modules/organisation/index.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from './fixtures/synthetic.js';
 import {
   codeFor,
@@ -30,7 +32,10 @@ import { connect } from './support/postgres.js';
 // S1-F04-T02: readiness checks and unit activation through the whole application, on real PostgreSQL (module-map
 // 4.16; domain-model 3.6, section 5, section 6 "Granting an activity", invariant 7; stage 1 exit check 6; PRD-LIF-001
 // to PRD-LIF-003, PRD-ACS-006, PRD-ORG-006, POL-10.08; MM-8, DEC-105; DEC-116, DEC-117). A test-only module declares
-// SYNTHETIC receiving and movement operations with the people they need (code-house-rules 11.4). The structure is made
+// SYNTHETIC receiving and movement operations with the people they need, and a validity check reporting one SYNTHETIC
+// value of each policy they name (code-house-rules 11.4); the stock ledger's answer of whether a location holds stock
+// is a test double, as in the test of locations (S1-F02-T02). A Site is made ready first, then each unit (PRD-LIF-001;
+// product owner, 10 Oct 2026). The structure is made
 // through organisation's real commands; a mapping's verification and a policy's Signed record and validation are
 // written as fixtures, labelled synthetic, since their evidence files are proved elsewhere (S1-F02-T02, S1-F04-T01).
 // Nothing here is KDPS's: every value, person and approval is SYNTHETIC.
@@ -41,6 +46,20 @@ const MOVE = `${GATE}.move-synthetic`;
 /** The policies the synthetic operations name, chosen for the test only: 4 for receiving, 6 for movement. */
 const RECEIVE_POLICY = 4;
 const MOVE_POLICY = 6;
+
+/** One SYNTHETIC value of each policy the operations name, so a validation has something to cover (RR-480). */
+const VALUES_CHECK = `${GATE}.synthetic-values`;
+const valuesCheck = (policy: number): ValidityCheck => ({
+  code: `${VALUES_CHECK}-${String(policy)}`,
+  policy: policy as ValidityCheck['policy'],
+  check: () => Promise.resolve({ kind: 'valid' }),
+  values: () => Promise.resolve([{ key: 'syn-value', version: 'v1', origin: 'synthetic', enteredBy: [] }]),
+  locks: () => Promise.resolve([]),
+});
+
+/** The locations where the stock ledger, as this test double answers, holds stock. */
+const stocked = new Set<string>();
+const locationInUse: LocationInUse = { hasStock: (_context, id) => Promise.resolve(stocked.has(id)) };
 
 const operations: readonly GatedOperation[] = [
   {
@@ -179,6 +198,29 @@ async function readiness(user: SyntheticUser, unitId: string): Promise<UnitReadi
   return unitReadinessSchema.parse(read.body);
 }
 
+/** Runs a Site's shared checks for the activity, and reads the run back. */
+async function runSite(activity: string, by: SyntheticUser = operationsUser) {
+  const ran = await post(by, `/api/site-lifecycle/sites/${siteId}/readiness/${activity}/runs`);
+  expect(ran.status, JSON.stringify(ran.body)).toBe(200);
+  const read = await readiness(by, ready.id);
+  const site = read.site.find((each) => each.activity === activity);
+  if (site?.latest === null || site?.latest === undefined) throw new Error('no Site run');
+  expect(site.latest.readinessRecordId).toBe(ran.body.readinessRecordId);
+  return site.latest;
+}
+
+/** Makes the Site ready for the activity: its checks run, and a different person approves them. */
+async function siteMadeReady(activity: string): Promise<void> {
+  const latest = await runSite(activity);
+  const requested = await post(
+    operationsUser,
+    `/api/site-lifecycle/readiness-records/${latest.readinessRecordId}/activation-request`,
+  );
+  expect(requested.status, JSON.stringify(requested.body)).toBe(200);
+  const decided = await decide(approver, String(requested.body.requestId), latest.readinessRecordId);
+  expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+}
+
 async function run(unitId: string, activity: string, by: SyntheticUser = operationsUser) {
   const ran = await post(by, `/api/site-lifecycle/units/${unitId}/readiness/${activity}/runs`);
   expect(ran.status, JSON.stringify(ran.body)).toBe(200);
@@ -232,7 +274,10 @@ async function verifyFixture(database: string, unitId: string): Promise<void> {
   }
 }
 
-/** Writes a SYNTHETIC Signed record and validation of a policy, as fixtures (module-map 4.4; DM-6). */
+/**
+ * Writes a SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports, as
+ * fixtures (module-map 4.4; DM-6).
+ */
 async function signedFixture(database: string, policy: number): Promise<void> {
   const owner = await connect(database, 'migration');
   try {
@@ -245,8 +290,8 @@ async function signedFixture(database: string, policy: number): Promise<void> {
     await owner.query(
       `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
          evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, $2, 'synthetic', '{}', array[$3::uuid], $4, $5, now())`,
-      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7()],
+       values ($1, $2, 'synthetic', array[$6], array[$3::uuid], $4, $5, now())`,
+      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7(), `${VALUES_CHECK}-${String(policy)}:syn-value@v1`],
     );
   } finally {
     await owner.end();
@@ -272,9 +317,9 @@ async function unit(overrides: Partial<BusinessUnitDraft> & Pick<BusinessUnitDra
   return { id: answer.recordId, siteId };
 }
 
-async function location(of: Unit): Promise<void> {
+async function location(of: Unit): Promise<string> {
   const code = next('READY-LOC');
-  await approved(setup, (c, p) =>
+  const answer = await approved(setup, (c, p) =>
     setup.organisation.prepareLocation(c, p, {
       code: syntheticCode(code),
       siteId: of.siteId,
@@ -284,12 +329,15 @@ async function location(of: Unit): Promise<void> {
       validFrom: setup.today(),
     }),
   );
+  return answer.recordId;
 }
 
 let ready: Unit;
+let readyLocation: string;
 let unverified: Unit;
 let counterUnit: Unit;
 let neighbour: Unit;
+let neighbourLocation: string;
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('readiness');
@@ -361,10 +409,10 @@ beforeAll(async () => {
   ).recordId;
   ready = await unit({ kind: 'whole-store', storeId });
   await verifyFixture(a.database, ready.id);
-  await location(ready);
+  readyLocation = await location(ready);
   neighbour = await unit({ kind: 'warehouse' });
   await verifyFixture(a.database, neighbour.id);
-  await location(neighbour);
+  neighbourLocation = await location(neighbour);
   unverified = await unit({ kind: 'warehouse' });
   counterUnit = await unit({ kind: 'brand-counter', storeId });
   await verifyFixture(a.database, counterUnit.id);
@@ -384,7 +432,12 @@ beforeAll(async () => {
     });
   }
   clock = new SyntheticClock();
-  api = await startAccessApp(world, keys, { clock, gatedOperations: operations });
+  api = await startAccessApp(world, keys, {
+    clock,
+    gatedOperations: operations,
+    validityChecks: [valuesCheck(RECEIVE_POLICY), valuesCheck(MOVE_POLICY)],
+    locationInUse,
+  });
   operationsUser = await enrolled(a.database, a.code, 'READY-OPS', READINESS_AUTHORITY);
   approver = await enrolled(a.database, a.code, 'READY-APPROVER', APPROVER_AUTHORITY);
   otherOperations = await enrolled(b.database, b.code, 'READY-OTHER', READINESS_AUTHORITY);
@@ -420,6 +473,16 @@ describe('the checks (PRD-LIF-002; domain-model 3.6; DEC-116)', () => {
       state: 'failed',
       missing: [{ kind: 'stock-plan', businessUnitId: ready.id }],
     });
+    // RR-483: refused while the stock ledger holds stock at the unit (product owner, 10 Oct 2026).
+    stocked.add(readyLocation);
+    const holding = await post(operationsUser, `/api/site-lifecycle/units/${ready.id}/zero-stock-declaration`, {
+      holdsNoStock: true,
+    });
+    stocked.delete(readyLocation);
+    expect(holding.status).toBe(422);
+    expect(holding.body).toMatchObject({
+      error: { code: 'site-lifecycle.unit-holds-stock', missing: [{ kind: 'stock-held', businessUnitId: ready.id }] },
+    });
     const declared = await post(operationsUser, `/api/site-lifecycle/units/${ready.id}/zero-stock-declaration`, {
       holdsNoStock: true,
     });
@@ -429,6 +492,17 @@ describe('the checks (PRD-LIF-002; domain-model 3.6; DEC-116)', () => {
     expect((await readiness(operationsUser, ready.id)).zeroStockDeclaration).toMatchObject({
       declaredBy: operationsUser.displayName,
     });
+    // S5: rechecked against the stock at every run: once stock is recorded there, the declaration no longer counts.
+    stocked.add(readyLocation);
+    try {
+      expect(stateOf(await run(ready.id, 'receiving'), 'stock-plan')).toEqual({
+        check: 'stock-plan',
+        state: 'failed',
+        missing: [{ kind: 'stock-held', businessUnitId: ready.id }],
+      });
+    } finally {
+      stocked.delete(readyLocation);
+    }
   });
 
   it('PRD-ACS-006 users and access names a permission nobody at the unit holds, and an approval with fewer than two people', async () => {
@@ -480,19 +554,6 @@ describe('the checks (PRD-LIF-002; domain-model 3.6; DEC-116)', () => {
     ]);
   });
 
-  it('the required-policies check fails, naming the policy, while the Available check fails for it', async () => {
-    const latest = await run(neighbour.id, 'movement');
-    expect(stateOf(latest, 'required-policies')).toEqual({
-      check: 'required-policies',
-      state: 'failed',
-      missing: [
-        { kind: 'policy', policy: String(MOVE_POLICY), lacks: 'signature' },
-        { kind: 'policy', policy: String(MOVE_POLICY), lacks: 'validation' },
-      ],
-    });
-    expect(stateOf(await run(ready.id, 'receiving'), 'required-policies')?.state).toBe('passed');
-  });
-
   it('PRD-ORG-006 activating a brand counter with no brand in force is refused (product owner, 10 Oct 2026)', async () => {
     await post(operationsUser, `/api/site-lifecycle/units/${counterUnit.id}/zero-stock-declaration`, {
       holdsNoStock: true,
@@ -508,15 +569,14 @@ describe('the checks (PRD-LIF-002; domain-model 3.6; DEC-116)', () => {
       `/api/site-lifecycle/readiness-records/${latest.readinessRecordId}/activation-request`,
     );
     expect(refused.status).toBe(422);
-    expect(refused.body).toMatchObject({
-      error: {
-        code: 'site-lifecycle.check-failed',
-        missing: [
-          { kind: 'readiness-check', check: 'brand-coverage' },
-          { kind: 'brand-coverage', businessUnitId: counterUnit.id },
-        ],
-      },
-    });
+    // Its Site is not ready for receiving yet either; the refusal names both.
+    expect(refused.body).toMatchObject({ error: { code: 'site-lifecycle.check-failed' } });
+    expect((refused.body.error as { missing: unknown[] }).missing).toEqual(
+      expect.arrayContaining([
+        { kind: 'readiness-check', check: 'brand-coverage' },
+        { kind: 'brand-coverage', businessUnitId: counterUnit.id },
+      ]),
+    );
     // With a brand in force, the counter passes.
     const catalogued = async (
       outcome: Awaited<ReturnType<typeof setup.catalogue.prepareBrand>>,
@@ -550,6 +610,74 @@ describe('the checks (PRD-LIF-002; domain-model 3.6; DEC-116)', () => {
   });
 });
 
+describe("the Site's shared readiness (PRD-LIF-001; domain-model 3.6; product owner, 10 Oct 2026)", () => {
+  it("the Site's required-policies check fails, naming the policy, while the Available check fails for it", async () => {
+    const latest = await runSite('movement');
+    expect(latest.businessUnitId).toBeNull();
+    expect(latest.checks).toEqual([
+      {
+        check: 'required-policies',
+        state: 'failed',
+        missing: [
+          { kind: 'policy', policy: String(MOVE_POLICY), lacks: 'signature' },
+          { kind: 'policy', policy: String(MOVE_POLICY), lacks: 'validation' },
+        ],
+      },
+    ]);
+    const refused = await post(
+      operationsUser,
+      `/api/site-lifecycle/readiness-records/${latest.readinessRecordId}/activation-request`,
+    );
+    expect(refused.status).toBe(422);
+    expect(refused.body).toMatchObject({ error: { code: 'site-lifecycle.check-failed' } });
+  });
+
+  it('a unit fails the site-readiness check while its Site is not ready for the activity', async () => {
+    expect(stateOf(await run(ready.id, 'receiving'), 'site-readiness')).toEqual({
+      check: 'site-readiness',
+      state: 'failed',
+      missing: [{ kind: 'site-readiness', siteId, activity: 'receiving' }],
+    });
+  });
+
+  it('a different person makes the Site ready; the person who ran its checks cannot, and it is not asked twice', async () => {
+    const latest = await runSite('receiving');
+    expect(latest.checks).toEqual([{ check: 'required-policies', state: 'passed', missing: [] }]);
+    const requested = await post(
+      operationsUser,
+      `/api/site-lifecycle/readiness-records/${latest.readinessRecordId}/activation-request`,
+    );
+    expect(requested.status, JSON.stringify(requested.body)).toBe(200);
+    const requestId = String(requested.body.requestId);
+    const self = await decide(operationsUser, requestId, latest.readinessRecordId);
+    expect(self.body).toMatchObject({ error: { code: 'access.self-preparation' } });
+    const decided = await decide(approver, requestId, latest.readinessRecordId);
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    const read = await readiness(operationsUser, ready.id);
+    expect(read.site.find((each) => each.activity === 'receiving')).toMatchObject({
+      ready: true,
+      latest: { request: { requestId, state: 'Approved' } },
+    });
+    const again = await post(
+      operationsUser,
+      `/api/site-lifecycle/readiness-records/${latest.readinessRecordId}/activation-request`,
+    );
+    expect(again.body).toMatchObject({ error: { code: 'site-lifecycle.site-already-ready' } });
+    expect(stateOf(await run(ready.id, 'receiving'), 'site-readiness')?.state).toBe('passed');
+  });
+
+  it('a later Site run replaces an earlier one: the Site is not ready again until it is approved', async () => {
+    await siteMadeReady('selling');
+    expect((await readiness(operationsUser, ready.id)).site.find((each) => each.activity === 'selling')?.ready).toBe(
+      true,
+    );
+    await runSite('selling');
+    expect((await readiness(operationsUser, ready.id)).site.find((each) => each.activity === 'selling')?.ready).toBe(
+      false,
+    );
+  });
+});
+
 describe('approving an activity (stage 1 exit check 6; PRD-LIF-001; MM-8, DEC-105)', () => {
   it('PRD-LIF-001 an activity stays unavailable until its checks pass and a different person approves it; the person who ran them cannot', async () => {
     // Before: unavailable at the unit, naming the activity and the place.
@@ -572,9 +700,15 @@ describe('approving an activity (stage 1 exit check 6; PRD-LIF-001; MM-8, DEC-10
       kind: 'readiness-check',
       check: 'mappings',
     });
-    // The passing run is put forward.
+    // The passing run is put forward, and its approval panel shows the zero declaration it relies on (RR-483).
     const passing = await run(ready.id, 'receiving');
     expect(passing.passed).toBe(true);
+    const panel = await get(approver, `/api/site-lifecycle/readiness-records/${passing.readinessRecordId}`);
+    expect(panel.status, JSON.stringify(panel.body)).toBe(200);
+    expect(readinessRecordReadSchema.parse(panel.body)).toMatchObject({
+      record: { readinessRecordId: passing.readinessRecordId, businessUnitId: ready.id, passed: true },
+      zeroStockDeclaration: { declaredBy: operationsUser.displayName },
+    });
     const requested = await post(
       operationsUser,
       `/api/site-lifecycle/readiness-records/${passing.readinessRecordId}/activation-request`,
@@ -630,6 +764,44 @@ describe('approving an activity (stage 1 exit check 6; PRD-LIF-001; MM-8, DEC-10
     const stale = await decide(approver, String(requested.body.requestId), first.readinessRecordId);
     expect(stale.status, JSON.stringify(stale.body)).toBe(409);
     expect(stale.body).toMatchObject({ error: { code: 'kernel.stale-version' } });
+  });
+
+  it('RR-483 a zero declaration replaced after the run makes its request stale; stock recorded since refuses it', async () => {
+    await post(operationsUser, `/api/site-lifecycle/units/${neighbour.id}/zero-stock-declaration`, {
+      holdsNoStock: true,
+    });
+    const first = await run(neighbour.id, 'receiving');
+    expect(first.passed, JSON.stringify(first.checks)).toBe(true);
+    const requested = await post(
+      operationsUser,
+      `/api/site-lifecycle/readiness-records/${first.readinessRecordId}/activation-request`,
+    );
+    expect(requested.status, JSON.stringify(requested.body)).toBe(200);
+    await post(operationsUser, `/api/site-lifecycle/units/${neighbour.id}/zero-stock-declaration`, {
+      holdsNoStock: true,
+    });
+    const stale = await decide(approver, String(requested.body.requestId), first.readinessRecordId);
+    expect(stale.status, JSON.stringify(stale.body)).toBe(409);
+    expect(stale.body).toMatchObject({ error: { code: 'kernel.stale-version' } });
+    // S5: a run on the latest declaration, then stock recorded before the decision: refused under the lock.
+    const second = await run(neighbour.id, 'receiving');
+    const asked = await post(
+      operationsUser,
+      `/api/site-lifecycle/readiness-records/${second.readinessRecordId}/activation-request`,
+    );
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
+    stocked.add(neighbourLocation);
+    try {
+      const refused = await decide(approver, String(asked.body.requestId), second.readinessRecordId);
+      expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+      expect(refused.body).toMatchObject({ error: { code: 'site-lifecycle.check-failed' } });
+      expect((refused.body.error as { missing: unknown[] }).missing).toContainEqual({
+        kind: 'stock-held',
+        businessUnitId: neighbour.id,
+      });
+    } finally {
+      stocked.delete(neighbourLocation);
+    }
   });
 
   it('PRD-SEC-005 needs create on the readiness record, covering the unit, to run the checks', async () => {

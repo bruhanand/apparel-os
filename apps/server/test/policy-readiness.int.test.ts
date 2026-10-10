@@ -44,13 +44,14 @@ const EXCEPTION_TYPE = `${GATE}.synthetic-exception`;
 const POLICY = 14;
 
 /** The synthetic values the test-only module holds for policy 14, as its check reports them; the test moves them. */
-const syntheticValues: { key: string; origin: SettingOrigin; enteredBy: string[] }[] = [];
+const syntheticValues: { key: string; version: string; origin: SettingOrigin; enteredBy: string[] }[] = [];
 
 const valuesCheck: ValidityCheck = {
   code: VALUES_CHECK,
   policy: POLICY,
   check: () => Promise.resolve({ kind: 'valid' }),
   values: () => Promise.resolve(syntheticValues.map((value) => ({ ...value }))),
+  locks: () => Promise.resolve([]),
 };
 
 const operations: readonly GatedOperation[] = [
@@ -227,7 +228,7 @@ beforeAll(async () => {
     { recordType: 'files_imports.stored_file', action: 'create' },
   ]);
   otherAdmin = await enrolled(b.database, b.code, 'GATE-OTHER-ADMIN', ADMIN_AUTHORITY);
-  syntheticValues.push({ key: 'syn-value-1', origin: 'synthetic', enteredBy: [enterer.id] });
+  syntheticValues.push({ key: 'syn-value-1', version: 'v1', origin: 'synthetic', enteredBy: [enterer.id] });
 });
 
 afterAll(async () => {
@@ -313,6 +314,19 @@ describe('capability, signature and validation (module-map 4.4; DM-6; PRD-SEC-01
     });
   });
 
+  it('RR-480 refuses a validation of a policy no module reports values for yet (S1-F04 review S1)', async () => {
+    const refused = await validate(admin, 3);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'configuration.no-values-to-validate',
+        missing: [{ kind: 'policy', policy: '3', lacks: 'values' }],
+      },
+    });
+    const three = (await readiness(admin)).find((each) => each.policy === 3);
+    expect(three?.missing).toContainEqual({ kind: 'policy', policy: '3', lacks: 'validation' });
+  });
+
   it('DM-6 refuses a validation by a person without the validate permission, and one with no evidence', async () => {
     const refused = await validate(plain, POLICY);
     expect(refused.status).toBe(403);
@@ -335,7 +349,7 @@ describe('capability, signature and validation (module-map 4.4; DM-6; PRD-SEC-01
   });
 
   it('DM-6 a validation stops covering the values once they change, so the operation is unavailable again', async () => {
-    syntheticValues.push({ key: 'syn-value-2', origin: 'synthetic', enteredBy: [admin.id] });
+    syntheticValues.push({ key: 'syn-value-2', version: 'v1', origin: 'synthetic', enteredBy: [admin.id] });
     try {
       const answer = await availabilityOf(plain, `operation=${EFFECT}`);
       expect(answer.missing).toEqual([{ kind: 'policy', policy: String(POLICY), lacks: 'validation' }]);
@@ -347,6 +361,19 @@ describe('capability, signature and validation (module-map 4.4; DM-6; PRD-SEC-01
       });
     } finally {
       syntheticValues.pop();
+    }
+    expect((await availabilityOf(plain, `operation=${EFFECT}`)).state).toBe('available');
+  });
+
+  it('RR-478 a value changed in place under the same key lapses the validation (product owner, 10 Oct 2026)', async () => {
+    const value = syntheticValues[0];
+    if (value === undefined) throw new Error('no value');
+    value.version = 'v2';
+    try {
+      const answer = await availabilityOf(plain, `operation=${EFFECT}`);
+      expect(answer.missing).toEqual([{ kind: 'policy', policy: String(POLICY), lacks: 'validation' }]);
+    } finally {
+      value.version = 'v1';
     }
     expect((await availabilityOf(plain, `operation=${EFFECT}`)).state).toBe('available');
   });
@@ -417,7 +444,16 @@ describe('PRD-ACS-020 two synthetic Organisations', () => {
 });
 
 describe('where a value came from (code-house-rules 12.14; DEC-116; RR-252, RR-401)', () => {
-  it.each(['kdps-test', 'production', ''])(
+  it.each(['production', '', 'Dev'])(
+    'does not start with the environment "%s" (S1-F04 review H1)',
+    async (environment) => {
+      await expect(
+        startAccessApp(world, keys, { clock, fileStoreEnvironment: minio.environment, environment }),
+      ).rejects.toThrow(/AOS_ENVIRONMENT/);
+    },
+  );
+
+  it.each(['kdps-test'])(
     'refuses a synthetic Signed record, and a synthetic setting, with the environment "%s"',
     async (environment) => {
       const app = await startAccessApp(world, keys, {
@@ -435,9 +471,7 @@ describe('where a value came from (code-house-rules 12.14; DEC-116; RR-252, RR-4
         expect(refused.body).toMatchObject({
           error: {
             code: 'configuration.origin-not-allowed',
-            missing: [
-              { kind: 'origin', origin: 'synthetic', environment: environment === '' ? 'not-named' : environment },
-            ],
+            missing: [{ kind: 'origin', origin: 'synthetic', environment }],
           },
         });
         // The synthetic Signed record of policy 14 counts for nothing here: the operation is unavailable again.

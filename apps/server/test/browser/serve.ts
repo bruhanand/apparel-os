@@ -71,6 +71,7 @@ import { createSyntheticOrganisations } from '../support/organisations.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 import { z } from 'zod';
+import { localOrigins } from '../support/origins.js';
 
 // The server of the browser journeys (S1-F01-T15, S1-F01-T20; code-house-rules 10.1, 11.2): a test composition of the
 // whole application, and of the worker that feeds My work, on a PostgreSQL container of its own. It holds three
@@ -1025,6 +1026,7 @@ const bookingApprover = await writeSyntheticUser(settingsDatabase, settingsCode,
 });
 await assignSyntheticRole(settingsDatabase, { kind: 'user', id: bookingApprover.id }, bookingRole.code);
 const fixtureAccess = new Access({
+  origins: localOrigins,
   audit: new Audit(fixtureLog.logger),
   registry: [...permissionRegistry, limitsBookingType],
   approvalRules: [limitsBookingRule],
@@ -1098,6 +1100,7 @@ const bulkApprover = await provisionUser('BROWSER-BULK-APPROVER', 'P-OWN', [
   }
 }
 const bulkAccess = new Access({
+  origins: localOrigins,
   audit: new Audit(fixtureLog.logger),
   registry: [...permissionRegistry, bulkBookingType],
   approvalRules: [bulkBookingRule],
@@ -1139,7 +1142,9 @@ const policyValuesCheck: ValidityCheck = {
   code: `${POLICY_GATE}.synthetic-values`,
   policy: 14,
   check: () => Promise.resolve({ kind: 'valid' }),
-  values: () => Promise.resolve([{ key: 'syn-browser-value', origin: 'synthetic', enteredBy: [policyEnterer.id] }]),
+  values: () =>
+    Promise.resolve([{ key: 'syn-browser-value', version: 'v1', origin: 'synthetic', enteredBy: [policyEnterer.id] }]),
+  locks: () => Promise.resolve([]),
 };
 const policyOperation: GatedOperation = {
   code: `${POLICY_GATE}.post-synthetic-effect`,
@@ -1168,6 +1173,14 @@ const policyValidator = await provisionUser('BROWSER-POLICY-VALIDATOR', 'P-ACC',
 // S1-F04-T01's; the unit's mapping verified as a fixture, since that journey is S1-F02-T02's (code-house-rules 11.2);
 // an Operations user who runs the checks and declares the unit holds no stock; and a different approver.
 const READINESS_GATE = syntheticIdentifier('readiness');
+/** One SYNTHETIC value of policy 4, so its SYNTHETIC validation covers something (RR-480). */
+const readinessValuesCheck: ValidityCheck = {
+  code: `${READINESS_GATE}.synthetic-values`,
+  policy: 4,
+  check: () => Promise.resolve({ kind: 'valid' }),
+  values: () => Promise.resolve([{ key: 'syn-readiness-value', version: 'v1', origin: 'synthetic', enteredBy: [] }]),
+  locks: () => Promise.resolve([]),
+};
 const readinessOperation: GatedOperation = {
   code: `${READINESS_GATE}.receive-synthetic`,
   policy: 4,
@@ -1204,8 +1217,8 @@ const readinessOperation: GatedOperation = {
     await owner.query(
       `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
          evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, 4, 'synthetic', '{}', array[$2::uuid], $3, $4, now())`,
-      [uuidv7(), uuidv7(), uuidv7(), uuidv7()],
+       values ($1, 4, 'synthetic', array[$5], array[$2::uuid], $3, $4, now())`,
+      [uuidv7(), uuidv7(), uuidv7(), uuidv7(), `${readinessValuesCheck.code}:syn-readiness-value@v1`],
     );
   } finally {
     await owner.end();
@@ -1250,7 +1263,7 @@ const app = await startAccessApp(
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck],
+    validityChecks: [policyValuesCheck, readinessValuesCheck],
   },
 );
 

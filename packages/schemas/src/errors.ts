@@ -290,6 +290,8 @@ export const accessApprovalCodes = declareCodes({
  * - `configuration.origin-not-allowed`: a value of that origin is not accepted in this environment: synthetic outside
  *   local work, tests and `dev`, or on an Organisation that is not synthetic; test-setup outside `kdps-test` (12.14).
  * - `configuration.validator-entered-values`: the person validating a policy's values entered some of them (DM-6).
+ * - `configuration.no-values-to-validate`: no module reports a value of the policy yet, so a validation would cover
+ *   nothing (RR-480).
  */
 export const configurationCodes = declareCodes({
   'configuration.operation-unavailable': 'unavailable',
@@ -297,6 +299,7 @@ export const configurationCodes = declareCodes({
   'configuration.capability-not-found': 'not-found',
   'configuration.origin-not-allowed': 'refused',
   'configuration.validator-entered-values': 'refused',
+  'configuration.no-values-to-validate': 'refused',
 });
 
 /**
@@ -307,12 +310,19 @@ export const configurationCodes = declareCodes({
  * - `site-lifecycle.record-not-found`: no readiness record has that identifier.
  * - A run that a later run for the unit and activity replaced answers `kernel.stale-version` (12.7).
  * - `site-lifecycle.activity-already-granted`: the unit holds the activity already.
+ * - `site-lifecycle.site-not-found`: no Site has that identifier.
+ * - `site-lifecycle.site-already-ready`: the Site's latest run for the activity is approved already.
+ * - `site-lifecycle.unit-holds-stock`: the stock ledger holds stock at the unit, so it cannot declare it holds none
+ *   (PRD-LIF-003; RR-483).
  */
 export const siteLifecycleCodes = declareCodes({
   'site-lifecycle.check-failed': 'refused',
   'site-lifecycle.unit-not-found': 'not-found',
   'site-lifecycle.record-not-found': 'not-found',
   'site-lifecycle.activity-already-granted': 'refused',
+  'site-lifecycle.site-not-found': 'not-found',
+  'site-lifecycle.site-already-ready': 'refused',
+  'site-lifecycle.unit-holds-stock': 'refused',
 });
 
 /**

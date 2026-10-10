@@ -27,6 +27,7 @@ import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.j
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
 import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F01 review (RR-325): the authority rows of step 0 (code-house-rules 8.2 "Authority first"; access-and-approvals
 // 7.1 step 4; stock-ledger 10.3, 10.4; spec section 9 "rechecks ... under the lock"). A decision relies on its
@@ -166,7 +167,11 @@ beforeAll(async () => {
   if (!found.routed) throw new Error('not routed');
   routed = found.organisation;
   keysEnvironment = syntheticKeysEnvironment(world);
-  access = new Access({ audit: new Audit(log.logger), keys: OrganisationKeys.fromEnvironment(keysEnvironment) });
+  access = new Access({
+    origins: localOrigins,
+    audit: new Audit(log.logger),
+    keys: OrganisationKeys.fromEnvironment(keysEnvironment),
+  });
   admin = await writeSyntheticUser(database, routed.organisationCode, keysEnvironment, { label: 'ADMIN' });
   const { assignmentId } = await grantSynthetic(
     database,

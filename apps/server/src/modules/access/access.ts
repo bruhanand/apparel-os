@@ -394,10 +394,10 @@ export interface AccessDependencies {
   readonly decisionEvidence?: DecisionEvidence | undefined;
   /**
    * Which origins of a setting version this environment accepts: `configuration`'s answer (code-house-rules 12.14;
-   * RR-252, RR-401; S1-F04-T01). The application always gives it; a test that builds `access` on its own and leaves it
-   * out accepts every origin.
+   * RR-252, RR-401; S1-F04-T01). Required, so no composition prepares a setting version without the check (S1-F04
+   * review H2).
    */
-  readonly origins?: Pick<ConfigurationInterface, 'originRefusal'> | undefined;
+  readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 
 /** One action on one record type, as a route or a job step declares it (access-and-approvals 7.1). */

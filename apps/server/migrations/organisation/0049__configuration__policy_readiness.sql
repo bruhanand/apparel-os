@@ -80,7 +80,8 @@ create trigger refuse_truncate before truncate on configuration.capability_chang
 
 -- An activity granted to, or withdrawn from, a Site or a business unit at its Site (PRD-LIF-001; module-map 4.4,
 -- 4.16). Only site-lifecycle writes it, from S1-F04-T02; it is created here empty. The latest row of an activity at a
--- place is its state; a business unit's row names its Site too.
+-- place is its state; a business unit's row names its Site too. Every grant names the approval decision it was written
+-- in, kept in access by its identifier (module-map 4.4 "As built").
 create table configuration.activity_grant (
   id uuid primary key,
   activity text not null,
@@ -88,6 +89,7 @@ create table configuration.activity_grant (
   business_unit_id uuid,
   granted boolean not null,
   readiness_record_id uuid not null,
+  approval_decision_id uuid not null,
   recorded_by_user_id uuid not null,
   recorded_at timestamptz not null,
   constraint activity_grant_activity check (activity in ('receiving', 'movement', 'selling'))

@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  ENVIRONMENT_VARIABLE,
+  isDevelopmentEnvironment,
+  isSyntheticOrganisation,
+  SYNTHETIC_ORGANISATION_PREFIX,
+} from '../../../kernel/index.js';
 
 // The test sign-in of the development environments (access-and-approvals 3.4; deployment.md section 3; DEC-121). One
 // button per listed SYNTHETIC person signs in without the password or the authenticator code. POL-02.17 allows an
@@ -9,13 +15,8 @@ import { z } from 'zod';
 
 /** The variable listing the people a test sign-in may sign in: a JSON array of `{organisationCode, login, label}`. */
 export const DEMO_SIGN_IN_VARIABLE = 'AOS_DEMO_SIGN_IN';
-/** The variable naming the environment (deployment.md section 1; RR-193). */
-export const ENVIRONMENT_VARIABLE = 'AOS_ENVIRONMENT';
-
-/** The environments where a test sign-in may be on (POL-02.17: development only). */
-const DEVELOPMENT_ENVIRONMENTS: readonly string[] = ['local', 'dev'];
-/** The marker every SYNTHETIC Organisation code begins with (code-house-rules 11). */
-const SYNTHETIC_CODE_PREFIX = 'SYN-';
+// The environment's variable, the development environments (POL-02.17: development only) and the synthetic marker are
+// the kernel's one definition, which `configuration` reads too (S1-F04 review H1).
 
 const personSchema = z.strictObject({
   organisationCode: z.string().min(1),
@@ -37,7 +38,7 @@ export function demoSignInFromEnvironment(env: Readonly<Record<string, string | 
   const value = env[DEMO_SIGN_IN_VARIABLE];
   if (value === undefined || value === '') return { enabled: false, people: [] };
   const environment = env[ENVIRONMENT_VARIABLE];
-  if (environment === undefined || !DEVELOPMENT_ENVIRONMENTS.includes(environment)) {
+  if (!isDevelopmentEnvironment(environment)) {
     throw new Error(
       `${DEMO_SIGN_IN_VARIABLE} is set but ${ENVIRONMENT_VARIABLE} is not local or dev: a test sign-in is for development only (POL-02.17)`,
     );
@@ -52,10 +53,10 @@ export function demoSignInFromEnvironment(env: Readonly<Record<string, string | 
   if (!people.success) {
     throw new Error(`${DEMO_SIGN_IN_VARIABLE} must be a non-empty JSON array of {organisationCode, login, label}`);
   }
-  const notSynthetic = people.data.find((person) => !person.organisationCode.startsWith(SYNTHETIC_CODE_PREFIX));
+  const notSynthetic = people.data.find((person) => !isSyntheticOrganisation(person.organisationCode));
   if (notSynthetic !== undefined) {
     throw new Error(
-      `${DEMO_SIGN_IN_VARIABLE} lists a person of an Organisation whose code does not begin ${SYNTHETIC_CODE_PREFIX}: a test sign-in is for SYNTHETIC Organisations only`,
+      `${DEMO_SIGN_IN_VARIABLE} lists a person of an Organisation whose code does not begin ${SYNTHETIC_ORGANISATION_PREFIX}: a test sign-in is for SYNTHETIC Organisations only`,
     );
   }
   return { enabled: true, people: people.data };

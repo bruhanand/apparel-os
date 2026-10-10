@@ -34,6 +34,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F05-T01: approval limits and routing (access-and-approvals 9.2 to 9.5, 9.7, 13.1, 15 tests 13, 13a, 15;
 // domain-model section 5; POL-02.07, POL-02.09, POL-02.15, PRD-ACS-015, PRD-ACS-016; DM-8, DEC-043, DEC-105, DEC-116).
@@ -131,6 +132,7 @@ beforeAll(async () => {
   routed = found.organisation;
   keysEnvironment = syntheticKeysEnvironment(world);
   access = new Access({
+    origins: localOrigins,
     audit: new Audit(log.logger),
     keys: OrganisationKeys.fromEnvironment(keysEnvironment),
     registry: REGISTRY,

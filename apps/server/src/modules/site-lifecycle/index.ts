@@ -3,5 +3,6 @@ export { SiteLifecycleModule } from './site-lifecycle.module.js';
 export { SITE_LIFECYCLE } from './tokens.js';
 export { SiteLifecycle } from './site-lifecycle.js';
 export type { SiteLifecycleDependencies, SiteLifecycleInterface } from './site-lifecycle.js';
-export { activityApprovalRule, siteLifecycleApprovals } from './commands/effects.js';
+export { activityApprovalRule, siteLifecycleApprovals, siteReadinessApprovalRule } from './commands/effects.js';
+export type { SiteLifecycleApprovalDependencies } from './commands/effects.js';
 export type { OpeningPlans } from './contracts/opening-plans.js';

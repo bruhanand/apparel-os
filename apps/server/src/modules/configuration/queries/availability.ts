@@ -19,6 +19,7 @@ export interface PlaceAsked {
 export interface PolicyValue {
   readonly check: string;
   readonly key: string;
+  readonly version: string;
   readonly origin: SettingOrigin;
   readonly enteredBy: readonly string[];
 }
@@ -72,21 +73,26 @@ export async function policyValues(
   return values.sort((a, b) => valueName(a).localeCompare(valueName(b)));
 }
 
-/** How a validation names a value it covers: `<check>:<key>`. */
-export function valueName(value: Pick<PolicyValue, 'check' | 'key'>): string {
-  return `${value.check}:${value.key}`;
+/** How a validation names a value it covers: `<check>:<key>@<version>`, its identity and its version (RR-478). */
+export function valueName(value: Pick<PolicyValue, 'check' | 'key' | 'version'>): string {
+  return `${value.check}:${value.key}@${value.version}`;
 }
 
-/** Whether a validation covers exactly the values configured now: one more, one fewer or one changed needs another. */
+/**
+ * Whether a validation covers exactly the values configured now, by identity and version: one added, one ended, or
+ * one changed in place under the same key needs another (RR-478; product owner, 10 Oct 2026). A policy that reports
+ * no values has nothing a validation could cover, so none covers it (RR-480; S1-F04 review S1).
+ */
 export function covers(validated: readonly string[], values: readonly PolicyValue[]): boolean {
+  if (values.length === 0) return false;
   const now = values.map(valueName).sort();
   const then = [...validated].sort();
   return now.length === then.length && now.every((name, index) => name === then[index]);
 }
 
 /** Whether a Signed record or a validation counts here: one of an origin this environment does not accept does not. */
-function counts(reading: GateReading, context: TransactionContext, origin: string): boolean {
-  return originAccepted(reading.environment, origin as PolicyRecordOrigin, context.organisationCode);
+function counts(reading: GateReading, context: TransactionContext, origin: PolicyRecordOrigin): boolean {
+  return originAccepted(reading.environment, origin, context.organisationCode);
 }
 
 /**

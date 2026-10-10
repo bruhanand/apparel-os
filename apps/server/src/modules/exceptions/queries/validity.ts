@@ -1,11 +1,11 @@
 import type { SettingOrigin } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import { CommandDefect } from '../../../kernel/index.js';
+import { CommandDefect, lockTable } from '../../../kernel/index.js';
 import type { ValidityCheck } from '../../configuration/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { routingInForce, today } from '../commands/common.js';
 import { codeSeriesTarget } from '../commands/raise.js';
-import { exceptionRoutingVersion } from '../db/schema.js';
+import { exceptionRouting, exceptionRoutingVersion } from '../db/schema.js';
 import { missingRouting } from '../domain/types.js';
 
 // The exceptions module's answers to the Available check (module-map 4.4, 4.13, section 3 rule 6; DEC-116; POL-02.16;
@@ -23,6 +23,7 @@ export function exceptionCodeSeriesCheck(numbering: NumberingInterface): Validit
       return series.kind === 'refused' ? { kind: 'invalid', missing: series.refusal.missing } : { kind: 'valid' };
     },
     values: () => Promise.resolve([]),
+    locks: () => Promise.resolve([]),
   };
 }
 
@@ -49,6 +50,7 @@ export const exceptionRoutingCheck: ValidityCheck = {
     const rows = await context.tx
       .select({
         id: exceptionRoutingVersion.id,
+        validDuring: exceptionRoutingVersion.validDuring,
         origin: exceptionRoutingVersion.origin,
         preparedBy: exceptionRoutingVersion.preparedByUserId,
       })
@@ -60,6 +62,19 @@ export const exceptionRoutingCheck: ValidityCheck = {
                or pg_catalog.upper(${exceptionRoutingVersion.validDuring}) > ${date.value}::date)`,
         ),
       );
-    return rows.map((row) => ({ key: row.id, origin: row.origin as SettingOrigin, enteredBy: [row.preparedBy] }));
+    // Its validity is the part changed in place, when a later version ends it (RR-478).
+    return rows.map((row) => ({
+      key: row.id,
+      version: row.validDuring,
+      origin: row.origin as SettingOrigin,
+      enteredBy: [row.preparedBy],
+    }));
+  },
+  // Every change of a type's routing locks its routing row (commands/routing.ts).
+  async locks(context) {
+    const rows = await context.tx.select({ id: exceptionRouting.id }).from(exceptionRouting);
+    return rows.map((row) => ({ table: ROUTING, id: row.id, mode: 'shared' as const }));
   },
 };
+
+const ROUTING = lockTable('exceptions', 'exception_routing');

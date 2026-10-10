@@ -26,6 +26,7 @@ import { grantSynthetic } from './support/grants.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F01-T13: approval requests and decisions of access changes (access-and-approvals 2.1, 4.3, 8, 9.1, 9.3, 9.5,
 // 9.6, 9.11, 15 tests 12, 12a, 14, 19, 19b, 19f, 19g, 22; DEC-104, DEC-112, DEC-116, DEC-117). Commands run as the
@@ -68,7 +69,7 @@ beforeAll(async () => {
   if (!found.routed) throw new Error('not routed');
   routed = found.organisation;
   keysEnvironment = syntheticKeysEnvironment(world);
-  access = new Access({ audit, keys: OrganisationKeys.fromEnvironment(keysEnvironment) });
+  access = new Access({ origins: localOrigins, audit, keys: OrganisationKeys.fromEnvironment(keysEnvironment) });
   const enrolled = (label: string) =>
     writeSyntheticUser(database, routed.organisationCode, keysEnvironment, { label, enrolled: true });
   admin = await enrolled('ADMIN');

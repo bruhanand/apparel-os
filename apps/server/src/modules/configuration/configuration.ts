@@ -7,7 +7,7 @@ import {
   type PolicyValidationDraft,
   type SettingOrigin,
 } from '@apparel-os/schemas';
-import type { CommandRefusal, Composition, TransactionContext } from '../../kernel/index.js';
+import { CommandDefect, type CommandRefusal, type Composition, type TransactionContext } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import {
   originRefusal,
@@ -17,12 +17,7 @@ import {
   type Outcome,
   type Recorder,
 } from './commands/policy-status.js';
-import {
-  grantActivity,
-  grantedActivities,
-  type ActivityGranter,
-  type ActivityGrantRequest,
-} from './commands/activity-grants.js';
+import { grantActivity, grantedActivities, type ActivityGrantWriter } from './commands/activity-grants.js';
 import type { PolicyEvidence } from './contracts/policy-evidence.js';
 import { GateRegistry, type GatedOperation, type ValidityCheck } from './domain/gate.js';
 import type { DeploymentEnvironment } from './domain/origins.js';
@@ -145,14 +140,12 @@ export interface ConfigurationInterface {
    */
   policyMissing(context: TransactionContext, policy: PolicyNumber): Promise<MissingItem[]>;
   /**
-   * Grant an activity (module-map 4.4): `site-lifecycle` only, in the transaction of the decision approving it, with
-   * its audit record and `configuration.activity-changed` (PRD-LIF-001; S1-F04-T02).
+   * The one writer of activity grants (module-map 4.4 "Grant or withdraw an activity"): claimed once, at start, by the
+   * composition root for `site-lifecycle`'s decision effect, which writes a grant in the transaction of the decision
+   * approving it, with its audit record and `configuration.activity-changed` (PRD-LIF-001; S1-F04 review H4). A
+   * second claim is a defect of the composition.
    */
-  grantActivity(
-    context: TransactionContext,
-    by: ActivityGranter,
-    grant: ActivityGrantRequest,
-  ): Promise<{ grantId: string }>;
+  claimActivityGrants(): ActivityGrantWriter;
   /** The activities granted now at a business unit, or at each unit of a Site (structure-and-masters 3.7). */
   grantedActivities(
     context: TransactionContext,
@@ -179,6 +172,7 @@ export function unavailableRefusal(answer: AvailabilityAnswer): CommandRefusal |
 
 export class Configuration implements ConfigurationInterface {
   private readonly registry = new GateRegistry();
+  private grantsClaimed = false;
 
   constructor(private readonly dependencies: ConfigurationDependencies) {}
 
@@ -255,7 +249,7 @@ export class Configuration implements ConfigurationInterface {
               signatureId: signature.id,
               signatory: signature.signatory,
               signedOn: signature.signedOn,
-              origin: signature.origin as PolicyRecordOrigin,
+              origin: signature.origin,
               recordedAt: signature.recordedAt,
               evidence: signature.evidenceAttachmentIds,
             },
@@ -264,7 +258,7 @@ export class Configuration implements ConfigurationInterface {
           ? null
           : {
               validationId: validation.id,
-              origin: validation.origin as PolicyRecordOrigin,
+              origin: validation.origin,
               validatedByUserId: validation.validatedByUserId,
               validatedAt: validation.validatedAt,
               evidence: validation.evidenceAttachmentIds,
@@ -302,8 +296,12 @@ export class Configuration implements ConfigurationInterface {
     return policyMissing(context, this.reading, policy, await policyValues(context, this.registry, policy));
   }
 
-  grantActivity(context: TransactionContext, by: ActivityGranter, grant: ActivityGrantRequest) {
-    return grantActivity(context, this.dependencies.audit, by, grant);
+  claimActivityGrants(): ActivityGrantWriter {
+    if (this.grantsClaimed)
+      throw new CommandDefect('The activity grant writer is claimed once, at start (module-map 4.4)');
+    this.grantsClaimed = true;
+    const { audit } = this.dependencies;
+    return { grant: (context, by, grant) => grantActivity(context, audit, by, grant) };
   }
 
   grantedActivities(

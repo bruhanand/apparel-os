@@ -1,4 +1,4 @@
-import { routes, type CommandRoute, type PolicyNumber } from '@apparel-os/schemas';
+import { policyNumberOf, routes, type CommandRoute, type PolicyNumber } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -35,6 +35,13 @@ import { SignedIn, type SignedInUser } from './authenticate.guard.js';
  * its authority at step 0, and a replay is answered only while the same Authorise still passes (12.4, CH-14). None of
  * these routes is policy-gated: they are how a policy gets configured (DEC-116). The controller holds no rule.
  */
+/** The policy the path names; the route's schema admits 1 to 19 only, so any other is a defect. */
+function policyOf(value: string): PolicyNumber {
+  const policy = policyNumberOf(value);
+  if (policy === undefined) throw new CommandDefect('The route admitted a policy number outside 1 to 19');
+  return policy;
+}
+
 @Controller()
 export class PolicyReadinessController {
   constructor(
@@ -97,7 +104,7 @@ export class PolicyReadinessController {
     @RouteInput() input: RouteInputOf<typeof routes.recordPolicySignature>,
     @SignedIn() user: SignedInUser,
   ) {
-    const policy = Number(input.params.policyNumber) as PolicyNumber;
+    const policy = policyOf(input.params.policyNumber);
     return this.command(routes.recordPolicySignature, 'configuration.record-policy-signature', user, input, (c, r) =>
       this.configuration.recordSignature(c, r, policy, input.body),
     );
@@ -108,7 +115,7 @@ export class PolicyReadinessController {
     @RouteInput() input: RouteInputOf<typeof routes.recordPolicyValidation>,
     @SignedIn() user: SignedInUser,
   ) {
-    const policy = Number(input.params.policyNumber) as PolicyNumber;
+    const policy = policyOf(input.params.policyNumber);
     return this.command(routes.recordPolicyValidation, 'configuration.record-policy-validation', user, input, (c, r) =>
       this.configuration.recordValidation(c, r, policy, input.body),
     );

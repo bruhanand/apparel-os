@@ -48,6 +48,7 @@ import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, t
 import { grantSynthetic } from './grants.js';
 import { capturingLogger } from './jobs.js';
 import { connect, databaseUrl } from './postgres.js';
+import { localOrigins } from './origins.js';
 
 // The organisation structure through its real interfaces (code-house-rules 11.2; S1-F02-T01): `access` built with the
 // approval rules and decision effects `organisation` declares, as the application composes it, and two SYNTHETIC
@@ -128,6 +129,7 @@ export async function structureSetup(options: {
   const partiesModule = partiesApprovals(audit);
   const keys = OrganisationKeys.fromEnvironment(options.keysEnvironment);
   const access = new Access({
+    origins: localOrigins,
     audit,
     keys,
     approvalRules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules],

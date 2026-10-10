@@ -185,3 +185,12 @@ export { timezoneNotConfigured } from './time/organisation-timezone.js';
 export type { OrganisationTimezoneSource, TimezoneSetting } from './time/organisation-timezone.js';
 export { PRODUCTION_COMPOSITION } from './composition.js';
 export type { Composition } from './composition.js';
+export {
+  deploymentEnvironmentFromEnvironment,
+  deploymentEnvironmentNames,
+  ENVIRONMENT_VARIABLE,
+  isDevelopmentEnvironment,
+  isSyntheticOrganisation,
+  SYNTHETIC_ORGANISATION_PREFIX,
+} from './environment/deployment-environment.js';
+export type { DeploymentEnvironment, DeploymentEnvironmentName } from './environment/deployment-environment.js';

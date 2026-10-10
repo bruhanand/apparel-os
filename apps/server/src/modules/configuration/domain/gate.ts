@@ -1,5 +1,10 @@
 import type { Activity, MissingItem, PermissionAction, PolicyNumber, SettingOrigin } from '@apparel-os/schemas';
-import { PRODUCTION_COMPOSITION, type Composition, type TransactionContext } from '../../../kernel/index.js';
+import {
+  PRODUCTION_COMPOSITION,
+  type Composition,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 
 // What the policy gate asks of the other modules (module-map 4.4, section 3 rule 6; domain-model 3.6, DM-6;
 // code-house-rules 12.14; PRD-SEC-017; S1-F04-T01). `configuration` calls no one: each module declares, at start, the
@@ -46,6 +51,11 @@ export interface ActivityNeeds {
 export interface ConfiguredValue {
   /** The value's identity within its check, such as a setting version's identifier. */
   readonly key: string;
+  /**
+   * The value's version under that identity: it changes whenever the value is changed in place, such as a version's
+   * end being set, so a validation stops covering it (RR-478; product owner, 10 Oct 2026).
+   */
+  readonly version: string;
   readonly origin: SettingOrigin;
   /** The people who entered it: its preparers (access-and-approvals 9.1). The validator must be none of them. */
   readonly enteredBy: readonly string[];
@@ -78,6 +88,12 @@ export interface ValidityCheck {
   check(context: TransactionContext, subject: ValiditySubject): Promise<ValidityAnswer>;
   /** Every value it holds that is in force now or later, Organisation-wide, with its origin and who entered it. */
   values(context: TransactionContext): Promise<readonly ConfiguredValue[]>;
+  /**
+   * The rows a change of its values locks, which recording a validation locks shared before it reads the values, so
+   * no value changes between that read and the validation's insert (code-house-rules 8.1; S1-F04 review S3). None
+   * where it holds no policy's values.
+   */
+  locks(context: TransactionContext): Promise<readonly LockTarget[]>;
 }
 
 /** The prefix of every synthetic operation, capability and check code (code-house-rules 11.1). */
@@ -104,6 +120,13 @@ export class GateRegistry {
     admit(operation.code, 'operation', composition);
     admit(operation.capability, 'capability', composition);
     if (this.operationsByCode.has(operation.code)) throw new Error(`Operation ${operation.code} is registered twice`);
+    // Checks register first, so an operation naming one that is not there fails the start, never a request.
+    const unknown = operation.checks.find((each) => !this.checksByCode.has(each.check));
+    if (unknown !== undefined) {
+      throw new Error(
+        `Operation ${operation.code} names the validity check ${unknown.check}, which no module registered`,
+      );
+    }
     this.operationsByCode.set(operation.code, operation);
   }
 

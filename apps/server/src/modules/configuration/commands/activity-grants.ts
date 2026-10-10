@@ -7,11 +7,10 @@ import { activityGrant } from '../db/schema.js';
 import { activityChanged } from '../events.js';
 
 // Grant an activity (module-map 4.4 "Grant or withdraw an activity", 4.16; domain-model 3.6, section 6 "Granting an
-// activity", invariant 7; PRD-LIF-001; S1-F04-T02): only `site-lifecycle` calls it, in the transaction of the decision
-// that approves the activity, so the decision, the readiness record, the grant and the audit record commit together.
-
-/** The one module that writes activity grants (module-map 4.4). */
-export const ACTIVITY_GRANTER = 'site-lifecycle';
+// activity", invariant 7; PRD-LIF-001; S1-F04-T02): only `site-lifecycle`'s decision effect writes it, in the
+// transaction of the decision that approves the activity, so the decision, the readiness record, the grant and the
+// audit record commit together. The writer is not on `configuration`'s interface: the composition root claims it once,
+// at start, and hands it to that effect (S1-F04 review H4).
 
 /** What a grant records: the activity at a business unit at its Site, on the readiness record it was approved on. */
 export interface ActivityGrantRequest {
@@ -21,17 +20,21 @@ export interface ActivityGrantRequest {
   readonly readinessRecordId: string;
 }
 
-/** Who grants: `site-lifecycle`, for the approver of the decision, with the decision relied on. */
+/** Who grants: the approver of the decision, and the decision relied on, which every grant names. */
 export interface ActivityGranter {
-  readonly module: typeof ACTIVITY_GRANTER;
   readonly userId: string;
   readonly roleAssignmentId?: string | undefined;
-  readonly approvalDecisionId?: string | undefined;
+  readonly approvalDecisionId: string;
+}
+
+/** The one writer of activity grants, which only `site-lifecycle`'s decision effect holds (module-map 4.4). */
+export interface ActivityGrantWriter {
+  grant(context: TransactionContext, by: ActivityGranter, grant: ActivityGrantRequest): Promise<{ grantId: string }>;
 }
 
 /**
  * Writes the grant (append-only; the latest row of an activity at a place is its state), its audit record, and
- * `configuration.activity-changed`. A caller other than `site-lifecycle` is a defect of the composition.
+ * `configuration.activity-changed`. A grant with no approval decision is a defect of the caller.
  */
 export async function grantActivity(
   context: TransactionContext,
@@ -39,8 +42,8 @@ export async function grantActivity(
   by: ActivityGranter,
   grant: ActivityGrantRequest,
 ): Promise<{ grantId: string }> {
-  if ((by.module as string) !== ACTIVITY_GRANTER) {
-    throw new CommandDefect('Only site-lifecycle grants an activity (module-map 4.4)');
+  if (by.approvalDecisionId === '') {
+    throw new CommandDefect('An activity is granted only in the approval decision it names (module-map 4.4)');
   }
   const grantId = uuidv7();
   await context.tx.insert(activityGrant).values({
@@ -50,13 +53,14 @@ export async function grantActivity(
     businessUnitId: grant.businessUnitId,
     granted: true,
     readinessRecordId: grant.readinessRecordId,
+    approvalDecisionId: by.approvalDecisionId,
     recordedByUserId: by.userId,
     recordedAt: context.startedAt,
   });
   await audit.record(context, {
     actor: { kind: 'user', id: by.userId },
     ...(by.roleAssignmentId === undefined ? {} : { roleAssignmentId: by.roleAssignmentId }),
-    ...(by.approvalDecisionId === undefined ? {} : { approval: { decisionId: by.approvalDecisionId } }),
+    approval: { decisionId: by.approvalDecisionId },
     record: { module: 'configuration', type: 'activity_grant', id: grantId },
     operation: 'grant-activity',
     changes: [
@@ -101,7 +105,7 @@ export async function grantedActivities(
     if (row.businessUnitId === null) continue;
     const key = `${row.activity}:${row.businessUnitId}`;
     if (!latest.has(key)) {
-      latest.set(key, { activity: row.activity as Activity, businessUnitId: row.businessUnitId, granted: row.granted });
+      latest.set(key, { activity: row.activity, businessUnitId: row.businessUnitId, granted: row.granted });
     }
   }
   return [...latest.values()]

@@ -1486,6 +1486,14 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1; PRD-LIF-003, DEC-117",
       "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the unit's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
+    },
+    {
+      "table": "site_lifecycle.site_readiness_approval",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1; PRD-LIF-001",
+      "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the Site's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
     }
   ]
 }

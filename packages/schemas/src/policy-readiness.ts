@@ -16,6 +16,10 @@ import { settingOriginSchema } from './settings.js';
 export const policyNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const;
 export type PolicyNumber = (typeof policyNumbers)[number];
 export const policyNumberSchema = z.int().min(1).max(19);
+/** The policy a path's number names, or undefined for any other text: parsed, never cast. */
+export function policyNumberOf(value: string): PolicyNumber | undefined {
+  return policyNumbers.find((each) => String(each) === value);
+}
 
 /** A policy's number as a path parameter, `1` to `19`. */
 export const policyNumberParamSchema = z.strictObject({ policyNumber: z.string().regex(/^(?:[1-9]|1[0-9])$/) });

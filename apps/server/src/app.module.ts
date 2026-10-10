@@ -91,8 +91,14 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           catalogueApprovals(audit),
           // Bank-detail changes and agreement versions (structure-and-masters 5.1, 5.2; S1-F03-T03).
           partiesApprovals(audit),
-          // An activity's approval, which writes the grant into configuration (module-map 4.16; S1-F04-T02).
-          siteLifecycleApprovals(audit, configuration),
+          // A Site's shared readiness and an activity's approval, which writes the grant into configuration with the
+          // one writer of grants, claimed here for it (module-map 4.4, 4.16; S1-F04-T02).
+          siteLifecycleApprovals({
+            audit,
+            configuration,
+            grants: configuration.claimActivityGrants(),
+            locationInUse,
+          }),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION],
     },

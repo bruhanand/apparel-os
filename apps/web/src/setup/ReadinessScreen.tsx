@@ -17,7 +17,8 @@ import { Card, GrantedButton, inputClass, ListRead, Toolbar } from './parts';
 
 // Setup › Site opening and closure › Readiness (ui-blueprint; module-map 4.16; domain-model 3.6; structure-and-masters
 // 3.7; design-language 7; PRD-LIF-001 to PRD-LIF-003, PRD-UXP-003; DEC-116, DEC-117; S1-F04-T02). For a business unit:
-// each activity's checks with their state and what is missing, the request for its approval, which a different person
+// its Site's shared readiness for each activity, run and approved once for the Site (product owner, 10 Oct 2026); each
+// activity's checks with their state and what is missing, the request for its approval, which a different person
 // decides from My work, and the unit's zero opening-stock declaration. The unit and its Site show Active once they hold
 // a grant. Nothing is declared or asked for on the person's behalf.
 
@@ -48,6 +49,94 @@ function CheckRow({ check }: { check: ReadinessCheck }) {
   );
 }
 
+/** A run's checks, who ran them and when, and the state of its approval request. */
+function RunView({ latest, timeZone }: { latest: ReadinessRecord | null; timeZone: string }) {
+  if (latest === null) return <p className="m-0 text-body-sm text-text-2">{t('readiness.never-run')}</p>;
+  return (
+    <>
+      <p className="m-0 text-body-sm text-text-2">
+        {t('readiness.ran', { name: latest.ranBy, at: formatDateTime(latest.ranAt, timeZone) })}
+      </p>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {latest.checks.map((check) => (
+          <CheckRow key={check.check} check={check} />
+        ))}
+      </ul>
+      {latest.request !== null && (
+        <p className="m-0 text-body-sm">{t('readiness.request.state', { state: latest.request.state })}</p>
+      )}
+    </>
+  );
+}
+
+/** Run the checks and ask for approval of the latest run that passed, while no request is open on it. */
+function RunActions({ latest, onRun }: { latest: ReadinessRecord | null; onRun: () => void }) {
+  const requesting = useSubmission('requestActivation', READS);
+  const open = latest?.request?.state === 'Awaiting approval';
+  return (
+    <>
+      {requesting.state.kind === 'refused' && <RefusalBanner refusal={requesting.state.refusal} />}
+      {open && <Banner tone="info" role="status" message="readiness.requested" />}
+      <div className="flex flex-wrap gap-2">
+        <GrantedButton
+          label="readiness.run"
+          recordType="site_lifecycle.readiness_record"
+          action="create"
+          onClick={onRun}
+        />
+        {latest !== null && latest.passed && !open && (
+          <GrantedButton
+            label="readiness.request"
+            variant="primary"
+            recordType="site_lifecycle.readiness_record"
+            action="create"
+            onClick={() => {
+              void requesting.submit({ params: { readinessRecordId: latest.readinessRecordId }, body: {} });
+            }}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The Site's shared readiness for one activity (PRD-LIF-001; product owner, 10 Oct 2026): run once for the Site and
+ * approved by a different person; each unit's activation then needs it.
+ */
+function SiteCard({
+  siteId,
+  activity,
+  ready,
+  latest,
+  timeZone,
+}: {
+  siteId: string;
+  activity: UnitReadiness['site'][number]['activity'];
+  ready: boolean;
+  latest: ReadinessRecord | null;
+  timeZone: string;
+}) {
+  const running = useSubmission('runSiteReadinessChecks', READS);
+  const title = t('readiness.site.card', { activity: named('activity', activity) });
+  return (
+    <section aria-label={title} className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
+      <h4 className="text-h3 font-semibold">{title}</h4>
+      {ready && <Banner tone="success" role="status" message="readiness.site.ready" />}
+      {running.state.kind === 'refused' && <RefusalBanner refusal={running.state.refusal} />}
+      <RunView latest={latest} timeZone={timeZone} />
+      {!ready && (
+        <RunActions
+          latest={latest}
+          onRun={() => {
+            void running.submit({ params: { siteId, activity }, body: {} });
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 function ActivityCard({
   unitId,
   activity,
@@ -62,55 +151,20 @@ function ActivityCard({
   timeZone: string;
 }) {
   const running = useSubmission('runReadinessChecks', READS);
-  const requesting = useSubmission('requestActivation', READS);
   const title = named('activity', activity);
-  const open = latest?.request?.state === 'Awaiting approval';
   return (
     <section aria-label={title} className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
       <h3 className="text-h3 font-semibold">{title}</h3>
       {granted && <Banner tone="success" role="status" message="readiness.granted" />}
       {running.state.kind === 'refused' && <RefusalBanner refusal={running.state.refusal} />}
-      {requesting.state.kind === 'refused' && <RefusalBanner refusal={requesting.state.refusal} />}
-      {latest === null ? (
-        <p className="m-0 text-body-sm text-text-2">{t('readiness.never-run')}</p>
-      ) : (
-        <>
-          <p className="m-0 text-body-sm text-text-2">
-            {t('readiness.ran', { name: latest.ranBy, at: formatDateTime(latest.ranAt, timeZone) })}
-          </p>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {latest.checks.map((check) => (
-              <CheckRow key={check.check} check={check} />
-            ))}
-          </ul>
-          {latest.request !== null && (
-            <p className="m-0 text-body-sm">{t('readiness.request.state', { state: latest.request.state })}</p>
-          )}
-        </>
-      )}
-      {open && <Banner tone="info" role="status" message="readiness.requested" />}
+      <RunView latest={latest} timeZone={timeZone} />
       {!granted && (
-        <div className="flex flex-wrap gap-2">
-          <GrantedButton
-            label="readiness.run"
-            recordType="site_lifecycle.readiness_record"
-            action="create"
-            onClick={() => {
-              void running.submit({ params: { businessUnitId: unitId, activity }, body: {} });
-            }}
-          />
-          {latest !== null && latest.passed && !open && (
-            <GrantedButton
-              label="readiness.request"
-              variant="primary"
-              recordType="site_lifecycle.readiness_record"
-              action="create"
-              onClick={() => {
-                void requesting.submit({ params: { readinessRecordId: latest.readinessRecordId }, body: {} });
-              }}
-            />
-          )}
-        </div>
+        <RunActions
+          latest={latest}
+          onRun={() => {
+            void running.submit({ params: { businessUnitId: unitId, activity }, body: {} });
+          }}
+        />
       )}
     </section>
   );
@@ -188,6 +242,19 @@ function UnitReadinessView({ unitId }: { unitId: string }) {
             />
             <AsOf asOf={read.asOf} timeZone={timeZone} />
           </div>
+          <Card title="readiness.site.title">
+            <p className="m-0 text-body-sm text-text-2">{t('readiness.site.intro')}</p>
+            {read.site.map((each) => (
+              <SiteCard
+                key={each.activity}
+                siteId={read.siteId}
+                activity={each.activity}
+                ready={each.ready}
+                latest={each.latest}
+                timeZone={timeZone}
+              />
+            ))}
+          </Card>
           <ZeroStock read={read} timeZone={timeZone} />
           {read.activities.map((each) => (
             <ActivityCard

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_COMPOSITION } from '../../../kernel/index.js';
 import { GateRegistry, type GatedOperation } from './gate.js';
-import { deploymentEnvironmentOf, originAccepted } from './origins.js';
+import { originAccepted } from './origins.js';
 
 // The policy gate's own rules (module-map 4.4; code-house-rules 11.1, 12.14; DEC-116; S1-F04-T01).
 
@@ -14,25 +14,12 @@ describe('where a value came from (code-house-rules 12.14; DEC-116)', () => {
     ['dev', 'synthetic', SYNTHETIC_ORGANISATION, true],
     ['dev', 'synthetic', REAL_ORGANISATION, false],
     ['kdps-test', 'synthetic', SYNTHETIC_ORGANISATION, false],
-    ['production', 'synthetic', SYNTHETIC_ORGANISATION, false],
     ['kdps-test', 'test-setup', REAL_ORGANISATION, true],
     ['dev', 'test-setup', SYNTHETIC_ORGANISATION, false],
-    ['production', 'test-setup', REAL_ORGANISATION, false],
-    ['production', 'kdps', REAL_ORGANISATION, true],
+    ['kdps-test', 'kdps', REAL_ORGANISATION, true],
+    ['local', 'test-setup', REAL_ORGANISATION, false],
   ] as const)('with %s, a %s value on %s is accepted: %s', (environment, origin, organisation, accepted) => {
-    expect(originAccepted(deploymentEnvironmentOf({ AOS_ENVIRONMENT: environment }), origin, organisation)).toBe(
-      accepted,
-    );
-  });
-
-  it('accepts no synthetic or test-setup value where no environment is named', () => {
-    const unnamed = deploymentEnvironmentOf({});
-    expect(unnamed.name).toBeNull();
-    expect(originAccepted(unnamed, 'synthetic', SYNTHETIC_ORGANISATION)).toBe(false);
-    expect(originAccepted(unnamed, 'test-setup', REAL_ORGANISATION)).toBe(false);
-    expect(originAccepted(deploymentEnvironmentOf({ AOS_ENVIRONMENT: '' }), 'synthetic', SYNTHETIC_ORGANISATION)).toBe(
-      false,
-    );
+    expect(originAccepted({ name: environment }, origin, organisation)).toBe(accepted);
   });
 });
 
@@ -52,6 +39,28 @@ describe('the operations and checks the modules declare (module-map 4.4; code-ho
     expect(() => {
       new GateRegistry().registerOperation(operation);
     }).toThrow(/outside a test composition/);
+  });
+
+  it('refuses, at start, an operation naming a validity check no one registered (S1-F04 review H3)', () => {
+    const registry = new GateRegistry();
+    const naming: GatedOperation = {
+      ...operation,
+      code: 'site-lifecycle.publish-opening-data',
+      capability: 'site-lifecycle.opening',
+      checks: [{ check: 'site-lifecycle.opening-values' }],
+    };
+    expect(() => {
+      registry.registerOperation(naming);
+    }).toThrow(/names the validity check site-lifecycle.opening-values, which no module registered/);
+    registry.registerCheck({
+      code: 'site-lifecycle.opening-values',
+      policy: null,
+      check: () => Promise.resolve({ kind: 'valid' }),
+      values: () => Promise.resolve([]),
+      locks: () => Promise.resolve([]),
+    });
+    registry.registerOperation(naming);
+    expect(registry.operation(naming.code)).toBe(naming);
   });
 
   it('refuses an operation declared twice', () => {

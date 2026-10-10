@@ -54,7 +54,7 @@ function isSettingKey(key: string): key is AccessSettingKey {
 export class SecuritySettingsChanges {
   constructor(
     private readonly audit: AuditInterface,
-    private readonly origins?: Pick<ConfigurationInterface, 'originRefusal'>,
+    private readonly origins: Pick<ConfigurationInterface, 'originRefusal'>,
   ) {}
 
   /**
@@ -78,7 +78,7 @@ export class SecuritySettingsChanges {
     }
     const startsOn = draft.takesEffect.kind === 'from-date' ? draft.takesEffect.date : null;
     if (startsOn !== null && startsOn <= date.date) return refusal('refused', 'access.starts-in-past');
-    const notAccepted = this.origins?.originRefusal(context, draft.origin);
+    const notAccepted = this.origins.originRefusal(context, draft.origin);
     if (notAccepted !== undefined) return { kind: 'refusal', refusal: notAccepted };
     const value = SETTING_SCHEMAS[draft.setting].parse(draft.value);
     // A second first preparation waits here at the setting's unique key for the first, then finds its row: the

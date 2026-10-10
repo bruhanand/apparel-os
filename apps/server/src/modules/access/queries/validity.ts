@@ -1,7 +1,8 @@
 import type { SettingOrigin } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
+import { lockTable } from '../../../kernel/index.js';
 import type { ValidityCheck } from '../../configuration/index.js';
-import { settingVersion, settingVersionChange } from '../db/schema.js';
+import { setting, settingVersion, settingVersionChange } from '../db/schema.js';
 import { securitySettings } from './security-settings.js';
 
 /**
@@ -25,6 +26,7 @@ export const securitySettingsCheck: ValidityCheck = {
     const rows = await context.tx
       .select({
         id: settingVersion.id,
+        validDuring: settingVersion.validDuring,
         origin: settingVersion.origin,
         changedBy: settingVersionChange.changedByUserId,
       })
@@ -37,12 +39,29 @@ export const securitySettingsCheck: ValidityCheck = {
                or pg_catalog.upper(${settingVersion.validDuring}) > ${now}::timestamptz)`,
         ),
       );
-    const byVersion = new Map<string, { origin: SettingOrigin; enteredBy: Set<string> }>();
+    const byVersion = new Map<string, { version: string; origin: SettingOrigin; enteredBy: Set<string> }>();
     for (const row of rows) {
-      const entry = byVersion.get(row.id) ?? { origin: row.origin as SettingOrigin, enteredBy: new Set<string>() };
+      const entry = byVersion.get(row.id) ?? {
+        // Its validity is the part changed in place, when a later version ends it (RR-478).
+        version: row.validDuring,
+        origin: row.origin as SettingOrigin,
+        enteredBy: new Set<string>(),
+      };
       if (row.changedBy !== null) entry.enteredBy.add(row.changedBy);
       byVersion.set(row.id, entry);
     }
-    return [...byVersion].map(([key, entry]) => ({ key, origin: entry.origin, enteredBy: [...entry.enteredBy] }));
+    return [...byVersion].map(([key, entry]) => ({
+      key,
+      version: entry.version,
+      origin: entry.origin,
+      enteredBy: [...entry.enteredBy],
+    }));
+  },
+  // Every change of a setting's versions locks the setting's row (commands/security-settings.ts).
+  async locks(context) {
+    const rows = await context.tx.select({ id: setting.id }).from(setting);
+    return rows.map((row) => ({ table: SETTING, id: row.id, mode: 'shared' as const }));
   },
 };
+
+const SETTING = lockTable('access', 'setting');

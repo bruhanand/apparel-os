@@ -1,3 +1,4 @@
+import type { Activity, PolicyNumber, PolicyRecordOrigin } from '@apparel-os/schemas';
 import { boolean, customType, date, pgSchema, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the configuration module's tables (code-house-rules 3.4). They mirror the reviewed
@@ -26,10 +27,10 @@ export const organisationTimezoneVersion = configuration.table('organisation_tim
 /** A policy recorded as Signed, with its evidence (migration 0049; DEC-092). Append-only. */
 export const policySignature = configuration.table('policy_signature', {
   id: uuid('id').primaryKey(),
-  policyNumber: smallint('policy_number').notNull(),
+  policyNumber: smallint('policy_number').$type<PolicyNumber>().notNull(),
   signatory: text('signatory').notNull(),
   signedOn: date('signed_on', { mode: 'string' }).notNull(),
-  origin: text('origin').notNull(),
+  origin: text('origin').$type<PolicyRecordOrigin>().notNull(),
   evidenceAttachmentIds: uuid('evidence_attachment_ids').array().notNull(),
   recordedByUserId: uuid('recorded_by_user_id').notNull(),
   roleAssignmentId: uuid('role_assignment_id').notNull(),
@@ -39,8 +40,8 @@ export const policySignature = configuration.table('policy_signature', {
 /** A policy's real values recorded as validated, with what it covers and its evidence (migration 0049; DM-6). */
 export const policyValidation = configuration.table('policy_validation', {
   id: uuid('id').primaryKey(),
-  policyNumber: smallint('policy_number').notNull(),
-  origin: text('origin').notNull(),
+  policyNumber: smallint('policy_number').$type<PolicyNumber>().notNull(),
+  origin: text('origin').$type<PolicyRecordOrigin>().notNull(),
   validatedValues: text('validated_values').array().notNull(),
   evidenceAttachmentIds: uuid('evidence_attachment_ids').array().notNull(),
   validatedByUserId: uuid('validated_by_user_id').notNull(),
@@ -61,11 +62,12 @@ export const capabilityChange = configuration.table('capability_change', {
 /** An activity granted to or withdrawn from a place (migration 0049; PRD-LIF-001). Written by site-lifecycle only. */
 export const activityGrant = configuration.table('activity_grant', {
   id: uuid('id').primaryKey(),
-  activity: text('activity').notNull(),
+  activity: text('activity').$type<Activity>().notNull(),
   siteId: uuid('site_id').notNull(),
   businessUnitId: uuid('business_unit_id'),
   granted: boolean('granted').notNull(),
   readinessRecordId: uuid('readiness_record_id').notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
   recordedByUserId: uuid('recorded_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull(),
 });

@@ -26,6 +26,7 @@ import { capturingLogger } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
 import { backendPid, terminateBackend } from './support/transactions.js';
+import { localOrigins } from './support/origins.js';
 
 // S1-F01-T20: the decision and everything it causes commit together or not at all (spec sections 9 and 10, "The
 // database fails during Decide"; S1-F01-AT15; numbering-and-audit 7 test 8; module-map 6.2 flow A). A decision on a
@@ -119,7 +120,11 @@ beforeAll(async () => {
   if (!found.routed) throw new Error('not routed');
   routed = found.organisation;
   const keys = syntheticKeysEnvironment(world);
-  access = new Access({ audit: new Audit(log.logger), keys: OrganisationKeys.fromEnvironment(keys) });
+  access = new Access({
+    origins: localOrigins,
+    audit: new Audit(log.logger),
+    keys: OrganisationKeys.fromEnvironment(keys),
+  });
   const enrolled = (label: string) =>
     writeSyntheticUser(database, routed.organisationCode, keys, { label, enrolled: true });
   admin = await enrolled('ADMIN');

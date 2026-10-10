@@ -38,6 +38,7 @@ import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import { LOCATION_IN_USE, type LocationInUse } from '../../src/modules/organisation/index.js';
 import {
   CONFIGURATION,
   CONFIGURATION_ENVIRONMENT,
@@ -271,6 +272,8 @@ export async function startAccessApp(
     /** Synthetic policy-dependent operations and validity checks, for a test-only module (S1-F04-T01). */
     readonly gatedOperations?: readonly GatedOperation[];
     readonly validityChecks?: readonly ValidityCheck[];
+    /** Whether stock is recorded at a location, as `stock` answers it; the ledger's own unless a test gives one. */
+    readonly locationInUse?: LocationInUse;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -286,6 +289,9 @@ export async function startAccessApp(
   );
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  if (options.locationInUse !== undefined) {
+    builder = builder.overrideProvider(LOCATION_IN_USE).useValue(options.locationInUse);
+  }
   if (options.liveSettings !== undefined) {
     builder = builder.overrideProvider(LIVE_SETTINGS).useValue(options.liveSettings);
   }
@@ -335,13 +341,15 @@ export async function startAccessApp(
     .overrideProvider(CONFIGURATION_ENVIRONMENT)
     .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
     .compile();
-  const configuration = moduleRef.get<ConfigurationInterface>(CONFIGURATION);
-  for (const check of options.validityChecks ?? []) configuration.registerCheck(check, TEST_COMPOSITION);
-  for (const operation of options.gatedOperations ?? []) configuration.registerOperation(operation, TEST_COMPOSITION);
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
   if (options.webApp !== undefined) serveWebApp(app, options.webApp);
   app.enableShutdownHooks();
+  // After the modules register their own validity checks at start, so an operation may name one (module-map 4.4).
+  await app.init();
+  const configuration = moduleRef.get<ConfigurationInterface>(CONFIGURATION);
+  for (const check of options.validityChecks ?? []) configuration.registerCheck(check, TEST_COMPOSITION);
+  for (const operation of options.gatedOperations ?? []) configuration.registerOperation(operation, TEST_COMPOSITION);
   await app.listen(options.port ?? 0, '127.0.0.1');
   const baseUrl = await app.getUrl();
   return { app, baseUrl, logText: () => lines.join(''), close: () => app.close() };
