@@ -1,4 +1,4 @@
-import type { RowIssue, StagedValueView } from '@apparel-os/schemas';
+import type { ImportOutcome, RowIssue, StagedValueView } from '@apparel-os/schemas';
 import { codeText } from '../components/StandardStates';
 import { isMessageId, t } from '../messages/catalogue';
 
@@ -79,4 +79,17 @@ export function placeText(issue: RowIssue): string {
     issue.field === undefined ? undefined : fieldName(issue.field),
   ];
   return parts.filter((part) => part !== undefined).join(' · ');
+}
+
+/** An attempt's counts (7.4): rows read, ignored, accepted, rejected, pending and duplicate. */
+export function countsText(outcome: Pick<ImportOutcome, 'counts'>): string {
+  const { counts } = outcome;
+  return t('intake.outcome.counts', {
+    read: counts.rowsRead,
+    ignored: counts.rowsIgnored,
+    accepted: counts.rowsAccepted,
+    rejected: counts.rowsRejected,
+    pending: counts.rowsPending,
+    duplicate: counts.rowsDuplicate,
+  });
 }

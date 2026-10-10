@@ -2,6 +2,7 @@ import {
   IMPORT_BATCH_TYPE,
   type DocumentPreview,
   type ImportBatchRead,
+  type ImportOutcome,
   type RowIssue,
   type StagedRow,
   type ValueSuggestion,
@@ -26,13 +27,16 @@ import { recordTypeName } from '../setup/describe';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
-import { className, correctionText, fieldName, issueText, placeText, valueLines } from './import-text';
+import { EvidenceList } from './Evidence';
+import { className, correctionText, countsText, fieldName, issueText, placeText, valueLines } from './import-text';
 
 // One import batch on Setup › File intake and saved layouts (imports-and-opening-data 3.2, 5, 8, 11, 13.1, 16;
 // design-language 10.10; S1-F06-T01, S1-F06-T03): its staged rows with each original cell's value beside its
 // normalised value and origin, hidden rows marked, a value entered by a person with the suggestions to accept, a
 // document excluded or put back; the validation report with its Warnings marked seen one class at a time; Validate,
-// Submit for review and Publish. A value of a class the reader is not granted is masked.
+// Submit for review and Publish. A value of a class the reader is not granted is masked. With S1-F06-T04: a document
+// that duplicates, conflicts with or revises a published one says so; Publish carries the batch version read and says
+// when some documents were not published; Withdraw; and each attempt's counts and documents (7.2, 7.4).
 
 const BATCH_READS = ['readImportBatch'] as const;
 
@@ -335,12 +339,33 @@ function Report({ read }: { read: ImportBatchRead }) {
   );
 }
 
+/** What became of each document at one attempt (7.2, 7.4): published, refused, a conflict, a duplicate, excluded. */
+function OutcomeDocuments({ outcome, read }: { outcome: ImportOutcome; read: ImportBatchRead }) {
+  return (
+    <ul aria-label={t('intake.outcome.documents')} className="m-0 flex list-none flex-col gap-1 p-0 pl-4">
+      {outcome.documents.map((document) => {
+        const found = read.documents.find((each) => each.documentId === document.documentId);
+        const reference =
+          found === undefined || found.referenceMasked !== undefined ? t('intake.value.masked') : found.reference;
+        return (
+          <li key={document.documentId}>
+            {t(`intake.outcome.document.${document.result}`, { reference })}
+            {document.refusalCode !== undefined && <> {issueText(document.refusalCode)}</>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function Batch({ read }: { read: ImportBatchRead }) {
   const timeZone = useTimeZone();
   const validate = useSubmission('validateImport', BATCH_READS);
   const submit = useSubmission('submitImport', BATCH_READS);
   const publish = useSubmission('publishImport', BATCH_READS);
+  const withdraw = useSubmission('withdrawImport', BATCH_READS);
   const exclude = useSubmission('excludeImportDocument', BATCH_READS);
+  const [published, setPublished] = useState<'published' | 'failed' | undefined>();
   const [entering, setEntering] = useState<{ row: StagedRow; field: string } | null>(null);
   const { batch } = read;
   const open = batch.state === 'Staged' || batch.state === 'Validated';
@@ -374,7 +399,11 @@ export function Batch({ read }: { read: ImportBatchRead }) {
       )}
       <SubmissionBanner state={validate.state} done="intake.validate.done" />
       <SubmissionBanner state={submit.state} done="intake.submit.done" />
-      <SubmissionBanner state={publish.state} done="intake.publish.done" />
+      <SubmissionBanner
+        state={publish.state}
+        done={published === 'failed' ? 'intake.publish.partly' : 'intake.publish.done'}
+      />
+      <SubmissionBanner state={withdraw.state} done="intake.withdraw.done" />
       <SubmissionBanner state={exclude.state} done="intake.exclude.done" />
       <div className="flex flex-wrap gap-2">
         {batch.state === 'Staged' && (
@@ -405,7 +434,24 @@ export function Batch({ read }: { read: ImportBatchRead }) {
             action="edit"
             variant="primary"
             onClick={() => {
-              void publish.submit({ params: { batchId: batch.batchId }, body: {} });
+              void (async () => {
+                // The batch version read travels with it (code-house-rules 12.7).
+                const answer = await publish.submit({
+                  params: { batchId: batch.batchId },
+                  body: { versionId: batch.versionId },
+                });
+                setPublished(answer?.result);
+              })();
+            }}
+          />
+        )}
+        {open && (
+          <GrantedButton
+            label="intake.withdraw"
+            recordType={IMPORT_BATCH_TYPE}
+            action="edit"
+            onClick={() => {
+              void withdraw.submit({ params: { batchId: batch.batchId }, body: { versionId: batch.versionId } });
             }}
           />
         )}
@@ -444,6 +490,16 @@ export function Batch({ read }: { read: ImportBatchRead }) {
                 />
               )}
             </div>
+            {document.identity !== undefined && (
+              <Banner
+                tone={document.identity.kind === 'conflict' ? 'warning' : 'info'}
+                role="status"
+                message={`intake.document.identity.${document.identity.kind}`}
+              />
+            )}
+            {document.revisesDocumentId !== undefined && (
+              <p className="m-0 text-body-sm text-text-2">{t('intake.document.revises')}</p>
+            )}
             {document.preview !== undefined && <Preview preview={document.preview} />}
             <div className="overflow-x-auto rounded-card border border-border">
               <table className="w-full border-collapse text-body" aria-label={t('intake.rows', { reference })}>
@@ -479,6 +535,9 @@ export function Batch({ read }: { read: ImportBatchRead }) {
           </Card>
         );
       })}
+      <Card title="intake.stored.title">
+        <EvidenceList attachmentIds={[batch.attachmentId]} />
+      </Card>
       {read.ignoredRows.length > 0 && (
         <p className="m-0 text-body-sm text-text-2">{t('intake.ignored', { count: read.ignoredRows.length })}</p>
       )}
@@ -486,13 +545,15 @@ export function Batch({ read }: { read: ImportBatchRead }) {
         <Card title="intake.outcomes">
           <ul className="m-0 flex list-none flex-col gap-1 p-0 text-body-sm">
             {read.outcomes.map((outcome) => (
-              <li key={outcome.outcomeId}>
-                {t(outcome.result === 'published' ? 'intake.outcome.published' : 'intake.outcome.failed', {
-                  at: formatDateTime(outcome.attemptedAt, timeZone),
-                  read: outcome.counts.rowsRead,
-                  accepted: outcome.counts.rowsAccepted,
-                })}
-                {outcome.refusalCode !== undefined && <> {codeText(outcome.refusalCode)}</>}
+              <li key={outcome.outcomeId} className="flex flex-col gap-1">
+                <span>
+                  {t(outcome.result === 'published' ? 'intake.outcome.published' : 'intake.outcome.failed', {
+                    at: formatDateTime(outcome.attemptedAt, timeZone),
+                  })}{' '}
+                  {countsText(outcome)}
+                  {outcome.refusalCode !== undefined && <> {codeText(outcome.refusalCode)}</>}
+                </span>
+                <OutcomeDocuments outcome={outcome} read={read} />
               </li>
             ))}
           </ul>

@@ -117,6 +117,10 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'layout-column' && item.column !== undefined) {
     return t('missing.layout-column.named', { column: item.column });
   }
+  // An earlier batch of the same file, by its code and state (imports-and-opening-data 7.2; S1-F06-T04).
+  if (item.kind === 'import-batch' && item.code !== undefined && item.state !== undefined) {
+    return t('missing.import-batch.named', { code: item.code, state: item.state });
+  }
   return undefined;
 }
 

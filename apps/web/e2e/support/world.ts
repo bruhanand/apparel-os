@@ -207,6 +207,20 @@ export interface SyntheticWorld {
     /** The SYNTHETIC brand code a mapping rule may target, and today as a business date. */
     readonly brandCode: string;
     readonly today: string;
+    /** The duplicate journey's own Booking user and two files: one style, then it again with a new one (S1-F06-T04). */
+    readonly duplicate: {
+      readonly booking: EnrolledUser;
+      readonly firstFile: string;
+      readonly secondFile: string;
+      readonly style: string;
+      readonly newStyle: string;
+    };
+    /** A reader scoped to one Store, and the codes of a batch in that Store and of one in another (S1-F06-T04). */
+    readonly outcomes: {
+      readonly reader: EnrolledUser;
+      readonly storeBatchCode: string;
+      readonly otherBatchCode: string;
+    };
   };
   /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's

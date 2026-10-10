@@ -18,6 +18,7 @@ import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner } from '../
 import { RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
 import { BatchRead } from './BatchView';
+import { OutcomesReport } from './OutcomesReport';
 import { base64Of, sizeText } from './Evidence';
 import { MappingRules, ProposeLayoutForm, SavedLayouts } from './SavedLayouts';
 
@@ -26,7 +27,8 @@ import { MappingRules, ProposeLayoutForm, SavedLayouts } from './SavedLayouts';
 // content and keeps encrypted; the stored file shows with its earlier batches and the saved layout versions its
 // structure matches, one proposed, several to choose from, or none, when the preparer proposes a new version from the
 // file's header; a batch is started with a matching layout and mapping; the batch, its staged rows and its validation
-// report follow (BatchView). The saved layouts and the mapping rules, with their proposals, have tabs of their own.
+// report follow (BatchView). The saved layouts and the mapping rules, with their proposals, have tabs of their own, and
+// so does the import outcomes report (OutcomesReport; S1-F06-T04).
 
 const XLSX_ACCEPT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -284,7 +286,7 @@ function Intake() {
   );
 }
 
-const TABS = ['intake', 'layouts', 'rules'] as const;
+const TABS = ['intake', 'layouts', 'rules', 'outcomes'] as const;
 type Tab = (typeof TABS)[number];
 
 /** Setup › File intake and saved layouts. */
@@ -318,6 +320,7 @@ export function FileIntakeScreen() {
         {tab === 'intake' && <Intake />}
         {tab === 'layouts' && <SavedLayouts />}
         {tab === 'rules' && <MappingRules />}
+        {tab === 'outcomes' && <OutcomesReport />}
       </div>
     </div>
   );
