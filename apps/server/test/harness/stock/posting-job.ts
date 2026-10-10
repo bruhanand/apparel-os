@@ -60,7 +60,12 @@ export interface PostingHooks {
   beforeLocks?: (context: TransactionContext, documentId: string) => Promise<void>;
   hold?: (context: TransactionContext) => Promise<void>;
   /** Called with the step's timings in milliseconds once its items are posted, before the commit. */
-  timed?: (timing: { readonly slowWorkMs: number; readonly postingMs: number; readonly items: number }) => void;
+  timed?: (timing: {
+    readonly slowWorkMs: number;
+    readonly postingMs: number;
+    readonly items: number;
+    readonly phases: Readonly<Record<string, number>>;
+  }) => void;
 }
 
 interface PostRequestRow extends Record<string, unknown> {
@@ -122,9 +127,11 @@ export function harnessPostingConsumer(
       ).rows.map((row) => row.recorded_by_user_id);
       await hooks.beforeLocks?.(context, request.document_id);
       const slowWorkMs = performance.now() - started;
+      const phases: Record<string, number> = {};
       try {
         await harness.postIn(context, actor, items, {
           authorityHeld: true,
+          timings: phases,
           source: {
             module: HARNESS_MODULE,
             recordType: HARNESS_RECORD_TYPE,
@@ -142,7 +149,12 @@ export function harnessPostingConsumer(
             after: async (c) => {
               await c.tx.execute(sql`
                 update test_stock_harness.document set state = 'posted' where id = ${request.document_id}`);
-              hooks.timed?.({ slowWorkMs, postingMs: performance.now() - started - slowWorkMs, items: items.length });
+              hooks.timed?.({
+                slowWorkMs,
+                postingMs: performance.now() - started - slowWorkMs,
+                items: items.length,
+                phases,
+              });
             },
           },
         });

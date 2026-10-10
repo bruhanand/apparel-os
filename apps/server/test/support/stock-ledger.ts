@@ -444,16 +444,21 @@ export class StockWorld {
       items,
       ...(options.approval === undefined ? {} : { approval: { decisionId: options.approval.decisionId, useId } }),
     };
+    const mark = timer(options.timings);
     const planned = await this.ledger.plan(context, request);
+    mark('plan');
     if (planned.kind === 'refused') throw new PostingRefused(planned.refusal);
     await options.afterPlan?.(context);
     const locked = await this.ledger.lock(context, planned.value);
+    mark('lock');
     // Steps 7 and 8: the periods the valued items post into, then the journal series (13.1; 10.3).
     const periods = await this.ledger.holdPeriods(context, planned.value);
     if (periods.kind === 'refused') throw new PostingRefused(periods.refusal);
     if (periods.value.length > 0) await context.lock(LOCK_STEP.numberSeries, periods.value);
+    mark('periodsAndSeries');
     const checked = await this.ledger.recheck(context, locked);
     if (checked.kind === 'refused') throw new PostingRefused(checked.refusal);
+    mark('recheck');
     await options.hold?.(context);
     if (options.approval !== undefined) {
       const document = {
@@ -484,7 +489,9 @@ export class StockWorld {
       });
       if (used !== undefined) throw new PostingRefused(used);
     }
+    mark('approval');
     const wrote = await this.ledger.write(context, checked.value);
+    mark('write');
     if (wrote.kind === 'refused') throw new PostingRefused(wrote.refusal);
     await options.document?.after(context, wrote.value);
     return wrote.value;
@@ -529,6 +536,16 @@ export class StockWorld {
   }
 }
 
+/** Records into `timings`, if given, the milliseconds since the last mark under each name. */
+function timer(timings: Record<string, number> | undefined): (name: string) => void {
+  let last = performance.now();
+  return (name) => {
+    const now = performance.now();
+    if (timings !== undefined) timings[name] = (timings[name] ?? 0) + now - last;
+    last = now;
+  };
+}
+
 /** A posting refused inside its command, which rolls the command back (13.1). */
 export class PostingRefused extends Error {
   constructor(readonly refusal: CommandRefusal) {
@@ -549,6 +566,8 @@ export interface PostOptions {
   readonly hold?: (context: TransactionContext) => Promise<void>;
   /** The worker has held the job step's authority at step 0 (code-house-rules 12.9): postIn does not hold it again. */
   readonly authorityHeld?: boolean;
+  /** Filled with the milliseconds each part of the posting took, for a measurement (S1-F10-T07). */
+  readonly timings?: Record<string, number>;
   /** Runs after Plan, before any lock of steps 2 to 8, so a test can change what the locks will find (10.4). */
   readonly afterPlan?: (context: TransactionContext) => Promise<void>;
   /**

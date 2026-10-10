@@ -1,5 +1,5 @@
 import { known, paise, uuidv7 } from '@apparel-os/domain';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditSource } from '../../audit/index.js';
 import type { PostItem, PostResult } from '../../finance/books/index.js';
@@ -29,6 +29,7 @@ import {
   valuationLayer,
 } from './db/schema.js';
 import { postedRecordType, refusalOf, StockRefused } from './domain/request.js';
+import { insertRows } from './db/sql.js';
 import type { PostShare } from './domain/valuing.js';
 import type { LedgerBooks } from './ports.js';
 import type { ClaimState, ExpectedQuantity } from './domain/working.js';
@@ -92,20 +93,20 @@ export async function writeRequest(
     roleAssignmentId: actor.roleAssignmentId,
   };
   const times = { businessDate: plan.businessDate, occurredAt: plan.occurredAt };
-  if (
-    !entries.origins.every((origin) =>
-      lines.has(entries.movements.find((m) => m.id === origin.lastStateMovementId)?.lineId ?? ''),
-    )
-  ) {
+  // Movements by identifier, so a large document's origins find theirs at once (10.6).
+  const movementById = new Map(entries.movements.map((each) => [each.id, each]));
+  if (!entries.origins.every((origin) => lines.has(movementById.get(origin.lastStateMovementId ?? '')?.lineId ?? ''))) {
     throw new CommandDefect('An origin without its receipt movement');
   }
 
   if (entries.origins.length > 0) {
-    await context.tx.insert(receiptOrigin).values(
+    await insertRows(
+      context,
+      receiptOrigin,
       entries.origins.map((origin) => {
         const unit = working.unit(origin.scope.siteId, origin.scope.businessUnitId);
         const sku = working.sku(origin.skuId ?? '');
-        const movementOf = entries.movements.find((each) => each.id === origin.lastStateMovementId);
+        const movementOf = movementById.get(origin.lastStateMovementId ?? '');
         return {
           id: origin.id,
           originKind: origin.originKind ?? 'receipt',
@@ -129,7 +130,9 @@ export async function writeRequest(
     );
   }
   if (entries.movements.length > 0) {
-    await context.tx.insert(movement).values(
+    await insertRows(
+      context,
+      movement,
       entries.movements.map((each) => ({
         id: each.id,
         kind: each.kind,
@@ -164,12 +167,12 @@ export async function writeRequest(
         ...leg.scope,
       })),
     );
-    if (legs.length > 0) await context.tx.insert(movementLeg).values(legs);
+    if (legs.length > 0) await insertRows(context, movementLeg, legs);
   }
   // Origin states: new ones with their owner (PRD-ORG-014, PRD-ORG-019); changed ones in place, under the origin's
   // exclusive lock (14.3).
   const newStates = entries.origins.map((origin) => {
-    const owner = entries.movements.find((each) => each.id === origin.lastStateMovementId)?.owner ?? {
+    const owner = movementById.get(origin.lastStateMovementId ?? '')?.owner ?? {
       kind: 'unknown' as const,
     };
     return {
@@ -190,20 +193,25 @@ export async function writeRequest(
       ...origin.scope,
     };
   });
-  if (newStates.length > 0) await context.tx.insert(receiptOriginState).values(newStates);
-  for (const origin of working.origins.values()) {
-    if (origin.isNew || !origin.stateChanged) continue;
-    await context.tx
-      .update(receiptOriginState)
-      .set({
-        ptRevisionId: origin.ptRevisionId,
-        coveredQuantity: origin.coveredQuantity,
-        valueKnown: origin.valueKnown,
-        pRatePaise: origin.pRatePaise,
-        establishedValuePaise: origin.establishedValuePaise,
-        ...(origin.lastStateMovementId === null ? {} : { lastStateMovementId: origin.lastStateMovementId }),
-      })
-      .where(eq(receiptOriginState.id, origin.stateId));
+  if (newStates.length > 0) await insertRows(context, receiptOriginState, newStates);
+  // Changed states in place, set-based in parts of a bounded size, so a large document's (a 10,000-line PT approval,
+  // 10.6) are a few statements, not one per origin (S1-F10-T07). Each keeps its last movement unless one is named.
+  const changedStates = [...working.origins.values()].filter((origin) => !origin.isNew && origin.stateChanged);
+  for (let start = 0; start < changedStates.length; start += STATES_PER_UPDATE) {
+    const rows = changedStates.slice(start, start + STATES_PER_UPDATE).map(
+      (origin) =>
+        sql`(${origin.stateId}::uuid, ${origin.ptRevisionId}::uuid, ${origin.coveredQuantity}::integer,
+          ${origin.valueKnown}::boolean, ${origin.pRatePaise}::bigint, ${origin.establishedValuePaise}::bigint,
+          ${origin.lastStateMovementId}::uuid)`,
+    );
+    await context.tx.execute(sql`
+      update stock.receipt_origin_state s set pt_revision_id = v.pt_revision_id,
+        covered_quantity = v.covered_quantity, value_known = v.value_known, p_rate_paise = v.p_rate_paise,
+        established_value_paise = v.established_value_paise,
+        last_state_movement_id = coalesce(v.last_state_movement_id, s.last_state_movement_id)
+      from (values ${sql.join(rows, sql`, `)}) as v (id, pt_revision_id, covered_quantity, value_known, p_rate_paise,
+        established_value_paise, last_state_movement_id)
+      where s.id = v.id`);
   }
   for (const total of working.skuBalances.values()) {
     if (total.changed)
@@ -212,7 +220,9 @@ export async function writeRequest(
   const balances = [...working.balances.values()];
   const newBalances = balances.filter((row) => row.isNew);
   if (newBalances.length > 0) {
-    await context.tx.insert(balance).values(
+    await insertRows(
+      context,
+      balance,
       newBalances.map((row) => ({
         id: row.id,
         skuBalanceId: row.skuBalanceId,
@@ -246,7 +256,9 @@ export async function writeRequest(
   const pieces = [...working.pieces.values()];
   const newPieces = pieces.filter((row) => row.isNew);
   if (newPieces.length > 0) {
-    await context.tx.insert(piece).values(
+    await insertRows(
+      context,
+      piece,
       newPieces.map((row) => ({
         id: row.id,
         code: row.code,
@@ -306,10 +318,12 @@ export async function writeRequest(
       };
     }),
   );
-  if (movedPieces.length > 0) await context.tx.insert(movementPiece).values(movedPieces);
+  if (movedPieces.length > 0) await insertRows(context, movementPiece, movedPieces);
   const status = { ...actorColumns, ...times };
   if (entries.coverage.length > 0) {
-    await context.tx.insert(coverage).values(
+    await insertRows(
+      context,
+      coverage,
       entries.coverage.map((row) => ({
         id: row.id,
         ptRevisionId: row.ptRevisionId,
@@ -326,7 +340,9 @@ export async function writeRequest(
     );
   }
   if (entries.acceptances.length > 0) {
-    await context.tx.insert(acceptance).values(
+    await insertRows(
+      context,
+      acceptance,
       entries.acceptances.map((row) => ({
         id: row.id,
         receiptOriginId: row.receiptOriginId,
@@ -341,7 +357,9 @@ export async function writeRequest(
     );
   }
   if (entries.reservations.length > 0) {
-    await context.tx.insert(reservation).values(
+    await insertRows(
+      context,
+      reservation,
       entries.reservations.map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -353,7 +371,9 @@ export async function writeRequest(
     );
   }
   if (entries.holds.length > 0) {
-    await context.tx.insert(hold).values(
+    await insertRows(
+      context,
+      hold,
       entries.holds.map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -378,7 +398,7 @@ export async function writeRequest(
         brandIds: row.brandIds as string[],
       })),
     );
-    if (scopes.length > 0) await context.tx.insert(holdScope).values(scopes);
+    if (scopes.length > 0) await insertRows(context, holdScope, scopes);
   }
   const newClaims = working.claims.filter((claim) => claim.isNew);
   const claimRow = (claim: ClaimState) => ({
@@ -391,15 +411,19 @@ export async function writeRequest(
   });
   const newHoldClaims = newClaims.filter((claim) => claim.owner === 'hold');
   if (newHoldClaims.length > 0) {
-    await context.tx
-      .insert(holdClaim)
-      .values(newHoldClaims.map((claim) => ({ ...claimRow(claim), holdId: claim.headerId })));
+    await insertRows(
+      context,
+      holdClaim,
+      newHoldClaims.map((claim) => ({ ...claimRow(claim), holdId: claim.headerId })),
+    );
   }
   const newReservationClaims = newClaims.filter((claim) => claim.owner === 'reservation');
   if (newReservationClaims.length > 0) {
-    await context.tx
-      .insert(reservationClaim)
-      .values(newReservationClaims.map((claim) => ({ ...claimRow(claim), reservationId: claim.headerId })));
+    await insertRows(
+      context,
+      reservationClaim,
+      newReservationClaims.map((claim) => ({ ...claimRow(claim), reservationId: claim.headerId })),
+    );
   }
   for (const claim of working.claims) {
     if (claim.isNew || !claim.changed) continue;
@@ -407,7 +431,9 @@ export async function writeRequest(
     await context.tx.update(table).set({ quantity: claim.quantity }).where(eq(table.id, claim.id));
   }
   if (entries.holdReleases.length > 0) {
-    await context.tx.insert(holdRelease).values(
+    await insertRows(
+      context,
+      holdRelease,
       entries.holdReleases.map((row) => ({
         id: row.id,
         holdId: row.holdId,
@@ -438,7 +464,9 @@ export async function writeRequest(
     });
   }
   if (entries.reservationEvents.length > 0) {
-    await context.tx.insert(reservationEvent).values(
+    await insertRows(
+      context,
+      reservationEvent,
       entries.reservationEvents.map((row) => ({
         id: row.id,
         reservationId: row.reservationId,
@@ -658,7 +686,9 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
   const { working, plan } = checked;
   const times = { businessDate: plan.businessDate, accountingDate: plan.businessDate };
   if (working.valuations.length > 0) {
-    await context.tx.insert(valuation).values(
+    await insertRows(
+      context,
+      valuation,
       working.valuations.map((row) => ({
         id: row.id,
         movementId: row.movementId,
@@ -689,7 +719,9 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     const scope = { siteId: pool.siteId, legalEntityId: pool.legalEntityId, brandId: pool.brandId };
     const added = pool.layers.filter((layer) => layer.isNew);
     if (added.length > 0) {
-      await context.tx.insert(costLayer).values(
+      await insertRows(
+        context,
+        costLayer,
         added.map((layer) => ({
           id: layer.id,
           costPoolId: pool.id,
@@ -726,7 +758,7 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
       ...row.scope,
     })),
   );
-  if (valuationLayers.length > 0) await context.tx.insert(valuationLayer).values(valuationLayers);
+  if (valuationLayers.length > 0) await insertRows(context, valuationLayer, valuationLayers);
   for (const transit of working.transits.values()) {
     if (transit.changed) {
       await context.tx
@@ -736,7 +768,9 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     }
     const added = transit.layers.filter((layer) => layer.isNew);
     if (added.length > 0) {
-      await context.tx.insert(transitValueLayer).values(
+      await insertRows(
+        context,
+        transitValueLayer,
         added.map((layer) => ({
           id: layer.id,
           transitValueId: transit.id,
@@ -760,3 +794,6 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     }
   }
 }
+
+/** Origin states one set-based update takes: a technical bound, inside PostgreSQL's parameter limit (7 a row). */
+const STATES_PER_UPDATE = 1000;

@@ -38,7 +38,9 @@ export async function post(
   for (const check of postable) {
     requirePeriodHeld(context, check.period.id);
     const key = [check.bookId, check.eventKind, check.accountingDate].join('|');
-    groups.set(key, [...(groups.get(key) ?? []), check]);
+    const group = groups.get(key) ?? [];
+    group.push(check);
+    groups.set(key, group);
   }
   const written: PostedJournal[] = [];
   const uses = new Map<string, { journalId: string; period: PostableItem['period'] }>();
@@ -120,17 +122,23 @@ async function postGroup(
       }
     }
   }
-  await context.tx.insert(postingSource).values(
-    [...sources.values()].map((each) => ({
-      id: uuidv7(),
-      sourceModule: request.sourceModule,
-      itemKey: each.itemKey,
-      component: each.component,
-      amountPaise: each.amount,
-      journalId: answer.journal.journalId,
-      journalLineId: each.lineId,
-      itemHash: hashes.get(each.itemKey) ?? '',
-    })),
-  );
+  const rows = [...sources.values()].map((each) => ({
+    id: uuidv7(),
+    sourceModule: request.sourceModule,
+    itemKey: each.itemKey,
+    component: each.component,
+    amountPaise: each.amount,
+    journalId: answer.journal.journalId,
+    journalLineId: each.lineId,
+    itemHash: hashes.get(each.itemKey) ?? '',
+  }));
+  // A large document's rows (stock-ledger 10.6) in multi-row inserts of a bounded size, so no statement passes
+  // PostgreSQL's limit of 65,535 bound parameters (S1-F10-T07). A technical bound, no business value.
+  for (let start = 0; start < rows.length; start += SOURCE_ROWS_PER_INSERT) {
+    await context.tx.insert(postingSource).values(rows.slice(start, start + SOURCE_ROWS_PER_INSERT));
+  }
   return answer;
 }
+
+/** Posting-source rows a multi-row insert takes at once: 8 columns each, well inside the parameter limit. */
+const SOURCE_ROWS_PER_INSERT = 1000;

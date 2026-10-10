@@ -132,7 +132,9 @@ async function jobsSettled(harness: StockHarness, count: number): Promise<void> 
 async function within(reached: Promise<void>, harness: StockHarness): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const late = new Promise<'late'>((resolve) => {
-    timer = setTimeout(() => { resolve('late'); }, 60_000);
+    timer = setTimeout(() => {
+      resolve('late');
+    }, 60_000);
   });
   const outcome = await Promise.race([reached, late]);
   clearTimeout(timer);

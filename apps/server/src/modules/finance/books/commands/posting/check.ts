@@ -1,6 +1,6 @@
 import { isKnown } from '@apparel-os/domain';
 import type { MissingItem } from '@apparel-os/schemas';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   canonicalJson,
   LOCK_STEP,
@@ -45,18 +45,89 @@ function contentOf(item: PostItem, amounts: ItemContent['components']): ItemCont
 const hashOf = (content: ItemContent) =>
   sha256Hex(canonicalJson({ ...content, components: content.components.map((each) => ({ ...each })) }));
 
-/** The rows already posted for an item, by source module and item key, as first posted (9.3). */
-async function postedRows(context: TransactionContext, sourceModule: string, itemKey: string) {
-  return context.tx
-    .select({ journalId: postingSource.journalId, itemHash: postingSource.itemHash })
-    .from(postingSource)
-    .where(
-      and(
-        eq(postingSource.sourceModule, sourceModule),
-        eq(postingSource.itemKey, itemKey),
-        isNull(postingSource.replacesPostingSourceId),
-      ),
+/** The rows already posted for each of the items, by source module and item key, as first posted (9.3). */
+async function postedRows(
+  context: TransactionContext,
+  sourceModule: string,
+  itemKeys: readonly string[],
+): Promise<Map<string, { journalId: string; itemHash: string }[]>> {
+  const found = new Map<string, { journalId: string; itemHash: string }[]>();
+  // One read for every item, in parts of a bounded size (a large document, stock-ledger 10.6; S1-F10-T07).
+  for (let start = 0; start < itemKeys.length; start += KEYS_PER_READ) {
+    const rows = await context.tx
+      .select({ itemKey: postingSource.itemKey, journalId: postingSource.journalId, itemHash: postingSource.itemHash })
+      .from(postingSource)
+      .where(
+        and(
+          eq(postingSource.sourceModule, sourceModule),
+          inArray(postingSource.itemKey, itemKeys.slice(start, start + KEYS_PER_READ)),
+          isNull(postingSource.replacesPostingSourceId),
+        ),
+      );
+    for (const row of rows) {
+      const list = found.get(row.itemKey) ?? [];
+      list.push({ journalId: row.journalId, itemHash: row.itemHash });
+      found.set(row.itemKey, list);
+    }
+  }
+  return found;
+}
+
+/** Item keys one read of the posted rows takes: a technical bound, inside PostgreSQL's parameter limit. */
+const KEYS_PER_READ = 5000;
+
+/**
+ * The reads an item's check makes that many items of one request share (the unit's mapping, the period, its admission,
+ * the map version, the accounts in force, the journal series), each made once per request and argument (S1-F10-T07: a
+ * 10,000-line document). Within one call they answer what a fresh read would: nothing the request does changes them.
+ */
+class SharedReads {
+  private readonly cache = new Map<string, Promise<unknown>>();
+
+  constructor(
+    private readonly context: TransactionContext,
+    private readonly numbering: NumberingInterface,
+  ) {}
+
+  private once<T>(key: string, read: () => Promise<T>): Promise<T> {
+    let found = this.cache.get(key) as Promise<T> | undefined;
+    if (found === undefined) {
+      found = read();
+      this.cache.set(key, found);
+    }
+    return found;
+  }
+
+  dimensionsOn(source: { readonly businessUnitId: string; readonly brandId: string | null }, date: string) {
+    return this.once(`dimensions|${source.businessUnitId}|${source.brandId ?? ''}|${date}`, () =>
+      dimensionsOn(this.context, source, date),
     );
+  }
+
+  periodOn(bookId: string, date: string) {
+    return this.once(`period|${bookId}|${date}`, () => periodOn(this.context, bookId, date));
+  }
+
+  admission(periodId: string, source: SourceRecord | undefined) {
+    const named = source === undefined ? '' : `${source.module}|${source.recordType}|${source.recordId}`;
+    return this.once(`admission|${periodId}|${named}`, () => admission(this.context, periodId, source));
+  }
+
+  mapVersionOn(bookId: string, eventKind: string, date: string) {
+    return this.once(`map|${bookId}|${eventKind}|${date}`, () => mapVersionOn(this.context, bookId, eventKind, date));
+  }
+
+  accountsInForce(accountIds: readonly string[], date: string) {
+    return this.once(`accounts|${[...accountIds].sort(byText).join(',')}|${date}`, () =>
+      accountsInForce(this.context, accountIds, date),
+    );
+  }
+
+  journalSeries(bookId: string, period: NonNullable<Awaited<ReturnType<typeof periodOn>>>) {
+    return this.once(`series|${bookId}|${period.id}`, () =>
+      journalSeries(this.context, this.numbering, bookId, period),
+    );
+  }
 }
 
 /** The detail a refusal of 6.2 names beside the map version (PRD-UXP-003), by the failed condition. */
@@ -100,10 +171,11 @@ function applyDetail(failed: ApplyRefusal, eventKind: string, map: MissingItem):
  * lines and accounts, and the book's journal series. Writes and locks nothing.
  */
 async function checkItem(
-  context: TransactionContext,
+  reads: SharedReads,
   dependencies: PostDependencies,
   sourceModule: string,
   item: PostItem,
+  posted: readonly { journalId: string; itemHash: string }[],
   source?: SourceRecord,
 ): Promise<ItemCheck> {
   const key = item.itemKey;
@@ -131,7 +203,6 @@ async function checkItem(
   const content = contentOf(item, amounts);
   const hash = hashOf(content);
   // 9.3; PRD-INT-002, PRD-INT-008: the same item again answers its first result; changed, it is refused and kept.
-  const posted = await postedRows(context, sourceModule, key);
   if (posted.length > 0) {
     const postedHash = posted[0]?.itemHash ?? '';
     if (postedHash === hash) {
@@ -145,7 +216,7 @@ async function checkItem(
   if (amounts.every((each) => each.amountPaise === 0)) return { kind: 'nothing', itemKey: key };
   // 2.1; PRD-LED-002, PRD-ACP-013: the unit's book through its mapping on the accounting date (4.4).
   const date = item.businessDate;
-  const found = await dimensionsOn(context, { businessUnitId: item.businessUnitId, brandId: item.brandId }, date);
+  const found = await reads.dimensionsOn({ businessUnitId: item.businessUnitId, brandId: item.brandId }, date);
   if (found.kind === 'refusal') return { kind: 'refused', itemKey: key, refusal: found.refusal };
   const dimensions = found.answer;
   if (item.storeId !== undefined && item.storeId !== dimensions.storeId) {
@@ -154,19 +225,18 @@ async function checkItem(
     ]);
   }
   const book = dimensions.bookId;
-  const period = await periodOn(context, book, date);
+  const period = await reads.periodOn(book, date);
   if (period === undefined) {
     return refusal(key, 'finance.no-period', [{ kind: 'financial-period', bookId: book, date }]);
   }
   // 4.2, 4.3; PRD-LED-009, PRD-LED-020: a Locked period takes only a correction a reopening in force names.
-  const admitted = await admission(context, period.id, source);
+  const admitted = await reads.admission(period.id, source);
   if (admitted.kind === 'locked') return refusal(key, 'finance.period-locked', [periodItem(period)]);
   // 6.2; POL-09.12, SL-23: no valid map refuses the item with the failed condition.
-  const map = await mapVersionOn(context, book, item.eventKind, date);
+  const map = await reads.mapVersionOn(book, item.eventKind, date);
   const mapItem: MissingItem = { kind: 'posting-map', bookId: book, eventKind: item.eventKind };
   if (map === undefined) return refusal(key, 'finance.no-posting-map', [mapItem]);
-  const accounts = await accountsInForce(
-    context,
+  const accounts = await reads.accountsInForce(
     map.lines.map((line) => line.accountId),
     date,
   );
@@ -189,7 +259,7 @@ async function checkItem(
       applyDetail(applied.refusal, item.eventKind, mapItem),
     ]);
   }
-  const series = await journalSeries(context, dependencies.numbering, book, period);
+  const series = await reads.journalSeries(book, period);
   if (series.kind === 'refused') return { kind: 'refused', itemKey: key, refusal: series.refusal };
   return {
     kind: 'postable',
@@ -227,8 +297,16 @@ export async function checkPostable(
 ): Promise<ItemCheck[]> {
   const checks: ItemCheck[] = [];
   const source = sourceOf(request);
+  const reads = new SharedReads(context, dependencies.numbering);
+  const posted = await postedRows(
+    context,
+    request.sourceModule,
+    request.items.map((item) => item.itemKey),
+  );
   for (const item of request.items) {
-    checks.push(await checkItem(context, dependencies, request.sourceModule, item, source));
+    checks.push(
+      await checkItem(reads, dependencies, request.sourceModule, item, posted.get(item.itemKey) ?? [], source),
+    );
   }
   return checks;
 }
@@ -260,7 +338,14 @@ export async function holdPeriods(
     };
   }
   // 9.1, 4.5; PRD-INT-003: under the lock, a period locked since Check postable refuses an item no reopening names.
+  // Asked once for each period and source the items share (S1-F10-T07).
+  const asked = new Map<string, (typeof postable)[number]>();
   for (const check of postable) {
+    const source =
+      check.source === undefined ? '' : `${check.source.module}|${check.source.recordType}|${check.source.recordId}`;
+    asked.set(`${check.period.id}|${source}`, check);
+  }
+  for (const check of asked.values()) {
     if ((await admission(context, check.period.id, check.source)).kind === 'locked') {
       return {
         kind: 'refused',
