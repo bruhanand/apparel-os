@@ -1,6 +1,6 @@
 # S1-F03-T01 — Brands, categories and vocabularies
 
-Status: blocked
+Status: done
 Blocked by: S1-F02-T02 (units, for brand coverage); RR-047: the PRD bullets for the `DEC-112` master picks, and the structure-and-masters edits they need, approved (done, `DEC-123`, 9 Oct 2026)
 Feature: [S1-F03 Product and party masters](../../spec.md)
 
@@ -37,3 +37,5 @@ The `merchandise` module, catalogue part, with its first migration. Every record
 - Left open: RR-467 (approval of catalogue changes), RR-468 (scope facts of catalogue record types), RR-469 (coverage screen, the assignment editor's brand list, retiring other catalogue masters). Live use also waits for V-01, RR-064 and RR-179.
 - Beyond the ticket: the version token on catalogue records and new versions (the organisation masters have none); `organisation`'s `businessUnitHeads` and `businessUnitInForce` exports; brand retirement through a version; the read routes of proposals; the `where` filter on the organisation `MasterTab`, its Save wording for masters that take effect when recorded, and `SubmissionBanner`'s `done` message; test helper `asPreparerDo` and the catalogue in `structureSetup`.
 - Review fixes (10 Oct 2026, branch `s1/f03-review-fixes`): your answers of 10 Oct 2026 recorded (RR-467, RR-468 closed; brand scoping revisited with booking, RR-476); a brand-counter unit may cover no brand while it is set up, and at most one (activation's check is `S1-F04-T02`'s); one kernel savepoint helper (`withSavepoint`, `UNIQUE_VIOLATION`) replaces the catalogue's copies.
+- Closed 10 Oct 2026 on `s1/f03-product-and-party-masters`, reviewed with `/code-review` with the feature's other tickets; review fixes `f169761`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): the version token on catalogue records; `organisation` exports `businessUnitHeads` and `businessUnitInForce`; brand retirement by a version; proposal read routes; MasterTab `where` filter and "Save" wording; `asPreparerDo` helper.

@@ -1,6 +1,6 @@
 # S1-F03-T03 — Parties, agreements and bank details
 
-Status: blocked
+Status: done
 Blocked by: S1-F03-T01, S1-F06-T05 (stored files, for the signed agreement)
 Feature: [S1-F03 Product and party masters](../../spec.md)
 
@@ -39,3 +39,5 @@ Parties, links and agreements in `merchandise` with their migration; the bank-de
 - Left open: RR-470 (approval of party changes; one agreement per counterparty), RR-471 (evidence classes: `bank-details` on a bank-detail decision's evidence, `margin` on the signed agreement), RR-472 (scope facts of the parties' record types). Live use also waits for V-01, V-14, V-61, RR-064 and RR-235.
 - Beyond the ticket: the version token on party, role, bank-detail, link and agreement changes; the catalogue's `brandExists`/`brandInForce` exports; the refusal codes `merchandise.agreement-exists` and `merchandise.supplier-terms-on-brand-agreement`; the role form on the party drawer; the approval panel's facts for the two new action types; `structureSetup` composing the parties part.
 - Review fixes (10 Oct 2026, branch `s1/f03-review-fixes`): your answers of 10 Oct 2026 recorded (RR-470, RR-471, RR-472 closed; KDPS Admin confirms the evidence classes); the version lines read and write through Drizzle; the bank-detail form clears its values once sent and when closed (Close button); the supplier-term shape, the brand–supplier link rule and always-masked reads written into structure-and-masters 5.1, 5.2, 5.5; Decide's refusal of a wrong or missing fresh code tested for bank details, agreements and product proposals.
+- Closed 10 Oct 2026 on `s1/f03-product-and-party-masters`, reviewed with `/code-review` with the feature's other tickets; review fixes `f169761`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): a version token on party, role, bank-detail, link and agreement changes; catalogue exports `brandExists` and `brandInForce`; refusal codes `merchandise.agreement-exists` and `merchandise.supplier-terms-on-brand-agreement`; a role form in the party drawer; approval-panel facts for the new action types; a Close button on the bank-detail form (review fix).
