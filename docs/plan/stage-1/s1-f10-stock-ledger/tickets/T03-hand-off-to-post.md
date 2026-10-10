@@ -1,7 +1,7 @@
 # S1-F10-T03 — Valuation and hand-off to Post
 
-Status: blocked
-Blocked by: T02 (done); S1-F09-T02 (books, maps, open periods and Post), S1-F08-T02 (an exception raised after a rollback)
+Status: in-progress
+Blocked by: T02 (done); S1-F09-T02 (done), S1-F08-T02 (done)
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
 ## Build
@@ -23,3 +23,11 @@ Each valued operation posts or refuses as section 13 says; a new pool carries th
 ## Notes
 
 - Holds the valued parts of the earlier T02, moved here on 6 Oct 2026 (product owner). Part 2 is accepted only through the real modules (T04).
+- Built on `s1/f10-t03` (10 Oct 2026), awaiting review; design as built in stock-ledger 13.10 and books-and-posting 7.2, 8.1, 9.1:
+  - Migration `0055__stock.ledger__valuation` (a customer return's `returns_movement_id`; `stock.rebuild_partial` over the value tables).
+  - `stock` · ledger: the pure cost formulas (`domain/valuation.ts`) and the valued items on the working state (`domain/valuing.ts`); Plan reading the cost setting and asking Check postable; Lock creating and locking pools and transit values at step 6; Hold periods; Post inside Write; the Value and Inventory reconciliation reads; Rebuild and compare over pools, layers and transit values; the posting event kinds of books-and-posting 7.2 with their reversal kinds, declared in the production composition; the `stock.no-cost-setting`, `stock.not-sellable` and `stock.posting-refused` codes and messages.
+  - `finance` · books: Check postable may be given the document, as Post is.
+  - Tests: `domain/valuation.test.ts`, `domain/event-kinds.test.ts`; `apps/server/test/stock-ledger-valuation.int.test.ts`: the story of 11.1 under all four combinations ending at 11.6 and 16.3, with Rebuild and compare and the movement-by-movement reconciliation of 8.3; books-and-posting 15 tests 4, 5, 7 and 8 at the ledger; the refusals `no-cost-setting`, `rule-not-set` (SL-2, SL-17), `not-sellable`, `exceeds-source`, `route-not-allowed`.
+  - Test 8 as built: a missing map refuses at Plan (books-and-posting 10 step 1), since a map version never ends retroactively; the refusal under the locks (a period locked since Plan, a changed item) is T07's.
+  - Not built: queued posting jobs one at a time per book (10.6), left for the large-posting job of T07; the valued items stage 3 to 5 bring (13.10).
+
