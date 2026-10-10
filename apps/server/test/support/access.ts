@@ -256,6 +256,8 @@ export async function startAccessApp(
     readonly clock?: Clock;
     /** A built web app to serve from the same origin, as the real server does (S1-F01-T27). */
     readonly webApp?: string;
+    /** The built counter app, served at /counter/ beside the web app (offline-counter 5.2; S1-F12-T02). */
+    readonly counterApp?: string;
     /** The file store variables (files-imports); none by default, so file storage is not configured. */
     readonly fileStoreEnvironment?: Record<string, string>;
     /** Record types beside the declared ones, for a test-only record type (code-house-rules 11.4). */
@@ -355,7 +357,7 @@ export async function startAccessApp(
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
-  if (options.webApp !== undefined) serveWebApp(app, options.webApp);
+  if (options.webApp !== undefined) serveWebApp(app, options.webApp, options.counterApp);
   app.enableShutdownHooks();
   // After the modules register their own validity checks at start, so an operation may name one (module-map 4.4).
   await app.init();

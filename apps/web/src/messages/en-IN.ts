@@ -2032,6 +2032,54 @@ export const englishIndia = {
   'devices.series.none':
     'No bill series yet: the bill-number format or the financial year is not set, or a unit has no mapping.',
   'devices.series.one': 'Bill series for {registration}, {year}',
+  // Revoke, retire, replace and change units (offline-counter 3.5, 12.1; S1-F12-T02).
+  'devices.revoke': 'Revoke (lost)',
+  'devices.retire': 'Retire',
+  'devices.revoke.confirm':
+    'Revoke {code} as lost? Its sessions end at their next request and its bill series close. This cannot be undone: a replacement is a new device.',
+  'devices.retire.confirm':
+    'Retire {code}? Its sessions end and its bill series close. This cannot be undone: a replacement is a new device.',
+  'devices.revoke.do': 'Revoke device',
+  'devices.retire.do': 'Retire device',
+  'devices.cancel': 'Cancel',
+  'devices.replace': 'Replace',
+  'devices.replace.title': 'Replace {code}',
+  'devices.replace.ending': 'The old device',
+  'devices.replace.choose': 'Choose how it leaves use',
+  'devices.replace.revoke': 'Revoke it: it is lost',
+  'devices.replace.retire': 'Retire it: it is taken out of use',
+  'devices.replace.code': 'New device code',
+  'devices.replace.label': 'New device label',
+  'devices.replace.do': 'Replace device',
+  'devices.replaces':
+    'Replaces an earlier device. It gets fresh bill series when it is enrolled; the old ones stay closed.',
+  'devices.units.change': 'Change units',
+  'devices.units.change.title': 'Units {code} bills for',
+  'devices.units.change.from': 'From',
+  'devices.units.change.do': 'Change units',
+  'devices.units.changed': 'Units changed. A unit with a new tax registration has its bill series from that date.',
+  'history.operation.revoke-billing-device': 'Revoked a billing device',
+  'history.operation.retire-billing-device': 'Retired a billing device',
+  'history.operation.change-billing-device-units': 'Changed a billing device’s units',
+  'history.operation.revoke-device': 'Revoked a session with its device',
+  'history.operation.retire-device': 'Ended a session with its retired device',
+  'error.access.device-ended': 'This device is revoked or retired already, which is final.',
+  'error.pos.device-not-active': 'A device’s units change only while it is Active.',
+  'error.pos.starts-in-past': 'The change cannot start before today.',
+  'error.pos.unit-change-scheduled':
+    'The device already has a unit listed from that date or later. Choose a later date.',
+  'error.pos.units-unchanged': 'These are the units it bills for on that date already.',
+  // The devices readiness check (offline-counter section 11; S1-F12-T02).
+  'readiness.check.devices': 'Devices',
+  'missing.billing-device':
+    'No Active billing device of the unit’s Store lists the unit. Register one on Devices, tills and bill series and enrol it.',
+  'missing.device-series': 'A billing device of the unit has no Open bill series for its registration and year.',
+  'missing.device-series.bill-format': 'Device {code} has no bill series: the bill-number format is not set.',
+  'missing.device-series.financial-year':
+    'Device {code} has no bill series: no financial year is defined for this date.',
+  'missing.device-series.mapping': 'Device {code} has no bill series: the unit has no mapping in force.',
+  'missing.device-series.series':
+    'Device {code} has no Open bill series for the unit’s tax registration and this financial year.',
   'screen.money.internal-ledger': 'Internal ledger and trial balance',
   'record-type.finance.posting_map': 'Posting map',
   'record-type.finance.financial_period': 'Financial period',

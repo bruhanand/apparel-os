@@ -91,6 +91,7 @@ async function answerTheApi(page: Page, server: Server): Promise<void> {
             storeId: STORE_ID,
             units: [{ businessUnitId: UNIT_ID, code: 'SYN-UNIT', kind: 'whole-store' }],
             series: [],
+            replacesDeviceId: null,
           },
         ],
       });

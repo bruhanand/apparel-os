@@ -102,7 +102,7 @@ describe('the web app from the one origin', () => {
     }
   });
 
-  it('answers /counter/ with not-found while the counter is not built (offline-counter 5.2)', async () => {
+  it('answers /counter/ with not-found when no counter build is given (offline-counter 5.2)', async () => {
     for (const path of ['/counter', '/counter/', '/counter/sale']) {
       const response = await fetch(`${baseUrl}${path}`);
       expect(response.status, path).toBe(404);
@@ -125,6 +125,102 @@ describe('the web app from the one origin', () => {
       expect(response.headers.get('x-content-type-options'), path).toBe('nosniff');
       expect(response.headers.get('x-frame-options'), path).toBe('DENY');
       expect(response.headers.get('referrer-policy'), path).toBe('same-origin');
+    }
+  });
+});
+
+// RR-420, S1-F12-T02: the counter app at /counter/ beside the web app (deployment.md section 3; offline-counter 5.2).
+// The build is a SYNTHETIC stand-in for apps/counter/dist, built with the base path /counter/: its index.html, one
+// hashed asset, and the golden-case test page, which the deployed service never serves.
+const COUNTER_HTML = '<!doctype html><html><body><div id="counter">SYNTHETIC counter</div></body></html>';
+
+describe('the counter app at /counter/ from the one origin', () => {
+  let app: INestApplication;
+  let baseUrl: string;
+  let web: string;
+  let counter: string;
+
+  beforeAll(async () => {
+    web = mkdtempSync(join(tmpdir(), 'aos-synthetic-web-'));
+    writeFileSync(join(web, 'index.html'), INDEX_HTML);
+    counter = mkdtempSync(join(tmpdir(), 'aos-synthetic-counter-'));
+    writeFileSync(join(counter, 'index.html'), COUNTER_HTML);
+    mkdirSync(join(counter, 'assets'));
+    writeFileSync(join(counter, 'assets', 'main-SYNTH456.js'), 'console.log("SYNTHETIC counter");');
+    writeFileSync(join(counter, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    mkdirSync(join(counter, 'golden'));
+    writeFileSync(join(counter, 'golden', 'index.html'), '<!doctype html><p>SYNTHETIC golden page</p>');
+    const moduleRef = await Test.createTestingModule({ imports: [KernelModule] })
+      .overrideProvider(HTTP_ENVIRONMENT)
+      .useValue({ AOS_PUBLIC_ORIGIN: 'http://synthetic.localhost', AOS_TRUSTED_PROXY_HOPS: '0' })
+      .compile();
+    app = moduleRef.createNestApplication({ logger: false });
+    configureApp(app);
+    serveWebApp(app, web, counter);
+    await app.listen(0, '127.0.0.1');
+    baseUrl = await app.getUrl();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    rmSync(web, { recursive: true, force: true });
+    rmSync(counter, { recursive: true, force: true });
+  });
+
+  it('answers /counter/ and its client routes with the counter, never kept by a cache', async () => {
+    for (const path of ['/counter/', '/counter', '/counter/index.html', '/counter/sign-in?device=1']) {
+      const response = await fetch(`${baseUrl}${path}`);
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('content-type'), path).toMatch(/^text\/html/);
+      expect(response.headers.get('cache-control'), path).toBe('no-store');
+      expect(await response.text(), path).toBe(COUNTER_HTML);
+    }
+  });
+
+  it('answers the counter’s hashed assets for a long time, and its other files revalidated', async () => {
+    const asset = await fetch(`${baseUrl}/counter/assets/main-SYNTH456.js`);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(await asset.text()).toBe('console.log("SYNTHETIC counter");');
+    const icon = await fetch(`${baseUrl}/counter/icon.svg`);
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('never serves the golden-case test page, nor a missing counter file, nor the web app under /counter/', async () => {
+    for (const path of ['/counter/golden/', '/counter/golden/index.html', '/counter/assets/missing.js']) {
+      const response = await fetch(`${baseUrl}${path}`);
+      expect(response.status, path).toBe(404);
+      expect(errorEnvelopeSchema.parse(await response.json()).error.code, path).toBe('kernel.not-found');
+    }
+  });
+
+  it('keeps the web app at / and its routes, and the security headers on the counter too', async () => {
+    expect(await (await fetch(`${baseUrl}/my-work`)).text()).toBe(INDEX_HTML);
+    expect(await (await fetch(`${baseUrl}/counterfeit`)).text()).toBe(INDEX_HTML);
+    for (const path of ['/counter/', '/counter/assets/main-SYNTH456.js']) {
+      const response = await fetch(`${baseUrl}${path}`);
+      expect(response.headers.get('content-security-policy'), path).toBe(
+        "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'",
+      );
+    }
+  });
+
+  it('refuses to start when the counter build has no index.html (code-house-rules 12.14)', async () => {
+    const empty = mkdtempSync(join(tmpdir(), 'aos-synthetic-counter-empty-'));
+    const moduleRef = await Test.createTestingModule({ imports: [KernelModule] })
+      .overrideProvider(HTTP_ENVIRONMENT)
+      .useValue({ AOS_PUBLIC_ORIGIN: 'http://synthetic.localhost', AOS_TRUSTED_PROXY_HOPS: '0' })
+      .compile();
+    const other = moduleRef.createNestApplication({ logger: false });
+    try {
+      configureApp(other);
+      expect(() => {
+        serveWebApp(other, web, empty);
+      }).toThrow(/counter app is not built/);
+    } finally {
+      await other.close();
+      rmSync(empty, { recursive: true, force: true });
     }
   });
 });

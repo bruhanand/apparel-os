@@ -1775,11 +1775,20 @@ const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
   // The unit list the screen chooses from (structure-and-masters 8).
   { recordType: 'organisation.business_unit', action: 'view' },
 ]);
-// The devices journey's Admin (S1-F12-T01): register and view billing devices, and the Stores and units the form
-// chooses from. SYNTHETIC grants: who registers devices is KDPS's (POL-02.03).
+// The devices journey's Admin (S1-F12-T01, S1-F12-T02): register, view, enrol, revoke and replace billing devices, and
+// the Stores and units the form chooses from. SYNTHETIC grants: who registers devices is KDPS's (POL-02.03).
 const devicesAdmin = await provisionUser('BROWSER-DEVICES-ADMIN', 'P-ADM', [
   { recordType: 'pos.billing_device', action: 'view' },
   { recordType: 'pos.billing_device', action: 'create' },
+  { recordType: 'pos.billing_device', action: 'edit' },
+  { recordType: 'organisation.store', action: 'view' },
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
+// The devices lifecycle journey's Admin (S1-F12-T02), with the same SYNTHETIC grants, apart so the journeys run at once.
+const devicesLifecycleAdmin = await provisionUser('BROWSER-DEVICES-LIFECYCLE', 'P-ADM', [
+  { recordType: 'pos.billing_device', action: 'view' },
+  { recordType: 'pos.billing_device', action: 'create' },
+  { recordType: 'pos.billing_device', action: 'edit' },
   { recordType: 'organisation.store', action: 'view' },
   { recordType: 'organisation.business_unit', action: 'view' },
 ]);
@@ -1794,6 +1803,8 @@ const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve'
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
+// The built counter app at /counter/ beside it (offline-counter 5.2; RR-420; S1-F12-T02).
+const counterApp = fileURLToPath(new URL('../../../../counter/dist', import.meta.url));
 // A MinIO container for the evidence files of the business units journey (code-house-rules 12.10).
 const fileStore = await startTestFileStore();
 const app = await startAccessApp(
@@ -1807,6 +1818,7 @@ const app = await startAccessApp(
     origin,
     port,
     webApp,
+    counterApp,
     fileStoreEnvironment: fileStore.environment,
     exceptionTypes: [syntheticMismatch],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
@@ -1996,6 +2008,7 @@ writeFileSync(
     devices: {
       organisationCode: settingsCode,
       admin: credentialsOf(devicesAdmin),
+      lifecycleAdmin: credentialsOf(devicesLifecycleAdmin),
       storeOption: `${devicesStore.code} · ${devicesStore.name}`,
       otherStoreOption: `${devicesOtherStore.code} · ${devicesOtherStore.name}`,
       units: devicesUnits.map((unit) => ({ code: unit.code, name: unit.name, store: unit.store })),

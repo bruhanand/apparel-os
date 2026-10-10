@@ -214,6 +214,8 @@ export interface SyntheticWorld {
   readonly devices: {
     readonly organisationCode: string;
     readonly admin: EnrolledUser;
+    /** S1-F12-T02: a second Admin for the lifecycle journey, so the two journeys never share authenticator steps. */
+    readonly lifecycleAdmin: EnrolledUser;
     readonly storeOption: string;
     readonly otherStoreOption: string;
     readonly units: readonly { readonly code: string; readonly name: string; readonly store: number }[];

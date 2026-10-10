@@ -101,6 +101,11 @@ function readinessText(item: MissingItem): string | undefined {
       recordType: named('record-type', item.recordType),
     });
   }
+  // A billing device with no Open series, by its code and why (offline-counter section 11; S1-F12-T02).
+  const lacks = `missing.device-series.${item.lacks ?? ''}`;
+  if (item.kind === 'device-series' && item.code !== undefined && isMessageId(lacks)) {
+    return t(lacks, { code: item.code });
+  }
   if (item.kind === 'approval-people' && item.actionType !== undefined) {
     return t('missing.approval-people.named', { actionType: named('approval.action', item.actionType) });
   }
