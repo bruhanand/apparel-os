@@ -531,9 +531,95 @@ describe('refusals of the valued items (stock-ledger 13.4, 13.8)', () => {
       missing: expect.arrayContaining([{ kind: 'open-question', question: 'SL-2' }]) as unknown,
     });
     expect((await pools(combo, sku)).map((pool) => [pool.quantity, pool.valuePaise])).toEqual([[3, 31]]);
-    // An outflow that empties the pool takes all 31 paise (7.3), but naming that value per receipt origin, 2 units
-    // and 1, needs the rounding rule too (14.2 `valuation`; SL-2): refused until it is set. Reported as a design gap.
-    expect((await refused([sell(3)])).code).toBe('stock.rule-not-set');
+    // An outflow that empties the pool takes all 31 paise, with no rounding (7.3): under moving average it is one
+    // valuation of the item, whose legs name the two origins' units (13.10).
+    const sale = await posted([sell(3)]);
+    expect(sale.posting?.kind).toBe('posted');
+    expect((await pools(combo, sku)).map((pool) => [pool.quantity, pool.valuePaise])).toEqual([[0, 0]]);
+    // A return is valued from the sale line (7.5): one unit of 31 paise in three does not divide; all three take 31.
+    const back = (quantity: number): LedgerItem => ({
+      kind: 'customer-return',
+      lineId: line(),
+      saleMovementId: sale.movementIds[0] ?? '',
+      to: combo.s1,
+      condition: 'good',
+      goods: { skuId: sku.skuId, quantity },
+    });
+    expect((await refused([back(1)])).code).toBe('stock.rule-not-set');
+    await posted([back(3)]);
+    expect((await pools(combo, sku)).map((pool) => [pool.quantity, pool.valuePaise])).toEqual([[3, 31]]);
+    expect(await rebuild()).toEqual([]);
+  }, 120_000);
+
+  it('SL-2 7.3 7.8 a dispatch that empties a Site pool of several origins carries all its value; the arrival takes it all', async () => {
+    const sku = world.sku(false);
+    // SYNTHETIC: W1 holds 2 units at 10 paise and 1 at 11 (3 / 31 paise), all sent to S1.
+    const origins: string[] = [];
+    for (const [quantity, pRate] of [
+      [2, 10],
+      [1, 11],
+    ] as const) {
+      const receipt = await posted([
+        {
+          kind: 'receipt-count',
+          lineId: line(),
+          skuId: sku.skuId,
+          quantity,
+          to: combo.w1,
+          condition: 'good',
+          owner: { kind: 'organisation', legalEntityId: combo.legalEntityId },
+        },
+      ]);
+      const originId = receipt.receiptOriginIds[0] ?? '';
+      origins.push(originId);
+      const ptRevisionId = uuidv7();
+      await posted([
+        { kind: 'record-coverage', lineId: line(), ptRevisionId, receiptOriginId: originId, quantity },
+        {
+          kind: 'record-acceptance',
+          lineId: line(),
+          at: combo.w1,
+          goods: { skuId: sku.skuId, quantity, receiptOriginId: originId },
+        },
+        { kind: 'cost-established', lineId: line(), receiptOriginId: originId, ptRevisionId, pRatePaise: paise(pRate) },
+      ]);
+    }
+    const reservation = await posted([
+      {
+        kind: 'reserve',
+        lineId: line(),
+        reservationKind: 'transfer',
+        at: combo.w1,
+        goods: [{ skuId: sku.skuId, quantity: 3 }],
+      },
+    ]);
+    const dispatchId = uuidv7();
+    await posted([
+      {
+        kind: 'dispatch',
+        lineId: line(),
+        dispatchId,
+        reservationId: reservation.reservationIds[0] ?? '',
+        from: combo.w1,
+        to: { siteId: combo.s1.siteId, businessUnitId: combo.s1.businessUnitId },
+        goods: { skuId: sku.skuId, quantity: 3 },
+      },
+    ]);
+    const atW1 = async () => (await pools(combo, sku)).find((pool) => pool.siteId === combo.w1.siteId);
+    expect([(await atW1())?.quantity, (await atW1())?.valuePaise]).toEqual([0, 0]);
+    await posted([
+      {
+        kind: 'arrival-count',
+        lineId: line(),
+        dispatchId,
+        from: { siteId: combo.w1.siteId, businessUnitId: combo.w1.businessUnitId },
+        to: combo.s1,
+        goods: { skuId: sku.skuId, quantity: 3 },
+      },
+    ]);
+    const atS1 = (await pools(combo, sku)).find((pool) => pool.siteId === combo.s1.siteId);
+    expect([atS1?.quantity, atS1?.valuePaise]).toEqual([3, 31]);
+    expect(await rebuild()).toEqual([]);
   }, 120_000);
 
   it('PRD-STK-003 a sale needs coverage and acceptance at the Store (not-sellable); billed-retained timing is SL-17', async () => {

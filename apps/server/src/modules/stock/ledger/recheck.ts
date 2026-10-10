@@ -603,7 +603,12 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
     .from(valuation)
     .where(and(eq(valuation.movementId, saleId), sql`${valuation.costPoolId} is not null`));
   const valued = new Map<string, { quantity: number; value: number }>();
+  const valuedTotal = { quantity: 0, value: 0 };
   for (const row of valuations) {
+    valuedTotal.quantity -= row.quantityDelta;
+    valuedTotal.value -= row.valueDeltaPaise;
+    // A moving-average valuation of several origins names none (13.10); FIFO's always name theirs.
+    if (row.receiptOriginId === null) continue;
     const sum = valued.get(row.receiptOriginId) ?? { quantity: 0, value: 0 };
     sum.quantity -= row.quantityDelta;
     sum.value -= row.valueDeltaPaise;
@@ -629,6 +634,7 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
     .where(eq(movement.returnsMovementId, saleId));
   const returnIds = returns.map((row) => row.id);
   const returned = new Map<string, { quantity: number; value: number }>();
+  const returnedTotal = { quantity: 0, value: 0 };
   const returnedFromLayer = new Map<string, { quantity: number; value: number }>();
   if (returnIds.length > 0) {
     const returnLegs = await context.tx
@@ -641,10 +647,17 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
       returned.set(leg.originId, sum);
     }
     const returnValues = await context.tx
-      .select({ originId: valuation.receiptOriginId, value: valuation.valueDeltaPaise })
+      .select({
+        originId: valuation.receiptOriginId,
+        quantity: valuation.quantityDelta,
+        value: valuation.valueDeltaPaise,
+      })
       .from(valuation)
       .where(and(inArray(valuation.movementId, returnIds), sql`${valuation.costPoolId} is not null`));
     for (const row of returnValues) {
+      returnedTotal.quantity += row.quantity;
+      returnedTotal.value += row.value;
+      if (row.originId === null) continue;
       const sum = returned.get(row.originId) ?? { quantity: 0, value: 0 };
       sum.value += row.value;
       returned.set(row.originId, sum);
@@ -679,5 +692,7 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
     })),
     returned,
     returnedFromLayer,
+    valuedTotal: valuations.length === 0 ? null : valuedTotal,
+    returnedTotal,
   };
 }

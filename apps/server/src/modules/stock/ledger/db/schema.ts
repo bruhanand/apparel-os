@@ -441,7 +441,8 @@ export const transitValue = stock.table('transit_value', {
 export const valuation = stock.table('valuation', {
   id: uuid('id').primaryKey(),
   movementId: uuid('movement_id').notNull(),
-  receiptOriginId: uuid('receipt_origin_id').notNull(),
+  /** The one origin whose units the value belongs to; none for a moving-average item of several (0056; 13.10). */
+  receiptOriginId: uuid('receipt_origin_id'),
   costPoolId: uuid('cost_pool_id'),
   transitValueId: uuid('transit_value_id'),
   sequence: bigint('sequence', { mode: 'number' }),

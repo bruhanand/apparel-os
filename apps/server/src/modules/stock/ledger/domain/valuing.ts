@@ -69,11 +69,15 @@ export interface SaleState {
   /** Its out legs, in order, by origin. */
   readonly legs: readonly { readonly originId: string; readonly quantity: number }[];
   readonly pieceIds: ReadonlySet<string>;
-  /** Its pool valuations by origin, as positive amounts (none when its value was Unknown). */
+  /** Its pool valuations by origin, as positive amounts (none when its value was Unknown), under FIFO. */
   readonly valued: ReadonlyMap<string, { readonly quantity: number; readonly value: number }>;
+  /** All its pool valuations together, as positive amounts, or none when no unit had a known value (7.5). */
+  readonly valuedTotal: { readonly quantity: number; readonly value: number } | null;
+  /** What returns brought back into pools so far, all origins together (moving average, 7.5). */
+  readonly returnedTotal: { quantity: number; value: number };
   /** The layers it took, in the order taken, under FIFO. */
   readonly layers: readonly {
-    readonly originId: string;
+    readonly originId: string | null;
     readonly layerId: string;
     readonly pieceId: string | null;
     readonly quantity: number;
@@ -103,7 +107,8 @@ export interface ValuingInputs extends WorkingInputs {
 export interface ValuationEntry {
   readonly id: string;
   readonly movementId: string;
-  readonly receiptOriginId: string;
+  /** The one origin whose units the value belongs to; none for a moving-average item of several (13.10). */
+  readonly receiptOriginId: string | null;
   readonly poolId: string | null;
   readonly transitId: string | null;
   readonly sequence: number | null;
@@ -148,6 +153,11 @@ interface Moved {
 }
 
 const SL = (question: string): MissingItem[] => [{ kind: 'open-question', question }];
+
+/** The origin a moving-average valuation names: the one origin of its units, or none when they have several (13.10). */
+function onlyOrigin(groups: readonly { readonly origin: OriginState }[]): OriginState | null {
+  return groups.length === 1 ? (groups[0]?.origin ?? null) : null;
+}
 
 export class Valuing extends Working {
   readonly valuations: ValuationEntry[] = [];
@@ -271,7 +281,7 @@ export class Valuing extends Working {
   /** Records one pool valuation in posting order (7.10), the pool already changed by `quantity` and `value`. */
   private poolValuation(
     movement: MovementEntry,
-    origin: OriginState,
+    origin: OriginState | null,
     pool: PoolState,
     change: { readonly quantity: number; readonly value: number; readonly before: { quantity: number; value: number } },
     names: { readonly eventKind: string; readonly component: string },
@@ -280,7 +290,7 @@ export class Valuing extends Working {
     const entry: ValuationEntry = {
       id: this.newId(),
       movementId: movement.id,
-      receiptOriginId: origin.id,
+      receiptOriginId: origin?.id ?? null,
       poolId: pool.id,
       transitId: null,
       sequence: nextSequence(pool),
@@ -299,7 +309,7 @@ export class Valuing extends Working {
   /** Records one transit valuation and changes the transit value by it (7.8). */
   private transitValuation(
     movement: MovementEntry,
-    origin: OriginState,
+    origin: OriginState | null,
     transit: TransitState,
     change: { readonly quantity: number; readonly value: number },
     names: { readonly eventKind: string; readonly component: string },
@@ -308,7 +318,7 @@ export class Valuing extends Working {
     this.valuations.push({
       id: this.newId(),
       movementId: movement.id,
-      receiptOriginId: origin.id,
+      receiptOriginId: origin?.id ?? null,
       poolId: null,
       transitId: transit.id,
       sequence: null,
@@ -347,16 +357,19 @@ export class Valuing extends Working {
 
   /**
    * One outflow of an item's valued units at the formula cost (7.3 to 7.5, 7.10): the pool issues them together, so an
-   * outflow that empties the pool takes all that is left; its value is then named per receipt origin, as each
-   * valuation names one (14.2): a piece's by the layer it took, a quantity's in the order taken, the last part of each
-   * taking what remains of it. A part that does not divide is `rule-not-set` (SL-2).
+   * outflow that empties the pool takes all that is left, with no rounding (7.3). Under moving average that is one
+   * valuation of the item, naming its origin only when it has one: the pool's value is one blend, and splitting it
+   * between origins would need the rounding rule (SL-2), which 7.3 does not ask for; the legs name each origin's
+   * units (13.10). Under FIFO the value is named per receipt origin (14.2): a piece's by the layer it took, a
+   * quantity's in the order taken, the last part of each taking what remains of it. A part that does not divide is
+   * `rule-not-set` (SL-2).
    */
   private outflow(
     lineId: string,
     pool: PoolState,
     groups: readonly { origin: OriginState; quantity: number; pieces: PieceState[] }[],
   ): {
-    origin: OriginState;
+    origin: OriginState | null;
     quantity: number;
     value: number;
     took: Took[];
@@ -366,6 +379,10 @@ export class Valuing extends Working {
     const pieceIds = groups.flatMap((group) => group.pieces.map((piece) => piece.id));
     let before = { quantity: pool.quantity, value: pool.value };
     const took = this.issueAt(lineId, pool, quantity, pieceIds);
+    if (pool.formula === 'moving-average') {
+      const value = took.reduce((sum, each) => sum + each.value, 0);
+      return [{ origin: onlyOrigin(groups), quantity, value, took, before }];
+    }
     const queue = took.map((each) => ({ ...each, left: each.quantity, valueLeft: each.value }));
     return groups.map((group) => {
       const parts: Took[] = [];
@@ -1089,6 +1106,7 @@ export class Valuing extends Working {
     movement.returnsMovementId = sale.id;
     let total = 0;
     let allKnown = true;
+    const valuedBack: { origin: OriginState; quantity: number }[] = [];
     for (const group of back.values()) {
       const target = this.balanceFor(
         item.to.siteId,
@@ -1115,6 +1133,16 @@ export class Valuing extends Working {
         piece.changed = true;
         movement.pieceIds.push(piece.id);
       }
+      const pool = this.poolOf(item.lineId, to, item.goods.skuId);
+      if (pool.formula === 'moving-average') {
+        // Valued below, all origins together, from the sale line (7.5).
+        if (sale.valuedTotal !== null && this.valued(group.origin)) valuedBack.push(group);
+        else allKnown = false;
+        const returned = sale.returned.get(group.origin.id) ?? { quantity: 0, value: 0 };
+        returned.quantity += group.quantity;
+        sale.returned.set(group.origin.id, returned);
+        continue;
+      }
       const issued = sale.valued.get(group.origin.id);
       const returned = sale.returned.get(group.origin.id) ?? { quantity: 0, value: 0 };
       if (issued === undefined) {
@@ -1123,72 +1151,57 @@ export class Valuing extends Working {
         sale.returned.set(group.origin.id, returned);
         continue;
       }
-      const pool = this.poolOf(item.lineId, to, item.goods.skuId);
       const before = { quantity: pool.quantity, value: pool.value };
       const layers: ValuationEntry['layers'] = [];
       let value = 0;
-      if (pool.formula === 'fifo') {
-        // The layers the sale took for these units: the piece's own, or the newest taken first (7.5).
-        const takes = sale.layers.filter((each) => each.originId === group.origin.id);
-        const wanted: { layerId: string; pieceId: string | null; quantity: number; value: number }[] = [];
-        if (group.pieces.length > 0) {
-          for (const piece of group.pieces) {
-            const took = takes.find((each) => each.pieceId === piece.id);
-            if (took === undefined) throw new Error('A sold piece without its layer');
-            wanted.push({ layerId: took.layerId, pieceId: piece.id, quantity: 1, value: took.value });
-          }
-        } else {
-          // The sale's takes summed per layer, the layer taken last first (7.5 "newest-taken layer first").
-          const perLayer = new Map<string, { quantity: number; value: number }>();
-          for (const took of takes) {
-            const sum = perLayer.get(took.layerId) ?? { quantity: 0, value: 0 };
-            sum.quantity += took.quantity;
-            sum.value += took.value;
-            perLayer.delete(took.layerId);
-            perLayer.set(took.layerId, sum);
-          }
-          let left = group.quantity;
-          for (const [layerId, took] of [...perLayer].reverse()) {
-            if (left === 0) break;
-            const done = sale.returnedFromLayer.get(layerId) ?? { quantity: 0, value: 0 };
-            const take = Math.min(left, took.quantity - done.quantity);
-            if (take <= 0) continue;
-            const part =
-              done.quantity + take === took.quantity ? took.value - done.value : share(took.value, take, took.quantity);
-            if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
-            done.quantity += take;
-            done.value += part;
-            sale.returnedFromLayer.set(layerId, done);
-            wanted.push({ layerId, pieceId: null, quantity: take, value: part });
-            left -= take;
-          }
-        }
-        const sequence = pool.lastSequence + 1;
-        for (const each of wanted) {
-          const layer = enter(pool, {
-            quantity: each.quantity,
-            value: each.value,
-            sequence,
-            at: this.valuing.occurredAt,
-            newLayerId: this.newId,
-            fromLayerId: each.layerId,
-          });
-          if (layer !== null)
-            layers.push({ layerId: layer.id, pieceId: each.pieceId, quantity: each.quantity, value: each.value });
-          value += each.value;
+      // The layers the sale took for these units: the piece's own, or the newest taken first (7.5).
+      const takes = sale.layers.filter((each) => each.originId === group.origin.id);
+      const wanted: { layerId: string; pieceId: string | null; quantity: number; value: number }[] = [];
+      if (group.pieces.length > 0) {
+        for (const piece of group.pieces) {
+          const took = takes.find((each) => each.pieceId === piece.id);
+          if (took === undefined) throw new Error('A sold piece without its layer');
+          wanted.push({ layerId: took.layerId, pieceId: piece.id, quantity: 1, value: took.value });
         }
       } else {
-        const last = returned.quantity + group.quantity === issued.quantity;
-        const part = last ? issued.value - returned.value : share(issued.value, group.quantity, issued.quantity);
-        if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
-        value = part;
-        enter(pool, {
-          quantity: group.quantity,
-          value,
-          sequence: 0,
+        // The sale's takes summed per layer, the layer taken last first (7.5 "newest-taken layer first").
+        const perLayer = new Map<string, { quantity: number; value: number }>();
+        for (const took of takes) {
+          const sum = perLayer.get(took.layerId) ?? { quantity: 0, value: 0 };
+          sum.quantity += took.quantity;
+          sum.value += took.value;
+          perLayer.delete(took.layerId);
+          perLayer.set(took.layerId, sum);
+        }
+        let left = group.quantity;
+        for (const [layerId, took] of [...perLayer].reverse()) {
+          if (left === 0) break;
+          const done = sale.returnedFromLayer.get(layerId) ?? { quantity: 0, value: 0 };
+          const take = Math.min(left, took.quantity - done.quantity);
+          if (take <= 0) continue;
+          const part =
+            done.quantity + take === took.quantity ? took.value - done.value : share(took.value, take, took.quantity);
+          if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+          done.quantity += take;
+          done.value += part;
+          sale.returnedFromLayer.set(layerId, done);
+          wanted.push({ layerId, pieceId: null, quantity: take, value: part });
+          left -= take;
+        }
+      }
+      const sequence = pool.lastSequence + 1;
+      for (const each of wanted) {
+        const layer = enter(pool, {
+          quantity: each.quantity,
+          value: each.value,
+          sequence,
           at: this.valuing.occurredAt,
           newLayerId: this.newId,
+          fromLayerId: each.layerId,
         });
+        if (layer !== null)
+          layers.push({ layerId: layer.id, pieceId: each.pieceId, quantity: each.quantity, value: each.value });
+        value += each.value;
       }
       returned.quantity += group.quantity;
       returned.value += value;
@@ -1203,6 +1216,33 @@ export class Valuing extends Working {
       );
       for (const layer of pool.layers)
         if (layers.some((each) => each.layerId === layer.id)) layer.fromValuationId = entry.id;
+      this.share(movement, to.businessUnitId, 'stock.customer-return', 'cost', value);
+      total += value;
+    }
+    if (valuedBack.length > 0 && sale.valuedTotal !== null) {
+      // Moving average: the sale line's value × returned ÷ sold, the last unit back taking what remains (7.5), as one
+      // valuation naming its origin only when it has one (13.10).
+      const issued = sale.valuedTotal;
+      const quantity = valuedBack.reduce((sum, group) => sum + group.quantity, 0);
+      const returned = sale.returnedTotal;
+      if (returned.quantity + quantity > issued.quantity) {
+        throw new Error('A customer return brings back more valued units than its sale issued');
+      }
+      const last = returned.quantity + quantity === issued.quantity;
+      const value = last ? issued.value - returned.value : share(issued.value, quantity, issued.quantity);
+      if (value === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+      const pool = this.poolOf(item.lineId, to, item.goods.skuId);
+      const before = { quantity: pool.quantity, value: pool.value };
+      enter(pool, { quantity, value, sequence: 0, at: this.valuing.occurredAt, newLayerId: this.newId });
+      returned.quantity += quantity;
+      returned.value += value;
+      this.poolValuation(
+        movement,
+        onlyOrigin(valuedBack),
+        pool,
+        { quantity, value, before },
+        { eventKind: 'stock.customer-return', component: 'cost' },
+      );
       this.share(movement, to.businessUnitId, 'stock.customer-return', 'cost', value);
       total += value;
     }
@@ -1344,6 +1384,10 @@ export class Valuing extends Working {
         : item.kind === 'supplier-handover'
           ? 'stock.supplier-handover'
           : 'stock.supplier-rejection-return';
+    // A transit value of a moving-average book holds no layers (7.8); a FIFO one keeps its source layers.
+    if (transit.layers.length === 0) {
+      return this.leaveAveragedTransit(item.lineId, movement, transit, groups, eventKind, from, to);
+    }
     let total = 0;
     let allKnown = true;
     for (const group of groups) {
@@ -1351,55 +1395,49 @@ export class Valuing extends Working {
         allKnown = false;
         continue;
       }
-      // What leaves the transit: per source layer under FIFO, the piece's own; else the exact share (SL-2).
+      // What leaves the transit: per source layer under FIFO, the piece's own.
       const parts: { sourceLayerId: string | null; pieceId: string | null; quantity: number; value: number }[] = [];
-      if (transit.layers.length > 0) {
-        const wanted: { layer: (typeof transit.layers)[number]; quantity: number; pieceId: string | null }[] = [];
-        // A piece takes the source layer it left with; one whose cost was established in transit, none, so it takes
-        // the oldest with a quantity's units (7.6).
-        const unmapped: PieceState[] = [];
-        for (const piece of group.pieces) {
-          const layer = transit.layers.find((each) => each.sourceLayerId === transit.pieceLayers.get(piece.id));
-          if (layer === undefined) unmapped.push(piece);
-          else wanted.push({ layer, quantity: 1, pieceId: piece.id });
+      const wanted: { layer: (typeof transit.layers)[number]; quantity: number; pieceId: string | null }[] = [];
+      // A piece takes the source layer it left with; one whose cost was established in transit, none, so it takes
+      // the oldest with a quantity's units (7.6).
+      const unmapped: PieceState[] = [];
+      for (const piece of group.pieces) {
+        const layer = transit.layers.find((each) => each.sourceLayerId === transit.pieceLayers.get(piece.id));
+        if (layer === undefined) unmapped.push(piece);
+        else wanted.push({ layer, quantity: 1, pieceId: piece.id });
+      }
+      if (group.pieces.length === 0 || unmapped.length > 0) {
+        let left = group.pieces.length === 0 ? group.quantity : unmapped.length;
+        for (const layer of [...transit.layers].sort((a, b) => a.order - b.order)) {
+          const already = wanted.filter((each) => each.layer === layer).reduce((sum, each) => sum + each.quantity, 0);
+          const take = Math.min(left, layer.quantity - already);
+          if (take <= 0) continue;
+          wanted.push({ layer, quantity: take, pieceId: null });
+          left -= take;
+          if (left === 0) break;
         }
-        if (group.pieces.length === 0 || unmapped.length > 0) {
-          let left = group.pieces.length === 0 ? group.quantity : unmapped.length;
-          for (const layer of [...transit.layers].sort((a, b) => a.order - b.order)) {
-            const already = wanted.filter((each) => each.layer === layer).reduce((sum, each) => sum + each.quantity, 0);
-            const take = Math.min(left, layer.quantity - already);
-            if (take <= 0) continue;
-            wanted.push({ layer, quantity: take, pieceId: null });
-            left -= take;
-            if (left === 0) break;
-          }
-          if (left > 0) throw new Error('A transit holds fewer valued units than its goods');
-        }
-        // Worked out on copies first, so nothing changes when a share does not divide (SL-2).
-        const staged = new Map<TransitLayerState, { quantity: number; value: number }>();
-        for (const each of wanted) {
-          const state = staged.get(each.layer) ?? { quantity: each.layer.quantity, value: each.layer.value };
-          const part = share(state.value, each.quantity, state.quantity);
-          if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
-          state.quantity -= each.quantity;
-          state.value -= part;
-          staged.set(each.layer, state);
-          parts.push({
-            sourceLayerId: each.layer.sourceLayerId,
-            pieceId: each.pieceId,
-            quantity: each.quantity,
-            value: part,
-          });
-        }
-        for (const [layer, state] of staged) {
-          layer.quantity = state.quantity;
-          layer.value = state.value;
-          layer.changed = true;
-        }
-      } else {
-        const value = share(transit.value, group.quantity, transit.quantity);
-        if (value === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
-        parts.push({ sourceLayerId: null, pieceId: null, quantity: group.quantity, value });
+        if (left > 0) throw new Error('A transit holds fewer valued units than its goods');
+      }
+      // Worked out on copies first, so nothing changes when a share does not divide (SL-2).
+      const staged = new Map<TransitLayerState, { quantity: number; value: number }>();
+      for (const each of wanted) {
+        const state = staged.get(each.layer) ?? { quantity: each.layer.quantity, value: each.layer.value };
+        const part = share(state.value, each.quantity, state.quantity);
+        if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+        state.quantity -= each.quantity;
+        state.value -= part;
+        staged.set(each.layer, state);
+        parts.push({
+          sourceLayerId: each.layer.sourceLayerId,
+          pieceId: each.pieceId,
+          quantity: each.quantity,
+          value: part,
+        });
+      }
+      for (const [layer, state] of staged) {
+        layer.quantity = state.quantity;
+        layer.value = state.value;
+        layer.changed = true;
       }
       const value = parts.reduce((sum, each) => sum + each.value, 0);
       this.transitValuation(
@@ -1455,5 +1493,41 @@ export class Valuing extends Working {
       total += value;
     }
     return this.itemValue(total, allKnown);
+  }
+
+  /**
+   * Units leave a transit value of a moving-average book (7.3, 7.8): the exact share of what it holds, all of it when
+   * they are all, as one valuation naming its origin only when it has one (13.10); at a destination they enter its
+   * pool at that value. A share that does not divide is `rule-not-set` (SL-2).
+   */
+  private leaveAveragedTransit(
+    lineId: string,
+    movement: MovementEntry,
+    transit: TransitState,
+    groups: readonly { origin: OriginState; quantity: number }[],
+    eventKind: string,
+    from: UnitFacts,
+    to: UnitFacts | undefined,
+  ): ItemValue {
+    const valued = groups.filter((group) => this.valued(group.origin));
+    const allKnown = valued.length === groups.length;
+    if (valued.length === 0) return this.itemValue(0, allKnown);
+    const quantity = valued.reduce((sum, group) => sum + group.quantity, 0);
+    if (quantity > transit.quantity) throw new Error('A transit holds fewer valued units than its goods');
+    const value = share(transit.value, quantity, transit.quantity);
+    if (value === undefined) refuse('rule-not-set', lineId, SL('SL-2'));
+    const origin = onlyOrigin(valued);
+    const names = { eventKind, component: 'cost' };
+    this.transitValuation(movement, origin, transit, { quantity: -quantity, value: -value }, names);
+    if (to === undefined) {
+      this.share(movement, from.businessUnitId, eventKind, 'cost', value);
+      return this.itemValue(value, allKnown);
+    }
+    const pool = this.poolOf(lineId, to, transit.skuId);
+    const before = { quantity: pool.quantity, value: pool.value };
+    enter(pool, { quantity, value, sequence: 0, at: this.valuing.occurredAt, newLayerId: this.newId });
+    this.poolValuation(movement, origin, pool, { quantity, value, before }, names);
+    this.share(movement, to.businessUnitId, eventKind, 'cost', value);
+    return this.itemValue(value, allKnown);
   }
 }
