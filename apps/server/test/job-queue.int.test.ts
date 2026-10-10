@@ -7,6 +7,7 @@ import {
   KEEP_EVERY_JOB,
   OrganisationRouter,
   PinoLoggerService,
+  POSTING_DELIVERY_QUEUE,
   startJobQueue,
   type RoutedOrganisation,
 } from '../src/kernel/index.js';
@@ -114,5 +115,25 @@ describe('pg-boss in an Organisation database (code-house-rules 12.9)', () => {
     await boss.fail(SINGLETON_QUEUE, first, { reason: 'SYNTHETIC' });
     const next = await boss.fetch(SINGLETON_QUEUE);
     expect(next.map((job) => job.id)).toEqual([second]);
+  });
+
+  it('stock-ledger 10.6 on the posting queue a waiting job of one book never holds up another book’s (S1-F10-T07)', async () => {
+    // The worker sends a posting delivery with its book as singleton key and group, and fetches one group at a time.
+    const [bookA, bookB] = [uuidv7(), uuidv7()];
+    const send = async (book: string) =>
+      (await boss.send(POSTING_DELIVERY_QUEUE, {}, { ...KEEP_EVERY_JOB, singletonKey: book, group: { id: book } })) ??
+      '';
+    const a1 = await send(bookA);
+    const a2 = await send(bookA);
+    const b1 = await send(bookB);
+    const fetchOne = async () =>
+      (await boss.fetch(POSTING_DELIVERY_QUEUE, { groupConcurrency: 1 })).map((job) => job.id);
+    expect(await fetchOne()).toEqual([a1]);
+    // A's second is older than B's first, yet B's is taken: A has a job active.
+    expect(await fetchOne()).toEqual([b1]);
+    expect(await fetchOne()).toEqual([]);
+    expect(await jobState(POSTING_DELIVERY_QUEUE, a2)).toEqual({ state: 'created', deletion: 0 });
+    await boss.complete(POSTING_DELIVERY_QUEUE, a1);
+    expect(await fetchOne()).toEqual([a2]);
   });
 });

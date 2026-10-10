@@ -1,4 +1,4 @@
-import { permissionRegistry, registryByCode } from '@apparel-os/schemas';
+import { permissionRegistry, registryByCode, type RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { JobIdentities } from '../../../kernel/index.js';
 import { authorise } from '../queries/authorise.js';
 import { authenticateInternalIdentity } from '../queries/service-identities.js';
@@ -9,10 +9,11 @@ import { holdAuthority } from './authority.js';
  * an internal identity by its code, Authorise for the action a job step declares, through one role assignment of the
  * identity in force today under the declared permission registry, and Hold: the same Authorise, then the step-0 locks
  * of the identity, that assignment and its role, shared, with the recheck under them (code-house-rules 8.2; DEC-118,
- * RR-360). A refusal names what is missing.
+ * RR-360). A refusal names what is missing. A test composition may pass its own declarations, as it does to Access, so
+ * a test-only job may authorise on a test-only record type (S1-F10-T07); the production module passes none.
  */
-export function jobIdentities(): JobIdentities {
-  const registry = registryByCode(permissionRegistry);
+export function jobIdentities(declarations: readonly RecordTypeDeclaration[] = permissionRegistry): JobIdentities {
+  const registry = registryByCode(declarations);
   return {
     authenticate: async (context, code) => (await authenticateInternalIdentity(context, code))?.serviceIdentityId,
     authorise: async (context, actorId, need) => {

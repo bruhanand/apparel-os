@@ -45,6 +45,13 @@ export interface ConsumerDefinition<Payload extends Record<string, unknown> = Re
   readonly serviceIdentity: string;
   /** The action its steps need, authorised in each step and again before a redelivery is answered (RR-273; CH-14). */
   readonly authorises: JobAuthority;
+  /**
+   * For a posting consumer, which posts a large document's stock and money effects as a queued job (stock-ledger
+   * 10.6; access-and-approvals 9.8): the accounting book its delivery posts into, read from the event's identifiers.
+   * Its deliveries go to the posting queue, one at a time per book through pg-boss's singleton key, and a second
+   * delivery of the same book waits until the first ends, never dropped (code-house-rules 12.9).
+   */
+  readonly postingBook?: (event: DeliveredEvent<Payload>) => string;
   /** Handles one delivery in its step's transaction; the tools are the worker's, as a job kind's are. */
   readonly handle: (
     context: TransactionContext,

@@ -238,6 +238,13 @@ export interface Actor {
   readonly roleAssignmentId: string;
 }
 
+/** An internal service identity posting in a job step on behalf of a person (access-and-approvals 2.3, 9.8). */
+export interface ServiceActor {
+  readonly serviceIdentityId: string;
+  readonly roleAssignmentId: string;
+  readonly onBehalfOfUserId: string;
+}
+
 export class StockWorld {
   readonly log = capturingLogger();
   world!: SyntheticWorld;
@@ -396,18 +403,23 @@ export class StockWorld {
    */
   async postIn(
     context: TransactionContext,
-    actor: Actor,
+    actor: Actor | ServiceActor,
     items: readonly LedgerItem[],
     options: PostOptions & { readonly source: LedgerRequest['source'] },
   ): Promise<Written> {
     const source = options.source;
     // The registry's record type of the caller's document, Authorised and approved on (15.2, 15.3).
     const documentType = options.documentType ?? SYNTHETIC_DOCUMENT_TYPE;
-    const held = await this.access.holdAuthority(context, { kind: 'user', id: actor.user.id }, actor.roleAssignmentId, {
-      action: 'create',
-      recordType: documentType,
-    });
-    if (held !== undefined) throw new PostingRefused(held);
+    const asUser = 'user' in actor ? actor.user.id : undefined;
+    // A job step's authority is held by the worker at step 0 already (code-house-rules 12.9).
+    if (options.authorityHeld !== true) {
+      if (asUser === undefined) throw new Error('A service identity posts only inside a job step');
+      const held = await this.access.holdAuthority(context, { kind: 'user', id: asUser }, actor.roleAssignmentId, {
+        action: 'create',
+        recordType: documentType,
+      });
+      if (held !== undefined) throw new PostingRefused(held);
+    }
     const useId = uuidv7();
     const stepOne = [
       ...(options.document?.targets ?? []),
@@ -420,7 +432,15 @@ export class StockWorld {
     if (stale !== undefined) throw new PostingRefused(stale);
     const request: LedgerRequest = {
       source,
-      actor: { kind: 'user', userId: actor.user.id, roleAssignmentId: actor.roleAssignmentId },
+      actor:
+        'user' in actor
+          ? { kind: 'user', userId: actor.user.id, roleAssignmentId: actor.roleAssignmentId }
+          : {
+              kind: 'service-identity',
+              serviceIdentityId: actor.serviceIdentityId,
+              onBehalfOfUserId: actor.onBehalfOfUserId,
+              roleAssignmentId: actor.roleAssignmentId,
+            },
       items,
       ...(options.approval === undefined ? {} : { approval: { decisionId: options.approval.decisionId, useId } }),
     };
@@ -447,7 +467,7 @@ export class StockWorld {
         decisionId: options.approval.decisionId,
         actionType: options.approval.actionType,
         document,
-        preparers: options.approval.preparers ?? [actor.user.id],
+        preparers: options.approval.preparers ?? (asUser === undefined ? [] : [asUser]),
         // The value on the rule's basis: none for a rule without one; the ledger's cost value otherwise (13.1).
         value:
           basis === 'none' || checked.value.value.kind === 'none' ? ({ kind: 'none' } as const) : checked.value.value,
@@ -457,7 +477,10 @@ export class StockWorld {
       const used = await this.access.recordUse(context, {
         ...check,
         useId,
-        actor: { kind: 'user', id: actor.user.id },
+        actor:
+          'user' in actor
+            ? { kind: 'user', id: actor.user.id }
+            : { kind: 'service-identity', id: actor.serviceIdentityId, onBehalfOfUserId: actor.onBehalfOfUserId },
       });
       if (used !== undefined) throw new PostingRefused(used);
     }
@@ -524,6 +547,8 @@ export interface PostOptions {
     readonly preparers?: readonly string[];
   };
   readonly hold?: (context: TransactionContext) => Promise<void>;
+  /** The worker has held the job step's authority at step 0 (code-house-rules 12.9): postIn does not hold it again. */
+  readonly authorityHeld?: boolean;
   /** Runs after Plan, before any lock of steps 2 to 8, so a test can change what the locks will find (10.4). */
   readonly afterPlan?: (context: TransactionContext) => Promise<void>;
   /**

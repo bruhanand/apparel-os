@@ -141,7 +141,13 @@ export type {
 } from './jobs/registry.js';
 export { WORKER_SETTINGS_VARIABLE, workerSettingsFromEnvironment } from './jobs/worker-settings.js';
 export type { RetrySettings, WorkerSettings } from './jobs/worker-settings.js';
-export { OUTBOX_AUTHORITY, OUTBOX_DELIVERY_QUEUE, OUTBOX_PROCESSOR_IDENTITY, Worker } from './jobs/worker.js';
+export {
+  OUTBOX_AUTHORITY,
+  OUTBOX_DELIVERY_QUEUE,
+  OUTBOX_PROCESSOR_IDENTITY,
+  POSTING_DELIVERY_QUEUE,
+  Worker,
+} from './jobs/worker.js';
 export { WORKER, WORKER_ENVIRONMENT, WORKER_SETTINGS, workerModuleWith } from './jobs/worker.module.js';
 export type { DeliveryData, StepResult, WorkerDependencies } from './jobs/worker.js';
 export { FAILED_JOB_EXCEPTIONS, SESSION_ACCESS } from './live/contracts.js';

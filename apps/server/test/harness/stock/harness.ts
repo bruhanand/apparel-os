@@ -749,7 +749,27 @@ export class StockHarness extends ValuedWorld {
       | { readonly kind: 'unknown' }
       | { readonly kind: 'none' },
   ): Promise<string> {
-    const requestId = await this.run(this.preparer.user.id, (context) =>
+    const requestId = await this.requestApprovalOf(document, actionType, value);
+    const decision = await this.decideAs(this.checker.user, requestId, document.versionId);
+    if (decision.kind !== 'success') throw new Error(`approval refused: ${decision.refusal.code}`);
+    return decision.answer.decisionId;
+  }
+
+  /** The record types `access` is composed with, the driver's document included (15.2). */
+  registryOf(): readonly RecordTypeDeclaration[] {
+    return this.registry;
+  }
+
+  /** Requests approval of the document's current version, on its value, by the preparer (9.1); answers the request. */
+  requestApprovalOf(
+    document: HarnessDocument,
+    actionType: string,
+    value:
+      | { readonly kind: 'known'; readonly amountPaise: Paise }
+      | { readonly kind: 'unknown' }
+      | { readonly kind: 'none' },
+  ): Promise<string> {
+    return this.run(this.preparer.user.id, (context) =>
       this.access.requestApproval(context, {
         actionType,
         document: {
@@ -763,9 +783,6 @@ export class StockHarness extends ValuedWorld {
         requestedBy: { userId: this.preparer.user.id, roleAssignmentId: this.preparer.roleAssignmentId },
       }),
     );
-    const decision = await this.decideAs(this.checker.user, requestId, document.versionId);
-    if (decision.kind !== 'success') throw new Error(`approval refused: ${decision.refusal.code}`);
-    return decision.answer.decisionId;
   }
 
   /**
