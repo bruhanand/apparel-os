@@ -174,9 +174,7 @@ async function journalSeries(
     scopeKey: bookId,
     financialYear: period.financialYear,
   });
-  const missing: MissingItem[] = [
-    { kind: 'number-series', numberedKind: JOURNAL_KIND.kind, bookId, financialYear: period.financialYear },
-  ];
+  const missing: MissingItem[] = [{ kind: 'journal-series', bookId, financialYear: period.financialYear }];
   if (series === undefined) return { kind: 'refused', code: 'finance.no-journal-series', missing };
   if (series.state === 'Paused') return { kind: 'refused', code: 'finance.journal-series-paused', missing };
   return { kind: 'series', seriesId: series.seriesId };
@@ -365,7 +363,7 @@ async function journalsByIds(context: TransactionContext, ids: readonly string[]
 
 /** Allocate's refusal on the held journal series, as Post's (5.4). */
 function seriesRefusal(code: string, bookId: string): CommandRefusal {
-  const missing: MissingItem[] = [{ kind: 'number-series', numberedKind: JOURNAL_KIND.kind, bookId }];
+  const missing: MissingItem[] = [{ kind: 'journal-series', bookId }];
   if (code === 'numbering.series-paused')
     return { kind: 'unavailable', code: 'finance.journal-series-paused', missing };
   return { kind: 'unavailable', code: 'finance.no-journal-series', missing };

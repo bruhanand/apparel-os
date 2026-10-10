@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { paise, uuidv7 } from '@apparel-os/domain';
+import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
   permissionRegistry,
   setupRequestSchema,
@@ -15,6 +15,7 @@ import {
   defineConsumer,
   defineEvent,
   IdempotencyHelper,
+  LOCK_STEP,
   newCorrelationId,
   OrganisationRouter,
   restrictedValueCipherNotConfigured,
@@ -31,6 +32,19 @@ import {
   type ApprovalRule,
 } from '../../src/modules/access/index.js';
 import { TEST_COMPOSITION } from '../support/composition.js';
+import { JOURNAL_KIND, type PostingEventKind } from '../../src/modules/finance/books/index.js';
+
+/** The posting maps journey's SYNTHETIC event kind and its reversal kind (books-and-posting 7.1; S1-F09-T02). */
+const POSTING_JOURNEY_KIND: PostingEventKind = {
+  kind: 'test-synthetic.value-in',
+  components: ['to-pool', 'to-dispatch'],
+  reversalKind: 'test-synthetic.value-in-reversal',
+  liveStage: 1,
+};
+const POSTING_JOURNEY_KINDS: readonly PostingEventKind[] = [
+  POSTING_JOURNEY_KIND,
+  { ...POSTING_JOURNEY_KIND, kind: 'test-synthetic.value-in-reversal', reversalKind: null },
+];
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../../src/modules/access/commands/job-identities.js';
 // The codes of the two roles the setup step creates, so the journey assigns exactly those roles (9.11).
@@ -357,6 +371,8 @@ const structureFixture = await structureSetup({
   organisationCode: settingsCode,
   keysEnvironment: keys,
   label: 'BROWSER-GEO',
+  // The posting maps journey's SYNTHETIC event kind, declared in the test composition only (S1-F09-T02).
+  eventKinds: POSTING_JOURNEY_KINDS,
 });
 const structureGeography = await approvedGeography(structureFixture, 'JOURNEY');
 // The business units journey (organisation-units.spec.ts; S1-F02-T02): an approved SYNTHETIC Site in the journey's
@@ -619,6 +635,212 @@ await approved(structureFixture, (c, p) =>
     validFrom: structureFixture.today(),
   }),
 );
+// The posting maps journey (posting-maps.spec.ts; S1-F09-T02): a SYNTHETIC book with a Site, a Store, a whole-store
+// unit and a warehouse unit mapped to it, the accounts of the synthetic chart of books-and-posting 16.1 in force, one
+// Open period from today with its journal series in a SYNTHETIC format, a map version in force from today, and two
+// journals posted through Post by the synthetic caller (DEC-112 H2), one at each unit, so the trial balance has lines
+// in and out of the Store reader's scope. Every value is SYNTHETIC (GC4-1, GC5-1, V-10).
+const postingEntity = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareLegalEntity(c, p, {
+    code: syntheticCode('JOURNEY-POST-LE'),
+    legalName: syntheticName('Journey Posting Entity'),
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingRegistration = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareTaxRegistration(c, p, {
+    code: syntheticCode('JOURNEY-POST-GSTIN'),
+    legalEntityId: postingEntity.recordId,
+    registrationNumber: 'SYNTHETIC-GSTIN-POST',
+    stateId: structureGeography.state.recordId,
+    validityFrom: structureFixture.today(),
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingBookCode = syntheticCode('JOURNEY-POST-BK');
+const postingBookName = syntheticName('Journey Posting Book');
+const postingBook = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareAccountingBook(c, p, {
+    code: postingBookCode,
+    legalEntityId: postingEntity.recordId,
+    name: postingBookName,
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingSite = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-POST-SITE'),
+    name: syntheticName('Journey Posting Site'),
+    physicalKind: 'retail-site',
+    areaId: structureGeography.area.recordId,
+    addresses: [syntheticName('1 Posting Road')],
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingStore = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareStore(c, p, {
+    code: syntheticCode('JOURNEY-POST-STORE'),
+    name: syntheticName('Journey Posting Store'),
+    format: 'ebo',
+    operatingModel: 'company-owned',
+    siteId: postingSite.recordId,
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingMapping = {
+  legalEntityId: postingEntity.recordId,
+  taxRegistrationId: postingRegistration.recordId,
+  accountingBookId: postingBook.recordId,
+};
+const postingStoreUnit = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareBusinessUnit(c, p, {
+    code: syntheticCode('JOURNEY-POST-STORE-UNIT'),
+    name: syntheticName('Journey Posting Store Unit'),
+    siteId: postingSite.recordId,
+    kind: 'whole-store',
+    storeId: postingStore.recordId,
+    ...postingMapping,
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingWarehouse = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareBusinessUnit(c, p, {
+    code: syntheticCode('JOURNEY-POST-WAREHOUSE'),
+    name: syntheticName('Journey Posting Warehouse'),
+    siteId: postingSite.recordId,
+    kind: 'warehouse',
+    ...postingMapping,
+    validFrom: structureFixture.today(),
+  }),
+);
+const postingOutcome = <A>(
+  outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } },
+) => {
+  if (outcome.kind !== 'success') throw new Error(`The synthetic books were refused: ${outcome.refusal.code}`);
+  return outcome.answer;
+};
+/** A books version covered by a SYNTHETIC CA reference and decided by the fixture's other person (6.3). */
+async function postingInForce(
+  change: { versionId: string; requestId?: string | undefined },
+  recordType: 'finance.account' | 'finance.posting_map',
+) {
+  postingOutcome(
+    await structureFixture.asPreparerDo((c, p) =>
+      structureFixture.books.recordCaEvidence(c, p, {
+        versions: [{ recordType, versionId: change.versionId }],
+        evidence: {
+          kind: 'reference',
+          what: syntheticName('CA approval letter'),
+          givenBy: syntheticName('CA'),
+          givenOn: structureFixture.today(),
+          keptAt: syntheticName('Accounts file'),
+        },
+      }),
+    ),
+  );
+  const decided = await structureFixture.decide(change.requestId ?? '', change.versionId);
+  if (decided.kind !== 'success') throw new Error(`The synthetic books decision was refused: ${decided.refusal.code}`);
+}
+const postingAccounts: Record<string, string> = {};
+for (const [code, nature, name] of [
+  ['SYN-INV', 'asset', 'SYNTHETIC Stock in cost pools'],
+  ['SYN-TRN', 'asset', 'SYNTHETIC Value held on a dispatch'],
+  ['SYN-PUR', 'liability', 'SYNTHETIC Purchase clearing'],
+] as const) {
+  const change = postingOutcome(
+    await structureFixture.asPreparerDo((c, p) =>
+      structureFixture.books.prepareAccount(c, p, {
+        bookId: postingBook.recordId,
+        code,
+        nature,
+        name,
+        validFrom: structureFixture.today(),
+      }),
+    ),
+  );
+  await postingInForce(change, 'finance.account');
+  postingAccounts[code] = change.recordId;
+}
+const postingPeriod = postingOutcome(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.books.definePeriod(c, p, postingBook.recordId, {
+      code: syntheticCode('JOURNEY-P1'),
+      financialYear: syntheticCode('FY-JOURNEY'),
+      firstDay: structureFixture.today(),
+      lastDay: structureFixture.day(29),
+    }),
+  ),
+);
+await structureFixture.run(structureFixture.preparer.id, async (c) => {
+  await structureFixture.numbering.defineFormatVersion(c, syntheticCode('JOURNEY-JV'), [
+    { kind: 'text', text: 'SYN-JV-' },
+    { kind: 'year' },
+    { kind: 'text', text: '-' },
+    { kind: 'sequence', width: 5 },
+  ]);
+  const series = await structureFixture.numbering.defineSeries(c, {
+    kind: JOURNAL_KIND.kind,
+    scopeKey: postingBook.recordId,
+    financialYear: syntheticCode('FY-JOURNEY'),
+    displayScopeKey: postingBook.recordId,
+    formatCode: syntheticCode('JOURNEY-JV'),
+  });
+  if (series.kind !== 'done') throw new Error(`The synthetic journal series was refused: ${series.refusal.code}`);
+});
+const postingLine = (component: string, side: 'debit' | 'credit', code: string) => ({
+  component,
+  side,
+  accountId: postingAccounts[code] ?? '',
+  requiresStore: false,
+  requiresBrand: false,
+});
+await postingInForce(
+  postingOutcome(
+    await structureFixture.asPreparerDo((c, p) =>
+      structureFixture.books.preparePostingMap(c, p, {
+        bookId: postingBook.recordId,
+        eventKind: POSTING_JOURNEY_KIND.kind,
+        origin: 'synthetic',
+        validFrom: structureFixture.today(),
+        lines: [
+          postingLine('to-pool', 'debit', 'SYN-INV'),
+          postingLine('to-pool', 'credit', 'SYN-PUR'),
+          postingLine('to-dispatch', 'debit', 'SYN-TRN'),
+          postingLine('to-dispatch', 'credit', 'SYN-PUR'),
+        ],
+      }),
+    ),
+  ),
+  'finance.posting_map',
+);
+{
+  const request = {
+    sourceModule: 'test-synthetic',
+    document: { recordType: 'test-synthetic.document', recordId: uuidv7() },
+    actor: { kind: 'user' as const, id: structureFixture.preparer.id },
+    items: [
+      [postingStoreUnit.recordId, 100_000],
+      [postingWarehouse.recordId, 50_000],
+    ].map(([businessUnitId, amount]) => ({
+      itemKey: uuidv7(),
+      eventKind: POSTING_JOURNEY_KIND.kind,
+      businessUnitId: String(businessUnitId),
+      brandId: null,
+      businessDate: structureFixture.today(),
+      components: [{ component: 'to-pool', amount: known(paise(Number(amount))) }],
+    })),
+  };
+  const result = await structureFixture.run(structureFixture.preparer.id, async (context) => {
+    const checks = await structureFixture.books.checkPostable(context, request);
+    const held = await structureFixture.books.holdPeriods(context, checks);
+    if (held.kind === 'refused') throw new Error(held.refusal.code);
+    await context.lock(LOCK_STEP.numberSeries, held.seriesTargets);
+    return structureFixture.books.post(context, request);
+  });
+  if (result.kind !== 'posted') throw new Error(`The synthetic journals were not posted: ${JSON.stringify(result)}`);
+}
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -1239,6 +1461,49 @@ const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-O
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+// The posting maps journey's people (S1-F09-T02): an Accounts user who prepares a map version and attaches the CA's
+// evidence file, a different Accounts user who decides it from My work, and a reader of journals scoped to the one Store.
+const postingBookView = { recordType: 'organisation.accounting_book', action: 'view' as const };
+const postingMapsPreparer = await provisionUser('BROWSER-POSTING-PREPARER', 'P-ACC', [
+  postingBookView,
+  { recordType: 'finance.posting_map', action: 'view' },
+  { recordType: 'finance.posting_map', action: 'edit' },
+  { recordType: 'finance.account', action: 'view' },
+  { recordType: 'finance.ca_approval_evidence', action: 'create' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const postingMapsApprover = await provisionUser('BROWSER-POSTING-APPROVER', 'P-ACC', [
+  postingBookView,
+  { recordType: 'finance.posting_map', action: 'view' },
+  { recordType: 'finance.posting_map', action: 'approve' },
+  { recordType: 'finance.account', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const postingStoreReader = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-POSTING-STORE-READER',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: postingStoreReader.id }, [
+  postingBookView,
+  { recordType: 'finance.financial_period', action: 'view' },
+]);
+await grantSynthetic(
+  settingsDatabase,
+  { kind: 'user', id: postingStoreReader.id },
+  [{ recordType: 'finance.journal', action: 'view' }],
+  {
+    scope: {
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'selected', members: [{ type: 'store', id: postingStore.recordId }] },
+      brand: { kind: 'all' },
+    },
+  },
+);
+const postingReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
@@ -1264,6 +1529,8 @@ const app = await startAccessApp(
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
     gatedOperations: [policyOperation, readinessOperation],
     validityChecks: [policyValuesCheck, readinessValuesCheck],
+    // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
+    postingEventKinds: POSTING_JOURNEY_KINDS,
   },
 );
 
@@ -1438,6 +1705,19 @@ writeFileSync(
       approver: credentialsOf(readinessApprover),
       reasonId: readinessReasonId,
       unitOption: `${readinessUnit.code} · ${readinessUnit.name}`,
+    },
+    // S1-F09-T02: the posting maps journey's two Accounts users, the reason the approver gives, the Store-scoped
+    // reader, and how the screens name the book, the event kind, the accounts and the period.
+    postingMaps: {
+      organisationCode: settingsCode,
+      preparer: credentialsOf(postingMapsPreparer),
+      approver: credentialsOf(postingMapsApprover),
+      storeReader: credentialsOf(postingStoreReader),
+      reasonId: postingReasonId,
+      bookOption: `${postingBookCode} · ${postingBookName}`,
+      eventKind: POSTING_JOURNEY_KIND.kind,
+      periodCode: syntheticCode('JOURNEY-P1'),
+      periodId: postingPeriod.periodId,
     },
     journey: {
       organisationCode: journeyCode,

@@ -218,6 +218,22 @@ export interface SyntheticWorld {
     readonly reasonId: string;
     readonly unitOption: string;
   };
+  /**
+   * The posting maps journey (S1-F09-T02), in the security settings Organisation: an Accounts user who prepares a map
+   * version and attaches the CA's evidence, a different Accounts user who decides it from My work with the reason
+   * given, a journal reader scoped to one Store, and how the screens name the SYNTHETIC book, kind and period.
+   */
+  readonly postingMaps: {
+    readonly organisationCode: string;
+    readonly preparer: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly storeReader: EnrolledUser;
+    readonly reasonId: string;
+    readonly bookOption: string;
+    readonly eventKind: string;
+    readonly periodCode: string;
+    readonly periodId: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

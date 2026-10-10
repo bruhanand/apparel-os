@@ -118,6 +118,99 @@ export class BooksController {
     );
   }
 
+  // Periods (4.1; S1-F09-T02).
+  @ApiRoute(routes.listPeriods)
+  listPeriods(@RouteInput() input: RouteInputOf<typeof routes.listPeriods>, @SignedIn() user: SignedInUser) {
+    return this.read(user, 'finance.list-periods', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      records: await this.books.listPeriods(context, input.params.bookId),
+    }));
+  }
+
+  @ApiRoute(routes.definePeriod)
+  definePeriod(@RouteInput() input: RouteInputOf<typeof routes.definePeriod>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.definePeriod, 'finance.define-period', user, input, (c, p) =>
+      this.books.definePeriod(c, p, input.params.bookId, input.body),
+    );
+  }
+
+  // Posting maps (6, 14; S1-F09-T02).
+  @ApiRoute(routes.listPostingMaps)
+  listPostingMaps(@RouteInput() input: RouteInputOf<typeof routes.listPostingMaps>, @SignedIn() user: SignedInUser) {
+    return this.read(user, 'finance.list-posting-maps', async (context, today) => ({
+      asOf: context.startedAt.toISOString(),
+      on: input.query.on,
+      eventKinds: this.books.eventKinds().map((each) => ({
+        kind: each.kind,
+        components: [...each.components],
+        ...(each.reversalKind === null ? {} : { reversalKind: each.reversalKind }),
+      })),
+      records: await this.books.listPostingMaps(context, input.params.bookId, input.query.on, today),
+    }));
+  }
+
+  @ApiRoute(routes.preparePostingMap)
+  preparePostingMap(
+    @RouteInput() input: RouteInputOf<typeof routes.preparePostingMap>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.preparePostingMap, 'finance.prepare-posting-map-version', user, input, (c, p) =>
+      this.books.preparePostingMap(c, p, input.body),
+    );
+  }
+
+  // The internal ledger and trial balance (12; POL-11.01; S1-F09-T02).
+  @ApiRoute(routes.readTrialBalance)
+  async readTrialBalance(
+    @RouteInput() input: RouteInputOf<typeof routes.readTrialBalance>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookId } = input.params;
+    const answer = await this.read(user, 'finance.read-trial-balance', async (context) => {
+      await this.mayReadJournals(context, user);
+      return { balance: await this.books.trialBalance(context, bookId, input.query.periodId) };
+    });
+    if (answer.balance === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'finance.record-not-found',
+        missing: [{ kind: 'record', recordType: 'finance.financial_period', recordId: input.query.periodId }],
+      });
+    }
+    return answer.balance;
+  }
+
+  @ApiRoute(routes.readLedger)
+  async readLedger(@RouteInput() input: RouteInputOf<typeof routes.readLedger>, @SignedIn() user: SignedInUser) {
+    const { accountId } = input.params;
+    const answer = await this.read(user, 'finance.read-ledger', async (context) => {
+      await this.mayReadJournals(context, user);
+      return { ledger: await this.books.ledger(context, accountId, input.query.from, input.query.to) };
+    });
+    if (answer.ledger === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'finance.record-not-found',
+        missing: [{ kind: 'record', recordType: 'finance.account', recordId: accountId }],
+      });
+    }
+    return answer.ledger;
+  }
+
+  /**
+   * The journal lines carry scope facts, so their reads authorise in the command (access-and-approvals 5.3, 7.1 step 3):
+   * refused when no assignment grants view on journals at all; otherwise row-level security shows the lines in the
+   * reader's scope, and the answer says when that is part of the book (books-and-posting 12; PRD-SEC-005).
+   */
+  private async mayReadJournals(context: TransactionContext, user: SignedInUser): Promise<void> {
+    const checked = await this.access.authoriseEach(
+      context,
+      { actorId: user.userId, action: 'view', recordType: 'finance.journal' },
+      [],
+    );
+    if (checked.kind === 'refused') throw new ApiRefusal({ ...checked.refusal, missing: [...checked.refusal.missing] });
+  }
+
   private async read<Answer>(
     user: SignedInUser,
     commandName: string,

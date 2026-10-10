@@ -18,8 +18,8 @@ import { BOOKS, POSTING_EVENT_KINDS } from './tokens.js';
  * chart of accounts and the CA's approval evidence (S1-F09-T01); periods, posting maps, Post and the read models
  * (S1-F09-T02). Its approval rules and decision effects reach `access` through the composition root (booksApprovals;
  * access-and-approvals 9.8b); "has this book held stock?" reaches it from `stock` the same way, optional while no
- * implementation answers (2.2); and the posting event kinds the posting modules declare, under POSTING_EVENT_KINDS
- * (7.1). Its check of the posting configuration goes to the policy gate (11).
+ * implementation answers (2.2); and the posting event kinds the posting modules declare, checked by checkEventKinds
+ * in the composition that hands them over, under POSTING_EVENT_KINDS (7.1). Its check of the posting configuration goes to the policy gate (11).
  */
 @Module({
   imports: [CommandRunnerModule, AuditModule, AccessModule, FilesImportsModule, NumberingModule],
@@ -33,8 +33,8 @@ import { BOOKS, POSTING_EVENT_KINDS } from './tokens.js';
         files: FilesImportsInterface,
         bookHeldStock: BookHeldStock | undefined,
         numbering: NumberingInterface,
-        kinds: readonly PostingEventKind[] | undefined,
-      ) => new Books({ audit, access, files, bookHeldStock, numbering, kinds: checkEventKinds(kinds ?? []) }),
+        kinds: ReadonlyMap<string, PostingEventKind> | undefined,
+      ) => new Books({ audit, access, files, bookHeldStock, numbering, kinds: kinds ?? checkEventKinds([]) }),
       inject: [
         AUDIT,
         ACCESS,

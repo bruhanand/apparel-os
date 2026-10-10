@@ -11,6 +11,8 @@ import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
+import { LedgerScreen } from './finance/LedgerScreen';
+import { PostingMapsScreen } from './finance/PostingMapsScreen';
 import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
 import { VocabulariesScreen } from './merchandise/VocabulariesScreen';
 import { ProductsScreen } from './merchandise/ProductsScreen';
@@ -128,6 +130,10 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <PolicyReadinessScreen />;
     case 'setup.site-opening':
       return <ReadinessScreen />;
+    case 'setup.posting-maps':
+      return <PostingMapsScreen />;
+    case 'money.internal-ledger':
+      return <LedgerScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

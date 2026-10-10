@@ -18,7 +18,7 @@ export interface Grant {
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 
-export const sections = ['home', 'setup'] as const;
+export const sections = ['home', 'money', 'setup'] as const;
 export type Section = (typeof sections)[number];
 
 export interface Screen {
@@ -97,6 +97,10 @@ export const screens = {
     path: '/setup/policy-readiness',
     need: view('configuration.policy_status'),
   },
+  // Setup › Posting maps (books-and-posting 6, 14; ui-blueprint Setup; S1-F09-T02).
+  'setup.posting-maps': { section: 'setup', path: '/setup/posting-maps', need: view('finance.posting_map') },
+  // Money › Internal ledger and trial balance (books-and-posting 12, 14; ui-blueprint Money; S1-F09-T02).
+  'money.internal-ledger': { section: 'money', path: '/money/internal-ledger', need: view('finance.journal') },
   // Site opening and closure › Readiness (ui-blueprint Setup; module-map 4.16; S1-F04-T02).
   'setup.site-opening': {
     section: 'setup',
@@ -135,7 +139,11 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // Accounts verifies business-unit mappings on Setup › Organisation structure, the synthetic journey's choice; who
   // holds the verify permission is KDPS's (POL-10.08, V-01; S1-F02-T02). My work is open to every person without a
   // menu entry, as the blueprint lists none for Accounts.
-  'P-ACC': { home: null, menu: ['setup.organisation-structure'] },
+  // Its Money › Internal ledger and trial balance and Setup › Posting maps arrive with S1-F09-T02 (ui-blueprint).
+  'P-ACC': {
+    home: null,
+    menu: ['money.internal-ledger', 'setup.organisation-structure', 'setup.posting-maps'],
+  },
   'P-CHA': { home: null, menu: [] },
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
   'P-BKG': { home: null, menu: ['setup.products'] },

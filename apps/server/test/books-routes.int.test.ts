@@ -5,7 +5,10 @@ import {
   attachedFileSchema,
   bookSettingListSchema,
   costSettingReadSchema,
+  periodListSchema,
+  postingMapListSchema,
   storedFileSchema,
+  trialBalanceSchema,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
@@ -139,6 +142,8 @@ beforeAll(async () => {
   api = await startAccessApp(world, keys, {
     clock,
     fileStoreEnvironment: minio.environment,
+    // A SYNTHETIC posting event kind for the posting routes (books-and-posting 7.1; S1-F09-T02).
+    postingEventKinds: [{ kind: 'test-synthetic.value-in', components: ['to-pool'], reversalKind: null, liveStage: 1 }],
   });
   bookId = await writeSyntheticBook();
   preparer = await enrolled('BOOKS-PREPARER', [
@@ -149,6 +154,12 @@ beforeAll(async () => {
     { recordType: 'finance.book_setting', action: 'edit' },
     { recordType: 'finance.ca_approval_evidence', action: 'create' },
     { recordType: 'files_imports.stored_file', action: 'create' },
+    // The posting half (S1-F09-T02).
+    { recordType: 'finance.posting_map', action: 'view' },
+    { recordType: 'finance.posting_map', action: 'edit' },
+    { recordType: 'finance.financial_period', action: 'view' },
+    { recordType: 'finance.financial_period', action: 'create' },
+    { recordType: 'finance.journal', action: 'view' },
   ]);
   approver = await enrolled('BOOKS-APPROVER', [
     { recordType: 'finance.account', action: 'view' },
@@ -254,5 +265,53 @@ describe('accounts and settings through the routes, with the CA evidence as a fi
     expect(read.setting).toMatchObject({ kind: 'set', versionId: costVersionId, formula: 'moving-average' });
     const account = accountReadSchema.parse((await get(reader, `/api/finance/accounts/${accountId}`)).body);
     expect(account.record.versions[0]?.state).toBe('In force');
+  });
+});
+
+describe('periods, posting maps and the trial balance through the routes (books-and-posting 4.1, 6, 12; S1-F09-T02)', () => {
+  it('PRD-LED-001 defines a period, prepares a map version and reads the trial balance, labelled internal', async () => {
+    const period = await post(preparer, `/api/finance/books/${bookId}/periods`, {
+      code: syntheticCode('P1'),
+      financialYear: syntheticCode('FY'),
+      firstDay: today(),
+      lastDay: today(),
+    });
+    expect(period.status, JSON.stringify(period.body)).toBe(200);
+    const periods = periodListSchema.parse((await get(preparer, `/api/finance/books/${bookId}/periods`)).body);
+    expect(periods.records.map((each) => [each.code, each.state])).toEqual([[syntheticCode('P1'), 'Open']]);
+    const accounts = (await get(preparer, `/api/finance/books/${bookId}/accounts`)).body.records as { id: string }[];
+    const accountId = accounts[0]?.id ?? '';
+    const map = await post(preparer, '/api/finance/posting-maps', {
+      bookId,
+      eventKind: 'test-synthetic.value-in',
+      origin: 'synthetic',
+      validFrom: today(),
+      lines: [
+        { component: 'to-pool', side: 'debit', accountId, requiresStore: false, requiresBrand: false },
+        { component: 'to-pool', side: 'credit', accountId, requiresStore: false, requiresBrand: false },
+      ],
+    });
+    expect(map.status, JSON.stringify(map.body)).toBe(200);
+    const maps = postingMapListSchema.parse(
+      (await get(preparer, `/api/finance/books/${bookId}/posting-maps?on=${today()}`)).body,
+    );
+    expect(maps.eventKinds.map((each) => each.kind)).toEqual(['test-synthetic.value-in']);
+    expect(maps.records[0]?.versions[0]?.state).toBe('Awaiting approval');
+    // POL-09.12: a kind no module declares is refused.
+    const strange = await post(preparer, '/api/finance/posting-maps', {
+      bookId,
+      eventKind: 'test-synthetic.unknown',
+      origin: 'synthetic',
+      validFrom: today(),
+      lines: [{ component: 'to-pool', side: 'debit', accountId, requiresStore: false, requiresBrand: false }],
+    });
+    expect(strange.body).toMatchObject({ error: { code: 'finance.event-kind-not-declared' } });
+    const periodId = periods.records[0]?.id ?? '';
+    const read = await get(preparer, `/api/finance/books/${bookId}/trial-balance?periodId=${periodId}`);
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    const balance = trialBalanceSchema.parse(read.body);
+    expect(balance).toMatchObject({ ledger: 'internal', partial: false, totals: { debitPaise: 0, creditPaise: 0 } });
+    // A reader with no view on journals is refused (PRD-SEC-005).
+    expect((await get(reader, `/api/finance/books/${bookId}/trial-balance?periodId=${periodId}`)).status).toBe(403);
   });
 });

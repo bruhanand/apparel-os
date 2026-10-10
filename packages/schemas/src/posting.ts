@@ -108,7 +108,8 @@ export const postingMapQuerySchema = z.strictObject({ on: businessDateSchema });
 export const eventKindViewSchema = z.strictObject({
   kind: z.string(),
   components: z.array(z.string()),
-  reversalKind: z.string(),
+  /** Absent for a kind that is itself a reversal kind (7.1). */
+  reversalKind: z.string().optional(),
 });
 export const postingMapListSchema = z.strictObject({
   asOf,

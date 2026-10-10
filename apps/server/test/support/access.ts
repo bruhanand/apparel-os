@@ -39,6 +39,7 @@ import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
 import { LOCATION_IN_USE, type LocationInUse } from '../../src/modules/organisation/index.js';
+import { checkEventKinds, POSTING_EVENT_KINDS, type PostingEventKind } from '../../src/modules/finance/books/index.js';
 import {
   CONFIGURATION,
   CONFIGURATION_ENVIRONMENT,
@@ -274,6 +275,8 @@ export async function startAccessApp(
     readonly validityChecks?: readonly ValidityCheck[];
     /** Whether stock is recorded at a location, as `stock` answers it; the ledger's own unless a test gives one. */
     readonly locationInUse?: LocationInUse;
+    /** SYNTHETIC posting event kinds, declared in the test composition (books-and-posting 7.1; S1-F09-T02). */
+    readonly postingEventKinds?: readonly PostingEventKind[];
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -291,6 +294,11 @@ export async function startAccessApp(
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
   if (options.locationInUse !== undefined) {
     builder = builder.overrideProvider(LOCATION_IN_USE).useValue(options.locationInUse);
+  }
+  if (options.postingEventKinds !== undefined) {
+    builder = builder
+      .overrideProvider(POSTING_EVENT_KINDS)
+      .useValue(checkEventKinds(options.postingEventKinds, TEST_COMPOSITION));
   }
   if (options.liveSettings !== undefined) {
     builder = builder.overrideProvider(LIVE_SETTINGS).useValue(options.liveSettings);
