@@ -58,6 +58,7 @@ let limitedApi: AccessTestApp;
 let keysEnvironment: Record<string, string>;
 let setup: StructureSetup;
 let layoutA: SyntheticProductLayout;
+let layoutUnconfirmed: SyntheticProductLayout;
 let layoutB: SyntheticProductLayout;
 let brandCode: string;
 let categoryCode: string;
@@ -244,7 +245,9 @@ beforeAll(async () => {
   preparer = await signedIn(0, 'IMPORTER', IMPORTER, { fieldClasses: ALL_CLASSES });
   preparerB = await signedIn(1, 'IMPORTERB', IMPORTER, { fieldClasses: ALL_CLASSES });
   outsider = await signedIn(0, 'OUTSIDER', [{ recordType: 'files_imports.stored_file', action: 'create' }]);
-  layoutA = await writeSyntheticProductLayout(orgA.database, setup.preparer.id);
+  // Confirmed by a different person, so its batches may publish (6.4; S1-F06-T03); and one left Proposed.
+  layoutA = await writeSyntheticProductLayout(orgA.database, setup.preparer.id, setup.approver.id);
+  layoutUnconfirmed = await writeSyntheticProductLayout(orgA.database, setup.preparer.id);
   layoutB = await writeSyntheticProductLayout(orgB.database, preparerB.user.id);
   const router = api.app.get<OrganisationRouter>(ORGANISATION_ROUTER);
   const routed = await router.resolveForSignIn(orgA.code);
@@ -349,7 +352,8 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     // Start: a create batch for merchandise, its code from the numbering series (GC9-9).
     const started = await start(preparer.cookie, stored, layoutA);
     expect(started.status).toBe(200);
-    expect(started.body).toMatchObject({ state: 'Staged', documentCount: 2, rowCount: 2 });
+    // The header row is staged too, as a row that is not data (6.6; S1-F06-T03).
+    expect(started.body).toMatchObject({ state: 'Staged', documentCount: 2, rowCount: 3 });
     expect(started.body.code).toMatch(/^SYN-IB-\d{5}$/);
     const batchId = String(started.body.batchId);
     const [allocation] = await rows<{ formatted_text: string; document_id: string }>(
@@ -405,6 +409,9 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     const validated = await call('POST', `/api/files-imports/batches/${batchId}/validate`, preparer.cookie);
     expect(validated.status).toBe(200);
     expect(validated.body).toMatchObject({ batchId, state: 'Validated' });
+    // The preparer's submission is the merchandise handler's review (13.1, 13.2; S1-F06-T03).
+    const submitted = await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie);
+    expect(submitted.status).toBe(200);
     const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie);
     expect(published.status).toBe(200);
     expect(published.body).toMatchObject({ batchId, state: 'Published' });
@@ -417,7 +424,7 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(after.outcomes).toHaveLength(1);
     expect(after.outcomes[0]).toMatchObject({
       result: 'published',
-      counts: { rowsRead: 2, rowsIgnored: 0, rowsAccepted: 2 },
+      counts: { rowsRead: 3, rowsIgnored: 1, rowsAccepted: 2 },
     });
     const proposalId = after.outcomes[0]?.documents[0]?.records[0]?.recordId ?? '';
     const proposal = await setup.run(setup.preparer.id, (c) => setup.catalogue.productProposal(c, proposalId));
@@ -481,6 +488,10 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
       kind: 'issues',
       issues: [{ code: 'files-imports.required-value-unknown', field: 'stockUnit', rowNumber: 2 }],
     });
+    // The validation report names it with its place (8.2; S1-F06-T03).
+    expect(read.report?.issues).toContainEqual(
+      expect.objectContaining({ class: 'required', severity: 'Blocking', field: 'stockUnit', rowNumber: 2 }),
+    );
     const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie);
     expect(errorOf(published)).toMatchObject({ kind: 'refused', code: 'files-imports.batch-not-validated' });
   });
@@ -490,7 +501,7 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     const stored = importFileStoredSchema.parse(
       (await upload(preparer.cookie, bytes, syntheticProductFileName('read'))).body,
     );
-    const batchId = String((await start(preparer.cookie, stored, layoutA)).body.batchId);
+    const batchId = String((await start(preparer.cookie, stored, layoutUnconfirmed)).body.batchId);
     const read = importBatchReadSchema.parse(
       (await call('GET', `/api/files-imports/batches/${batchId}`, preparer.cookie)).body,
     );
@@ -510,10 +521,13 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
       outsider.cookie,
     );
     expect(errorOf(outside).code).toBe('files-imports.attachment-not-found');
-    // Its staged rows likewise: a reader without the classes the file holds is refused (section 11).
+    // Its staged rows likewise: a reader without every class the file holds sees every cell masked (section 11;
+    // S1-F06-T03).
     const partial = await signedIn(0, 'PARTIAL', IMPORTER, { fieldClasses: ['cost'] });
-    const refused = await call('GET', `/api/files-imports/batches/${batchId}`, partial.cookie);
-    expect(errorOf(refused)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+    const masked = importBatchReadSchema.parse(
+      (await call('GET', `/api/files-imports/batches/${batchId}`, partial.cookie)).body,
+    );
+    expect(masked.documents[0]?.rows[0]?.cells.every((cell) => cell.masked !== undefined)).toBe(true);
     // And another Organisation never sees it.
     const elsewhere = await call('GET', `/api/files-imports/batches/${batchId}`, preparerB.cookie);
     expect(errorOf(elsewhere)).toMatchObject({ kind: 'not-found', code: 'files-imports.batch-not-found' });

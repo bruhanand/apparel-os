@@ -229,7 +229,7 @@ create table files_imports.row_issue (
   code text not null,
   correction text not null,
   rule text not null,
-  original jsonb,
+  original text,
   restricted_class text,
   missing jsonb not null default '[]',
   seen_by_user_id uuid,

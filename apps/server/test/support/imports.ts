@@ -13,11 +13,11 @@ import {
 import { syntheticCode } from '../fixtures/synthetic.js';
 import { connect } from './postgres.js';
 
-// S1-F06-T01: the one fixed layout and mapping of the import tracer, written directly as the migration role until
-// proposing and confirming them arrives (S1-F06-T03; code-house-rules 11.2: "until an interface exists, a fixture
-// writes the fewest rows it needs directly"). Each has one version, Proposed by the person named: no confirmation
-// exists yet, so the file a batch reads with it counts as holding every restricted class (imports-and-opening-data
-// 11). Every value is SYNTHETIC.
+// S1-F06-T01: the one fixed layout and mapping of the import tracer, written directly as the migration role
+// (code-house-rules 11.2: a fixture writes the fewest rows it needs directly). Each has one version, Proposed by the
+// person named, so the file a batch reads with it counts as holding every restricted class (imports-and-opening-data
+// 11); or, where a test names a confirmer, Confirmed by that different person, as the decision through `access` would
+// leave it (6.4; S1-F06-T03, whose own tests propose and confirm through the routes). Every value is SYNTHETIC.
 
 export interface SyntheticProductLayout {
   readonly layoutVersionId: string;
@@ -28,7 +28,10 @@ export interface SyntheticProductLayout {
 export async function writeSyntheticProductLayout(
   database: string,
   proposedByUserId: string,
+  confirmedByUserId?: string,
 ): Promise<SyntheticProductLayout> {
+  const state = confirmedByUserId === undefined ? 'Proposed' : 'Confirmed';
+  const decided = [confirmedByUserId ?? null, confirmedByUserId === undefined ? null : new Date()];
   const layoutId = uuidv7();
   const layoutVersionId = uuidv7();
   const mappingId = uuidv7();
@@ -39,21 +42,31 @@ export async function writeSyntheticProductLayout(
     await owner.query(
       `insert into files_imports.layout (id, code, source, document_type, kinds)
        values ($1, $2, $3, 'product-master', array['create'])`,
-      [layoutId, SYNTHETIC_PRODUCT_LAYOUT_CODE, SYNTHETIC_LAYOUT_SOURCE],
+      [
+        layoutId,
+        state === 'Proposed' ? SYNTHETIC_PRODUCT_LAYOUT_CODE : `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED`,
+        SYNTHETIC_LAYOUT_SOURCE,
+      ],
     );
     await owner.query(
-      `insert into files_imports.layout_version (id, layout_id, version, structure, state, proposed_by_user_id)
-       values ($1, $2, 1, $3, 'Proposed', $4)`,
-      [layoutVersionId, layoutId, JSON.stringify(SYNTHETIC_PRODUCT_LAYOUT), proposedByUserId],
+      `insert into files_imports.layout_version (id, layout_id, version, structure, state, proposed_by_user_id,
+         decided_by_user_id, decided_at)
+       values ($1, $2, 1, $3, $4, $5, $6, $7)`,
+      [layoutVersionId, layoutId, JSON.stringify(SYNTHETIC_PRODUCT_LAYOUT), state, proposedByUserId, ...decided],
     );
     await owner.query(
       `insert into files_imports.mapping (id, code, layout_version_id, target) values ($1, $2, $3, 'merchandise')`,
-      [mappingId, SYNTHETIC_PRODUCT_MAPPING_CODE, layoutVersionId],
+      [
+        mappingId,
+        state === 'Proposed' ? SYNTHETIC_PRODUCT_MAPPING_CODE : `${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED`,
+        layoutVersionId,
+      ],
     );
     await owner.query(
-      `insert into files_imports.mapping_version (id, mapping_id, version, fields, state, proposed_by_user_id)
-       values ($1, $2, 1, $3, 'Proposed', $4)`,
-      [mappingVersionId, mappingId, JSON.stringify(SYNTHETIC_PRODUCT_MAPPING), proposedByUserId],
+      `insert into files_imports.mapping_version (id, mapping_id, version, fields, state, proposed_by_user_id,
+         decided_by_user_id, decided_at)
+       values ($1, $2, 1, $3, $4, $5, $6, $7)`,
+      [mappingVersionId, mappingId, JSON.stringify(SYNTHETIC_PRODUCT_MAPPING), state, proposedByUserId, ...decided],
     );
     await owner.query('commit');
   } catch (error) {

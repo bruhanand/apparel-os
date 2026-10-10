@@ -86,3 +86,23 @@ export async function syntheticProductWorkbook(rows: readonly SyntheticProductRo
   for (const row of rows) sheet.addRow(SYNTHETIC_PRODUCT_COLUMNS.map((column) => row[column] ?? null));
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
+
+/** A SYNTHETIC workbook of one sheet: the header row, then the rows given, a missing value an empty cell (S1-F06-T03). */
+export async function syntheticWorkbook(options: {
+  readonly sheet: string;
+  readonly header: readonly (string | null)[];
+  readonly rows: readonly (readonly (string | number | null)[])[];
+  readonly marker: string;
+  /** The rows to hide, by their number in the sheet. */
+  readonly hiddenRows?: readonly number[];
+}): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.title = `SYNTHETIC file ${options.marker}`;
+  workbook.subject = 'SYNTHETIC';
+  workbook.creator = 'SYNTHETIC generator';
+  const sheet = workbook.addWorksheet(options.sheet);
+  sheet.addRow([...options.header]);
+  for (const row of options.rows) sheet.addRow([...row]);
+  for (const number of options.hiddenRows ?? []) sheet.getRow(number).hidden = true;
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}

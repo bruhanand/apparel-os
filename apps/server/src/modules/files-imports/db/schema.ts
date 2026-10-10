@@ -248,7 +248,7 @@ export const rowIssue = filesImports.table('row_issue', {
   code: text('code').notNull(),
   correction: text('correction').notNull(),
   rule: text('rule').notNull(),
-  original: jsonb('original').$type<string>(),
+  original: text('original'),
   restrictedClass: text('restricted_class').$type<FieldClass>(),
   missing: jsonb('missing').$type<{ kind: string; [field: string]: string }[]>().notNull(),
   seenByUserId: uuid('seen_by_user_id'),
