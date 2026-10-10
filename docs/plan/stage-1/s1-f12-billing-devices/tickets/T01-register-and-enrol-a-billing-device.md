@@ -1,6 +1,6 @@
 # S1-F12-T01 — Register and enrol a billing device
 
-Status: in-progress
+Status: done
 Blocked by: S1-F02-T02 (Stores and their whole-store and brand-counter units); S1-F08-T01 (number series); S1-F01-T09 (session kinds and the fresh-code check); S1-F11-T10 (`apps/counter` exists, with its Playwright run)
 Feature: [S1-F12 Billing devices and device bill series](../../spec.md)
 
@@ -32,7 +32,7 @@ When an approved change defines the bill format or the financial-year dates, the
 - Enrolment with no bill format or no financial-year dates succeeds and defines no series
 - The Admin's browser journey on the devices screen covers registration and its refusals with their reasons (GC-8 test 12 passes whole in S1-F12-T02)
 
-A device enrolled before the format and year exist gets its series when the approving change commits; repeating the change creates none twice; an existing series is untouched (`DEC-117`)
+A device enrolled before the format and year exist gets its series when the approving change commits; repeating the change creates none twice; an existing series is untouched (`DEC-117`). Completed by `S1-F12-T03` (product owner, 10 Oct 2026): `pos.defineMissingSeries` is built and tested here; the approving change that calls it is T03's
 
 ## Notes
 
@@ -44,4 +44,6 @@ A device enrolled before the format and year exist gets its series when the appr
 - **Built** on `s1/f12-t01` (10 Oct 2026); as built in offline-counter 3.6 and 4.3a, numbering-and-audit 3.3 and 5.1, access-and-approvals 2.4, 3.3 and 13.1, module-map 4.17. The design text step needed no change: sections 3 to 5 and 11 were already marked approved, with `apps/counter`, the fresh code and 12.1 aligned with 4.1 and test 8.
 - **Settled with the code, beyond the ticket's words** (design choices, each written into the design): the bill-number format and the financial year's dates are kept by `numbering` (`numbering.kind_format`, `numbering.financial_year`), which every yearly series follows; the challenge is a public command on the sign-in path, names no device and has no lifetime; a device proof that fails gets the one sign-in refusal; the shared POS session limits are the setting `access.shared-pos-session-limits` (RR-303); a new access record kind `device-enrolled`; `organisation`'s unit head now carries its Store.
 - **Not built here** (proposed open items): the approved change, with its route and screen, that defines the bill-number format or a financial year and calls `defineMissingSeries` in its transaction (DEC-117; `pos.defineMissingSeries` exists and is tested); changing `access.shared-pos-session-limits` on Setup › Security settings; a lifetime for device challenges; serving `apps/counter` at `/counter/` from the `app` service (RR-420), without which the counter pages are reachable only from `vite preview`.
-
+- **Review** (product owner, 10 Oct 2026): setting the financial-year dates and the bill-number format, prepared by one person and approved by a second, with the approval creating the missing series, is the new ticket [`S1-F12-T03`](T03-financial-year-and-bill-format-settings.md). The device challenge's lifetime is OPEN (RR-493, product owner; blocks live device sign-in); meanwhile used challenges are kept, final, as the record of the proof that used them, and the unused challenges of one source address are bounded by the sign-in throttling setting, as sign-in is (offline-counter 3.6). Changing `access.shared-pos-session-limits` on Setup › Security settings is RR-494.
+- **Review fixes**: a device sign-in holds the device row in shared mode at step 1 before reading its state and key, so a revocation committing meanwhile is waited for (code-house-rules 8.2); enrolment already held it exclusively (tested now against a revocation in progress); `pos`'s series definition requires the device row held.
+- Closed 10 Oct 2026 on `s1/f12-billing-devices`, reviewed with `/code-review`; review fixes 35168f1, 3cffc41, 575414b and the documents commit on `s1/f12-fixes`; no blocking finding left. Commits: 9c77261, f56fdeb, f1e96de, 9ac6736, 32fc14f.

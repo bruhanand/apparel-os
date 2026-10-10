@@ -201,8 +201,9 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F06-T02 Intake refusals and caps](s1-f06-file-intake/tickets/T02-intake-refusals-and-caps.md) | blocked | F06-T01, F06-T03 + gate |
 | [F06-T03 Layouts, mappings and the validation report](s1-f06-file-intake/tickets/T03-layouts-mappings-and-the-validation-report.md) | blocked | F06-T01, F02-T02, F02-T03, F04-T01 |
 | [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | blocked | F06-T03 |
-| [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | blocked | F01-T09, F11-T10, F02-T02, F08-T01 |
-| [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | blocked | F04-T02, F12-T01 |
+| [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | done | F01-T09, F11-T10, F02-T02, F08-T01 |
+| [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | done | F04-T02, F12-T01 |
+| [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | ready-for-agent | F12-T01, F12-T02, F01-T13, F02-T01 |
 | [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | ready-for-agent | — |
 | [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | blocked | F06-T01, F06-T05, F08-T01, F14-T01 |
 | [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | blocked | F14-T02 |
