@@ -65,8 +65,32 @@ export class SignInController {
       login: input.body.login,
       password: input.body.password,
       totpCode: input.body.totpCode,
+      device: input.body.device,
     });
     return answerOf(result, routed.organisation.organisationCode, response);
+  }
+
+  /**
+   * A one-time challenge for a device to sign (offline-counter 3.2, 3.3; PRD-OFF-010), on the sign-in path with no
+   * actor (code-house-rules 6.3), like sign-in a public command with no key. An unknown Organisation gets the one
+   * sign-in refusal.
+   */
+  @ApiRoute(routes.issueDeviceChallenge)
+  async issueDeviceChallenge(
+    @RouteInput() input: RouteInputOf<typeof routes.issueDeviceChallenge>,
+    @Req() request: HttpRequest,
+  ) {
+    const routed = await this.router.resolveForSignIn(input.body.organisationCode);
+    if (!routed.routed) throw refused();
+    return this.runner.run(
+      {
+        commandName: 'access.issue-device-challenge',
+        organisation: routed.organisation,
+        correlationId: correlationIdOf(request) ?? newCorrelationId(),
+        actor: { kind: 'no-actor', path: 'sign-in' },
+      },
+      (context) => this.access.issueDeviceChallenge(context),
+    );
   }
 
   // The test sign-in of the development environments (access-and-approvals 3.4; POL-02.17, PRD-ACS-017; DEC-121).
@@ -104,7 +128,19 @@ export class SignInController {
         correlationId: user.correlationId,
         actor: { kind: 'actor', actorId: user.userId },
       },
-      (context) => this.access.ownAccess(context, user.userId),
+      async (context) => {
+        const access = await this.access.ownAccess(
+          context,
+          user.userId,
+          user.deviceId === undefined ? 'office' : 'shared-pos',
+        );
+        // A shared POS session names its device (access-and-approvals 3.3; POL-02.18; S1-F12-T01).
+        const device =
+          user.deviceId === undefined
+            ? undefined
+            : (await this.access.devices(context, [user.deviceId])).get(user.deviceId);
+        return { ...access, device };
+      },
     );
     // Screens show times in the Organisation's timezone only (PRD-MOD-017; DEC-118). With none in force no session
     // authenticates (authenticate-session.ts), so this answers as the guard does if it ended since; nothing falls back
@@ -123,6 +159,7 @@ export class SignInController {
       roleAssignmentInForce: own.roleAssignmentInForce,
       timezone: own.timezone,
       idleLockSeconds: own.idleLockSeconds,
+      ...(own.device === undefined ? {} : { device: { deviceId: own.device.deviceId, code: own.device.code } }),
     };
   }
 

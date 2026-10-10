@@ -7,6 +7,7 @@ import {
   personasHeldSchema,
   totpCodeSchema,
 } from './common.js';
+import { deviceProofSchema } from './devices.js';
 import { grantSchema } from './roles.js';
 import { secretString, shownOnceSecret } from './secret.js';
 
@@ -24,6 +25,12 @@ export const signInRequestSchema = z.strictObject({
   login: loginSchema,
   password: secretString(),
   totpCode: totpCodeSchema.optional(),
+  /**
+   * On a billing device, its proof: its signature over a one-time challenge (offline-counter 3.3, 3.4). With a valid
+   * one the session is a shared POS session bound to the device; with none, an office session (POL-02.18). A proof
+   * that does not verify gets the one sign-in refusal.
+   */
+  device: deviceProofSchema.optional(),
 });
 export type SignInRequestInput = z.input<typeof signInRequestSchema>;
 
@@ -99,6 +106,11 @@ export const sessionViewSchema = z.strictObject({
    * passed with no request of the session, without polling; the server stays the check, locking at the next request.
    */
   idleLockSeconds: z.int().positive(),
+  /**
+   * Present only for a shared POS session: the billing device it is bound to (access-and-approvals 3.3; POL-02.18;
+   * offline-counter 3.4). Its idle-lock limit is then the shared POS session limits' (S1-F12-T01).
+   */
+  device: z.strictObject({ deviceId: idSchema, code: z.string().min(1) }).optional(),
 });
 export type SessionView = z.infer<typeof sessionViewSchema>;
 

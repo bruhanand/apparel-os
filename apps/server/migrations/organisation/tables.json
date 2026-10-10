@@ -1725,6 +1725,62 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "books-and-posting 4.3, 4.5, 13.1; code-house-rules 7.1",
       "why": "The books' periods and their reopenings belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "access.device",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "access-and-approvals 2.4, 13.1; offline-counter 3.1, 3.2, 12.3; code-house-rules 6.3, 8.2",
+      "why": "Read by sign-in before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.device_version",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "access-and-approvals 2.4, 13.1; offline-counter 3.1; code-house-rules 6.3, 7.1",
+      "why": "Read by sign-in before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.device_challenge",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "offline-counter 3.2, 3.3; code-house-rules 6.3",
+      "why": "Read by sign-in before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "numbering.financial_year",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.3, 6.1; code-house-rules 7.1, 12.14",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command"
+    },
+    {
+      "table": "numbering.kind_format",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "numbering-and-audit 3.5, 6.1; code-house-rules 7.1, 12.14",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command"
+    },
+    {
+      "table": "pos.billing_device",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "offline-counter 3.1, 12.3; code-house-rules 7.1, 8.2",
+      "why": "A billing device belongs to the structure of its Store, which belongs to the Organisation as a whole: its records carry the Store's place as their scope facts and Authorise on pos.billing_device decides (structure-and-masters 6.1; access-and-approvals 5.3); only pos code reads them"
+    },
+    {
+      "table": "pos.billing_device_unit",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "offline-counter 3.1, 12.3; code-house-rules 7.1",
+      "why": "A billing device belongs to the structure of its Store, which belongs to the Organisation as a whole: its records carry the Store's place as their scope facts and Authorise on pos.billing_device decides (structure-and-masters 6.1; access-and-approvals 5.3); only pos code reads them"
     }
   ]
 }

@@ -5,6 +5,12 @@ export { Numbering } from './numbering.js';
 export type { NumberingDependencies, NumberingInterface } from './numbering.js';
 export type { Allocated, AllocationRequest } from './commands/allocate.js';
 export type { FormatVersion } from './commands/define-format.js';
+export type {
+  FinancialYearDraft,
+  FinancialYearRead,
+  KindFormatRead,
+  SettingOrigin as NumberingSettingOrigin,
+} from './commands/settings.js';
 export type { SeriesDefinition } from './commands/define-series.js';
 export type { FormatPart } from './domain/format.js';
 export type { NumberedKind, NumberingResult } from './domain/kinds.js';

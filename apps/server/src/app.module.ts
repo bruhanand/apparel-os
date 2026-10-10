@@ -34,6 +34,7 @@ import {
   type ConfigurationInterface,
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
+import { BILL_KIND, PosModule } from './modules/pos/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -132,9 +133,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: SCOPE_MEMBERS,
       useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
     },
-    // The kinds the owning modules number: the exception code (S1-F08-T02) and the journal (books-and-posting 5.4;
-    // S1-F09-T02).
-    { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND] satisfies readonly NumberedKind[] },
+    // The kinds the owning modules number: the exception code (S1-F08-T02), the journal (books-and-posting 5.4;
+    // S1-F09-T02) and the bill, per billing device and tax registration (offline-counter 4.1; S1-F12-T01).
+    {
+      provide: NUMBERED_KINDS,
+      useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND, BILL_KIND] satisfies readonly NumberedKind[],
+    },
     // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
     // its kinds of 7.2 with S1-F10.
     { provide: POSTING_EVENT_KINDS, useFactory: () => checkEventKinds([] satisfies readonly PostingEventKind[]) },
@@ -192,6 +196,8 @@ export class ModuleApprovalsModule {}
     SiteLifecycleModule,
     // Book settings, the chart of accounts and the CA's approval evidence (module-map 4.14; S1-F09-T01).
     BooksModule,
+    // Billing devices, their enrolment and bill series (module-map 4.17; offline-counter 3, 4; S1-F12-T01).
+    PosModule,
   ],
 })
 export class AppModule {}

@@ -57,6 +57,24 @@ export async function liveSeries(context: TransactionContext, key: SeriesKey): P
   return row === undefined ? undefined : stateOf(row);
 }
 
+/**
+ * Every series of a kind under the scope keys named, live or closed, oldest first: for an owning module's read of its
+ * documents' series, such as a billing device's (offline-counter 4.4; S1-F12-T01).
+ */
+export async function seriesOfScopes(
+  context: TransactionContext,
+  kind: string,
+  scopeKeys: readonly string[],
+): Promise<SeriesState[]> {
+  if (scopeKeys.length === 0) return [];
+  const rows = await context.tx
+    .select()
+    .from(series)
+    .where(and(eq(series.kind, kind), inArray(series.scopeKey, [...scopeKeys])))
+    .orderBy(asc(series.id));
+  return rows.map(stateOf);
+}
+
 /** The parts of format versions, in order, by version. */
 export async function partsOf(
   context: TransactionContext,

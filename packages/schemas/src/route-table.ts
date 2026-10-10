@@ -15,6 +15,15 @@ import {
   signInRequestSchema,
   userCreateRequestSchema,
 } from './sign-in.js';
+import {
+  billingDeviceDraftSchema,
+  billingDeviceListSchema,
+  billingDeviceRegisteredSchema,
+  deviceChallengeRequestSchema,
+  deviceChallengeSchema,
+  deviceEnrolledSchema,
+  deviceEnrolmentSchema,
+} from './devices.js';
 import { idSchema, setupPageQuerySchema, totpCodeSchema } from './common.js';
 import {
   credentialResetRequestSchema,
@@ -879,6 +888,20 @@ export const routes = {
     shows: 'nothing',
     response: signInOutcomeSchema,
     codes: ['access.sign-in-refused', 'access.sign-in-unavailable', 'kernel.cross-site-request'],
+  }),
+  // A one-time challenge for a device to sign (offline-counter 3.2, 3.3; PRD-OFF-010; S1-F12-T01): on the sign-in path,
+  // before anyone is signed in, a public command like sign-in, with no key. It carries no secret.
+  issueDeviceChallenge: defineRoute({
+    method: 'POST',
+    path: '/api/access/device-challenges',
+    access: { kind: 'public' },
+    command: true,
+    body: deviceChallengeRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: deviceChallengeSchema,
+    codes: ['access.sign-in-refused', 'kernel.cross-site-request'],
   }),
   // The signed-in user (access-and-approvals 3.3). Refused, naming the steps left, until first sign-in is done.
   session: defineRoute({
@@ -3753,6 +3776,57 @@ export const routes = {
     shows: 'nothing',
     response: caEvidenceRecordedSchema,
     codes: TAX_RULE_CA_EVIDENCE_CODES,
+  }),
+  // Billing devices (offline-counter 3.1, 3.2, 4.1, 12.1; module-map 4.17; S1-F12-T01): Setup › Devices, tills and bill
+  // series registers a device and lists them; the counter app enrols this browser as one. A device carries its Store's
+  // place, so each route authorises in its command with the Store's facts (access-and-approvals 5.3).
+  listBillingDevices: defineRoute({
+    method: 'GET',
+    path: '/api/pos/billing-devices',
+    access: { kind: 'action', action: 'view', recordType: 'pos.billing_device', authorisedIn: 'command' },
+    command: false,
+    response: billingDeviceListSchema,
+    codes: HISTORY_CODES,
+  }),
+  registerBillingDevice: defineRoute({
+    method: 'POST',
+    path: '/api/pos/billing-devices',
+    access: { kind: 'action', action: 'create', recordType: 'pos.billing_device', authorisedIn: 'command' },
+    command: true,
+    body: billingDeviceDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: billingDeviceRegisteredSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'access.device-code-taken',
+      'pos.store-not-found',
+      'pos.unit-not-of-store',
+      'pos.unit-listed-twice',
+    ],
+  }),
+  enrolBillingDevice: defineRoute({
+    method: 'POST',
+    path: '/api/pos/billing-devices/{deviceId}/enrolment',
+    params: z.strictObject({ deviceId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'pos.billing_device', authorisedIn: 'command' },
+    command: true,
+    body: deviceEnrolmentSchema,
+    secretFields: [{ path: ['totpCode'], kind: 'authenticator-code' }],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: deviceEnrolledSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'access.authenticator-code-refused',
+      'access.enrolment-not-started',
+      'access.device-not-found',
+      'access.device-already-enrolled',
+      'access.device-proof-refused',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

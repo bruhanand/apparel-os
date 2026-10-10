@@ -18,6 +18,15 @@ export interface AuthenticatedSession {
   readonly displayName: string;
   /** What first sign-in, or sign-in after a reset, still needs; empty once done (access-and-approvals 3.2). */
   readonly pendingSteps: readonly SignInStep[];
+  /** The billing device a shared POS session is bound to; absent for an office session (3.3; POL-02.18). */
+  readonly deviceId?: string;
+}
+
+/** The setting holding the limits of a session's kind (3.3; POL-02.18; RR-303). */
+function limitsOf(kind: string) {
+  if (kind === 'office') return 'access.office-session-limits' as const;
+  if (kind === 'shared-pos') return 'access.shared-pos-session-limits' as const;
+  return undefined;
 }
 
 /**
@@ -48,9 +57,9 @@ const NOT_SIGNED_IN: AuthenticateResult = { kind: 'not-signed-in' };
  *   record, and stays Locked until the same user unlocks it with their password (3.3).
  * - Otherwise the request is its activity: the last activity moves to now.
  *
- * The limits are the settings of the session's kind in force today (POL-02.18). With none set, no session is kept
- * (fail-safe; code-house-rules 12.14). Only the office kind has a setting yet; a shared POS session needs a registered
- * device (S1-F12, RR-303). The session row is locked through the lock helper as the command's own record, step 1
+ * The limits are the settings of the session's kind in force today (POL-02.18): the office session limits, or the
+ * shared POS session limits for a session on a billing device (S1-F12-T01; RR-303). With none set, no session is kept
+ * (fail-safe; code-house-rules 12.14). The session row is locked through the lock helper as the command's own record, step 1
  * (code-house-rules 8.2), and read again under the lock, so two requests at once agree.
  */
 export async function authenticateSession(
@@ -76,6 +85,7 @@ export async function authenticateSession(
       id: session.id,
       userId: session.appUserId,
       kind: session.kind,
+      deviceId: session.deviceId,
       state: session.state,
       startedAt: session.startedAt,
       lastActivityAt: session.lastActivityAt,
@@ -83,8 +93,9 @@ export async function authenticateSession(
     .from(session)
     .where(and(eq(session.id, candidate.id), inArray(session.state, OPEN_STATES)));
   if (found === undefined) return NOT_SIGNED_IN;
-  if (found.kind !== 'office') return NOT_SIGNED_IN;
-  const limits = await readSetting(context, 'access.office-session-limits');
+  const setting = limitsOf(found.kind);
+  if (setting === undefined) return NOT_SIGNED_IN;
+  const limits = await readSetting(context, setting);
   if (limits.kind === 'not-set') return NOT_SIGNED_IN;
   const now = context.startedAt;
   const reached = sessionLimitReached(limits.value, found, now);
@@ -102,6 +113,7 @@ export async function authenticateSession(
     userId: found.userId,
     displayName: inForce.displayName,
     pendingSteps: pendingSteps(await credentialState(context, found.userId)),
+    ...(found.deviceId === null ? {} : { deviceId: found.deviceId }),
   };
   if (found.state === 'Locked') return { kind: 'locked', session: authenticated };
   if (reached === 'idle') {
@@ -117,7 +129,7 @@ export async function authenticateSession(
 
 /**
  * Whether a session is still open for its live-update stream (access-and-approvals 3.3; code-house-rules 12.12;
- * PRD-SEC-008): In force, an office session within its limits, of a user Active today. A read on the authenticate path
+ * PRD-SEC-008): In force, within the limits of its kind, of a user Active today. A read on the authenticate path
  * that keeps no activity and ends or locks nothing; the next request's Authenticate does that. A Locked session is not
  * open: its stream closes, and the browser opens it again after the unlock.
  */
@@ -132,8 +144,10 @@ export async function sessionStillOpen(context: TransactionContext, sessionId: s
     })
     .from(session)
     .where(eq(session.id, sessionId));
-  if (found?.state !== 'In force' || found.kind !== 'office') return false;
-  const limits = await readSetting(context, 'access.office-session-limits');
+  if (found?.state !== 'In force') return false;
+  const setting = limitsOf(found.kind);
+  if (setting === undefined) return false;
+  const limits = await readSetting(context, setting);
   if (limits.kind === 'not-set') return false;
   if (sessionLimitReached(limits.value, found, context.startedAt) !== 'none') return false;
   return (await userInForce(context, found.userId))?.state === 'Active';

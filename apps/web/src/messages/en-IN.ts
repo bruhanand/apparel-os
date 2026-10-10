@@ -531,6 +531,7 @@ export const englishIndia = {
   'access-kind.password-changed': 'Password changed',
   'access-kind.password-reset': 'Password reset',
   'access-kind.device-registered': 'Device registered',
+  'access-kind.device-enrolled': 'Device enrolled',
   'access-kind.device-revoked': 'Device revoked',
   'access-kind.operator-recovery': 'Recovery by the platform operator',
   'access-kind.demo-sign-in': 'Test sign-in',

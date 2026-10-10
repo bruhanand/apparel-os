@@ -87,6 +87,8 @@ export type PlainAccessKind =
   | 'password-changed'
   | 'password-reset'
   | 'device-registered'
+  /** A device's key bound at enrolment (offline-counter 3.2; S1-F12-T01). */
+  | 'device-enrolled'
   | 'device-revoked';
 
 /** One access record (module-map 4.5 "Record access"; numbering-and-audit 5; PRD-SEC-007). */

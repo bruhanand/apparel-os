@@ -25,6 +25,7 @@ export type { Decider, EffectOptions, Prepared, Preparer } from './commands/acce
 export type { FreshCode, FreshCodeRefusal } from './commands/fresh-code.js';
 export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
+export type { DeviceActor, DeviceOutcome, DeviceRead } from './commands/devices.js';
 export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked, standInChanged } from './events.js';
 export type { BatchInput, BatchOutcome } from './commands/bulk.js';
 export type { BatchItemInput } from './commands/decide.js';

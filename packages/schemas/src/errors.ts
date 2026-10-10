@@ -584,8 +584,14 @@ export const organisationCodes = declareCodes({
  * - `numbering.series-not-open`, `numbering.series-not-paused`: pause takes an open series, release a paused one (3.7).
  * - `numbering.series-exhausted`: the next number does not fit the format's width (3.5).
  * - `numbering.document-numbered-elsewhere`: the document already has its number of this kind from another series.
+ * - `numbering.financial-year-invalid`, `numbering.financial-year-label-taken`, `numbering.financial-year-overlaps`: a
+ *   financial year needs a label of its own and a last day on or after its first, and never overlaps another (3.3;
+ *   S1-F12-T01).
  */
 export const numberingCodes = declareCodes({
+  'numbering.financial-year-invalid': 'refused',
+  'numbering.financial-year-label-taken': 'refused',
+  'numbering.financial-year-overlaps': 'refused',
   'numbering.kind-not-declared': 'refused',
   'numbering.financial-year-mismatch': 'refused',
   'numbering.invalid-series': 'refused',
@@ -768,6 +774,29 @@ export const financeTaxRulesCodes = declareCodes({
   'finance.rounding-level-invalid': 'refused',
 });
 
+/**
+ * The codes of devices and billing devices (offline-counter 3.1 to 3.4, 12.1; access-and-approvals 2.4; S1-F12-T01).
+ *
+ * - `access.device-code-taken`: another device of the Organisation has the code, without regard to letter case (2.4).
+ * - `access.device-not-found`: no device has that identifier.
+ * - `access.device-already-enrolled`: a device is enrolled once; its key never changes (offline-counter 3.2).
+ * - `access.device-proof-refused`: the signature over the challenge did not verify with the key, or the challenge is
+ *   unknown or used (offline-counter 3.3; PRD-OFF-010).
+ * - `pos.store-not-found`: no Store has that identifier.
+ * - `pos.unit-not-of-store`: a unit listed is not a whole-store or brand-counter unit of the device's Store, such as a
+ *   unit of another Store, an office or a warehouse; `missing` names it (offline-counter 3.1; PRD-ORG-005).
+ * - `pos.unit-listed-twice`: a unit is listed more than once.
+ */
+export const deviceCodes = declareCodes({
+  'access.device-code-taken': 'refused',
+  'access.device-not-found': 'not-found',
+  'access.device-already-enrolled': 'refused',
+  'access.device-proof-refused': 'refused',
+  'pos.store-not-found': 'not-found',
+  'pos.unit-not-of-store': 'refused',
+  'pos.unit-listed-twice': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -788,6 +817,7 @@ export const errorCodes = {
   ...financeBooksCodes,
   ...financePostingCodes,
   ...financePeriodCodes,
+  ...deviceCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

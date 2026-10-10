@@ -165,7 +165,11 @@ export async function writeSyntheticUser(
 /** Writes a SYNTHETIC setting of access, Approved, in force from a day before now, labelled synthetic (12.14; 11.1). */
 export async function writeSyntheticSetting(
   database: string,
-  key: 'access.sign-in-throttling' | 'access.password-rules' | 'access.office-session-limits',
+  key:
+    | 'access.sign-in-throttling'
+    | 'access.password-rules'
+    | 'access.office-session-limits'
+    | 'access.shared-pos-session-limits',
   value: Record<string, number>,
 ): Promise<void> {
   const owner = await connect(database, 'migration');

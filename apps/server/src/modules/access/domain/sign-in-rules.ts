@@ -23,6 +23,10 @@ export const SETTING_FORMATS = {
   'access.sign-in-throttling': 'access.sign-in-throttling/1',
   'access.password-rules': 'access.password-rules/1',
   'access.office-session-limits': 'access.office-session-limits/1',
+  // The limits of a shared POS session, a session on a billing device (POL-02.18; access-and-approvals 3.3; RR-303;
+  // S1-F12-T01): the same shape as the office limits, with no default; values OPEN until policy 2 is Signed and
+  // validated (V-04). While it is not set, a device sign-in is unavailable naming it.
+  'access.shared-pos-session-limits': 'access.shared-pos-session-limits/1',
 } as const;
 export type AccessSettingKey = keyof typeof SETTING_FORMATS;
 
@@ -30,6 +34,7 @@ export const SETTING_SCHEMAS = {
   'access.sign-in-throttling': signInThrottlingSchema,
   'access.password-rules': passwordRulesSchema,
   'access.office-session-limits': sessionLimitsSchema,
+  'access.shared-pos-session-limits': sessionLimitsSchema,
 } as const satisfies Record<AccessSettingKey, z.ZodType>;
 
 /** The failed sign-ins counted in the window. */
