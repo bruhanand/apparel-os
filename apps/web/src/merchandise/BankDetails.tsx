@@ -15,7 +15,8 @@ import { RefusalBanner } from '../sign-in/RefusalBanner';
 // A party's bank details on Setup › Suppliers and agreements (structure-and-masters 5.1, 5.5, 8; access-and-approvals
 // 3.3, 6; S1-F03-T03). Every version shows masked, so a person knows it exists (PRD-ACS-008). Show unmasks one version
 // after a fresh authenticator code, which the server records; the values live only in this view's state and go when it
-// closes, never into a kept draft or a cache (PRD-SEC-006). A change is a new version, prepared with a fresh code and
+// closes, never into a kept draft or a cache (PRD-SEC-006). A change's typed values are cleared once it is sent and when
+// its form closes (S1-F03 review H3). A change is a new version, prepared with a fresh code and
 // approved by a different authorised person from My work (POL-02.07; GC2-6, DEC-105).
 
 const BANK_TYPE = 'merchandise.party_bank_details';
@@ -90,11 +91,21 @@ function ShowVersion({ partyId, versionId }: { partyId: string; versionId: strin
   );
 }
 
+const NO_BANK_VALUES = { accountHolder: '', accountNumber: '', ifsc: '', bankName: '' } as const;
+
 /** Change bank details: a new version, prepared with a fresh code, approved by a different person. */
-function ChangeForm({ partyId, versionToken }: { partyId: string; versionToken: string | undefined }) {
+function ChangeForm({
+  partyId,
+  versionToken,
+  onClose,
+}: {
+  partyId: string;
+  versionToken: string | undefined;
+  onClose: () => void;
+}) {
   const today = useBusinessToday();
   const submission = useSubmission('prepareBankDetails', PARTY_READS);
-  const [values, setValues] = useState({ accountHolder: '', accountNumber: '', ifsc: '', bankName: '' });
+  const [values, setValues] = useState<Record<keyof typeof NO_BANK_VALUES, string>>(NO_BANK_VALUES);
   const [validFrom, setValidFrom] = useState(today);
   const [code, setCode] = useState('');
   const formId = `bank-change-${partyId}`;
@@ -106,7 +117,7 @@ function ChangeForm({ partyId, versionToken }: { partyId: string; versionToken: 
       onSubmit={(event) => {
         event.preventDefault();
         void (async () => {
-          await submission.submit({
+          const answer = await submission.submit({
             params: { partyId },
             body: {
               ...values,
@@ -116,6 +127,8 @@ function ChangeForm({ partyId, versionToken }: { partyId: string; versionToken: 
             },
           });
           setCode('');
+          // PRD-SEC-006: once sent, the plain values leave this view's state; a refusal keeps them to correct.
+          if (answer !== undefined) setValues(NO_BANK_VALUES);
         })();
       }}
     >
@@ -147,12 +160,20 @@ function ChangeForm({ partyId, versionToken }: { partyId: string; versionToken: 
         />
       </FormField>
       <CodeField id={`${formId}-code`} value={code} onChange={setCode} />
-      <div>
+      <div className="flex gap-2">
         <Button
           type="submit"
           variant="primary"
           label="setup.request-approval"
           disabled={submission.state.kind === 'pending'}
+        />
+        <Button
+          label="parties.bank.close"
+          onClick={() => {
+            setValues(NO_BANK_VALUES);
+            setCode('');
+            onClose();
+          }}
         />
       </div>
     </form>
@@ -208,7 +229,13 @@ export function BankDetails({ party }: { party: PartyRecord }) {
         </ul>
       )}
       {changing ? (
-        <ChangeForm partyId={party.id} versionToken={party.bankDetails.versionToken} />
+        <ChangeForm
+          partyId={party.id}
+          versionToken={party.bankDetails.versionToken}
+          onClose={() => {
+            setChanging(false);
+          }}
+        />
       ) : (
         <div>
           <GrantedButton

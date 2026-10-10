@@ -261,6 +261,28 @@ describe('SKU identity (structure-and-masters 4.1, 9 test 8; PRD-MER-005)', () =
     const unknownColour = await read('sku', another.skuIds[0] ?? '');
     expect(unknownColour?.identity).toEqual([{ attributeId: catalogue.colourId }]);
   });
+
+  it('code-house-rules 3.3 the identity key a SKU keeps is always the key of its identity rows, held at commit', async () => {
+    const proposal = await confirmedProduct(styleDraft([skuDraft({ size: 'SYN-S' })]));
+    const client = await connect(world.organisations[0].database, 'migration');
+    try {
+      const made = await client.query<{ style_id: string; proposal_id: string }>(
+        'select style_id, proposal_id from merchandise.sku where id = $1',
+        [proposal.skuIds[0]],
+      );
+      const [row] = made.rows;
+      await client.query('begin');
+      // A key that is not its rows' key: the deferred check refuses the transaction at commit.
+      await client.query(
+        `insert into merchandise.sku (id, code, style_id, size, identity_key, proposal_id)
+         values ($1, $2, $3, 'SYN-M', 'SYNTHETIC not a key', $4)`,
+        [uuidv7(), syntheticCode(next('SKU')), row?.style_id, row?.proposal_id],
+      );
+      await expect(client.query('commit')).rejects.toMatchObject({ code: 'AO003' });
+    } finally {
+      await client.end();
+    }
+  });
 });
 
 describe('Read a SKU as of a date (structure-and-masters 4.7; PRD-MER-019)', () => {
@@ -630,7 +652,8 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
       expect.objectContaining({ skuId, brandId: catalogue.brandId, stockUnit: 'piece', pieceTracked: true }),
       expect.objectContaining({ skuId, pieceTracked: false, batchTracked: false }),
     ]);
-    // A category moves between piece and quantity tracking only through its profile's own version (4.6).
+    // A link back to a quantity profile is refused while the labelled Site holds the category's pieces (4.6).
+    stock.held.set(skuId, [site.recordId]);
     const quantity = recorded(
       await setup.asPreparerDo((c, p) =>
         setup.catalogue.prepareTrackingProfile(c, p, {
@@ -652,7 +675,11 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           versionToken: linked?.versionToken,
         }),
       ),
-    ).toMatchObject({ kind: 'refusal', refusal: { code: 'merchandise.tracking-change-through-profile' } });
+    ).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.pieces-held', missing: [{ recordId: site.recordId }] },
+    });
+    stock.held.delete(skuId);
     // Only a change to piece-tracked waits for labelling counts: the first version is none.
     expect(
       await setup.run(setup.preparer.id, (c) =>
@@ -663,6 +690,166 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
         ),
       ),
     ).toMatchObject({ kind: 'refusal', refusal: { code: 'merchandise.not-a-piece-tracking-change' } });
+  });
+
+  /** A SYNTHETIC tracking profile from today. */
+  const newProfile = async (pieceTracked: boolean) =>
+    recorded(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareTrackingProfile(c, p, {
+          code: syntheticCode(next('PROFILE')),
+          name: syntheticName(pieceTracked ? 'Piece profile' : 'Quantity profile'),
+          pieceTracked,
+          batchExpiryRequired: false,
+          requiredIdentifiers: [],
+          validFrom: setup.today(),
+        }),
+      ),
+    );
+  /** A profile's next version from a date, piece-tracked or quantity. */
+  const profileVersion = async (profileId: string, pieceTracked: boolean, validFrom: string) => {
+    const record = await read('tracking_profile', profileId);
+    return setup.asPreparerDo((c, p) =>
+      setup.catalogue.prepareTrackingProfileVersion(c, p, profileId, {
+        name: syntheticName(pieceTracked ? 'Piece profile' : 'Quantity profile'),
+        pieceTracked,
+        batchExpiryRequired: false,
+        requiredIdentifiers: [],
+        validFrom,
+        versionToken: record?.versionToken,
+      }),
+    );
+  };
+  /** Links a category to a profile from a date. */
+  const link = async (categoryId: string, trackingProfileId: string, validFrom: string) => {
+    const record = await read('category_tracking_profile', categoryId);
+    return setup.asPreparerDo((c, p) =>
+      setup.catalogue.prepareCategoryTrackingProfileVersion(c, p, categoryId, {
+        trackingProfileId,
+        validFrom,
+        versionToken: record?.versionToken,
+      }),
+    );
+  };
+  /** A SYNTHETIC category of its own, colour its identity, with one confirmed SKU of Unknown size. */
+  const categoryWithSku = async () => {
+    const categoryId = recorded(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareCategory(c, p, {
+          code: syntheticCode(next('CAT')),
+          name: syntheticName('Tracked category'),
+          identityAttributeIds: [catalogue.colourId],
+          validFrom: setup.today(),
+        }),
+      ),
+    ).recordId;
+    const draft = styleDraft([skuDraft()]);
+    const proposal = await confirmedProduct({
+      ...draft,
+      style: { ...(draft.style ?? { code: '', brandId: '', attributes: [] }), categoryId },
+    });
+    return { categoryId, skuId: proposal.skuIds[0] ?? '' };
+  };
+
+  it('PRD-MER-018 a change from piece-tracked to quantity is refused while a Site holds pieces of the profile (product owner, 10 Oct 2026)', async () => {
+    const profile = await newProfile(true);
+    const { categoryId, skuId } = await categoryWithSku();
+    recorded(await link(categoryId, profile.recordId, setup.today()));
+    const siteId = uuidv7();
+    // Piece-tracked from its first version, so its stock is pieces at every Site.
+    stock.held.set(skuId, [siteId]);
+    expect(await profileVersion(profile.recordId, false, setup.day(1))).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.pieces-held', missing: [{ recordType: 'organisation.site', recordId: siteId }] },
+    });
+    stock.held.delete(skuId);
+    recorded(await profileVersion(profile.recordId, false, setup.day(1)));
+  });
+
+  it('PRD-MER-018 pieces are held only where the change to piece-tracked is in force: stock at a Site still on quantity does not refuse the change back', async () => {
+    const profile = await newProfile(false);
+    const { categoryId, skuId } = await categoryWithSku();
+    recorded(await link(categoryId, profile.recordId, setup.today()));
+    const change = recorded(await profileVersion(profile.recordId, true, setup.day(1)));
+    const labelled = await approved(setup, (c, p) =>
+      setup.organisation.prepareSite(c, p, {
+        code: syntheticCode(next('SITE')),
+        name: syntheticName('Labelled site'),
+        physicalKind: 'retail-site',
+        areaId: geography.area.recordId,
+        addresses: [],
+        aliases: [],
+        validFrom: setup.today(),
+      }),
+    );
+    const unlabelled = uuidv7();
+    // The labelled Site's change is in force; a Site with no labelling count still holds quantities.
+    ok(
+      await setup.run(setup.preparer.id, (c) =>
+        setup.catalogue.recordTrackingSiteChange(
+          c,
+          { kind: 'user', id: setup.preparer.id },
+          { trackingProfileVersionId: change.versionId, siteId: labelled.recordId, labellingCountId: uuidv7() },
+        ),
+      ),
+    );
+    stock.held.set(skuId, [labelled.recordId, unlabelled]);
+    expect(await profileVersion(profile.recordId, false, setup.day(2))).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.pieces-held', missing: [{ recordId: labelled.recordId }] },
+    });
+    stock.held.set(skuId, [unlabelled]);
+    recorded(await profileVersion(profile.recordId, false, setup.day(2)));
+    stock.held.delete(skuId);
+  });
+
+  it('PRD-MER-018 a change to piece-tracked counts every category linked to the profile on a day the change covers, and no other', async () => {
+    const profile = await newProfile(false);
+    // A quantity version from day 4 ends the change on day 4 (structure-and-masters 2.2).
+    recorded(await profileVersion(profile.recordId, false, setup.day(4)));
+    const within = await categoryWithSku();
+    const after = await categoryWithSku();
+    recorded(await link(within.categoryId, profile.recordId, setup.day(2)));
+    recorded(await link(after.categoryId, profile.recordId, setup.day(5)));
+    const siteId = uuidv7();
+    // Stock of a category linked from day 5, after the change ends: no refusal.
+    stock.held.set(after.skuId, [siteId]);
+    const change = await profileVersion(profile.recordId, true, setup.day(1));
+    expect(change).toMatchObject({ kind: 'success' });
+    stock.held.delete(after.skuId);
+    // Stock of a category linked from day 2, inside the change: refused.
+    const again = await newProfile(false);
+    recorded(await profileVersion(again.recordId, false, setup.day(4)));
+    const linked = await categoryWithSku();
+    recorded(await link(linked.categoryId, again.recordId, setup.day(2)));
+    stock.held.set(linked.skuId, [siteId]);
+    expect(await profileVersion(again.recordId, true, setup.day(1))).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.labelling-count-not-planned' },
+    });
+    stock.held.delete(linked.skuId);
+  });
+
+  it('PRD-MER-018 a category linked from a quantity profile to a piece-tracked one is a change to piece-tracked, refused while its stock is held', async () => {
+    const [quantity, pieces] = [await newProfile(false), await newProfile(true)];
+    const { categoryId, skuId } = await categoryWithSku();
+    recorded(await link(categoryId, quantity.recordId, setup.today()));
+    const siteId = uuidv7();
+    stock.held.set(skuId, [siteId]);
+    expect(await link(categoryId, pieces.recordId, setup.day(1))).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.labelling-count-not-planned', missing: [{ recordId: siteId }] },
+    });
+    stock.held.delete(skuId);
+    recorded(await link(categoryId, pieces.recordId, setup.day(1)));
+    // And back to quantity: refused while the category's pieces are held, accepted when none are.
+    stock.held.set(skuId, [siteId]);
+    expect(await link(categoryId, quantity.recordId, setup.day(2))).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'merchandise.pieces-held', missing: [{ recordId: siteId }] },
+    });
+    stock.held.delete(skuId);
+    recorded(await link(categoryId, quantity.recordId, setup.day(2)));
   });
 
   it('POL-04.05 keeps each shelf life Unknown until given, none with a default', async () => {

@@ -521,7 +521,7 @@ export const exceptionsCodes = declareCodes({
  * - `merchandise.size-set-of-another-category`: a category names a size set fixed to another category (4.1).
  * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type (4.2; GC2-9).
  * - `merchandise.office-unit-has-no-brand`: an office unit operates without a brand (3.3; PRD-ORG-006).
- * - `merchandise.brand-counter-one-brand`: a brand-counter unit covers exactly one brand (3.3; PRD-ORG-006).
+ * - `merchandise.brand-counter-one-brand`: a brand-counter unit covers at most one brand (3.3; PRD-ORG-006).
  * - `merchandise.proposal-not-found`: no proposal has that identifier.
  * - `merchandise.proposal-not-open`: the proposal is already confirmed or rejected (4.2).
  */
@@ -551,11 +551,11 @@ export const merchandiseCodes = declareCodes({
  * - `merchandise.size-not-in-size-set`: the size is not one of the category's size set in force (4.1; PRD-MER-002).
  * - `merchandise.sku-exists`: a SKU of the style already has that size and identity, Unknown counting as one value.
  * - `merchandise.stock-recorded`: a SKU's stock unit changes while stock of it is recorded (4.4; GC2-5).
- * - `merchandise.labelling-count-not-planned`: a change to piece-tracked while stock of the profile's goods is
- *   recorded at a Site with no labelling count planned (4.6; PRD-MER-018).
+ * - `merchandise.labelling-count-not-planned`: a change to piece-tracked, by a profile version or a category's link,
+ *   while stock of the goods is recorded at a Site with no labelling count planned (4.6; PRD-MER-018).
  * - `merchandise.stock-presence-unanswered`: no implementation of the stock-presence contract answers (4.4, 4.6).
- * - `merchandise.tracking-change-through-profile`: a category's link would move it between piece and quantity tracking;
- *   that is a change of the profile's own version (4.6).
+ * - `merchandise.pieces-held`: a change from piece-tracked back to quantity, by a profile version or a category's link,
+ *   while a Site holds pieces of the goods (4.6; PRD-MER-018; product owner, 10 Oct 2026).
  * - `merchandise.not-a-piece-tracking-change`: the profile version is not a change from quantity to piece-tracked.
  * - `merchandise.pack-of-another-sku`: the pack named is not one of the SKU's (4.3).
  * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target (4.3).
@@ -573,7 +573,7 @@ function merchandiseProductCodes() {
     'merchandise.stock-recorded': 'refused',
     'merchandise.labelling-count-not-planned': 'refused',
     'merchandise.stock-presence-unanswered': 'unavailable',
-    'merchandise.tracking-change-through-profile': 'refused',
+    'merchandise.pieces-held': 'refused',
     'merchandise.not-a-piece-tracking-change': 'refused',
     'merchandise.pack-of-another-sku': 'refused',
     'merchandise.code-conflict': 'refused',

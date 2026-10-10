@@ -1,7 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { BRAND_COVERAGE_CHANGE, PRODUCT_CONFIRMATION, VOCABULARY_CONFIRMATION } from '@apparel-os/schemas';
 import { eq, sql } from 'drizzle-orm';
-import { lockTable, sqlStateOf, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
+import {
+  lockTable,
+  UNIQUE_VIOLATION,
+  withSavepoint,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import { businessUnitInForce } from '../../../organisation/index.js';
@@ -23,8 +29,6 @@ import { coverageRules } from './rules.js';
 // brand coverage version taking effect from its start or rejected (structure-and-masters 3.3), and a vocabulary
 // proposal confirmed into an approved value or rejected (4.2; PRD-IMP-008), in the decision's transaction under the
 // locks Decide took, with their audit records.
-
-const UNIQUE_VIOLATION = '23505';
 
 async function recordDecision(
   context: TransactionContext,
@@ -156,20 +160,15 @@ function proposalEffect(audit: AuditInterface): DocumentEffect {
         return refused('refused', 'merchandise.code-taken');
       }
       const valueId = uuidv7();
-      await context.tx.execute(sql`savepoint merchandise_confirm`);
-      try {
-        await context.tx.insert(vocabularyValue).values({
+      const written = await withSavepoint(context, 'merchandise_confirm', [UNIQUE_VIOLATION], () =>
+        context.tx.insert(vocabularyValue).values({
           id: valueId,
           attributeId: proposal.attributeId,
           code: proposal.code,
           proposalId,
-        });
-        await context.tx.execute(sql`release savepoint merchandise_confirm`);
-      } catch (error) {
-        if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
-        await context.tx.execute(sql`rollback to savepoint merchandise_confirm`);
-        return refused('refused', 'merchandise.code-taken');
-      }
+        }),
+      );
+      if (written.kind === 'caught') return refused('refused', 'merchandise.code-taken');
       const versionId = uuidv7();
       await context.tx.insert(vocabularyValueVersion).values({
         id: versionId,

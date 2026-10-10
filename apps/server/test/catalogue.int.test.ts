@@ -430,12 +430,8 @@ describe('brand coverage (structure-and-masters 3.3, 9 test 5; PRD-ORG-006)', ()
       kind: 'refusal',
       refusal: { code: 'merchandise.office-unit-has-no-brand' },
     });
-    // A brand-counter unit covers exactly one brand.
+    // A brand-counter unit covers at most one brand (product owner, 10 Oct 2026).
     expect(await cover(units['brand-counter'], [one.recordId, two.recordId])).toMatchObject({
-      kind: 'refusal',
-      refusal: { code: 'merchandise.brand-counter-one-brand' },
-    });
-    expect(await cover(units['brand-counter'], [])).toMatchObject({
       kind: 'refusal',
       refusal: { code: 'merchandise.brand-counter-one-brand' },
     });
@@ -456,6 +452,15 @@ describe('brand coverage (structure-and-masters 3.3, 9 test 5; PRD-ORG-006)', ()
         versions: [{ state: 'In force', brandIds: [...brandIds].sort() }],
       });
     }
+  });
+
+  it('PRD-ORG-006 a brand-counter unit may cover no brand while it is set up; activation asks for one (product owner, 10 Oct 2026)', async () => {
+    const units = await unitsOfEachKind();
+    const answer = recorded(await cover(units['brand-counter'], []));
+    decided(await setup.decide(answer.requestId ?? '', answer.versionId));
+    expect(await read('business_unit_brand', units['brand-counter'])).toMatchObject({
+      versions: [{ state: 'In force', brandIds: [] }],
+    });
   });
 });
 

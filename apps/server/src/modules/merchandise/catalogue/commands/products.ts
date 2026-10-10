@@ -5,12 +5,19 @@ import {
   type ProductProposalDraft,
   type ProductProposed,
 } from '@apparel-os/schemas';
-import { eq, sql } from 'drizzle-orm';
-import { lockTable, sqlStateOf, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
+import { eq } from 'drizzle-orm';
+import {
+  CommandDefect,
+  lockTable,
+  UNIQUE_VIOLATION,
+  withSavepoint,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../../kernel/index.js';
 import type { AccessInterface, DocumentEffect, EffectOutcome } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { Preparer } from '../../../organisation/index.js';
-import { productProposal, sku, skuVersion, style, styleVersion } from '../db/schema.js';
+import { productProposal, sku, skuIdentityValue, skuVersion, style, styleVersion } from '../db/schema.js';
 import type { StoredProposal } from '../domain/products.js';
 import { productConfirmed } from '../events.js';
 import { refused, today, type Outcome } from './common.js';
@@ -22,7 +29,12 @@ import { proposalRefusal } from './product-rules.js';
 // different person from the proposer confirms it through `access`'s Decide; confirming makes the style and SKUs, each
 // with its first version in force from that day, and publishes `merchandise.product-confirmed`.
 
-const UNIQUE_VIOLATION = '23505';
+/** The unique constraints a confirmation can meet when another committed first, and the refusal each is (4.1). */
+const CONFLICTS: Readonly<Record<string, string>> = {
+  style_code_key: 'merchandise.code-taken',
+  sku_code_key: 'merchandise.code-taken',
+  sku_identity_once: 'merchandise.sku-exists',
+};
 
 export async function proposeProduct(
   context: TransactionContext,
@@ -106,10 +118,9 @@ export function productProposalEffect(audit: AuditInterface): DocumentEffect {
       if ('refusal' in checked) return { kind: 'refusal', refusal: checked.refusal };
       const validDuring = `[${date},)`;
       const common = { validDuring, decision: 'Approved' as const, preparedByUserId: proposal.proposedByUserId };
-      await context.tx.execute(sql`savepoint merchandise_confirm_product`);
-      let styleId: string;
-      const skuIds: string[] = [];
-      try {
+      const written = await withSavepoint(context, 'merchandise_confirm_product', [UNIQUE_VIOLATION], async () => {
+        let styleId: string;
+        const skuIds: string[] = [];
         if (stored.style !== undefined) {
           styleId = uuidv7();
           await context.tx.insert(style).values({
@@ -129,19 +140,35 @@ export function productProposalEffect(audit: AuditInterface): DocumentEffect {
             hsn: stored.style.hsn ?? null,
           });
           await writeStyleAttributes(context, versionId, stored.style.attributes);
+        } else if (stored.styleId !== undefined) {
+          styleId = stored.styleId;
         } else {
-          styleId = stored.styleId ?? '';
+          throw new CommandDefect('A stored product proposal names no style');
         }
         for (const [index, proposed] of stored.skus.entries()) {
           const skuId = uuidv7();
+          const identity = checked.checked.identities[index];
+          if (identity === undefined) throw new CommandDefect('A proposed SKU was not checked');
           await context.tx.insert(sku).values({
             id: skuId,
             code: proposed.code,
             styleId,
             size: proposed.size ?? null,
-            identity: checked.checked.identities[index] ?? {},
+            identityKey: identity.key,
             proposalId,
           });
+          // Every identity attribute of the category has its row, Unknown included (4.1 as built).
+          if (identity.values.length > 0) {
+            await context.tx.insert(skuIdentityValue).values(
+              identity.values.map((each) => ({
+                id: uuidv7(),
+                skuId,
+                attributeId: each.attributeId,
+                vocabularyValueId: each.valueId ?? null,
+                textValue: each.text ?? null,
+              })),
+            );
+          }
           await context.tx.insert(skuVersion).values({
             ...common,
             id: uuidv7(),
@@ -151,13 +178,17 @@ export function productProposalEffect(audit: AuditInterface): DocumentEffect {
           });
           skuIds.push(skuId);
         }
-        await context.tx.execute(sql`release savepoint merchandise_confirm_product`);
-      } catch (error) {
-        // A code or an identity made by another confirmation that committed first (4.1).
-        if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
-        await context.tx.execute(sql`rollback to savepoint merchandise_confirm_product`);
-        return refused('refused', 'merchandise.sku-exists');
+        return { styleId, skuIds };
+      });
+      if (written.kind === 'caught') {
+        // A code or an identity made by another confirmation that committed first (4.1), told apart by the constraint.
+        const code = CONFLICTS[written.violation.constraint ?? ''];
+        if (code === undefined) {
+          throw new CommandDefect(`Unexpected unique violation on ${written.violation.constraint ?? 'no constraint'}`);
+        }
+        return refused('refused', code);
       }
+      const { styleId, skuIds } = written.value;
       await context.tx
         .update(productProposal)
         .set({ state: 'Confirmed', decidedByUserId: decider.actor.id, decidedAt: context.startedAt })

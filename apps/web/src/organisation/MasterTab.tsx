@@ -157,6 +157,93 @@ function AttributeValues({ value }: { value: unknown }) {
   );
 }
 
+/** One attribute's value as a form keeps it: a vocabulary value, text, or neither while Unknown (4.2; 2.4). */
+export interface AttributeValueInput {
+  readonly attributeId: string;
+  readonly valueId?: string;
+  readonly text?: string;
+}
+
+/**
+ * A style's attribute values to enter or change (structure-and-masters 4.1, 4.2; GC2-9; S1-F03 review S1): each of the
+ * Organisation's attributes in force today, a list-type one from its approved vocabulary values in force, never a
+ * proposal, a text one as text. Left empty, an attribute is Unknown, never a default (2.4; PRD-MOD-015).
+ */
+export function AttributeValuesInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: readonly AttributeValueInput[];
+  onChange: (values: AttributeValueInput[]) => void;
+}) {
+  const today = useBusinessToday();
+  const attributes = useAllRecords('attribute').filter((each) => versionOn(each, today) !== undefined);
+  const vocabulary = useAllRecords('vocabulary_value');
+  const given = new Map(value.map((each) => [each.attributeId, each]));
+  const set = (attributeId: string, next: AttributeValueInput | undefined) => {
+    const rest = value.filter((each) => each.attributeId !== attributeId);
+    onChange(next === undefined ? rest : [...rest, next]);
+  };
+  if (attributes.length === 0) return <p className="m-0 text-body-sm text-text-2">{t('organisation.none')}</p>;
+  return (
+    <div className="flex flex-col gap-2">
+      {attributes.map((attribute) => {
+        const inputId = `${id}-${attribute.id}`;
+        const name = versionOn(attribute, today)?.name;
+        const current = given.get(attribute.id);
+        return (
+          <div key={attribute.id} className="flex flex-col gap-1">
+            <label htmlFor={inputId} className="text-body-sm font-semibold text-text">
+              {typeof name === 'string' ? name : attribute.code}
+            </label>
+            {attribute.valueKind === 'list' ? (
+              <select
+                id={inputId}
+                className={inputClass}
+                value={current?.valueId ?? ''}
+                onChange={(event) => {
+                  set(
+                    attribute.id,
+                    event.target.value === '' ? undefined : { attributeId: attribute.id, valueId: event.target.value },
+                  );
+                }}
+              >
+                <option value="">{t('organisation.unknown')}</option>
+                {vocabulary
+                  .filter((each) => each.attributeId === attribute.id && versionOn(each, today) !== undefined)
+                  .map((each) => {
+                    const valueName = versionOn(each, today)?.name;
+                    return (
+                      <option key={each.id} value={each.id}>
+                        {typeof valueName === 'string' ? `${each.code} · ${valueName}` : each.code}
+                      </option>
+                    );
+                  })}
+              </select>
+            ) : (
+              <input
+                id={inputId}
+                className={inputClass}
+                value={current?.text ?? ''}
+                onChange={(event) => {
+                  set(
+                    attribute.id,
+                    event.target.value.trim() === ''
+                      ? undefined
+                      : { attributeId: attribute.id, text: event.target.value },
+                  );
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** A mixed pack's contents in words: each SKU with its quantity (4.4; S1-F03-T02). */
 function ContentsValue({ value }: { value: unknown }) {
   const skus = useNames('sku');
@@ -446,8 +533,26 @@ function FormInput({ form, spec, formId }: { form: UseFormReturn; spec: FieldSpe
   const id = `${formId}-${spec.name}`;
   const error = form.formState.errors[spec.name] as { type?: string } | undefined;
   const invalid = error !== undefined;
-  // Attribute values are kept from the version a change starts from; the screen does not edit them yet (S1-F03-T02).
-  if (spec.kind === 'attribute-values') return null;
+  // A fixed identity is never changed (4.1); a style's attribute values are entered here (S1-F03 review S1).
+  if (spec.kind === 'attribute-values') {
+    if (spec.fixed === true) return null;
+    return (
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" aria-label={t(spec.label)}>
+        <legend className="mb-1 p-0 text-body-sm font-semibold text-text">{t(spec.label)}</legend>
+        <Controller
+          control={form.control}
+          name={spec.name}
+          render={({ field }) => (
+            <AttributeValuesInput
+              id={id}
+              value={(field.value as AttributeValueInput[] | undefined) ?? []}
+              onChange={field.onChange}
+            />
+          )}
+        />
+      </fieldset>
+    );
+  }
   const required =
     !(
       (spec.kind === 'date' || spec.kind === 'reference' || spec.kind === 'text' || spec.kind === 'whole') &&

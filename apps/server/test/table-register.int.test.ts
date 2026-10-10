@@ -146,6 +146,22 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
     );
   });
 
+  it('code-house-rules 3.3 no constraint or index a table keeps covers a jsonb column', async () => {
+    // jsonb holds a payload snapshot only, never a column a constraint needs (3.3; S1-F03 review H1).
+    const covered = await read<{ name: string }>(
+      databases[set],
+      `select distinct n.nspname || '.' || c.relname || '.' || a.attname as name
+       from pg_catalog.pg_index i
+       join pg_catalog.pg_class c on c.oid = i.indrelid
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+       join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = any (i.indkey)
+       where a.atttypid = 'pg_catalog.jsonb'::regtype
+         and n.nspname not in ${SYSTEM_SCHEMAS} and n.nspname not in ${thirdPartySchemas(set)}
+       order by 1`,
+    );
+    expect(covered).toEqual([]);
+  });
+
   it('holds only classes and marks this test checks, each entry naming its design', () => {
     for (const entry of register(set)) {
       expect(CHECKED_CLASSES, entry.table).toContain(entry.class);

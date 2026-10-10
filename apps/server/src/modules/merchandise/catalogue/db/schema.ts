@@ -196,15 +196,22 @@ export const styleAttributeValue = merchandise.table('style_attribute_value', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A SKU's identity: each identity attribute of its category to a vocabulary value or text, or null while Unknown. */
-export type SkuIdentity = Record<string, string | null>;
-
 export const sku = merchandise.table('sku', {
   ...identityColumns(),
   styleId: uuid('style_id').notNull(),
   size: text('size'),
-  identity: jsonb('identity').$type<SkuIdentity>().notNull(),
+  /** The canonical key of the SKU's identity rows, which the unique constraint holds (4.1 as built). */
+  identityKey: text('identity_key').notNull(),
   proposalId: uuid('proposal_id').notNull(),
+});
+/** An identity attribute's value on a SKU: a vocabulary value, text, or neither while Unknown (4.1; 2.4). */
+export const skuIdentityValue = merchandise.table('sku_identity_value', {
+  id: uuid('id').primaryKey(),
+  skuId: uuid('sku_id').notNull(),
+  attributeId: uuid('attribute_id').notNull(),
+  vocabularyValueId: uuid('vocabulary_value_id'),
+  textValue: text('text_value'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 export const skuVersion = merchandise.table('sku_version', {
   ...versionColumns(),

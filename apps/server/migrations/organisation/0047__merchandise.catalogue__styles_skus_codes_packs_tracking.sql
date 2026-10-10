@@ -208,27 +208,81 @@ create trigger refuse_truncate before truncate on merchandise.style_attribute_va
 create trigger refuse_after_version before insert on merchandise.style_attribute_value
   for each row execute function merchandise.refuse_after_version('style_version', 'style_version_id');
 
--- A SKU (4.1; PRD-MER-002, PRD-MER-005, POL-04.02): its style, size and the identity attributes its category names, as
--- an object of attribute to value, vocabulary value or text, or null while Unknown, fixed at creation. One SKU per
--- style, size and identity, an Unknown counting as one value, so Unknown size and Free Size are two SKUs.
+-- A SKU (4.1; PRD-MER-002, PRD-MER-005, POL-04.02): its style, size and the identity attributes its category names,
+-- each a vocabulary value, text or Unknown, in sku_identity_value, fixed at creation. One SKU per style, size and
+-- identity, an Unknown counting as one value, so Unknown size and Free Size are two SKUs: the identity's canonical key,
+-- identity_key, carries the unique constraint (code-house-rules 3.3 keeps jsonb from any column a constraint needs),
+-- and merchandise.check_sku_identity_key holds it equal to the key of the SKU's own identity rows at commit.
 create table merchandise.sku (
   id uuid primary key,
   code text not null unique,
   style_id uuid not null references merchandise.style (id),
   size text,
-  identity jsonb not null,
+  identity_key text not null,
   proposal_id uuid not null references merchandise.product_proposal (id),
   recorded_at timestamptz not null default now(),
   constraint sku_code check (code <> ''),
   constraint sku_size check (size <> ''),
-  constraint sku_identity_object check (pg_catalog.jsonb_typeof(identity) = 'object'),
-  constraint sku_identity_once unique nulls not distinct (style_id, size, identity)
+  constraint sku_identity_once unique nulls not distinct (style_id, size, identity_key)
 );
 create index sku_proposal on merchandise.sku (proposal_id);
 create trigger refuse_row_change before update or delete on merchandise.sku
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on merchandise.sku
   for each statement execute function kernel.refuse_change();
+
+-- An identity attribute's value on a SKU, frozen with it: an approved vocabulary value of a list-type attribute, text
+-- for a text attribute, or neither while Unknown (4.1; 2.4). Every identity attribute of the category in force when the
+-- SKU is made has one row; written only in the SKU's own transaction.
+create table merchandise.sku_identity_value (
+  id uuid primary key,
+  sku_id uuid not null references merchandise.sku (id),
+  attribute_id uuid not null references merchandise.attribute (id),
+  vocabulary_value_id uuid references merchandise.vocabulary_value (id),
+  text_value text,
+  recorded_at timestamptz not null default now(),
+  constraint sku_identity_value_one check (vocabulary_value_id is null or text_value is null),
+  constraint sku_identity_value_text check (text_value <> ''),
+  constraint sku_identity_value_once unique (sku_id, attribute_id)
+);
+create index sku_identity_value_attribute on merchandise.sku_identity_value (attribute_id);
+create index sku_identity_value_value on merchandise.sku_identity_value (vocabulary_value_id);
+create trigger refuse_row_change before update or delete on merchandise.sku_identity_value
+  for each row execute function kernel.refuse_change();
+create trigger refuse_truncate before truncate on merchandise.sku_identity_value
+  for each statement execute function kernel.refuse_change();
+create trigger refuse_after_version before insert on merchandise.sku_identity_value
+  for each row execute function merchandise.refuse_after_version('sku', 'sku_id');
+
+-- At commit, a SKU's identity key is the canonical key of its identity rows, so the unique constraint holds the
+-- identity itself: each attribute in identifier order, then `=v` and the vocabulary value's identifier, `=t`, the
+-- text's length in characters, `:` and the text, or `=?` while Unknown, joined by commas; empty for none. The length
+-- prefix keeps any text unambiguous. The catalogue's service builds the same key (structure-and-masters 4.1 as built).
+create function merchandise.check_sku_identity_key() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+declare
+  rebuilt text;
+begin
+  select coalesce(pg_catalog.string_agg(
+      v.attribute_id::text || case
+        when v.vocabulary_value_id is not null then '=v' || v.vocabulary_value_id::text
+        when v.text_value is not null then '=t' || pg_catalog.length(v.text_value)::text || ':' || v.text_value
+        else '=?'
+      end, ',' order by v.attribute_id), '')
+    into rebuilt
+    from merchandise.sku_identity_value v where v.sku_id = new.id;
+  if new.identity_key is distinct from rebuilt then
+    raise exception 'a SKU''s identity key differs from its identity values' using errcode = 'AO003';
+  end if;
+  return null;
+end;
+$$;
+revoke execute on function merchandise.check_sku_identity_key() from public;
+create constraint trigger check_sku_identity_key after insert on merchandise.sku
+  deferrable initially deferred
+  for each row execute function merchandise.check_sku_identity_key();
 
 -- A SKU's versioned fields (4.1, 4.4; POL-04.03, POL-04.04, PRD-MER-019): its one stock unit and its purpose.
 create table merchandise.sku_version (
@@ -387,7 +441,7 @@ create trigger guard_external_code_change before update on merchandise.external_
 
 -- Runtime grants (code-house-rules 5.2), as 0045's: an identity row is append-only and locked, hence UPDATE on its
 -- identifier only (7.1, 8.2); a version row takes the changes its guard allows, a proposal its decision, a mapping its
--- end. The rows frozen with a version, and the Site changes, are append-only.
+-- end. The rows frozen with a version or a SKU, and the Site changes, are append-only.
 grant select, insert on merchandise.tracking_profile to aos_runtime;
 grant update (id) on merchandise.tracking_profile to aos_runtime;
 grant select, insert, update on merchandise.tracking_profile_version to aos_runtime;
@@ -400,6 +454,7 @@ grant select, insert, update on merchandise.style_version to aos_runtime;
 grant select, insert on merchandise.style_attribute_value to aos_runtime;
 grant select, insert on merchandise.sku to aos_runtime;
 grant update (id) on merchandise.sku to aos_runtime;
+grant select, insert on merchandise.sku_identity_value to aos_runtime;
 grant select, insert, update on merchandise.sku_version to aos_runtime;
 grant select, insert on merchandise.pack to aos_runtime;
 grant update (id) on merchandise.pack to aos_runtime;

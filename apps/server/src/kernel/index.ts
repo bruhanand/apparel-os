@@ -7,6 +7,8 @@ export {
   sqlStateOf,
 } from './command-runner/command-errors.js';
 export { isInsideCommand, refuseInsideCommand } from './command-runner/command-mark.js';
+export { constraintOf, EXCLUSION_VIOLATION, UNIQUE_VIOLATION, withSavepoint } from './command-runner/savepoint.js';
+export type { CaughtViolation } from './command-runner/savepoint.js';
 export { CommandRunner } from './command-runner/command-runner.js';
 export type { CommandRequest, CommandRunnerDependencies } from './command-runner/command-runner.js';
 export {

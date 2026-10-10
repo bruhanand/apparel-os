@@ -572,7 +572,7 @@ const CATALOGUE_CHANGE_CODES = [
   'merchandise.stock-recorded',
   'merchandise.labelling-count-not-planned',
   'merchandise.stock-presence-unanswered',
-  'merchandise.tracking-change-through-profile',
+  'merchandise.pieces-held',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes proposing a product can answer (4.2; S1-F03-T02), and its confirmation under the proposal's lock. */

@@ -6,7 +6,7 @@ import {
   type VocabularyProposed,
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import { sqlStateOf, type TransactionContext } from '../../../../kernel/index.js';
+import { UNIQUE_VIOLATION, withSavepoint, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { Preparer } from '../../../organisation/index.js';
@@ -16,8 +16,6 @@ import { inForceOn, recordItem, refused, today, type Outcome } from './common.js
 // Propose a vocabulary value (structure-and-masters 4.2, 4.7; PRD-IMP-008, POL-02.07; S1-F03-T01): the proposal is
 // kept apart from the vocabulary, which keeps only approved values, and changes no operational data until a different
 // person confirms it through the approval panel (effects.ts).
-
-const UNIQUE_VIOLATION = '23505';
 
 /** Whether a value of the attribute has the code, or an open proposal has it (2.1). */
 export async function vocabularyCodeTaken(
@@ -85,22 +83,17 @@ export async function proposeVocabularyValue(
   }
   const proposalId = uuidv7();
   // Two proposals of one code at once: the second meets the open-code index and is refused, never failed.
-  await context.tx.execute(sql`savepoint merchandise_proposal`);
-  try {
-    await context.tx.insert(vocabularyProposal).values({
+  const written = await withSavepoint(context, 'merchandise_proposal', [UNIQUE_VIOLATION], () =>
+    context.tx.insert(vocabularyProposal).values({
       id: proposalId,
       attributeId: draft.attributeId,
       code: draft.code,
       name: draft.name,
       proposedByUserId: proposer.userId,
       state: 'Proposed',
-    });
-    await context.tx.execute(sql`release savepoint merchandise_proposal`);
-  } catch (error) {
-    if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
-    await context.tx.execute(sql`rollback to savepoint merchandise_proposal`);
-    return refused('refused', 'merchandise.code-taken');
-  }
+    }),
+  );
+  if (written.kind === 'caught') return refused('refused', 'merchandise.code-taken');
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: proposer.userId },
     roleAssignmentId: proposer.roleAssignmentId,

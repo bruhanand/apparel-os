@@ -13,7 +13,8 @@ export class SkuStockPresence implements StockPresence {
   async sitesHoldingStock(context: TransactionContext, skuIds: readonly string[]): Promise<readonly string[]> {
     if (skuIds.length === 0) return [];
     const result = await context.tx.execute<{ site_id: string }>(
-      sql`select site_id::text as site_id from stock.sites_holding_stock(${`{${skuIds.join(',')}}`}::uuid[]) as site_id`,
+      // One bound parameter holding the array, which the driver writes as a PostgreSQL array (code-house-rules 3.4).
+      sql`select site_id::text as site_id from stock.sites_holding_stock(${sql.param([...skuIds])}::uuid[]) as site_id`,
     );
     return result.rows.map((row) => row.site_id);
   }

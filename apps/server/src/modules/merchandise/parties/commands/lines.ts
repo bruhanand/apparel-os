@@ -1,14 +1,39 @@
 import type { MissingItem } from '@apparel-os/schemas';
-import { sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, max, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
+import { agreementVersion, brandSupplierLinkVersion, partyBankDetails, partyRole, partyVersion } from '../db/schema.js';
 
 // The version lines of the parties part (structure-and-masters 2.2; code-house-rules 7.3; S1-F03-T03): the rows of one
 // record's effective-dated versions, such as a party's versions, one of its roles, its bank details, a brand–supplier
-// link or an agreement. What every change and decision of them shares.
+// link or an agreement. What every change and decision of them shares, through Drizzle's query builder over the
+// part's own table definitions (code-house-rules 3.4).
 
 /** The version tables of the parties part. */
 export type VersionTable =
   'party_version' | 'party_role' | 'party_bank_details' | 'brand_supplier_link_version' | 'agreement_version';
+
+/**
+ * Each version table by name. They share the version columns (`versionColumns`, db/schema.ts), so a line reads any of
+ * them through the shape of one; only those shared columns are named through it.
+ */
+const tables: Record<VersionTable, typeof partyVersion> = {
+  party_version: partyVersion,
+  party_role: partyRole as unknown as typeof partyVersion,
+  party_bank_details: partyBankDetails as unknown as typeof partyVersion,
+  brand_supplier_link_version: brandSupplierLinkVersion as unknown as typeof partyVersion,
+  agreement_version: agreementVersion as unknown as typeof partyVersion,
+};
+
+/** The column naming a line's record, by table. */
+const ownerColumns = {
+  party_id: {
+    party_version: partyVersion.partyId,
+    party_role: partyRole.partyId,
+    party_bank_details: partyBankDetails.partyId,
+  },
+  link_id: { brand_supplier_link_version: brandSupplierLinkVersion.linkId },
+  agreement_id: { agreement_version: agreementVersion.agreementId },
+} as const;
 
 /** One record's line of versions: its table, the record type it is read as, and the condition naming its rows. */
 export interface Line {
@@ -18,8 +43,6 @@ export interface Line {
   readonly where: SQL;
 }
 
-const tableOf = (line: Line) => sql.raw(`merchandise.${line.table}`);
-
 /** The line of a record whose rows name it in one column. */
 export function lineOf(
   table: VersionTable,
@@ -27,7 +50,9 @@ export function lineOf(
   column: 'party_id' | 'link_id' | 'agreement_id',
   recordId: string,
 ): Line {
-  return { table, recordType, recordId, where: sql`${sql.raw(column)} = ${recordId}::uuid` };
+  const owner = (ownerColumns[column] as Partial<Record<VersionTable, AnyColumn>>)[table];
+  if (owner === undefined) throw new Error(`${table} has no column ${column}`);
+  return { table, recordType, recordId, where: eq(owner, recordId) };
 }
 
 /** One role's line of a party: the role is its own dated record (5.1). */
@@ -36,7 +61,7 @@ export function roleLine(partyId: string, role: string): Line {
     table: 'party_role',
     recordType: 'merchandise.party',
     recordId: partyId,
-    where: sql`party_id = ${partyId}::uuid and role = ${role}`,
+    where: sql`${eq(partyRole.partyId, partyId)} and ${partyRole.role} = ${role}`,
   };
 }
 
@@ -65,10 +90,12 @@ export async function today(context: TransactionContext): Promise<string | Comma
 
 /** The newest version of the line, its version token (code-house-rules 12.7), or undefined while it has none. */
 export async function newestVersion(context: TransactionContext, line: Line): Promise<string | undefined> {
-  const result = await context.tx.execute<{ id: string | null }>(
-    sql`select max(id::text) as id from ${tableOf(line)} where ${line.where}`,
-  );
-  return result.rows[0]?.id ?? undefined;
+  const table = tables[line.table];
+  const [row] = await context.tx
+    .select({ id: max(sql<string>`${table.id}::text`) })
+    .from(table)
+    .where(line.where);
+  return row?.id ?? undefined;
 }
 
 /** The refusal of a change made on a stale screen, naming the newest version (12.7), or undefined. */
@@ -92,11 +119,12 @@ export async function approvedOn(
   line: Line,
   start: string,
 ): Promise<CommandRefusal | undefined> {
-  const result = await context.tx.execute<{ id: string }>(
-    sql`select id::text as id from ${tableOf(line)}
-        where ${line.where} and decision = 'Approved' and lower(valid_during) = ${start}::date limit 1`,
-  );
-  const same = result.rows[0];
+  const table = tables[line.table];
+  const [same] = await context.tx
+    .select({ id: table.id })
+    .from(table)
+    .where(and(line.where, eq(table.decision, 'Approved'), sql`lower(${table.validDuring}) = ${start}::date`))
+    .limit(1);
   return same === undefined
     ? undefined
     : {
@@ -108,11 +136,13 @@ export async function approvedOn(
 
 /** The approved version of the line in force on a date, or undefined (2.2). */
 export async function inForceOn(context: TransactionContext, line: Line, date: string): Promise<string | undefined> {
-  const result = await context.tx.execute<{ id: string }>(
-    sql`select id::text as id from ${tableOf(line)}
-        where ${line.where} and decision = 'Approved' and valid_during @> ${date}::date limit 1`,
-  );
-  return result.rows[0]?.id;
+  const table = tables[line.table];
+  const [row] = await context.tx
+    .select({ id: table.id })
+    .from(table)
+    .where(and(line.where, eq(table.decision, 'Approved'), sql`${table.validDuring} @> ${date}::date`))
+    .limit(1);
+  return row?.id;
 }
 
 /**
@@ -125,20 +155,22 @@ export async function takeEffect(
   versionId: string,
   start: string,
 ): Promise<void> {
-  const next = await context.tx.execute<{ start: string }>(
-    sql`select lower(valid_during)::text as start from ${tableOf(line)}
-        where ${line.where} and decision = 'Approved' and lower(valid_during) > ${start}::date
-        order by lower(valid_during) limit 1`,
-  );
-  await context.tx.execute(
-    sql`update ${tableOf(line)} set valid_during = daterange(lower(valid_during), ${start}::date)
-        where ${line.where} and decision = 'Approved' and valid_during @> ${start}::date`,
-  );
-  await context.tx.execute(
-    sql`update ${tableOf(line)}
-        set decision = 'Approved', valid_during = daterange(${start}::date, ${next.rows[0]?.start ?? null}::date)
-        where id = ${versionId}::uuid`,
-  );
+  const table = tables[line.table];
+  const lower = sql`lower(${table.validDuring})`;
+  const [next] = await context.tx
+    .select({ start: sql<string>`${lower}::text` })
+    .from(table)
+    .where(and(line.where, eq(table.decision, 'Approved'), gt(lower, sql`${start}::date`)))
+    .orderBy(asc(lower))
+    .limit(1);
+  await context.tx
+    .update(table)
+    .set({ validDuring: sql`daterange(${lower}, ${start}::date)` })
+    .where(and(line.where, eq(table.decision, 'Approved'), sql`${table.validDuring} @> ${start}::date`));
+  await context.tx
+    .update(table)
+    .set({ decision: 'Approved', validDuring: sql`daterange(${start}::date, ${next?.start ?? null}::date)` })
+    .where(eq(table.id, versionId));
 }
 
 /** Whether the party holds a role in force on the date (5.1). */
@@ -148,12 +180,19 @@ export async function holdsRoleOn(
   role: string,
   date: string,
 ): Promise<boolean> {
-  const result = await context.tx.execute(
-    sql`select 1 from merchandise.party_role
-        where party_id = ${partyId}::uuid and role = ${role} and held and decision = 'Approved'
-          and valid_during @> ${date}::date limit 1`,
-  );
-  return result.rows.length > 0;
+  const rows = await context.tx
+    .select({ id: partyRole.id })
+    .from(partyRole)
+    .where(
+      and(
+        roleLine(partyId, role).where,
+        eq(partyRole.held, true),
+        eq(partyRole.decision, 'Approved'),
+        sql`${partyRole.validDuring} @> ${date}::date`,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** `[start,end)` as PostgreSQL writes a daterange. */

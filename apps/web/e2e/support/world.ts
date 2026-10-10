@@ -183,6 +183,10 @@ export interface SyntheticWorld {
     readonly brandOption: string;
     readonly categoryOption: string;
     readonly freeSize: string;
+    /** A SYNTHETIC list-type attribute, how the form names its one confirmed value, and a text attribute. */
+    readonly seasonName: string;
+    readonly seasonValueOption: string;
+    readonly fitName: string;
   };
   /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's

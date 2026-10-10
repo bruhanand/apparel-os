@@ -18,11 +18,12 @@ import {
   type PartyRoleVersionDraft,
   type PartyVersionDraft,
 } from '@apparel-os/schemas';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   LOCK_STEP,
   lockTable,
-  sqlStateOf,
+  UNIQUE_VIOLATION,
+  withSavepoint,
   type CommandRefusal,
   type TransactionContext,
 } from '../../../../kernel/index.js';
@@ -76,7 +77,6 @@ export interface MaintainDependencies {
   readonly keys: OrganisationKeys | undefined;
 }
 
-const UNIQUE_VIOLATION = '23505';
 const from = (start: string) => `[${start},)`;
 const partyItem = (partyId: string): MissingItem => ({ kind: 'record', recordType: PARTY_TYPE, recordId: partyId });
 
@@ -108,16 +108,8 @@ export class PartiesMaintenance {
 
   /** Inserts an identity row whose code is unique, refusing a taken code, a race included (2.1). */
   private async insertCoded(context: TransactionContext, write: () => Promise<unknown>): Promise<boolean> {
-    await context.tx.execute(sql`savepoint merchandise_new_party_record`);
-    try {
-      await write();
-      await context.tx.execute(sql`release savepoint merchandise_new_party_record`);
-      return true;
-    } catch (error) {
-      if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
-      await context.tx.execute(sql`rollback to savepoint merchandise_new_party_record`);
-      return false;
-    }
+    const written = await withSavepoint(context, 'merchandise_new_party_record', [UNIQUE_VIOLATION], write);
+    return written.kind === 'done';
   }
 
   private async audit(

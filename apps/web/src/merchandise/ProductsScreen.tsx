@@ -10,7 +10,14 @@ import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { FormField } from '../forms/FormField';
 import { t, type MessageId } from '../messages/catalogue';
-import { MasterTab, useAllRecords, useNames, versionOn } from '../organisation/MasterTab';
+import {
+  AttributeValuesInput,
+  MasterTab,
+  useAllRecords,
+  useNames,
+  versionOn,
+  type AttributeValueInput,
+} from '../organisation/MasterTab';
 import { useBusinessToday } from '../setup/business-date';
 import { formatDate } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from '../setup/parts';
@@ -218,7 +225,9 @@ function draftOf(form: {
   brandId: string;
   categoryId: string;
   brandArticleNumber: string;
+  launchDate: string;
   hsn: string;
+  attributes: readonly AttributeValueInput[];
   sourceWords: string;
   skus: readonly SkuRow[];
 }): ProductProposalDraft {
@@ -245,8 +254,14 @@ function draftOf(form: {
             brandId: form.brandId,
             categoryId: form.categoryId,
             ...('value' in article ? { brandArticleNumber: article.value } : {}),
+            ...(form.launchDate === '' ? {} : { launchDate: form.launchDate }),
             ...('value' in hsn ? { hsn: hsn.value } : {}),
-            attributes: [],
+            // Season, gender, fabric, fit and the rest are the Organisation's attributes (4.1 as built; GC2-9).
+            attributes: form.attributes.map((each) =>
+              each.valueId !== undefined
+                ? { attributeId: each.attributeId, valueId: each.valueId }
+                : { attributeId: each.attributeId, text: (each.text ?? '').trim() },
+            ),
           },
         }
       : { styleId: form.styleId }),
@@ -268,7 +283,9 @@ function ProposeProductForm() {
   const [brandId, setBrandId] = useState('');
   const [chosenCategory, setCategoryId] = useState('');
   const [brandArticleNumber, setArticle] = useState('');
+  const [launchDate, setLaunchDate] = useState('');
   const [hsn, setHsn] = useState('');
+  const [attributes, setAttributes] = useState<AttributeValueInput[]>([]);
   const [sourceWords, setSourceWords] = useState('');
   const [skus, setSkus] = useState<SkuRow[]>([emptySku()]);
   const styleCategory = styles.find((each) => each.id === styleId)?.categoryId;
@@ -289,7 +306,9 @@ function ProposeProductForm() {
             brandId,
             categoryId,
             brandArticleNumber,
+            launchDate,
             hsn,
+            attributes,
             sourceWords,
             skus,
           }),
@@ -385,6 +404,17 @@ function ProposeProductForm() {
               }}
             />
           </FormField>
+          <FormField id={`${formId}-launch`} label="merchandise.field.launchDate">
+            <input
+              id={`${formId}-launch`}
+              type="date"
+              className={inputClass}
+              value={launchDate}
+              onChange={(event) => {
+                setLaunchDate(event.target.value);
+              }}
+            />
+          </FormField>
           <FormField id={`${formId}-hsn`} label="merchandise.field.hsn">
             <input
               id={`${formId}-hsn`}
@@ -395,6 +425,12 @@ function ProposeProductForm() {
               }}
             />
           </FormField>
+          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" aria-label={t('merchandise.field.attributes')}>
+            <legend className="mb-1 p-0 text-body-sm font-semibold text-text">
+              {t('merchandise.field.attributes')}
+            </legend>
+            <AttributeValuesInput id={`${formId}-attribute`} value={attributes} onChange={setAttributes} />
+          </fieldset>
         </>
       )}
       <h3 className="m-0 text-h3">{t('products.skus')}</h3>

@@ -1,7 +1,18 @@
-import type { SkuAsOf, SkuPurpose, StockUnit } from '@apparel-os/schemas';
-import { sql } from 'drizzle-orm';
+import type { SkuAsOf } from '@apparel-os/schemas';
+import { and, asc, eq, inArray, sql, type AnyColumn } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
-import { identityView } from '../domain/products.js';
+import {
+  pack,
+  packContent,
+  packVersion,
+  sku,
+  skuIdentityValue,
+  skuVersion,
+  style,
+  styleAttributeValue,
+  styleVersion,
+} from '../db/schema.js';
+import type { IdentityValue } from '../domain/products.js';
 import { approvedProfileVersions, changeInForceAt, inForceWithChange, linkOn } from './tracking.js';
 
 // Read a SKU as of a date (structure-and-masters 4.7; module-map 4.12; PRD-MER-002, PRD-MER-004, PRD-MER-014,
@@ -15,13 +26,31 @@ const notFound = (skuId: string): CommandRefusal => ({
   missing: [{ kind: 'record', recordType: 'merchandise.sku', recordId: skuId }],
 });
 
-/** The list-type attributes among those named, so an identity value reads as a vocabulary value or as text. */
-async function listAttributes(context: TransactionContext, ids: readonly string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-  const result = await context.tx.execute<{ id: string }>(sql`
-    select id::text as id from merchandise.attribute
-    where id = any (${`{${ids.join(',')}}`}::uuid[]) and value_kind = 'list'`);
-  return new Set(result.rows.map((row) => row.id));
+const inForce = (column: AnyColumn, date: string) => sql`${column} @> ${date}::date`;
+
+/** Each SKU's identity, in attribute order, as its rows keep it: an Unknown value names its attribute alone (4.1). */
+export async function identitiesOf(
+  context: TransactionContext,
+  skuIds: readonly string[],
+): Promise<Map<string, IdentityValue[]>> {
+  const identities = new Map<string, IdentityValue[]>();
+  if (skuIds.length === 0) return identities;
+  const rows = await context.tx
+    .select()
+    .from(skuIdentityValue)
+    .where(inArray(skuIdentityValue.skuId, [...skuIds]))
+    .orderBy(asc(skuIdentityValue.attributeId));
+  for (const row of rows) {
+    identities.set(row.skuId, [
+      ...(identities.get(row.skuId) ?? []),
+      {
+        attributeId: row.attributeId,
+        ...(row.vocabularyValueId === null ? {} : { valueId: row.vocabularyValueId }),
+        ...(row.textValue === null ? {} : { text: row.textValue }),
+      },
+    ]);
+  }
+  return identities;
 }
 
 export async function skuOn(
@@ -30,101 +59,113 @@ export async function skuOn(
   siteId: string,
   date: string,
 ): Promise<{ readonly sku: SkuAsOf } | { readonly refusal: CommandRefusal }> {
-  const heads = await context.tx.execute<{
-    code: string;
-    style_id: string;
-    style_code: string;
-    brand_id: string;
-    category_id: string;
-    size: string | null;
-    identity: Record<string, string | null>;
-  }>(sql`
-    select k.code, k.style_id::text as style_id, s.code as style_code, s.brand_id::text as brand_id,
-           s.category_id::text as category_id, k.size, k.identity
-    from merchandise.sku k join merchandise.style s on s.id = k.style_id
-    where k.id = ${skuId}::uuid`);
-  const head = heads.rows[0];
+  const [head] = await context.tx
+    .select({
+      code: sku.code,
+      styleId: sku.styleId,
+      styleCode: style.code,
+      brandId: style.brandId,
+      categoryId: style.categoryId,
+      size: sku.size,
+    })
+    .from(sku)
+    .innerJoin(style, eq(style.id, sku.styleId))
+    .where(eq(sku.id, skuId));
   if (head === undefined) return { refusal: notFound(skuId) };
-  const versions = await context.tx.execute<{ id: string; stock_unit: StockUnit; purpose: SkuPurpose }>(sql`
-    select id::text as id, stock_unit, purpose from merchandise.sku_version
-    where sku_id = ${skuId}::uuid and decision = 'Approved' and valid_during @> ${date}::date`);
-  const styles = await context.tx.execute<{
-    id: string;
-    brand_article_number: string | null;
-    launch_date: string | null;
-    hsn: string | null;
-  }>(sql`
-    select id::text as id, brand_article_number, launch_date::text as launch_date, hsn from merchandise.style_version
-    where style_id = ${head.style_id}::uuid and decision = 'Approved' and valid_during @> ${date}::date`);
-  const version = versions.rows[0];
-  const styleVersion = styles.rows[0];
-  if (version === undefined || styleVersion === undefined) {
+  const [version] = await context.tx
+    .select({ id: skuVersion.id, stockUnit: skuVersion.stockUnit, purpose: skuVersion.purpose })
+    .from(skuVersion)
+    .where(
+      and(eq(skuVersion.skuId, skuId), eq(skuVersion.decision, 'Approved'), inForce(skuVersion.validDuring, date)),
+    );
+  const [styleOn] = await context.tx
+    .select({
+      id: styleVersion.id,
+      brandArticleNumber: styleVersion.brandArticleNumber,
+      launchDate: styleVersion.launchDate,
+      hsn: styleVersion.hsn,
+    })
+    .from(styleVersion)
+    .where(
+      and(
+        eq(styleVersion.styleId, head.styleId),
+        eq(styleVersion.decision, 'Approved'),
+        inForce(styleVersion.validDuring, date),
+      ),
+    );
+  if (version === undefined || styleOn === undefined) {
     return {
       refusal: { kind: 'not-found', code: 'merchandise.no-version-in-force', missing: notFound(skuId).missing },
     };
   }
-  const attributes = await context.tx.execute<{
-    attribute_id: string;
-    value_id: string | null;
-    text: string | null;
-  }>(sql`
-    select attribute_id::text as attribute_id, vocabulary_value_id::text as value_id, text_value as text
-    from merchandise.style_attribute_value where style_version_id = ${styleVersion.id}::uuid order by attribute_id`);
-  const packs = await context.tx.execute<{
-    pack_id: string;
-    code: string;
-    version_id: string;
-    units: number | null;
-    mixed: boolean;
-    for_purchasing: boolean;
-    for_selling: boolean;
-  }>(sql`
-    select p.id::text as pack_id, p.code, v.id::text as version_id, v.units, v.mixed, v.for_purchasing, v.for_selling
-    from merchandise.pack p join merchandise.pack_version v on v.pack_id = p.id
-    where p.sku_id = ${skuId}::uuid and v.decision = 'Approved' and v.valid_during @> ${date}::date
-    order by p.code, p.id`);
-  const contents = await context.tx.execute<{ version_id: string; sku_id: string; quantity: number }>(sql`
-    select c.pack_version_id::text as version_id, c.sku_id::text as sku_id, c.quantity
-    from merchandise.pack_content c
-    where c.pack_version_id = any (${`{${packs.rows.map((row) => row.version_id).join(',')}}`}::uuid[])
-    order by c.sku_id`);
-  const identityIds = Object.keys(head.identity);
-  const lists = await listAttributes(context, identityIds);
-  const tracking = await trackingOn(context, head.category_id, siteId, date);
+  const attributes = await context.tx
+    .select()
+    .from(styleAttributeValue)
+    .where(eq(styleAttributeValue.styleVersionId, styleOn.id))
+    .orderBy(asc(styleAttributeValue.attributeId));
+  const packs = await context.tx
+    .select({
+      packId: pack.id,
+      code: pack.code,
+      versionId: packVersion.id,
+      units: packVersion.units,
+      mixed: packVersion.mixed,
+      forPurchasing: packVersion.forPurchasing,
+      forSelling: packVersion.forSelling,
+    })
+    .from(pack)
+    .innerJoin(packVersion, eq(packVersion.packId, pack.id))
+    .where(and(eq(pack.skuId, skuId), eq(packVersion.decision, 'Approved'), inForce(packVersion.validDuring, date)))
+    .orderBy(asc(pack.code), asc(pack.id));
+  const contents =
+    packs.length === 0
+      ? []
+      : await context.tx
+          .select()
+          .from(packContent)
+          .where(
+            inArray(
+              packContent.packVersionId,
+              packs.map((row) => row.versionId),
+            ),
+          )
+          .orderBy(asc(packContent.skuId));
+  const identity = (await identitiesOf(context, [skuId])).get(skuId) ?? [];
+  const tracking = await trackingOn(context, head.categoryId, siteId, date);
   return {
     sku: {
       skuId,
       code: head.code,
       versionId: version.id,
-      styleId: head.style_id,
-      styleVersionId: styleVersion.id,
-      styleCode: head.style_code,
-      brandId: head.brand_id,
-      categoryId: head.category_id,
+      styleId: head.styleId,
+      styleVersionId: styleOn.id,
+      styleCode: head.styleCode,
+      brandId: head.brandId,
+      categoryId: head.categoryId,
       size: head.size,
-      identity: identityView(head.identity, lists),
+      identity,
       purpose: version.purpose,
-      stockUnit: version.stock_unit,
-      packs: packs.rows.map((row) => ({
-        packId: row.pack_id,
+      stockUnit: version.stockUnit,
+      packs: packs.map((row) => ({
+        packId: row.packId,
         code: row.code,
-        versionId: row.version_id,
+        versionId: row.versionId,
         ...(row.units === null ? {} : { units: row.units }),
         mixed: row.mixed,
-        forPurchasing: row.for_purchasing,
-        forSelling: row.for_selling,
-        contents: contents.rows
-          .filter((content) => content.version_id === row.version_id)
-          .map((content) => ({ skuId: content.sku_id, quantity: content.quantity })),
+        forPurchasing: row.forPurchasing,
+        forSelling: row.forSelling,
+        contents: contents
+          .filter((content) => content.packVersionId === row.versionId)
+          .map((content) => ({ skuId: content.skuId, quantity: content.quantity })),
       })),
       ...(tracking === undefined ? {} : { tracking }),
-      ...(styleVersion.hsn === null ? {} : { hsn: styleVersion.hsn }),
-      ...(styleVersion.brand_article_number === null ? {} : { brandArticleNumber: styleVersion.brand_article_number }),
-      ...(styleVersion.launch_date === null ? {} : { launchDate: styleVersion.launch_date }),
-      attributes: attributes.rows.map((row) => ({
-        attributeId: row.attribute_id,
-        ...(row.value_id === null ? {} : { valueId: row.value_id }),
-        ...(row.text === null ? {} : { text: row.text }),
+      ...(styleOn.hsn === null ? {} : { hsn: styleOn.hsn }),
+      ...(styleOn.brandArticleNumber === null ? {} : { brandArticleNumber: styleOn.brandArticleNumber }),
+      ...(styleOn.launchDate === null ? {} : { launchDate: styleOn.launchDate }),
+      attributes: attributes.map((row) => ({
+        attributeId: row.attributeId,
+        ...(row.vocabularyValueId === null ? {} : { valueId: row.vocabularyValueId }),
+        ...(row.textValue === null ? {} : { text: row.textValue }),
       })),
     },
   };

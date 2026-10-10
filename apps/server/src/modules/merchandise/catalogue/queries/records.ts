@@ -21,7 +21,7 @@ import {
 } from '../db/schema.js';
 import { catalogueTables } from '../db/tables.js';
 import { versionState } from '../domain/kinds.js';
-import { identityView } from '../domain/products.js';
+import { identitiesOf } from './sku.js';
 
 // The catalogue's records with every version, a page at a time or one at a time (structure-and-masters 8;
 // code-house-rules 12.1), and the vocabulary proposals (4.2; S1-F03-T01). Every version is shown, newest first, with
@@ -265,27 +265,13 @@ async function heads(
         .select()
         .from(sku)
         .where(inArray(sku.id, [...ids]));
-      // An identity value of a list-type attribute is a vocabulary value; of a text attribute, text (4.2).
-      const attributeIds = [...new Set(rows.flatMap((row) => Object.keys(row.identity)))];
-      const kinds =
-        attributeIds.length === 0
-          ? []
-          : await context.tx
-              .select({ id: attribute.id, valueKind: attribute.valueKind })
-              .from(attribute)
-              .where(inArray(attribute.id, attributeIds));
-      const listKinds = new Set(kinds.filter((row) => row.valueKind === 'list').map((row) => row.id));
+      const identities = await identitiesOf(context, ids);
       return new Map(
         rows.map(
           (row) =>
             [
               row.id,
-              {
-                code: row.code,
-                styleId: row.styleId,
-                size: row.size,
-                identity: identityView(row.identity, listKinds),
-              },
+              { code: row.code, styleId: row.styleId, size: row.size, identity: identities.get(row.id) ?? [] },
             ] as const,
         ),
       );

@@ -1494,7 +1494,7 @@ export const englishIndia = {
   'error.merchandise.size-set-of-another-category': 'This size set belongs to another category.',
   'error.merchandise.attribute-not-list': 'Values are proposed only for an attribute that takes them from a list.',
   'error.merchandise.office-unit-has-no-brand': 'An office unit operates without a brand.',
-  'error.merchandise.brand-counter-one-brand': 'A brand-counter unit covers exactly one brand.',
+  'error.merchandise.brand-counter-one-brand': 'A brand-counter unit covers at most one brand.',
   'error.merchandise.proposal-not-found': 'This proposal does not exist.',
   'error.merchandise.proposal-not-open': 'This proposal is already confirmed or rejected.',
   // Styles, SKUs, codes, packs and tracking profiles (structure-and-masters 4, 8; S1-F03-T02).
@@ -1615,10 +1615,10 @@ export const englishIndia = {
   'error.merchandise.sku-exists': 'The style already has a SKU of this size and identity.',
   'error.merchandise.stock-recorded': 'Stock of this SKU is recorded, so its stock unit cannot change yet.',
   'error.merchandise.labelling-count-not-planned':
-    'Stock of this profile’s goods is held at a Site with no labelling count planned, so it cannot become piece-tracked yet.',
+    'Stock of these goods is held at a Site with no labelling count planned, so they cannot become piece-tracked yet.',
   'error.merchandise.stock-presence-unanswered': 'Whether stock is recorded cannot be checked now. Try again later.',
-  'error.merchandise.tracking-change-through-profile':
-    'A category moves between piece and quantity tracking only through its tracking profile’s own new version.',
+  'error.merchandise.pieces-held':
+    'Pieces of these goods are held at a Site, so they cannot go back to quantity tracking yet.',
   'error.merchandise.not-a-piece-tracking-change': 'This profile version is not a change to piece-tracked.',
   'error.merchandise.pack-of-another-sku': 'This pack belongs to another SKU.',
   'error.merchandise.code-conflict': 'This code already names another SKU or unit in an overlapping scope and dates.',
@@ -1695,6 +1695,7 @@ export const englishIndia = {
   'parties.bank.help':
     'Bank details are restricted. They show masked until you show them with a fresh authenticator code, which is recorded.',
   'parties.bank.show': 'Show bank details',
+  'parties.bank.close': 'Close',
   'parties.bank.hide': 'Hide',
   'parties.bank.change': 'Change bank details',
   'parties.bank.change.help':

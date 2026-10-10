@@ -116,11 +116,15 @@ beforeAll(async () => {
       (authority) => !(authority.recordType === 'merchandise.vocabulary_proposal' && authority.action === 'edit'),
     ),
     { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+    { recordType: 'merchandise.product_proposal', action: 'view' },
+    { recordType: 'merchandise.product_proposal', action: 'create' },
     { recordType: 'access.approval_request', action: 'view' },
   ]);
   confirmer = await enrolled('CAT-CONFIRMER', [
     ...each(['view']),
     { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+    { recordType: 'merchandise.product_proposal', action: 'view' },
+    { recordType: 'merchandise.product_proposal', action: 'approve' },
     { recordType: 'access.approval_request', action: 'view' },
   ]);
   reader = await enrolled('CAT-READER', [{ recordType: 'merchandise.brand', action: 'view' }]);
@@ -217,5 +221,43 @@ describe('vocabulary proposals through the routes (structure-and-masters 4.2; PR
       (await get(booking, `/api/merchandise/vocabulary-proposals/${proposed.body.proposalId as string}`)).body,
     );
     expect(proposal.proposal).toMatchObject({ state: 'Confirmed' });
+  });
+});
+
+describe('product proposals through the routes (structure-and-masters 4.2; DM-5)', () => {
+  it('PRD-SEC-001 Decide refuses a product proposal confirmed with a wrong fresh code, or none (access-and-approvals 9.5)', async () => {
+    const brand = await post(booking, '/api/merchandise/brands', {
+      code: code('BRAND'),
+      name: syntheticName('Route brand'),
+      aliases: [],
+      validFrom: today(),
+    });
+    const category = await post(booking, '/api/merchandise/categories', {
+      code: code('CAT'),
+      name: syntheticName('Route category'),
+      identityAttributeIds: [],
+      validFrom: today(),
+    });
+    expect([brand.status, category.status]).toEqual([200, 200]);
+    const proposed = await post(booking, '/api/merchandise/product-proposals', {
+      style: { code: code('STYLE'), brandId: brand.body.recordId, categoryId: category.body.recordId, attributes: [] },
+      skus: [{ code: code('SKU'), identity: [], stockUnit: 'piece', purpose: 'merchandise' }],
+    });
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
+    const decide = (totpCode: string | null) =>
+      post(confirmer, `/api/access/approval-requests/${proposed.body.requestId as string}/decision`, {
+        versionId: proposed.body.proposalId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId: approveReason },
+        ...(totpCode === null ? {} : { totpCode }),
+      });
+    const wrong = await decide('000000');
+    expect(wrong.status).toBe(403);
+    expect(wrong.body).toMatchObject({ error: { code: 'access.authenticator-code-refused' } });
+    const none = await decide(null);
+    expect(none.status).toBe(400);
+    expect(none.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
+    const confirmed = await decide(freshCode(confirmer));
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
   });
 });

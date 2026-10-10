@@ -130,13 +130,23 @@ async function get(user: SyntheticUser, path: string): Promise<Call> {
 
 const today = () => clock.now().toISOString().slice(0, 10);
 const code = (part: string) => syntheticCode(`${part}-${String(randomInt(1_000_000))}`);
-const decide = (by: SyntheticUser, requestId: string, versionId: string) =>
+const decide = (by: SyntheticUser, requestId: string, versionId: string, totpCode: string | null = freshCode(by)) =>
   post(by, `/api/access/approval-requests/${requestId}/decision`, {
     versionId,
     outcome: 'approve',
     reason: { kind: 'listed', reasonId: approveReason },
-    totpCode: freshCode(by),
+    ...(totpCode === null ? {} : { totpCode }),
   });
+
+/** Decide refuses a decision with a wrong fresh code, or none (PRD-SEC-001; access-and-approvals 3.3, 9.5). */
+async function refusesWithoutFreshCode(requestId: string, versionId: string): Promise<void> {
+  const wrong = await decide(approver, requestId, versionId, '000000');
+  expect(wrong.status).toBe(403);
+  expect(wrong.body).toMatchObject({ error: { code: 'access.authenticator-code-refused' } });
+  const none = await decide(approver, requestId, versionId, null);
+  expect(none.status).toBe(400);
+  expect(none.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
+}
 
 async function newSupplier(): Promise<string> {
   const made = await post(preparer, '/api/merchandise/parties', {
@@ -234,6 +244,7 @@ describe('bank details through the routes (structure-and-masters 5.1; access-and
     versionId = made.body.versionId as string;
     const own = await decide(preparer, made.body.requestId as string, versionId);
     expect(own.body).toMatchObject({ error: { code: 'access.self-preparation' } });
+    await refusesWithoutFreshCode(made.body.requestId as string, versionId);
     const approved = await decide(approver, made.body.requestId as string, versionId);
     expect(approved.status, JSON.stringify(approved.body)).toBe(200);
     const read = partyReadSchema.parse((await get(plainReader, `/api/merchandise/parties/${partyId}`)).body);
@@ -326,6 +337,7 @@ describe('agreements through the routes (structure-and-masters 5.2; PRD-ACS-008;
     });
     expect(made.status, JSON.stringify(made.body)).toBe(200);
     agreementId = made.body.recordId as string;
+    await refusesWithoutFreshCode(made.body.requestId as string, made.body.versionId as string);
     expect((await decide(approver, made.body.requestId as string, made.body.versionId as string)).status).toBe(200);
     const read = agreementReadSchema.parse((await get(preparer, `/api/merchandise/agreements/${agreementId}`)).body);
     attachmentId = read.record.versions[0]?.signedAgreement[0] ?? '';

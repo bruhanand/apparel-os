@@ -525,6 +525,38 @@ recordedCatalogue(
     }),
   ),
 );
+// A style's attribute values (S1-F03 review S1): a SYNTHETIC list-type attribute with one confirmed value, and a
+// SYNTHETIC text attribute, so the journey enters and changes them on Setup › Products (structure-and-masters 4.2).
+const productsSeason = { code: syntheticCode('JOURNEY-PRODUCTS-SEASON'), name: syntheticName('Journey Season') };
+const productsSeasonValue = { code: syntheticCode('JOURNEY-PRODUCTS-SS'), name: syntheticName('Journey Summer') };
+const productsFit = { code: syntheticCode('JOURNEY-PRODUCTS-FIT'), name: syntheticName('Journey Fit') };
+const productsSeasonAnswer = recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareAttribute(c, p, {
+      ...productsSeason,
+      valueKind: 'list',
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareAttribute(c, p, {
+      ...productsFit,
+      valueKind: 'text',
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+const productsSeasonProposal = recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.proposeVocabularyValue(c, p, {
+      attributeId: productsSeasonAnswer.recordId,
+      ...productsSeasonValue,
+    }),
+  ),
+);
+recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -653,6 +685,8 @@ const productViews = [
 ].map((recordType) => ({ recordType, action: 'view' as const }));
 const productsBooking = await provisionUser('BROWSER-PRODUCTS-BOOKING', 'P-BKG', [
   ...productViews,
+  // Edit, so they record a style's later version with its attribute values (S1-F03 review S1).
+  { recordType: 'merchandise.style', action: 'edit' },
   { recordType: 'merchandise.product_proposal', action: 'create' },
   // Approve too, so the refusal of their own proposal is for the proposal alone (DM-5, DEC-105).
   { recordType: 'merchandise.product_proposal', action: 'approve' },
@@ -1142,6 +1176,9 @@ writeFileSync(
       brandOption: `${productsBrand.code} · ${productsBrand.name}`,
       categoryOption: `${productsCategory.code} · ${productsCategory.name}`,
       freeSize: productsFreeSize,
+      seasonName: productsSeason.name,
+      seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
+      fitName: productsFit.name,
     },
     bankDetails: {
       organisationCode: settingsCode,

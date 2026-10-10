@@ -53,6 +53,12 @@ test('POL-02.07 PRD-ACS-008 a supplier’s bank-detail change: own approval refu
       const drawer = await openSupplier(preparer, world.supplierCode);
       await drawer.getByRole('button', { name: 'Change bank details' }).click();
       const form = drawer.getByRole('form', { name: 'Change bank details' });
+      // PRD-SEC-006: closing the form clears what was typed; opened again, it is empty.
+      await form.getByLabel(/^Account number/).fill(BANK.number);
+      await form.getByRole('button', { name: 'Close' }).click();
+      await expect(form).toHaveCount(0);
+      await drawer.getByRole('button', { name: 'Change bank details' }).click();
+      await expect(form.getByLabel(/^Account number/)).toHaveValue('');
       await form.getByLabel(/^Account holder/).fill(BANK.holder);
       await form.getByLabel(/^Account number/).fill(BANK.number);
       await form.getByLabel(/^IFSC/).fill(BANK.ifsc);
@@ -60,6 +66,10 @@ test('POL-02.07 PRD-ACS-008 a supplier’s bank-detail change: own approval refu
       await form.getByLabel(/^Authenticator code/).fill(await app.nextCode());
       await form.getByRole('button', { name: 'Request approval' }).click();
       await expect(form.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
+      // PRD-SEC-006: once sent, no bank value stays in the form.
+      for (const field of [/^Account holder/, /^Account number/, /^IFSC/, /^Bank/]) {
+        await expect(form.getByLabel(field)).toHaveValue('');
+      }
       await expect(drawer.getByText('Awaiting approval').first()).toBeVisible();
       // The value never shows on the party, not even to its preparer.
       await expect(drawer.getByText(BANK.number)).toHaveCount(0);

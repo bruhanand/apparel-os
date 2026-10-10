@@ -21,11 +21,12 @@ import {
   type SizeSetDraft,
   type SizeSetVersionDraft,
 } from '@apparel-os/schemas';
-import { eq, sql } from 'drizzle-orm';
+import { and, desc, eq, lte, sql } from 'drizzle-orm';
 import {
   LOCK_STEP,
   lockTable,
-  sqlStateOf,
+  UNIQUE_VIOLATION,
+  withSavepoint,
   type CommandRefusal,
   type LockTarget,
   type TransactionContext,
@@ -63,8 +64,23 @@ import { catalogueTables } from '../db/tables.js';
 import { approved, operationName, recordTypeOf } from '../domain/kinds.js';
 import type { StockPresence } from '../contracts/stock-presence.js';
 import { trackingProfileChanged } from '../events.js';
-import { isPieceTrackingChange, linkOn, piecesAskedOn } from '../queries/tracking.js';
-import { attributeValuesRefusal, skusOfProfile, stockRecordedRefusal } from './product-rules.js';
+import {
+  approvedProfileVersions,
+  endOfVersionFrom,
+  inForceWithChange,
+  linkOn,
+  sitesUnderPieceRules,
+  versionBefore,
+  type ProfileVersion,
+} from '../queries/tracking.js';
+import {
+  attributeValuesRefusal,
+  sitesHoldingStock,
+  sitesRefusal,
+  skusOfCategory,
+  skusOfProfile,
+  stockRecordedRefusal,
+} from './product-rules.js';
 import {
   ancestorsOf,
   approvedOn,
@@ -123,7 +139,6 @@ interface NewRecord {
   readonly taken?: (context: TransactionContext) => Promise<boolean>;
 }
 
-const UNIQUE_VIOLATION = '23505';
 const from = (start: string) => `[${start},)`;
 
 /** Preparing new records and versions of the catalogue (structure-and-masters 4.7, "Maintain masters"). */
@@ -261,19 +276,35 @@ export class CataloguePreparation {
     if (fixed.taken !== undefined) {
       if (await fixed.taken(context)) return false;
     } else {
-      const taken = await context.tx.execute(sql`select 1 from ${tables.identity} where code = ${fixed.code} limit 1`);
-      if (taken.rows.length > 0) return false;
+      const taken = await context.tx
+        .select({ id: tables.identityId })
+        .from(tables.identity)
+        .where(sql`code = ${fixed.code}`)
+        .limit(1);
+      if (taken.length > 0) return false;
     }
-    await context.tx.execute(sql`savepoint merchandise_new_record`);
-    try {
-      await fixed.writeIdentity(context, recordId);
-      await context.tx.execute(sql`release savepoint merchandise_new_record`);
-      return true;
-    } catch (error) {
-      if (sqlStateOf(error) !== UNIQUE_VIOLATION) throw error;
-      await context.tx.execute(sql`rollback to savepoint merchandise_new_record`);
-      return false;
-    }
+    const written = await withSavepoint(context, 'merchandise_new_record', [UNIQUE_VIOLATION], () =>
+      fixed.writeIdentity(context, recordId),
+    );
+    return written.kind === 'done';
+  }
+
+  /**
+   * The refusal of a change from piece-tracked back to quantity while a Site holds pieces of the goods (4.6; product
+   * owner, 10 Oct 2026): stock of them at a Site where the piece rules of the version it ends are in force, since stock
+   * there is held as pieces; at a Site still waiting for its labelling count it is held as quantities.
+   */
+  private async piecesHeldRefusal(
+    context: TransactionContext,
+    skuIds: readonly string[],
+    versions: readonly ProfileVersion[],
+    ending: ProfileVersion,
+    date: string,
+  ): Promise<CommandRefusal | undefined> {
+    const held = await sitesHoldingStock(context, this.presence, skuIds);
+    if ('refusal' in held) return held.refusal;
+    const pieces = await sitesUnderPieceRules(context, versions, ending, held.sites, date);
+    return sitesRefusal('merchandise.pieces-held', pieces);
   }
 
   // Brands (4.1; PRD-MER-001, PRD-MER-020).
@@ -537,12 +568,19 @@ export class CataloguePreparation {
       ],
       // PRD-MER-018, DEC-054: a change to piece-tracked is refused while stock of the profile's goods is recorded at a
       // Site with no labelling count planned there. Labelling counts are stage 2's, so none is planned yet: any Site
-      // holding such stock refuses it (4.6).
+      // holding such stock refuses it (4.6). A change back to quantity is refused while a Site holds pieces of the
+      // profile (product owner, 10 Oct 2026). The goods are those of every category linked to the profile on a day
+      // the change covers, up to the next approved version's start.
       check: async (c, recordId) => {
-        if (recordId === undefined || !draft.pieceTracked) return undefined;
-        if (!(await isPieceTrackingChange(c, recordId, draft.validFrom))) return undefined;
-        const skus = await skusOfProfile(c, recordId, draft.validFrom);
-        return stockRecordedRefusal(c, this.presence, skus, 'merchandise.labelling-count-not-planned');
+        if (recordId === undefined) return undefined;
+        const versions = await approvedProfileVersions(c, recordId);
+        const previous = versionBefore(versions, draft.validFrom);
+        if (previous === undefined || previous.pieceTracked === draft.pieceTracked) return undefined;
+        const skus = await skusOfProfile(c, recordId, draft.validFrom, endOfVersionFrom(versions, draft.validFrom));
+        if (draft.pieceTracked) {
+          return stockRecordedRefusal(c, this.presence, skus, 'merchandise.labelling-count-not-planned');
+        }
+        return this.piecesHeldRefusal(c, skus, versions, previous, draft.validFrom);
       },
       writeVersion: async (c, common, recordId) => {
         await c.tx.insert(trackingProfileVersion).values({
@@ -588,10 +626,9 @@ export class CataloguePreparation {
   }
 
   /**
-   * A category's tracking profile from a date (4.6; POL-04.01). A category moves from quantity to piece tracking only
-   * through its profile's own version, which the labelling count puts in force Site by Site (PRD-MER-018), so a link
-   * keeps the tracking of the link it ends on its start (`merchandise.tracking-change-through-profile`). A category's
-   * first link may name any profile: no stock of its goods can be held before it has one. **Design choice.**
+   * A category's tracking profile from a date (4.6; POL-04.01). A link that moves the category between quantity and
+   * piece tracking is checked as a profile version's change is (PRD-MER-018; S1-F03 review S2). A category's first
+   * link may name any profile: no stock of its goods can be held before it has one. **Design choice.**
    */
   prepareCategoryTrackingProfileVersion(
     context: TransactionContext,
@@ -611,15 +648,30 @@ export class CataloguePreparation {
         check: async (c) => {
           const previous = await linkOn(c, categoryId, draft.validFrom);
           if (previous === undefined || previous.trackingProfileId === draft.trackingProfileId) return undefined;
-          const before = await piecesAskedOn(c, previous.trackingProfileId, draft.validFrom);
-          const after = await piecesAskedOn(c, draft.trackingProfileId, draft.validFrom);
-          return before === after
-            ? undefined
-            : {
-                kind: 'refused',
-                code: 'merchandise.tracking-change-through-profile',
-                missing: [recordItem('tracking_profile', draft.trackingProfileId)],
-              };
+          const beforeVersions = await approvedProfileVersions(c, previous.trackingProfileId);
+          const before = inForceWithChange(beforeVersions, draft.validFrom)?.version;
+          const after = inForceWithChange(
+            await approvedProfileVersions(c, draft.trackingProfileId),
+            draft.validFrom,
+          )?.version;
+          // Each profile needs a version in force on the start, so the change can be told (2.2).
+          if (before === undefined || after === undefined) {
+            const profileId = before === undefined ? previous.trackingProfileId : draft.trackingProfileId;
+            return {
+              kind: 'refused',
+              code: 'merchandise.reference-not-in-force',
+              missing: [recordItem('tracking_profile', profileId)],
+            };
+          }
+          if (before.pieceTracked === after.pieceTracked) return undefined;
+          // PRD-MER-018: a link from a quantity profile to a piece-tracked one is a change to piece-tracked, refused
+          // while stock of the category's goods is held, since no labelling count is planned before stage 2; a link
+          // back to quantity is refused while a Site holds the category's pieces (product owner, 10 Oct 2026).
+          const skus = await skusOfCategory(c, categoryId);
+          if (after.pieceTracked) {
+            return stockRecordedRefusal(c, this.presence, skus, 'merchandise.labelling-count-not-planned');
+          }
+          return this.piecesHeldRefusal(c, skus, beforeVersions, before, draft.validFrom);
         },
         writeVersion: async (c, common) => {
           await c.tx
@@ -698,12 +750,20 @@ export class CataloguePreparation {
         references: [],
         changes: [value('stockUnit', draft.stockUnit), value('purpose', draft.purpose)],
         check: async (c) => {
-          const current = await c.tx.execute<{ stock_unit: string }>(sql`
-            select stock_unit from merchandise.sku_version
-            where sku_id = ${skuId}::uuid and decision = 'Approved'
-              and lower(valid_during) <= ${draft.validFrom}::date
-            order by lower(valid_during) desc limit 1`);
-          const unit = current.rows[0]?.stock_unit;
+          const start = sql`lower(${skuVersion.validDuring})`;
+          const [current] = await c.tx
+            .select({ stockUnit: skuVersion.stockUnit })
+            .from(skuVersion)
+            .where(
+              and(
+                eq(skuVersion.skuId, skuId),
+                eq(skuVersion.decision, 'Approved'),
+                lte(start, sql`${draft.validFrom}::date`),
+              ),
+            )
+            .orderBy(desc(start))
+            .limit(1);
+          const unit = current?.stockUnit;
           if (unit === undefined || unit === draft.stockUnit) return undefined;
           return stockRecordedRefusal(c, this.presence, [skuId], 'merchandise.stock-recorded');
         },
@@ -770,10 +830,11 @@ export class CataloguePreparation {
         // A pack's code is unique in its SKU (4.1).
         taken: async (c) =>
           (
-            await c.tx.execute(
-              sql`select 1 from merchandise.pack where sku_id = ${draft.skuId}::uuid and code = ${draft.code}`,
-            )
-          ).rows.length > 0,
+            await c.tx
+              .select({ id: pack.id })
+              .from(pack)
+              .where(and(eq(pack.skuId, draft.skuId), eq(pack.code, draft.code)))
+          ).length > 0,
         writeIdentity: async (c, id) => {
           await c.tx.insert(pack).values({ id, code: draft.code, skuId: draft.skuId });
         },
