@@ -1,5 +1,6 @@
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import { skuOn } from '../../merchandise/catalogue/index.js';
+import type { BooksInterface } from '../../finance/books/index.js';
 
 // The read contracts Plan uses (stock-ledger 13.1), as the ledger needs them from `organisation` and `merchandise`
 // (module-map 4.11, 4.12; structure-and-masters 3.8, 4.7). Those modules are not built yet (S1-F02, S1-F03), so the
@@ -84,4 +85,19 @@ export const catalogueSkus: LedgerSkus = {
       batchTracked: tracking.batchExpiryRequired,
     };
   },
+};
+
+/**
+ * What the ledger calls in `finance` · books (stock-ledger 7.11, 13.1; books-and-posting 2.2, 8, 9.1): the book's cost
+ * setting a new pool takes, read at Plan; Check postable before any lock; Hold periods at step 7; and Post, inside
+ * Write, in the movement's transaction (PRD-MOD-013, DEC-087). The ledger never writes a journal itself.
+ */
+export type LedgerBooks = Pick<BooksInterface, 'costSettingOn' | 'checkPostable' | 'holdPeriods' | 'post'>;
+
+/** For a composition whose ledger posts no valued item, such as the quantity tests of S1-F10-T02. */
+export const booksNotComposed: LedgerBooks = {
+  costSettingOn: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
+  checkPostable: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
+  holdPeriods: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
+  post: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
 };

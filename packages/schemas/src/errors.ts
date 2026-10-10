@@ -491,6 +491,10 @@ export const stockLedgerCodes = declareCodes({
   'stock.wrong-release-event': 'refused',
   'stock.condition-route': 'refused',
   'stock.rule-not-set': 'unavailable',
+  // The valued items (S1-F10-T03).
+  'stock.no-cost-setting': 'unavailable',
+  'stock.not-sellable': 'refused',
+  'stock.posting-refused': 'refused',
 });
 
 /**

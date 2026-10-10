@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
   LOCK_STEP,
@@ -7,7 +7,7 @@ import {
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { skuBalance, unitAnchor } from './db/schema.js';
+import { costPool, skuBalance, transitValue, unitAnchor } from './db/schema.js';
 import { compareCodeUnits, skuKey, unitKey } from './domain/keys.js';
 import type { LedgerPlan } from './plan.js';
 
@@ -20,6 +20,8 @@ const SKU_BALANCE = lockTable('stock', 'sku_balance');
 const PIECE = lockTable('stock', 'piece');
 const HOLD = lockTable('stock', 'hold');
 const RESERVATION = lockTable('stock', 'reservation');
+const COST_POOL = lockTable('stock', 'cost_pool');
+const TRANSIT_VALUE = lockTable('stock', 'transit_value');
 
 /** Targets a caller adds to the ledger's steps 2 to 6 (13.1 "Lock"). */
 export type ExtraTargets = Partial<Record<2 | 3 | 4 | 5 | 6, readonly LockTarget[]>>;
@@ -28,6 +30,9 @@ export type ExtraTargets = Partial<Record<2 | 3 | 4 | 5 | 6, readonly LockTarget
 export interface LockedPlan {
   readonly plan: LedgerPlan;
   readonly skuBalanceIds: readonly string[];
+  /** The cost pools and transit values locked at step 6 (10.3; 14.3). */
+  readonly poolIds: readonly string[];
+  readonly transitIds: readonly string[];
   /** Targets not locked: missing, or hidden from the actor by row-level security. */
   readonly missing: readonly LockTarget[];
 }
@@ -160,6 +165,88 @@ export async function lockPlan(
     ],
     extra[5],
   );
-  await step(LOCK_STEP.costPoolAndDispatchValue, [], extra[6]);
-  return { plan, skuBalanceIds, missing };
+
+  // Step 6 (10.3; SL-24): a missing pool or transit value is created empty, a new pool taking its formula, pool mode
+  // and cost-setting version from the cost setting read at Plan (14.2); then every pool and transit value is locked in
+  // one call.
+  for (const target of [...plan.pools.values()].sort((a, b) => compareCodeUnits(a.key, b.key))) {
+    await context.tx
+      .insert(costPool)
+      .values({
+        id: uuidv7(),
+        bookId: target.bookId,
+        skuId: target.skuId,
+        poolMode: target.mode,
+        siteId: target.siteId,
+        formula: target.formula,
+        costSettingVersionId: target.costSettingVersionId,
+        quantity: 0,
+        valuePaise: 0,
+        lastSequence: 0,
+        legalEntityId: target.legalEntityId,
+        brandId: target.brandId,
+      })
+      .onConflictDoNothing();
+  }
+  const transits = [...plan.transits.values()].sort((a, b) => compareCodeUnits(a.key, b.key));
+  for (const target of transits.filter((each) => each.create)) {
+    await context.tx
+      .insert(transitValue)
+      .values({
+        id: uuidv7(),
+        transitKind: target.kind,
+        transitRef: target.ref,
+        bookId: target.bookId,
+        skuId: target.skuId,
+        quantity: 0,
+        valuePaise: 0,
+        siteId: target.unit.siteId,
+        storeId: target.unit.storeId,
+        businessUnitId: target.unit.businessUnitId,
+        legalEntityId: target.unit.legalEntityId,
+        brandId: target.brandId,
+      })
+      .onConflictDoNothing();
+  }
+  const poolIds = new Set(plan.poolIds);
+  for (const target of plan.pools.values()) {
+    const [row] = await context.tx
+      .select({ id: costPool.id })
+      .from(costPool)
+      .where(
+        and(
+          eq(costPool.bookId, target.bookId),
+          eq(costPool.skuId, target.skuId),
+          sql`${costPool.siteId} is not distinct from ${target.siteId}::uuid`,
+          isNull(costPool.closedAt),
+        ),
+      );
+    if (row === undefined) throw new CommandDefect('A cost pool just created is not visible to its actor');
+    poolIds.add(row.id);
+  }
+  const transitIds = new Set<string>();
+  for (const target of transits) {
+    const [row] = await context.tx
+      .select({ id: transitValue.id })
+      .from(transitValue)
+      .where(
+        and(
+          eq(transitValue.transitKind, target.kind),
+          eq(transitValue.transitRef, target.ref),
+          eq(transitValue.bookId, target.bookId),
+          eq(transitValue.skuId, target.skuId),
+        ),
+      );
+    if (row === undefined) throw new CommandDefect('A transit value just created is not visible to its actor');
+    transitIds.add(row.id);
+  }
+  await step(
+    LOCK_STEP.costPoolAndDispatchValue,
+    [
+      ...[...poolIds].map((id) => ({ table: COST_POOL, id, mode: 'exclusive' as const })),
+      ...[...transitIds].map((id) => ({ table: TRANSIT_VALUE, id, mode: 'exclusive' as const })),
+    ],
+    extra[6],
+  );
+  return { plan, skuBalanceIds, poolIds: [...poolIds], transitIds: [...transitIds], missing };
 }

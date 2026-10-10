@@ -64,6 +64,7 @@ export const movement = stock.table('movement', {
   roleAssignmentId: uuid('role_assignment_id').notNull(),
   approvalUseId: uuid('approval_use_id'),
   reversesMovementId: uuid('reverses_movement_id'),
+  returnsMovementId: uuid('returns_movement_id'),
   correctionOfMovementId: uuid('correction_of_movement_id'),
   businessDate: date('business_date').notNull(),
   occurredAt: at('occurred_at').notNull(),

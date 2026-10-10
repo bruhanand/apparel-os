@@ -14,8 +14,10 @@ import { Access, type ApprovalRule } from '../../src/modules/access/index.js';
 import { OrganisationKeys } from '../../src/modules/access/domain/organisation-keys.js';
 import { Audit } from '../../src/modules/audit/index.js';
 import {
+  booksNotComposed,
   StockLedger,
   type CallerRegistration,
+  type LedgerBooks,
   type LedgerItem,
   type LedgerPlaces,
   type LedgerRequest,
@@ -112,6 +114,16 @@ export const syntheticCaller: CallerRegistration = {
         'end-count-freeze',
         'reserve',
         'end-reservation',
+        // The valued items (S1-F10-T03).
+        'cost-established',
+        'cost-adjustment',
+        'dispatch',
+        'arrival-count',
+        'sale-issue',
+        'customer-return',
+        'supplier-return-departure',
+        'supplier-handover',
+        'supplier-rejection-return',
       ],
       importKinds: ['none'],
     },
@@ -232,8 +244,18 @@ export class StockWorld {
   brandLimited!: Actor;
   approver!: Actor;
   reasonId!: string;
-  private offsetMs = 0;
-  private keysEnvironment!: Record<string, string>;
+  protected offsetMs = 0;
+  protected keysEnvironment!: Record<string, string>;
+  /** The declared reads and the books the ledger is composed with: stand-ins here; a subclass gives real ones. */
+  protected places: LedgerPlaces = syntheticPlaces;
+  protected skus: LedgerSkus = syntheticSkus;
+  protected books: LedgerBooks = booksNotComposed;
+  protected readonly registrations: readonly CallerRegistration[] = [syntheticCaller];
+
+  /** Composes what the ledger reads, after the Organisations are made and before the ledger is (S1-F10-T03). */
+  protected async compose(): Promise<void> {
+    // The quantity tests read stand-ins only.
+  }
 
   now(): Date {
     return new Date(Date.now() + this.offsetMs);
@@ -259,11 +281,13 @@ export class StockWorld {
       approvalRules: syntheticRules,
       composition: TEST_COMPOSITION,
     });
+    await this.compose();
     this.ledger = new StockLedger({
       audit,
-      places: syntheticPlaces,
-      skus: syntheticSkus,
-      registrations: [syntheticCaller],
+      places: this.places,
+      skus: this.skus,
+      books: this.books,
+      registrations: this.registrations,
       composition: TEST_COMPOSITION,
     });
     this.poster = await this.actor('POSTER');
@@ -347,6 +371,8 @@ export class StockWorld {
         readonly preparers?: readonly string[];
       };
       readonly hold?: (context: TransactionContext) => Promise<void>;
+      /** Runs after a refusal rolled the command back, as a caller raises its exception (SL-23; DEC-105). */
+      readonly afterRefusal?: (refusal: CommandRefusal, source: LedgerRequest['source']) => Promise<void>;
     } = {},
   ): Promise<{ kind: 'written'; written: Written } | { kind: 'refused'; refusal: CommandRefusal }> {
     const source = options.source ?? this.source();
@@ -375,6 +401,10 @@ export class StockWorld {
         const planned = await this.ledger.plan(context, request);
         if (planned.kind === 'refused') throw new Refused(planned.refusal);
         const locked = await this.ledger.lock(context, planned.value);
+        // Steps 7 and 8: the periods the valued items post into, then the journal series (13.1; 10.3).
+        const periods = await this.ledger.holdPeriods(context, planned.value);
+        if (periods.kind === 'refused') throw new Refused(periods.refusal);
+        if (periods.value.length > 0) await context.lock(LOCK_STEP.numberSeries, periods.value);
         const checked = await this.ledger.recheck(context, locked);
         if (checked.kind === 'refused') throw new Refused(checked.refusal);
         await options.hold?.(context);
@@ -394,7 +424,7 @@ export class StockWorld {
             value:
               options.approval.actionType === APPROVE_DOCUMENT || checked.value.value.kind === 'none'
                 ? ({ kind: 'none' } as const)
-                : ({ kind: 'unknown' } as const),
+                : checked.value.value,
           };
           const verified = await this.access.verifyUnderLock(context, check);
           if (verified !== undefined) throw new Refused(verified);
@@ -405,11 +435,17 @@ export class StockWorld {
           });
           if (used !== undefined) throw new Refused(used);
         }
-        return this.ledger.write(context, checked.value);
+        const wrote = await this.ledger.write(context, checked.value);
+        if (wrote.kind === 'refused') throw new Refused(wrote.refusal);
+        return wrote.value;
       });
       return { kind: 'written', written };
     } catch (error) {
-      if (error instanceof Refused) return { kind: 'refused', refusal: error.refusal };
+      if (error instanceof Refused) {
+        // SL-23 Outcome A (DEC-105): the command rolled back; the caller raises its exception in its own transaction.
+        await options.afterRefusal?.(error.refusal, source);
+        return { kind: 'refused', refusal: error.refusal };
+      }
       throw error;
     }
   }

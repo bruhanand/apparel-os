@@ -1,10 +1,13 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { known, paise, uuidv7 } from '@apparel-os/domain';
 import { eq } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditSource } from '../../audit/index.js';
+import type { PostItem, PostResult } from '../../finance/books/index.js';
 import {
   acceptance,
   balance,
+  costLayer,
+  costPool,
   coverage,
   hold,
   holdClaim,
@@ -20,7 +23,14 @@ import {
   reservationClaim,
   reservationEvent,
   skuBalance,
+  transitValue,
+  transitValueLayer,
+  valuation,
+  valuationLayer,
 } from './db/schema.js';
+import { refusalOf, StockRefused } from './domain/request.js';
+import type { PostShare } from './domain/valuing.js';
+import type { LedgerBooks } from './ports.js';
 import type { ClaimState, ExpectedQuantity } from './domain/working.js';
 import { countFreezeChanged, holdChanged, movementsPosted, reservationChanged } from './events.js';
 import type { CheckedRequest } from './recheck.js';
@@ -38,6 +48,15 @@ export interface Written {
   readonly acceptanceIds: string[];
   /** A count freeze's expected quantities: the balances in its scope under its locks (8.1). */
   readonly expected: ExpectedQuantity[];
+  /** The valuations written (7.10). */
+  readonly valuationIds: string[];
+  /** What Post answered for the valued movements, or none when nothing was valued (books-and-posting 9.2). */
+  readonly posting: PostResult | null;
+}
+
+/** The item key of a share: the movement, with its business unit where it is not the movement's own (8.1). */
+function itemKeyOf(share: PostShare, movementUnit: string): string {
+  return share.businessUnitId === movementUnit ? share.movementId : `${share.movementId}:${share.businessUnitId}`;
 }
 
 /**
@@ -48,13 +67,14 @@ export interface Written {
  */
 export async function writeRequest(
   context: TransactionContext,
-  audit: AuditInterface,
+  dependencies: { readonly audit: AuditInterface; readonly books: LedgerBooks },
   checked: CheckedRequest,
   source: AuditSource = { kind: 'screen' },
 ): Promise<Written> {
   const { plan, working } = checked;
   const { request } = plan;
   const { entries } = working;
+  const posting = await postValues(context, dependencies.books, checked);
   const lines = new Map(request.items.map((item) => [item.lineId, item]));
   const sourceColumns = (lineId: string) => ({
     sourceModule: request.source.module,
@@ -117,6 +137,7 @@ export async function writeRequest(
         ...actorColumns,
         approvalUseId: request.approval?.useId ?? null,
         reversesMovementId: null,
+        returnsMovementId: each.returnsMovementId ?? null,
         correctionOfMovementId: null,
         ...times,
         ...each.scope,
@@ -134,9 +155,9 @@ export async function writeRequest(
         acceptedQuantity: leg.accepted,
         locationId: leg.locationId,
         condition: leg.condition,
-        heldAs: 'custody',
-        transitKind: null,
-        transitRef: null,
+        heldAs: leg.heldAs,
+        transitKind: leg.transitKind,
+        transitRef: leg.transitRef,
         batchCode: leg.batchCode,
         expiryDate: leg.expiryDate,
         bookId: leg.bookId,
@@ -174,7 +195,14 @@ export async function writeRequest(
     if (origin.isNew || !origin.stateChanged) continue;
     await context.tx
       .update(receiptOriginState)
-      .set({ ptRevisionId: origin.ptRevisionId, coveredQuantity: origin.coveredQuantity })
+      .set({
+        ptRevisionId: origin.ptRevisionId,
+        coveredQuantity: origin.coveredQuantity,
+        valueKnown: origin.valueKnown,
+        pRatePaise: origin.pRatePaise,
+        establishedValuePaise: origin.establishedValuePaise,
+        ...(origin.lastStateMovementId === null ? {} : { lastStateMovementId: origin.lastStateMovementId }),
+      })
       .where(eq(receiptOriginState.id, origin.stateId));
   }
   for (const total of working.skuBalances.values()) {
@@ -192,9 +220,9 @@ export async function writeRequest(
         businessUnitId: row.businessUnitId,
         locationId: row.locationId,
         condition: row.condition,
-        heldAs: 'custody',
-        transitKind: null,
-        transitRef: null,
+        heldAs: row.heldAs,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
         skuId: row.skuId,
         batchCode: row.batchCode,
         expiryDate: row.expiryDate,
@@ -227,8 +255,8 @@ export async function writeRequest(
         locationId: row.locationId,
         condition: row.condition,
         heldAs: row.heldAs,
-        transitKind: null,
-        transitRef: null,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
         inCustody: row.inCustody,
         ptRevisionId: row.ptRevisionId,
         acceptedSiteId: row.acceptedSiteId,
@@ -248,6 +276,11 @@ export async function writeRequest(
       .set({
         locationId: row.locationId,
         condition: row.condition,
+        heldAs: row.heldAs,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
+        siteId: row.siteId,
+        legalEntityId: row.legalEntityId,
         inCustody: row.inCustody,
         ptRevisionId: row.ptRevisionId,
         acceptedSiteId: row.acceptedSiteId,
@@ -389,6 +422,21 @@ export async function writeRequest(
       })),
     );
   }
+  // The reservations the movements consumed (13.5 "End reservation"; 14.2 `reservation_event` `consumed`).
+  for (const each of working.consumed) {
+    entries.reservationEvents.push({
+      id: uuidv7(),
+      lineId: each.lineId,
+      reservationId: each.reservationId,
+      reservationKind: each.kind,
+      claimId: each.claimId,
+      event: 'consumed',
+      quantity: each.quantity,
+      pieceId: each.pieceId,
+      movementId: each.movementId ?? null,
+      scope: each.scope,
+    });
+  }
   if (entries.reservationEvents.length > 0) {
     await context.tx.insert(reservationEvent).values(
       entries.reservationEvents.map((row) => ({
@@ -407,6 +455,8 @@ export async function writeRequest(
     );
   }
 
+  await writeValues(context, checked);
+
   const written: Written = {
     movementIds: entries.movements.map((row) => row.id),
     receiptOriginIds: entries.origins.map((row) => row.id),
@@ -420,8 +470,10 @@ export async function writeRequest(
     coverageIds: entries.coverage.map((row) => row.id),
     acceptanceIds: entries.acceptances.map((row) => row.id),
     expected: working.expected,
+    valuationIds: working.valuations.map((row) => row.id),
+    posting,
   };
-  await recordAudit(context, audit, checked, written, source);
+  await recordAudit(context, dependencies.audit, checked, written, source);
   await publish(context, checked, written);
   return written;
 }
@@ -483,6 +535,13 @@ async function recordAudit(
       { kind: 'value', field: 'reservations', before: null, after: written.reservationIds },
       { kind: 'value', field: 'coverage', before: null, after: written.coverageIds },
       { kind: 'value', field: 'acceptances', before: null, after: written.acceptanceIds },
+      { kind: 'value', field: 'valuations', before: null, after: written.valuationIds },
+      {
+        kind: 'value',
+        field: 'journals',
+        before: null,
+        after: written.posting?.kind === 'posted' ? written.posting.journals.map((each) => each.journalId) : [],
+      },
     ],
     source,
     ...(request.approval === undefined ? {} : { approval: { ...request.approval } }),
@@ -527,5 +586,177 @@ async function publish(context: TransactionContext, checked: CheckedRequest, wri
       subject: subject('stock.hold', freezeId),
       payload: { holdIds: [...freezes] },
     });
+  }
+}
+
+/**
+ * The hand-off to the books (7.11; books-and-posting 8.1 to 8.3; PRD-MOD-013, DEC-087): `finance` Post, once for the
+ * request, with one item per valued movement and business unit, keyed by the movement (8.1), carrying each component's
+ * signed amount in paise. Post rechecks under the caller's locks and writes the journals in this transaction; a
+ * refusal is `posting-refused` and the command rolls back (SL-23 Outcome A; DEC-105). Nothing valued, nothing posted.
+ */
+async function postValues(
+  context: TransactionContext,
+  books: LedgerBooks,
+  checked: CheckedRequest,
+): Promise<PostResult | null> {
+  const { plan, working } = checked;
+  const { request } = plan;
+  if (working.shares.length === 0) return null;
+  const movements = new Map(working.entries.movements.map((each) => [each.id, each]));
+  const items = new Map<string, { item: Omit<PostItem, 'components'>; amounts: Map<string, number>; lineId: string }>();
+  for (const each of working.shares) {
+    const movement = movements.get(each.movementId);
+    if (movement === undefined) throw new CommandDefect('A share of a movement the request did not write');
+    const itemKey = itemKeyOf(each, movement.scope.businessUnitId);
+    const found = items.get(itemKey) ?? {
+      item: {
+        itemKey,
+        eventKind: each.eventKind,
+        businessUnitId: each.businessUnitId,
+        brandId: each.brandId,
+        businessDate: plan.businessDate,
+      },
+      amounts: new Map<string, number>(),
+      lineId: movement.lineId,
+    };
+    found.amounts.set(each.component, (found.amounts.get(each.component) ?? 0) + each.amount);
+    items.set(itemKey, found);
+  }
+  const actor = request.actor;
+  const result = await books.post(context, {
+    sourceModule: request.source.module,
+    document: {
+      recordType: request.source.recordType,
+      recordId: request.source.recordId,
+      versionId: request.source.versionId,
+    },
+    actor:
+      actor.kind === 'user' ? { kind: 'user', id: actor.userId } : { kind: 'service', id: actor.serviceIdentityId },
+    ...(actor.kind === 'service-identity' && actor.onBehalfOfUserId !== undefined
+      ? { onBehalfOfUserId: actor.onBehalfOfUserId }
+      : {}),
+    items: [...items.values()].map(({ item, amounts }) => ({
+      ...item,
+      components: [...amounts].map(([component, amount]) => ({ component, amount: known(paise(amount)) })),
+    })),
+  });
+  if (result.kind === 'refused') {
+    const [first] = result.items;
+    throw new StockRefused(
+      refusalOf('posting-refused', first === undefined ? undefined : items.get(first.itemKey)?.lineId, [
+        { kind: 'posting', code: first?.refusal.code ?? 'finance.refused' },
+        ...(first?.refusal.missing ?? []),
+      ]),
+    );
+  }
+  return result;
+}
+
+/** The pools, layers, transit values and valuations the request changed (7; 14.2), under the step 6 locks. */
+async function writeValues(context: TransactionContext, checked: CheckedRequest): Promise<void> {
+  const { working, plan } = checked;
+  const times = { businessDate: plan.businessDate, accountingDate: plan.businessDate };
+  if (working.valuations.length > 0) {
+    await context.tx.insert(valuation).values(
+      working.valuations.map((row) => ({
+        id: row.id,
+        movementId: row.movementId,
+        receiptOriginId: row.receiptOriginId,
+        costPoolId: row.poolId,
+        transitValueId: row.transitId,
+        sequence: row.sequence,
+        quantityDelta: row.quantityDelta,
+        valueDeltaPaise: row.valueDelta,
+        quantityBefore: row.quantityBefore,
+        quantityAfter: row.quantityBefore + row.quantityDelta,
+        valueBeforePaise: row.valueBefore,
+        valueAfterPaise: row.valueBefore + row.valueDelta,
+        eventKind: row.eventKind,
+        component: row.component,
+        ...times,
+        ...row.scope,
+      })),
+    );
+  }
+  for (const pool of working.pools.values()) {
+    if (pool.changed) {
+      await context.tx
+        .update(costPool)
+        .set({ quantity: pool.quantity, valuePaise: pool.value, lastSequence: pool.lastSequence })
+        .where(eq(costPool.id, pool.id));
+    }
+    const scope = { siteId: pool.siteId, legalEntityId: pool.legalEntityId, brandId: pool.brandId };
+    const added = pool.layers.filter((layer) => layer.isNew);
+    if (added.length > 0) {
+      await context.tx.insert(costLayer).values(
+        added.map((layer) => ({
+          id: layer.id,
+          costPoolId: pool.id,
+          poolFormula: pool.formula,
+          enteredSequence: layer.enteredSequence,
+          enteredAt: layer.enteredAt,
+          quantityIn: layer.quantityIn,
+          quantityLeft: layer.quantityLeft,
+          valueInPaise: layer.valueIn,
+          valueLeftPaise: layer.valueLeft,
+          fromLayerId: layer.fromLayerId,
+          receiptOriginId: layer.receiptOriginId,
+          fromValuationId: layer.fromValuationId,
+          ...scope,
+        })),
+      );
+    }
+    for (const layer of pool.layers) {
+      if (layer.isNew || !layer.changed) continue;
+      await context.tx
+        .update(costLayer)
+        .set({ quantityLeft: layer.quantityLeft, valueLeftPaise: layer.valueLeft })
+        .where(eq(costLayer.id, layer.id));
+    }
+  }
+  const valuationLayers = working.valuations.flatMap((row) =>
+    row.layers.map((layer) => ({
+      id: uuidv7(),
+      valuationId: row.id,
+      costLayerId: layer.layerId,
+      pieceId: layer.pieceId,
+      quantity: layer.quantity,
+      valuePaise: layer.value,
+      ...row.scope,
+    })),
+  );
+  if (valuationLayers.length > 0) await context.tx.insert(valuationLayer).values(valuationLayers);
+  for (const transit of working.transits.values()) {
+    if (transit.changed) {
+      await context.tx
+        .update(transitValue)
+        .set({ quantity: transit.quantity, valuePaise: transit.value })
+        .where(eq(transitValue.id, transit.id));
+    }
+    const added = transit.layers.filter((layer) => layer.isNew);
+    if (added.length > 0) {
+      await context.tx.insert(transitValueLayer).values(
+        added.map((layer) => ({
+          id: layer.id,
+          transitValueId: transit.id,
+          sourceLayerId: layer.sourceLayerId,
+          quantity: layer.quantity,
+          valuePaise: layer.value,
+          siteId: transit.scope.siteId,
+          storeId: transit.scope.storeId,
+          businessUnitId: transit.scope.businessUnitId,
+          legalEntityId: transit.scope.legalEntityId,
+          brandId: transit.scope.brandId,
+        })),
+      );
+    }
+    for (const layer of transit.layers) {
+      if (layer.isNew || !layer.changed) continue;
+      await context.tx
+        .update(transitValueLayer)
+        .set({ quantity: layer.quantity, valuePaise: layer.value })
+        .where(eq(transitValueLayer.id, layer.id));
+    }
   }
 }

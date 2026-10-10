@@ -50,8 +50,13 @@ export interface BalanceState {
   readonly skuBalanceId: string;
   readonly siteId: string;
   readonly businessUnitId: string;
-  readonly locationId: string;
+  /** None while in transit (14.2 `balance_location`). */
+  readonly locationId: string | null;
   readonly condition: Condition;
+  readonly heldAs: HeldAs;
+  /** The dispatch or supplier-return shipment the units are in transit on (14.2). */
+  readonly transitKind: TransitKind | null;
+  readonly transitRef: string | null;
   readonly skuId: string | null;
   readonly batchCode: string | null;
   readonly expiryDate: string | null;
@@ -62,6 +67,9 @@ export interface BalanceState {
   accepted: number;
   changed: boolean;
 }
+
+export type HeldAs = 'custody' | 'in-transit' | 'billed-retained';
+export type TransitKind = 'dispatch' | 'return-shipment';
 
 export interface PieceState {
   readonly id: string;
@@ -76,7 +84,9 @@ export interface PieceState {
   readonly brandId: string | null;
   locationId: string | null;
   condition: Condition;
-  heldAs: 'custody' | 'in-transit' | 'billed-retained';
+  heldAs: HeldAs;
+  transitKind: TransitKind | null;
+  transitRef: string | null;
   inCustody: boolean;
   ptRevisionId: string | null;
   acceptedSiteId: string | null;
@@ -95,7 +105,12 @@ export interface OriginState {
   readonly quantity: number;
   readonly scope: Scope;
   readonly stateId: string;
-  readonly valueKnown: boolean;
+  /** The owner's kind on the origin, or null while Unknown (PRD-ORG-014). */
+  readonly ownerKind: 'organisation' | 'supplier' | 'brand' | null;
+  /** Whether its cost is established, its P RATE and the exact value its cost items added (14.2; 7.6, 7.7). */
+  valueKnown: boolean;
+  pRatePaise: number | null;
+  establishedValuePaise: number | null;
   ptRevisionId: string | null;
   coveredQuantity: number;
   lastStateMovementId: string | null;
@@ -154,14 +169,31 @@ export interface Entries {
 
 export interface MovementEntry {
   readonly id: string;
-  readonly kind: 'receipt-count' | 'location-move' | 'condition-change';
+  readonly kind: MovementKind;
   readonly lineId: string;
+  /** For a customer return: the sale movement it brings back (7.5; 14.2). */
+  returnsMovementId?: string;
   readonly scope: Omit<Scope, 'brandId'>;
   readonly brandIds: (string | null)[];
   readonly legs: LegEntry[];
   readonly pieceIds: string[];
   owner?: Owner;
 }
+
+/** The movement kinds of stock-ledger 2.3 this ledger writes so far. */
+export type MovementKind =
+  | 'receipt-count'
+  | 'location-move'
+  | 'condition-change'
+  | 'cost-established'
+  | 'cost-adjustment'
+  | 'dispatch'
+  | 'arrival-count'
+  | 'sale-issue'
+  | 'customer-return'
+  | 'supplier-return-departure'
+  | 'supplier-handover'
+  | 'supplier-rejection-return';
 
 export interface LegEntry {
   readonly id: string;
@@ -170,7 +202,10 @@ export interface LegEntry {
   readonly skuId: string | null;
   readonly quantity: number;
   readonly accepted: number;
-  readonly locationId: string;
+  readonly locationId: string | null;
+  readonly heldAs: HeldAs;
+  readonly transitKind: TransitKind | null;
+  readonly transitRef: string | null;
   readonly condition: Condition;
   readonly batchCode: string | null;
   readonly expiryDate: string | null;
@@ -280,7 +315,8 @@ export interface ExpectedQuantity {
   readonly balanceId: string;
   readonly receiptOriginId: string;
   readonly skuId: string | null;
-  readonly locationId: string;
+  /** None for units in transit. */
+  readonly locationId: string | null;
   readonly condition: Condition;
   readonly quantity: number;
 }
@@ -358,12 +394,12 @@ export class Working {
   readonly claims: ClaimState[] = [];
   readonly hidden: HiddenChecks = { takes: [], pieces: [], origins: [] };
   readonly expected: ExpectedQuantity[] = [];
-  private readonly headers = new Map<string, HeaderState>();
-  private readonly coverage = new Map<string, CoverageState>();
-  private readonly usedCodes: Set<string>;
-  private readonly newId: () => string;
+  protected readonly headers = new Map<string, HeaderState>();
+  protected readonly coverage = new Map<string, CoverageState>();
+  protected readonly usedCodes: Set<string>;
+  protected readonly newId: () => string;
   /** The ordinal of the item being applied, which the hidden checks name (13.8). */
-  private line = -1;
+  protected line = -1;
 
   constructor(private readonly inputs: WorkingInputs) {
     for (const row of inputs.skuBalances) this.skuBalances.set(row.id, row);
@@ -408,7 +444,14 @@ export class Working {
         return this.reserve(item);
       case 'end-reservation':
         return this.endReservation(item);
+      default:
+        return this.applyValued(item);
     }
+  }
+
+  /** The valued items of 13.4 (S1-F10-T03), which the valuing state takes (valuing.ts). */
+  protected applyValued(item: LedgerItem): ItemValue {
+    throw new Error(`No valuing state for ${item.kind}`);
   }
 
   /**
@@ -463,7 +506,7 @@ export class Working {
           item.businessUnitId,
           unique([
             ...item.scope.flatMap((member) => ('locationId' in member ? [member.locationId] : [])),
-            ...inScope.map((row) => row.locationId),
+            ...inScope.flatMap((row) => (row.locationId === null ? [] : [row.locationId])),
           ]),
           unique([...scopeSkus, ...inScope.flatMap((row) => (row.skuId === null ? [] : [row.skuId]))]),
           unique([
@@ -492,18 +535,18 @@ export class Working {
     return sku;
   }
 
-  private scopeAt(siteId: string, businessUnitId: string, brandId: string | null): Scope {
+  protected scopeAt(siteId: string, businessUnitId: string, brandId: string | null): Scope {
     const unit = this.unit(siteId, businessUnitId);
     return { siteId, storeId: unit.storeId, businessUnitId, legalEntityId: unit.legalEntityId, brandId };
   }
 
   /** The scope of a header row, which records a brand set instead of one brand (14.1). */
-  private headerScopeAt(siteId: string, businessUnitId: string): Omit<Scope, 'brandId'> {
+  protected headerScopeAt(siteId: string, businessUnitId: string): Omit<Scope, 'brandId'> {
     const unit = this.unit(siteId, businessUnitId);
     return { siteId, storeId: unit.storeId, businessUnitId, legalEntityId: unit.legalEntityId };
   }
 
-  private skuBalanceOf(siteId: string, businessUnitId: string, skuId: string | null): SkuBalanceState {
+  protected skuBalanceOf(siteId: string, businessUnitId: string, skuId: string | null): SkuBalanceState {
     const wanted = skuKey(siteId, businessUnitId, skuId);
     for (const row of this.skuBalances.values()) {
       if (skuKey(row.siteId, row.businessUnitId, row.skuId) === wanted) return row;
@@ -511,12 +554,12 @@ export class Working {
     throw new Error(`SKU balance not locked: ${wanted}`);
   }
 
-  private activeClaims(filter: (claim: ClaimState) => boolean): ClaimState[] {
+  protected activeClaims(filter: (claim: ClaimState) => boolean): ClaimState[] {
     return this.claims.filter((claim) => claim.quantity > 0 && filter(claim));
   }
 
   /** What is claimed on a balance by claims the actor can see (6.2). */
-  private claimsOn(balance: BalanceState): BalanceClaims & { readonly holds: ClaimState[] } {
+  protected claimsOn(balance: BalanceState): BalanceClaims & { readonly holds: ClaimState[] } {
     const on = this.activeClaims((claim) => claim.balanceId === balance.id);
     const holds = on.filter((claim) => claim.owner === 'hold' && claim.withinReservationId === null);
     return {
@@ -529,7 +572,7 @@ export class Working {
   }
 
   /** Units of an origin reserved anywhere the request loaded, at every balance of the origin (6.2; 13.9). */
-  private reservedOfOrigin(originId: string): number {
+  protected reservedOfOrigin(originId: string): number {
     return this.activeClaims(
       (claim) =>
         claim.owner === 'reservation' &&
@@ -538,24 +581,24 @@ export class Working {
     ).reduce((sum, claim) => sum + claim.quantity, 0);
   }
 
-  private coverOf(balance: BalanceState): { covered: number; reservedEverywhere: number } {
+  protected coverOf(balance: BalanceState): { covered: number; reservedEverywhere: number } {
     return {
       covered: this.origins.get(balance.receiptOriginId)?.coveredQuantity ?? 0,
       reservedEverywhere: this.reservedOfOrigin(balance.receiptOriginId),
     };
   }
 
-  private pieceClaims(piece: PieceState): ClaimState[] {
+  protected pieceClaims(piece: PieceState): ClaimState[] {
     return this.activeClaims((claim) => claim.pieceId === piece.id);
   }
 
   /** Records the free units a take left on a balance, for the hidden-row recheck (DEC-117). */
-  private leaveSpare(balance: BalanceState, spare: number): void {
+  protected leaveSpare(balance: BalanceState, spare: number): void {
     this.hidden.takes.push({ line: this.line, balanceId: balance.id, spare });
   }
 
   /** The balances of a SKU at a place, in one condition, oldest first: soonest expiry, then count date (PRD-STK-013). */
-  private balancesAt(place: Place, condition: Condition, goods: Goods): BalanceState[] {
+  protected balancesAt(place: Place, condition: Condition, goods: Goods): BalanceState[] {
     return [...this.balances.values()]
       .filter(
         (row) =>
@@ -575,7 +618,7 @@ export class Working {
   }
 
   /** Plan staleness (13.1): every origin with stock here was one Plan found and locked. */
-  private checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
+  protected checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
     if (goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
     const seen = this.inputs.originsSeen.get(skuKey(place.siteId, place.businessUnitId, goods.skuId));
     if (candidates.some((row) => row.quantity > 0 && seen?.has(row.receiptOriginId) !== true)) {
@@ -585,19 +628,24 @@ export class Working {
 
   // --- changing the state --------------------------------------------------------------------------------------
 
-  private balanceFor(
+  protected balanceFor(
     siteId: string,
     businessUnitId: string,
     locationId: string,
     condition: Condition,
     origin: OriginState,
+    transit?: { readonly kind: TransitKind; readonly ref: string },
   ): BalanceState {
+    const heldAs: HeldAs = transit === undefined ? 'custody' : 'in-transit';
     for (const row of this.balances.values()) {
       if (
         row.siteId === siteId &&
         row.businessUnitId === businessUnitId &&
-        row.locationId === locationId &&
+        row.locationId === (transit === undefined ? locationId : null) &&
         row.condition === condition &&
+        row.heldAs === heldAs &&
+        row.transitKind === (transit?.kind ?? null) &&
+        row.transitRef === (transit?.ref ?? null) &&
         row.receiptOriginId === origin.id
       ) {
         return row;
@@ -609,8 +657,11 @@ export class Working {
       skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId).id,
       siteId,
       businessUnitId,
-      locationId,
+      locationId: transit === undefined ? locationId : null,
       condition,
+      heldAs,
+      transitKind: transit?.kind ?? null,
+      transitRef: transit?.ref ?? null,
       skuId: origin.skuId,
       batchCode: origin.batchCode,
       expiryDate: origin.expiryDate,
@@ -625,7 +676,7 @@ export class Working {
     return created;
   }
 
-  private addTo(balance: BalanceState, quantity: number, accepted: number): void {
+  protected addTo(balance: BalanceState, quantity: number, accepted: number): void {
     balance.quantity += quantity;
     balance.accepted += accepted;
     balance.changed = true;
@@ -634,25 +685,24 @@ export class Working {
     total.changed = true;
   }
 
-  private origin(lineId: string, originId: string): OriginState {
+  protected origin(lineId: string, originId: string): OriginState {
     const origin = this.origins.get(originId);
     if (origin === undefined) refuse('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: originId }]);
-    if (origin.valueKnown) throw new Error('Valued items arrive with S1-F10-T03');
     return origin;
   }
 
-  private piece(lineId: string, code: string): PieceState {
+  protected piece(lineId: string, code: string): PieceState {
     const piece = this.piecesByCode.get(code);
     if (piece === undefined) refuse('invalid-item', lineId, [{ kind: 'piece', code }]);
     return piece;
   }
 
-  private brandOf(skuId: string | null): string | null {
+  protected brandOf(skuId: string | null): string | null {
     return skuId === null ? null : this.sku(skuId).brandId;
   }
 
   /** Why free units fall short (13.8): held or reserved by what the actor can see, or simply not there. */
-  private shortfall(lineId: string, candidates: readonly BalanceState[], wanted: number, reservation = false): never {
+  protected shortfall(lineId: string, candidates: readonly BalanceState[], wanted: number, reservation = false): never {
     let quantity = 0;
     let reserved = 0;
     let held = 0;
@@ -677,7 +727,7 @@ export class Working {
    * `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names `reservation-overlap` for
    * reserved units.
    */
-  private take(
+  protected take(
     lineId: string,
     place: Place,
     condition: Condition,
@@ -772,14 +822,14 @@ export class Working {
    * Reserved units at a balance a move may carry with their claims: those of reservations no hold sits inside there,
    * since held goods move only under their own authority (6.2).
    */
-  private movableReserved(balance: BalanceState): number {
+  protected movableReserved(balance: BalanceState): number {
     return this.activeClaims(
       (claim) => claim.owner === 'reservation' && claim.balanceId === balance.id && !this.heldInside(claim),
     ).reduce((sum, claim) => sum + claim.quantity, 0);
   }
 
   /** Whether a hold sits inside this reservation on the same balance or piece (6.2). */
-  private heldInside(claim: ClaimState): boolean {
+  protected heldInside(claim: ClaimState): boolean {
     return (
       this.activeClaims(
         (hold) =>
@@ -791,7 +841,7 @@ export class Working {
     );
   }
 
-  private checkGoodsShape(lineId: string, goods: Goods): void {
+  protected checkGoodsShape(lineId: string, goods: Goods): void {
     const sku = this.sku(goods.skuId);
     if (!Number.isInteger(goods.quantity) || goods.quantity <= 0)
       refuse('invalid-item', lineId, [{ kind: 'quantity' }]);
@@ -802,7 +852,7 @@ export class Working {
     }
   }
 
-  private newMovement(
+  protected newMovement(
     kind: MovementEntry['kind'],
     lineId: string,
     siteId: string,
@@ -822,7 +872,7 @@ export class Working {
     return movement;
   }
 
-  private leg(direction: 'out' | 'in', balance: BalanceState, quantity: number, accepted: number): LegEntry {
+  protected leg(direction: 'out' | 'in', balance: BalanceState, quantity: number, accepted: number): LegEntry {
     return {
       id: this.newId(),
       direction,
@@ -831,6 +881,9 @@ export class Working {
       quantity,
       accepted,
       locationId: balance.locationId,
+      heldAs: balance.heldAs,
+      transitKind: balance.transitKind,
+      transitRef: balance.transitRef,
       condition: balance.condition,
       batchCode: balance.batchCode,
       expiryDate: balance.expiryDate,
@@ -842,7 +895,7 @@ export class Working {
   // --- movement items (13.4) -----------------------------------------------------------------------------------
 
   /** Receipt count (13.4; PRD-REC-008, PRD-MER-015, PRD-ORG-019): a new receipt origin, its custody and pieces. */
-  private receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
+  protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
     const sku = this.sku(item.skuId);
     const codes = item.pieceCodes ?? [];
     for (const code of codes) {
@@ -865,7 +918,10 @@ export class Working {
       quantity: item.quantity,
       scope: this.scopeAt(item.to.siteId, item.to.businessUnitId, sku.brandId),
       stateId: this.newId(),
+      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
       valueKnown: false,
+      pRatePaise: null,
+      establishedValuePaise: null,
       ptRevisionId: null,
       coveredQuantity: 0,
       lastStateMovementId: movement.id,
@@ -891,6 +947,8 @@ export class Working {
         locationId: item.to.locationId,
         condition: item.condition,
         heldAs: 'custody',
+        transitKind: null,
+        transitRef: null,
         inCustody: true,
         ptRevisionId: null,
         acceptedSiteId: null,
@@ -910,7 +968,7 @@ export class Working {
    * do the claims of reserved units it carries, by a `moved` event on the claim it leaves and a new claim of the same
    * reservation where the units arrive (13.9; product owner, 8 Oct 2026).
    */
-  private moveUnits(
+  protected moveUnits(
     lineId: string,
     movement: MovementEntry,
     taken: readonly Taken[],
@@ -942,7 +1000,7 @@ export class Working {
   }
 
   /** Moves `quantity` reserved units' claims from one balance to another at the same unit (13.9). */
-  private moveClaims(
+  protected moveClaims(
     lineId: string,
     movement: MovementEntry,
     from: BalanceState,
@@ -983,7 +1041,7 @@ export class Working {
    * (product owner, 8 Oct 2026); between two units it takes free units only, since reserved units never leave their unit
    * by a location move.
    */
-  private locationMove(item: ItemOf<'location-move'>): ItemValue {
+  protected locationMove(item: ItemOf<'location-move'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     const from = this.unit(item.from.siteId, item.from.businessUnitId);
     const to = this.unit(item.from.siteId, item.to.businessUnitId);
@@ -1012,7 +1070,7 @@ export class Working {
    * every change from another condition is `condition-route`. Takes free units; the hold the new condition raises is
    * its own item in the same request (13.5).
    */
-  private conditionChange(item: ItemOf<'condition-change'>): ItemValue {
+  protected conditionChange(item: ItemOf<'condition-change'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     if (item.from === item.to) refuse('invalid-item', item.lineId, [{ kind: 'same-condition' }]);
     if (item.from !== 'good' || !CHANGED_CONDITIONS.includes(item.to)) {
@@ -1036,7 +1094,7 @@ export class Working {
    * Record coverage (13.5; PRD-REC-015, PRD-REC-017, PRD-ACP-002, PRD-INT-005): no unit covered by two approved
    * revisions. One origin is covered by one revision; a split goes through its own origins (section 4).
    */
-  private recordCoverage(item: ItemOf<'record-coverage'>): ItemValue {
+  protected recordCoverage(item: ItemOf<'record-coverage'>): ItemValue {
     const origin = this.origin(item.lineId, item.receiptOriginId);
     if (origin.ptRevisionId !== null && origin.ptRevisionId !== item.ptRevisionId) {
       refuse('coverage-overlap', item.lineId, [{ kind: 'coverage', ptRevisionId: origin.ptRevisionId }]);
@@ -1087,7 +1145,7 @@ export class Working {
    * covered units is the dependent quantity the ledger keeps, at every balance of the origin; later dependents add
    * their own checks.
    */
-  private removeCoverage(item: ItemOf<'remove-coverage'>): ItemValue {
+  protected removeCoverage(item: ItemOf<'remove-coverage'>): ItemValue {
     const record = this.coverage.get(item.coverageId);
     if (record?.action !== 'cover')
       refuse('invalid-item', item.lineId, [{ kind: 'coverage', coverageId: item.coverageId }]);
@@ -1131,7 +1189,7 @@ export class Working {
    * Site, of units in custody there and not yet accepted: a piece elsewhere is `piece-not-at-place`; more units than
    * are unaccepted there is `exceeds-source`.
    */
-  private recordAcceptance(item: ItemOf<'record-acceptance'>): ItemValue {
+  protected recordAcceptance(item: ItemOf<'record-acceptance'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     const sku = this.sku(item.goods.skuId);
     if (sku.pieceTracked) {
@@ -1185,11 +1243,11 @@ export class Working {
     return { kind: 'unknown' };
   }
 
-  private acceptance(lineId: string, balance: BalanceState, piece: PieceState | null, quantity: number): void {
+  protected acceptance(lineId: string, balance: BalanceState, piece: PieceState | null, quantity: number): void {
     this.entries.acceptances.push({
       id: this.newId(),
       lineId,
-      locationId: balance.locationId,
+      locationId: balance.locationId ?? '',
       condition: balance.condition,
       receiptOriginId: balance.receiptOriginId,
       pieceId: piece?.id ?? null,
@@ -1203,7 +1261,7 @@ export class Working {
    * reserved or already held, since holds coexist; units not there are `not-in-custody`. A quantity claims balances
    * oldest first, each hold its own units (6.2).
    */
-  private placeHold(item: ItemOf<'place-hold'>): ItemValue {
+  protected placeHold(item: ItemOf<'place-hold'>): ItemValue {
     if (item.reason.trim() === '' || item.goods.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'hold' }]);
     if (item.withinReservationId !== undefined) {
       const inside = this.claims.some(
@@ -1278,7 +1336,7 @@ export class Working {
     return { kind: 'unknown' };
   }
 
-  private scopeOfPiece(piece: PieceState): Scope {
+  protected scopeOfPiece(piece: PieceState): Scope {
     return {
       siteId: piece.siteId,
       storeId: piece.storeId,
@@ -1288,7 +1346,7 @@ export class Working {
     };
   }
 
-  private newClaim(
+  protected newClaim(
     owner: 'hold' | 'reservation',
     headerId: string,
     headerKind: string,
@@ -1316,7 +1374,7 @@ export class Working {
     return claim;
   }
 
-  private header(lineId: string, id: string, owner: 'hold' | 'reservation'): HeaderState {
+  protected header(lineId: string, id: string, owner: 'hold' | 'reservation'): HeaderState {
     const header = this.headers.get(id);
     if (header?.owner !== owner) refuse('invalid-item', lineId, [{ kind: owner, id }]);
     return header;
@@ -1328,7 +1386,7 @@ export class Working {
    * authority a release needs, such as an excess hold's PT route or its link to a recorded loss, is the calling
    * module's own check (13.9).
    */
-  private releaseHold(item: ItemOf<'release-hold'>): ItemValue {
+  protected releaseHold(item: ItemOf<'release-hold'>): ItemValue {
     const hold = this.header(item.lineId, item.holdId, 'hold');
     if (hold.kind === 'count-freeze') refuse('invalid-item', item.lineId, [{ kind: 'count-freeze', holdId: hold.id }]);
     if (!(RELEASE_EVENTS[hold.kind] ?? []).includes(item.event)) {
@@ -1360,7 +1418,7 @@ export class Working {
    * `reserved` while offline protected quantity is in the scope (8.1); another freeze over the same units is found by
    * the command's freeze check, as for any item (`count-freeze-active`).
    */
-  private startFreeze(item: ItemOf<'start-count-freeze'>): ItemValue {
+  protected startFreeze(item: ItemOf<'start-count-freeze'>): ItemValue {
     if (item.reason.trim() === '' || item.scope.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'scope' }]);
     const inScope = this.freezeBalances(item.siteId, item.businessUnitId, item.scope);
     const protectedQuantity = this.activeClaims(
@@ -1422,7 +1480,7 @@ export class Working {
   }
 
   /** End count freeze (13.5): the count's closure, `count-closed`, once; under the anchor held exclusively. */
-  private endFreeze(item: ItemOf<'end-count-freeze'>): ItemValue {
+  protected endFreeze(item: ItemOf<'end-count-freeze'>): ItemValue {
     const hold = this.header(item.lineId, item.holdId, 'hold');
     if (hold.kind !== 'count-freeze')
       refuse('wrong-release-event', item.lineId, [{ kind: 'hold', holdKind: hold.kind, event: 'count-closed' }]);
@@ -1448,7 +1506,7 @@ export class Working {
    * covered quantity is drawn on once by every reservation of its units, wherever they are (13.9). Held-goods
    * reservations reserve held goods under their own authority and arrive with the routes that make them (stage 2 and 3).
    */
-  private reserve(item: ItemOf<'reserve'>): ItemValue {
+  protected reserve(item: ItemOf<'reserve'>): ItemValue {
     if (item.goods.length === 0) refuse('invalid-item', item.lineId, [{ kind: 'goods' }]);
     if (item.reservationKind === 'held-goods')
       refuse('invalid-item', item.lineId, [{ kind: 'reservation-kind', reservationKind: item.reservationKind }]);
@@ -1532,7 +1590,7 @@ export class Working {
    * it still holds. Consumption is made by the movement that consumes it (dispatch, departure, an offline sale), which
    * arrives with those movements.
    */
-  private endReservation(item: ItemOf<'end-reservation'>): ItemValue {
+  protected endReservation(item: ItemOf<'end-reservation'>): ItemValue {
     const reservation = this.header(item.lineId, item.reservationId, 'reservation');
     if (!(RESERVATION_EVENTS[reservation.kind] ?? []).includes(item.event)) {
       refuse('wrong-release-event', item.lineId, [

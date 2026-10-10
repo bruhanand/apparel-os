@@ -1,7 +1,8 @@
+import type { Paise } from '@apparel-os/domain';
 import type { CommandRefusal, MissingItem } from '../../../../kernel/index.js';
 
 // The ledger request of stock-ledger 13.1 and 13.3 and the unvalued items of 13.4 and 13.5 (S1-F10-T02). Pure types:
-// no database, no clock (code-house-rules 2). The valued items arrive with S1-F10-T03.
+// no database, no clock (code-house-rules 2). The valued items of 13.4 (S1-F10-T03) follow them.
 
 export type Condition = 'good' | 'damaged' | 'wrong' | 'unidentified';
 
@@ -133,7 +134,115 @@ export type LedgerItem =
       readonly lineId: string;
       readonly reservationId: string;
       readonly event: string;
+    }
+  | ValuedItem;
+
+/** A Site and business unit, without a location: a transit's source, or a dispatch's destination (13.3). */
+export interface UnitPlace {
+  readonly siteId: string;
+  readonly businessUnitId: string;
+}
+
+/**
+ * The valued movement items of 13.4 (S1-F10-T03). Amounts are integer paise (PRD-MOD-014). A dispatch and a
+ * supplier-return shipment are named by the caller's identifier, the transit reference their units travel under (14.2).
+ */
+export type ValuedItem =
+  | {
+      /** PT approval gives the origin its cost: the covering revision's P RATE, per unit (7.6; PRD-PTW-010). */
+      readonly kind: 'cost-established';
+      readonly lineId: string;
+      readonly receiptOriginId: string;
+      readonly ptRevisionId: string;
+      readonly pRatePaise: Paise;
+    }
+  | {
+      /**
+       * A later approved change of the origin's cost, the signed total over the units its cost established put into
+       * pools, shared equally among them (7.7; PRD-LED-016).
+       */
+      readonly kind: 'cost-adjustment';
+      readonly lineId: string;
+      readonly receiptOriginId: string;
+      readonly amountPaise: Paise;
+    }
+  | {
+      /** Custody leaves the source into transit on the dispatch; consumes the reservation (7.8; PRD-TRF-011). */
+      readonly kind: 'dispatch';
+      readonly lineId: string;
+      readonly dispatchId: string;
+      readonly reservationId: string;
+      readonly from: Place;
+      readonly to: UnitPlace;
+      readonly goods: Goods;
+    }
+  | {
+      /** The counted good units of a dispatch arrive at the destination (7.8; PRD-TRF-016, PRD-TRF-018). */
+      readonly kind: 'arrival-count';
+      readonly lineId: string;
+      readonly dispatchId: string;
+      readonly from: UnitPlace;
+      readonly to: Place;
+      readonly goods: Goods;
+    }
+  | {
+      /** Custody leaves at customer handover (6.3; PRD-STK-003, PRD-POS-018). */
+      readonly kind: 'sale-issue';
+      readonly lineId: string;
+      readonly at: Place;
+      readonly handover: 'now' | 'billed-retained';
+      readonly goods: Goods;
+    }
+  | {
+      /** Custody back after physical acceptance, at the cost its sale issued (7.5; PRD-RET-013, PRD-LED-017). */
+      readonly kind: 'customer-return';
+      readonly lineId: string;
+      readonly saleMovementId: string;
+      readonly to: Place;
+      readonly condition: Condition;
+      readonly goods: Goods;
+    }
+  | {
+      /** Custody leaves for the supplier on a return shipment; consumes the reservation (7.8; PRD-OFR-012). */
+      readonly kind: 'supplier-return-departure';
+      readonly lineId: string;
+      readonly shipmentId: string;
+      readonly reservationId: string;
+      readonly from: Place;
+      readonly goods: Goods;
+    }
+  | {
+      /** Custody ends at confirmed handover or supplier receipt (7.8; PRD-TRF-020). */
+      readonly kind: 'supplier-handover';
+      readonly lineId: string;
+      readonly shipmentId: string;
+      readonly from: UnitPlace;
+      readonly goods: Goods;
+    }
+  | {
+      /** Goods the supplier refuses come back, counted at the place named (7.8; PRD-OFR-014). */
+      readonly kind: 'supplier-rejection-return';
+      readonly lineId: string;
+      readonly shipmentId: string;
+      readonly from: UnitPlace;
+      readonly to: Place;
+      readonly goods: Goods;
     };
+
+export type ValuedItemKind = ValuedItem['kind'];
+
+/** The valued item kinds (13.4; S1-F10-T03). */
+export const VALUED_ITEM_KINDS: readonly ValuedItemKind[] = [
+  'cost-established',
+  'cost-adjustment',
+  'dispatch',
+  'arrival-count',
+  'sale-issue',
+  'customer-return',
+  'supplier-return-departure',
+  'supplier-handover',
+  'supplier-rejection-return',
+];
 
 export type LedgerItemKind = LedgerItem['kind'];
 
@@ -154,6 +263,7 @@ export const ITEM_KINDS: readonly LedgerItemKind[] = [
   'end-count-freeze',
   'reserve',
   'end-reservation',
+  ...VALUED_ITEM_KINDS,
 ];
 
 /**
@@ -196,12 +306,16 @@ export type StockReason =
   | 'exceeds-source'
   | 'wrong-release-event'
   | 'condition-route'
-  | 'rule-not-set';
+  | 'rule-not-set'
+  | 'no-cost-setting'
+  | 'not-sellable'
+  | 'posting-refused';
 
 const KIND_OF: Partial<Record<StockReason, CommandRefusal['kind']>> = {
   'business-date-not-set': 'unavailable',
   'plan-stale': 'conflict',
   'rule-not-set': 'unavailable',
+  'no-cost-setting': 'unavailable',
 };
 
 /** Thrown inside the ledger to stop at the first failing item; the operation answers it as its refusal. */
@@ -232,4 +346,5 @@ export function refuse(reason: StockReason, lineId: string | undefined, details:
 }
 
 /** The value of an item on its approval basis, or of the request (13.1 "Recheck and value"; PRD-ACS-016). */
-export type ItemValue = { readonly kind: 'none' } | { readonly kind: 'unknown' };
+export type ItemValue =
+  { readonly kind: 'none' } | { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: Paise };

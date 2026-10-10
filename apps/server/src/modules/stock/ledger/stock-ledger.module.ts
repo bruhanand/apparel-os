@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PRODUCTION_COMPOSITION } from '../../../kernel/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../../audit/index.js';
+import { BOOKS, BooksModule, type BooksInterface } from '../../finance/books/index.js';
 import { BookStockHistory } from './contracts/book-stock-history.js';
 import { StockLedger } from './ledger.js';
 import { catalogueSkus, placesNotBuilt } from './ports.js';
@@ -17,21 +18,23 @@ export const STOCK_LEDGER = 'stock.ledger.StockLedger';
  * tests (13.2); its SKU read is `merchandise`'s Read a SKU (S1-F03-T02), its place read not wired yet (RR-436).
  */
 @Module({
-  imports: [AuditModule],
+  imports: [AuditModule, BooksModule],
   providers: [
     { provide: BOOK_STOCK_HISTORY, useFactory: () => new BookStockHistory() },
     {
       provide: STOCK_LEDGER,
-      useFactory: (audit: AuditInterface) =>
+      useFactory: (audit: AuditInterface, books: BooksInterface) =>
         new StockLedger({
           audit,
+          // finance · books: the cost setting, Check postable, Hold periods and Post (7.11; S1-F10-T03).
+          books,
           places: placesNotBuilt,
           // The merchandise half of RR-436: Read a SKU as of a date (S1-F03-T02).
           skus: catalogueSkus,
           registrations: [],
           composition: PRODUCTION_COMPOSITION,
         }),
-      inject: [AUDIT],
+      inject: [AUDIT, BOOKS],
     },
   ],
   exports: [BOOK_STOCK_HISTORY, STOCK_LEDGER],
