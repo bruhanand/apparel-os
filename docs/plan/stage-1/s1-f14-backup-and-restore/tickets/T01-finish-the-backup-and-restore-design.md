@@ -1,6 +1,6 @@
 # S1-F14-T01 — Finish the backup and restore design
 
-Status: ready-for-agent
+Status: in-progress
 Blocked by: —
 Feature: [S1-F14 Backup, restore and export proof](../../spec.md)
 
@@ -33,3 +33,4 @@ Documents only; no code. Bring [backup-and-restore.md](../../../../design/platfo
 - A change to the PRD or the policies is logged in [decisions.md](../../../../decisions.md) first; none is expected here.
 - The Railway assumptions GC9-A4 to GC9-A6 are verified before the drill, in S1-F14-T04, not here.
 - Retention periods, legal holds and recovery targets stay KDPS's (RR-075, RR-076, RR-123); this ticket sets none.
+- Drafted 10 Oct 2026: the approvals of GC9-9 and GC9-10 were already written in; GC9-12 rewritten; key recovery is 2.4 (GC9-18), stored-file deletion 8.5 (GC9-16), and the backup key's form GC9-17, all **Proposed** with options and recommendations, as are GC9-7 and GC9-8. The KDPS question already existed (KDPS Owner 62, RR-237); it now also covers the kept copies of every key. Waiting for the product owner's approval; GC-9 stays Draft, the section 13 edits wait, RR-010 stays open.
