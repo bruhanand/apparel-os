@@ -221,6 +221,26 @@ export interface SyntheticWorld {
       readonly storeBatchCode: string;
       readonly otherBatchCode: string;
     };
+    /**
+     * The intake refusal journey (S1-F06-T02): a Booking user of its own, a SYNTHETIC workbook holding a macro project
+     * and its clean copy.
+     */
+    readonly refusal: {
+      readonly booking: EnrolledUser;
+      readonly macroFilePath: string;
+      readonly cleanFilePath: string;
+    };
+    /**
+     * The masked cost journey (S1-F06-T02): a Booking user not granted the class cost, a SYNTHETIC file of the
+     * Confirmed costed layout, how the screen names that layout, the file's style code and its cost value.
+     */
+    readonly cost: {
+      readonly reader: EnrolledUser;
+      readonly filePath: string;
+      readonly layoutOption: string;
+      readonly styleCode: string;
+      readonly costValue: string;
+    };
   };
   /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's

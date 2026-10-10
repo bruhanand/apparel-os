@@ -467,8 +467,6 @@ export const inboxCodes = declareCodes({
  * - `files-imports.batch-not-found`: no batch with that identifier is visible to the reader.
  * - `files-imports.batch-not-staged` / `files-imports.batch-not-validated`: the batch is not in the state the step
  *   needs (3.2).
- * - `files-imports.publishing-limited`: publishing is limited to local work, tests and `dev` until the controls
- *   `missing` names are built (S1-F06-T01; PRD-SEC-017).
  * - `files-imports.document-refused`: the target's handler refused a document at publishing; `missing` names the
  *   document and the handler's reason. From S1-F06-T04 it is the refusal of that document's own transaction, and
  *   the reason a failed outcome keeps; the other documents publish.
@@ -518,6 +516,22 @@ export const inboxCodes = declareCodes({
  *   (7.2); `missing` names the document and the published one. The other documents publish.
  * - `files-imports.counts-do-not-close`: the rows staged differ from the rows the reader read, so the counts cannot
  *   close; Submit and Publish refuse the batch (7.4). `missing` names both counts.
+ * Intake refusals and caps (S1-F06-T02; imports-and-opening-data 9.3, 11; PRD-SEC-011; DEC-112 GC6-3, GC6-5,
+ * GC6-6). Each is answered before anything is stored; a stored file read again later answers the same:
+ *
+ * - `files-imports.file-unreadable` also refuses a damaged workbook at intake; `missing` names the reader's error as a
+ *   word (`reader-error`), never its message, which may quote the file.
+ * - `files-imports.workbook-active-content`: macros, active controls or embedded objects; `missing` names which.
+ * - `files-imports.workbook-depends-on-another`: the workbook depends on data in another workbook; `missing` asks
+ *   for a self-contained copy (A-9). Nothing is stripped and no linked value is trusted.
+ * - `files-imports.workbook-unapproved-link`: a link that fetches something, such as an external image or object, or
+ *   a data connection; an ordinary hyperlink is not one (GC6-17). `missing` names it.
+ * - `files-imports.over-intake-cap`: over a cap at intake (uploaded size, expanded size, rows, parser memory,
+ *   processing time); `missing` names the cap and its limit. Nothing is truncated.
+ * - `files-imports.customer-contact-columns`: on the test setup, the file has columns its Confirmed layout marks as
+ *   customer contact (section 11; DEC-052); `missing` names them. Upload it again without them.
+ * - `files-imports.layout-needed-on-test-setup`: on the test setup, a sheet of the file that holds cells fits no
+ *   Confirmed layout version, so its columns cannot be known to hold no customer contact; `missing` names it.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -537,8 +551,13 @@ export const filesImportsCodes = declareCodes({
   'files-imports.batch-not-found': 'not-found',
   'files-imports.batch-not-staged': 'refused',
   'files-imports.batch-not-validated': 'refused',
-  'files-imports.publishing-limited': 'unavailable',
   'files-imports.document-refused': 'refused',
+  'files-imports.workbook-active-content': 'refused',
+  'files-imports.workbook-depends-on-another': 'refused',
+  'files-imports.workbook-unapproved-link': 'refused',
+  'files-imports.over-intake-cap': 'refused',
+  'files-imports.customer-contact-columns': 'refused',
+  'files-imports.layout-needed-on-test-setup': 'refused',
   'files-imports.layout-code-taken': 'refused',
   'files-imports.mapping-code-taken': 'refused',
   'files-imports.mapping-not-found': 'not-found',

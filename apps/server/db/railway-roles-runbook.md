@@ -12,6 +12,7 @@ Steps the product owner runs once per Railway environment (`dev`, later `kdps-te
 | Pre-deploy variable | `AOS_MIGRATION_DATABASE_URL` | The directory database as `aos_migration`. Never logged |
 | Runtime variables | `AOS_RUNTIME_DATABASE_URL`, `AOS_DATABASE_POOL_MAX` | The directory database as `aos_runtime`, and the most connections each database pool opens. `app` and `worker` refuse to start without either. The URL is never logged |
 | Other `app` variables | `AOS_ENVIRONMENT`, `AOS_PUBLIC_ORIGIN`, `AOS_TRUSTED_PROXY_HOPS`, `AOS_ORGANISATION_KEYS` | The environment's name (also read when the web app is built), the app's own origin, the proxies in front of it, and a key per Organisation (deployment.md sections 1, 3, 9; RR-254). `app` refuses to start without the last three |
+| Caps at intake (`S1-F06-T02`) | `AOS_INTAKE_MAX_UPLOAD_BYTES`, `AOS_INTAKE_MAX_EXPANDED_BYTES`, `AOS_INTAKE_MAX_ROWS`, `AOS_INTAKE_MAX_PARSER_MEMORY_MB`, `AOS_INTAKE_MAX_PROCESSING_MS` | The builders' values for `dev` are in imports-and-opening-data 9.3 (deployment.md section 9). `app` refuses to start without any of them, so they are set before the deploy that brings `S1-F06-T02`; not yet set on Railway |
 | `worker` variables | `AOS_WORKER_SETTINGS` | Besides the two runtime variables: the retry and interval settings of every consumer and job kind in the worker's registry (code-house-rules 12.9; DEC-118, DEC-119; RR-276, RR-322). The worker refuses to start without it or with a consumer or job kind missing |
 
 ## Steps

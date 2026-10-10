@@ -572,6 +572,18 @@ const PREPARE_CODES = [
   'kernel.cross-site-request',
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The codes of every read of a workbook (imports-and-opening-data 9.3; S1-F06-T02): at intake, and whenever the stored
+ * file is read again under the caps in force.
+ */
+const WORKBOOK_READ_CODES = [
+  'files-imports.file-unreadable',
+  'files-imports.over-intake-cap',
+  'files-imports.workbook-active-content',
+  'files-imports.workbook-depends-on-another',
+  'files-imports.workbook-unapproved-link',
+] as const satisfies readonly ErrorCode[];
+
 /** The codes every read of access records and history can answer (access-and-approvals 7.1). */
 const HISTORY_CODES = [
   'access.not-signed-in',
@@ -1657,7 +1669,14 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: importFileStoredSchema,
-    codes: [...PREPARE_CODES, 'files-imports.type-not-allowed', 'files-imports.file-store-not-configured'],
+    codes: [
+      ...PREPARE_CODES,
+      'files-imports.type-not-allowed',
+      ...WORKBOOK_READ_CODES,
+      'files-imports.customer-contact-columns',
+      'files-imports.layout-needed-on-test-setup',
+      'files-imports.file-store-not-configured',
+    ],
   }),
   listImportLayouts: defineRoute({
     method: 'GET',
@@ -1740,7 +1759,7 @@ export const routes = {
     codes: [
       ...HISTORY_CODES,
       'files-imports.import-file-not-found',
-      'files-imports.file-unreadable',
+      ...WORKBOOK_READ_CODES,
       'files-imports.file-store-not-configured',
     ],
   }),
@@ -1757,7 +1776,7 @@ export const routes = {
     codes: [
       ...PREPARE_CODES,
       'files-imports.import-file-not-found',
-      'files-imports.file-unreadable',
+      ...WORKBOOK_READ_CODES,
       'files-imports.layout-not-found',
       'files-imports.layout-not-matched',
       'files-imports.layout-version-rejected',
@@ -1905,7 +1924,6 @@ export const routes = {
       ...PREPARE_CODES,
       'files-imports.batch-not-found',
       'files-imports.batch-not-validated',
-      'files-imports.publishing-limited',
       'files-imports.review-missing',
       'files-imports.version-not-confirmed',
       'files-imports.counts-do-not-close',

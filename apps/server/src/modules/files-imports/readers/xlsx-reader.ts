@@ -6,7 +6,11 @@ import type { CellType, Grid, GridCell, GridNote, GridRow, GridSheet, SheetState
 // is read by its cached value only), runs no macro and follows no link: a hyperlink is kept as its text, inert
 // (PRD-SEC-011; GC6-17). Errors stay errors (J-1). A cell it cannot read is noted and the file goes on (A-11).
 
-export type XlsxRead = { readonly kind: 'read'; readonly grid: Grid } | { readonly kind: 'unreadable' };
+export type XlsxRead =
+  { readonly kind: 'read'; readonly grid: Grid } | { readonly kind: 'unreadable' } | { readonly kind: 'too-many-rows' };
+
+/** Thrown inside a sheet's walk when the rows read pass the row cap, so the walk stops there. */
+class TooManyRows extends Error {}
 
 const SHEET_STATES: Readonly<Record<string, SheetState>> = {
   visible: 'visible',
@@ -66,9 +70,16 @@ function cellRead(value: ExcelJS.CellValue): Read | 'no-cache' | undefined {
   return undefined;
 }
 
-function sheetOf(worksheet: ExcelJS.Worksheet, position: number, notes: GridNote[]): GridSheet {
+function sheetOf(
+  worksheet: ExcelJS.Worksheet,
+  position: number,
+  notes: GridNote[],
+  budget: { rowsLeft: number },
+): GridSheet {
   const rows: GridRow[] = [];
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    budget.rowsLeft -= 1;
+    if (budget.rowsLeft < 0) throw new TooManyRows();
     const cells: GridCell[] = [];
     row.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
       // A merged cell's followers repeat the master's value; the master alone holds it (9.1).
@@ -91,8 +102,12 @@ function sheetOf(worksheet: ExcelJS.Worksheet, position: number, notes: GridNote
   return { name: worksheet.name, position, state: SHEET_STATES[worksheet.state] ?? 'visible', rows };
 }
 
-/** Reads an XLSX workbook into the neutral grid, or answers unreadable when it cannot be opened. */
-export async function readXlsx(bytes: Buffer): Promise<XlsxRead> {
+/**
+ * Reads an XLSX workbook into the neutral grid, or answers unreadable when it cannot be opened. With `maxRows`, the
+ * rows holding a cell, of every sheet together, are counted, and a workbook with more is answered `too-many-rows`,
+ * never read in part (9.3; S1-F06-T02).
+ */
+export async function readXlsx(bytes: Buffer, options: { readonly maxRows?: number } = {}): Promise<XlsxRead> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(bytes as unknown as ArrayBuffer);
@@ -100,6 +115,12 @@ export async function readXlsx(bytes: Buffer): Promise<XlsxRead> {
     return { kind: 'unreadable' };
   }
   const notes: GridNote[] = [];
-  const sheets = workbook.worksheets.map((worksheet, index) => sheetOf(worksheet, index + 1, notes));
-  return { kind: 'read', grid: { sheets, notes } };
+  const budget = { rowsLeft: options.maxRows ?? Number.POSITIVE_INFINITY };
+  try {
+    const sheets = workbook.worksheets.map((worksheet, index) => sheetOf(worksheet, index + 1, notes, budget));
+    return { kind: 'read', grid: { sheets, notes } };
+  } catch (error) {
+    if (error instanceof TooManyRows) return { kind: 'too-many-rows' };
+    throw error;
+  }
 }

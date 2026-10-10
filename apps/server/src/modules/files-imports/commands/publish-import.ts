@@ -3,7 +3,6 @@ import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
-  ApiRefusal,
   LOCK_STEP,
   lockTable,
   UNIQUE_VIOLATION,
@@ -20,7 +19,6 @@ import type { ImportHandler } from '../contracts/import-handlers.js';
 import { importBatch, importDocument, importOutcome, stagedValueEntry } from '../db/schema.js';
 import { importFailed, importPublished } from '../events.js';
 import type { DocumentResult, OutcomeDocument } from '../domain/outcome.js';
-import { publishLimitRefusal } from '../domain/publish-limit.js';
 import {
   BATCH_NOT_FOUND,
   documentsOf,
@@ -58,8 +56,10 @@ import { BATCH_LOCK, batchReplayAuthorisation } from './validate-import.js';
 // (PRD-INT-005; domain-model invariant 20): the document is marked published before its handler writes anything, and a
 // publish that loses the race on the index rolls back to its savepoint and is answered as a duplicate or a conflict.
 //
-// The publishing limit of S1-F06-T01 comes first: outside local work, tests and `dev`, Publish answers unavailable
-// naming the controls still missing, and writes nothing (product owner, 6 Oct 2026; PRD-SEC-017, PRD-UXP-003).
+// The publishing limit of S1-F06-T01 is lifted (S1-F06-T04 Notes): with intake refusals and caps (S1-F06-T02),
+// confirmed layouts with the validation report (S1-F06-T03) and duplicate control built, Publish outside local work,
+// tests and `dev` depends only on those controls and on the other gates in force. It enables no real data: real masters
+// on `kdps-test` still need KDPS's agreement (RR-180, D-4) and the confirmers of RR-197.
 //
 // Publish needs the review (3.1 step 8, 6.4, 13.1; S1-F06-T03): the batch version submitted, its layout and mapping
 // versions Confirmed, and, where the handler requires an approval in `access`, a decision of that exact version,
@@ -428,10 +428,6 @@ export async function publishImport(
   deps: ImportDependencies,
   input: PublishInput,
 ): Promise<IdempotentAnswer<JsonValue>> {
-  const limited = publishLimitRefusal(deps.environment.name);
-  if (limited !== undefined) {
-    throw new ApiRefusal({ kind: limited.kind, code: limited.code, missing: [...limited.missing] });
-  }
   const header = (commandName: string) => ({
     commandName,
     organisation: input.actor.organisation,

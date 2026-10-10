@@ -553,8 +553,12 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(await rows(1, 'select id from files_imports.import_batch')).toEqual([]);
   });
 
-  it('PRD-SEC-017 PRD-UXP-003: on kdps-test Publish answers unavailable naming the missing controls, and writes nothing', async () => {
-    const bytes = await syntheticProductWorkbook([productRow(next('STYLE'), next('SKU'))], next('LIMIT'));
+  it('S1-F06-T04 Notes: with the controls of S1-F06-T02, T03 and T04 built, Publish on kdps-test depends only on them and the other gates in force', async () => {
+    // The publishing limit of S1-F06-T01 is lifted: it names no missing control and refuses nothing. The batch still
+    // needs its review and Confirmed versions, and duplicate control holds (13.1, 7.2). Lifting it enables no real
+    // data: real masters on kdps-test still need KDPS's agreement (RR-180, D-4) and the confirmers of RR-197.
+    const style = next('STYLE');
+    const bytes = await syntheticProductWorkbook([productRow(style, next('SKU'))], next('LIMIT'));
     const stored = importFileStoredSchema.parse(
       (await upload(preparer.cookie, bytes, syntheticProductFileName('limit'))).body,
     );
@@ -562,26 +566,19 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect((await call('POST', `/api/files-imports/batches/${batchId}/validate`, preparer.cookie)).body).toMatchObject({
       state: 'Validated',
     });
-    const limitedUser = await signedIn(0, 'LIMITED', IMPORTER, { fieldClasses: ALL_CLASSES, app: limitedApi });
-    const proposalsBefore = await rows(0, 'select id from merchandise.product_proposal');
-    const answer = await call(
-      'POST',
-      `/api/files-imports/batches/${batchId}/publish`,
-      limitedUser.cookie,
-      { versionId: batchId },
-      limitedApi,
+    const read = importBatchReadSchema.parse(
+      (await call('GET', `/api/files-imports/batches/${batchId}`, preparer.cookie)).body,
     );
-    expect(answer.status).toBe(403);
-    expect(errorOf(answer)).toMatchObject({
-      kind: 'unavailable',
-      code: 'files-imports.publishing-limited',
-      // S1-F06-T03 and S1-F06-T04 are built; the limit stays while S1-F06-T02 is not.
-      missing: [{ kind: 'publishing-control', control: 'intake-refusals-and-caps', ticket: 'S1-F06-T02' }],
-    });
-    expect(await rows(0, 'select id from merchandise.product_proposal')).toEqual(proposalsBefore);
-    expect(await rows(0, 'select id from files_imports.import_outcome where batch_id = $1', [batchId])).toEqual([]);
-    expect(await rows(0, 'select state from files_imports.import_batch where id = $1', [batchId])).toEqual([
-      { state: 'Validated' },
-    ]);
+    const limitedUser = await signedIn(0, 'LIMITED', IMPORTER, { fieldClasses: ALL_CLASSES, app: limitedApi });
+    const path = `/api/files-imports/batches/${batchId}/publish`;
+    const unreviewed = await call('POST', path, limitedUser.cookie, { versionId: read.batch.versionId }, limitedApi);
+    expect(errorOf(unreviewed)).toMatchObject({ kind: 'refused', code: 'files-imports.review-missing' });
+    expect((await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie)).status).toBe(200);
+    const answer = await call('POST', path, limitedUser.cookie, { versionId: read.batch.versionId }, limitedApi);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toMatchObject({ batchId, state: 'Published', result: 'published' });
+    expect(
+      await rows(0, `select id from merchandise.product_proposal where proposal -> 'style' ->> 'code' = $1`, [style]),
+    ).toHaveLength(1);
   });
 });
