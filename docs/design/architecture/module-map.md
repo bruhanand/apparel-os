@@ -432,7 +432,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 ### 4.14 `finance` · books and tax rules
 
-**Uses:** `access`, `configuration`, `audit`, `numbering`, `organisation`, `exceptions`, `kernel`.
+**Uses:** `access`, `configuration`, `audit`, `numbering`, `organisation`, `exceptions`, `files-imports` (the CA's evidence as stored files, books-and-posting 6.3; S1-F09-T04), `kernel`.
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |

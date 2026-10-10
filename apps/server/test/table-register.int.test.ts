@@ -19,6 +19,7 @@ import * as numberingTables from '../src/modules/numbering/db/schema.js';
 import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/modules/audit/db/schema.js';
 import * as configurationTables from '../src/modules/configuration/db/schema.js';
 import * as siteLifecycleTables from '../src/modules/site-lifecycle/db/schema.js';
+import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
@@ -639,3 +640,12 @@ async function expectDefinitionMatches(database: string, table: Parameters<typeo
     .sort((a, b) => a.column_name.localeCompare(b.column_name));
   expect(columns, config.name).toEqual(defined);
 }
+
+describe('the Drizzle definitions of finance · tax rules (code-house-rules 3.4, 10.4; S1-F09-T04)', () => {
+  it.each(Object.entries(taxRulesTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
+});

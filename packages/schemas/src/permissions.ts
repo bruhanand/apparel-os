@@ -290,6 +290,15 @@ const siteLifecycleRecordTypes = [
   declare('site_lifecycle.zero_stock_declaration', ['view', 'create'], PLACE),
 ] as const;
 
+/**
+ * `finance` · tax rules (shared-calculations 10; module-map 4.14; S1-F09-T04). One record type for every tax-rule
+ * record, classifications, rate rules, registration applicability, the price basis and rounding rules: Accounts
+ * prepare them (create a record with its first version, edit a later version) and a different Accounts user decides
+ * them with the CA's evidence (approve), as posting maps are (books-and-posting 6.3, GC4-2; POL-10.05; DEC-116). They
+ * belong to the Organisation as a whole, so they carry no scope fact. Who holds them is KDPS's (V-01).
+ */
+const financeTaxRulesRecordTypes = [declare('finance.tax_rule', PREPARED, NONE)] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -303,6 +312,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...merchandiseRecordTypes,
   ...configurationRecordTypes,
   ...siteLifecycleRecordTypes,
+  ...financeTaxRulesRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -317,7 +327,8 @@ export type RecordTypeCode =
   | (typeof exceptionsRecordTypes)[number]['code']
   | (typeof merchandiseRecordTypes)[number]['code']
   | (typeof configurationRecordTypes)[number]['code']
-  | (typeof siteLifecycleRecordTypes)[number]['code'];
+  | (typeof siteLifecycleRecordTypes)[number]['code']
+  | (typeof financeTaxRulesRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

@@ -11,6 +11,7 @@ export {
   type RoundingRule,
   type TaxRoundingRule,
   ROUNDING_MODES,
+  assertRoundingRule,
   roundByRule,
   roundToInteger,
 } from './numbers/rounding.js';

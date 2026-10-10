@@ -52,6 +52,7 @@ import {
   type LocationInUse,
 } from './modules/organisation/index.js';
 import { LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
+import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
 
 /** The approval rules and decision effects of several modules, as one (access-and-approvals 9.8b). */
 function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals {
@@ -91,6 +92,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           catalogueApprovals(audit),
           // Bank-detail changes and agreement versions (structure-and-masters 5.1, 5.2; S1-F03-T03).
           partiesApprovals(audit),
+          // Tax-rule versions, decided by a different Accounts user with the CA's evidence (shared-calculations 10.1;
+          // S1-F09-T04).
+          taxRulesApprovals(audit),
           // A Site's shared readiness and an activity's approval, which writes the grant into configuration with the
           // one writer of grants, claimed here for it (module-map 4.4, 4.16; S1-F04-T02).
           siteLifecycleApprovals({
@@ -156,6 +160,8 @@ export class ModuleApprovalsModule {}
     CatalogueModule,
     PartiesModule,
     StockLedgerModule,
+    // The tax-rule records the calculations read (shared-calculations 10; S1-F09-T04).
+    TaxRulesModule,
     // Readiness checks and unit activation (module-map 4.16; S1-F04-T02).
     SiteLifecycleModule,
   ],

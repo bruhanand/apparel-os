@@ -522,3 +522,6 @@ export * from './products.js';
 // Policy readiness and the Available check (module-map 4.4; S1-F04-T01).
 export * from './policy-readiness.js';
 export * from './site-lifecycle.js';
+
+// The tax rules part of finance (shared-calculations 10; S1-F09-T04).
+export * from './tax-rules.js';

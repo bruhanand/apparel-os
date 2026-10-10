@@ -230,6 +230,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@apparel-os/calculations':
+        specifier: workspace:*
+        version: link:../../packages/calculations
       '@apparel-os/domain':
         specifier: workspace:*
         version: link:../../packages/domain

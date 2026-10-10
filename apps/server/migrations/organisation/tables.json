@@ -1494,6 +1494,110 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "module-map 4.16; domain-model 3.6; code-house-rules 7.1; PRD-LIF-001",
       "why": "Readiness is about the structure, which belongs to the Organisation as a whole: its records carry the Site's place as their scope facts and Authorise on their record type decides (structure-and-masters 6.1; access-and-approvals 5.3); only site-lifecycle code reads them"
+    },
+    {
+      "table": "finance.goods_classification",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.1, 8.2",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.goods_classification_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.3, 12.14",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.tax_rate_rule",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.1, 8.2",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.tax_rate_rule_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 3.3, 7.3, 12.14",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.tax_rate_slab",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "shared-calculations 10.3; code-house-rules 3.3, 7.1, 7.3",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.registration_tax_applicability",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.1, 8.2",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.registration_tax_applicability_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.3, 12.14",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.registration_tax_component",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "shared-calculations 10.3; code-house-rules 3.3, 7.1, 7.3",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.price_basis",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.1, 8.2",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.price_basis_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "shared-calculations 10.1, 10.3; code-house-rules 7.3, 12.14",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.rounding_rule",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "shared-calculations 3.3, 10.3; code-house-rules 7.1, 8.2",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.rounding_rule_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "shared-calculations 3.3, 10.3; code-house-rules 7.3, 12.14",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.tax_rule_ca_evidence",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "shared-calculations 10.1; books-and-posting 6.3; code-house-rules 7.1",
+      "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
     }
   ]
 }

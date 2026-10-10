@@ -649,6 +649,41 @@ function merchandisePartiesCodes() {
   } as const;
 }
 
+/**
+ * The codes of `finance` · tax rules (shared-calculations 3.3, 10; S1-F09-T04). A refusal names what blocks it
+ * (PRD-UXP-003).
+ *
+ * - `finance.code-taken`: a classification already has that HSN code (10.3).
+ * - `finance.record-not-found`: a record or version the change names does not exist.
+ * - `finance.starts-in-past`: a version never starts on a past date (structure-and-masters 2.2; GC2-7, DEC-105).
+ * - `finance.version-overlaps`: another approved version of the record starts on the same date (10.1, 10.3).
+ * - `finance.reference-not-in-force`: the classification a rate rule names has no approved version in force, not
+ *   retired, on the rule's start (10.1).
+ * - `finance.tax-registration-not-found`: no tax registration of `organisation` has that identifier (10.1).
+ * - `finance.rate-rule-invalid`: a rate is not an exact decimal, or the slabs are none, do not start at zero or do not
+ *   rise by lower bound (10.3).
+ * - `finance.shares-invalid`: a registration that charges tax has component shares that do not add up to one, or one
+ *   that charges none has components (10.1; GC7-8).
+ * - `finance.rounding-unit-not-positive`: a rounding rule's unit is not whole paise above zero (3.3, 10.3).
+ * - `finance.rounding-level-invalid`: a level on a discount or bill rule, or none on a tax rule (3.3, 10.3).
+ * - `finance.ca-evidence-missing`: the version has no CA evidence attached or referenced (10.1; POL-10.05; GC4-2).
+ * - `finance.version-not-awaiting`: CA evidence is recorded only for a version awaiting approval.
+ */
+export const financeTaxRulesCodes = declareCodes({
+  'finance.code-taken': 'refused',
+  'finance.record-not-found': 'not-found',
+  'finance.starts-in-past': 'refused',
+  'finance.version-overlaps': 'refused',
+  'finance.reference-not-in-force': 'refused',
+  'finance.tax-registration-not-found': 'not-found',
+  'finance.rate-rule-invalid': 'refused',
+  'finance.shares-invalid': 'refused',
+  'finance.rounding-unit-not-positive': 'refused',
+  'finance.rounding-level-invalid': 'refused',
+  'finance.ca-evidence-missing': 'refused',
+  'finance.version-not-awaiting': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -665,6 +700,7 @@ export const errorCodes = {
   ...merchandiseCodes,
   ...configurationCodes,
   ...siteLifecycleCodes,
+  ...financeTaxRulesCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
