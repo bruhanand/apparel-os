@@ -80,6 +80,10 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'stock.sites_holding_stock',
     // stock-ledger 14.1, 14.3: the recheck of holds and freezes the actor cannot see, SECURITY DEFINER (DEC-117).
     'stock.recheck_hidden',
+    // stock-ledger 14.3 "Pool admission": whether the transaction names a pool, and, SECURITY DEFINER, whether it
+    // names the pool of a layer or a valuation row (S1-F10-T07).
+    'stock.pool_admitted',
+    'stock.pool_row_admitted',
   ],
 };
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";

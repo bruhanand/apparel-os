@@ -5,6 +5,7 @@ import {
   type CatalogueChanged,
   type CostFormula,
   type CostPoolMode,
+  type PlaceMember,
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
@@ -308,6 +309,44 @@ export class StockHarness extends ValuedWorld {
     );
     this.checker = { user: checker, roleAssignmentId: checking.assignmentId };
     await this.limits(checking.roleId);
+  }
+
+  /**
+   * A person who posts the driver's steps within a place scope only, such as a seller of one Store (S1-F10-T07):
+   * create and view on the driver's document, and view on every stock record type, over the places given.
+   */
+  async scopedPoster(label: string, members: readonly PlaceMember[]): Promise<Actor> {
+    const user = await this.enrolled(label);
+    const granted = await grantSynthetic(
+      this.database,
+      { kind: 'user', id: user.id },
+      [
+        ...permissionRegistry
+          .filter((declaration) => declaration.code.startsWith('stock.'))
+          .map((declaration) => ({ recordType: declaration.code, action: 'view' as const })),
+        { recordType: HARNESS_DOCUMENT_TYPE, action: 'view' },
+        { recordType: HARNESS_DOCUMENT_TYPE, action: 'create' },
+      ],
+      {
+        registry: this.registry,
+        scope: {
+          kind: 'dimensions',
+          legalEntity: { kind: 'all' },
+          place: { kind: 'selected', members: [...members] },
+          brand: { kind: 'all' },
+        },
+      },
+    );
+    return { user, roleAssignmentId: granted.assignmentId };
+  }
+
+  /** The Store a unit belongs to, as `organisation` maps it today, or none. */
+  async storeOf(businessUnitId: string): Promise<string | null> {
+    const unit = await this.setup.run(this.setup.preparer.id, (c) =>
+      this.setup.organisation.mappingOn(c, businessUnitId, this.setup.today()),
+    );
+    if (unit.kind !== 'success') throw new Error(`no mapping: ${unit.refusal.code}`);
+    return unit.answer.storeId;
   }
 
   private enrolled(label: string): Promise<SyntheticUser> {
@@ -703,7 +742,7 @@ export class StockHarness extends ValuedWorld {
   /**
    * One step sent once under a new idempotency key, which answers whether it was written or refused (13.1); a
    * refusal rolled the whole command back, so the document stays as it was (SL-23 Outcome A). `importKind` names the
-   * import the source carries, none by default (13.2).
+   * import the source carries, none by default (13.2); `as` the person who sends it, the preparer by default.
    */
   async send(
     document: HarnessDocument,
@@ -712,6 +751,7 @@ export class StockHarness extends ValuedWorld {
     items: readonly LedgerItem[],
     approval?: { readonly decisionId: string; readonly actionType: string },
     importKind: ImportKind = 'none',
+    as: Actor = this.preparer,
   ): Promise<StepSent> {
     const key = uuidv7();
     const source = {
@@ -734,7 +774,7 @@ export class StockHarness extends ValuedWorld {
           commandName: `${HARNESS_MODULE}.${document.kind}.${name}`,
           organisation: this.routed,
           correlationId: newCorrelationId(),
-          actor: { kind: 'actor', actorId: this.preparer.user.id },
+          actor: { kind: 'actor', actorId: as.user.id },
         },
         {
           key,
@@ -742,7 +782,7 @@ export class StockHarness extends ValuedWorld {
           authoriseReplay: () => Promise.resolve({ kind: 'allowed' as const }),
           work: async (context) => {
             try {
-              written = await this.postIn(context, this.preparer, items, {
+              written = await this.postIn(context, as, items, {
                 source,
                 documentType: HARNESS_DOCUMENT_TYPE,
                 ...(approval === undefined ? {} : { approval }),

@@ -25,6 +25,7 @@ import {
   type StepSent,
   type StockHarness,
 } from './harness.js';
+import type { Actor } from '../../support/stock-ledger.js';
 
 // The scenario files of the stock harness and their runner (S1-F10 spec 3.4, 3.5; stock-ledger 15.1). A file is one
 // scenario under one combination, in the style of the shared golden cases (shared-calculations 12.1): `synthetic`, the
@@ -226,7 +227,7 @@ interface Receipt {
 }
 
 /** A step to send again after its refusal (10 step 5): its document, its items and its approval as they stayed. */
-interface Pending {
+export interface Pending {
   readonly document: HarnessDocument;
   readonly name: string;
   readonly transition: { readonly from: string; readonly to: string };
@@ -273,6 +274,90 @@ interface RunState {
 
 let pieceNumber = 0;
 
+function placesOf(fixtures: HarnessFixtures): Record<PlaceName, At> {
+  return { W1: fixtures.w1, S1: fixtures.s1, S1B: fixtures.s1b };
+}
+
+function newRunState(): RunState {
+  return {
+    receipts: new Map(),
+    ptRevisions: new Map(),
+    transfers: new Map(),
+    sales: new Map(),
+    returns: new Map(),
+    damages: new Map(),
+    counts: new Map(),
+    originNames: new Map(),
+    pending: new Map(),
+  };
+}
+
+/**
+ * Scenario commands run one at a time, with no file's expectations, for the failure, concurrency and isolation suites
+ * (S1-F10-T07; S1-F10 spec 3.6): a command's step is prepared (its document, approval and items), then sent, by the
+ * preparer or another actor, as often and as concurrently as the test needs.
+ */
+export class ScenarioRun {
+  readonly places: Record<PlaceName, At>;
+  private readonly state = newRunState();
+
+  constructor(
+    readonly harness: StockHarness,
+    readonly fixtures: HarnessFixtures,
+    readonly pieceTracked: boolean,
+  ) {
+    this.places = placesOf(fixtures);
+  }
+
+  /** Prepares a command's document, approval and items, sending nothing (S1-F10 spec 3.2). */
+  prepared(command: ScenarioStepCommand): Promise<Pending> {
+    return plan(this.harness, this.fixtures, this.places, this.state, command, this.pieceTracked);
+  }
+
+  /** Sends a prepared step once, under a new key, as the actor given or the preparer (13.1). */
+  async send(pending: Pending, as?: Actor): Promise<StepSent> {
+    const sent = await this.harness.send(
+      pending.document,
+      pending.name,
+      pending.transition,
+      pending.items,
+      pending.approval,
+      pending.importKind,
+      as,
+    );
+    if (sent.kind === 'written') pending.after?.(sent);
+    return sent;
+  }
+
+  /** Prepares and sends a command; a housekeeping command (a lock, a reopening, a map) posts nothing. */
+  async do(command: ScenarioStepCommand, as?: Actor): Promise<StepSent | undefined> {
+    if (await housekeeping(this.harness, this.fixtures, this.state, command)) return undefined;
+    return this.send(await this.prepared(command), as);
+  }
+
+  /** Prepares and sends a command that must be written. */
+  async done(command: ScenarioStepCommand, as?: Actor): Promise<StepSent & { kind: 'written' }> {
+    const sent = await this.do(command, as);
+    if (sent?.kind !== 'written') throw new Error(`${command.command} refused: ${JSON.stringify(sent)}`);
+    return sent;
+  }
+
+  /** The piece codes a set names (`R1:0-3`). */
+  pieces(set: PieceSet): string[] {
+    return piecesOf(this.state, set);
+  }
+
+  /** A receipt's origin, by its name. */
+  originOf(receipt: string): string {
+    return named(this.state.receipts, receipt).originId;
+  }
+
+  /** A sale's movement, by its name. */
+  saleMovementOf(sale: string): string | undefined {
+    return named(this.state.sales, sale).movementId;
+  }
+}
+
 /**
  * Runs a scenario through the driver in its own fixtures (S1-F10 spec 3.4, 3.5): each command posts, then its movement
  * kinds and journals are compared with the file, the checks of 3.5 run, and the same request sent again under its key
@@ -287,18 +372,8 @@ export async function runScenario(harness: StockHarness, scenario: Scenario): Pr
     batch: scenario.sku.batch ?? false,
     ...(scenario.withoutMaps === undefined ? {} : { maps: kinds }),
   });
-  const places: Record<PlaceName, At> = { W1: fixtures.w1, S1: fixtures.s1, S1B: fixtures.s1b };
-  const state: RunState = {
-    receipts: new Map(),
-    ptRevisions: new Map(),
-    transfers: new Map(),
-    sales: new Map(),
-    returns: new Map(),
-    damages: new Map(),
-    counts: new Map(),
-    originNames: new Map(),
-    pending: new Map(),
-  };
+  const places = placesOf(fixtures);
+  const state = newRunState();
   const actorId = harness.preparer.user.id;
   for (const step of scenario.steps) {
     for (const command of step.commands) {

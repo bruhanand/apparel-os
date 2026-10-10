@@ -166,6 +166,11 @@ export async function lockPlan(
     extra[5],
   );
 
+  // A target of steps 2 to 5 not locked, hidden or missing, refuses the request at Recheck (13.9): nothing of step 6
+  // is created or admitted for it.
+  if (missing.length > 0) return { plan, skuBalanceIds, poolIds: [], transitIds: [], missing };
+  await admitPools(context, plan);
+
   // Step 6 (10.3; SL-24): a missing pool or transit value is created empty, a new pool taking its formula, pool mode
   // and cost-setting version from the cost setting read at Plan (14.2); then every pool and transit value is locked in
   // one call.
@@ -249,4 +254,20 @@ export async function lockPlan(
     extra[6],
   );
   return { plan, skuBalanceIds, poolIds: [...poolIds], transitIds: [...transitIds], missing };
+}
+
+/**
+ * The pool admission of 14.3 (code-house-rules 6.2; migration 0057): names, for the rest of the transaction, each pool
+ * the request's items reach, so a poster whose scope covers the items' places but not the pool, such as a seller of
+ * one Store under a book or Site pool (SL-25 (c), (e)), can lock, value and write it. Called only once steps 2 to 5
+ * have locked every row of the items' own places, which row-level security admits only within the actor's scope. It
+ * adds to what an earlier request of the same command named.
+ */
+async function admitPools(context: TransactionContext, plan: LedgerPlan): Promise<void> {
+  const keys = [...plan.pools.values()].map((pool) => `${pool.bookId}:${pool.skuId}:${pool.siteId ?? '-'}`);
+  if (keys.length === 0) return;
+  await context.tx.execute(sql`
+    select pg_catalog.set_config('aos.admitted_pools',
+      concat_ws(',', nullif(pg_catalog.current_setting('aos.admitted_pools', true), ''), ${keys.join(',')}::text),
+      true)`);
 }
