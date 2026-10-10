@@ -1,6 +1,6 @@
 # S1-F04-T01 — Policy readiness and the Available check
 
-Status: blocked
+Status: done
 Blocked by: S1-F01-T13, S1-F01-T16, S1-F06-T05 (stored files, for signature and validation evidence)
 Feature: [S1-F04 Policy readiness and Site activation](../../spec.md)
 
@@ -43,3 +43,5 @@ Policy status, validation, capability controls, validity-check registration, act
 - Beyond the ticket: the `checkAvailability` read route, for screens to show a gated action before it is pressed; `access`'s security-settings validity check (policy 2's values), which carries RR-252 and RR-401; a validation stops covering changed values (RR-478).
 - Open: RR-293 (no route asks Available until the first gated operation, S1-F13), RR-478, RR-479 (no second-person approval on Signed, validation or capability), RR-480 (the other modules' validity checks and the setup step's origin check), RR-481 (no stage 1 screen holds a gated action, so the journey checks the banner on Policy readiness), RR-449 (no screen defines formats or series) and RR-334 (the general settings screen) are left.
 - Review fixes (10 Oct 2026, branch `s1/f04-review-fixes`): `AOS_ENVIRONMENT` read at start through the kernel's one definition, shared with the test sign-in, and required (`local`, `dev` or `kdps-test`; anything else stops the server); `access`'s origin check required; an operation naming an unregistered check refused at start; a validation covers each value's identity and version, locks what a change of the values locks, and is refused for a policy no module reports values for (RR-480, fail closed); the activity grant writer claimed once by the composition root and every grant naming its decision; typed policy number and origin columns. RR-478 and RR-479 answered by the product owner and closed.
+- Closed 10 Oct 2026 on `s1/f04-policy-readiness`, reviewed with `/code-review` with the feature's other ticket; review fixes `f25ea9d`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): the `checkAvailability` read route; an `access` validity check for the essential security settings (policy 2), which carries RR-252 and RR-401; a validation lapses when its values change (RR-478, approved); the kernel's single `AOS_ENVIRONMENT` definition (review fix); `policyNumberOf` in schemas.

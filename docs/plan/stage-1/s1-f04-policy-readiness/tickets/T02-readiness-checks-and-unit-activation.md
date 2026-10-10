@@ -1,6 +1,6 @@
 # S1-F04-T02 — Readiness checks and unit activation
 
-Status: blocked
+Status: done
 Blocked by: S1-F04-T01, S1-F02-T02, S1-F03-T02
 Feature: [S1-F04 Policy readiness and Site activation](../../spec.md)
 
@@ -47,3 +47,5 @@ The stock-plan check reads an approved, unpublished opening-data batch for the u
 - Beyond the ticket: refusing to ask for or approve an activity a unit already holds (`site-lifecycle.activity-already-granted`); the `OpeningPlans` read left as an optional dependency for S1-F13-T01 (RR-485).
 - Open: RR-482, RR-483 (product owner), RR-484, RR-485 (builders); who holds readiness and activity approval stays OPEN (MM-8; KDPS Owner question 49; RR-057).
 - Review fixes (10 Oct 2026, branch `s1/f04-review-fixes`): shared Site readiness is its own run, per Site and activity, approved by a second person (`site_lifecycle.site_readiness.approve`); each unit's run needs its Site ready (the site-readiness check), rechecked under the unit decision's lock; the zero declaration is refused while the stock ledger holds stock at the unit, rechecked at every run, named on the run and shown on the approval panel (`readReadinessRecord`); the effect refuses the person who ran the checks again; the activation's time is the command's clock. The journey makes the Site ready first, then the unit. It still ends at "Active here", since no receiving operation exists yet (RR-481). RR-482 and RR-483 answered by the product owner and closed.
+- Closed 10 Oct 2026 on `s1/f04-policy-readiness`, reviewed with `/code-review` with the feature's other ticket; review fixes `f25ea9d`; no blocking finding left.
+- Beyond the ticket (logged at the product owner's request): the `site-lifecycle.activity-already-granted` refusal; an optional `OpeningPlans` dependency for S1-F13-T01; Site opening and closure in Operations' menu; review fixes: Site readiness per Site and activity (product owner, 10 Oct 2026), the `runSiteReadinessChecks` and `readReadinessRecord` routes, `organisation` queries `siteExists` and `unitLocationIds`, an `approval_decision_id` on activity grants.
