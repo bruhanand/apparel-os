@@ -16,6 +16,9 @@ import { mappingChanged } from './modules/organisation/index.js';
 import { posConsumers } from './modules/pos/index.js';
 import { composedNumbering } from './numbered-kinds.js';
 
+/** `numbering` with every declared kind, handed to the consumers and job kinds that number (module-map section 3, rule 6). */
+const numbering = composedNumbering();
+
 /**
  * Everything the worker runs (code-house-rules 12.8, 12.9): the event types the units declare, their consumers and
  * the job kinds, each from its unit's `jobs/` folder. Stage 1 so far: the audit job kinds (RR-241), the rebuild of
@@ -28,9 +31,9 @@ import { composedNumbering } from './numbered-kinds.js';
 export const jobRegistry: JobRegistry = {
   events: [approvalRequested, approvalDecided, assignmentChanged, sessionRevoked, jobFailed, mappingChanged],
   // `pos` defines a billing device's series when a unit's mapping changes (offline-counter 4.3; S1-F12-T02).
-  consumers: [...inboxConsumers, ...exceptionsConsumers, ...posConsumers(composedNumbering())],
+  consumers: [...inboxConsumers, ...exceptionsConsumers(numbering), ...posConsumers(numbering)],
   // The escalation of overdue tasks and approvals (access-and-approvals 11.3; S1-F05-T02).
-  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds, ...inboxJobKinds],
+  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds(numbering), ...inboxJobKinds],
 };
 
 /** The worker's composition root: the same build as the app, another start command (deployment.md section 2). */
