@@ -234,6 +234,21 @@ export interface SyntheticWorld {
     readonly periodCode: string;
     readonly periodId: string;
   };
+  /**
+   * The period close journey (S1-F09-T03): an Accounts user who locks and requests, a different one who approves, the
+   * approve reason, the SYNTHETIC book and periods as the screen names them, the correction a reopening names, and the
+   * harness of the server of the journeys that posts it, as the module owning it would.
+   */
+  readonly periodClose: {
+    readonly organisationCode: string;
+    readonly requester: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly bookOption: string;
+    readonly periodCodes: readonly string[];
+    readonly correction: { readonly module: string; readonly recordType: string; readonly recordId: string };
+    readonly harnessUrl: string;
+  };
   /** The approval journey's Organisation, made by the setup step, and its first two users (S1-F01-AT18). */
   readonly journey: {
     readonly organisationCode: string;

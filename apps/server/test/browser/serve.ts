@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
@@ -877,7 +878,129 @@ await postingInForce(
   });
   if (result.kind !== 'posted') throw new Error(`The synthetic journals were not posted: ${JSON.stringify(result)}`);
 }
-await postingFixture.close();
+// The period close journey (period-close.spec.ts; S1-F09-T03), in the posting Organisation: a SYNTHETIC book of its
+// own, so the posting maps journey's trial balance is untouched, with a warehouse unit at the posting Site mapped to
+// it, its accounts in force, two Open periods of ten days from today, its journal series and a map in force; and a
+// SYNTHETIC document that a reopening will name as its correction, posted mid-journey by the harness below, which
+// stands for the module that owns the document (DEC-112 H2). The fixture stays open for it until the server stops.
+const periodBookCode = syntheticCode('JOURNEY-CLOSE-BK');
+const periodBookName = syntheticName('Journey Period Close Book');
+const periodBook = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareAccountingBook(c, p, {
+    code: periodBookCode,
+    legalEntityId: postingEntity.recordId,
+    name: periodBookName,
+    validFrom: postingFixture.today(),
+  }),
+);
+const periodUnit = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareBusinessUnit(c, p, {
+    code: syntheticCode('JOURNEY-CLOSE-WAREHOUSE'),
+    name: syntheticName('Journey Period Close Warehouse'),
+    siteId: postingSite.recordId,
+    kind: 'warehouse',
+    legalEntityId: postingEntity.recordId,
+    taxRegistrationId: postingRegistration.recordId,
+    accountingBookId: periodBook.recordId,
+    validFrom: postingFixture.today(),
+  }),
+);
+const periodAccounts: Record<string, string> = {};
+for (const [code, nature] of [
+  ['SYN-CL-INV', 'asset'],
+  ['SYN-CL-PUR', 'liability'],
+] as const) {
+  const change = postingOutcome(
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.prepareAccount(c, p, {
+        bookId: periodBook.recordId,
+        code,
+        nature,
+        name: syntheticName(`Period close ${code}`),
+        validFrom: postingFixture.today(),
+      }),
+    ),
+  );
+  await postingInForce(change, 'finance.account');
+  periodAccounts[code] = change.recordId;
+}
+const periodCodes = [syntheticCode('JOURNEY-CLOSE-P1'), syntheticCode('JOURNEY-CLOSE-P2')] as const;
+for (const [index, code] of periodCodes.entries()) {
+  postingOutcome(
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.definePeriod(c, p, periodBook.recordId, {
+        code,
+        financialYear: syntheticCode('FY-JOURNEY'),
+        firstDay: postingFixture.day(index * 10),
+        lastDay: postingFixture.day(index * 10 + 9),
+      }),
+    ),
+  );
+}
+await postingFixture.run(postingFixture.preparer.id, async (c) => {
+  const series = await postingFixture.numbering.defineSeries(c, {
+    kind: JOURNAL_KIND.kind,
+    scopeKey: periodBook.recordId,
+    financialYear: syntheticCode('FY-JOURNEY'),
+    displayScopeKey: periodBook.recordId,
+    formatCode: syntheticCode('JOURNEY-JV'),
+  });
+  if (series.kind !== 'done') throw new Error(`The synthetic journal series was refused: ${series.refusal.code}`);
+});
+const periodLine = (component: string, side: 'debit' | 'credit', code: string) => ({
+  component,
+  side,
+  accountId: periodAccounts[code] ?? '',
+  requiresStore: false,
+  requiresBrand: false,
+});
+await postingInForce(
+  postingOutcome(
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.preparePostingMap(c, p, {
+        bookId: periodBook.recordId,
+        eventKind: POSTING_JOURNEY_KIND.kind,
+        origin: 'synthetic',
+        validFrom: postingFixture.today(),
+        lines: [
+          periodLine('to-pool', 'debit', 'SYN-CL-INV'),
+          periodLine('to-pool', 'credit', 'SYN-CL-PUR'),
+          periodLine('to-dispatch', 'debit', 'SYN-CL-INV'),
+          periodLine('to-dispatch', 'credit', 'SYN-CL-PUR'),
+        ],
+      }),
+    ),
+  ),
+  'finance.posting_map',
+);
+const periodCorrection = { module: 'test-synthetic', recordType: 'test-synthetic.document', recordId: uuidv7() };
+/** Posts the SYNTHETIC correction into the first period, as the module that owns it would (DEC-112 H2). */
+async function postPeriodCorrection(): Promise<string> {
+  const request = {
+    sourceModule: periodCorrection.module,
+    document: { recordType: periodCorrection.recordType, recordId: periodCorrection.recordId },
+    actor: { kind: 'user' as const, id: postingFixture.preparer.id },
+    items: [
+      {
+        itemKey: periodCorrection.recordId,
+        eventKind: POSTING_JOURNEY_KIND.kind,
+        businessUnitId: periodUnit.recordId,
+        brandId: null,
+        businessDate: postingFixture.today(),
+        components: [{ component: 'to-pool', amount: known(paise(25_000)) }],
+      },
+    ],
+  };
+  const result = await postingFixture.run(postingFixture.preparer.id, async (context) => {
+    const checks = await postingFixture.books.checkPostable(context, request);
+    if (checks.some((each) => each.kind === 'refused')) return { kind: 'refused' as const, checks };
+    const held = await postingFixture.books.holdPeriods(context, checks);
+    if (held.kind === 'refused') return { kind: 'refused' as const, refusal: held.refusal };
+    await context.lock(LOCK_STEP.numberSeries, held.seriesTargets);
+    return postingFixture.books.post(context, request);
+  });
+  return JSON.stringify(result);
+}
 // The posting maps journey's people (S1-F09-T02): an Accounts user who prepares a map version and attaches the CA's
 // evidence file, a different Accounts user who decides it from My work, and a reader of journals scoped to the one Store.
 const postingBookView = { recordType: 'organisation.accounting_book', action: 'view' as const };
@@ -934,6 +1057,42 @@ await grantSynthetic(
   },
 );
 const postingReasonId = await writeSyntheticReason(postingDatabase, 'approve');
+// The period close journey's people (S1-F09-T03): an Accounts user who locks the periods and requests a reopening,
+// holding approve too, so that the refusal of their own approval is for their request alone (PRD-LED-019), and a
+// different Accounts user who approves it from My work. SYNTHETIC grants: who may lock, request and approve is KDPS's
+// (V-01).
+const periodRequester = await postingUser('BROWSER-PERIOD-REQUESTER', [
+  postingBookView,
+  { recordType: 'finance.financial_period', action: 'view' },
+  { recordType: 'finance.financial_period', action: 'edit' },
+  { recordType: 'finance.period_reopening', action: 'view' },
+  { recordType: 'finance.period_reopening', action: 'create' },
+  { recordType: 'finance.period_reopening', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
+  postingBookView,
+  { recordType: 'finance.financial_period', action: 'view' },
+  { recordType: 'finance.period_reopening', action: 'view' },
+  { recordType: 'finance.period_reopening', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+// The harness the journey asks to post the correction (code-house-rules 11.4: test code, composed only here), on a
+// local port of its own beside the server of the journeys.
+const harnessPort = port + 11;
+const harness = createServer((request, response) => {
+  if (request.method !== 'POST' || request.url !== '/post-period-correction') {
+    response.writeHead(404).end();
+    return;
+  }
+  postPeriodCorrection().then(
+    (body) => response.writeHead(200, { 'content-type': 'application/json' }).end(body),
+    (error: unknown) => response.writeHead(500).end(String(error)),
+  );
+});
+await new Promise<void>((resolve) => harness.listen(harnessPort, '127.0.0.1', resolve));
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -1769,6 +1928,18 @@ writeFileSync(
       periodCode: syntheticCode('JOURNEY-P1'),
       periodId: postingPeriod.periodId,
     },
+    // S1-F09-T03: the period close journey's two Accounts users, the reason the approver gives, how the screen names
+    // the book and the periods, the correction a reopening names, and the harness that posts it.
+    periodClose: {
+      organisationCode: postingCode,
+      requester: credentialsOf(periodRequester),
+      approver: credentialsOf(periodApprover),
+      reasonId: postingReasonId,
+      bookOption: `${periodBookCode} · ${periodBookName}`,
+      periodCodes: [...periodCodes],
+      correction: periodCorrection,
+      harnessUrl: `http://127.0.0.1:${String(harnessPort)}/post-period-correction`,
+    },
     journey: {
       organisationCode: journeyCode,
       admin: {
@@ -1791,6 +1962,8 @@ async function stop(): Promise<void> {
   if (stopping) return;
   stopping = true;
   await worker.stop().catch(() => undefined);
+  harness.close();
+  await postingFixture.close().catch(() => undefined);
   await router.close().catch(() => undefined);
   await app.close().catch(() => undefined);
   await fileStore.stop().catch(() => undefined);

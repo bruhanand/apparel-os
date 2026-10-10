@@ -25,6 +25,10 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'scope' && isMessageId(fact) && (item.factCode ?? item.factId) !== undefined) {
     return t('missing.scope.named', { type: t(fact), code: item.factCode ?? item.factId ?? '' });
   }
+  // A Locked period a posting was refused for, by its code (books-and-posting 14; PRD-UXP-003; S1-F09-T03).
+  if (item.kind === 'financial-period' && item.code !== undefined) {
+    return t('missing.financial-period.named', { code: item.code });
+  }
   const gate = gateText(item) ?? readinessText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;

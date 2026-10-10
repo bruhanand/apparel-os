@@ -12,6 +12,7 @@ import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
 import { LedgerScreen } from './finance/LedgerScreen';
+import { PeriodCloseScreen } from './finance/PeriodCloseScreen';
 import { PostingMapsScreen } from './finance/PostingMapsScreen';
 import { GeographyScreen, OrganisationStructureScreen } from './organisation/StructureScreens';
 import { VocabulariesScreen } from './merchandise/VocabulariesScreen';
@@ -134,6 +135,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <PostingMapsScreen />;
     case 'money.internal-ledger':
       return <LedgerScreen />;
+    case 'money.period-close':
+      return <PeriodCloseScreen />;
     case 'setup.audit-log':
       return <AuditLogScreen grants={session.grants} />;
     default:

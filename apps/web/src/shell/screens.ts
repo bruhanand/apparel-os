@@ -101,6 +101,8 @@ export const screens = {
   'setup.posting-maps': { section: 'setup', path: '/setup/posting-maps', need: view('finance.posting_map') },
   // Money › Internal ledger and trial balance (books-and-posting 12, 14; ui-blueprint Money; S1-F09-T02).
   'money.internal-ledger': { section: 'money', path: '/money/internal-ledger', need: view('finance.journal') },
+  // Money › Period close (books-and-posting 4.2, 4.3, 14; ui-blueprint Money; S1-F09-T03).
+  'money.period-close': { section: 'money', path: '/money/period-close', need: view('finance.financial_period') },
   // Site opening and closure › Readiness (ui-blueprint Setup; module-map 4.16; S1-F04-T02).
   'setup.site-opening': {
     section: 'setup',
@@ -139,10 +141,11 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // Accounts verifies business-unit mappings on Setup › Organisation structure, the synthetic journey's choice; who
   // holds the verify permission is KDPS's (POL-10.08, V-01; S1-F02-T02). My work is open to every person without a
   // menu entry, as the blueprint lists none for Accounts.
-  // Its Money › Internal ledger and trial balance and Setup › Posting maps arrive with S1-F09-T02 (ui-blueprint).
+  // Its Money › Internal ledger and trial balance and Setup › Posting maps arrive with S1-F09-T02, Money › Period close
+  // with S1-F09-T03 (ui-blueprint).
   'P-ACC': {
     home: null,
-    menu: ['money.internal-ledger', 'setup.organisation-structure', 'setup.posting-maps'],
+    menu: ['money.internal-ledger', 'money.period-close', 'setup.organisation-structure', 'setup.posting-maps'],
   },
   'P-CHA': { home: null, menu: [] },
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.

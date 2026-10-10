@@ -2,6 +2,7 @@ import {
   ACTIVITY_APPROVAL,
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
+  PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
   SITE_READINESS_APPROVAL,
   VOCABULARY_CONFIRMATION,
@@ -348,6 +349,40 @@ function ReadinessFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A reopening of a Locked period as requested: its period, reason and named corrections, which the approval binds to
+ * (books-and-posting 4.3; PRD-LED-019, PRD-LED-020, PRD-ACS-007; S1-F09-T03).
+ */
+function ReopeningFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readReopening', { params: { reopeningId: view.document.recordId } }),
+    enabled: useViewable('finance.period_reopening'),
+  });
+  const read = query.data;
+  if (read === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="reopening.period">
+        {t('finance.period.option', {
+          code: read.period.code,
+          first: formatDate(read.period.firstDay),
+          last: formatDate(read.period.lastDay),
+        })}
+      </Fact>
+      <Fact label="reopening.reason">{read.reopening.reason}</Fact>
+      <Fact label="reopening.corrections">
+        <ul className="m-0 list-none p-0">
+          {read.reopening.corrections.map((each) => (
+            <li key={`${each.module}|${each.recordType}|${each.recordId}`} className="font-mono">
+              {each.module} · {each.recordType} · {each.recordId}
+            </li>
+          ))}
+        </ul>
+      </Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -376,6 +411,8 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     case SITE_READINESS_APPROVAL:
     case ACTIVITY_APPROVAL:
       return <ReadinessFacts view={view} />;
+    case PERIOD_REOPENING_APPROVAL:
+      return <ReopeningFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;
