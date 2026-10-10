@@ -7,7 +7,9 @@ import { answered, refused, type NumberedKind, type NumberingResult } from '../d
 // The two Organisation settings numbering keeps for the series it serves (numbering-and-audit 3.3, 3.5; module-map
 // 4.6; code-house-rules 12.14; S1-F12-T01): the financial years and the format each declared kind's new series take.
 // Neither has a default: the financial year's dates are OPEN (GC5-1, RR-060) and the bill-number format is OPEN (V-40,
-// RR-101; POL-10.07). The owning module has authorised the change; tests use labelled synthetic values.
+// RR-101; POL-10.07). The owning module has authorised the change; tests use labelled synthetic values. A year is
+// found by an explicit business date (PRD-MOD-009); years never overlap, and a series keeps the format version and
+// the year it was defined with (PRD-MOD-010).
 
 /** Where a setting's value came from (code-house-rules 12.14). */
 export type SettingOrigin = 'kdps' | 'test-setup' | 'synthetic';

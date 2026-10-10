@@ -907,7 +907,12 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: deviceChallengeSchema,
-    codes: ['access.sign-in-refused', 'kernel.cross-site-request'],
+    codes: [
+      'access.sign-in-refused',
+      'access.sign-in-slowed',
+      'access.sign-in-unavailable',
+      'kernel.cross-site-request',
+    ],
   }),
   // The signed-in user (access-and-approvals 3.3). Refused, naming the steps left, until first sign-in is done.
   session: defineRoute({

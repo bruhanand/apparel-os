@@ -283,6 +283,29 @@ describe('proving the device at sign-in (offline-counter 3.3, 3.4)', () => {
   });
 });
 
-// S1-F12-T02: the end of a device's life, its units, its series following a mapping change, and the devices readiness
-// check (offline-counter 3.5, 4.3, 4.4, 11, 12.1, 14.1 tests 3, 5, 6, 7, 8, 9 and 10; numbering-and-audit 7 test 4;
-// access-and-approvals 15 test 5). The format and year set above stay in force: every value is SYNTHETIC.
+describe('the one-time challenge, a route with no actor (offline-counter 3.3; access-and-approvals 3.1)', () => {
+  it('PRD-SEC-001 DEC-116 unused challenges from one source address are bounded as failed sign-ins are, by the throttling setting', async () => {
+    // The SYNTHETIC throttling setting of this file: 50 in 600 seconds. A challenge not yet used counts as an attempt
+    // not yet made good; a used one does not count, so a till that signs in is never slowed.
+    const address = '10.9.77.1';
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    const used = await w.challenge(address);
+    const signed = await w.signIn(w.cashier, {
+      deviceId: device.deviceId,
+      challengeId: used.challengeId,
+      signature: await device.key.sign('sign-in', device.deviceId, used.challenge),
+    });
+    expect(signed.status).toBe(200);
+    for (let issued = 0; issued < 50; issued += 1) await w.challenge(address);
+    const slowed = await w.post(
+      undefined,
+      '/api/access/device-challenges',
+      { organisationCode: w.organisationCode },
+      { networkAddress: address },
+    );
+    expect(slowed.status).toBe(401);
+    expect(errorOf(slowed).code).toBe('access.sign-in-slowed');
+    // Another source address is not slowed.
+    expect((await w.challenge('10.9.77.2')).challengeId).toBeDefined();
+  });
+});

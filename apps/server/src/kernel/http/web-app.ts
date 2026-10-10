@@ -1,7 +1,7 @@
 import { statusOfKind } from '@apparel-os/schemas';
 import { existsSync, readFileSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
-import { basename, join, sep } from 'node:path';
+import { basename, join, posix, sep } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { correlationIdOf, newCorrelationId } from '../command-runner/correlation.js';
@@ -13,8 +13,14 @@ const HASHED_FILE_CACHE = 'public, max-age=31536000, immutable';
 
 /** Where the counter app is served (offline-counter 5.2; deployment.md section 3). */
 const COUNTER_PREFIX = '/counter';
-/** The golden-case test page of the counter build, never served by the deployed service (offline-counter 5.2, 5.5). */
+/**
+ * The golden-case test page of the counter build, never served by the deployed service (offline-counter 5.2, 5.5).
+ * Lower case: a request's path is compared in its canonical form (canonicalPath).
+ */
 const GOLDEN_PREFIX = '/counter/golden';
+
+/** Which build a path belongs to: the counter under `/counter/`, the web app everywhere else outside `/api`. */
+type ServedApp = 'web' | 'counter';
 
 /**
  * Serves the built web app (apps/web/dist) and, when its build is given, the counter app (apps/counter/dist, built with
@@ -41,8 +47,12 @@ export function serveWebApp(app: INestApplication, directory: string, counterDir
   if (counterDirectory !== undefined) {
     const counterStatic = staticOptions(counterDirectory);
     (app as NestExpressApplication).use((request: HttpRequest, response: HttpResponse, next: () => void) => {
-      // The golden page and its folder are refused before the counter's static files are looked up.
-      if (underPrefix(pathOf(request), GOLDEN_PREFIX)) {
+      // The golden page and its folder are refused before the counter's static files are looked up, by every spelling
+      // the static serving would resolve to them: Express matches the mount path without regard to letter case, the
+      // file system may ignore it too, and the file is looked up after decoding and resolving dot and empty segments
+      // (S1-F12 review).
+      const canonical = canonicalPath(pathOf(request));
+      if (canonical !== undefined && underPrefix(canonical, GOLDEN_PREFIX)) {
         notFound(request, response);
         return;
       }
@@ -60,13 +70,9 @@ export function serveWebApp(app: INestApplication, directory: string, counterDir
       next();
       return;
     }
-    const counter = underPrefix(path, COUNTER_PREFIX);
-    const html = counter ? counterHtml : indexHtml;
-    if (
-      html === undefined ||
-      (request.method !== 'GET' && request.method !== 'HEAD') ||
-      !isClientRoute(path, counter ? COUNTER_PREFIX : '')
-    ) {
+    const served: ServedApp = underPrefix(path, COUNTER_PREFIX) ? 'counter' : 'web';
+    const html = served === 'counter' ? counterHtml : indexHtml;
+    if (html === undefined || (request.method !== 'GET' && request.method !== 'HEAD') || !isClientRoute(path, served)) {
       notFound(request, response);
       return;
     }
@@ -121,9 +127,23 @@ function pathOf(request: HttpRequest): string {
  * A path an app's router answers: for the web app not the counter's path (deployment.md section 3), and not a file,
  * whose last segment has an extension.
  */
-function isClientRoute(path: string, prefix: string): boolean {
-  if (prefix === '' && underPrefix(path, COUNTER_PREFIX)) return false;
+function isClientRoute(path: string, served: ServedApp): boolean {
+  if (served === 'web' && underPrefix(path, COUNTER_PREFIX)) return false;
   return !path.slice(path.lastIndexOf('/') + 1).includes('.');
+}
+
+/**
+ * A path as the static serving resolves it to a file, in lower case: percent-decoded, back slashes as separators, dot
+ * and empty segments resolved. Undefined when it does not decode; the static serving refuses such a path itself.
+ */
+function canonicalPath(path: string): string | undefined {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return undefined;
+  }
+  return posix.normalize(decoded.replaceAll('\\', '/')).toLowerCase();
 }
 
 function underPrefix(path: string, prefix: string): boolean {

@@ -8,6 +8,7 @@ import { findDemoPerson, type DemoSignInSettings } from '../domain/demo-sign-in.
 import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
+import { SESSION_LIMITS_SETTING, sessionKindOf } from '../domain/sign-in-rules.js';
 import { matchingStep } from '../domain/totp.js';
 import { sessionIdentifierHash } from './authenticate-session.js';
 import { proveDeviceForSignIn } from './devices.js';
@@ -123,12 +124,9 @@ export class SignIn {
       // A sign-in on a billing device keeps a shared POS session, whose limits are a setting of their own with no
       // default; while it is not set, the device sign-in is unavailable, naming it (POL-02.18; code-house-rules 12.14;
       // RR-303). An office sign-in never needs it.
-      const posLimits = await this.dependencies.runner.read(request, (context) =>
-        readSetting(context, 'access.shared-pos-session-limits'),
-      );
-      if (posLimits.kind === 'not-set') {
-        return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.shared-pos-session-limits' }] };
-      }
+      const setting = SESSION_LIMITS_SETTING['shared-pos'];
+      const posLimits = await this.dependencies.runner.read(request, (context) => readSetting(context, setting));
+      if (posLimits.kind === 'not-set') return { kind: 'unavailable', missing: [{ kind: 'setting', setting }] };
     }
     if (looked.slowed) {
       await this.dependencies.runner.run(request, (context) => this.recordAccess(context, attempt, looked, false));
@@ -266,7 +264,7 @@ async function startSession(context: TransactionContext, userId: string, deviceI
     id: uuidv7(),
     appUserId: userId,
     identifierHash: sessionIdentifierHash(identifier),
-    kind: deviceId === undefined ? 'office' : 'shared-pos',
+    kind: sessionKindOf(deviceId),
     deviceId: deviceId ?? null,
     state: 'In force',
     startedAt: context.startedAt,

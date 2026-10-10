@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { errorEnvelopeSchema } from '@apparel-os/schemas';
@@ -13,6 +14,23 @@ import { serveWebApp } from './web-app.js';
 // S1-F01-T27: the `app` service serves the web app at `/` from the one origin of the API (deployment.md section 3;
 // code-house-rules 12.1). The build here is a SYNTHETIC stand-in for apps/web/dist: an index.html with a marker, one
 // hashed asset and one font.
+
+/** A `GET` of the path exactly as written: `fetch` would normalise dot segments and other spellings first. */
+function raw(baseUrl: string, path: string): Promise<{ status: number; body: string }> {
+  const { hostname, port } = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const sent = request({ hostname, port, path, method: 'GET' }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk: string) => (body += chunk));
+      response.on('end', () => {
+        resolve({ status: response.statusCode ?? 0, body });
+      });
+    });
+    sent.on('error', reject);
+    sent.end();
+  });
+}
 
 const INDEX_HTML = '<!doctype html><html><body><div id="root">SYNTHETIC web app</div></body></html>';
 
@@ -193,6 +211,31 @@ describe('the counter app at /counter/ from the one origin', () => {
       expect(response.status, path).toBe(404);
       expect(errorEnvelopeSchema.parse(await response.json()).error.code, path).toBe('kernel.not-found');
     }
+  });
+
+  it('never serves the golden-case test page by another spelling: letter case, an encoded character, a doubled or dot segment (S1-F12 review)', async () => {
+    const spellings = [
+      '/counter/Golden/',
+      '/counter/GOLDEN/index.html',
+      '/counter/golden/INDEX.HTML',
+      '/COUNTER/golden/index.html',
+      '/Counter/Golden/index.html',
+      '/counter/%67olden/index.html',
+      '/counter/%47olden/index.html',
+      '/counter/golden%2Findex.html',
+      '/counter/golden%2findex.html',
+      '/counter/%2e/golden/index.html',
+      '/counter/./golden/index.html',
+      '/counter//golden/index.html',
+      '/counter/golden/./index.html',
+      '/counter/x/../golden/index.html',
+    ];
+    // A path that names no file may answer the counter's index.html as a client route; never the golden page.
+    const leaked: string[] = [];
+    for (const path of spellings) {
+      if ((await raw(baseUrl, path)).body.includes('SYNTHETIC golden page')) leaked.push(path);
+    }
+    expect(leaked).toEqual([]);
   });
 
   it('keeps the web app at / and its routes, and the security headers on the counter too', async () => {

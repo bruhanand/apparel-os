@@ -81,12 +81,14 @@ import {
 } from './queries/authorise.js';
 import type { RecordFacts } from './domain/scope.js';
 import { ownAccess, type OwnAccess } from './queries/own-access.js';
+import type { SessionKind } from './domain/sign-in-rules.js';
 import {
   devicesById,
   endDevice,
   enrolDevice,
   issueChallenge,
   registerDevice,
+  type ChallengeIssue,
   type DeviceActor,
   type DeviceOutcome,
   type DeviceRead,
@@ -172,7 +174,7 @@ export interface AccessInterface {
    * The personas a user holds today, their effective grants, whether any role assignment is in force and the
    * Organisation's timezone, for the shell (RR-261, RR-281; DEC-118, RR-260, RR-310).
    */
-  ownAccess(context: TransactionContext, userId: string, sessionKind?: 'office' | 'shared-pos'): Promise<OwnAccess>;
+  ownAccess(context: TransactionContext, userId: string, sessionKind?: SessionKind): Promise<OwnAccess>;
   /**
    * Register a device (access-and-approvals 2.4; offline-counter 3.2 step 1): Setting up, its code unique in the
    * Organisation; writes the `device-registered` access record. The owning module has authorised it.
@@ -198,14 +200,15 @@ export interface AccessInterface {
    */
   endDevice(
     context: TransactionContext,
-    by: DeviceActor & { readonly roleAssignmentId?: string },
+    by: DeviceActor,
     deviceId: string,
     state: 'Revoked' | 'Ended',
   ): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>>;
-  /** Issue a one-time challenge for a device to sign (offline-counter 3.3), on the sign-in path. */
-  issueDeviceChallenge(
-    context: TransactionContext,
-  ): Promise<{ readonly challengeId: string; readonly challenge: string }>;
+  /**
+   * Issue a one-time challenge for a device to sign (offline-counter 3.3), on the sign-in path, to the source address
+   * given; slowed as sign-in is (access-and-approvals 3.1).
+   */
+  issueDeviceChallenge(context: TransactionContext, networkAddress: string): Promise<ChallengeIssue>;
   /** The devices named, each with its code, label and latest state; one that does not exist is left out. */
   devices(context: TransactionContext, deviceIds: readonly string[]): Promise<ReadonlyMap<string, DeviceRead>>;
   prepareUser(
@@ -585,24 +588,19 @@ export class Access implements AccessInterface {
     return enrolDevice(context, this.dependencies.audit, by, deviceId, enrolment);
   }
 
-  endDevice(
-    context: TransactionContext,
-    by: DeviceActor & { readonly roleAssignmentId?: string },
-    deviceId: string,
-    state: 'Revoked' | 'Ended',
-  ) {
+  endDevice(context: TransactionContext, by: DeviceActor, deviceId: string, state: 'Revoked' | 'Ended') {
     return endDevice(context, this.dependencies.audit, by, deviceId, state);
   }
 
-  issueDeviceChallenge(context: TransactionContext) {
-    return issueChallenge(context);
+  issueDeviceChallenge(context: TransactionContext, networkAddress: string) {
+    return issueChallenge(context, networkAddress);
   }
 
   devices(context: TransactionContext, deviceIds: readonly string[]) {
     return devicesById(context, deviceIds);
   }
 
-  ownAccess(context: TransactionContext, userId: string, sessionKind: 'office' | 'shared-pos' = 'office') {
+  ownAccess(context: TransactionContext, userId: string, sessionKind: SessionKind = 'office') {
     return ownAccess(context, userId, sessionKind);
   }
 

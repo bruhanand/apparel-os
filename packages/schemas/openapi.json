@@ -3854,7 +3854,21 @@
               }
             },
             "x-error-codes": [
-              "access.sign-in-refused"
+              "access.sign-in-refused",
+              "access.sign-in-slowed"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.sign-in-unavailable"
             ]
           },
           "500": {

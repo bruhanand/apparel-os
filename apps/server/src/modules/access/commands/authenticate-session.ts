@@ -4,7 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { LOCK_STEP, lockTable, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session } from '../db/schema.js';
-import { sessionLimitReached } from '../domain/sign-in-rules.js';
+import { limitsSettingOf, sessionLimitReached } from '../domain/sign-in-rules.js';
 import { readSetting } from '../queries/settings.js';
 import { credentialState, pendingSteps, userInForce } from '../queries/users.js';
 
@@ -20,13 +20,6 @@ export interface AuthenticatedSession {
   readonly pendingSteps: readonly SignInStep[];
   /** The billing device a shared POS session is bound to; absent for an office session (3.3; POL-02.18). */
   readonly deviceId?: string;
-}
-
-/** The setting holding the limits of a session's kind (3.3; POL-02.18; RR-303). */
-function limitsOf(kind: string) {
-  if (kind === 'office') return 'access.office-session-limits' as const;
-  if (kind === 'shared-pos') return 'access.shared-pos-session-limits' as const;
-  return undefined;
 }
 
 /**
@@ -93,7 +86,7 @@ export async function authenticateSession(
     .from(session)
     .where(and(eq(session.id, candidate.id), inArray(session.state, OPEN_STATES)));
   if (found === undefined) return NOT_SIGNED_IN;
-  const setting = limitsOf(found.kind);
+  const setting = limitsSettingOf(found.kind);
   if (setting === undefined) return NOT_SIGNED_IN;
   const limits = await readSetting(context, setting);
   if (limits.kind === 'not-set') return NOT_SIGNED_IN;
@@ -145,7 +138,7 @@ export async function sessionStillOpen(context: TransactionContext, sessionId: s
     .from(session)
     .where(eq(session.id, sessionId));
   if (found?.state !== 'In force') return false;
-  const setting = limitsOf(found.kind);
+  const setting = limitsSettingOf(found.kind);
   if (setting === undefined) return false;
   const limits = await readSetting(context, setting);
   if (limits.kind === 'not-set') return false;

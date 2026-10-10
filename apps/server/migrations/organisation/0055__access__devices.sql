@@ -93,11 +93,14 @@ create trigger refuse_truncate before truncate on access.device_version
 
 -- A one-time challenge a device signs with its private key (offline-counter 3.2, 3.3): 256 random bits, base64url,
 -- issued on the sign-in path with no actor (code-house-rules 6.3) and used at most once, for an enrolment or a sign-in,
--- by the device that signed it. A challenge is no secret: only the device's private key can sign it.
+-- by the device that signed it. A challenge is no secret: only the device's private key can sign it. The source
+-- address it was issued to bounds how many unused challenges one address may hold in the sign-in throttling window
+-- (access-and-approvals 3.1; S1-F12 review). A used challenge is kept, final, as the record of the proof that used it.
 create table access.device_challenge (
   id uuid primary key,
   challenge text not null,
   issued_at timestamptz not null,
+  network_address inet not null,
   used_at timestamptz,
   used_for text,
   device_id uuid references access.device (id),
@@ -109,6 +112,7 @@ create table access.device_challenge (
     (used_at is null) = (used_for is null) and (used_at is null) = (device_id is null))
 );
 create index device_challenge_device on access.device_challenge (device_id);
+create index device_challenge_unused on access.device_challenge (network_address, issued_at) where used_at is null;
 
 create function access.guard_device_challenge_change() returns trigger
   language plpgsql
@@ -116,7 +120,8 @@ create function access.guard_device_challenge_change() returns trigger
 as $$
 begin
   if new.id <> old.id or new.challenge <> old.challenge or new.issued_at <> old.issued_at
-     or new.recorded_at <> old.recorded_at or old.used_at is not null then
+     or new.network_address <> old.network_address or new.recorded_at <> old.recorded_at
+     or old.used_at is not null then
     raise exception 'a challenge is used once and never changed' using errcode = 'AO004';
   end if;
   return new;

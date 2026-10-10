@@ -1,6 +1,12 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { devicePublicKeySchema, type DeviceProof, type DevicePublicKey, type DeviceState } from '@apparel-os/schemas';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  devicePublicKeySchema,
+  type DeviceProof,
+  type DevicePublicKey,
+  type DeviceState,
+  type MissingItem,
+} from '@apparel-os/schemas';
+import { and, asc, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
   LOCK_STEP,
@@ -13,6 +19,7 @@ import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { device, deviceChallenge, deviceVersion, session } from '../db/schema.js';
 import { newChallenge, proofVerifies } from '../domain/device-proof.js';
 import { deviceRevoked, sessionRevoked } from '../events.js';
+import { readSetting } from '../queries/settings.js';
 
 // Devices in `access` (access-and-approvals 2.4, 3.3; offline-counter 3.1 to 3.4; PRD-OFF-002, PRD-OFF-010,
 // PRD-SEC-007, PRD-SEC-008; S1-F12-T01): register a device, Setting up; issue a one-time challenge; enrol it, binding
@@ -22,12 +29,24 @@ import { deviceRevoked, sessionRevoked } from '../events.js';
 
 const DEVICE = lockTable('access', 'device');
 
-/** Who acts on a device, for its access record (numbering-and-audit 5.2). */
+/** Who acts on a device, for its access record and audit records (numbering-and-audit 4.1, 5.2). */
 export interface DeviceActor {
   readonly userId: string;
   readonly networkAddress?: string;
   /** The place the device belongs to, so the device access record is read in that scope (5.2). */
   readonly scope?: AuditScope;
+  /** The role assignment Authorise used, for the audit records of the sessions a device's end revokes (4.1). */
+  readonly roleAssignmentId?: string;
+}
+
+/** The facts of the actor named, those it holds only: an access or audit record omits a fact not known. */
+function known<const K extends 'networkAddress' | 'scope' | 'roleAssignmentId'>(
+  by: DeviceActor,
+  ...keys: readonly K[]
+): Pick<DeviceActor, K> {
+  const facts: Partial<Record<K, unknown>> = {};
+  for (const key of keys) if (by[key] !== undefined) facts[key] = by[key];
+  return facts as Pick<DeviceActor, K>;
 }
 
 export type DeviceOutcome<T> =
@@ -82,24 +101,51 @@ export async function registerDevice(
     outcome: 'succeeded',
     userId: by.userId,
     deviceId,
-    ...(by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress }),
-    ...(by.scope === undefined ? {} : { scope: by.scope }),
+    ...known(by, 'networkAddress', 'scope'),
   });
   return { kind: 'success', answer: { deviceId } };
 }
+
+/** What a challenge request comes to (offline-counter 3.3; access-and-approvals 3.1). */
+export type ChallengeIssue =
+  | { readonly kind: 'issued'; readonly challengeId: string; readonly challenge: string }
+  | { readonly kind: 'slowed' }
+  | { readonly kind: 'unavailable'; readonly missing: readonly MissingItem[] };
 
 /**
  * Issue a one-time challenge for a device to sign (offline-counter 3.2, 3.3), on the sign-in path with no actor
  * (code-house-rules 6.3). It names no device: the signature binds the purpose, the Organisation and the device, and
  * the challenge is used once, by whichever proof uses it first.
+ *
+ * Bounded as sign-in is (access-and-approvals 3.1; S1-F12 review): the challenges issued to the source address in the
+ * sign-in throttling window and not yet used count like failed sign-ins, and at the setting's limit the request is
+ * slowed; a used challenge does not count, so a device that signs in is never slowed. No value of its own is chosen:
+ * the window and the limit are the `access.sign-in-throttling` setting, and while it is not set a challenge is
+ * unavailable, naming it, as sign-in is (code-house-rules 12.14). Challenges carry no lifetime (OPEN, RR-493).
  */
-export async function issueChallenge(
-  context: TransactionContext,
-): Promise<{ readonly challengeId: string; readonly challenge: string }> {
+export async function issueChallenge(context: TransactionContext, networkAddress: string): Promise<ChallengeIssue> {
+  const throttling = await readSetting(context, 'access.sign-in-throttling');
+  if (throttling.kind === 'not-set') {
+    return { kind: 'unavailable', missing: [{ kind: 'setting', setting: 'access.sign-in-throttling' }] };
+  }
+  const since = new Date(context.startedAt.getTime() - throttling.value.windowSeconds * 1000);
+  const [held] = await context.tx
+    .select({ unused: count() })
+    .from(deviceChallenge)
+    .where(
+      and(
+        sql`${deviceChallenge.networkAddress} = ${networkAddress}::inet`,
+        isNull(deviceChallenge.usedAt),
+        gte(deviceChallenge.issuedAt, since),
+      ),
+    );
+  if ((held?.unused ?? 0) >= throttling.value.failureLimit) return { kind: 'slowed' };
   const challengeId = uuidv7();
   const challenge = newChallenge();
-  await context.tx.insert(deviceChallenge).values({ id: challengeId, challenge, issuedAt: context.startedAt });
-  return { challengeId, challenge };
+  await context.tx
+    .insert(deviceChallenge)
+    .values({ id: challengeId, challenge, issuedAt: context.startedAt, networkAddress });
+  return { kind: 'issued', challengeId, challenge };
 }
 
 /**
@@ -147,8 +193,7 @@ export async function enrolDevice(
     outcome: 'succeeded',
     userId: by.userId,
     deviceId,
-    ...(by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress }),
-    ...(by.scope === undefined ? {} : { scope: by.scope }),
+    ...known(by, 'networkAddress', 'scope'),
   });
   return { kind: 'success', answer: { deviceId } };
 }
@@ -166,7 +211,7 @@ export async function enrolDevice(
 export async function endDevice(
   context: TransactionContext,
   audit: AuditInterface,
-  by: DeviceActor & { readonly roleAssignmentId?: string },
+  by: DeviceActor,
   deviceId: string,
   state: 'Revoked' | 'Ended',
 ): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>> {
@@ -192,15 +237,14 @@ export async function endDevice(
     byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.id]);
     await audit.record(context, {
       actor: { kind: 'user', id: by.userId },
-      ...(by.roleAssignmentId === undefined ? {} : { roleAssignmentId: by.roleAssignmentId }),
-      ...(by.scope === undefined ? {} : { scope: by.scope }),
+      ...known(by, 'roleAssignmentId', 'scope'),
       record: { module: 'access', type: 'session', id: row.id },
       operation: state === 'Revoked' ? 'revoke-device' : 'retire-device',
       changes: [{ kind: 'value', field: 'state', before: 'In force or Locked', after: 'Revoked' }],
       source: { kind: 'screen' },
     });
   }
-  const address = by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress };
+  const address = known(by, 'networkAddress');
   for (const [userId, sessionIds] of [...byUser].sort(([a], [b]) => a.localeCompare(b))) {
     await audit.recordAccess(context, { kind: 'session-revoked', outcome: 'succeeded', userId, ...address });
     await context.publish(sessionRevoked, {
@@ -214,8 +258,7 @@ export async function endDevice(
     outcome: 'succeeded',
     userId: by.userId,
     deviceId,
-    ...address,
-    ...(by.scope === undefined ? {} : { scope: by.scope }),
+    ...known(by, 'networkAddress', 'scope'),
   });
   if (state === 'Revoked') {
     await context.publish(deviceRevoked, {

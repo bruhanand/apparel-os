@@ -115,6 +115,7 @@ export const deviceChallenge = access.table('device_challenge', {
   id: uuid('id').primaryKey(),
   challenge: text('challenge').notNull(),
   issuedAt: at('issued_at').notNull(),
+  networkAddress: inet('network_address').notNull(),
   usedAt: at('used_at'),
   usedFor: text('used_for').$type<'enrolment' | 'sign-in'>(),
   deviceId: uuid('device_id'),
