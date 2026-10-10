@@ -279,7 +279,7 @@ function Intake() {
           setBatchId(null);
         }}
       />
-      {stored !== null && <StoredFile stored={stored} onOpen={setBatchId} />}
+      {stored !== null && <StoredFile key={stored.receiptId} stored={stored} onOpen={setBatchId} />}
       {batchId !== null && <BatchRead batchId={batchId} />}
       {stored === null && batchId === null && <EmptyState title="intake.empty.title" body="intake.empty.body" />}
     </div>

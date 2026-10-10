@@ -26,7 +26,12 @@ async function openIntake(page: Page): Promise<void> {
 
 async function upload(page: Page, file: string): Promise<void> {
   await page.locator('#intake-file').setInputFiles(file);
+  // The banner of an earlier upload stays on screen, so wait for this upload's own answer.
+  const stored = page.waitForResponse(
+    (response) => response.url().endsWith('/api/files-imports/import-files') && response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Upload', exact: true }).click();
+  await stored;
   await expect(page.getByRole('status').filter({ hasText: 'The file is stored.' })).toBeVisible();
 }
 
