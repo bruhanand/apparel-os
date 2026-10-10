@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import {
   CommandRunner,
   IdempotencyHelper,
+  LOCK_STEP,
   newCorrelationId,
   readMigrationSet,
   type CommandRefusal,
@@ -197,6 +198,12 @@ export type StepSent =
       readonly refusal: CommandRefusal;
       readonly key: string;
       readonly replay: () => Promise<IdempotentAnswer<StepAnswer>>;
+    }
+  | {
+      /** The key had already been used with the same content: the first answer, with no second effect (PRD-INT-002). */
+      readonly kind: 'replayed';
+      readonly answer: StepAnswer;
+      readonly key: string;
     };
 
 /** What a step keeps under its key: identifiers only (code-house-rules 12.4 "Storage"). */
@@ -212,6 +219,8 @@ export interface HarnessFixtures extends SyntheticCombination {
   readonly sku: { readonly skuId: string; readonly brandId: string };
   /** A second location of S1's unit, such as its backroom (S1-F10-T06: counts across two locations). */
   readonly s1b: At;
+  /** A second Store S2 in the same book, where asked for (S1-F10-T07: sales at two Stores under one pool). */
+  readonly s2?: At;
 }
 
 type Outcome<A> = { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } };
@@ -533,7 +542,12 @@ export class StockHarness extends ValuedWorld {
   async fixtures(
     formula: CostFormula,
     poolMode: CostPoolMode,
-    options: { readonly pieceTracked?: boolean; readonly batch?: boolean; readonly maps?: readonly string[] } = {},
+    options: {
+      readonly pieceTracked?: boolean;
+      readonly batch?: boolean;
+      readonly maps?: readonly string[];
+      readonly secondStore?: boolean;
+    } = {},
   ): Promise<HarnessFixtures> {
     const combination = await this.book(formula, poolMode, options.maps === undefined ? {} : { maps: options.maps });
     const sku = await this.catalogueSku(options.pieceTracked ?? true, options.batch ?? false);
@@ -544,7 +558,11 @@ export class StockHarness extends ValuedWorld {
     };
     await this.routePostingRefused(combination.w1.siteId, HARNESS_POSTING_REFUSED.code);
     await this.routePostingRefused(combination.s1.siteId, HARNESS_POSTING_REFUSED.code);
-    return { ...combination, sku, s1b };
+    if (options.secondStore !== true) return { ...combination, sku, s1b };
+    const site = await this.site('retail-site');
+    const s2 = await this.unit(combination, site, 'whole-store', await this.store(site));
+    await this.routePostingRefused(site, HARNESS_POSTING_REFUSED.code);
+    return { ...combination, sku, s1b, s2 };
   }
 
   protected override exceptionTypes(): ExceptionTypeRegistration[] {
@@ -692,6 +710,34 @@ export class StockHarness extends ValuedWorld {
   }
 
   /**
+   * Changes a document after it was prepared (15.2): a new version, with its lines as they were, recorded by the
+   * preparer, under the document's lock at step 1, so any approval of the earlier version no longer covers it
+   * (access-and-approvals 9.6; PRD-ACS-007).
+   */
+  async change(document: HarnessDocument): Promise<void> {
+    const versionId = uuidv7();
+    await this.run(this.preparer.user.id, async (context) => {
+      await context.lock(LOCK_STEP.document, [{ table: DOCUMENT_TABLE, id: document.id, mode: 'exclusive' }]);
+      await context.tx.execute(sql`
+        update test_stock_harness.document set version_id = ${versionId}, version_no = version_no + 1
+        where id = ${document.id}`);
+      for (const line of document.lines) {
+        await context.tx.execute(sql`
+          insert into test_stock_harness.document_line (id, document_id, version_id, line_id, sku_id, quantity,
+            location_id, to_location_id, receipt_origin_id, movement_id, amount_paise, value_known)
+          values (${uuidv7()}, ${document.id}, ${versionId}, ${line.lineId}, ${line.skuId}, ${line.quantity},
+            ${line.locationId ?? null}, ${line.toLocationId ?? null}, ${line.receiptOriginId ?? null},
+            ${line.movementId ?? null}, ${line.amountPaise ?? null}, ${line.amountPaise !== undefined})`);
+      }
+      await context.tx.execute(sql`
+        insert into test_stock_harness.document_change (id, document_id, version_id, recorded_by_user_id)
+        values (${uuidv7()}, ${document.id}, ${versionId}, ${this.preparer.user.id})`);
+    });
+    document.versionId = versionId;
+    document.versionNo += 1;
+  }
+
+  /**
    * Requests approval of the document's current version, on its value at cost, and has the checker decide it
    * (access-and-approvals 9.1, 9.5; PRD-ACS-006, PRD-ACS-015, PRD-ACS-016). Answers the decision.
    */
@@ -735,14 +781,16 @@ export class StockHarness extends ValuedWorld {
     approval?: { readonly decisionId: string; readonly actionType: string },
   ): Promise<StepOutcome> {
     const sent = await this.send(document, name, transition, items, approval);
-    if (sent.kind !== 'written') throw new StepRefused(sent.refusal);
+    if (sent.kind !== 'written') throw new StepRefused(sent.kind === 'refused' ? sent.refusal : undefined);
     return sent;
   }
 
   /**
    * One step sent once under a new idempotency key, which answers whether it was written or refused (13.1); a
    * refusal rolled the whole command back, so the document stays as it was (SL-23 Outcome A). `importKind` names the
-   * import the source carries, none by default (13.2); `as` the person who sends it, the preparer by default.
+   * import the source carries, none by default (13.2); `as` the person who sends it, the preparer by default; `key`
+   * the idempotency key, a new one by default; `hold` runs under every lock, after the rechecks and before any write,
+   * so a concurrency test can keep the command there (code-house-rules 10.3).
    */
   async send(
     document: HarnessDocument,
@@ -750,10 +798,11 @@ export class StockHarness extends ValuedWorld {
     transition: { readonly from: string; readonly to: string },
     items: readonly LedgerItem[],
     approval?: { readonly decisionId: string; readonly actionType: string },
-    importKind: ImportKind = 'none',
-    as: Actor = this.preparer,
+    options: SendOptions = {},
   ): Promise<StepSent> {
-    const key = uuidv7();
+    const importKind = options.importKind ?? 'none';
+    const as = options.as ?? this.preparer;
+    const key = options.key ?? uuidv7();
     const source = {
       module: HARNESS_MODULE,
       recordType: HARNESS_RECORD_TYPE,
@@ -786,6 +835,8 @@ export class StockHarness extends ValuedWorld {
                 source,
                 documentType: HARNESS_DOCUMENT_TYPE,
                 ...(approval === undefined ? {} : { approval }),
+                ...(options.hold === undefined ? {} : { hold: options.hold }),
+                ...(options.afterPlan === undefined ? {} : { afterPlan: options.afterPlan }),
                 document: {
                   targets: [{ table: DOCUMENT_TABLE, id: document.id, mode: 'exclusive' } satisfies LockTarget],
                   recheck: (c) => this.recheckDocument(c, document, transition.from),
@@ -817,6 +868,7 @@ export class StockHarness extends ValuedWorld {
     const first = await send();
     if (first.kind === 'refusal')
       return { kind: 'refused', refusal: first.refusal as CommandRefusal, key, replay: send };
+    if (first.replayed) return { kind: 'replayed', answer: first.answer, key };
     if (written === undefined) throw new StepRefused(undefined);
     document.state = transition.to;
     return { kind: 'written', written, key, replay: send };
@@ -838,6 +890,15 @@ export class StockHarness extends ValuedWorld {
     if (row.state !== state) return { kind: 'refused', code: `${HARNESS_MODULE}.document-state`, missing: named };
     return undefined;
   }
+}
+
+/** How a step is sent (`send`). */
+export interface SendOptions {
+  readonly importKind?: ImportKind;
+  readonly as?: Actor;
+  readonly key?: string;
+  readonly hold?: (context: TransactionContext) => Promise<void>;
+  readonly afterPlan?: (context: TransactionContext) => Promise<void>;
 }
 
 /** A step that had to post and was refused. */

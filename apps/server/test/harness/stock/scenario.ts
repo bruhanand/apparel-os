@@ -22,6 +22,7 @@ import {
   type DocumentLine,
   type HarnessDocument,
   type HarnessFixtures,
+  type SendOptions,
   type StepSent,
   type StockHarness,
 } from './harness.js';
@@ -40,7 +41,7 @@ export const SCENARIO_FOLDER = join(import.meta.dirname, 'scenarios');
 export const FURTHER_FOLDER = join(SCENARIO_FOLDER, 'further');
 
 /** A place of the scenarios (11.1): warehouse W1, Store S1, and a second location of S1's unit, S1B. */
-export type PlaceName = 'W1' | 'S1' | 'S1B';
+export type PlaceName = 'W1' | 'S1' | 'S1B' | 'S2';
 
 /**
  * Pieces of a receipt by position, such as `R1:0-3` (R1's first four) or `R1:0-2,R2:0-1`; positions are those of the
@@ -274,8 +275,10 @@ interface RunState {
 
 let pieceNumber = 0;
 
+/** The places by name; S2 only where the fixtures made a second Store (S1-F10-T07). */
 function placesOf(fixtures: HarnessFixtures): Record<PlaceName, At> {
-  return { W1: fixtures.w1, S1: fixtures.s1, S1B: fixtures.s1b };
+  const places = { W1: fixtures.w1, S1: fixtures.s1, S1B: fixtures.s1b };
+  return (fixtures.s2 === undefined ? places : { ...places, S2: fixtures.s2 }) as Record<PlaceName, At>;
 }
 
 function newRunState(): RunState {
@@ -315,15 +318,17 @@ export class ScenarioRun {
   }
 
   /** Sends a prepared step once, under a new key, as the actor given or the preparer (13.1). */
-  async send(pending: Pending, as?: Actor): Promise<StepSent> {
+  async send(pending: Pending, options: SendOptions = {}): Promise<StepSent> {
     const sent = await this.harness.send(
       pending.document,
       pending.name,
       pending.transition,
       pending.items,
       pending.approval,
-      pending.importKind,
-      as,
+      {
+        ...(pending.importKind === undefined ? {} : { importKind: pending.importKind }),
+        ...options,
+      },
     );
     if (sent.kind === 'written') pending.after?.(sent);
     return sent;
@@ -332,7 +337,7 @@ export class ScenarioRun {
   /** Prepares and sends a command; a housekeeping command (a lock, a reopening, a map) posts nothing. */
   async do(command: ScenarioStepCommand, as?: Actor): Promise<StepSent | undefined> {
     if (await housekeeping(this.harness, this.fixtures, this.state, command)) return undefined;
-    return this.send(await this.prepared(command), as);
+    return this.send(await this.prepared(command), as === undefined ? {} : { as });
   }
 
   /** Prepares and sends a command that must be written. */
@@ -397,7 +402,7 @@ export async function runScenario(harness: StockHarness, scenario: Scenario): Pr
         if (command.raise === true) await raiseOnce(harness, state, command, sent);
         continue;
       }
-      if (sent.kind !== 'written') throw new Error(`${label} refused: ${JSON.stringify(sent.refusal)}`);
+      if (sent.kind !== 'written') throw new Error(`${label} not written: ${JSON.stringify(sent)}`);
       expect(await movementKinds(harness.database, sent.written), label).toEqual([...(command.movements ?? [])].sort());
       const journals = [...(await journalIds(harness.database, fixtures.bookId))].filter(
         (id) => !journalsBefore.has(id),
@@ -605,10 +610,10 @@ async function perform(
     pending.transition,
     pending.items,
     pending.approval,
-    pending.importKind,
+    pending.importKind === undefined ? {} : { importKind: pending.importKind },
   );
   if (sent.kind === 'refused') state.pending.set(key, pending);
-  else pending.after?.(sent);
+  else if (sent.kind === 'written') pending.after?.(sent);
   return sent;
 }
 

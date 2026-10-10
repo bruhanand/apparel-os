@@ -426,6 +426,7 @@ export class StockWorld {
     };
     const planned = await this.ledger.plan(context, request);
     if (planned.kind === 'refused') throw new PostingRefused(planned.refusal);
+    await options.afterPlan?.(context);
     const locked = await this.ledger.lock(context, planned.value);
     // Steps 7 and 8: the periods the valued items post into, then the journal series (13.1; 10.3).
     const periods = await this.ledger.holdPeriods(context, planned.value);
@@ -523,6 +524,8 @@ export interface PostOptions {
     readonly preparers?: readonly string[];
   };
   readonly hold?: (context: TransactionContext) => Promise<void>;
+  /** Runs after Plan, before any lock of steps 2 to 8, so a test can change what the locks will find (10.4). */
+  readonly afterPlan?: (context: TransactionContext) => Promise<void>;
   /**
    * The caller's own document (stock-ledger 15.2): its rows locked at step 1 with the decision's request, rechecked
    * under the lock before Plan, and changed after Write, all in the posting's transaction (10.3, 10.4).
