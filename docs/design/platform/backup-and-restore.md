@@ -2,9 +2,9 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-> **Draft — not yet approved**, except GC9-9 and GC9-10, which the product owner approved on 6 Oct 2026. Written 6 Oct 2026 on a side branch and brought into the docs unreviewed; finished on 10 Oct 2026 by `S1-F14-T01`, which added key recovery (2.4) and the deletion of stored files after retention (8.5) and set out the options of GC9-7, GC9-8, GC9-16 and GC9-17. Every other engineering choice here is **Proposed** until the product owner approves it (RR-010).
+> **Current.** Approved by the product owner on 10 Oct 2026 (RR-010): GC9-9 and GC9-10 on 6 Oct 2026, the rest, with the answers to GC9-7, GC9-8, GC9-16, GC9-17 and GC9-18, on 10 Oct 2026. Written 6 Oct 2026 on a side branch; finished by `S1-F14-T01`, which added key recovery (2.4) and the deletion of stored files after retention (8.5).
 
-Status: **Draft**, 10 Oct 2026, with GC9-9 and GC9-10 approved; complete and waiting for the product owner's approval (RR-010). If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current**, 10 Oct 2026. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements these PRD sections: from AI, security and operational reliability, backup, restore verification and export recovery, recovery status for operators, and retention, deletion and legal holds; from Opening, closure, migration and export, the complete export in outline. It is GC-9 in [gaps-before-code.md](../../history/gaps-before-code.md) and the design of readiness item RR-010. It places the platform work of policy 18 that [module-map.md](../architecture/module-map.md) 11.2 leaves to GC-9.
 
@@ -30,13 +30,13 @@ Used by: the stage 1 code of `S1-F14` in `kernel`, `files-imports`, `numbering`,
 - The complete export: its scope for `S5-F09` and what stage 1 needs now (section 9; `PRD-LIF-022`).
 - The implementation units, their owners, commands and tables (sections 10 and 11), the tests `S1-F14` runs (section 12), and the edits this design asks of other documents (section 13).
 
-It fixes no recovery target, backup frequency, backup keeping period, retention period, legal hold, restore operator, drill date or drill cadence. Those are KDPS's and the Admin's under policy 18, with the CA for legal retention; they stay OPEN with no default (section 14). Railway's capabilities are not verified here; every one this design leans on is an assumption to verify (RR-187; section 14.3). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says; every choice made here is **Proposed**, except GC9-9 and GC9-10, approved by the product owner on 6 Oct 2026.
+It fixes no recovery target, backup frequency, backup keeping period, retention period, legal hold, restore operator, drill date or drill cadence. Those are KDPS's and the Admin's under policy 18, with the CA for legal retention; they stay OPEN with no default (section 14). Railway's capabilities are not verified here; every one this design leans on is an assumption to verify (RR-187; section 14.3). Labels (**Design choice**, **Proposed**, **OPEN**) mean what module-map section 1 says; every choice made here is a **Design choice**, approved by the product owner: GC9-9 and GC9-10 on 6 Oct 2026, the rest on 10 Oct 2026.
 
 ## 2. What is backed up
 
 ### 2.1 The parts of a backup
 
-A backup of an environment has these parts. **Proposed.**
+A backup of an environment has these parts. **Design choice.**
 
 | Part | What it holds | IDs |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ A backup of an environment has these parts. **Proposed.**
 | The file store | Every stored object of the bucket, already encrypted by the application ([imports-and-opening-data.md](imports-and-opening-data.md) section 11) | `PRD-IMP-002`, `POL-18.02` |
 | The manifest | One per backup: what it holds and how to check it (3.2). No record data, no key | `PRD-SEC-012` |
 
-- The unit of restore is one Organisation: its database, its objects in the file store and its keys. A whole environment is its directory plus every Organisation. One database per Organisation makes this possible (`PRD-MOD-001`). **Proposed.**
+- The unit of restore is one Organisation: its database, its objects in the file store and its keys. A whole environment is its directory plus every Organisation. One database per Organisation makes this possible (`PRD-MOD-001`). **Design choice.**
 - So that one Organisation's objects can be found without reading its database, every object key in the file store starts with the Organisation's identifier. Approved by the product owner on 6 Oct 2026 (GC9-10); [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 holds the rule, where the bucket key is fixed per stored file.
 
 ### 2.2 What a backup never holds
@@ -57,24 +57,22 @@ A backup of an environment has these parts. **Proposed.**
 
 ### 2.3 Encryption and the keys kept apart
 
-- **The backup is encrypted as a whole** (`POL-18.02`). The application backup of 3.2 encrypts each database dump and the manifest with a backup key before they leave the command, using authenticated encryption from Node's built-in crypto, so no dependency is added. File objects need no second layer: they are encrypted with the Organisation's key already. **Proposed.**
-- **The backup key is not an Organisation key.** It opens backups only. An Organisation's data key opens its encrypted fields and files only. Holding one never gives the other. **Proposed.**
-- **Key identifiers, not keys.** Every encrypted field and file records the identifier of the key version that encrypted it, and the manifest lists the identifiers each backup needs. A restore refuses before writing anything when a listed key version is not available (4.2). **Proposed.** It makes key rotation, which waits for production hosting (access-and-approvals section 6; D-1, RR-029), safe for old backups: a key version is kept while any backup still kept needs it.
-- **The form of the backup key** (GC9-17). **Proposed**, for the product owner to choose:
-  - *(a) One secret key.* The backup command and the restore command both hold it as an environment secret. Simple; but whoever reads the environment's variables can open every backup.
-  - *(b) A key pair* (recommended). The environment holds only the public part, with which the backup command encrypts (X25519 key agreement and AES-256-GCM, both in Node's built-in crypto, so no dependency is added). The private part, which opens backups, is never an environment secret: it exists only in the custodian's kept copies and is handed to the restore command at the prompt, never echoed or logged. A stolen environment then cannot open a backup, and every restore, drills included, proves the kept copy (section 6). The cost: no restore runs without the custodian, and a lost private part cannot be made again from the environment.
-- **Copies of the keys are kept apart** (GC9-12). Copies of every key version, of each Organisation's data key and of the backup key, are kept outside Railway, apart from every backup, in a store that holds no backup and that Railway credentials do not open, by a named custodian. **Proposed.** This design names no custodian. On `dev` the product owner names the custodian before the drill (`S1-F14-T04`), and has done so (product owner, 9 Oct 2026; RR-236). On production, custody belongs to KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237); it blocks live use only, never building or testing. Losing every copy of a key loses what it opens (2.4), so the drill checks the copies too (section 6).
+- **The backup is encrypted as a whole** (`POL-18.02`). The application backup of 3.2 encrypts each database dump and the manifest with a backup key before they leave the command, using authenticated encryption from Node's built-in crypto, so no dependency is added. File objects need no second layer: they are encrypted with the Organisation's key already. **Design choice.**
+- **The backup key is not an Organisation key.** It opens backups only. An Organisation's data key opens its encrypted fields and files only. Holding one never gives the other. **Design choice.**
+- **Key identifiers, not keys.** Every encrypted field and file records the identifier of the key version that encrypted it, and the manifest lists the identifiers each backup needs. A restore refuses before writing anything when a listed key version is not available (4.2). **Design choice.** It makes key rotation, which waits for production hosting (access-and-approvals section 6; D-1, RR-029), safe for old backups: a key version is kept while any backup still kept needs it.
+- **The backup key is a key pair** (GC9-17; product owner, 10 Oct 2026). The environment holds only the public part, with which the backup command encrypts (X25519 key agreement and AES-256-GCM, both in Node's built-in crypto, so no dependency is added). The private part, which opens backups, is never an environment secret: it exists only in the custodian's kept copies and is handed to the restore command at the prompt, never echoed or logged. A stolen environment then cannot open a backup, and every restore, drills included, proves the kept copy (section 6). The cost, accepted: no restore runs without the custodian, and a lost private part cannot be made again from the environment. Not chosen: one secret key held in the environment, which anyone reading the environment's variables could use to open every backup.
+- **Copies of the keys are kept apart** (GC9-12). Copies of every key version, of each Organisation's data key and of the backup key, are kept outside Railway, apart from every backup, in a store that holds no backup and that Railway credentials do not open, by a named custodian. **Design choice.** This design names no custodian. On `dev` the product owner names the custodian before the drill (`S1-F14-T04`), and has done so (product owner, 9 Oct 2026; RR-236). On production, custody belongs to KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237); it blocks live use only, never building or testing. Losing every copy of a key loses what it opens (2.4), so the drill checks the copies too (section 6).
 - Key storage, backup and rotation on production are designed with production hosting (D-1, RR-029; GC9-11).
 
 ### 2.4 Key recovery
 
-What happens when a copy of a key is lost or damaged (`POL-18.02`). **Proposed** throughout (GC9-18), except where a choice names its own question.
+What happens when a copy of a key is lost or damaged (`POL-18.02`). **Design choice** throughout, approved as written (GC9-18; product owner, 10 Oct 2026).
 
 - **Every key version has an identifier.** The identifier is computed from the key and a fixed label (HMAC-SHA-256 of the label under the key, shortened), so it names the key without revealing it. `access` keeps the identifiers of each Organisation's data key versions in its database (a `key_version` row: identifier, purpose, when it was first used; never the key), and each backup's manifest and `kernel.backup_record` keep the backup key's (2.3, 3.2). Every encrypted field and stored file names the identifier that encrypted it (2.3).
 - **A wrong key is found before it is used.** At start, the server computes the identifier of each Organisation's data key in its environment and refuses to start when it is not a version that Organisation's database lists, naming the Organisation code and the identifiers, never the key ([deployment.md](deployment.md) section 9 already refuses a missing key). So a damaged or swapped key is never used to write data no one can open later. The backup command checks the backup key's identifier against the last complete backup the same way and refuses on a difference, unless the operator states that a new backup key version starts.
 - **The environment's copy lost or damaged.** The custodian gives the kept copy of that key version to the platform operator (on `dev`, both are the product owner; on production, KDPS's, RR-237), who puts it back as the environment secret. The start check then proves it by its identifier. Nothing in the database changes.
 - **The record.** The operator then runs an operator command, like the recovery of a first user (access-and-approvals 3.2): never an API route, under the `setup` service identity. It asks at the prompt which key version was recovered (its identifier), why (lost, damaged, or a suspected leak), how it was found, and who gave the kept copy, and writes a `key-recovered` access record in the Organisation's database, or for the backup key in every Organisation database the key's backups cover ([numbering-and-audit.md](numbering-and-audit.md) 5.1; section 13). It never takes or records the key itself (`PRD-SEC-014`).
-- **A kept copy lost or damaged**, with the environment's copy sound: the custodian makes a new kept copy from the environment's at once, checked by its identifier, and the operator records it with the same command. With a key pair (GC9-17 (b)) the private part has no copy in the environment, so a lost kept copy is a lost key (below) unless the custodian holds a second copy; how many copies the custodian keeps, and where, is the custodian's under policy 18 (RR-236, RR-237).
+- **A kept copy lost or damaged**, with the environment's copy sound: the custodian makes a new kept copy from the environment's at once, checked by its identifier, and the operator records it with the same command. The backup key's private part (GC9-17) has no copy in the environment, so a lost kept copy is a lost key (below) unless the custodian holds a second copy; how many copies the custodian keeps, and where, is the custodian's under policy 18 (RR-236, RR-237).
 - **A suspected leak** is not a loss: the key stays usable, and replacing it is rotation, designed with production hosting (GC9-11). Until then a suspected leak on test hosting is reported to the product owner, who decides what follows.
 - **What the drill checks** (section 6). The restore uses the custodian's kept copies, never the environment's: every key version the manifest lists is taken from its kept copy and must match its identifier, and the drill record says so for each. A drill that had to use an environment copy fails that check.
 - **What is lost if every copy is lost.**
@@ -92,28 +90,24 @@ What happens when a copy of a key is lost or damaged (`POL-18.02`). **Proposed**
 
 ### 3.2 The application backup
 
-An application backup is the backup this design builds and proves in stage 1. It is portable: it restores into any PostgreSQL 17 server and S3-compatible store, so it does not depend on a provider's restore tools. **Proposed.**
+An application backup is the backup this design builds and proves in stage 1. It is portable: it restores into any PostgreSQL 17 server and S3-compatible store, so it does not depend on a provider's restore tools. **Design choice.**
 
-1. **One snapshot per database.** For each database the backup command opens a repeatable-read, read-only transaction, exports its snapshot, and runs PostgreSQL's own dump tool on that snapshot. So the dump and everything else read in that transaction see the same committed state (PRD Stack: Database). **Proposed.**
-2. **Control totals in the same snapshot.** In that transaction, each module that holds records computes its control totals through the restore contract (10.1): named counts and sums over its own tables, in a fixed order, money as integer paise (`PRD-MOD-014`), and Unknown values counted apart, never as zero (`PRD-MOD-015`). For example, journals and the debit and credit totals of each book; movements and quantities of the stock ledger; stored files and attachments; allocations and the highest sequence number of each series. **Proposed.**
+1. **One snapshot per database.** For each database the backup command opens a repeatable-read, read-only transaction, exports its snapshot, and runs PostgreSQL's own dump tool on that snapshot. So the dump and everything else read in that transaction see the same committed state (PRD Stack: Database). **Design choice.**
+2. **Control totals in the same snapshot.** In that transaction, each module that holds records computes its control totals through the restore contract (10.1): named counts and sums over its own tables, in a fixed order, money as integer paise (`PRD-MOD-014`), and Unknown values counted apart, never as zero (`PRD-MOD-015`). For example, journals and the debit and credit totals of each book; movements and quantities of the stock ledger; stored files and attachments; allocations and the highest sequence number of each series. **Design choice.**
 3. **The latest audit seal** of the Organisation is read in the same snapshot ([numbering-and-audit.md](numbering-and-audit.md) 4.4).
 4. **Encrypt and store.** Each dump is encrypted with the backup key (2.3) and written to the backup store, with its hash.
 5. **Copy the file store** after every database snapshot is taken (3.3).
-6. **Write the manifest**, encrypted with the backup key: the backup's identifier; the environment it came from; the code commit that took it; for each database, the snapshot time, the last migration applied and the hash of its encrypted dump; for each Organisation, its control totals, its latest seal, the list of stored-file keys its snapshot references, and the key identifiers its data needs. **Proposed.**
-7. **Check the backup** before calling it complete: every stored-file key the snapshots reference is present in the backup store, and every dump decrypts and matches its hash. A backup that fails is kept with its failure and never offered for restore. **Proposed.**
+6. **Write the manifest**, encrypted with the backup key: the backup's identifier; the environment it came from; the code commit that took it; for each database, the snapshot time, the last migration applied and the hash of its encrypted dump; for each Organisation, its control totals, its latest seal, the list of stored-file keys its snapshot references, and the key identifiers its data needs. **Design choice.**
+7. **Check the backup** before calling it complete: every stored-file key the snapshots reference is present in the backup store, and every dump decrypts and matches its hash. A backup that fails is kept with its failure and never offered for restore. **Design choice.**
 8. **Record it.** After the backup is complete, the command appends a row to `kernel.backup_record` in each Organisation database it backed up (section 11), so the operations view can show the last good backup (`PRD-SEC-013`). The record of a backup is therefore in the next backup, not in its own. The directory database gets no such row: it holds only routing facts (DEC-093).
 
-- The command reads every row, so it needs a role that row-level security does not filter. The restore creates databases and loads them, so it needs the migration role in any case (4.2). Which role the backup reads as is GC9-7, **Proposed**, for the product owner to choose:
-  - *(a) The migration role* (recommended for stage 1). The owner, which row-level security does not filter because no table forces it ([code-house-rules.md](code-house-rules.md) 5.1). Nothing new to create and no Railway capability to verify, and the operator who runs the backup already holds this credential for `pnpm migrate` and the setup step. The cost: the backup holds a credential that can change every table, more than it needs. It adds a use to the list in code-house-rules 5.1.
-  - *(b) A separate read-only backup role* with `BYPASSRLS` and read rights only, granted in every database by the runner's database step (code-house-rules 4.3). Least privilege: a leaked backup credential cannot change data. The cost: a third role in the runbook and the runner, and only a role that already has `BYPASSRLS` can give it, which on Railway is not verified (GC9-A5).
-  - *(c) (a) in stage 1 on `dev` and `kdps-test`, and the production hosting design chooses again* with its key storage (D-1; GC9-11).
-  - Recommendation: (c). The drill on `dev` runs on synthetic data by the product owner, who holds the migration credential already; least privilege matters most on production, where the backup runs on a schedule (GC9-1).
-- It is an operator command, like the setup step: never an API endpoint, never run by `app` or `worker`, and it holds credentials they do not hold (code-house-rules 4.3; access-and-approvals 9.11; DEC-112, CH-1). **Proposed.**
+- The command reads every row, so it needs a role that row-level security does not filter. The restore creates databases and loads them, so it needs the migration role in any case (4.2). The backup reads as the migration role on `dev` and `kdps-test`, the owner, which row-level security does not filter because no table forces it ([code-house-rules.md](code-house-rules.md) 5.1); the production hosting design chooses again, with its key storage (GC9-7; product owner, 10 Oct 2026; D-1, GC9-11). Nothing new is created and no Railway capability is needed, and the operator who runs the backup already holds this credential for `pnpm migrate` and the setup step. The alternative weighed for production is a separate read-only role with `BYPASSRLS`, so that a leaked backup credential cannot change data; only a role that already has `BYPASSRLS` can give it, which on Railway is not verified (GC9-A5).
+- It is an operator command, like the setup step: never an API endpoint, never run by `app` or `worker`, and it holds credentials they do not hold (code-house-rules 4.3; access-and-approvals 9.11; DEC-112, CH-1). **Design choice.**
 
 ### 3.3 Database and files consistent
 
-- A file is stored before the transaction that records it, never inside it (code-house-rules 8.3; `PRD-INT-006`). Its stored-file record is append-only and its object key is fixed ([imports-and-opening-data.md](imports-and-opening-data.md) 15.1; `PRD-MOD-011`). The application never overwrites an object, and deletes one only through the retention deletion of 8.5, after its record is gone. **Proposed** as a rule the file-store adapter enforces: the adapter used by every other path offers no delete (as built, `S1-F06-T05`).
-- So every stored-file record in a snapshot names an object that was already in the bucket when the snapshot was taken, and is still there unchanged: retention deletes the record before the object (8.5), so an object a snapshot's record names is never gone before the copy. A copy of the bucket taken after the snapshots holds every object they reference. **Proposed:** the database snapshots come first, the file copy second (3.2).
+- A file is stored before the transaction that records it, never inside it (code-house-rules 8.3; `PRD-INT-006`). Its stored-file record is append-only and its object key is fixed ([imports-and-opening-data.md](imports-and-opening-data.md) 15.1; `PRD-MOD-011`). The application never overwrites an object, and deletes one only through the retention deletion of 8.5, after its record is gone. **Design choice**, a rule the file-store adapter enforces: the adapter used by every other path offers no delete (as built, `S1-F06-T05`).
+- So every stored-file record in a snapshot names an object that was already in the bucket when the snapshot was taken, and is still there unchanged: retention deletes the record before the object (8.5), so an object a snapshot's record names is never gone before the copy. A copy of the bucket taken after the snapshots holds every object they reference. **Design choice:** the database snapshots come first, the file copy second (3.2).
 - The copy may also hold objects no snapshot references: files stored after the snapshot, or by a transaction that rolled back. They are kept and listed, never deleted (section 8). After a restore they are reported in the drill record as objects with no record, with their store time, because one stored after the recovery point can be evidence of lost work (`POL-18.04`; 4.5).
 - The copy is incremental: an object whose key is already in the backup store is not copied again, since keys are never reused for other content. Each copy is checked against the backup store's own object listing (GC9-A4).
 - Whether the bucket can refuse overwrites and deletes by itself, through object versioning or object lock, is a Railway capability not verified (GC9-A4). The rule above does not depend on it.
@@ -130,13 +124,13 @@ An application backup is the backup this design builds and proves in stage 1. It
 
 ### 4.1 Into a fresh target
 
-- A restore writes only into a fresh target: a PostgreSQL server with no Apparel OS database and an empty file store, with the migration and runtime roles created as the roles runbook says ([code-house-rules.md](code-house-rules.md) 5.1). It never writes over the source environment or into a database that already holds rows. **Proposed.** Switching traffic from the source to the restored target is a separate, recorded step after reopening (4.3).
-- A backup restores only into the environment it came from: a `dev` backup into a `dev` target, a `kdps-test` backup into a `kdps-test` target. The two are never mixed ([deployment.md](deployment.md) section 1). The manifest names its environment and the restore compares it with the target's. **Proposed.**
+- A restore writes only into a fresh target: a PostgreSQL server with no Apparel OS database and an empty file store, with the migration and runtime roles created as the roles runbook says ([code-house-rules.md](code-house-rules.md) 5.1). It never writes over the source environment or into a database that already holds rows. **Design choice.** Switching traffic from the source to the restored target is a separate, recorded step after reopening (4.3).
+- A backup restores only into the environment it came from: a `dev` backup into a `dev` target, a `kdps-test` backup into a `kdps-test` target. The two are never mixed ([deployment.md](deployment.md) section 1). The manifest names its environment and the restore compares it with the target's. **Design choice.**
 - Restoring onto production hosting from test hosting is never a switch: a Store switches only on production hosting, at its own switch count (`PRD-LIF-026`, DEC-028).
 
 ### 4.2 Steps
 
-The restore command is an operator command, like the backup command (3.2). It writes each step with its start and end time to the drill record (section 6) as it goes. **Proposed.**
+The restore command is an operator command, like the backup command (3.2). It writes each step with its start and end time to the drill record (section 6) as it goes. **Design choice.**
 
 1. **Check before writing.** The manifest decrypts with the backup key; its environment matches the target's (4.1); the target is fresh (4.1); every key version it lists is available (2.3); the running code holds every migration the backup had applied. A backup taken by newer code is refused; older code's backup is restored, then migrated forward in step 3. Any failure stops the restore with nothing written.
 2. **Restore the databases.** The directory database first when the whole environment is restored, then each Organisation database, from the dumps, as the migration role into databases it creates. Each dump's hash is checked before it is read.
@@ -151,39 +145,34 @@ Steps 1 to 8 run without people. What follows needs authorised people (4.3): rec
 
 ### 4.3 Recovery hold and reopening
 
-- **The hold.** A restored Organisation is held: `kernel`'s command runner refuses every command except sign-in, session and access commands (revocations included, 4.4), reading, and the recovery commands below. A refused command names the hold as its reason. Jobs and outbox delivery wait too, except the participants' own steps. **Proposed**, implementing `POL-18.03`: Operations and Accounts validate stock, bills and financial totals before reopening.
-- **Recovery commands.** Three commands act while the hold is on: reconcile a series, record a validation, reopen. Each runs as the acting user under Authorise and writes its audit record (`PRD-ACS-013`, `PRD-INT-004`). Reopening lifts the hold through `kernel`'s interface, a call down a tier, and the `recovery_event` row it appends is written as the runtime role (section 11). Where they live is GC9-8, **Proposed**, for the product owner to choose. `configuration` and `numbering` are both tier 1, so any call between them is a same-tier call that module-map 4.4 must list and `pnpm check:modules` must allow (module-map section 3):
-  - *(a) All three in `configuration`* (recommended), which owns availability and already calls `audit` (module-map 4.4). Reconcile calls `numbering`'s reconcile operation: a new listed same-tier call, `configuration` → `numbering`. One place and one screen for everything a restore needs before reopening; `numbering` stays a module that calls no one.
-  - *(b) Reconcile in `numbering`, the other two in `configuration`.* `numbering` keeps its own records' command, but to serve a route it must Authorise through `access`, a new same-tier call `numbering` → `access`, or `access` serves the route and calls `numbering`. Two places for one recovery.
-  - *(c) Each module that owns series reconciles its own* (`exceptions`, `files-imports`, `finance` · books, later `pos`), as each already pauses, releases and closes them (numbering-and-audit 3.7). No new call for the tier 2 modules, but `files-imports` (tier 1) still needs its listed call to `numbering` (module-map 4.7), and every owning module builds the same command.
-  - Recommendation: (a), for one listed call and one recovery place.
+- **The hold.** A restored Organisation is held: `kernel`'s command runner refuses every command except sign-in, session and access commands (revocations included, 4.4), reading, and the recovery commands below. A refused command names the hold as its reason. Jobs and outbox delivery wait too, except the participants' own steps. **Design choice**, implementing `POL-18.03`: Operations and Accounts validate stock, bills and financial totals before reopening.
+- **Recovery commands.** Three commands act while the hold is on: reconcile a series, record a validation, reopen. Each runs as the acting user under Authorise and writes its audit record (`PRD-ACS-013`, `PRD-INT-004`). Reopening lifts the hold through `kernel`'s interface, a call down a tier, and the `recovery_event` row it appends is written as the runtime role (section 11). All three belong to `configuration`, which owns availability and already calls `audit` (GC9-8; product owner, 10 Oct 2026; module-map 4.4). Reconcile calls `numbering`'s reconcile operation: `configuration` and `numbering` are both tier 1, so this is a same-tier call that module-map 4.4 lists and `pnpm check:modules` allows (module-map section 3). One place and one screen hold everything a restore needs before reopening, and `numbering` stays a module that calls no one. Not chosen: reconcile in `numbering`, or in each module that owns series.
   - **Reconcile a series** after a restore, with its evidence (5.3), through `numbering`'s reconcile operation.
   - **Record a validation**: one by Operations and one by Accounts, each saying which of stock, bills and financial totals it compared, against what, and with what evidence (`POL-18.03`). Which of the three each validates is not split here; the policy names both.
   - **Reopen**: refused until both validations are recorded and every recovery gap (4.5) is reconciled or raised as an exception. Reopening lifts the hold and records the time, which ends the measured recovery time (section 6).
-- Recovery commands are in `configuration` below, as (a) proposes; under (b) or (c) only the reconcile moves.
 - **Who** holds the restore operator's role, the two validations and reopening is KDPS's. Whether one person holding both the Operations and the Accounts persona may record both validations, and who may reopen, are OPEN (GC9-6; V-63). On `dev` the drill uses synthetic users and labelled synthetic role assignments.
 - **Series stay paused after reopening** until each is reconciled. A document that needs a paused series stays unavailable, and Allocate refuses it ([numbering-and-audit.md](numbering-and-audit.md) 3.2).
 - **Policy gates still apply.** Reopening switches on no policy-dependent operation: the availability check answers as it did before the restore (`PRD-SEC-017`).
 
 ### 4.4 Sessions, devices and service identities
 
-- **Sessions.** A restore can bring back a session that was ended or revoked after the recovery point. So `access` ends every session of a restored Organisation, and everyone signs in again with the second factor (`PRD-SEC-001`, `PRD-SEC-008`). **Proposed.**
+- **Sessions.** A restore can bring back a session that was ended or revoked after the recovery point. So `access` ends every session of a restored Organisation, and everyone signs in again with the second factor (`PRD-SEC-001`, `PRD-SEC-008`). **Design choice.**
 - **Revocations after the recovery point** of a device, a user or a service identity are lost with everything else after it. Before reopening, the restore operator applies again each revocation known from outside evidence, such as the incident record. Whether every outside service credential is replaced after every restore is OPEN (GC9-15).
 - **Devices.** A restored server never lets a device continue a cloned or restored identity (`PRD-OFF-010`). How an offline counter's queued bills and series meet a restored server is the offline counter design (GC-8; `PRD-OFF-009`).
 
 ### 4.5 Outside systems and the recovery gap
 
 - **The recovery gap** is the work done after the recovery point that the restored database does not hold. It is reconciled against counter, provider and Tally records; no transaction is silently lost or duplicated (`POL-18.04`).
-- **Held outside deliveries.** No outbox row is delivered while the hold is on (4.3). After reopening, rows bound for a module inside the Organisation are delivered as usual; their consumers are idempotent on the event's identity, so a delivery made again changes nothing (`PRD-INT-008`). Rows bound for an outside system (Tally, GST, bank, messaging) stay undelivered until their outcome is reconciled with that system, because a delivery the restored database thinks pending may already have reached it after the recovery point (`PRD-INT-006`, `PRD-INT-007`). **Proposed.**
+- **Held outside deliveries.** No outbox row is delivered while the hold is on (4.3). After reopening, rows bound for a module inside the Organisation are delivered as usual; their consumers are idempotent on the event's identity, so a delivery made again changes nothing (`PRD-INT-008`). Rows bound for an outside system (Tally, GST, bank, messaging) stay undelivered until their outcome is reconciled with that system, because a delivery the restored database thinks pending may already have reached it after the recovery point (`PRD-INT-006`, `PRD-INT-007`). **Design choice.**
 - **Repeated requests.** An idempotency key recorded after the recovery point is lost, so a client repeating that request runs it again; its first effect was lost too (`PRD-INT-002`). An offline bill uploaded again is matched by its device and number (GC-8; `PRD-OFF-009`).
-- **Each gap is an exception.** A piece of outside evidence that the restored records cannot explain becomes an exception with an owner and evidence (`PRD-EXC-001`; access-and-approvals section 12), raised by the module that owns the matching record through its restore participant. **Proposed.**
+- **Each gap is an exception.** A piece of outside evidence that the restored records cannot explain becomes an exception with an owner and evidence (`PRD-EXC-001`; access-and-approvals section 12), raised by the module that owns the matching record through its restore participant. **Design choice.**
 - **Stage 1 sources.** In stage 1 the only gap sources are the number series (5.3) and objects in the file store with no record (3.3). Later designs add theirs through the restore contract: the offline counter's queues (GC-8, stage 4), card and UPI providers and IRN (stage 4), bank and Tally (stage 5).
 
 ## 5. The restore proof
 
 ### 5.1 Checks on every restore
 
-These checks run on every restored Organisation, from an application backup or a platform backup alike. **Proposed.**
+These checks run on every restored Organisation, from an application backup or a platform backup alike. **Design choice.**
 
 | Check | What passes | IDs |
 | --- | --- | --- |
@@ -200,26 +189,26 @@ A failed check is shown in the drill record and the operations view, and the Org
 
 ### 5.2 Comparison with the backup's control totals
 
-- For an application backup, each module computes its control totals on the restored database with the same function that computed them in the backup's snapshot (3.2). Every total must be equal. **Proposed.**
+- For an application backup, each module computes its control totals on the restored database with the same function that computed them in the backup's snapshot (3.2). Every total must be equal. **Design choice.**
 - For a platform backup there are no snapshot totals. The proof then rests on 5.1 and on the recovery gap (4.5), and the drill record says that no comparison was possible (`PRD-PRF-004`).
 
 ### 5.3 Number series
 
 - After a restore every series is paused until it is reconciled against the counters' records and other evidence. Its next number is then set past the highest number known to be issued, and the skip is recorded with its reason ([numbering-and-audit.md](numbering-and-audit.md) 3.6; `POL-18.04`). This design runs it, as that section says.
-- **Pause.** `numbering`'s restore participant pauses every open series and writes a series event for each (numbering-and-audit 6.1). It needs no caller from the owning module. **Proposed**, adding a row to numbering-and-audit 3.7 (section 13).
-- **Reconcile.** An authorised person records, for one series, the evidence of the highest number issued: printed or uploaded bills, the counters' records, or a statement that no document left the system, with its reason. `numbering` sets the next number past the higher of that number and the highest allocation in the restored database, records the skip and the reason as the series event "reconciled after a restore", and releases the series. **Proposed** (4.3).
+- **Pause.** `numbering`'s restore participant pauses every open series and writes a series event for each (numbering-and-audit 6.1). It needs no caller from the owning module. **Design choice**; numbering-and-audit 3.7 lists it.
+- **Reconcile.** An authorised person records, for one series, the evidence of the highest number issued: printed or uploaded bills, the counters' records, or a statement that no document left the system, with its reason. `numbering` sets the next number past the higher of that number and the highest allocation in the restored database, records the skip and the reason as the series event "reconciled after a restore", and releases the series. **Design choice** (4.3).
 - A number is never given twice, including after a restore (`PRD-ACP-019`, `PRD-LIF-020`). A reconciliation never lowers a series' next number.
 - **Import batch codes** come from a `numbering` series ([imports-and-opening-data.md](imports-and-opening-data.md) 15.1), so they are paused and reconciled like any other. A PostgreSQL sequence would restart from the snapshot after a restore and could give a code a second time, against `PRD-ACP-019`. Approved by the product owner on 6 Oct 2026 (GC9-9); it closes RR-204.
 
 ### 5.4 Audit seals
 
 - `audit`'s restore participant recomputes the seal chain over every sealed block and reports any difference ([numbering-and-audit.md](numbering-and-audit.md) 4.4; `PRD-SEC-007`).
-- For an application backup it also checks that the chain ends at the latest seal the manifest holds (3.2). The manifest is kept apart from the database and encrypted, so a chain rebuilt over altered rows would not end at that seal. **Proposed.**
+- For an application backup it also checks that the chain ends at the latest seal the manifest holds (3.2). The manifest is kept apart from the database and encrypted, so a chain rebuilt over altered rows would not end at that seal. **Design choice.**
 - Rows recorded after the last seal are sealed by the sealing job after reopening, as usual.
 
 ## 6. The restore drill record
 
-Every restore, drill or real, produces a drill record. **Proposed.**
+Every restore, drill or real, produces a drill record. **Design choice.**
 
 - **Who and when:** the drill's purpose (a drill, or a real restore and its cause); who conducted it, and for a go-live drill the Admin who conducts it (`POL-18.03`); the restore operator; the backup used and its recovery point; the start and end time of every step of 4.2; the time each validation was recorded and by whom; the time of reopening.
 - **Measured times:** recovery time, from the start of the restore, or for a real failure from the time it was declared, to reopening; and the data lost, from the recovery point to the time the failure was declared. On production they are compared with the `POL-18.01` targets; on the test setup they are measured, not promised (deployment section 4).
@@ -237,7 +226,7 @@ Every restore, drill or real, produces a drill record. **Proposed.**
 | The recovery hold, the validations and reopening, with synthetic users | The restore operator, the pre-launch drill date and cadence (V-63, RR-123); who validates and reopens (GC9-6) |
 | — | The Admin's restore drill before go-live, on production (`POL-18.03`, RR-188) |
 
-- **Fresh target on `dev`.** The drill restores into a temporary target holding only that drill's synthetic data: a separate PostgreSQL service and a separate bucket, with an `app` instance pointed at them so files are opened through the application. Whether this is a temporary Railway environment or extra services inside `dev` depends on what Railway allows (GC9-A6). It is removed after the drill record is kept; it is a copy of synthetic data, not a record. **Proposed.**
+- **Fresh target on `dev`.** The drill restores into a temporary target holding only that drill's synthetic data: a separate PostgreSQL service and a separate bucket, with an `app` instance pointed at them so files are opened through the application. Whether this is a temporary Railway environment or extra services inside `dev` depends on what Railway allows (GC9-A6). It is removed after the drill record is kept; it is a copy of synthetic data, not a record. **Design choice.**
 - **`kdps-test`.** Railway's scheduled backups and one practised restore (deployment section 4). Real data there needs KDPS's agreement (D-4, DEC-052), and a restore of it stays inside `kdps-test`.
 - **Stage 1 exit** needs this design approved and the drill record on `dev` ([stage 1](../../plan/stage-1/README.md) exit checklist 7.1). Live use in stage 1 needs policy 18 Signed with its values validated (RR-075, RR-076, RR-123; stage 1 exit checklist 7.4).
 
@@ -246,8 +235,8 @@ Every restore, drill or real, produces a drill record. **Proposed.**
 ### 8.1 Retention schedules
 
 - Retention is set by record class, including financial, stock, employee, customer and audit records, and validated against legal retention requirements (`POL-18.05`). The periods are OPEN (V-13, RR-076; KDPS Owner, Admin, CA). Nothing has a default (DEC-105).
-- A retention schedule is a setting in `configuration`, versioned like any setting (module-map 11.2). It names a record class and, once KDPS sets it, its period and the date the period counts from. **Proposed.**
-- Each module declares which of its record types belong to which class. A record type that belongs to no declared class is never deleted. **Proposed.**
+- A retention schedule is a setting in `configuration`, versioned like any setting (module-map 11.2). It names a record class and, once KDPS sets it, its period and the date the period counts from. **Design choice.**
+- Each module declares which of its record types belong to which class. A record type that belongs to no declared class is never deleted. **Design choice.**
 - Customer consent and notices are designed with the stage 4 counter, and employee data with the stage 6 HR design (module-map MM-15, DEC-105; `PRD-SEC-009`, `PRD-SEC-010`).
 
 ### 8.2 Deletion
@@ -262,32 +251,29 @@ Every restore, drill or real, produces a drill record. **Proposed.**
 ### 8.3 Legal holds
 
 - A legal hold overrides routine deletion (`POL-18.05`, `PRD-SEC-009`).
-- A hold is a record in `configuration`: what it covers (record classes, and a legal entity, Site, party, date range or named records), its reason, who placed it and when; and, once released, who released it, when and why. A hold takes effect when it is placed. Every retention function checks holds before it deletes and skips what any hold covers. **Proposed.**
+- A hold is a record in `configuration`: what it covers (record classes, and a legal entity, Site, party, date range or named records), its reason, who placed it and when; and, once released, who released it, when and why. A hold takes effect when it is placed. Every retention function checks holds before it deletes and skips what any hold covers. **Design choice.**
 - Which records are under a legal hold today is KDPS's, with the CA (V-13; KDPS Owner question 7, CA question 12). Who may place and release a hold, and whether a release needs a different authorised person, are OPEN (GC9-4).
 - Holds are built before the first retention deletion can be enabled, together with the schedules (section 10.2).
 
 ### 8.4 Backups, restores and retention
 
 - A record deleted under retention stays in every backup taken before its deletion until that backup expires. So how long backups are kept (GC9-2) bounds how long a deleted record can still be recovered. The CA confirms that this is acceptable for each class (GC9-2). A backup is never edited to remove a record.
-- A restore brings back records deleted after the recovery point. Retention runs again once the Organisation reopens, and deletes them again where their period has passed. While the hold is on, no retention function runs. **Proposed.**
-- A legal hold placed after the recovery point is lost with everything else after it. Before reopening, the restore operator places it again from outside evidence; the reopen command asks for confirmation that this was done. **Proposed.**
+- A restore brings back records deleted after the recovery point. Retention runs again once the Organisation reopens, and deletes them again where their period has passed. While the hold is on, no retention function runs. **Design choice.**
+- A legal hold placed after the recovery point is lost with everything else after it. Before reopening, the restore operator places it again from outside evidence; the reopen command asks for confirmation that this was done. **Design choice.**
 
 ### 8.5 Deleting stored files after retention
 
-A stored file is one record of `files-imports` and one object in the file store, shared by every receipt and attachment of the same bytes, whatever records they belong to (the key is `<Organisation identifier>/files/<content hash>`; [imports-and-opening-data.md](imports-and-opening-data.md) 15.1). The records that point to it may belong to different classes with different periods. This section says how such a file, its record and its object are deleted once retention allows (`POL-18.05`). **Proposed** throughout (GC9-16). Nothing here is built in `S1-F14`; it is built before the first retention deletion can be enabled (10.2).
+A stored file is one record of `files-imports` and one object in the file store, shared by every receipt and attachment of the same bytes, whatever records they belong to (the key is `<Organisation identifier>/files/<content hash>`; [imports-and-opening-data.md](imports-and-opening-data.md) 15.1). The records that point to it may belong to different classes with different periods. This section says how such a file, its record and its object are deleted once retention allows (`POL-18.05`). **Design choice** throughout (GC9-16; product owner, 10 Oct 2026). Nothing here is built in `S1-F14`; it is built before the first retention deletion can be enabled (10.2).
 
-- **When a file is due** (GC9-16, for the product owner to choose):
-  - *(a) A file follows its records* (recommended). A stored file has no period of its own. It is due only when nothing points to it any more: every attachment to it has been deleted with its attached record, and every import batch whose stored original it is has been deleted, each under its own class's retention function. So a file is never deleted while any record still in its period, or under a hold, depends on it, and an attachment never points to a missing file.
-  - *(b) Stored files are their own record class* with their own period, counting from when they were stored; an attachment whose file is gone shows that it was deleted after retention. Simpler to run, but a record still in its period can lose its evidence, which `PRD-IMP-002` and `PRD-ACP-019` need it to keep.
-  - The rest of this section assumes (a).
+- **A file follows its records** (GC9-16; product owner, 10 Oct 2026). A stored file has no period of its own. It is due only when nothing points to it any more: every attachment to it has been deleted with its attached record, and every import batch whose stored original it is has been deleted, each under its own class's retention function. So a file is never deleted while any record still in its period, or under a hold, depends on it, and an attachment never points to a missing file. Not chosen: stored files as their own record class, which could take evidence from a record still in its period (`PRD-IMP-002`, `PRD-ACP-019`).
 - **Attachments go with their record.** An attachment is a `files-imports` row, so the owning module never deletes it itself. The owning module's retention function (8.2), in its own transaction, calls `files-imports`' operation "delete the attachments of a record after retention", which deletes the record's attachments through `files-imports`' retention function and writes an audit record for each. The record and its attachments go together or not at all.
-- **Only a named retention function deletes.** `files_imports.delete_after_retention` is the only path that deletes a `stored_file` or `file_receipt` row; the append-only trigger admits it alone ([code-house-rules.md](code-house-rules.md) 7.1), as `audit.delete_after_retention` for audit (numbering-and-audit 4.6). It is `SECURITY DEFINER` and runs in a job of the existing worker under its own internal service identity (`files-retention`; access-and-approvals 9.11a). **Proposed.** While no class has a period, nothing points to nothing, so it finds no file due and deletes nothing (8.2).
+- **Only a named retention function deletes.** `files_imports.delete_after_retention` is the only path that deletes a `stored_file` or `file_receipt` row; the append-only trigger admits it alone ([code-house-rules.md](code-house-rules.md) 7.1), as `audit.delete_after_retention` for audit (numbering-and-audit 4.6). It is `SECURITY DEFINER` and runs in a job of the existing worker under its own internal service identity (`files-retention`; access-and-approvals 9.11a). **Design choice.** While no class has a period, nothing points to nothing, so it finds no file due and deletes nothing (8.2).
 - **Holds first.** Every record that pointed to the file was checked against legal holds when its own retention function deleted it (8.2, 8.3). Before it deletes the file, the function also asks `configuration` whether any hold names the file itself, and skips it if one does (`POL-18.05`, `PRD-SEC-009`).
 - **Record first, object second.** In one transaction the function locks the stored file, checks again that nothing points to it and no hold covers it, deletes its `stored_file` row and its receipts, and appends a `stored_file_deletion` row: the stored file's identifier, its content hash, its object key, the retention schedule versions and the hold check that allowed it, when, and the job. No name or reference of a receipt is kept (`PRD-SEC-009`). It writes an audit record of the deletion under the job's service identity (`PRD-SEC-007`). After the transaction commits, never inside it (code-house-rules 8.3; `PRD-INT-006`), the job deletes the object through a deleter only this job is given; every other path keeps the adapter with no delete (3.3). The deletion row then records the object's outcome: pending, succeeded or failed, retried until it succeeds (`PRD-INT-007`).
   - If the object's deletion fails, the object stays with no record, which is safe: the restore proof lists it as an object with no record (5.1) and the drill record names it with its deletion row, so it is not mistaken for lost work.
   - The other order, object first, could leave a record naming a missing object, which fails the stored-file check of 5.1.
 - **The same bytes later.** Once the row is gone, the same content can be stored again as a new stored file, with a new identifier, under the same object key; the earlier deletion row stays.
-- **Objects with no record** (3.3), stored by a transaction that rolled back, have no class and are never due under (a). They are kept and listed. Whether and when they are removed is decided before the first retention deletion (GC9-16).
+- **Objects with no record** (3.3), stored by a transaction that rolled back, have no class and are never due. They are kept and listed for now (product owner, 10 Oct 2026). How they are removed is decided by the product owner before the first retention deletion (RR-492).
 - **Backups.** The object stays in the backup store for every backup that references it until the last such backup expires (8.4; GC9-2). Backup copies are never edited. Because the file-store copy is incremental (3.3), an object in the backup store is removed only when no kept backup's manifest lists it; removing expired backups is designed with how long backups are kept (GC9-2).
 - **Restores.** A restore from a backup taken before the deletion brings back the record, its attachments and the object (from the backup store), and 5.1 passes for them. Retention runs again after reopening and deletes them again, the deletion row of the restored database being gone with the recovery gap (8.4).
 
@@ -308,14 +294,14 @@ The complete export is built in stage 5 by `site-lifecycle`, with closure and re
 ### 9.2 What stage 1 needs
 
 - Every record keeps its identifier and business code, and nothing reuses one, including after a restore (5.3; `PRD-MOD-008`).
-- Each module computes named control totals over its own records (10.1). Stage 5 reuses the same definitions where the export's totals are the same, read through declared read models (`PRD-MOD-003`). **Proposed.**
+- Each module computes named control totals over its own records (10.1). Stage 5 reuses the same definitions where the export's totals are the same, read through declared read models (`PRD-MOD-003`). **Design choice.**
 - Nothing else of the export is built in stage 1.
 
 ## 10. Implementation units
 
 ### 10.1 The restore contract
 
-- `kernel` sits at tier 0 and calls no module above it (module-map section 3). So `kernel` defines a restore contract and each module that holds records implements it and registers it at start, as a target module registers an import handler (module-map section 3, rule 6). **Proposed.**
+- `kernel` sits at tier 0 and calls no module above it (module-map section 3). So `kernel` defines a restore contract and each module that holds records implements it and registers it at start, as a target module registers an import handler (module-map section 3, rule 6). **Design choice.**
 - A participant may offer:
   - **control totals**: named counts and sums over its own tables, read in the transaction context it is given, never in one it opens itself (3.2, 5.2; `PRD-MOD-006`);
   - **after-restore steps** it runs before reopening (4.2, step 7), under the restore's internal service identity (`PRD-SEC-018`);
@@ -335,7 +321,7 @@ The complete export is built in stage 5 by `site-lifecycle`, with closure and re
 | `configuration` | The recovery commands: reconcile a series, record a validation, reopen (4.3); retention schedules with no values, and the rule that nothing is deleted without one (8.1, 8.2) | `POL-18.03`, `POL-18.05` |
 | Every other module holding records in stage 1 (`organisation`, `merchandise`, `exceptions`, `finance` · books, `stock` · ledger) | Its participant: control totals and checks (5.1, 5.2) | `PRD-ACP-019` |
 
-- Legal holds (8.3), the retention functions of classes other than audit (8.2) and the deletion of stored files (8.5) are built before the first deletion can be enabled, not in `S1-F14`. **Proposed.**
+- Legal holds (8.3), the retention functions of classes other than audit (8.2) and the deletion of stored files (8.5) are built before the first deletion can be enabled, not in `S1-F14`. **Design choice.**
 - `site-lifecycle` builds the complete export in stage 5 (section 9).
 
 ### 10.3 Commands and jobs
@@ -354,7 +340,7 @@ The complete export is built in stage 5 by `site-lifecycle`, with closure and re
 
 ## 11. Tables
 
-Every table has a UUIDv7 primary key and an entry in its set's table register (code-house-rules 3.2). **Proposed** throughout; other columns are left to reviewed migrations.
+Every table has a UUIDv7 primary key and an entry in its set's table register (code-house-rules 3.2). **Design choice** throughout; other columns are left to reviewed migrations.
 
 | Schema | Table | Class | Constraints |
 | --- | --- | --- | --- |
@@ -400,22 +386,22 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 
 ## 13. Edits this design asks of other documents
 
-These follow only if the proposals are approved, with GC-9 and the edits it causes elsewhere. None is made here except the [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 edit, made on 6 Oct 2026, when GC9-9 and GC9-10 were approved and `S1-F06-T05` took the write-once rule of 3.3 (DEC-116); module-map 4.7 already lists `files-imports`' call to `numbering` for batch codes. The rows below follow the recommended options; another choice at approval changes its row.
+Made on 10 Oct 2026, when the product owner approved GC-9 (`S1-F14-T01`). The [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 edit for GC9-9 and GC9-10 and the write-once rule of 3.3 was made on 6 Oct 2026 by `S1-F06-T05` and `S1-F06-T01` (DEC-116), and module-map 4.7 already listed `files-imports`' call to `numbering` for batch codes. The entry for `configuration` → `numbering` in `SAME_TIER_CALLS` of `tools/module-check/check.mts` is added with the code that makes the call (`S1-F14-T03`), as that file says: module-map first, then the table.
 
-| Document | Edit | Proposal |
+| Document | Edit | From |
 | --- | --- | --- |
 | [module-map.md](../architecture/module-map.md) 4.1 | The operations view shows backup and recovery status; `kernel` holds the restore contract and the recovery hold | 4.3, 10.1 |
-| module-map 4.4 | `configuration` uses `numbering` for the reconcile-after-restore call, and holds retention schedules, legal holds and recovery validations; the same call added to `SAME_TIER_CALLS` in `tools/module-check/check.mts` | GC9-8 |
+| module-map 4.4 | `configuration` uses `numbering` for the reconcile-after-restore call, and holds retention schedules, legal holds and recovery validations; the same call is added to `SAME_TIER_CALLS` with its code (`S1-F14-T03`) | GC9-8 |
 | module-map 4.7 | `files-imports` offers "delete the attachments of a record after retention" and holds the retention deletion of stored files | 8.5, GC9-16 |
 | [numbering-and-audit.md](numbering-and-audit.md) 3.7 | A row for "pause every series after a restore" and one for "reconcile after a restore" | 5.3 |
-| [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 | Made 6 Oct 2026: object keys start with the Organisation's identifier; objects are never overwritten or deleted by the app; batch codes from a `numbering` series. Still to make: deletion after retention only through 8.5, and the `stored_file_deletion` table | GC9-10, 3.3, GC9-9, GC9-16 |
+| [imports-and-opening-data.md](imports-and-opening-data.md) 15.1 | Object keys start with the Organisation's identifier; objects are never overwritten or deleted by the app; batch codes from a `numbering` series (6 Oct 2026); deletion after retention only through 8.5, and the `stored_file_deletion` table (10 Oct 2026) | GC9-10, 3.3, GC9-9, GC9-16 |
 | numbering-and-audit 5.1 | The access record kind `key-recovered` (2.4) | GC9-18 |
-| [code-house-rules.md](code-house-rules.md) 5.1 | The migration role is also used by the backup and restore commands (stage 1; production chooses again) | GC9-7 |
+| [code-house-rules.md](code-house-rules.md) 5.1 | The migration role is also used by the backup and restore commands (`dev` and `kdps-test`; production chooses again) | GC9-7 |
 | code-house-rules 7.1 | `files_imports.delete_after_retention` beside audit retention as a delete a design allows | 8.5 |
 | [access-and-approvals.md](../access/access-and-approvals.md) 2.3 and 9.11 | The restore's internal service identity, created with the Organisation; later, `files-retention` | 4.2, 8.5 |
 | access-and-approvals section 6 | Key version identifiers, the start check and the key-recovery command (2.4) | GC9-18 |
 | [deployment.md](deployment.md) section 4 | A pointer to this design for the file-store backup and the drill | 3.1 |
-| deployment.md section 9 | The backup key's public part as an environment secret, its private part never one (or the one secret key, under GC9-17 (a)); the start check of 2.4 | GC9-17, GC9-18 |
+| deployment.md section 9 | The backup key's public part as an environment secret, its private part never one; the start check of 2.4 | GC9-17, GC9-18 |
 
 ## 14. Open questions and assumptions
 
@@ -431,27 +417,27 @@ Nothing below has a default. Questions already open elsewhere are pointed to, no
 | GC9-4 | Who may place and release a legal hold, and whether a release needs a different authorised person (8.3) | Business | KDPS Owner, CA | The first retention deletion | Who controls holds |
 | GC9-5 | Whether a Site's or legal entity's records can be restored alone, apart from the Organisation (2.1) | Business | Product owner; KDPS Owner | — (the Organisation is the unit until decided) | Partial restores |
 | GC9-6 | Who records the Operations and the Accounts validations, whether they must be two different people when one person holds both personas, and who may reopen (4.3) | Business | KDPS Owner, Admin | Live S1 (go-live drill) | Who can put a restored Organisation back in service |
-| GC9-7 | **Proposed:** which role the backup reads as: (a) the migration role; (b) a read-only backup role with `BYPASSRLS`; (c) (a) in stage 1, chosen again with production hosting. Recommended: (c). The restore uses the migration role in every option (3.2) | Technical | Product owner, at approval | Code: S1-F14 | Least privilege for backups |
-| GC9-8 | **Proposed:** where the recovery commands live: (a) all in `configuration`, with a listed call to `numbering`; (b) reconcile in `numbering`, the rest in `configuration`; (c) each owning module reconciles its own series. Recommended: (a) (4.3) | Technical | Product owner, at approval | Code: S1-F14 | Module boundaries |
+| GC9-7 | Answered (product owner, 10 Oct 2026): the backup reads as the migration role on `dev` and `kdps-test`; the production hosting design chooses again. The restore uses the migration role (3.2) | Technical | — | Production: D-1 | Least privilege for backups |
+| GC9-8 | Answered (product owner, 10 Oct 2026): the recovery commands are in `configuration`, with a listed call to `numbering` (4.3; module-map 4.4) | Technical | — | — | Module boundaries |
 | GC9-9 | Approved by the product owner, 6 Oct 2026: import batch codes come from a `numbering` series, so a restore cannot give one twice (5.3; imports-and-opening-data 15.1). Closes RR-204 | Technical | — | — | `PRD-ACP-019` for batch codes |
 | GC9-10 | Approved by the product owner, 6 Oct 2026: object keys in the file store start with the Organisation's identifier (2.1; imports-and-opening-data 15.1) | Technical | — | — | Restoring and exporting one Organisation's files |
 | GC9-11 | Key storage, copies and rotation on production (2.3) | Technical | Product owner (D-1, RR-029) | Live S1 | Whether old backups stay readable |
-| GC9-12 | **Proposed:** copies of every key version are kept outside Railway, apart from every backup, by a named custodian (2.3). This design names no custodian. On `dev` the product owner names the custodian before the drill (`S1-F14-T04`; named 9 Oct 2026, RR-236). On production custody belongs to KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237; DEC-116) and blocks live use only | Technical; on production, business | Product owner (`dev`); KDPS Owner and Admin (production) | Exit S1 (the drill checks the `dev` copies); live use only, for production custody | Whether a lost secret loses the backups |
+| GC9-12 | Approved (product owner, 10 Oct 2026): copies of every key version are kept outside Railway, apart from every backup, by a named custodian (2.3). This design names no custodian. On `dev` the product owner names the custodian before the drill (`S1-F14-T04`; named 9 Oct 2026, RR-236). On production custody belongs to KDPS's Owner and Admin under policy 18 (`POL-18.02`; KDPS Owner question 62, RR-237; DEC-116) and blocks live use only | Business, on production | KDPS Owner and Admin (production) | Live use only, for production custody | Whether a lost secret loses the backups |
 | GC9-13 | The complete export's scopes, file format, package protection and who may run it (9.1) | Business and technical | Product owner, in the stage 5 design; KDPS Owner for who may run it | Design: S5-F09 | The export |
 | GC9-14 | How each record class other than audit is deleted after retention, and how its totals stay explainable (8.2) | Technical | The owning module's design | The first deletion in that class | Retention beyond audit |
 | GC9-15 | Whether every outside service credential is replaced after a restore, or only the revocations known from outside evidence are applied again (4.4) | Technical (security) | Product owner | Live S1 | What a restore can bring back |
-| GC9-16 | **Proposed:** when a stored file is due for deletion: (a) it follows its records, due only when nothing points to it; (b) stored files are their own record class with their own period. Recommended: (a). With it: records before objects, an audit record and a deletion row, and objects with no record kept until decided (8.5) | Technical; the periods stay KDPS's | Product owner, at approval; the objects with no record before the first deletion | The first retention deletion of a stored file | Whether evidence can go before the record it proves |
-| GC9-17 | **Proposed:** the form of the backup key: (a) one secret key in the environment; (b) a key pair, the environment holding only the public part. Recommended: (b) (2.3) | Technical (security) | Product owner, at approval | Code: S1-F14 | Whether a stolen environment can open backups |
-| GC9-18 | **Proposed:** key recovery: key version identifiers, the start check, the custodian's copy put back by the platform operator, the `key-recovered` access record, the drill using kept copies only (2.4) | Technical | Product owner, at approval | Code: S1-F14 | Whether a lost or damaged key is found before it is used, and recovered with a record |
+| GC9-16 | Answered (product owner, 10 Oct 2026): a stored file follows its records, deleted only once nothing points to it, record before object (8.5). Objects with no record are kept for now; how they are removed is RR-492 | Technical; the periods stay KDPS's | Product owner, for RR-492 | The first retention deletion of a stored file | Whether evidence can go before the record it proves |
+| GC9-17 | Answered (product owner, 10 Oct 2026): the backup key is a key pair; the environment holds only the public part, the private part only the custodian (2.3) | Technical (security) | — | — | Whether a stolen environment can open backups |
+| GC9-18 | Approved as written (product owner, 10 Oct 2026): key version identifiers, the start check, the custodian's copy put back by the platform operator, the `key-recovered` access record, the drill using kept copies only (2.4) | Technical | — | — | Whether a lost or damaged key is found before it is used, and recovered with a record |
 
-### 14.2 Proposed choices at a glance
+### 14.2 The choices at a glance
 
-Each is **Proposed** where it is written, except GC9-9 and GC9-10, approved by the product owner on 6 Oct 2026; this list helps the approval find them.
+Each is a **Design choice** where it is written, approved by the product owner (GC9-9 and GC9-10 on 6 Oct 2026, the rest on 10 Oct 2026); this list helps find them.
 
 - The Organisation as the unit of restore (2.1); object keys by Organisation (GC9-10).
 - Backups encrypted as a whole with a backup key apart from Organisation keys, as a key pair (GC9-17); key identifiers recorded; copies of keys kept apart (2.3; GC9-12).
 - Key recovery: the start check, putting a kept copy back, its record, and the drill on kept copies (2.4; GC9-18).
-- The application backup: one exported snapshot per database, control totals and the latest seal in that snapshot, an encrypted manifest, a completeness check, and `kernel.backup_record` (3.2); read as the migration role (GC9-7).
+- The application backup: one exported snapshot per database, control totals and the latest seal in that snapshot, an encrypted manifest, a completeness check, and `kernel.backup_record` (3.2); read as the migration role on `dev` and `kdps-test` (GC9-7).
 - Database snapshots first, file copy second; the file-store adapter never overwrites or deletes; objects with no record kept and listed (3.3).
 - Restore only into a fresh target of the same environment; refusals before writing; the steps of 4.2.
 - The recovery hold, and the recovery commands in `configuration` (4.3; GC9-8).

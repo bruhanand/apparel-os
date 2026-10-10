@@ -192,7 +192,8 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Live updates | Events carry identifiers only. The client refetches through the owning module, so access is checked again | PRD Stack: Live updates; `PRD-SEC-005` |
 | Read-model gateway | Serves declared read models with their as-of time | `PRD-MOD-003`, `PRD-PRF-004` |
 | Identity and time | UUIDv7 identifiers; event time, recording time and business date under the Organisation's timezone | `PRD-MOD-008`, `PRD-MOD-009` |
-| Operations view | Failed jobs, stale data, stuck sync and integration failures shown to authorised operators; correlated logs without secrets | `PRD-SEC-013`, `PRD-SEC-014` |
+| Operations view | Failed jobs, stale data, stuck sync and integration failures shown to authorised operators; correlated logs without secrets; backup and recovery status: the last good backup and a restored Organisation that is held ([backup-and-restore.md](../platform/backup-and-restore.md) 3.2, 4.2) | `PRD-SEC-013`, `PRD-SEC-014` |
+| Restore contract and recovery hold | The backup and restore operator commands; the restore contract each module that holds records implements and registers at start (control totals, after-restore steps, checks, gap checks), run in tier order; the recovery hold in the command runner, which refuses business commands on a restored Organisation until it is reopened (backup-and-restore 4.3, 10.1; GC-9, product owner, 10 Oct 2026) | `PRD-SEC-012`, `POL-18.03`, `POL-18.04` |
 
 ### 4.2 `calculations`
 
@@ -238,7 +239,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 **Responsibility.** The Organisation's settings, the status of each policy, and the one answer to "is this operation available here, now?".
 
-**Uses:** `audit`, `kernel`. It calls no business module.
+**Uses:** `audit`, `numbering` (only to reconcile a series after a restore, GC9-8; product owner, 10 Oct 2026), `kernel`. It calls no business module.
 
 | Operation | Called by | What it does | Refuses when |
 | --- | --- | --- | --- |
@@ -248,6 +249,8 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Set a capability | Admin | Switches a feature on or off for the Organisation (`PRD-SEC-017`) | — |
 | Grant or withdraw an activity | `site-lifecycle` only | Records that receiving, movement or selling is enabled for a Site or business unit (`PRD-LIF-001`) | The caller is not `site-lifecycle` |
 | Register a validity check | Each module, at start | Lets the gate ask the owner whether its configured records are valid | — |
+| Recovery commands | An authorised person, while a restored Organisation is held | Reconcile a series after a restore (through `numbering`), record the Operations or the Accounts validation, reopen (`POL-18.03`, `POL-18.04`; [backup-and-restore.md](../platform/backup-and-restore.md) 4.3) | Reopen: a validation is missing, or a recovery gap is neither reconciled nor raised |
+| Keep retention schedules and legal holds | An authorised person (who places and releases holds is OPEN, GC9-4); every retention function, which reads them before it deletes | A retention schedule per record class, with no row until KDPS sets a period; legal holds placed and released (`POL-18.05`, `PRD-SEC-009`; backup-and-restore 8.1, 8.3) | — |
 
 - Each module keeps its own configured values: approval limits in `access`, posting maps in `finance` · books, tracking profiles in `merchandise`, and so on. `configuration` holds the status and the gate, not a copy of those values.
 - Nothing is on by default. A suggested value is never an active default (PRD "Required policy configuration"). Switching a capability on cannot bypass a missing policy or a stock or accounting invariant (`PRD-SEC-017`).
@@ -318,6 +321,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Publish | The reviewer | Hands the reviewed rows to the target module's import handler, one transaction per document. A required document posts whole or not at all (`PRD-IMP-012`) | The required review is missing; the handler refuses |
 | Register an import handler | Each target module, at start | Lets Publish reach the module that owns the records | — |
 
+- **Retention** (backup-and-restore 8.5; GC9-16, product owner, 10 Oct 2026). `files-imports` offers "delete the attachments of a record after retention", which the owning module's retention function calls in its own transaction, and holds `files_imports.delete_after_retention`, which deletes a stored file only once nothing points to it, the record before the object. Built before the first retention deletion, not in stage 1.
 - Attach is the one operation other modules call in their own transaction (`S1-F06-T05`): the caller names the stored file, the record and version, the kind of evidence with its restricted classes, and the record's scope facts. Store a file and Read a file are routes of `files-imports`, since only the app hands in and serves files (code-house-rules 12.1; imports-and-opening-data 11).
 - The framework never writes another module's records. The handler does (rule 6).
 - A suggestion is offered for manual selection. Identity and commercial facts are never filled from an unaccepted guess (`PRD-IMP-009`).
@@ -825,7 +829,7 @@ What this map fixes for each design in [gaps-before-code.md](../../history/gaps-
 | GC-6 Imports and opening data | `files-imports` (4.7) | Layouts, staging detail: written in [imports-and-opening-data.md](../platform/imports-and-opening-data.md) |
 | GC-7 Shared calculations | `calculations` (4.2) | Functions, tax rule records and golden cases: written in [shared-calculations.md](../calculations/shared-calculations.md) |
 | GC-8 Offline counter | Ownership split between `access`, `pos`, `numbering`, `stock` (4.17) | Everything else: written in [offline-counter.md](../pos/offline-counter.md); sections 3 to 5 and 11 approved 6 Oct 2026, sections 6 to 10 Draft |
-| GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else: drafted in [backup-and-restore.md](../platform/backup-and-restore.md), not yet approved |
+| GC-9 Backup, restore and export | Owners of files and export (section 9, 11.1) | Everything else: [backup-and-restore.md](../platform/backup-and-restore.md), approved by the product owner on 10 Oct 2026 |
 
 ## 12. Open questions
 

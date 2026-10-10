@@ -23,7 +23,7 @@ Updated 7 Oct 2026.
 | `S1-F01` Sign-in and access control | Built on the branch `s1/f01-first-access` with both rounds of review fixes, merged into `main` and deployed to Railway `dev` on 7 Oct 2026; every check and the six browser journeys pass locally. 21 tickets done, including T22 to T25 (`DEC-118`) and T26 and T27 from 7 Oct 2026: the starting roles can prepare and approve security settings changes, and assignment dates are checked at every request (T26, `DEC-120`); the server serves the screens at one address (T27). The Railway `dev` project `apparel-os` runs `main` with automatic deploys; the two synthetic Organisations are set up there (RR-187; T14's Demo 0 done). CI is green on the pushed branch (run 37603828723) and the product owner approved the screens on 7 Oct 2026 (T09 done). Left: T20 (Demo 1 and acceptance, RR-350). Open questions: RR-380, RR-401, RR-420 |
 | `S1-F11` Shared calculations | Done, accepted 8 Oct 2026: 38 golden cases pass on the server and in Chromium on the counter build (`apps/counter`), the counter bundle excludes costing, CI green (run 37679034974). Left in later stages: the live values (RR-136 to RR-145) and RR-042 |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) built and reviewed on 8 Oct 2026, merged into `main` and deployed to `dev`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
-| `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC9-9 and GC9-10 approved; the rest of GC-9 is finished in `S1-F14-T01` (RR-010) |
+| `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC-9 approved and Current on 10 Oct 2026 (`S1-F14-T01`, RR-010) |
 | `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026, merged into `main` and deployed to `dev`; `S1-F06-T06` (protected download, encrypted receipt names; RR-432, RR-433) done 8 Oct 2026. T01 to T04 wait on `S1-F02`, `S1-F03`, `S1-F04` and `S1-F08` |
 | `S1-F08` Number series and exceptions | Done 9 Oct 2026: gapless number series (T01), exceptions in My work (T02), evidence files on exceptions and approval decisions (T03), live updates and the failed-jobs view (T04). Open: RR-449 (no screen defines number formats or series yet), RR-453, RR-454, RR-455, RR-456 |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
@@ -32,7 +32,7 @@ Next: stock ledger part 2 (`S1-F10` T03 onwards). `S1-F09` (books, posting maps,
 
 ## 3. Scope
 
-**Included:** the "In scope" list of [phases.md](../../phases.md) stage 1, with the designs GC-1 to GC-7; GC-8 sections 3 to 5 and 11 (approved), with sections 6 to 10 still Draft; GC-9, with GC9-9 and GC9-10 approved and the rest finished in `S1-F14-T01`. Reports: master lists, access and audit history, import outcomes.
+**Included:** the "In scope" list of [phases.md](../../phases.md) stage 1, with the designs GC-1 to GC-7; GC-8 sections 3 to 5 and 11 (approved), with sections 6 to 10 still Draft; GC-9 (approved, 10 Oct 2026). Reports: master lists, access and audit history, import outcomes.
 
 **Excluded:** live Store selling, live policy-dependent stock or financial posting, loading real opening balances, the AI gateway (stage 2, `DEC-105`), messaging (stage 5, `DEC-099`), offline billing itself (stage 4). Paths for these may be exercised on synthetic data only. The sample layouts, the XLS, XLSB and CSV readers and the 10,000-line PT parse, once `S1-F07`, are stage 2's `S2-F13` (`DEC-115`); stage 1 reads XLSX. Screens for book settings, the chart of accounts and tax configuration come before the first live posting in stage 2; in stage 1 they are API only (`DEC-116`).
 
@@ -114,7 +114,7 @@ flowchart LR
 | `S1-F12` | `S1-F08` |
 | `S1-F10` | Part 1 when `S1-F01` is merged; part 2 after `S1-F03`, `S1-F05`, `S1-F08`, `S1-F09` |
 | `S1-F13` | `S1-F04`, `S1-F06`, `S1-F10` |
-| `S1-F14` | `S1-F14-T01` (finishing GC-9) now; the rest after `S1-F06`, `S1-F08` and T01 |
+| `S1-F14` | `S1-F14-T01` done (GC-9 approved); the rest after `S1-F06` and `S1-F08` |
 
 How many people or agents build at once (RR-031) never blocks the start.
 
@@ -141,7 +141,7 @@ How many people or agents build at once (RR-031) never blocks the start.
 ### 7.3 Completeness
 
 - [ ] `S1-F01` to `S1-F14` accepted, each with its evidence; `S1-F07` is now stage 2's `S2-F13` (`DEC-115`).
-- [ ] GC-8 sections 6 to 10 and the rest of GC-9 approved by the product owner (RR-014, RR-010). GC-8 sections 3 to 5 and 11, GC9-9, GC9-10 and the stock ledger interface and tables were approved on 6 Oct 2026 (`DEC-116`).
+- [ ] GC-8 sections 6 to 10 approved by the product owner (RR-014). GC-8 sections 3 to 5 and 11, GC9-9, GC9-10 and the stock ledger interface and tables were approved on 6 Oct 2026 (`DEC-116`); the rest of GC-9 on 10 Oct 2026 (RR-010).
 - [ ] Stage 1 reports exist: master lists, access and audit history, import outcomes.
 - [ ] Every PRD bullet owned by a stage 1 feature passes the part its owner builds, and every bullet completed in stage 1 passes its whole acceptance ([coverage.md](../coverage.md)).
 - [ ] No KDPS-valued setting has a default, and no synthetic value is read as one.
@@ -203,8 +203,8 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | blocked | F06-T03 |
 | [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | blocked | F01-T09, F11-T10, F02-T02, F08-T01 |
 | [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | blocked | F04-T02, F12-T01 |
-| [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | ready-for-agent | — |
-| [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | blocked | F06-T01, F06-T05, F08-T01, F14-T01 |
+| [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | done | — |
+| [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | blocked | F06-T01, F06-T05, F08-T01 |
 | [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | blocked | F14-T02 |
 | [F14-T04 Restore drill on dev](s1-f14-backup-and-restore/tickets/T04-restore-drill-on-dev.md) | blocked | F14-T03 + gate |
 | [F13-T01 Opening-stock manifest and comparison runs](s1-f13-opening-data/tickets/T01-opening-stock-manifest-and-comparison-runs.md) | blocked | F06-T03, F10-T03, F04-T02 + gate |

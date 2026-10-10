@@ -88,6 +88,8 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 | Pause, release, close | The owning module | Changes the state; close is final | The series is closed |
 | Record used numbers | `pos`, on an offline upload | Keeps numbers the device already used as allocations | A number is already recorded with another document |
 | Read series state | `pos` | The financial year and the next sequence number (`PRD-OFF-012`) | — |
+| Pause every series after a restore | `numbering`'s own restore participant, under the restore's internal service identity; no owning module calls it | Pauses every open series and writes a series event for each (3.6; [backup-and-restore.md](backup-and-restore.md) 5.3) | — |
+| Reconcile after a restore | `configuration`'s recovery command, the one call it makes to `numbering` (module-map 4.4; GC9-8, product owner, 10 Oct 2026) | Sets the next number past the higher of the evidence and the highest restored allocation, records the skip and its reason as the series event "reconciled after a restore", and releases the series (`POL-18.04`, `PRD-ACP-019`; backup-and-restore 5.3) | The series is not paused after a restore; the evidence is missing. It never lowers a next number |
 
 ## 4. The audit record
 
@@ -154,6 +156,7 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 
 The access record logs sign-ins, permission changes and sensitive access (`PRD-SEC-007`):
 
+- a key version put back or copied again after a loss or damage, `key-recovered`: which version (its identifier, never the key), why, how it was found and who gave the kept copy, written by the platform operator's command ([backup-and-restore.md](backup-and-restore.md) 2.4; GC9-18, product owner, 10 Oct 2026);
 - sign-in attempts and their outcome, a test sign-in of `local` and `dev` as its own kind, `demo-sign-in` ([access-and-approvals.md](../access/access-and-approvals.md) 3.4; DEC-121); sign-out; a session locked, ended or revoked;
 - enrolment and reset of the second factor; password changes and resets, including the platform operator's recovery of a first user's password or authenticator, with how the person's identity was verified ([access-and-approvals.md](../access/access-and-approvals.md) 3.2; DEC-116);
 - device registration and revocation;
