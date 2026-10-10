@@ -75,6 +75,7 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 - A person whose role assignment grants the lock action on the book locks a period (`PRD-LED-009`). No source asks for a second person to lock, so none is asked. **Design choice.**
 - Periods are locked in date order: a period is locked only when every earlier period of its book is locked. **Design choice.**
 - A posting whose accounting date falls in a Locked period is refused (`PRD-LED-009`), unless a reopening names it (4.3).
+- **As built** (`S1-F09-T03`). **Design choice** throughout. The lock action is edit on `finance.financial_period`: a period's only change is its lock, and the explicit actions of `POL-02.03` name no "lock". Who holds it is KDPS's (V-01). Locking writes a `locked` period event (13.1), once per period, audited as `lock-period`, and emits `finance.period-locked`. It is refused `finance.period-not-open` when the period is Locked or Reopened already, and `finance.earlier-period-open`, naming the earlier period, while an earlier period of the book has no `locked` event; a Reopened earlier period counts as locked. A posting refused for a Locked period answers `finance.period-locked`, naming the period by identifier and code.
 
 ### 4.3 Reopening
 
@@ -83,6 +84,14 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 3. **Reopened.** From the approval the period shows Reopened. Only postings whose source is a named correction may enter it; every other posting stays refused (`PRD-LED-020`, DEC-107).
 4. **Locked again.** Each named correction's posting is recorded against the reopening in its own transaction. When every named correction has posted, or the reopening is withdrawn by its requester or an authorised person, the period shows Locked again with nothing more to do (`PRD-LED-020`). **Design choice:** no time limit, since `PRD-LED-020` sets none.
 5. Several reopenings of one period may be in force at once. The period shows Reopened while any of them has a correction still to post.
+
+**As built** (`S1-F09-T03`). **Design choice** throughout; who may request, approve and withdraw is KDPS's (V-01).
+
+- The record type is `finance.period_reopening`, with view, create (request), approve (decide) and cancel (withdraw); the action type is `finance.period_reopening.approval`, with no value basis. A reopening is its own version: the request's document version is the reopening's identifier, and its preparer is the requester, so `access` refuses the requester's decision (`access.self-preparation`; `PRD-ACS-006`), and the period event's trigger refuses it again as the last guard.
+- A request is refused `finance.no-correction-named` without a correction and `finance.period-not-locked` on an Open period; a Reopened period takes a further request (step 5). Corrections are kept once each. The request is frozen (`period_reopening`, `period_reopening_source`); its approval, rejection and withdrawal are period events (13.1), not changes to it.
+- A posting's source, as a correction is matched, is the source module, record type and identifier Post is given (5.1); a reversal's is the journal it reverses. A posting enters a Locked or Reopened period only when an approved, unwithdrawn reopening of that period names its source as a correction not yet used; Post then writes the use once, naming the first journal of that posting in the period, after its journals. A replay of the same item answers its first result (9.3); any further posting of that source into the period is refused unless another reopening names it.
+- Withdrawal is of a reopening in force only (approved, not withdrawn, a correction still to post), else `finance.reopening-not-in-force`; it needs cancel on the record type, the requester included (RR-489). A request still awaiting its decision is rejected by an approver, not withdrawn (RR-489). Audit operations: `request-reopening`, `approve-reopening`, `reject-reopening`, `withdraw-reopening`.
+- A reopening's state on Period close: Awaiting approval, In force, Completed (every correction posted), Withdrawn or Rejected (RR-490).
 
 ### 4.4 The accounting date
 
@@ -95,6 +104,7 @@ It fixes no account, map, rate, formula, rounding rule, period date or approver.
 - Every transaction that posts takes the row of each period it posts into in shared mode, after the cost pool rows and before the number series (stock-ledger 10.3, step 7; MM-6, DEC-105). Postings into one period never wait for each other on the period row. They do wait on the book's journal series (5.4), which each holds from step 8 until commit; that is GC4-4.
 - Locking a period, and the approval that reopens one, take the period row in exclusive mode. They wait for postings already holding it, and a posting that comes after them sees the new state under its lock (`PRD-INT-003`).
 - The use of a named correction (4.3, step 4) is a row with a unique key on that correction. It needs no lock of its own, so stock-ledger 10.3 gains no step. **Design choice.**
+- **As built** (`S1-F09-T03`). **Design choice.** Decide locks the reopening row at step 1; its approval takes the period row exclusively at step 7. A withdrawal does the same (reopening at step 1, period exclusive at step 7), so a posting in flight on the correction ends first and one after sees the period Locked again. A request takes the period row shared at step 7, so the state it reads is stable. Hold periods rechecks each item's period under its shared lock, so a period locked between Check postable and the lock refuses the item there (`PRD-INT-003`). Two postings of one correction at once meet the use's unique key; the second is refused `finance.period-locked`.
 
 ## 5. Journals
 
@@ -314,10 +324,10 @@ The books part's tables. The tax rules and operations parts add theirs in their 
 | `ca_approval_evidence` | — | a stored file or a reference (6.3); append-only. As built (`S1-F09-T01`) |
 | `ca_approval_evidence_cover` | evidence and version | the account, book-setting or posting map version a piece covers, with the file's attachment to it; append-only. As built (`S1-F09-T01`; map versions `S1-F09-T02`) |
 | `financial_period` | book and code | date range inside one financial year, named by its label (4.1 "As built"); no overlap per book (exclusion constraint); no gap, checked by a trigger. As built (`S1-F09-T02`) |
-| `period_event` | — | append-only: locked; with `period_reopening`, the source of the state projection (4.1) |
-| `period_reopening` | — | request, reason, requester, approval decision, withdrawal; takes effect only with a decision by a different person, checked by `access` (`PRD-LED-019`) |
+| `period_event` | — | append-only: locked; with `period_reopening`, the source of the state projection (4.1). As built (`S1-F09-T03`): also the reopening's approval and rejection, with the approval decision, and its withdrawal, each once; locked once per period; a trigger refuses an approval by the requester (AO017) |
+| `period_reopening` | — | request, reason, requester; takes effect only with a decision by a different person, checked by `access` (`PRD-LED-019`). As built (`S1-F09-T03`): frozen and append-only, its decision and withdrawal kept as period events |
 | `period_reopening_source` | reopening and source record | the named corrections (`PRD-LED-020`) |
-| `period_reopening_use` | named correction | one use, written in the posting transaction (4.5) |
+| `period_reopening_use` | named correction | one use, written in the posting transaction (4.5); names the first journal it went into |
 | `posting_map` + versions | book and event kind | approved versions never overlap; no past start; in force only when approved (6.3) |
 | `posting_map_line` | — | component, side and account of the map's book; required dimensions |
 | `journal` | number | book, accounting date, event kind, map version and source fixed; insert only; a reversal names the journal it reverses, unique, in the same book; refused into a Locked period, or a Reopened one without a named correction, by a trigger as the last guard |
@@ -333,6 +343,7 @@ The books part's tables. The tax rules and operations parts add theirs in their 
   - Period close shows each period's state, the reopenings in force with their named corrections, and which of them have posted (`PRD-LED-019`, `PRD-LED-020`).
   - A refused posting names its reason: the missing map, the failed condition of 6.2, or the Locked period (`PRD-UXP-003`).
   - The ledger and trial balance say they are the internal ledger, show their as-of time, and say when they are partial (section 12).
+- **As built** (`S1-F09-T03`). Money › Period close lists a book's periods with their state; a period's drawer locks it, shows when it was locked, its reopenings with their reason, state and named corrections (posted or not yet), opens a reopening's approval, requests a new reopening and withdraws one in force. The approval panel shows the reopening as requested: its period, reason and named corrections (`PRD-ACS-007`). A refusal names the Locked period by its code. Nothing on screen posts in stage 1, so a refused posting is named where its caller shows it.
 
 ## 15. Tests on synthetic data
 
@@ -359,6 +370,8 @@ All data is labelled synthetic and never becomes a default (`AGENTS.md`: "Never 
 | 16 | A 10,000-line document makes one journal per book, event kind and date, and one posting-source row per movement and component | `PRD-LED-004`, `PRD-PRF-003` |
 | 17 | A queued posting refused at commit leaves its approval decision unused | DEC-097, `PRD-INT-004` |
 | 18 | A reader scoped to one Store sees only that Store's lines, and the trial balance says it is partial | `PRD-SEC-005`, `PRD-PRF-004` |
+
+**As built** (`S1-F09-T03`): tests 9 to 13 run in `apps/server/test/period-close.int.test.ts`, 9 and 10 on separate connections. Test 10, measured on the local test container (SYNTHETIC load: 40 postings, 4 at once into one period, one journal each): the wait at step 8 on the book's journal series was mean 8.9 ms, median 9.9 ms, 95th percentile 19.7 ms, maximum 21.2 ms. `PRD-PRF-003` sets no number, so the result is reported to Accounts under GC4-4, not judged here; the counter load test of stage 4 remains.
 
 ## 16. Golden scenarios: the posting half
 
