@@ -123,7 +123,7 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 
 | Role | Name | What it is |
 | --- | --- | --- |
-| Migration role | `aos_migration` | Owns every directory and Organisation database, made with `CREATE DATABASE … OWNER aos_migration`, and every schema, table, function and trigger in them. Has `CREATEDB`, so that the setup step creates an Organisation's database with it (CH-1). Used only by the migration runner, the setup step, the partition maintenance of 3.2 (CH-5), test setup (10.1) and the local seed (11.2); the scheduled partition upkeep runs under its rights only through its one `SECURITY DEFINER` function (12.9). Not a superuser |
+| Migration role | `aos_migration` | Owns every directory and Organisation database, made with `CREATE DATABASE … OWNER aos_migration`, and every schema, table, function and trigger in them. Has `CREATEDB`, so that the setup step creates an Organisation's database with it (CH-1). Used only by the migration runner, the setup step, the partition maintenance of 3.2 (CH-5), test setup (10.1), the local seed (11.2), and on `dev` and `kdps-test` the backup and restore operator commands ([backup-and-restore.md](backup-and-restore.md) 3.2, 4.2; GC9-7, product owner, 10 Oct 2026; production chooses again with its hosting); the scheduled partition upkeep runs under its rights only through its one `SECURITY DEFINER` function (12.9). Not a superuser |
 | Runtime role | `aos_runtime` | Used by `app` and `worker`. Owns nothing, cannot create or change any object, does not bypass row-level security (`PRD-SEC-005`; [deployment.md](deployment.md) section 4). Not a superuser; no `CREATEDB`, `CREATEROLE` or `BYPASSRLS` |
 
 - Each role has its own password, held in the environment's variables and never in the repository ([deployment.md](deployment.md) section 9).
@@ -201,7 +201,7 @@ create policy row_scope on stock.balance for all to aos_runtime
 - Entries, status records, audit and access records, approval decisions, and the frozen payloads of documents are append-only (domain-model section 1; `PRD-MOD-011`, `PRD-SEC-007`). Each table is marked `append-only` and has two guards:
   1. the runtime role has no `DELETE` on it, and no `UPDATE` except `UPDATE (id)` on a `locked` table, which it needs to lock rows (5.2);
   2. a `BEFORE UPDATE OR DELETE` row trigger and a `BEFORE TRUNCATE` statement trigger call `kernel.refuse_change()`, which raises an error with a SQLSTATE of the class `AO`. The trigger also stops the owner. Taking a row lock fires no trigger.
-- A delete a design allows, such as audit retention (numbering-and-audit 4.6), goes through that design's named function, and the trigger admits only it.
+- A delete a design allows, such as audit retention (numbering-and-audit 4.6) or the deletion of stored files after retention (`files_imports.delete_after_retention`; backup-and-restore 8.5), goes through that design's named function, and the trigger admits only it.
 - A correction is its own linked record (`PRD-MOD-011`; domain-model section 1). A status that changes is a projection, kept apart from the rows it is built from.
 
 ### 7.2 Documents
