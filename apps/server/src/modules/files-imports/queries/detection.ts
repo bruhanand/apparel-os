@@ -117,7 +117,7 @@ export async function valueSuggestions(
     .from(stagedRow)
     .where(and(eq(stagedRow.id, input.stagedRowId), eq(stagedRow.batchId, batch.id), eq(stagedRow.role, 'data')));
   if (row === undefined) refuse('not-found', 'files-imports.staged-row-not-found');
-  const document = (await documentsOf(context, batch.id)).find((each) =>
+  const document = (await documentsOf(context, batch)).find((each) =>
     each.rows.some((candidate) => candidate.stagedRowId === row.id),
   );
   const value = document?.rows.find((candidate) => candidate.stagedRowId === row.id)?.values[input.field];

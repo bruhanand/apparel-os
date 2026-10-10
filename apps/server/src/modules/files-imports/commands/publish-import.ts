@@ -1,46 +1,104 @@
+import { createHash } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
   ApiRefusal,
   LOCK_STEP,
+  lockTable,
+  UNIQUE_VIOLATION,
+  withSavepoint,
   type CommandOutcome,
+  type CommandRefusal,
   type IdempotentAnswer,
   type JsonValue,
+  type LockTarget,
+  type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { importBatch, importDocument, importOutcome, stagedRow } from '../db/schema.js';
-import { stagedValueEntry } from '../db/schema.js';
-import { outcomeCounts, type OutcomeDocument } from '../domain/outcome.js';
+import type { ImportHandler } from '../contracts/import-handlers.js';
+import { importBatch, importDocument, importOutcome, stagedValueEntry } from '../db/schema.js';
+import { importFailed, importPublished } from '../events.js';
+import type { DocumentResult, OutcomeDocument } from '../domain/outcome.js';
 import { publishLimitRefusal } from '../domain/publish-limit.js';
 import {
   BATCH_NOT_FOUND,
   documentsOf,
   factsOfBatch,
   handlerOf,
+  identityOf,
+  publishedDocument,
+  scopeColumnsOf,
   versionsOf,
   visibleBatch,
   type BatchRow,
+  type ImportActor,
   type ImportDependencies,
-  type LoadedDocument,
 } from './import-common.js';
-import { BATCH_LOCK, batchReplayAuthorisation, type BatchStepInput } from './validate-import.js';
+import { batchOutcome, countsRefusal, projectedResult } from './outcomes.js';
+import { BATCH_LOCK, batchReplayAuthorisation } from './validate-import.js';
 
-// Publish (imports-and-opening-data 3.1 steps 9 and 10, 3.2, 7.4, 13.1, 13.2; structure-and-masters 7; PRD-IMP-012,
-// PRD-IMP-013, PRD-MOD-002; S1-F06-T01). The target's handler writes its own records in the transaction it is given,
-// through its Maintain operation; files-imports writes none of them. A required document posts whole or not at all.
-// An outcome is written for every attempt, a failed one included.
+// Publish (imports-and-opening-data 3.1 steps 9 and 10, 3.2, 3.3, 7.1 to 7.4, 13.1, 13.2; structure-and-masters 7;
+// PRD-IMP-011, PRD-IMP-012, PRD-IMP-013, PRD-INT-002, PRD-INT-005, PRD-MOD-002, PRD-MOD-006; S1-F06-T01, S1-F06-T03,
+// S1-F06-T04). The target's handler writes its own records, through its Maintain operation; files-imports writes none
+// of them.
+//
+// One transaction per document (3.3 "Step 9 is one transaction per document"): each document chosen publishes in a
+// command of its own, with its audit record and its event, whole or not at all, so one failing line fails its
+// document and the others publish (PRD-IMP-012). Each runs under a key derived from the request's idempotency key and
+// the document, so the request sent again is answered once: each document's run answers what it answered first, and
+// the batch's run, under the request's own key, answers its kept outcome (PRD-INT-002). The batch's run then writes the
+// outcome of the attempt, for the batch and each document, success or failure (7.4), and makes the batch Published
+// when every document chosen has posted or is a duplicate; otherwise it stays Validated so it can be corrected (3.2).
+//
+// Duplicate control under the locks (7.2): a document whose source identity is published with the same content is a
+// duplicate and has no effect; other content is a conflict, refused, unless the batch is a governed revision, which
+// marks the published document replaced and publishes the new one in the same transaction (7.3). The partial unique
+// index on the source identity of published documents is the last guard, so two publishes at once give one effect
+// (PRD-INT-005; domain-model invariant 20): the document is marked published before its handler writes anything, and a
+// publish that loses the race on the index rolls back to its savepoint and is answered as a duplicate or a conflict.
 //
 // The publishing limit of S1-F06-T01 comes first: outside local work, tests and `dev`, Publish answers unavailable
 // naming the controls still missing, and writes nothing (product owner, 6 Oct 2026; PRD-SEC-017, PRD-UXP-003).
 //
 // Publish needs the review (3.1 step 8, 6.4, 13.1; S1-F06-T03): the batch version submitted, its layout and mapping
 // versions Confirmed, and, where the handler requires an approval in `access`, a decision of that exact version,
-// verified under the locks and its use recorded (access-and-approvals 9.7, 9.8). An excluded document is not
-// published. As built, the batch's documents publish in one transaction, so one refused document fails the attempt;
-// one transaction per document, so the others publish, is S1-F06-T04's, with duplicate control.
+// verified under the locks; its use is recorded once, when the batch is Published (access-and-approvals 9.7, 9.8).
+// The batch version the screen read travels with the request; another one is `kernel.stale-version` (code-house-rules
+// 12.7).
 
 const COMMAND = 'files-imports.publish-import';
+const DOCUMENT_COMMAND = 'files-imports.publish-document';
+const DOCUMENT_LOCK = lockTable('files_imports', 'import_document');
+
+/** The refusals of one document's run that leave the other documents to publish (7.2; PRD-IMP-012). */
+const DOCUMENT_REFUSALS: readonly string[] = ['files-imports.document-refused', 'files-imports.document-conflict'];
+
+export interface PublishInput {
+  readonly actor: ImportActor;
+  readonly batchId: string;
+  readonly key: string;
+  readonly content: RequestContent;
+  /** The batch version the screen read (code-house-rules 12.7). */
+  readonly versionId: string;
+  readonly approvalDecisionId?: string | undefined;
+}
+
+/**
+ * The key of one document's run: derived from the request's key and the document, so the request sent again finds
+ * it used (code-house-rules 12.4). A UUID of version 8 (RFC 9562), from SHA-256.
+ */
+export function documentKey(key: string, documentId: string): string {
+  const hex = createHash('sha256').update(`${key.toLowerCase()} ${documentId.toLowerCase()}`).digest('hex');
+  const variant = ((Number.parseInt(hex.charAt(16), 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+const refused = (refusal: CommandRefusal): CommandOutcome<JsonValue> => ({
+  kind: 'refusal',
+  refusal,
+  causedBySecret: false,
+});
 
 /** Every user who recorded a change in the batch version (access-and-approvals 9.1, 9.7). */
 async function batchPreparers(context: TransactionContext, batch: BatchRow, submitter: string): Promise<string[]> {
@@ -51,251 +109,467 @@ async function batchPreparers(context: TransactionContext, batch: BatchRow, subm
   return [...new Set([batch.startedByUserId, submitter, ...entries.map((entry) => entry.userId)])].sort();
 }
 
+interface Held {
+  readonly batch: BatchRow;
+  readonly handler: ImportHandler;
+  readonly roleAssignmentId: string;
+  readonly handlerAssignmentId: string;
+  readonly approvalCheck: Parameters<ImportDependencies['access']['verifyUnderLock']>[1] | undefined;
+}
+
+/**
+ * The common start of a document's run and of the batch's (access-and-approvals 7.1; code-house-rules 8.2): edit on
+ * the batch and the handler's own permission for the batch's kind, held at step 0; the batch, the decision's request
+ * and the rows `more` names locked at step 1; then the batch rechecked under the locks: Validated, at the version the
+ * screen read, submitted at it, its layout and mapping versions Confirmed, and its approval verified.
+ */
+async function held(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  input: PublishInput,
+  more: (batch: BatchRow, handler: ImportHandler) => Promise<LockTarget[]> = () => Promise.resolve([]),
+): Promise<
+  { readonly kind: 'held'; readonly held: Held } | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+> {
+  const found = await visibleBatch(context, input.batchId);
+  if (found === undefined) return { kind: 'refused', refusal: BATCH_NOT_FOUND };
+  const handler = handlerOf(deps.handlers, found);
+  const actorId = input.actor.userId;
+  const need = { action: 'edit' as const, recordType: IMPORT_BATCH_TYPE, facts: factsOfBatch(found) };
+  const authorised = await deps.access.authorise(context, { actorId, ...need });
+  if (authorised.kind === 'refused') return { kind: 'refused', refusal: authorised.refusal };
+  // The handler's own permission for the batch's kind, held with the batch's, so publishing goes through the same
+  // checks as a person's change (structure-and-masters 7; module-map section 3, rule 8).
+  const handlerNeed = handler.publishNeeds(found.kind);
+  const forHandler = await deps.access.authorise(context, { actorId, ...handlerNeed });
+  if (forHandler.kind === 'refused') return { kind: 'refused', refusal: forHandler.refusal };
+  const holding = await deps.access.holdAuthority(
+    context,
+    { kind: 'user', id: actorId },
+    authorised.roleAssignmentId,
+    need,
+    [],
+    [{ roleAssignmentId: forHandler.roleAssignmentId, need: handlerNeed }],
+  );
+  if (holding !== undefined) return { kind: 'refused', refusal: holding };
+  // The decision's request is locked with the batch at step 1, as Decide locks it (access-and-approvals 9.7).
+  const decisionLocks =
+    input.approvalDecisionId === undefined
+      ? []
+      : await deps.access.approvalLockTargets(context, input.approvalDecisionId);
+  await context.lock(LOCK_STEP.document, [
+    { table: BATCH_LOCK, id: found.id, mode: 'exclusive' },
+    ...decisionLocks,
+    ...(await more(found, handler)),
+  ]);
+  const batch = await visibleBatch(context, input.batchId);
+  if (batch === undefined) return { kind: 'refused', refusal: BATCH_NOT_FOUND };
+  if (batch.state !== 'Validated') {
+    return { kind: 'refused', refusal: { kind: 'refused', code: 'files-imports.batch-not-validated', missing: [] } };
+  }
+  // The version token (code-house-rules 12.7): a Publish made on a stale screen is refused, naming the current one.
+  if (batch.versionId !== input.versionId) {
+    return {
+      kind: 'refused',
+      refusal: {
+        kind: 'conflict',
+        code: 'kernel.stale-version',
+        missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId }],
+      },
+    };
+  }
+  // The review: the version submitted (13.1), and its approval where the handler requires one (3.1 step 8).
+  if (batch.submittedVersionId !== batch.versionId) {
+    return {
+      kind: 'refused',
+      refusal: {
+        kind: 'refused',
+        code: 'files-imports.review-missing',
+        missing: [{ kind: 'review', review: 'submission' }],
+      },
+    };
+  }
+  // A batch may preview with Proposed versions; Publish needs Confirmed ones (6.4; GC6-4, DEC-112).
+  const versions = await versionsOf(context, batch);
+  const unconfirmed = [
+    ...(versions.layout.state === 'Confirmed'
+      ? []
+      : [{ kind: 'layout-version', layoutVersionId: versions.layout.id, state: versions.layout.state }]),
+    ...(versions.mapping.state === 'Confirmed'
+      ? []
+      : [{ kind: 'mapping-version', mappingVersionId: versions.mapping.id, state: versions.mapping.state }]),
+  ];
+  if (unconfirmed.length > 0) {
+    return {
+      kind: 'refused',
+      refusal: { kind: 'refused', code: 'files-imports.version-not-confirmed', missing: unconfirmed },
+    };
+  }
+  // The counts close (7.4): every row the reader read is staged.
+  const counts = await countsRefusal(context, batch);
+  if (counts !== undefined) return { kind: 'refused', refusal: counts };
+  let approvalCheck: Held['approvalCheck'];
+  if (handler.review.kind === 'approval') {
+    if (input.approvalDecisionId === undefined) {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'refused',
+          code: 'files-imports.review-missing',
+          missing: [{ kind: 'review', review: 'approval' }],
+        },
+      };
+    }
+    approvalCheck = {
+      decisionId: input.approvalDecisionId,
+      actionType: handler.review.actionType,
+      document: {
+        module: 'files-imports',
+        recordType: IMPORT_BATCH_TYPE,
+        recordId: batch.id,
+        versionId: batch.versionId,
+      },
+      preparers: await batchPreparers(context, batch, actorId),
+      value: { kind: 'none' },
+    };
+    const verified = await deps.access.verifyUnderLock(context, approvalCheck);
+    if (verified !== undefined) return { kind: 'refused', refusal: verified };
+  }
+  return {
+    kind: 'held',
+    held: {
+      batch,
+      handler,
+      roleAssignmentId: authorised.roleAssignmentId,
+      handlerAssignmentId: forHandler.roleAssignmentId,
+      approvalCheck,
+    },
+  };
+}
+
+/** What one document's run answers: published, a duplicate, or already published or excluded (skipped). */
+interface DocumentAnswer {
+  readonly documentId: string;
+  readonly result: 'published' | 'duplicate' | 'skipped';
+  readonly records: readonly { readonly recordType: string; readonly recordId: string }[];
+  readonly publishedDocumentId?: string;
+  readonly revisesDocumentId?: string;
+}
+
+const conflict = (documentId: string, publishedDocumentId: string): CommandOutcome<JsonValue> =>
+  refused({
+    kind: 'refused',
+    code: 'files-imports.document-conflict',
+    missing: [{ kind: 'import-document', documentId, conflictsWith: publishedDocumentId }],
+  });
+
+/** One document published in its own transaction (3.3; 7.2, 7.3; PRD-IMP-012). */
+async function publishDocument(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  input: PublishInput,
+  documentId: string,
+): Promise<CommandOutcome<JsonValue>> {
+  let revisable: string | undefined;
+  const start = await held(deps, context, input, async (batch, handler) => {
+    const document = (await documentsOf(context, batch)).find((each) => each.documentId === documentId);
+    if (document === undefined) return [];
+    // The published document a revision would replace is locked with the batch, where the actor may see it (7.3).
+    const { finding } = await identityOf(context, handler, batch, document);
+    revisable = finding.kind === 'revision' ? finding.of : undefined;
+    return [
+      { table: DOCUMENT_LOCK, id: documentId, mode: 'exclusive' as const },
+      ...(revisable === undefined ? [] : [{ table: DOCUMENT_LOCK, id: revisable, mode: 'exclusive' as const }]),
+      ...(await handler.lockTargets(context, document)),
+    ];
+  });
+  if (start.kind === 'refused') return refused(start.refusal);
+  const { batch, handler } = start.held;
+  // The document, read again under the lock: one published or excluded meanwhile is not published again.
+  const document = (await documentsOf(context, batch)).find((each) => each.documentId === documentId);
+  if (document === undefined) {
+    return refused({ kind: 'not-found', code: 'files-imports.document-not-found', missing: [] });
+  }
+  const skipped: DocumentAnswer = { documentId, result: 'skipped', records: [] };
+  if (document.state !== 'Staged' || document.excluded) {
+    return { kind: 'success', answer: { ...skipped }, shows: 'nothing' };
+  }
+  const identity = await identityOf(context, handler, batch, document);
+  const { finding } = identity;
+  if (finding.kind === 'duplicate') {
+    const answer: DocumentAnswer = { ...skipped, result: 'duplicate', publishedDocumentId: finding.of };
+    return { kind: 'success', answer: { ...answer }, shows: 'nothing' };
+  }
+  if (finding.kind === 'conflict') return conflict(documentId, finding.of);
+  // A revision replaces only the document locked above; another one published meanwhile is a conflict.
+  if (finding.kind === 'revision' && finding.of !== revisable) return conflict(documentId, finding.of);
+  const revises = finding.kind === 'revision' ? finding.of : null;
+  const marked = await withSavepoint(context, 'files_imports_publish_document', [UNIQUE_VIOLATION], async () => {
+    if (revises !== null) {
+      const replaced = await context.tx
+        .update(importDocument)
+        .set({ replacedByDocumentId: documentId })
+        .where(
+          and(
+            eq(importDocument.id, revises),
+            eq(importDocument.state, 'Published'),
+            isNull(importDocument.replacedByDocumentId),
+          ),
+        )
+        .returning({ id: importDocument.id });
+      if (replaced.length === 0) return false;
+    }
+    await context.tx
+      .update(importDocument)
+      .set({
+        state: 'Published',
+        publishedAt: context.startedAt,
+        contentHash: identity.contentHash,
+        revisesDocumentId: revises,
+      })
+      .where(and(eq(importDocument.id, documentId), eq(importDocument.state, 'Staged')));
+    return true;
+  });
+  if (marked.kind === 'caught' || !marked.value) {
+    // Another publish of the same identity committed first (PRD-INT-005): the same content is a duplicate.
+    const winner = await publishedDocument(context, {
+      target: identity.target,
+      scopeKey: identity.scopeKey,
+      reference: document.reference,
+    });
+    if (winner?.contentHash === identity.contentHash) {
+      const answer: DocumentAnswer = { ...skipped, result: 'duplicate', publishedDocumentId: winner.documentId };
+      return { kind: 'success', answer: { ...answer }, shows: 'nothing' };
+    }
+    return conflict(documentId, winner?.documentId ?? revises ?? documentId);
+  }
+  const published = await handler.publish(
+    context,
+    { userId: input.actor.userId, roleAssignmentId: start.held.handlerAssignmentId },
+    document,
+    {
+      batchId: batch.id,
+      batchCode: batch.code,
+      documentId,
+      stagedRowIds: document.rows.map((row) => row.stagedRowId),
+      firstRowNumber: document.rows[0]?.rowNumber ?? 1,
+    },
+  );
+  if (published.kind === 'refused') {
+    // Everything the document's run wrote rolls back; the batch's run keeps its outcome (7.4; PRD-IMP-012).
+    return refused({
+      kind: 'refused',
+      code: 'files-imports.document-refused',
+      missing: [{ kind: 'import-document', documentId, reason: published.refusal.code }, ...published.refusal.missing],
+    });
+  }
+  const facts = factsOfBatch(batch);
+  await deps.audit.record(context, {
+    actor: { kind: 'user', id: input.actor.userId },
+    roleAssignmentId: start.held.roleAssignmentId,
+    scope: facts,
+    record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
+    operation: 'publish-import-document',
+    changes: [
+      { kind: 'value', field: 'documentId', before: null, after: documentId },
+      { kind: 'value', field: 'documentState', before: 'Staged', after: 'Published' },
+      ...(revises === null
+        ? []
+        : [{ kind: 'value' as const, field: 'revisesDocumentId', before: null, after: revises }]),
+      { kind: 'value', field: 'records', before: null, after: published.records.map((record) => record.recordId) },
+    ],
+    source: { kind: 'screen' },
+    idempotencyKey: input.key,
+  });
+  await context.publish(importPublished, {
+    subject: { module: 'files-imports', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId },
+    scope: facts,
+    payload: { batchId: batch.id, documentId },
+  });
+  const answer: DocumentAnswer = {
+    documentId,
+    result: 'published',
+    records: published.records.map((record) => ({ ...record })),
+    ...(revises === null ? {} : { revisesDocumentId: revises }),
+  };
+  return { kind: 'success', answer: { ...answer, records: [...answer.records] }, shows: 'nothing' };
+}
+
+/** What became of one document's run, as the batch's outcome keeps it (7.4). */
+function attemptOf(
+  answer: IdempotentAnswer<JsonValue>,
+): Omit<OutcomeDocument, 'documentId' | 'rows'> | 'stop' | undefined {
+  if (answer.kind === 'refusal') {
+    if (!DOCUMENT_REFUSALS.includes(answer.refusal.code)) return 'stop';
+    const [first] = answer.refusal.missing;
+    const conflictsWith = first !== undefined && 'conflictsWith' in first ? first.conflictsWith : undefined;
+    const reason = first !== undefined && 'reason' in first ? first.reason : answer.refusal.code;
+    return answer.refusal.code === 'files-imports.document-conflict'
+      ? {
+          result: 'conflict',
+          records: [],
+          refusalCode: answer.refusal.code,
+          ...(conflictsWith === undefined ? {} : { publishedDocumentId: conflictsWith }),
+        }
+      : { result: 'refused', records: [], refusalCode: reason };
+  }
+  const value = answer.answer as unknown as DocumentAnswer;
+  // Published or excluded before this run: the batch's run reads which from the document itself.
+  if (value.result === 'skipped') return undefined;
+  return {
+    result: value.result,
+    records: value.records.map((record) => ({ ...record })),
+    ...(value.publishedDocumentId === undefined ? {} : { publishedDocumentId: value.publishedDocumentId }),
+    ...(value.revisesDocumentId === undefined ? {} : { revisesDocumentId: value.revisesDocumentId }),
+  };
+}
+
 export async function publishImport(
   deps: ImportDependencies,
-  input: BatchStepInput & { readonly approvalDecisionId?: string | undefined },
+  input: PublishInput,
 ): Promise<IdempotentAnswer<JsonValue>> {
   const limited = publishLimitRefusal(deps.environment.name);
   if (limited !== undefined) {
     throw new ApiRefusal({ kind: limited.kind, code: limited.code, missing: [...limited.missing] });
   }
-  let failed: { readonly documents: OutcomeDocument[]; readonly code: string } | undefined;
-  const answer = await deps.helper.run(
-    {
-      commandName: COMMAND,
-      organisation: input.actor.organisation,
-      correlationId: input.actor.correlationId,
-      actor: { kind: 'actor', actorId: input.actor.userId },
-    },
-    {
-      key: input.key,
-      content: input.content,
-      authoriseReplay: batchReplayAuthorisation(deps, input),
-      work: async (context): Promise<CommandOutcome<JsonValue>> => {
-        const found = await visibleBatch(context, input.batchId);
-        if (found === undefined) return { kind: 'refusal', refusal: BATCH_NOT_FOUND, causedBySecret: false };
-        const handler = handlerOf(deps.handlers, found);
-        const need = { action: 'edit' as const, recordType: IMPORT_BATCH_TYPE, facts: factsOfBatch(found) };
-        const actorId = input.actor.userId;
-        const authorised = await deps.access.authorise(context, { actorId, ...need });
-        if (authorised.kind === 'refused') {
-          return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
-        }
-        // The handler's own permission, held with the batch's, so publishing goes through the same checks as a
-        // person's change (structure-and-masters 7; module-map section 3, rule 8).
-        const handlerNeed = { action: handler.publishNeeds.action, recordType: handler.publishNeeds.recordType };
-        const forHandler = await deps.access.authorise(context, { actorId, ...handlerNeed });
-        if (forHandler.kind === 'refused') {
-          return { kind: 'refusal', refusal: forHandler.refusal, causedBySecret: false };
-        }
-        const held = await deps.access.holdAuthority(
-          context,
-          { kind: 'user', id: actorId },
-          authorised.roleAssignmentId,
-          need,
-          [],
-          [{ roleAssignmentId: forHandler.roleAssignmentId, need: handlerNeed }],
-        );
-        if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-        // The decision's request is locked with the batch at step 1, as Decide locks it (access-and-approvals 9.7).
-        const decisionLocks =
-          input.approvalDecisionId === undefined
-            ? []
-            : await deps.access.approvalLockTargets(context, input.approvalDecisionId);
-        await context.lock(LOCK_STEP.document, [
-          { table: BATCH_LOCK, id: found.id, mode: 'exclusive' },
-          ...decisionLocks,
-        ]);
-        const batch = await visibleBatch(context, input.batchId);
-        if (batch === undefined) return { kind: 'refusal', refusal: BATCH_NOT_FOUND, causedBySecret: false };
-        if (batch.state !== 'Validated') {
-          return {
-            kind: 'refusal',
-            refusal: { kind: 'refused', code: 'files-imports.batch-not-validated', missing: [] },
-            causedBySecret: false,
-          };
-        }
-        // The review: the version submitted (13.1), and its approval where the handler requires one (3.1 step 8).
-        if (batch.submittedVersionId !== batch.versionId) {
-          return {
-            kind: 'refusal',
-            refusal: {
-              kind: 'refused',
-              code: 'files-imports.review-missing',
-              missing: [{ kind: 'review', review: 'submission' }],
-            },
-            causedBySecret: false,
-          };
-        }
-        // A batch may preview with Proposed versions; Publish needs Confirmed ones (6.4; GC6-4, DEC-112).
-        const versions = await versionsOf(context, batch);
-        const unconfirmed = [
-          ...(versions.layout.state === 'Confirmed'
-            ? []
-            : [{ kind: 'layout-version', layoutVersionId: versions.layout.id, state: versions.layout.state }]),
-          ...(versions.mapping.state === 'Confirmed'
-            ? []
-            : [{ kind: 'mapping-version', mappingVersionId: versions.mapping.id, state: versions.mapping.state }]),
-        ];
-        if (unconfirmed.length > 0) {
-          return {
-            kind: 'refusal',
-            refusal: { kind: 'refused', code: 'files-imports.version-not-confirmed', missing: unconfirmed },
-            causedBySecret: false,
-          };
-        }
-        let approvalCheck: Parameters<typeof deps.access.verifyUnderLock>[1] | undefined;
-        if (handler.review.kind === 'approval') {
-          if (input.approvalDecisionId === undefined) {
-            return {
-              kind: 'refusal',
-              refusal: {
-                kind: 'refused',
-                code: 'files-imports.review-missing',
-                missing: [{ kind: 'review', review: 'approval' }],
-              },
-              causedBySecret: false,
-            };
-          }
-          approvalCheck = {
-            decisionId: input.approvalDecisionId,
-            actionType: handler.review.actionType,
-            document: {
-              module: 'files-imports',
-              recordType: IMPORT_BATCH_TYPE,
-              recordId: batch.id,
-              versionId: batch.versionId,
-            },
-            preparers: await batchPreparers(context, batch, actorId),
-            value: { kind: 'none' },
-          };
-          const verified = await deps.access.verifyUnderLock(context, approvalCheck);
-          if (verified !== undefined) return { kind: 'refusal', refusal: verified, causedBySecret: false };
-        }
-        const documents = await documentsOf(context, batch.id);
-        const results: OutcomeDocument[] = [];
-        for (const document of documents) {
-          if (document.state === 'Published' || document.excluded) continue;
-          const published = await handler.publish(
-            context,
-            { userId: actorId, roleAssignmentId: forHandler.roleAssignmentId },
-            document,
-            {
-              batchId: batch.id,
-              batchCode: batch.code,
-              documentId: document.documentId,
-              stagedRowIds: document.rows.map((row) => row.stagedRowId),
-              firstRowNumber: document.rows[0]?.rowNumber ?? 1,
-            },
-          );
-          if (published.kind === 'refused') {
-            // The whole attempt rolls back; its outcome is written after, in a transaction of its own (7.4).
-            failed = {
-              code: 'files-imports.document-refused',
-              documents: documents.map((each) =>
-                each.documentId === document.documentId
-                  ? { documentId: each.documentId, result: 'refused', records: [], refusalCode: published.refusal.code }
-                  : { documentId: each.documentId, result: 'not-attempted', records: [] },
-              ),
-            };
-            return {
-              kind: 'refusal',
-              refusal: {
-                kind: 'refused',
-                code: 'files-imports.document-refused',
-                missing: [
-                  { kind: 'import-document', documentId: document.documentId, reason: published.refusal.code },
-                  ...published.refusal.missing,
-                ],
-              },
-              causedBySecret: false,
-            };
-          }
-          await context.tx
-            .update(importDocument)
-            .set({ state: 'Published', publishedAt: context.startedAt })
-            .where(and(eq(importDocument.id, document.documentId), eq(importDocument.state, 'Staged')));
-          results.push({ documentId: document.documentId, result: 'published', records: [...published.records] });
-        }
-        if (approvalCheck !== undefined) {
-          const used = await deps.access.recordUse(context, {
-            ...approvalCheck,
-            useId: uuidv7(),
-            actor: { kind: 'user', id: actorId },
-          });
-          if (used !== undefined) return { kind: 'refusal', refusal: used, causedBySecret: false };
-        }
-        await context.tx.update(importBatch).set({ state: 'Published' }).where(eq(importBatch.id, batch.id));
-        const outcomeId = await writeOutcome(context, batch.id, actorId, 'published', null, results, documents);
-        await deps.audit.record(context, {
-          actor: { kind: 'user', id: actorId },
-          roleAssignmentId: authorised.roleAssignmentId,
-          scope: factsOfBatch(batch),
-          record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id },
-          operation: 'publish-import',
-          changes: [
-            { kind: 'value', field: 'state', before: 'Validated', after: 'Published' },
-            { kind: 'value', field: 'outcomeId', before: null, after: outcomeId },
-          ],
-          source: { kind: 'screen' },
-          idempotencyKey: input.key,
-        });
-        return { kind: 'success', answer: { batchId: batch.id, state: 'Published', outcomeId }, shows: 'nothing' };
-      },
-    },
-  );
-  if (answer.kind === 'refusal' && !answer.replayed && failed !== undefined) {
-    const kept = failed;
-    // The failed attempt's outcome, kept after its transaction rolled back (7.4; PRD-IMP-012). The batch stays
-    // Validated so it can be corrected and published again (3.2).
-    await deps.runner.run(
-      {
-        commandName: `${COMMAND}.outcome`,
-        organisation: input.actor.organisation,
-        correlationId: input.actor.correlationId,
-        actor: { kind: 'actor', actorId: input.actor.userId },
-      },
-      async (context) => {
-        const documents = await documentsOf(context, input.batchId);
-        await writeOutcome(context, input.batchId, input.actor.userId, 'failed', kept.code, kept.documents, documents);
-      },
-    );
-  }
-  return answer;
-}
-
-async function writeOutcome(
-  context: TransactionContext,
-  batchId: string,
-  actorId: string,
-  result: 'published' | 'failed',
-  refusalCode: string | null,
-  results: readonly OutcomeDocument[],
-  documents: readonly LoadedDocument[],
-): Promise<string> {
-  // Every row that is not data is ignored: the header, totals, filler and notes (7.4).
-  const ignored = await context.tx
-    .select({ id: stagedRow.id })
-    .from(stagedRow)
-    .where(and(eq(stagedRow.batchId, batchId), ne(stagedRow.role, 'data')));
-  const resultOf = (documentId: string) => results.find((each) => each.documentId === documentId)?.result;
-  const counts = outcomeCounts(
-    ignored.length,
-    documents.map((document) => ({
-      result: resultOf(document.documentId) ?? (document.state === 'Published' ? 'published' : 'not-attempted'),
-      rows: document.rows.length,
-    })),
-  );
-  const outcomeId = uuidv7();
-  await context.tx.insert(importOutcome).values({
-    id: outcomeId,
-    batchId,
-    result,
-    refusalCode,
-    counts,
-    documents: [...results],
-    attemptedByUserId: actorId,
-    attemptedAt: context.startedAt,
+  const header = (commandName: string) => ({
+    commandName,
+    organisation: input.actor.organisation,
+    correlationId: input.actor.correlationId,
+    actor: { kind: 'actor' as const, actorId: input.actor.userId },
   });
-  return outcomeId;
+  // The documents to publish, read before any transaction that writes; each run reads its own again under its lock.
+  const chosen = await deps.runner.read(header(COMMAND), async (context) => {
+    const batch = await visibleBatch(context, input.batchId);
+    if (batch?.state !== 'Validated') return [];
+    return (await documentsOf(context, batch))
+      .filter((document) => document.state === 'Staged' && !document.excluded)
+      .map((document) => document.documentId);
+  });
+  const attempts = new Map<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>();
+  for (const documentId of chosen) {
+    const answer = await deps.helper.run(header(DOCUMENT_COMMAND), {
+      key: documentKey(input.key, documentId),
+      content: {
+        pathParameters: { batchId: input.batchId, documentId },
+        body: { versionId: input.versionId, approvalDecisionId: input.approvalDecisionId ?? null },
+        secretFields: [],
+        restrictedFields: [],
+      },
+      authoriseReplay: batchReplayAuthorisation(deps, input),
+      work: (context) => publishDocument(deps, context, input, documentId),
+    });
+    const attempt = attemptOf(answer);
+    // A refusal of the batch, such as a stale version or a missing review, is the batch run's to answer.
+    if (attempt === 'stop') break;
+    if (attempt !== undefined) attempts.set(documentId, attempt);
+  }
+  return deps.helper.run(header(COMMAND), {
+    key: input.key,
+    content: input.content,
+    authoriseReplay: batchReplayAuthorisation(deps, input),
+    work: async (context): Promise<CommandOutcome<JsonValue>> => {
+      const start = await held(deps, context, input);
+      if (start.kind === 'refused') return refused(start.refusal);
+      const { batch, handler } = start.held;
+      const documents = await documentsOf(context, batch);
+      const results = new Map<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>();
+      for (const document of documents) {
+        const attempt = attempts.get(document.documentId);
+        if (document.state === 'Published') {
+          results.set(document.documentId, {
+            result: 'published',
+            records: attempt?.result === 'published' ? attempt.records : [],
+            ...(document.revisesDocumentId === null ? {} : { revisesDocumentId: document.revisesDocumentId }),
+          });
+        } else if (document.excluded) {
+          results.set(document.documentId, { result: 'excluded', records: [] });
+        } else if (attempt !== undefined) {
+          results.set(document.documentId, attempt);
+        } else {
+          results.set(document.documentId, {
+            ...(await projectedResult(context, handler, batch, document)),
+            records: [],
+          });
+        }
+      }
+      const outcome = await batchOutcome(context, handler, batch, documents, results);
+      const done: readonly DocumentResult[] = ['published', 'duplicate', 'excluded'];
+      const chosenResults = outcome.documents.filter((document) => document.result !== 'excluded');
+      const allDone = chosenResults.length > 0 && chosenResults.every((document) => done.includes(document.result));
+      const failing = outcome.documents.find((document) => !done.includes(document.result));
+      const actorId = input.actor.userId;
+      if (allDone && start.held.approvalCheck !== undefined) {
+        const used = await deps.access.recordUse(context, {
+          ...start.held.approvalCheck,
+          useId: uuidv7(),
+          actor: { kind: 'user', id: actorId },
+        });
+        if (used !== undefined) return refused(used);
+      }
+      const state = allDone ? 'Published' : 'Validated';
+      if (allDone) await context.tx.update(importBatch).set({ state: 'Published' }).where(eq(importBatch.id, batch.id));
+      const outcomeId = uuidv7();
+      const result = allDone ? 'published' : 'failed';
+      await context.tx.insert(importOutcome).values({
+        id: outcomeId,
+        batchId: batch.id,
+        batchVersionId: batch.versionId,
+        result,
+        refusalCode: allDone
+          ? null
+          : failing?.result === 'conflict'
+            ? 'files-imports.document-conflict'
+            : 'files-imports.document-refused',
+        counts: outcome.counts,
+        documents: outcome.documents,
+        measures: outcome.measures,
+        controlTotals: outcome.controlTotals,
+        attemptedByUserId: actorId,
+        attemptedAt: context.startedAt,
+        ...scopeColumnsOf(batch),
+      });
+      const facts = factsOfBatch(batch);
+      await deps.audit.record(context, {
+        actor: { kind: 'user', id: actorId },
+        roleAssignmentId: start.held.roleAssignmentId,
+        scope: facts,
+        record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
+        operation: 'publish-import',
+        changes: [
+          { kind: 'value', field: 'state', before: 'Validated', after: state },
+          { kind: 'value', field: 'outcomeId', before: null, after: outcomeId },
+          { kind: 'value', field: 'result', before: null, after: result },
+        ],
+        source: { kind: 'screen' },
+        idempotencyKey: input.key,
+      });
+      const subject = {
+        module: 'files-imports',
+        recordType: IMPORT_BATCH_TYPE,
+        recordId: batch.id,
+        versionId: batch.versionId,
+      };
+      if (allDone) {
+        await context.publish(importPublished, { subject, scope: facts, payload: { batchId: batch.id } });
+      } else {
+        await context.publish(importFailed, { subject, scope: facts, payload: { batchId: batch.id, outcomeId } });
+      }
+      return {
+        kind: 'success',
+        answer: {
+          batchId: batch.id,
+          state,
+          outcomeId,
+          result,
+          documents: outcome.documents.map((document) => ({
+            documentId: document.documentId,
+            result: document.result,
+            ...(document.refusalCode === undefined ? {} : { refusalCode: document.refusalCode }),
+          })),
+        },
+        shows: 'nothing',
+      };
+    },
+  });
 }

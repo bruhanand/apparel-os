@@ -7,7 +7,7 @@ import {
   type LayoutStructure,
   type StagedValueView,
 } from '@apparel-os/schemas';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   CommandDefect,
@@ -32,6 +32,7 @@ import {
   stagedRow,
   stagedValueEntry,
 } from '../db/schema.js';
+import { documentContentHash, identityFinding, type IdentityFinding } from '../domain/identity.js';
 import type { EffectiveValue } from '../domain/report.js';
 import type { FileStoreHandle } from '../file-store/file-store.js';
 
@@ -173,10 +174,16 @@ export function effectiveValues(
 export interface LoadedDocument extends HandlerDocument {
   readonly state: 'Staged' | 'Published';
   readonly excluded: boolean;
+  /** The published document it revises, once published as a revision (7.3). */
+  readonly revisesDocumentId: string | null;
 }
 
 /** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
-export async function documentsOf(context: TransactionContext, batchId: string): Promise<LoadedDocument[]> {
+export async function documentsOf(
+  context: TransactionContext,
+  batch: Pick<BatchRow, 'id' | 'kind'>,
+): Promise<LoadedDocument[]> {
+  const batchId = batch.id;
   const documents = await context.tx
     .select()
     .from(importDocument)
@@ -191,8 +198,10 @@ export async function documentsOf(context: TransactionContext, batchId: string):
   return documents.map((document) => ({
     documentId: document.id,
     reference: document.reference,
+    kind: batch.kind,
     state: document.state,
     excluded: document.excluded,
+    revisesDocumentId: document.revisesDocumentId,
     rows: rows
       .filter((row) => row.documentId === document.id)
       .map((row) => ({
@@ -245,4 +254,56 @@ export function handlerOf(handlers: ImportHandlers, batch: BatchRow): ImportHand
   const handler = handlers.for(batch.target, batch.kind);
   if (handler === undefined) throw new CommandDefect(`No import handler is registered for ${batch.target}`);
   return handler;
+}
+
+/** The published document of a source identity, whatever the actor's scope sees (7.2; migration 0059). */
+export async function publishedDocument(
+  context: TransactionContext,
+  identity: { readonly target: string; readonly scopeKey: string; readonly reference: string },
+): Promise<{ readonly documentId: string; readonly batchId: string; readonly contentHash: string | null } | undefined> {
+  const result = await context.tx.execute<{ document_id: string; batch_id: string; content_hash: string | null }>(
+    sql`select document_id, batch_id, content_hash from files_imports.published_document(${identity.target}, ${identity.scopeKey}, ${identity.reference})`,
+  );
+  const [row] = result.rows;
+  return row === undefined
+    ? undefined
+    : { documentId: row.document_id, batchId: row.batch_id, contentHash: row.content_hash };
+}
+
+/** A document's source identity and content, and what it is against the published document of its identity (7.1). */
+export interface DocumentIdentity {
+  readonly target: string;
+  readonly scopeKey: string;
+  readonly contentHash: string;
+  readonly finding: IdentityFinding;
+}
+
+/**
+ * Whether a batch is a governed revision of the documents it holds whose identities are published (7.3): an update
+ * batch, of a handler that supports revisions. The preparer chooses it with the kind at the start, and the reviewer
+ * reviews it as the batch.
+ */
+export function revisesPublished(handler: ImportHandler, batch: Pick<BatchRow, 'kind'>): boolean {
+  return batch.kind === 'update' && handler.revisions !== 'none';
+}
+
+/** A document's source identity, its content hash, and what it is against the published document (7.1, 7.2). */
+export async function identityOf(
+  context: TransactionContext,
+  handler: ImportHandler,
+  batch: Pick<BatchRow, 'kind' | 'target'>,
+  document: HandlerDocument,
+): Promise<DocumentIdentity> {
+  const scopeKey = handler.sourceScope(document);
+  const contentHash = documentContentHash(
+    handler.fields.map((field) => field.name),
+    document.rows.map((row) => row.values),
+  );
+  const published = await publishedDocument(context, { target: batch.target, scopeKey, reference: document.reference });
+  return {
+    target: batch.target,
+    scopeKey,
+    contentHash,
+    finding: identityFinding(published, contentHash, revisesPublished(handler, batch)),
+  };
 }

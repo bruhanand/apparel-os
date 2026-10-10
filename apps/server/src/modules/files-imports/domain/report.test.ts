@@ -230,3 +230,60 @@ describe('validationReport (imports-and-opening-data 8)', () => {
     ]);
   });
 });
+
+describe('validationReport: duplicates, conflicts and revisions (imports-and-opening-data 7.2, 7.3; S1-F06-T04)', () => {
+  const document = (n: number, identity: NonNullable<ReportInput['documents'][number]['identity']>) => ({
+    documentId: id(n),
+    reference: `SYN-S${String(n)}`,
+    excluded: false,
+    identity,
+    // A handler would refuse what is already published; a duplicate or a conflict is never checked for it.
+    preview: { kind: 'issues' as const, issues: [{ code: 'merchandise.code-taken' }] },
+    rows: [
+      {
+        stagedRowId: id(n + 100),
+        sheet: 'SYNTHETIC Products',
+        rowNumber: n,
+        hidden: false,
+        cells: [text(1, `A${String(n)}`, `SYN-S${String(n)}`)],
+        values: {
+          styleCode: { kind: 'supplied' as const, value: `SYN-S${String(n)}`, origin: origin(`A${String(n)}`, 'x') },
+          units: { kind: 'supplied' as const, value: '1', origin: origin(`B${String(n)}`, 1) },
+        },
+      },
+    ],
+  });
+
+  it('PRD-IMP-011 PRD-ACP-012: a duplicate is a Note, a conflict Blocking, a revision a Note naming what it revises', () => {
+    const report = validationReport({
+      ...base,
+      documents: [
+        document(2, { kind: 'duplicate', of: id(90) }),
+        document(3, { kind: 'conflict', of: id(91) }),
+        document(4, { kind: 'revision', of: id(92) }),
+      ],
+    });
+    const identity = report.issues.filter((issue) => ['duplicate', 'conflict', 'revision'].includes(issue.class));
+    expect(identity).toEqual([
+      expect.objectContaining({
+        class: 'duplicate',
+        severity: 'Note',
+        code: 'files-imports.duplicate-document',
+        documentId: id(2),
+        original: 'SYN-S2',
+        missing: [{ kind: 'import-document', documentId: id(90) }],
+      }),
+      expect.objectContaining({
+        class: 'conflict',
+        severity: 'Blocking',
+        code: 'files-imports.conflicting-document',
+        correction: 'files-imports.exclude-or-import-as-a-revision',
+        documentId: id(3),
+      }),
+      expect.objectContaining({ class: 'revision', severity: 'Note', documentId: id(4) }),
+    ]);
+    // Only the revision is checked for publishing; a duplicate or a conflict never publishes.
+    const handler = report.issues.filter((issue) => issue.class === 'handler').map((issue) => issue.documentId);
+    expect(handler).toEqual([id(4)]);
+  });
+});

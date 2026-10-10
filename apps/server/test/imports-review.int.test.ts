@@ -329,6 +329,19 @@ async function read(batchId: string, by: SyntheticUser = preparer): Promise<Impo
 const step = (batchId: string, name: string, body: unknown = {}) =>
   call(preparer, 'POST', `/api/files-imports/batches/${batchId}/${name}`, body);
 
+/**
+ * Withdraw a batch, so its file may start a new batch for the same target and layout (7.2; S1-F06-T04): the earlier
+ * batch is kept, Failed.
+ */
+async function withdraw(batchId: string): Promise<void> {
+  ok(await step(batchId, 'withdraw', { versionId: (await read(batchId)).batch.versionId }));
+}
+
+/** Publish, with the batch version the screen read (code-house-rules 12.7; S1-F06-T04). */
+async function publish(batchId: string): Promise<Answer> {
+  return step(batchId, 'publish', { versionId: (await read(batchId)).batch.versionId });
+}
+
 const IMPORTER: SyntheticAuthority[] = [
   { recordType: 'files_imports.stored_file', action: 'create' },
   { recordType: 'files_imports.import_batch', action: 'view' },
@@ -386,7 +399,11 @@ beforeAll(async () => {
     kinds: ['create'],
     effects: 'master-records',
     fields: [{ name: 'code', required: true }],
-    publishNeeds: { action: 'view', recordType: IMPORT_BATCH_TYPE },
+    measures: [],
+    sourceScope: () => REVIEWED_TARGET,
+    revisions: 'none',
+    publishNeeds: () => ({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
+    lockTargets: () => Promise.resolve([]),
     review: { kind: 'approval', actionType: REVIEW_ACTION },
     suggestions: () => Promise.resolve([]),
     checkRuleTarget: () => Promise.resolve(undefined),
@@ -547,7 +564,7 @@ describe('layouts and mappings proposed, detected and confirmed (imports-and-ope
     expect((await read(batchId)).batch).toMatchObject({ layoutState: 'Proposed', mappingState: 'Proposed' });
     expect(ok(await step(batchId, 'validate'))).toMatchObject({ state: 'Validated' });
     expect(ok(await step(batchId, 'submit'))).toMatchObject({ state: 'Validated' });
-    const early = await step(batchId, 'publish');
+    const early = await publish(batchId);
     expect(errorOf(early)).toMatchObject({
       kind: 'refused',
       code: 'files-imports.version-not-confirmed',
@@ -572,7 +589,7 @@ describe('layouts and mappings proposed, detected and confirmed (imports-and-ope
       decidedByUserId: confirmer.id,
       mappings: [{ mappingVersionId: versions.mappingVersionId, state: 'Confirmed', decidedByUserId: confirmer.id }],
     });
-    expect(ok(await step(batchId, 'publish'))).toMatchObject({ state: 'Published' });
+    expect(ok(await publish(batchId))).toMatchObject({ state: 'Published' });
   });
 
   it('GC-6 17 test 13 PRD-MOD-010: a batch keeps its layout and mapping versions; a new version leaves it as it was', async () => {
@@ -597,6 +614,20 @@ describe('layouts and mappings proposed, detected and confirmed (imports-and-ope
     expect(after.batch.mappingVersionId).toBe(versions.mappingVersionId);
     expect(after.documents).toEqual(kept.documents);
     expect(after.documents[0]?.rows[0]?.values.size).toMatchObject({ kind: 'supplied', value: 'SYN-M' });
+    // The same file starts a new batch for the same target and layout only once every earlier one Failed (7.2).
+    const again = await call(preparer, 'POST', '/api/files-imports/batches', {
+      storedFileId: stored.storedFileId,
+      fileReceiptId: stored.receiptId,
+      kind: 'create',
+      target: 'merchandise',
+      layoutVersionId: versions.layoutVersionId,
+      mappingVersionId: String(second.mappingVersionId),
+    });
+    expect(errorOf(again)).toMatchObject({
+      code: 'files-imports.file-already-imported',
+      missing: [expect.objectContaining({ kind: 'import-batch', batchId: before, state: 'Staged' })],
+    });
+    ok(await step(before, 'withdraw', { versionId: kept.batch.versionId }));
     const later = await read(await start(stored, { ...versions, mappingVersionId: String(second.mappingVersionId) }));
     expect(later.documents[0]?.rows[0]?.values.size).toBeUndefined();
   });
@@ -718,6 +749,7 @@ describe('mapping rules (imports-and-opening-data 6.3, 6.4; PRD-IMP-003, PRD-IMP
 
     // Confirmed by a different person: a new batch maps the word, keeping it beside the value.
     ok(await decide(confirmer, String(proposed.requestId), String(proposed.ruleVersionId)));
+    await withdraw(unconfirmed);
     const mapped = await start(file, versions);
     const value = (await read(mapped)).documents[0]?.rows[0]?.values.brandCode;
     expect(value).toMatchObject({
@@ -795,6 +827,7 @@ describe('mapping rules (imports-and-opening-data 6.3, 6.4; PRD-IMP-003, PRD-IMP
       expect.objectContaining({ class: 'required', severity: 'Blocking', field: 'brandCode' }),
     );
     await propose({ kind: 'layout', id: versions.layoutId }, brandCode);
+    await withdraw(ambiguous);
     const layoutWins = await start(file, versions, { source: { brandId: otherBrandId } });
     expect((await read(layoutWins)).documents[0]?.rows[0]?.values.brandCode).toMatchObject({
       kind: 'mapped',
@@ -968,7 +1001,7 @@ describe('origins, entries and the validation report (imports-and-opening-data 5
     expect(ok(await step(batchId, 'submit'))).toMatchObject({
       submittedVersionId: (await read(batchId)).batch.versionId,
     });
-    expect(ok(await step(batchId, 'publish'))).toMatchObject({ state: 'Published' });
+    expect(ok(await publish(batchId))).toMatchObject({ state: 'Published' });
   });
 
   it('PRD-IMP-007 C-2: a money value with more decimals than paise is flagged and stays Unknown', async () => {
@@ -1090,6 +1123,7 @@ describe('restricted columns and scope (imports-and-opening-data 11, 15.1; PRD-A
     expect(open.documents[0]?.rows[0]?.cells.find((cell) => cell.ref === 'H2')?.text).toBe('42');
 
     await confirm(versions);
+    await withdraw(unconfirmed);
     const confirmed = await start(stored, versions);
     const partial = await read(confirmed, noClassReader);
     expect(partial.batch.restrictedClasses.sort()).toEqual(['bank-details', 'cost']);
@@ -1104,7 +1138,9 @@ describe('restricted columns and scope (imports-and-opening-data 11, 15.1; PRD-A
     const versions = await proposeLayoutAndMapping(PRODUCT_LAYOUT, PRODUCT_MAPPING);
     const stored = await upload(preparer, [product(next('STYLE'), next('SKU'))]);
     const inA = await start(stored, versions, { scope: { siteId: SITE, storeId: STORE_A } });
-    const inB = await start(stored, versions, { scope: { siteId: SITE, storeId: STORE_B } });
+    // Another file: the same one starts no second batch for the target and layout while the first is open (7.2).
+    const storedB = await upload(preparer, [product(next('STYLE'), next('SKU'))]);
+    const inB = await start(storedB, versions, { scope: { siteId: SITE, storeId: STORE_B } });
     const seen = await read(inA, storeReader);
     expect(seen.documents[0]?.rows).toHaveLength(1);
     const hidden = await call(storeReader, 'GET', `/api/files-imports/batches/${inB}`);
@@ -1170,7 +1206,7 @@ describe('the organisation create handler (structure-and-masters 7; imports-and-
     });
     ok(await step(batchId, 'validate'));
     ok(await step(batchId, 'submit'));
-    expect(ok(await step(batchId, 'publish'))).toMatchObject({ state: 'Published' });
+    expect(ok(await publish(batchId))).toMatchObject({ state: 'Published' });
     const stores = await rows<{ decision: string }>(
       `select v.decision from organisation.store s join organisation.store_version v on v.store_id = s.id
         where s.code = $1`,

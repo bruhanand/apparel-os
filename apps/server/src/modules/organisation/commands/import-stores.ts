@@ -3,8 +3,10 @@ import {
   operatingModelSchema,
   storeDraftSchema,
   storeFormatSchema,
+  storeVersionDraftSchema,
   type DocumentPreview,
   type StoreDraft,
+  type StoreVersionDraft,
   type ValueSuggestion,
 } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
@@ -22,7 +24,10 @@ import type { Organisation } from '../organisation.js';
 // different authorised person to approve it, exactly as one prepared on screen (2.3). Its Site is found by the Site's
 // code among the Sites in force today; the format and operating model must be values the organisation accepts. The
 // version starts today. As built, the Stores are the first structure master the handler takes; the others follow the
-// same shape (structure-and-masters 7).
+// same shape (structure-and-masters 7). With S1-F06-T04 it takes the update kind too: a document of an update batch is
+// the next version of a Store in force today, starting today, through Prepare a Store version, and a governed revision
+// of the document that published the Store (imports-and-opening-data 4.1, 7.1, 7.3). Its source identity is the Store
+// record type and the Store's code.
 
 const FIELDS = [
   { name: 'storeCode', required: true },
@@ -43,11 +48,19 @@ async function today(context: TransactionContext): Promise<string | undefined> {
   return date.kind === 'set' ? date.date : undefined;
 }
 
-/** The Store draft a document stands for, or the issues that stop it. */
+/**
+ * The Store draft a create document stands for; or, for an update document, the Store in force today and its next
+ * version: the file's name, format, operating model, Site and opening date, the rest as the version in force has them
+ * (structure-and-masters 2.2, 3.3; imports-and-opening-data 4.1, 7.3); or the issues that stop it.
+ */
 async function draftOf(
   context: TransactionContext,
   document: HandlerDocument,
-): Promise<{ readonly draft: StoreDraft } | { readonly issues: Issue[] }> {
+): Promise<
+  | { readonly draft: StoreDraft }
+  | { readonly update: { readonly storeId: string; readonly draft: StoreVersionDraft } }
+  | { readonly issues: Issue[] }
+> {
   const [row, ...more] = document.rows;
   if (row === undefined) return { issues: [{ code: 'organisation.import-document-empty' }] };
   const issues: Issue[] = more.map((extra) => ({
@@ -69,6 +82,33 @@ async function draftOf(
   const structure = await structureOn(context, date);
   const site = structure.sites.find((each) => each.code === value('siteCode'));
   if (site === undefined) issues.push({ code: 'organisation.record-not-found', ...at('siteCode') });
+  if (document.kind === 'update') {
+    // An update is a new version of a Store in force today, starting today (4.1; structure-and-masters 2.2).
+    const current = structure.stores.find((each) => each.code === document.reference);
+    if (current === undefined) issues.push({ code: 'organisation.record-not-found', ...at('storeCode') });
+    if (issues.length > 0 || current === undefined || site === undefined || !format.success || !model.success) {
+      return { issues };
+    }
+    const next = storeVersionDraftSchema.safeParse({
+      name: value('name'),
+      format: format.data,
+      operatingModel: model.data,
+      siteId: site.id,
+      aliases: current.aliases,
+      ...(current.classificationValueIds.length === 0
+        ? {}
+        : { classificationValueIds: current.classificationValueIds }),
+      ...(opening === undefined
+        ? current.openingDate === undefined
+          ? {}
+          : { openingDate: current.openingDate }
+        : { openingDate: opening }),
+      ...(current.closingDate === undefined ? {} : { closingDate: current.closingDate }),
+      validFrom: date,
+    });
+    if (!next.success) return { issues: [{ code: 'organisation.import-value-not-accepted' }] };
+    return { update: { storeId: current.id, draft: next.data } };
+  }
   const [taken] = await context.tx.select({ id: store.id }).from(store).where(eq(store.code, document.reference));
   if (taken !== undefined) {
     issues.push({
@@ -107,10 +147,17 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
   return {
     target: STORE_IMPORT_TARGET,
     recordType: recordTypeOf('store'),
-    kinds: ['create'],
+    // A correction of a Store is its next version, through an update batch (imports-and-opening-data 4.1, 7.3).
+    kinds: ['create', 'update'],
     effects: 'master-records',
     fields: FIELDS,
-    publishNeeds: { action: 'create', recordType: recordTypeOf('store') },
+    measures: [],
+    // A Store's source identity is its record type and code (imports-and-opening-data 7.1).
+    sourceScope: () => recordTypeOf('store'),
+    revisions: 'new-version',
+    publishNeeds: (kind) => ({ action: kind === 'update' ? 'edit' : 'create', recordType: recordTypeOf('store') }),
+    // Preparing a Store or its version takes no lock of its own: its approval checks it under its locks (2.3).
+    lockTargets: () => Promise.resolve([]),
     // Each Store's first version waits for a different authorised person (2.3), so the submission is the review.
     review: { kind: 'submission' },
     async suggestions(context, field, value) {
@@ -164,7 +211,10 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
     async preview(context, document) {
       const drafted = await draftOf(context, document);
       if ('issues' in drafted) return { kind: 'issues', issues: drafted.issues };
-      return { kind: 'would-create', records: [{ recordType: recordTypeOf('store'), codes: [drafted.draft.code] }] };
+      return {
+        kind: 'would-create',
+        records: [{ recordType: recordTypeOf('store'), codes: [document.reference] }],
+      };
     },
     async publish(context, publisher, document) {
       const drafted = await draftOf(context, document);
@@ -175,8 +225,11 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
           refusal: { kind: 'refused', code: issue?.code ?? 'organisation.import-value-not-accepted', missing: [] },
         };
       }
-      // Prepare a Store, the organisation's own Maintain operation (module-map section 3, rule 8).
-      const prepared = await organisation.prepareStore(context, publisher, drafted.draft);
+      // Prepare a Store, or its next version, the organisation's own Maintain operations (module-map section 3, rule 8).
+      const prepared =
+        'update' in drafted
+          ? await organisation.prepareStoreVersion(context, publisher, drafted.update.storeId, drafted.update.draft)
+          : await organisation.prepareStore(context, publisher, drafted.draft);
       if (prepared.kind !== 'success') return { kind: 'refused', refusal: prepared.refusal };
       return {
         kind: 'published',

@@ -6,6 +6,7 @@ import {
   type FieldClass,
   type ImportBatchRead,
   type ImportLayoutList,
+  type ImportOutcome,
   type MappingRuleList,
   type MissingItem,
   type RowIssue,
@@ -34,6 +35,7 @@ import {
   entriesOf,
   factsOfBatch,
   handlerOf,
+  identityOf,
   latestEntries,
   parsedOrDefect,
   previewOf,
@@ -145,18 +147,31 @@ export async function readBatch(
       }
       return { row, values, views };
     });
+    const handlerDocument = {
+      documentId: document.id,
+      reference: document.reference,
+      kind: batch.kind,
+      rows: effective.map(({ row, values }) => ({
+        stagedRowId: row.id,
+        sheet: row.sheet,
+        rowNumber: row.rowNumber,
+        values,
+      })),
+    };
+    // What a Staged document is against the published document of its source identity (7.2; S1-F06-T04). A
+    // duplicate or a conflict is not previewed: it never publishes.
+    const finding =
+      document.state === 'Staged' && !document.excluded
+        ? (await identityOf(context, handler, batch, handlerDocument)).finding
+        : undefined;
+    const identity = finding === undefined || finding.kind === 'new' ? undefined : finding;
     const preview =
-      document.state === 'Staged' && !document.excluded && plan.kind !== 'all'
-        ? await previewOf(context, handler, {
-            documentId: document.id,
-            reference: document.reference,
-            rows: effective.map(({ row, values }) => ({
-              stagedRowId: row.id,
-              sheet: row.sheet,
-              rowNumber: row.rowNumber,
-              values,
-            })),
-          })
+      document.state === 'Staged' &&
+      !document.excluded &&
+      plan.kind !== 'all' &&
+      identity?.kind !== 'duplicate' &&
+      identity?.kind !== 'conflict'
+        ? await previewOf(context, handler, handlerDocument)
         : undefined;
     documentViews.push({
       documentId: document.id,
@@ -166,6 +181,8 @@ export async function readBatch(
       excluded: document.excluded,
       rows: effective.map(({ row, views }) => maskRow(rowView(row, views), plan)),
       ...(preview === undefined || (plan.kind === 'columns' && plan.fields.size > 0) ? {} : { preview }),
+      ...(identity === undefined ? {} : { identity: { kind: identity.kind, publishedDocumentId: identity.of } }),
+      ...(document.revisesDocumentId === null ? {} : { revisesDocumentId: document.revisesDocumentId }),
     });
   }
   return {
@@ -197,19 +214,30 @@ export async function readBatch(
       .filter((row) => row.documentId === null)
       .map((row) => (row.role === 'header' ? rowView(row, {}) : maskRow(rowView(row, {}), plan))),
     ...(await reportView(context, batch, plan)),
-    outcomes: outcomes.map((outcome) => ({
-      outcomeId: outcome.id,
-      result: outcome.result,
-      ...(outcome.refusalCode === null ? {} : { refusalCode: outcome.refusalCode }),
-      attemptedAt: outcome.attemptedAt.toISOString(),
-      attemptedByUserId: outcome.attemptedByUserId,
-      counts: outcome.counts,
-      documents: outcome.documents.map((document) => ({
-        documentId: document.documentId,
-        result: document.result,
-        records: [...document.records],
-        ...(document.refusalCode === undefined ? {} : { refusalCode: document.refusalCode }),
-      })),
+    outcomes: outcomes.map(outcomeView),
+  };
+}
+
+/** An outcome as its reader is served it (7.4). */
+export function outcomeView(outcome: typeof importOutcome.$inferSelect): ImportOutcome {
+  return {
+    outcomeId: outcome.id,
+    result: outcome.result,
+    ...(outcome.refusalCode === null ? {} : { refusalCode: outcome.refusalCode }),
+    attemptedAt: outcome.attemptedAt.toISOString(),
+    attemptedByUserId: outcome.attemptedByUserId,
+    ...(outcome.batchVersionId === null ? {} : { batchVersionId: outcome.batchVersionId }),
+    counts: outcome.counts,
+    measures: outcome.measures.map((measure) => ({ ...measure })),
+    controlTotals: outcome.controlTotals.map((total) => ({ ...total })),
+    documents: outcome.documents.map((document) => ({
+      documentId: document.documentId,
+      result: document.result,
+      records: [...document.records],
+      ...(document.refusalCode === undefined ? {} : { refusalCode: document.refusalCode }),
+      ...(document.publishedDocumentId === undefined ? {} : { publishedDocumentId: document.publishedDocumentId }),
+      ...(document.revisesDocumentId === undefined ? {} : { revisesDocumentId: document.revisesDocumentId }),
+      ...(document.rows === undefined ? {} : { rows: document.rows }),
     })),
   };
 }

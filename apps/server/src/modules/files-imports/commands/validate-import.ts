@@ -12,12 +12,13 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import { controlTotal, importBatch, layout, mapping, rowIssue, stagedRow } from '../db/schema.js';
-import { validationReport, type Report } from '../domain/report.js';
+import { checkedForPublishing, validationReport, type Report } from '../domain/report.js';
 import {
   BATCH_NOT_FOUND,
   documentsOf,
   factsOfBatch,
   handlerOf,
+  identityOf,
   previewOf,
   scopeColumnsOf,
   versionsOf,
@@ -32,7 +33,9 @@ import {
 // without writing, and the validation report is worked out for the batch version and kept: its row issues, each with
 // its class, severity, place, original value, correction and rule, and its control totals. The batch is Validated when
 // no Blocking issue is found and a document is left to publish; otherwise it stays Staged. An excluded document is
-// neither previewed nor checked.
+// neither previewed nor checked. With S1-F06-T04, each document is checked against the published document of its
+// source identity (7.2): a duplicate is a Note and has no effect, a conflict is Blocking, and a governed revision of an
+// update batch is a Note naming what it revises (PRD-IMP-011, PRD-ACP-012).
 
 export interface BatchStepInput {
   readonly actor: ImportActor;
@@ -124,7 +127,7 @@ export async function reportOf(
     .from(layout)
     .innerJoin(mapping, eq(mapping.id, versions.mapping.mappingId))
     .where(eq(layout.id, versions.layout.layoutId));
-  const documents = await documentsOf(context, batch.id);
+  const documents = await documentsOf(context, batch);
   const rows = await context.tx
     .select()
     .from(stagedRow)
@@ -133,11 +136,19 @@ export async function reportOf(
   const byId = new Map(rows.map((row) => [row.id, row]));
   const reportDocuments = [];
   for (const document of documents.filter((each) => each.state === 'Staged')) {
+    // What it is against the published document of its source identity (7.2): a duplicate or a conflict never
+    // publishes, so it is not previewed (S1-F06-T04).
+    const identity = document.excluded ? undefined : (await identityOf(context, handler, batch, document)).finding;
+    const checked = checkedForPublishing({
+      excluded: document.excluded,
+      ...(identity === undefined ? {} : { identity }),
+    });
     reportDocuments.push({
       documentId: document.documentId,
       reference: document.reference,
       excluded: document.excluded,
-      preview: document.excluded ? NOTHING : await previewOf(context, handler, document),
+      ...(identity === undefined ? {} : { identity }),
+      preview: checked ? await previewOf(context, handler, document) : NOTHING,
       rows: document.rows.map((row) => ({
         stagedRowId: row.stagedRowId,
         sheet: row.sheet,
@@ -235,8 +246,13 @@ export async function validateImport(
           );
         }
         const blocking = report.issues.filter((issue) => issue.severity === 'Blocking').length;
-        // A batch with every document excluded has nothing to publish; it stays Staged (3.2).
-        const anyDocument = (await documentsOf(context, batch.id)).some((each) => !each.excluded);
+        // A batch with every document excluded or a duplicate has nothing to publish; it stays Staged (3.2, 7.2).
+        const duplicates = new Set(
+          report.issues.filter((issue) => issue.class === 'duplicate').map((issue) => issue.documentId),
+        );
+        const anyDocument = (await documentsOf(context, batch)).some(
+          (each) => each.state === 'Staged' && !each.excluded && !duplicates.has(each.documentId),
+        );
         const state = blocking === 0 && anyDocument ? 'Validated' : 'Staged';
         if (state === 'Validated') {
           await context.tx.update(importBatch).set({ state: 'Validated' }).where(eq(importBatch.id, batch.id));

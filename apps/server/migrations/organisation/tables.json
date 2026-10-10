@@ -635,11 +635,10 @@
     },
     {
       "table": "files_imports.import_outcome",
-      "class": "unscoped",
+      "class": "scoped",
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
-      "design": "imports-and-opening-data 7.4, 15.1; code-house-rules 7.1",
-      "why": "Read only with its batch, after row-level security on files_imports.import_batch has shown the batch to the reader and Authorise has granted view on it with the classes its file holds; only files-imports code reads it"
+      "design": "imports-and-opening-data 7.4, 14, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
     },
     {
       "table": "stock.unit_anchor",

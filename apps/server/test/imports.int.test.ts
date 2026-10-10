@@ -412,9 +412,12 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     // The preparer's submission is the merchandise handler's review (13.1, 13.2; S1-F06-T03).
     const submitted = await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie);
     expect(submitted.status).toBe(200);
-    const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie);
+    // The batch version the screen read travels with Publish (code-house-rules 12.7; S1-F06-T04).
+    const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie, {
+      versionId: read.batch.versionId,
+    });
     expect(published.status).toBe(200);
-    expect(published.body).toMatchObject({ batchId, state: 'Published' });
+    expect(published.body).toMatchObject({ batchId, state: 'Published', result: 'published' });
 
     // The proposal names its batch, document and staged rows; it is no SKU until a different person confirms it.
     const after = importBatchReadSchema.parse(
@@ -492,7 +495,9 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(read.report?.issues).toContainEqual(
       expect.objectContaining({ class: 'required', severity: 'Blocking', field: 'stockUnit', rowNumber: 2 }),
     );
-    const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie);
+    const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie, {
+      versionId: read.batch.versionId,
+    });
     expect(errorOf(published)).toMatchObject({ kind: 'refused', code: 'files-imports.batch-not-validated' });
   });
 
@@ -563,18 +568,15 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
       'POST',
       `/api/files-imports/batches/${batchId}/publish`,
       limitedUser.cookie,
-      {},
+      { versionId: batchId },
       limitedApi,
     );
     expect(answer.status).toBe(403);
     expect(errorOf(answer)).toMatchObject({
       kind: 'unavailable',
       code: 'files-imports.publishing-limited',
-      missing: [
-        { kind: 'publishing-control', control: 'intake-refusals-and-caps', ticket: 'S1-F06-T02' },
-        { kind: 'publishing-control', control: 'confirmed-layouts-and-validation-report', ticket: 'S1-F06-T03' },
-        { kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' },
-      ],
+      // S1-F06-T03 and S1-F06-T04 are built; the limit stays while S1-F06-T02 is not.
+      missing: [{ kind: 'publishing-control', control: 'intake-refusals-and-caps', ticket: 'S1-F06-T02' }],
     });
     expect(await rows(0, 'select id from merchandise.product_proposal')).toEqual(proposalsBefore);
     expect(await rows(0, 'select id from files_imports.import_outcome where batch_id = $1', [batchId])).toEqual([]);

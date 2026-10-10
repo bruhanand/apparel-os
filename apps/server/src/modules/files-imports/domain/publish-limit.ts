@@ -6,13 +6,12 @@ import { isDevelopmentEnvironment } from '../../../kernel/index.js';
 // included, Publish answers unavailable naming the publishing controls still missing and writes nothing
 // (PRD-SEC-017, PRD-UXP-003). The gate reads the environment's name, as the simulator gate of code-house-rules 12.10
 // does; no code tests for a synthetic Organisation code (11.1). The ticket that closes last of S1-F06-T02, T03 and T04
-// removes it (S1-F06-T04 Notes).
+// removes it (S1-F06-T04 Notes). The confirmed layouts and mappings with the validation report (S1-F06-T03) and
+// duplicate control (S1-F06-T04) are built, so only the intake refusals and caps of S1-F06-T02 are still named.
 
 /** The publishing controls not yet built, each named with the ticket that builds it. */
 const MISSING_CONTROLS = [
   { kind: 'publishing-control', control: 'intake-refusals-and-caps', ticket: 'S1-F06-T02' },
-  { kind: 'publishing-control', control: 'confirmed-layouts-and-validation-report', ticket: 'S1-F06-T03' },
-  { kind: 'publishing-control', control: 'duplicate-control', ticket: 'S1-F06-T04' },
 ] as const;
 
 /** The refusal of Publish in an environment that is not local work, tests or `dev`; undefined where it may run. */

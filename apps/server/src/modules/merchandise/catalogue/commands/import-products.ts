@@ -5,16 +5,18 @@ import {
   stockUnitSchema,
   type DocumentPreview,
   type ProductProposalDraft,
+  type SkuVersionDraft,
   type ValueSuggestion,
 } from '@apparel-os/schemas';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
+import { lockTable, type CommandRefusal, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import { knownValue, type HandlerDocument, type HandlerRow, type ImportHandler } from '../../../files-imports/index.js';
-import { brand, brandVersion, category, categoryVersion } from '../db/schema.js';
+import { brand, brandVersion, category, categoryVersion, sku, style } from '../db/schema.js';
 import type { StoredProposal } from '../domain/products.js';
-import { today } from './common.js';
+import { newestVersion, today } from './common.js';
+import type { CataloguePreparation } from './maintain.js';
 import { proposalRefusal } from './product-rules.js';
 import { proposeProduct } from './products.js';
 
@@ -29,8 +31,16 @@ import { proposeProduct } from './products.js';
 // their codes and names (PRD Stack: Search), and for the stock unit and purpose from the values the catalogue accepts;
 // a mapping rule may target a brand or category code that exists, or a stock unit or purpose the catalogue accepts.
 // The handler has no attribute value field yet, so no vocabulary word is searched or mapped (structure-and-masters 4.1).
+// With S1-F06-T04 it takes the update kind too: a document of an update batch is a style's SKUs, each SKU's next version
+// with the row's stock unit and purpose, starting today, through Prepare a SKU version; and a governed revision of the
+// document that published the style (imports-and-opening-data 4.1, 7.1, 7.3). Its source identity is the style record
+// type and the style's code.
 
 /** The fields of the handler's staged row. Size is optional: absent, it is Unknown (4.1). */
+/** The record types an update versions, and a product's source identity names (imports-and-opening-data 7.1). */
+const STYLE_TYPE = 'merchandise.style';
+const SKU_TYPE = 'merchandise.sku';
+
 const FIELDS = [
   { name: 'styleCode', required: true },
   { name: 'skuCode', required: true },
@@ -169,9 +179,88 @@ async function draftOf(
   return { draft: draft.data };
 }
 
+/** An update document's SKUs and their next versions, starting today (4.1, 4.4; structure-and-masters 2.2). */
+interface SkuUpdates {
+  readonly skus: readonly { readonly skuId: string; readonly draft: SkuVersionDraft }[];
+}
+
+/**
+ * The next versions an update document stands for (imports-and-opening-data 4.1, 7.3; S1-F06-T04), or the issues that
+ * stop it. The style must exist by the document's code, every row must name its brand and category, and each row is a
+ * SKU of that style by its code, of the same size: a style's brand and category and a SKU's size are fixed at its
+ * creation, so a file that differs is refused, never applied. Each SKU's next version takes the row's stock unit and
+ * purpose and starts today; a new SKU arrives only through a product proposal (4.2).
+ */
+async function updatesOf(
+  context: TransactionContext,
+  document: HandlerDocument,
+): Promise<{ readonly updates: SkuUpdates } | { readonly issues: Issue[] }> {
+  const [first] = document.rows;
+  if (first === undefined) return { issues: [{ code: 'merchandise.import-document-empty' }] };
+  const date = await today(context);
+  if (typeof date !== 'string') return { issues: [{ code: date.code }] };
+  const [owner] = await context.tx
+    .select({ id: style.id, brandId: style.brandId, categoryId: style.categoryId })
+    .from(style)
+    .where(eq(style.code, document.reference));
+  if (owner === undefined) {
+    return { issues: [{ code: 'merchandise.record-not-found', field: 'styleCode', rowNumber: first.rowNumber }] };
+  }
+  const issues: Issue[] = [];
+  const brandId = await idOfCode(context, brand, valueOf(first, 'brandCode') ?? '');
+  const categoryId = await idOfCode(context, category, valueOf(first, 'categoryCode') ?? '');
+  if (brandId !== owner.brandId) {
+    issues.push({ code: 'merchandise.import-identity-differs', field: 'brandCode', rowNumber: first.rowNumber });
+  }
+  if (categoryId !== owner.categoryId) {
+    issues.push({ code: 'merchandise.import-identity-differs', field: 'categoryCode', rowNumber: first.rowNumber });
+  }
+  const skus: { skuId: string; draft: SkuVersionDraft }[] = [];
+  for (const row of document.rows) {
+    if (valueOf(row, 'styleCode') !== document.reference) {
+      issues.push({ code: 'merchandise.import-style-differs', field: 'styleCode', rowNumber: row.rowNumber });
+    }
+    const [found] = await context.tx
+      .select({ id: sku.id, size: sku.size })
+      .from(sku)
+      .where(and(eq(sku.code, valueOf(row, 'skuCode') ?? ''), eq(sku.styleId, owner.id)));
+    if (found === undefined) {
+      issues.push({ code: 'merchandise.record-not-found', field: 'skuCode', rowNumber: row.rowNumber });
+      continue;
+    }
+    if ((valueOf(row, 'size') ?? null) !== found.size) {
+      issues.push({ code: 'merchandise.import-identity-differs', field: 'size', rowNumber: row.rowNumber });
+    }
+    const stockUnit = stockUnitSchema.safeParse(valueOf(row, 'stockUnit'));
+    const purpose = skuPurposeSchema.safeParse(valueOf(row, 'purpose'));
+    if (!stockUnit.success) {
+      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'stockUnit', rowNumber: row.rowNumber });
+    }
+    if (!purpose.success) {
+      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'purpose', rowNumber: row.rowNumber });
+    }
+    if (!stockUnit.success || !purpose.success) continue;
+    // The version token is the newest version's, read in the transaction that prepares it (code-house-rules 12.7).
+    const versionToken = await newestVersion(context, 'sku', found.id);
+    skus.push({
+      skuId: found.id,
+      draft: {
+        stockUnit: stockUnit.data,
+        purpose: purpose.data,
+        validFrom: date,
+        ...(versionToken === undefined ? {} : { versionToken }),
+      },
+    });
+  }
+  if (issues.length > 0) return { issues };
+  return { updates: { skus } };
+}
+
 export interface ProductImportDependencies {
   readonly audit: AuditInterface;
   readonly access: Pick<AccessInterface, 'requestApproval'>;
+  /** The catalogue's own Maintain operations, for an update's SKU versions (structure-and-masters 7). */
+  readonly catalogue: Pick<CataloguePreparation, 'prepareSkuVersion'>;
 }
 
 /** The handler `merchandise` · catalogue registers with files-imports at start. */
@@ -179,10 +268,29 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
   return {
     target: 'merchandise',
     recordType: PRODUCT_PROPOSAL_TYPE,
-    kinds: ['create'],
+    // A correction of a product is its SKUs' next versions, through an update batch (imports-and-opening-data 4.1, 7.3).
+    kinds: ['create', 'update'],
     effects: 'master-records',
     fields: FIELDS,
-    publishNeeds: { action: 'create', recordType: PRODUCT_PROPOSAL_TYPE },
+    measures: [],
+    // A product's source identity is the style record type and the style's code (imports-and-opening-data 7.1).
+    sourceScope: () => STYLE_TYPE,
+    revisions: 'new-version',
+    publishNeeds: (kind) =>
+      kind === 'update'
+        ? { action: 'edit', recordType: SKU_TYPE }
+        : { action: 'create', recordType: PRODUCT_PROPOSAL_TYPE },
+    // An update locks the SKUs it versions with the batch at step 1, as Prepare a SKU version would lock them (8.2).
+    async lockTargets(context, document): Promise<LockTarget[]> {
+      if (document.kind !== 'update') return [];
+      const updated = await updatesOf(context, document);
+      if ('issues' in updated) return [];
+      return updated.updates.skus.map((each) => ({
+        table: lockTable('merchandise', 'sku'),
+        id: each.skuId,
+        mode: 'exclusive' as const,
+      }));
+    },
     // Each proposal is confirmed by a different person, so the preparer's submission is the review (13.2).
     review: { kind: 'submission' },
     async suggestions(context, field, value) {
@@ -224,6 +332,14 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
       }
     },
     async preview(context, document) {
+      if (document.kind === 'update') {
+        const updated = await updatesOf(context, document);
+        if ('issues' in updated) return { kind: 'issues', issues: updated.issues };
+        return {
+          kind: 'would-create',
+          records: [{ recordType: SKU_TYPE, codes: document.rows.map((row) => valueOf(row, 'skuCode') ?? '') }],
+        };
+      }
       const drafted = await draftOf(context, document);
       if ('issues' in drafted) return { kind: 'issues', issues: drafted.issues };
       const date = await today(context);
@@ -250,6 +366,26 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
       };
     },
     async publish(context, publisher, document, source) {
+      if (document.kind === 'update') {
+        const updated = await updatesOf(context, document);
+        if ('issues' in updated) {
+          const [issue] = updated.issues;
+          return {
+            kind: 'refused',
+            refusal: { kind: 'refused', code: issue?.code ?? 'merchandise.import-value-not-accepted', missing: [] },
+          };
+        }
+        // Prepare a SKU version, the catalogue's own Maintain operation, for each SKU (module-map section 3, rule 8):
+        // each waits Awaiting approval for a different authorised person (structure-and-masters 2.3).
+        for (const each of updated.updates.skus) {
+          const prepared = await dependencies.catalogue.prepareSkuVersion(context, publisher, each.skuId, each.draft);
+          if (prepared.kind !== 'success') return { kind: 'refused', refusal: prepared.refusal };
+        }
+        return {
+          kind: 'published',
+          records: updated.updates.skus.map((each) => ({ recordType: SKU_TYPE, recordId: each.skuId })),
+        };
+      }
       const drafted = await draftOf(context, document);
       if ('issues' in drafted) {
         const [issue] = drafted.issues;

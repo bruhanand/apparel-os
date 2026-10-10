@@ -44,10 +44,14 @@ export class CatalogueModule implements OnModuleInit {
     @Inject(AUDIT) private readonly audit: AuditInterface,
     @Inject(ACCESS) private readonly access: AccessInterface,
     @Inject(IMPORT_HANDLERS) private readonly handlers: ImportHandlers,
+    @Inject(CATALOGUE) private readonly catalogue: Catalogue,
   ) {}
 
-  /** Publishing a product import reaches the catalogue's own Propose a product (module-map section 3, rule 8). */
+  /**
+   * Publishing a product import reaches the catalogue's own Propose a product, and an update its Prepare a SKU version
+   * (module-map section 3, rule 8).
+   */
   onModuleInit(): void {
-    this.handlers.register(productImportHandler({ audit: this.audit, access: this.access }));
+    this.handlers.register(productImportHandler({ audit: this.audit, access: this.access, catalogue: this.catalogue }));
   }
 }

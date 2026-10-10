@@ -309,3 +309,21 @@ describe('stage', () => {
     ]);
   });
 });
+
+describe('stage: every row the reader read (S1-F06-T04)', () => {
+  it('PRD-IMP-013 stages a title above the header as an ignored row, so rows read and staged are the same', () => {
+    const titled = sheetGrid([
+      { number: 1, hidden: false, cells: [text(1, 'A1', 'SYNTHETIC title')] },
+      { number: 2, hidden: false, cells: [text(1, 'A2', 'Style'), text(2, 'B2', 'SKU'), text(3, 'C2', 'Units')] },
+      { number: 3, hidden: false, cells: [text(1, 'A3', 'SYN-ST-1'), text(2, 'B3', 'SYN-SKU-1')] },
+    ]);
+    const result = staged(stage(titled, { ...layout, headerRow: 2, dataStartRow: 3 }, mapping, context));
+    expect(result.others.map((row) => [row.rowNumber, row.role])).toEqual([
+      [1, 'ignored'],
+      [2, 'header'],
+    ]);
+    expect(result.others.length + result.documents.flatMap((document) => document.rows).length).toBe(
+      result.sheets.find((sheet) => sheet.imported)?.rows,
+    );
+  });
+});

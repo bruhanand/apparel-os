@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE, type FieldClass, type StartImportRequest } from '@apparel-os/schemas';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import {
   ApiRefusal,
   CommandDefect,
@@ -14,6 +14,8 @@ import {
   type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
+import type { ImportHandler } from '../contracts/import-handlers.js';
+import { openReceiptText } from '../domain/receipt-seal.js';
 import { attach } from './attach.js';
 import {
   fileReceipt,
@@ -38,6 +40,8 @@ import {
   layoutStructureSchema,
   mappingFieldsSchema,
   parsedOrDefect,
+  publishedDocument,
+  revisesPublished,
   scopeColumnsOf,
   type ImportActor,
   type ImportDependencies,
@@ -151,13 +155,15 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       if (versions.layoutState === 'Rejected' || versions.mappingState === 'Rejected') {
         refuse({ kind: 'refused', code: 'files-imports.layout-version-rejected', missing: [] });
       }
-      if (deps.handlers.for(body.target, body.kind) === undefined) {
+      const handler = deps.handlers.for(body.target, body.kind);
+      if (handler === undefined) {
         refuse({
           kind: 'refused',
           code: 'files-imports.no-import-handler',
           missing: [{ kind: 'import-handler', target: body.target, importKind: body.kind }],
         });
       }
+      await refuseRepeat(deps, context, input, handler, versions.layoutId);
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
       const date = await context.businessDate();
       if (date.kind !== 'set') {
@@ -180,6 +186,79 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       };
     },
   );
+}
+
+/**
+ * Duplicate control at the start (7.2, 13.1; PRD-IMP-011; S1-F06-T04). The same file starts a new batch for the same
+ * target and layout only if every earlier such batch Failed; the refusal names the earlier batches the person may see.
+ * And a document reference the uploader claimed at the hand-in, already published for the target, is refused, unless
+ * the batch is a governed revision of it (7.3). Both are checked whatever the person's scope sees, since a source
+ * identity is one across the Organisation; validation checks each document the file holds, and publishing checks again
+ * under the lock, behind which the unique index is the last guard.
+ */
+async function refuseRepeat(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  input: StartImportInput,
+  handler: ImportHandler,
+  layoutId: string,
+): Promise<void> {
+  const { body } = input;
+  const open = await context.tx.execute<{ open: boolean }>(
+    sql`select files_imports.file_in_open_batch(${body.storedFileId}, ${body.target}, ${layoutId}) as open`,
+  );
+  if (open.rows[0]?.open === true) {
+    const earlier = await context.tx
+      .select({ batchId: importBatch.id, code: importBatch.code, state: importBatch.state })
+      .from(importBatch)
+      .innerJoin(layoutVersion, eq(layoutVersion.id, importBatch.layoutVersionId))
+      .where(
+        and(
+          eq(importBatch.storedFileId, body.storedFileId),
+          eq(importBatch.target, body.target),
+          eq(layoutVersion.layoutId, layoutId),
+          ne(importBatch.state, 'Failed'),
+        ),
+      )
+      .orderBy(asc(importBatch.code));
+    refuse({
+      kind: 'refused',
+      code: 'files-imports.file-already-imported',
+      missing: earlier.map((batch) => ({
+        kind: 'import-batch',
+        batchId: batch.batchId,
+        code: batch.code,
+        state: batch.state,
+      })),
+    });
+  }
+  const [receipt] = await context.tx
+    .select({ sealed: fileReceipt.claimedReferenceSealed, scheme: fileReceipt.encryptionScheme })
+    .from(fileReceipt)
+    .where(eq(fileReceipt.id, body.fileReceiptId));
+  if (receipt?.sealed === null || receipt === undefined) return;
+  const reference = openReceiptText(
+    deps.keys,
+    input.actor.organisation.organisationCode,
+    body.fileReceiptId,
+    'claimed-reference',
+    {
+      scheme: receipt.scheme,
+      ciphertext: receipt.sealed,
+    },
+  );
+  const published = await publishedDocument(context, {
+    target: body.target,
+    scopeKey: handler.sourceScope({ reference, rows: [] }),
+    reference,
+  });
+  if (published !== undefined && !revisesPublished(handler, { kind: body.kind })) {
+    refuse({
+      kind: 'refused',
+      code: 'files-imports.document-already-published',
+      missing: [{ kind: 'import-document', documentId: published.documentId }],
+    });
+  }
 }
 
 interface StagedFile {
@@ -371,11 +450,21 @@ async function record(
     values: { ...row.values },
     ...columns,
   });
+  const handler = deps.handlers.for(body.target, body.kind);
+  if (handler === undefined) throw new CommandDefect(`No import handler is registered for ${body.target}`);
   for (const document of file.documents) {
     const documentId = uuidv7();
-    await context.tx
-      .insert(importDocument)
-      .values({ id: documentId, batchId, reference: document.reference, state: 'Staged', excluded: false, ...columns });
+    // Its source identity (7.1): the target, the scope key its handler names and the reference.
+    await context.tx.insert(importDocument).values({
+      id: documentId,
+      batchId,
+      reference: document.reference,
+      state: 'Staged',
+      excluded: false,
+      target: body.target,
+      scopeKey: handler.sourceScope({ reference: document.reference, rows: [] }),
+      ...columns,
+    });
     for (const row of document.rows) rows.push(asRow(row, documentId));
   }
   for (const row of file.others) rows.push(asRow(row, null));

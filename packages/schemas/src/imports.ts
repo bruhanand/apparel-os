@@ -613,6 +613,40 @@ const outcomeCountsSchema = z.strictObject({
   rowsDuplicate: z.number().int().nonnegative(),
 });
 
+/**
+ * What became of one document at an attempt (7.2, 7.4; S1-F06-T04): published, refused by its handler, a conflict, a
+ * duplicate, excluded, or not attempted.
+ */
+export const documentResultSchema = z.enum([
+  'published',
+  'refused',
+  'conflict',
+  'duplicate',
+  'excluded',
+  'not-attempted',
+]);
+export type DocumentResult = z.infer<typeof documentResultSchema>;
+
+/** The sums of one measure the handler names, by result; null is Unknown (7.4; PRD-MOD-015). */
+export const outcomeMeasureSchema = z.strictObject({
+  field: z.string(),
+  kind: z.enum(['quantity', 'value']),
+  accepted: z.string().nullable(),
+  rejected: z.string().nullable(),
+  pending: z.string().nullable(),
+  duplicate: z.string().nullable(),
+});
+
+/** A control total as reported, summed and accepted (7.4; PRD-EBO-004); null is Unknown. */
+export const outcomeControlTotalSchema = z.strictObject({
+  sheet: z.string(),
+  rowNumber: z.number().int().positive(),
+  column: z.string(),
+  reported: z.string().nullable(),
+  summed: z.string().nullable(),
+  accepted: z.string().nullable(),
+});
+
 /** What one publish attempt did, for the batch and each document, kept for a failure too (7.4). */
 export const importOutcomeSchema = z.strictObject({
   outcomeId: idSchema,
@@ -620,15 +654,34 @@ export const importOutcomeSchema = z.strictObject({
   refusalCode: z.string().optional(),
   attemptedAt: asOf,
   attemptedByUserId: idSchema,
+  /** The batch version attempted; absent for an attempt kept before S1-F06-T04. */
+  batchVersionId: idSchema.optional(),
   counts: outcomeCountsSchema,
+  measures: z.array(outcomeMeasureSchema),
+  controlTotals: z.array(outcomeControlTotalSchema),
   documents: z.array(
     z.strictObject({
       documentId: idSchema,
-      result: z.enum(['published', 'refused', 'not-attempted']),
+      result: documentResultSchema,
       records: z.array(z.strictObject({ recordType: z.string(), recordId: idSchema })),
       refusalCode: z.string().optional(),
+      /** The published document it duplicates or conflicts with (7.2). */
+      publishedDocumentId: idSchema.optional(),
+      /** The published document it revised (7.3). */
+      revisesDocumentId: idSchema.optional(),
+      rows: z.number().int().nonnegative().optional(),
     }),
   ),
+});
+export type ImportOutcome = z.infer<typeof importOutcomeSchema>;
+
+/**
+ * A document against the published document of its source identity (7.2, 7.3): a duplicate, which has no effect; a
+ * conflict, refused unless imported as a governed revision; or a governed revision of it.
+ */
+export const documentIdentitySchema = z.strictObject({
+  kind: z.enum(['duplicate', 'conflict', 'revision']),
+  publishedDocumentId: idSchema,
 });
 
 /** A sheet the reader found (8.1; A-7, A-8): imported, or listed with its row count. */
@@ -691,6 +744,10 @@ export const importBatchReadSchema = z.strictObject({
       rows: z.array(stagedRowSchema),
       /** The handler's preview, worked out at reading while the document is Staged and not excluded. */
       preview: documentPreviewSchema.optional(),
+      /** What a Staged document is against the published document of its source identity (7.2; S1-F06-T04). */
+      identity: documentIdentitySchema.optional(),
+      /** The published document it revised, once published as a governed revision (7.3). */
+      revisesDocumentId: idSchema.optional(),
     }),
   ),
   ignoredRows: z.array(stagedRowSchema),
@@ -746,12 +803,87 @@ export const importSubmittedSchema = z.strictObject({
   requestId: idSchema.optional(),
 });
 
-/** Publish: the batch, and the approval decision where its handler requires one (3.1 step 9; 13.1). */
-export const publishImportRequestSchema = z.strictObject({ approvalDecisionId: idSchema.optional() });
+/**
+ * Publish: the batch version the screen read (code-house-rules 12.7), and the approval decision where its handler
+ * requires one (3.1 step 9; 13.1).
+ */
+export const publishImportRequestSchema = z.strictObject({
+  versionId: idSchema,
+  approvalDecisionId: idSchema.optional(),
+});
 
-/** Publish's answer, with the outcome it wrote (7.4). */
+/**
+ * Publish's answer (3.2, 7.4; S1-F06-T04): the outcome it wrote, published when every document chosen posted or is a
+ * duplicate, and the batch Published; failed when a document was refused or conflicts, the others published and the
+ * batch still Validated; and what became of each document.
+ */
 export const importPublishedSchema = z.strictObject({
   batchId: idSchema,
   state: importBatchStateSchema,
   outcomeId: idSchema,
+  result: z.enum(['published', 'failed']),
+  documents: z.array(
+    z.strictObject({ documentId: idSchema, result: documentResultSchema, refusalCode: z.string().optional() }),
+  ),
 });
+
+/** Withdraw (3.2, 13.1; S1-F06-T04): the batch version the screen read; the batch becomes Failed. */
+export const withdrawImportRequestSchema = z.strictObject({ versionId: idSchema });
+
+/**
+ * The import outcomes report's filters (14; S1-F06-T04): a Store, a kind, a state, and the dates the batches were
+ * started on, from and to, both included, in the Organisation's timezone.
+ */
+export const importOutcomesQuerySchema = z.strictObject({
+  storeId: idSchema.optional(),
+  kind: importKindSchema.optional(),
+  state: importBatchStateSchema.optional(),
+  from: businessDateSchema.optional(),
+  to: businessDateSchema.optional(),
+});
+export type ImportOutcomesQuery = z.infer<typeof importOutcomesQuerySchema>;
+
+/**
+ * The import outcomes report (14; PRD-IMP-013, PRD-MOD-003, PRD-EXC-010, PRD-EXC-011, PRD-SEC-005; S1-F06-T04): each
+ * batch the reader may see, newest first, with its kind, target, scope, layout and mapping versions, who started it
+ * and when, its state, its last attempt's counts, quantities, values and control totals, and each document with what
+ * became of it; drilled to through the batch, which holds its rows, issues and stored file. Its as-of time. A document
+ * reference of a class the reader is not granted is masked (section 11).
+ */
+export const importOutcomesSchema = z.strictObject({
+  asOf,
+  batches: z.array(
+    z.strictObject({
+      batchId: idSchema,
+      code: z.string(),
+      kind: importKindSchema,
+      target: z.string(),
+      state: importBatchStateSchema,
+      legalEntityId: idSchema.optional(),
+      siteId: idSchema.optional(),
+      storeId: idSchema.optional(),
+      businessUnitId: idSchema.optional(),
+      layout: z.strictObject({ layoutVersionId: idSchema, code: z.string(), version: z.number().int().positive() }),
+      mapping: z.strictObject({ mappingVersionId: idSchema, code: z.string(), version: z.number().int().positive() }),
+      startedByUserId: idSchema,
+      startedAt: asOf,
+      /** The rows the reader read from the imported sheet (8.1). */
+      rowsRead: z.number().int().nonnegative(),
+      attempts: z.number().int().nonnegative(),
+      lastOutcome: importOutcomeSchema.optional(),
+      documents: z.array(
+        z.strictObject({
+          documentId: idSchema,
+          reference: z.string(),
+          referenceMasked: fieldClassSchema.optional(),
+          state: z.enum(['Staged', 'Published']),
+          excluded: z.boolean(),
+          rows: z.number().int().nonnegative(),
+          revisesDocumentId: idSchema.optional(),
+          replacedByDocumentId: idSchema.optional(),
+        }),
+      ),
+    }),
+  ),
+});
+export type ImportOutcomes = z.infer<typeof importOutcomesSchema>;

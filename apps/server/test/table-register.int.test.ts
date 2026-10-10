@@ -60,6 +60,10 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     // imports-and-opening-data 11: the record an attachment belongs to, SECURITY DEFINER, and whether the transaction
     // names a record its owning module admitted the actor to (migration 0039; RR-452).
     'files_imports.attached_record',
+    // imports-and-opening-data 7.2: a source identity's published document and whether a file is in a batch that has
+    // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0059; S1-F06-T04).
+    'files_imports.file_in_open_batch',
+    'files_imports.published_document',
     'files_imports.record_admitted',
     // books-and-posting 12: whether a book's lines include any the reader cannot see, SECURITY DEFINER (S1-F09-T02).
     'finance.lines_hidden',

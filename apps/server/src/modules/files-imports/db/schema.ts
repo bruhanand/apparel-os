@@ -8,11 +8,11 @@ import type {
 } from '@apparel-os/schemas';
 import { bigint, boolean, customType, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { GridCell, GridNote } from '../domain/grid.js';
-import type { OutcomeCounts, OutcomeDocument } from '../domain/outcome.js';
+import type { OutcomeControlTotal, OutcomeCounts, OutcomeDocument, OutcomeMeasure } from '../domain/outcome.js';
 import type { SheetSummary, StagedRowDraft, StagedValue } from '../domain/staging.js';
 
 // Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0024, 0055, 0057) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0024, 0055, 0057, 0059) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
@@ -172,6 +172,15 @@ export const importDocument = filesImports.table('import_document', {
   /** Excluded from publishing, while Staged (3.2; 0057). */
   excluded: boolean('excluded').notNull(),
   ...scopeColumns(),
+  /** The source identity (7.1; 0059): the target and the scope key its handler names, with the reference. */
+  target: text('target'),
+  scopeKey: text('scope_key'),
+  /** The hash of the document's values as published (7.2); null while Staged, and for one published before 0059. */
+  contentHash: text('content_hash'),
+  /** The published document this one revises (7.3). */
+  revisesDocumentId: uuid('revises_document_id'),
+  /** The revision that replaced this published document (7.3). */
+  replacedByDocumentId: uuid('replaced_by_document_id'),
 });
 
 /** One row of the file with every original cell and its normalised values (section 5). */
@@ -283,4 +292,11 @@ export const importOutcome = filesImports.table('import_outcome', {
   attemptedByUserId: uuid('attempted_by_user_id').notNull(),
   attemptedAt: at('attempted_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The batch version attempted (0059); null for an attempt before it. */
+  batchVersionId: uuid('batch_version_id'),
+  /** The quantities and values of the handler's measures, by result (7.4; 0059). */
+  measures: jsonb('measures').$type<OutcomeMeasure[]>().notNull(),
+  /** The control totals as reported, summed and accepted (7.4; 0059). */
+  controlTotals: jsonb('control_totals').$type<OutcomeControlTotal[]>().notNull(),
+  ...scopeColumns(),
 });

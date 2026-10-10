@@ -145,6 +145,12 @@ export async function enterStagedValue(
           .from(stagedRow)
           .where(and(eq(stagedRow.id, input.stagedRowId), eq(stagedRow.batchId, batch.id), eq(stagedRow.role, 'data')));
         if (row === undefined) return refusal('not-found', 'files-imports.staged-row-not-found');
+        // A published document is never edited (7.3; PRD-MOD-011): its rows stay as they were published (S1-F06-T04).
+        const [document] = await context.tx
+          .select({ state: importDocument.state })
+          .from(importDocument)
+          .where(eq(importDocument.id, row.documentId ?? row.id));
+        if (document?.state !== 'Staged') return refusal('refused', 'files-imports.document-not-staged');
         const handler = handlerOf(deps.handlers, batch);
         if (!handler.fields.some((field) => field.name === body.field)) {
           return refusal('refused', 'files-imports.field-unknown', [{ kind: 'import-field', field: body.field }]);

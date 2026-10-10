@@ -8,6 +8,7 @@ import {
   type MappingFields,
 } from '@apparel-os/schemas';
 import type { GridCell } from './grid.js';
+import type { IdentityFinding } from './identity.js';
 import { sameLabel, type RowRole, type SheetSummary, type StagedValue } from './staging.js';
 
 // The validation report (imports-and-opening-data 6.6, 8.1 to 8.3; PRD-IMP-005, PRD-IMP-007, PRD-IMP-013,
@@ -36,6 +37,8 @@ export interface ReportDocument {
   readonly rows: readonly (ReportRow & { readonly values: Readonly<Record<string, EffectiveValue>> })[];
   /** The handler's preview of the document, which writes nothing (13.2). */
   readonly preview: DocumentPreview;
+  /** What it is against the published document of its source identity (7.2, 7.3); new when none is published. */
+  readonly identity?: IdentityFinding;
 }
 
 export interface ReportInput {
@@ -370,13 +373,73 @@ function controlTotals(input: ReportInput): { totals: ControlTotalDraft[]; issue
   return { totals, issues };
 }
 
+/**
+ * A document against the published document of its source identity (7.2, 7.3; PRD-IMP-011, PRD-ACP-012): a duplicate
+ * has no effect and is a Note; other content is a conflict, Blocking until the document is excluded or imported as a
+ * governed revision; a governed revision is a Note naming what it revises.
+ */
+function identityIssues(input: ReportInput, document: ReportDocument): IssueDraft[] {
+  const identity = document.identity;
+  if (identity === undefined || identity.kind === 'new') return [];
+  const place = { documentId: document.documentId, original: document.reference };
+  const rule = `source identity ${input.target}`;
+  const missing = [{ kind: 'import-document', documentId: identity.of }];
+  switch (identity.kind) {
+    case 'duplicate':
+      return [
+        {
+          ...place,
+          class: 'duplicate',
+          severity: 'Note',
+          code: 'files-imports.duplicate-document',
+          correction: NO_ACTION,
+          rule,
+          missing,
+        },
+      ];
+    case 'conflict':
+      return [
+        {
+          ...place,
+          class: 'conflict',
+          severity: 'Blocking',
+          code: 'files-imports.conflicting-document',
+          correction: 'files-imports.exclude-or-import-as-a-revision',
+          rule,
+          missing,
+        },
+      ];
+    case 'revision':
+      return [
+        {
+          ...place,
+          class: 'revision',
+          severity: 'Note',
+          code: 'files-imports.revises-document',
+          correction: NO_ACTION,
+          rule,
+          missing,
+        },
+      ];
+  }
+}
+
+/** Whether a document is checked for publishing: neither excluded nor a duplicate or a conflict, which never publish. */
+export function checkedForPublishing(document: Pick<ReportDocument, 'excluded' | 'identity'>): boolean {
+  const kind = document.identity?.kind;
+  return !document.excluded && kind !== 'duplicate' && kind !== 'conflict';
+}
+
 /** The validation report of one batch version. */
 export function validationReport(input: ReportInput): Report {
   const totals = controlTotals(input);
   return {
     issues: [
       ...fileIssues(input),
-      ...input.documents.filter((document) => !document.excluded).flatMap((document) => valueIssues(input, document)),
+      ...input.documents
+        .filter((document) => !document.excluded)
+        .flatMap((document) => identityIssues(input, document)),
+      ...input.documents.filter(checkedForPublishing).flatMap((document) => valueIssues(input, document)),
       ...totals.issues,
     ],
     controlTotals: totals.totals,

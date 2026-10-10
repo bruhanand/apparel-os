@@ -27,8 +27,10 @@ import { enterStagedValue, excludeImportDocument } from '../commands/staging-edi
 import { startImport } from '../commands/start-import.js';
 import { storeFile, type StoreFileDependencies } from '../commands/store-file.js';
 import { validateImport } from '../commands/validate-import.js';
+import { withdrawImport } from '../commands/withdraw.js';
 import { layoutList, mappingRuleList, readBatch } from '../queries/batches.js';
 import { detectLayout, valueSuggestions } from '../queries/detection.js';
+import { importOutcomes } from '../queries/outcomes.js';
 import { STORE_FILE_DEPENDENCIES } from './files.controller.js';
 
 export const IMPORT_DEPENDENCIES = 'files-imports.ImportDependencies';
@@ -36,7 +38,8 @@ export const IMPORT_DEPENDENCIES = 'files-imports.ImportDependencies';
 /**
  * Imports (imports-and-opening-data 3.1, 5, 6, 8, 13.1, 13.2; S1-F06-T01, S1-F06-T03): the import upload, layouts,
  * mappings and mapping rules with their proposals, detection, Start an import, one batch, staging edits, Validate,
- * the report's Warnings marked seen, Submit for review and Publish. The controller holds no rule of its own: the
+ * the report's Warnings marked seen, Submit for review, Publish, Withdraw and the import outcomes report (S1-F06-T04).
+ * The controller holds no rule of its own: the
  * commands and reads hold them.
  */
 @Controller()
@@ -245,9 +248,36 @@ export class ImportsController {
       batchId: input.params.batchId,
       key: input.idempotencyKey,
       content: requestContentOf(routes.publishImport, input),
+      versionId: input.body.versionId,
       approvalDecisionId: input.body.approvalDecisionId,
     });
     return commandAnswer(answer);
+  }
+
+  @ApiRoute(routes.withdrawImport)
+  async withdrawImport(
+    @RouteInput() input: RouteInputOf<typeof routes.withdrawImport>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const answer = await withdrawImport(this.imports, {
+      actor: actorOf(user),
+      batchId: input.params.batchId,
+      key: input.idempotencyKey,
+      content: requestContentOf(routes.withdrawImport, input),
+      versionId: input.body.versionId,
+    });
+    return commandAnswer(answer);
+  }
+
+  @ApiRoute(routes.importOutcomes)
+  async importOutcomes(
+    @RouteInput() input: RouteInputOf<typeof routes.importOutcomes>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const answer = await this.imports.runner.read(this.request('files-imports.import-outcomes', user), (context) =>
+      importOutcomes(this.imports, context, user.userId, input.query),
+    );
+    return routeAnswer(answer, { replayed: false });
   }
 
   /**

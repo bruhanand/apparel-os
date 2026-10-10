@@ -1,5 +1,5 @@
 import type { DocumentPreview, ImportKind, PermissionAction, ValueSuggestion } from '@apparel-os/schemas';
-import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
+import type { CommandRefusal, LockTarget, TransactionContext } from '../../../kernel/index.js';
 import type { EffectiveValue } from '../domain/report.js';
 
 // The import handler contract (imports-and-opening-data 13.2; module-map 4.7 "Register an import handler", section 3
@@ -9,8 +9,10 @@ import type { EffectiveValue } from '../domain/report.js';
 //
 // As built (S1-F06-T01, S1-F06-T03): the record type, the kinds and effects, the fields of a staged row, the
 // permission its publish needs, the review it requires, a preview that writes nothing and runs its reference checks,
-// suggestions from its own records, the check of a mapping rule whose target it owns, and publish. The scope of its
-// source identity and governed revisions are S1-F06-T04's.
+// suggestions from its own records, the check of a mapping rule whose target it owns, and publish. As built with
+// S1-F06-T04: the scope of its source identity (7.1), whether it supports governed revisions (7.3), the permission
+// its publish needs for each kind it accepts, the measures an outcome sums (7.4), and the rows its publish locks with
+// the batch at step 1 (code-house-rules 8.2).
 
 /** One field of the handler's staged row: its name and whether a document needs it known (PRD-MOD-015). */
 export interface ImportField {
@@ -40,11 +42,25 @@ export function knownValue(value: EffectiveValue | undefined): string | undefine
  */
 export type ImportReview = { readonly kind: 'submission' } | { readonly kind: 'approval'; readonly actionType: string };
 
-/** One document of a batch, with its data rows. */
+/** One document of a batch, with its data rows, and the batch's kind, which says what publishing it does (4.1). */
 export interface HandlerDocument {
   readonly documentId: string;
   readonly reference: string;
+  readonly kind: ImportKind;
   readonly rows: readonly HandlerRow[];
+}
+
+/**
+ * Whether a handler supports governed revisions (7.3), and what reversing means for its records: `none`, so a
+ * changed document is a conflict; or `new-version`, for a master, whose correction is simply a new version
+ * (structure-and-masters 2.2), published by an update batch.
+ */
+export type ImportRevisions = 'none' | 'new-version';
+
+/** A field an outcome sums by result: a quantity or a value (7.4; PRD-IMP-013). */
+export interface ImportMeasure {
+  readonly field: string;
+  readonly kind: 'quantity' | 'value';
 }
 
 /** Where a published record came from: the batch, its code, the document and its staged rows (section 5). */
@@ -80,11 +96,25 @@ export interface ImportHandler {
   readonly effects: 'master-records';
   /** The fields of its staged row. */
   readonly fields: readonly ImportField[];
+  /** The fields an outcome sums as quantities and values (7.4); none for a master. */
+  readonly measures: readonly ImportMeasure[];
   /**
-   * The permission its publish needs beside the batch's, held at step 0 with it, so publishing goes through the same
-   * checks as a person's change (structure-and-masters 7; module-map section 3, rule 8).
+   * The scope key of a document's source identity (7.1): for a master create or update, the record type. With the
+   * target and the document reference it is the idempotency key of publishing (PRD-INT-002).
    */
-  readonly publishNeeds: { readonly action: PermissionAction; readonly recordType: string };
+  sourceScope(document: Pick<HandlerDocument, 'reference' | 'rows'>): string;
+  /** Whether it supports governed revisions (7.3). */
+  readonly revisions: ImportRevisions;
+  /**
+   * The permission its publish of a kind needs beside the batch's, held at step 0 with it, so publishing goes through
+   * the same checks as a person's change (structure-and-masters 7; module-map section 3, rule 8).
+   */
+  publishNeeds(kind: ImportKind): { readonly action: PermissionAction; readonly recordType: string };
+  /**
+   * The rows of its own that publishing the document locks, which Publish locks with the batch at step 1 in one call
+   * (code-house-rules 8.2 "Rows of other modules"); its Maintain operation then finds them held.
+   */
+  lockTargets(context: TransactionContext, document: HandlerDocument): Promise<LockTarget[]>;
   /** The review it requires (3.1 step 8). */
   readonly review: ImportReview;
   /**

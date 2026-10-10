@@ -32,7 +32,8 @@ export type RowRole = 'data' | 'header' | 'total' | 'filler' | 'note';
 export interface StagedRowDraft {
   readonly sheet: string;
   readonly rowNumber: number;
-  readonly role: RowRole;
+  /** `ignored` is a row above the data the layout reads that is not its header, such as a title (S1-F06-T04). */
+  readonly role: RowRole | 'ignored';
   readonly hidden: boolean;
   /** Every original cell of the row, as read, but a column of an encrypted class (section 11); never changed. */
   readonly cells: readonly GridCell[];
@@ -57,7 +58,10 @@ export interface SheetSummary {
 export interface Staged {
   readonly kind: 'staged';
   readonly documents: readonly StagedDocumentDraft[];
-  /** The header and the rows below it that are not data, each with its role, counted and shown (6.6). */
+  /**
+   * The header and the rows below it that are not data, each with its role, counted and shown (6.6); and, as
+   * `ignored`, the other rows above the data, so every row the reader read is staged and the counts close (7.4).
+   */
   readonly others: readonly StagedRowDraft[];
   readonly sheets: readonly SheetSummary[];
 }
@@ -293,7 +297,10 @@ export function stage(
       others.push({ ...base, role: 'header', values: {} });
       continue;
     }
-    if (row.number < layout.dataStartRow) continue;
+    if (row.number < layout.dataStartRow) {
+      others.push({ ...base, role: 'ignored', values: {} });
+      continue;
+    }
     const reader: RowReader = { sheet: sheet.name, row, notes, columns, types };
     const reference = readColumn({ ...reader, types: new Map() }, layout.documentReference);
     if (reference.kind !== 'value') {

@@ -470,7 +470,8 @@ export const inboxCodes = declareCodes({
  * - `files-imports.publishing-limited`: publishing is limited to local work, tests and `dev` until the controls
  *   `missing` names are built (S1-F06-T01; PRD-SEC-017).
  * - `files-imports.document-refused`: the target's handler refused a document at publishing; `missing` names the
- *   document and the handler's reason.
+ *   document and the handler's reason. From S1-F06-T04 it is the refusal of that document's own transaction, and
+ *   the reason a failed outcome keeps; the other documents publish.
  *
  * Layouts, mappings, mapping rules and the validation report (S1-F06-T03; imports-and-opening-data 3.2, 5, 6, 8,
  * 13.1, 13.2):
@@ -506,6 +507,17 @@ export const inboxCodes = declareCodes({
  *   an approval decision of that version (3.1 step 8, 13.1).
  * - `files-imports.version-not-confirmed`: Publish needs the batch's layout and mapping versions Confirmed (6.4).
  * - `files-imports.not-a-warning`: only a Warning is marked seen (8.2).
+ *
+ * Duplicate control, publishing per document and outcomes (S1-F06-T04; imports-and-opening-data 3.2, 7, 13.1):
+ *
+ * - `files-imports.file-already-imported`: the same file is read by a batch for the same target and layout that has
+ *   not Failed (7.2); `missing` names the earlier batches the person may see. Withdraw them first.
+ * - `files-imports.document-already-published`: the document reference claimed at the hand-in is already published
+ *   for the target, and the batch is no governed revision of it (7.2, 7.3); `missing` names the published document.
+ * - `files-imports.document-conflict`: at publishing, a document's source identity is published with other content
+ *   (7.2); `missing` names the document and the published one. The other documents publish.
+ * - `files-imports.counts-do-not-close`: the rows staged differ from the rows the reader read, so the counts cannot
+ *   close; Submit and Publish refuse the batch (7.4). `missing` names both counts.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -554,6 +566,10 @@ export const filesImportsCodes = declareCodes({
   'files-imports.review-missing': 'refused',
   'files-imports.version-not-confirmed': 'refused',
   'files-imports.not-a-warning': 'refused',
+  'files-imports.file-already-imported': 'refused',
+  'files-imports.document-already-published': 'refused',
+  'files-imports.document-conflict': 'refused',
+  'files-imports.counts-do-not-close': 'refused',
 });
 
 /**

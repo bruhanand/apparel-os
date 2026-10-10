@@ -108,6 +108,8 @@ import {
   importBatchReadSchema,
   importFileStoredSchema,
   importLayoutListSchema,
+  importOutcomesQuerySchema,
+  importOutcomesSchema,
   importPublishedSchema,
   importStartedSchema,
   importSubmittedSchema,
@@ -129,6 +131,7 @@ import {
   startImportRequestSchema,
   valueSuggestionsQuerySchema,
   valueSuggestionsSchema,
+  withdrawImportRequestSchema,
 } from './imports.js';
 import {
   securitySettingPreparedSchema,
@@ -1759,6 +1762,8 @@ export const routes = {
       'files-imports.layout-not-matched',
       'files-imports.layout-version-rejected',
       'files-imports.no-import-handler',
+      'files-imports.file-already-imported',
+      'files-imports.document-already-published',
       'files-imports.no-import-batch-series',
       'files-imports.import-batch-series-paused',
       'files-imports.file-store-not-configured',
@@ -1791,6 +1796,7 @@ export const routes = {
       'files-imports.batch-not-found',
       'files-imports.batch-not-open',
       'files-imports.staged-row-not-found',
+      'files-imports.document-not-staged',
       'files-imports.field-unknown',
       'files-imports.ai-suggestions-unavailable',
     ],
@@ -1881,6 +1887,7 @@ export const routes = {
       'files-imports.blocking-issues-remain',
       'files-imports.warnings-not-seen',
       'files-imports.already-submitted',
+      'files-imports.counts-do-not-close',
     ],
   }),
   publishImport: defineRoute({
@@ -1899,9 +1906,10 @@ export const routes = {
       'files-imports.batch-not-found',
       'files-imports.batch-not-validated',
       'files-imports.publishing-limited',
-      'files-imports.document-refused',
       'files-imports.review-missing',
       'files-imports.version-not-confirmed',
+      'files-imports.counts-do-not-close',
+      'kernel.stale-version',
       // A batch whose handler requires an approval in `access` (3.1 step 8; access-and-approvals 9.7).
       'access.approval-decision-not-found',
       'access.approval-not-approved',
@@ -1910,6 +1918,30 @@ export const routes = {
       'access.approval-version-changed',
       'access.self-preparation',
     ],
+  }),
+  // Withdraw a batch, which becomes Failed (3.2, 13.1; S1-F06-T04).
+  withdrawImport: defineRoute({
+    method: 'POST',
+    path: '/api/files-imports/batches/{batchId}/withdraw',
+    params: z.strictObject({ batchId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: IMPORT_BATCH_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: withdrawImportRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: importBatchChangedSchema,
+    codes: [...PREPARE_CODES, 'files-imports.batch-not-found', 'files-imports.batch-not-open', 'kernel.stale-version'],
+  }),
+  // The import outcomes report (14; PRD-IMP-013, PRD-MOD-003, PRD-EXC-011, PRD-SEC-005; S1-F06-T04).
+  importOutcomes: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/outcomes',
+    query: importOutcomesQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: IMPORT_BATCH_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: importOutcomesSchema,
+    codes: [...HISTORY_CODES],
   }),
   // The organisation structure (structure-and-masters 2.3, 3, 8; module-map 4.11, 6.2 flow A; S1-F02-T01): each master's
   // paged list and one record with every version, preparing a new master with its first version, and preparing a later version. Preparing
