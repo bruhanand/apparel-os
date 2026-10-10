@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { buildGuard } from './build-guard.ts';
 
@@ -6,7 +7,7 @@ import { buildGuard } from './build-guard.ts';
 // @apparel-os/calculations in a chunk both share (5.5).
 export default defineConfig({
   base: '/counter/',
-  plugins: [buildGuard({ reportFile: join(import.meta.dirname, '.build-report', 'bundled-modules.json') })],
+  plugins: [react(), buildGuard({ reportFile: join(import.meta.dirname, '.build-report', 'bundled-modules.json') })],
   build: {
     rollupOptions: {
       input: {
