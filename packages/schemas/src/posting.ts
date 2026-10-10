@@ -39,8 +39,12 @@ export const periodDraftSchema = z.strictObject({
   lastDay: businessDateSchema,
 });
 export type PeriodDraft = z.infer<typeof periodDraftSchema>;
-/** A period's state (4.1; design-language 7): Open here; Locked and Reopened come with S1-F09-T03. */
-export const periodStateSchema = z.enum(['Open']);
+/**
+ * A period's state (4.1; design-language 7): Open; Locked once locked (4.2); Reopened while an approved reopening of it
+ * has a named correction still to post (4.3; S1-F09-T03).
+ */
+export const periodStateSchema = z.enum(['Open', 'Locked', 'Reopened']);
+export type PeriodState = z.infer<typeof periodStateSchema>;
 export const periodRecordSchema = z.strictObject({
   id: idSchema,
   bookId: idSchema,
@@ -174,3 +178,62 @@ export const ledgerSchema = z.strictObject({
   lines: z.array(ledgerLineSchema),
 });
 export type Ledger = z.infer<typeof ledgerSchema>;
+
+// Lock and reopening (books-and-posting 4.2, 4.3, 4.5, 9.1, 14; PRD-LED-009, PRD-LED-019, PRD-LED-020; DEC-106,
+// DEC-107; S1-F09-T03). Who may lock, request, approve and withdraw is KDPS's (V-01): the permissions below are the
+// mechanism, and tests hold them through labelled synthetic roles.
+
+/** A reopening of a Locked period, decided by a different authorised person from its requester (4.3; PRD-LED-019). */
+export const PERIOD_REOPENING_TYPE = 'finance.period_reopening';
+export const PERIOD_REOPENING_APPROVAL = 'finance.period_reopening.approval';
+
+/** A correction a reopening names: a source record, by owning module, record type and identifier (4.3; PRD-LED-020). */
+export const namedCorrectionSchema = z.strictObject({
+  module: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  recordType: z.string().regex(/^[a-z][a-z0-9-]*\.[a-z][a-z0-9_]*$/),
+  recordId: idSchema,
+});
+export type NamedCorrection = z.infer<typeof namedCorrectionSchema>;
+
+/** A request to reopen a Locked period: its reason and the corrections it is for (4.3 step 1). */
+export const reopeningDraftSchema = z.strictObject({
+  reason: textSchema.max(2000),
+  corrections: z.array(namedCorrectionSchema).max(100),
+});
+export type ReopeningDraft = z.infer<typeof reopeningDraftSchema>;
+export const periodLockedSchema = z.strictObject({ periodId: idSchema });
+export const reopeningRequestedSchema = z.strictObject({ reopeningId: idSchema, requestId: idSchema });
+export const reopeningWithdrawnSchema = z.strictObject({ reopeningId: idSchema });
+
+/**
+ * A reopening's state (design-language 7): Awaiting approval; In force while a named correction is still to post;
+ * Completed once every one has posted; Withdrawn; Rejected (4.3 steps 2 to 4).
+ */
+export const reopeningStateSchema = z.enum(['Awaiting approval', 'In force', 'Completed', 'Withdrawn', 'Rejected']);
+export type ReopeningState = z.infer<typeof reopeningStateSchema>;
+export const reopeningViewSchema = z.strictObject({
+  id: idSchema,
+  periodId: idSchema,
+  reason: z.string(),
+  state: reopeningStateSchema,
+  requestedByUserId: idSchema,
+  requestedAt: asOf,
+  request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
+  /** Each named correction, and the journal its posting went into once it has posted (4.3 step 4). */
+  corrections: z.array(namedCorrectionSchema.extend({ postedJournalId: idSchema.optional() })),
+});
+export type ReopeningView = z.infer<typeof reopeningViewSchema>;
+/** Money › Period close: each period's state and its reopenings with their named corrections (14). */
+export const periodCloseRowSchema = z.strictObject({
+  ...periodRecordSchema.shape,
+  lockedAt: asOf.optional(),
+  reopenings: z.array(reopeningViewSchema),
+});
+export type PeriodCloseRow = z.infer<typeof periodCloseRowSchema>;
+export const periodCloseSchema = z.strictObject({ asOf, bookId: idSchema, periods: z.array(periodCloseRowSchema) });
+export type PeriodClose = z.infer<typeof periodCloseSchema>;
+export const reopeningReadSchema = z.strictObject({
+  asOf,
+  reopening: reopeningViewSchema,
+  period: periodRecordSchema,
+});

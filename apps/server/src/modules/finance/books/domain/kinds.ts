@@ -3,6 +3,8 @@ import {
   ACCOUNT_TYPE,
   BOOK_SETTING_CHANGE,
   BOOK_SETTING_TYPE,
+  PERIOD_REOPENING_APPROVAL,
+  PERIOD_REOPENING_TYPE,
   POSTING_MAP_CHANGE,
   POSTING_MAP_TYPE,
   type CostFormula,
@@ -46,6 +48,19 @@ export const booksApprovalRules: readonly ApprovalRule[] = [
     actionType: POSTING_MAP_CHANGE,
     module: 'finance',
     recordType: POSTING_MAP_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
+  // A reopening of a Locked period (4.3; S1-F09-T03): requested by an authorised person and approved by a different
+  // one, binding to the request as made, its period, reason and named corrections (PRD-LED-019, PRD-ACS-007; DEC-106).
+  // The action has no value basis.
+  {
+    actionType: PERIOD_REOPENING_APPROVAL,
+    module: 'finance',
+    recordType: PERIOD_REOPENING_TYPE,
     independent: true,
     value: 'none',
     freeTextReason: false,

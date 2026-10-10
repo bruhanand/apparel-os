@@ -1,4 +1,4 @@
-import type { PeriodDraft, PostingMapDraft } from '@apparel-os/schemas';
+import type { PeriodDraft, PostingMapDraft, ReopeningDraft } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, Preparer } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
@@ -6,6 +6,7 @@ import type { FilesImportsInterface } from '../../files-imports/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { BooksMaintenance } from './commands/maintain.js';
 import { preparePostingMap } from './commands/maps.js';
+import { lockPeriod, requestReopening, withdrawReopening } from './commands/period-close.js';
 import { definePeriod } from './commands/periods.js';
 import {
   checkPostable,
@@ -24,6 +25,7 @@ import type { PostingEventKind } from './domain/posting.js';
 import { dimensionsOn } from './queries/dimensions.js';
 import { ledgerOf, trialBalance } from './queries/ledger.js';
 import { mapsOfBook } from './queries/maps.js';
+import { periodCloseOf, reopeningRead } from './queries/period-close.js';
 import { periodsOfBook } from './queries/periods.js';
 import { accountRecord, accountsOfBook, costSettingOn, settingsOfBook } from './queries/records.js';
 
@@ -43,8 +45,8 @@ export interface BooksDependencies {
  * The books part's interface (module-map 4.14; books-and-posting 9.1): Maintain accounts, settings and posting maps,
  * record the CA's approval evidence, define periods, Check postable, Hold periods, Post and Reverse, and Read the
  * books' records, the ledger and the trial balance (S1-F09-T01, S1-F09-T02). Every operation joins the caller's
- * transaction through its context (code-house-rules 8.1); the caller has authorised it. Lock and reopening are
- * S1-F09-T03's.
+ * transaction through its context (code-house-rules 8.1); the caller has authorised it. Lock a period, request and
+ * withdraw a reopening, whose decision is `access`'s Decide, and Money › Period close (S1-F09-T03).
  */
 export class Books extends BooksMaintenance {
   private readonly readers: BooksDependencies['access'];
@@ -139,6 +141,33 @@ export class Books extends BooksMaintenance {
 
   listPeriods(context: TransactionContext, bookId: string) {
     return periodsOfBook(context, bookId);
+  }
+
+  // Lock and reopening (4.2, 4.3; S1-F09-T03).
+
+  /** Lock a period (4.2; PRD-LED-009): it waits for the postings in flight in it (4.5). */
+  lockPeriod(context: TransactionContext, preparer: Preparer, periodId: string) {
+    return lockPeriod(context, this.dependencies, preparer, periodId);
+  }
+
+  /** Request a reopening of a Locked period, naming its corrections (4.3; PRD-LED-019, PRD-LED-020). */
+  requestReopening(context: TransactionContext, preparer: Preparer, periodId: string, draft: ReopeningDraft) {
+    return requestReopening(context, this.dependencies, preparer, periodId, draft);
+  }
+
+  /** Withdraw a reopening in force (4.3 step 4; PRD-LED-020). */
+  withdrawReopening(context: TransactionContext, preparer: Preparer, reopeningId: string) {
+    return withdrawReopening(context, this.dependencies, preparer, reopeningId);
+  }
+
+  /** Money › Period close: each period's state and its reopenings with their named corrections (14). */
+  periodClose(context: TransactionContext, bookId: string) {
+    return periodCloseOf(context, bookId, this.requests(context));
+  }
+
+  /** A reopening as made, with its period, for the approval panel (PRD-ACS-007). */
+  readReopening(context: TransactionContext, reopeningId: string) {
+    return reopeningRead(context, reopeningId, this.requests(context));
   }
 
   // Posting (8, 9).

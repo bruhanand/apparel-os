@@ -1701,6 +1701,38 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "books-and-posting 8.3, 9.3, 13.1; code-house-rules 7.1",
       "why": "Post reads it whatever the poster may see, to answer a replay or refuse a changed item (books-and-posting 9.3); it says only where a line came from, and every reader reaches amounts through the scoped journal lines (books-and-posting 12, 13.1 'As built'); only finance code reads it"
+    },
+    {
+      "table": "finance.period_reopening",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "books-and-posting 4.3, 13.1; code-house-rules 7.1, 8.2",
+      "why": "The books' periods and their reopenings belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.period_reopening_source",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 4.3, 13.1; code-house-rules 7.1",
+      "why": "The books' periods and their reopenings belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.period_event",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 4.1 to 4.3, 13.1; code-house-rules 7.1",
+      "why": "The books' periods and their reopenings belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.period_reopening_use",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 4.3, 4.5, 13.1; code-house-rules 7.1",
+      "why": "The books' periods and their reopenings belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
     }
   ]
 }

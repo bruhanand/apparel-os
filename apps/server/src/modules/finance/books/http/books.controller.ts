@@ -20,6 +20,7 @@ import {
 import { ACCESS, SignedIn, type AccessInterface, type Preparer, type SignedInUser } from '../../../access/index.js';
 import type { BooksInterface } from '../books.js';
 import type { Outcome } from '../commands/lines.js';
+import { recordOf } from '../queries/periods.js';
 import { BOOKS } from '../tokens.js';
 
 /**
@@ -131,6 +132,59 @@ export class BooksController {
   definePeriod(@RouteInput() input: RouteInputOf<typeof routes.definePeriod>, @SignedIn() user: SignedInUser) {
     return this.command(routes.definePeriod, 'finance.define-period', user, input, (c, p) =>
       this.books.definePeriod(c, p, input.params.bookId, input.body),
+    );
+  }
+
+  // Lock and reopening, and Money › Period close (4.2, 4.3, 14; S1-F09-T03). The decision on a reopening is access's
+  // Decide route (access-and-approvals 9.5).
+  @ApiRoute(routes.readPeriodClose)
+  readPeriodClose(@RouteInput() input: RouteInputOf<typeof routes.readPeriodClose>, @SignedIn() user: SignedInUser) {
+    const { bookId } = input.params;
+    return this.read(user, 'finance.read-period-close', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      bookId,
+      periods: await this.books.periodClose(context, bookId),
+    }));
+  }
+
+  @ApiRoute(routes.lockPeriod)
+  lockPeriod(@RouteInput() input: RouteInputOf<typeof routes.lockPeriod>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.lockPeriod, 'finance.lock-period', user, input, (c, p) =>
+      this.books.lockPeriod(c, p, input.params.periodId),
+    );
+  }
+
+  @ApiRoute(routes.requestReopening)
+  requestReopening(@RouteInput() input: RouteInputOf<typeof routes.requestReopening>, @SignedIn() user: SignedInUser) {
+    return this.command(routes.requestReopening, 'finance.request-reopening', user, input, (c, p) =>
+      this.books.requestReopening(c, p, input.params.periodId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.readReopening)
+  async readReopening(@RouteInput() input: RouteInputOf<typeof routes.readReopening>, @SignedIn() user: SignedInUser) {
+    const { reopeningId } = input.params;
+    const answer = await this.read(user, 'finance.read-reopening', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      found: await this.books.readReopening(context, reopeningId),
+    }));
+    if (answer.found === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'finance.record-not-found',
+        missing: [{ kind: 'record', recordType: 'finance.period_reopening', recordId: reopeningId }],
+      });
+    }
+    return { asOf: answer.asOf, reopening: answer.found.reopening, period: recordOf(answer.found.period) };
+  }
+
+  @ApiRoute(routes.withdrawReopening)
+  withdrawReopening(
+    @RouteInput() input: RouteInputOf<typeof routes.withdrawReopening>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(routes.withdrawReopening, 'finance.withdraw-reopening', user, input, (c, p) =>
+      this.books.withdrawReopening(c, p, input.params.reopeningId),
     );
   }
 

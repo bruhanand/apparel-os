@@ -3,6 +3,7 @@ import {
   ACCOUNT_TYPE,
   BOOK_SETTING_CHANGE,
   BOOK_SETTING_TYPE,
+  PERIOD_REOPENING_APPROVAL,
   POSTING_MAP_CHANGE,
   POSTING_MAP_TYPE,
 } from '@apparel-os/schemas';
@@ -23,6 +24,7 @@ import {
 import { postingMapChanged } from '../events.js';
 import { booksApprovalRules } from '../domain/kinds.js';
 import { costChangeRefusal } from './cost-change.js';
+import { reopeningEffect } from './period-close.js';
 import { accountLine, approvedOn, mapLine, refused, settingLine, takeEffect, today, type Line } from './lines.js';
 
 // What a decision does to a version of the books part (module-map 6.2 flow A; access-and-approvals 9.8b;
@@ -333,6 +335,8 @@ export function booksApprovals(audit: AuditInterface, bookHeldStock: BookHeldSto
       [ACCOUNT_CHANGE, accountEffect(audit)],
       [BOOK_SETTING_CHANGE, bookSettingEffect(audit, bookHeldStock)],
       [POSTING_MAP_CHANGE, postingMapEffect(audit)],
+      // A reopening of a Locked period (books-and-posting 4.3; S1-F09-T03).
+      [PERIOD_REOPENING_APPROVAL, reopeningEffect(audit)],
     ]),
   };
 }

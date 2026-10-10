@@ -317,8 +317,13 @@ const financeRecordTypes = [
   // internal ledger and trial balance: its lines carry the book's legal entity, the unit's place and the brand as
   // scope facts (12; PRD-SEC-005). **Design choice**; who holds them is KDPS's (V-01).
   declare('finance.posting_map', ['view', 'edit', 'approve'], NONE),
-  declare('finance.financial_period', ['view', 'create'], NONE),
+  declare('finance.financial_period', ['view', 'create', 'edit'], NONE),
   declare('finance.journal', ['view'], ALL),
+  // Lock and reopening (books-and-posting 4.2, 4.3; S1-F09-T03). Edit on a period locks it: a period's only change is
+  // its lock, the explicit actions of POL-02.03 name no "lock", and no source asks for a second person (4.2). A
+  // reopening is requested (create) by an authorised person and decided (approve) by a different one (PRD-LED-019,
+  // DEC-106); cancel withdraws one in force (PRD-LED-020). **Design choice**; who holds them is KDPS's (V-01).
+  declare('finance.period_reopening', ['view', 'create', 'approve', 'cancel'], NONE),
 ] as const;
 
 /** Every record type declared so far. */

@@ -352,6 +352,8 @@ export const financeBooksCodes = declareCodes({
  * - `finance.no-journal-series`, `finance.journal-series-paused`: the book has no open journal series for the
  *   financial year (5.4; numbering-and-audit 3.2).
  * - `finance.already-reversed`: a journal is reversed at most once (5.3).
+ * - `finance.period-locked`: the accounting date lies in a Locked period, or a Reopened one whose reopenings do not
+ *   name the posting's source as a correction still to post (4.2, 4.3; PRD-LED-009, PRD-LED-020; S1-F09-T03).
  */
 export const financePostingCodes = declareCodes({
   'finance.event-kind-not-declared': 'refused',
@@ -373,6 +375,26 @@ export const financePostingCodes = declareCodes({
   'finance.no-journal-series': 'unavailable',
   'finance.journal-series-paused': 'unavailable',
   'finance.already-reversed': 'refused',
+  'finance.period-locked': 'refused',
+});
+
+/**
+ * The codes of lock and reopening (books-and-posting 4.2, 4.3, 9.1; PRD-LED-009, PRD-LED-019, PRD-LED-020; DEC-106,
+ * DEC-107; S1-F09-T03).
+ *
+ * - `finance.period-not-open`: the period is Locked or Reopened already, so it cannot be locked.
+ * - `finance.earlier-period-open`: an earlier period of the book is still Open; periods lock in date order (4.2).
+ * - `finance.period-not-locked`: a reopening is asked for a period that is still Open (4.3 step 1).
+ * - `finance.no-correction-named`: a reopening names no correction (4.3 step 1; PRD-LED-020).
+ * - `finance.reopening-not-in-force`: only a reopening in force can be withdrawn; one awaiting its decision is
+ *   rejected by its approver instead (4.3 step 4).
+ */
+export const financePeriodCodes = declareCodes({
+  'finance.period-not-open': 'refused',
+  'finance.earlier-period-open': 'refused',
+  'finance.period-not-locked': 'refused',
+  'finance.no-correction-named': 'refused',
+  'finance.reopening-not-in-force': 'refused',
 });
 
 /**
@@ -765,6 +787,7 @@ export const errorCodes = {
   ...financeTaxRulesCodes,
   ...financeBooksCodes,
   ...financePostingCodes,
+  ...financePeriodCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

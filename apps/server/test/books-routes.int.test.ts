@@ -5,8 +5,10 @@ import {
   attachedFileSchema,
   bookSettingListSchema,
   costSettingReadSchema,
+  periodCloseSchema,
   periodListSchema,
   postingMapListSchema,
+  reopeningReadSchema,
   storedFileSchema,
   trialBalanceSchema,
 } from '@apparel-os/schemas';
@@ -160,6 +162,11 @@ beforeAll(async () => {
     { recordType: 'finance.financial_period', action: 'view' },
     { recordType: 'finance.financial_period', action: 'create' },
     { recordType: 'finance.journal', action: 'view' },
+    // Lock and reopening (S1-F09-T03): SYNTHETIC grants; who holds them is KDPS's (V-01).
+    { recordType: 'finance.financial_period', action: 'edit' },
+    { recordType: 'finance.period_reopening', action: 'view' },
+    { recordType: 'finance.period_reopening', action: 'create' },
+    { recordType: 'finance.period_reopening', action: 'cancel' },
   ]);
   approver = await enrolled('BOOKS-APPROVER', [
     { recordType: 'finance.account', action: 'view' },
@@ -167,6 +174,8 @@ beforeAll(async () => {
     { recordType: 'finance.book_setting', action: 'view' },
     { recordType: 'finance.book_setting', action: 'approve' },
     { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'finance.period_reopening', action: 'view' },
+    { recordType: 'finance.period_reopening', action: 'approve' },
   ]);
   reader = await enrolled('BOOKS-READER', [
     { recordType: 'finance.account', action: 'view' },
@@ -313,5 +322,53 @@ describe('periods, posting maps and the trial balance through the routes (books-
     expect(balance).toMatchObject({ ledger: 'internal', partial: false, totals: { debitPaise: 0, creditPaise: 0 } });
     // A reader with no view on journals is refused (PRD-SEC-005).
     expect((await get(reader, `/api/finance/books/${bookId}/trial-balance?periodId=${periodId}`)).status).toBe(403);
+  });
+});
+
+describe('lock and reopening through the routes (books-and-posting 4.2, 4.3, 14; S1-F09-T03)', () => {
+  it('PRD-LED-009 PRD-LED-019 PRD-LED-020 locks a period, requests a reopening another person approves, and withdraws it; Period close shows each step', async () => {
+    const book = await writeSyntheticBook();
+    const defined = await post(preparer, `/api/finance/books/${book}/periods`, {
+      code: syntheticCode('P1'),
+      financialYear: syntheticCode('FY'),
+      firstDay: today(),
+      lastDay: today(),
+    });
+    expect(defined.status, JSON.stringify(defined.body)).toBe(200);
+    const periodId = defined.body.periodId as string;
+    // A reader with no edit on periods may not lock one.
+    expect((await post(reader, `/api/finance/periods/${periodId}/lock`, {})).status).toBe(403);
+    const locked = await post(preparer, `/api/finance/periods/${periodId}/lock`, {});
+    expect(locked.status, JSON.stringify(locked.body)).toBe(200);
+    expect((await post(preparer, `/api/finance/periods/${periodId}/lock`, {})).body).toMatchObject({
+      error: { code: 'finance.period-not-open' },
+    });
+    const correction = { module: 'test-synthetic', recordType: 'test-synthetic.document', recordId: uuidv7() };
+    const none = await post(preparer, `/api/finance/periods/${periodId}/reopenings`, {
+      reason: 'SYNTHETIC reason',
+      corrections: [],
+    });
+    expect(none.body).toMatchObject({ error: { code: 'finance.no-correction-named' } });
+    const asked = await post(preparer, `/api/finance/periods/${periodId}/reopenings`, {
+      reason: 'SYNTHETIC reason',
+      corrections: [correction],
+    });
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200);
+    const reopeningId = asked.body.reopeningId as string;
+    const requestId = asked.body.requestId as string;
+    const read = reopeningReadSchema.parse((await get(approver, `/api/finance/period-reopenings/${reopeningId}`)).body);
+    expect(read).toMatchObject({
+      reopening: { state: 'Awaiting approval', reason: 'SYNTHETIC reason', corrections: [correction] },
+      period: { id: periodId, state: 'Locked' },
+    });
+    expect((await decide(approver, requestId, reopeningId)).status).toBe(200);
+    const close = periodCloseSchema.parse((await get(preparer, `/api/finance/books/${book}/period-close`)).body);
+    expect(close.periods).toMatchObject([
+      { id: periodId, state: 'Reopened', reopenings: [{ id: reopeningId, state: 'In force' }] },
+    ]);
+    const withdrawn = await post(preparer, `/api/finance/period-reopenings/${reopeningId}/withdraw`, {});
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
+    const after = periodCloseSchema.parse((await get(preparer, `/api/finance/books/${book}/period-close`)).body);
+    expect(after.periods).toMatchObject([{ state: 'Locked', reopenings: [{ state: 'Withdrawn' }] }]);
   });
 });

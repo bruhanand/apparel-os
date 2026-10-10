@@ -7,6 +7,7 @@ import {
   CA_APPROVAL_EVIDENCE_TYPE,
   FINANCIAL_PERIOD_TYPE,
   JOURNAL_TYPE,
+  PERIOD_REOPENING_TYPE,
   POSTING_MAP_TYPE,
   BRAND_SUPPLIER_LINK_TYPE,
   PARTY_TYPE,
@@ -215,6 +216,8 @@ export async function structureSetup(options: {
     POSTING_MAP_TYPE,
     FINANCIAL_PERIOD_TYPE,
     JOURNAL_TYPE,
+    // Lock and reopening (S1-F09-T03): request (create) and decide (approve); cancel is granted where a test needs it.
+    PERIOD_REOPENING_TYPE,
   ];
   const declared = new Map(permissionRegistry.map((each) => [each.code, each.actions]));
   const grants = (actions: readonly PermissionAction[]) => [

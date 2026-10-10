@@ -1,22 +1,25 @@
 import { isKnown, uuidv7, type MaybeKnown, type Paise } from '@apparel-os/domain';
-import { JOURNAL_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { JOURNAL_TYPE, type MissingItem, type PeriodState } from '@apparel-os/schemas';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import {
   canonicalJson,
   CommandDefect,
   LOCK_STEP,
   sha256Hex,
+  UNIQUE_VIOLATION,
+  withSavepoint,
   type CommandRefusal,
   type LockTarget,
   type TransactionContext,
 } from '../../../../kernel/index.js';
 import type { NumberingInterface } from '../../../numbering/index.js';
-import { journal, journalLine, postingSource } from '../db/schema.js';
+import { journal, journalLine, periodReopeningUse, postingSource } from '../db/schema.js';
 import { journalPosted } from '../events.js';
 import { applyMap, otherSide, sumLines, type ItemLine, type PostingEventKind } from '../domain/posting.js';
 import { dimensionsOn } from '../queries/dimensions.js';
 import { accountsInForce, mapVersionOn } from '../queries/maps.js';
-import { PERIOD_TABLE, periodOn, type PeriodRow } from '../queries/periods.js';
+import { admission, PERIOD_TABLE, periodOn, type PeriodRow, type SourceRecord } from '../queries/periods.js';
+import { periodItem } from './period-close.js';
 
 // Check postable, Hold periods, Post and Reverse (books-and-posting 8, 9.1 to 9.4, 10; module-map 4.14, 6.1, 6.3;
 // PRD-LED-003, PRD-LED-004, PRD-MOD-011, PRD-MOD-013, PRD-MOD-015, PRD-INT-002, PRD-INT-004, PRD-INT-008;
@@ -91,7 +94,11 @@ export type ItemCheck =
       readonly itemKey: string;
       readonly bookId: string;
       readonly legalEntityId: string;
-      readonly period: { readonly id: string; readonly code: string; readonly state: 'Open' };
+      readonly period: { readonly id: string; readonly code: string; readonly state: PeriodState };
+      /** The source document, by which a reopening may name the item as a correction (4.3; PRD-LED-020). */
+      readonly source?: SourceRecord;
+      /** The named correction the item enters a Locked or Reopened period as (4.3 step 3). */
+      readonly correction?: string;
       readonly mapVersionId: string;
       readonly journalSeriesId: string;
       readonly eventKind: string;
@@ -190,6 +197,7 @@ export async function checkItem(
   dependencies: PostDependencies,
   sourceModule: string,
   item: PostItem,
+  source?: SourceRecord,
 ): Promise<ItemCheck> {
   const key = item.itemKey;
   const kind = dependencies.kinds.get(item.eventKind);
@@ -242,6 +250,9 @@ export async function checkItem(
   const period = await periodOn(context, book, date);
   if (period === undefined)
     return refusal(key, 'finance.no-period', [{ kind: 'financial-period', bookId: book, date }]);
+  // 4.2, 4.3; PRD-LED-009, PRD-LED-020: a Locked period takes only a correction a reopening in force names.
+  const admitted = await admission(context, period.id, source);
+  if (admitted.kind === 'locked') return refusal(key, 'finance.period-locked', [periodItem(period)]);
   // 6.2; POL-09.12, SL-23: no valid map refuses the item with the failed condition.
   const map = await mapVersionOn(context, book, item.eventKind, date);
   const mapItem: MissingItem = { kind: 'posting-map', bookId: book, eventKind: item.eventKind };
@@ -284,6 +295,8 @@ export async function checkItem(
     bookId: book,
     legalEntityId: dimensions.legalEntityId,
     period: { id: period.id, code: period.code, state: period.state },
+    ...(source === undefined ? {} : { source }),
+    ...(admitted.kind === 'correction' ? { correction: admitted.sourceId } : {}),
     mapVersionId: map.versionId,
     journalSeriesId: series.seriesId,
     eventKind: item.eventKind,
@@ -293,14 +306,28 @@ export async function checkItem(
   };
 }
 
-/** Check postable (9.1; module-map 6.1 step 4): each item's answer. Writes nothing and locks nothing. */
+/** The source document of a posting, as a reopening names a correction (4.3; PRD-LED-020). */
+const sourceOf = (
+  request: Pick<PostRequest, 'sourceModule'> & { readonly document?: PostRequest['document'] },
+): SourceRecord | undefined =>
+  request.document === undefined
+    ? undefined
+    : { module: request.sourceModule, recordType: request.document.recordType, recordId: request.document.recordId };
+
+/**
+ * Check postable (9.1; module-map 6.1 step 4): each item's answer. Writes nothing and locks nothing. Without its
+ * document a request can name no correction, so a Locked or Reopened period refuses it.
+ */
 export async function checkPostable(
   context: TransactionContext,
   dependencies: PostDependencies,
-  request: Pick<PostRequest, 'sourceModule' | 'items'>,
+  request: Pick<PostRequest, 'sourceModule' | 'items'> & { readonly document?: PostRequest['document'] },
 ): Promise<ItemCheck[]> {
   const checks: ItemCheck[] = [];
-  for (const item of request.items) checks.push(await checkItem(context, dependencies, request.sourceModule, item));
+  const source = sourceOf(request);
+  for (const item of request.items) {
+    checks.push(await checkItem(context, dependencies, request.sourceModule, item, source));
+  }
   return checks;
 }
 
@@ -329,6 +356,15 @@ export async function holdPeriods(
         missing: held.missing.map((each) => ({ kind: 'financial-period', periodId: each.id })),
       },
     };
+  }
+  // 9.1, 4.5; PRD-INT-003: under the lock, a period locked since Check postable refuses an item no reopening names.
+  for (const check of postable) {
+    if ((await admission(context, check.period.id, check.source)).kind === 'locked') {
+      return {
+        kind: 'refused',
+        refusal: { kind: 'refused', code: 'finance.period-locked', missing: [periodItem(check.period)] },
+      };
+    }
   }
   // The journal series the postable items draw on, for the caller's step 8 lock call.
   const series = [...new Set(postable.map((each) => each.journalSeriesId))];
@@ -467,6 +503,7 @@ export async function post(
     groups.set(key, [...(groups.get(key) ?? []), check]);
   }
   const written: PostedJournal[] = [];
+  const uses = new Map<string, string>();
   for (const [, group] of [...groups.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const first = group[0];
     if (first === undefined) continue;
@@ -531,9 +568,37 @@ export async function post(
       })),
     );
     written.push(answer.journal);
+    for (const each of group) {
+      if (each.correction !== undefined && !uses.has(each.correction)) uses.set(each.correction, journalId);
+    }
+  }
+  // 4.3 step 4, 4.5; PRD-LED-020: each named correction's use, once, after its journals, which the period guard
+  // admitted while it was still unused. A second posting of the same correction meets the unique key.
+  for (const [correction, journalId] of uses) {
+    const used = await recordUse(context, correction, journalId);
+    if (used !== undefined) {
+      const items = postable.filter((each) => each.correction === correction);
+      return {
+        kind: 'refused',
+        items: items.map((each) => ({ kind: 'refused', itemKey: each.itemKey, refusal: used })),
+      };
+    }
   }
   const earlier = await journalsByIds(context, [...new Set(replayed)]);
   return { kind: 'posted', journals: [...earlier, ...written] };
+}
+
+/** Records a named correction's use (4.3 step 4), or answers the refusal when it was used already. */
+async function recordUse(
+  context: TransactionContext,
+  correction: string,
+  journalId: string,
+): Promise<CommandRefusal | undefined> {
+  const written = await withSavepoint(context, 'finance_correction_use', [UNIQUE_VIOLATION], () =>
+    context.tx.insert(periodReopeningUse).values({ id: uuidv7(), periodReopeningSourceId: correction, journalId }),
+  );
+  if (written.kind === 'done') return undefined;
+  return { kind: 'refused', code: 'finance.period-locked', missing: [] };
 }
 
 /** A reversal (9.1, 9.4): the journal it reverses and the reversal's own business date. */
@@ -551,6 +616,8 @@ export type ReversalPlan =
       readonly original: typeof journal.$inferSelect;
       readonly period: PeriodRow;
       readonly seriesId: string;
+      /** The named correction the reversal enters a Locked or Reopened period as (4.3 step 3). */
+      readonly correction?: string;
     }
   | { readonly kind: 'refused'; readonly refusal: CommandRefusal };
 
@@ -583,11 +650,29 @@ export async function planReversal(
       },
     };
   }
+  // 9.1; PRD-LED-009, PRD-LED-020: the reversal's source is the original's, which a reopening may name.
+  const admitted = await admission(context, period.id, {
+    module: original.sourceModule,
+    recordType: original.sourceRecordType,
+    recordId: original.sourceRecordId,
+  });
+  if (admitted.kind === 'locked') {
+    return {
+      kind: 'refused',
+      refusal: { kind: 'refused', code: 'finance.period-locked', missing: [periodItem(period)] },
+    };
+  }
   const series = await journalSeries(context, numbering, original.bookId, period);
   if (series.kind === 'refused') {
     return { kind: 'refused', refusal: { kind: 'unavailable', code: series.code, missing: series.missing } };
   }
-  return { kind: 'reversible', original, period, seriesId: series.seriesId };
+  return {
+    kind: 'reversible',
+    original,
+    period,
+    seriesId: series.seriesId,
+    ...(admitted.kind === 'correction' ? { correction: admitted.sourceId } : {}),
+  };
 }
 
 /** Holds the reversal's period at step 7 (4.5) and answers the series the caller locks at step 8. */
@@ -658,5 +743,9 @@ export async function reverse(
       mappingVersionId: line.mappingVersionId,
     })),
   );
+  if (plan.correction !== undefined) {
+    const used = await recordUse(context, plan.correction, answer.journal.journalId);
+    if (used !== undefined) return { kind: 'refused', refusal: used };
+  }
   return { kind: 'reversed', journal: answer.journal };
 }

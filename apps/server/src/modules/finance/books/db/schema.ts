@@ -164,3 +164,40 @@ export const postingSource = finance.table('posting_source', {
   replacesPostingSourceId: uuid('replaces_posting_source_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
+
+// Lock and reopening (migration 0054; books-and-posting 4.1 to 4.5, 13.1; S1-F09-T03).
+export type PeriodEventKind = 'locked' | 'reopening-approved' | 'reopening-rejected' | 'reopening-withdrawn';
+export const periodReopening = finance.table('period_reopening', {
+  id: uuid('id').primaryKey(),
+  financialPeriodId: uuid('financial_period_id').notNull(),
+  reason: text('reason').notNull(),
+  requestedByUserId: uuid('requested_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  occurredAt: at('occurred_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const periodReopeningSource = finance.table('period_reopening_source', {
+  id: uuid('id').primaryKey(),
+  periodReopeningId: uuid('period_reopening_id').notNull(),
+  sourceModule: text('source_module').notNull(),
+  sourceRecordType: text('source_record_type').notNull(),
+  sourceRecordId: uuid('source_record_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const periodEvent = finance.table('period_event', {
+  id: uuid('id').primaryKey(),
+  financialPeriodId: uuid('financial_period_id').notNull(),
+  kind: text('kind').$type<PeriodEventKind>().notNull(),
+  periodReopeningId: uuid('period_reopening_id'),
+  byUserId: uuid('by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id'),
+  approvalDecisionId: uuid('approval_decision_id'),
+  occurredAt: at('occurred_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+export const periodReopeningUse = finance.table('period_reopening_use', {
+  id: uuid('id').primaryKey(),
+  periodReopeningSourceId: uuid('period_reopening_source_id').notNull(),
+  journalId: uuid('journal_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
