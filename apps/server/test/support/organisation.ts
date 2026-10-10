@@ -5,6 +5,9 @@ import {
   BANK_DETAILS_TYPE,
   BOOK_SETTING_TYPE,
   CA_APPROVAL_EVIDENCE_TYPE,
+  FINANCIAL_PERIOD_TYPE,
+  JOURNAL_TYPE,
+  POSTING_MAP_TYPE,
   BRAND_SUPPLIER_LINK_TYPE,
   PARTY_TYPE,
   catalogueKinds,
@@ -46,7 +49,16 @@ import {
   type StockPresence,
 } from '../../src/modules/merchandise/catalogue/index.js';
 import { Parties, partiesApprovals, partiesSupplierRoles } from '../../src/modules/merchandise/parties/index.js';
-import { Books, booksApprovals, type BookHeldStock } from '../../src/modules/finance/books/index.js';
+import {
+  Books,
+  booksApprovals,
+  checkEventKinds,
+  JOURNAL_KIND,
+  type BookHeldStock,
+  type PostingEventKind,
+} from '../../src/modules/finance/books/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
+import { TEST_COMPOSITION } from './composition.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { codeFor, syntheticTimezone, writeSyntheticReason, writeSyntheticUser, type SyntheticUser } from './access.js';
 import { grantSynthetic } from './grants.js';
@@ -69,6 +81,8 @@ export interface StructureSetup {
   readonly parties: Parties;
   /** finance · books, composed with `access` as the application composes it (S1-F09-T01). */
   readonly books: Books;
+  /** numbering, serving the journal kind as the application composes it (S1-F09-T02). */
+  readonly numbering: Numbering;
   readonly preparer: SyntheticUser;
   readonly approver: SyntheticUser;
   readonly asPreparer: Preparer;
@@ -122,6 +136,8 @@ export async function structureSetup(options: {
   readonly stockPresence?: StockPresence;
   /** The "has this book held stock?" implementation; none answers when left out (books-and-posting 2.2). */
   readonly bookHeldStock?: BookHeldStock;
+  /** SYNTHETIC posting event kinds, declared in the test composition only (books-and-posting 7.1; DEC-112 H2). */
+  readonly eventKinds?: readonly PostingEventKind[];
 }): Promise<StructureSetup> {
   const log = capturingLogger();
   const router = new OrganisationRouter(
@@ -159,7 +175,15 @@ export async function structureSetup(options: {
     stockPresence: options.stockPresence,
   });
   const parties = new Parties({ audit, access, files: new FilesImports(audit), keys });
-  const books = new Books({ audit, access, files: new FilesImports(audit), bookHeldStock: options.bookHeldStock });
+  const numbering = new Numbering({ kinds: [JOURNAL_KIND] });
+  const books = new Books({
+    audit,
+    access,
+    files: new FilesImports(audit),
+    bookHeldStock: options.bookHeldStock,
+    numbering,
+    kinds: checkEventKinds(options.eventKinds ?? [], TEST_COMPOSITION),
+  });
   const organisation = new Organisation({
     audit,
     access,
@@ -187,6 +211,10 @@ export async function structureSetup(options: {
     ACCOUNT_TYPE,
     BOOK_SETTING_TYPE,
     CA_APPROVAL_EVIDENCE_TYPE,
+    // The posting half (S1-F09-T02).
+    POSTING_MAP_TYPE,
+    FINANCIAL_PERIOD_TYPE,
+    JOURNAL_TYPE,
   ];
   const declared = new Map(permissionRegistry.map((each) => [each.code, each.actions]));
   const grants = (actions: readonly PermissionAction[]) => [
@@ -228,6 +256,7 @@ export async function structureSetup(options: {
     catalogue,
     parties,
     books,
+    numbering,
     preparer,
     approver,
     asPreparer,

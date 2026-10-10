@@ -1,4 +1,11 @@
-import { ACCOUNT_CHANGE, ACCOUNT_TYPE, BOOK_SETTING_CHANGE, BOOK_SETTING_TYPE } from '@apparel-os/schemas';
+import {
+  ACCOUNT_CHANGE,
+  ACCOUNT_TYPE,
+  BOOK_SETTING_CHANGE,
+  BOOK_SETTING_TYPE,
+  POSTING_MAP_CHANGE,
+  POSTING_MAP_TYPE,
+} from '@apparel-os/schemas';
 import { eq, or, sql } from 'drizzle-orm';
 import { lockTable, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
@@ -9,11 +16,14 @@ import {
   bookSetting,
   bookSettingVersion,
   caApprovalEvidenceCover,
+  postingMap,
+  postingMapVersion,
   type Decision,
 } from '../db/schema.js';
+import { postingMapChanged } from '../events.js';
 import { booksApprovalRules } from '../domain/kinds.js';
 import { costChangeRefusal } from './cost-change.js';
-import { accountLine, approvedOn, refused, settingLine, takeEffect, today, type Line } from './lines.js';
+import { accountLine, approvedOn, mapLine, refused, settingLine, takeEffect, today, type Line } from './lines.js';
 
 // What a decision does to a version of the books part (module-map 6.2 flow A; access-and-approvals 9.8b;
 // books-and-posting 6.3; S1-F09-T01): an account version or a book-setting version taking effect from its start, or
@@ -27,7 +37,7 @@ interface Version {
   readonly start: string;
 }
 
-async function recordDecision(
+export async function recordDecision(
   context: TransactionContext,
   audit: AuditInterface,
   decider: EffectDecider,
@@ -47,7 +57,7 @@ async function recordDecision(
   });
 }
 
-const decisionChange = (after: 'Approved' | 'Rejected'): AuditChange => ({
+export const decisionChange = (after: 'Approved' | 'Rejected'): AuditChange => ({
   kind: 'value',
   field: 'decision',
   before: 'Awaiting approval',
@@ -63,6 +73,7 @@ async function covered(context: TransactionContext, versionId: string): Promise<
       or(
         eq(caApprovalEvidenceCover.accountVersionId, versionId),
         eq(caApprovalEvidenceCover.bookSettingVersionId, versionId),
+        eq(caApprovalEvidenceCover.postingMapVersionId, versionId),
       ),
     )
     .limit(1);
@@ -73,7 +84,7 @@ async function covered(context: TransactionContext, versionId: string): Promise<
  * The checks every approval of a version makes under the locks: still waiting, not started in the past, no approved
  * version starting the same day, and the CA's evidence attached or referenced (6.3).
  */
-async function approvable(
+export async function approvable(
   context: TransactionContext,
   version: Version | undefined,
   line: (id: string) => Line,
@@ -232,6 +243,84 @@ function bookSettingEffect(audit: AuditInterface, bookHeldStock: BookHeldStock |
   };
 }
 
+async function mapVersionOf(context: TransactionContext, versionId: string) {
+  const [row] = await context.tx
+    .select({
+      ownerId: postingMapVersion.postingMapId,
+      bookId: postingMap.bookId,
+      decision: sql<Decision>`${postingMapVersion.decision}`,
+      start: sql<string>`lower(${postingMapVersion.validDuring})::text`,
+    })
+    .from(postingMapVersion)
+    .innerJoin(postingMap, eq(postingMap.id, postingMapVersion.postingMapId))
+    .where(eq(postingMapVersion.id, versionId));
+  return row;
+}
+
+const lineOfMap = (mapId: string) => mapLine(POSTING_MAP_TYPE, mapId);
+
+/**
+ * The effect of a decision on a posting map version (6.3; POL-09.01, POL-09.12; S1-F09-T02): approved, with the CA's
+ * evidence, it is in force from its start, ending the version before it there; either way `finance.posting-map-changed`
+ * is emitted (module-map section 8).
+ */
+function postingMapEffect(audit: AuditInterface): DocumentEffect {
+  const changed = (
+    context: TransactionContext,
+    version: { ownerId: string; bookId: string },
+    versionId: string,
+    decision: 'Approved' | 'Rejected',
+  ) =>
+    context.publish(postingMapChanged, {
+      subject: { module: 'finance', recordType: POSTING_MAP_TYPE, recordId: version.ownerId, versionId },
+      payload: { postingMapId: version.ownerId, versionId, bookId: version.bookId, decision },
+    });
+  return {
+    async targets(context, versionId): Promise<LockTarget[]> {
+      const version = await mapVersionOf(context, versionId);
+      return version === undefined
+        ? []
+        : [{ table: lockTable('finance', 'posting_map'), id: version.ownerId, mode: 'exclusive' }];
+    },
+    async approve(context, decider, versionId): Promise<EffectOutcome> {
+      const version = await mapVersionOf(context, versionId);
+      const blocked = await approvable(context, version, lineOfMap, versionId, POSTING_MAP_TYPE);
+      if (blocked !== undefined || version === undefined)
+        return blocked ?? refused('not-found', 'finance.record-not-found');
+      await takeEffect(context, lineOfMap(version.ownerId), versionId, version.start);
+      await recordDecision(
+        context,
+        audit,
+        decider,
+        { type: 'posting_map', id: version.ownerId, versionId },
+        'approve-posting-map-version',
+        [decisionChange('Approved')],
+      );
+      await changed(context, version, versionId, 'Approved');
+      return { kind: 'success', answer: { recordId: version.ownerId } };
+    },
+    async reject(context, decider, versionId): Promise<EffectOutcome> {
+      const version = await mapVersionOf(context, versionId);
+      if (version === undefined) return refused('not-found', 'finance.record-not-found');
+      if (version.decision !== 'Awaiting approval') return refused('conflict', 'kernel.stale-version');
+      await context.tx
+        .update(postingMapVersion)
+        .set({ decision: 'Rejected' })
+        .where(eq(postingMapVersion.id, versionId));
+      await recordDecision(
+        context,
+        audit,
+        decider,
+        { type: 'posting_map', id: version.ownerId, versionId },
+        'reject-posting-map-version',
+        [decisionChange('Rejected')],
+      );
+      await changed(context, version, versionId, 'Rejected');
+      return { kind: 'success', answer: { recordId: version.ownerId } };
+    },
+  };
+}
+
 /**
  * The approval rules and decision effects the books part declares to `access` (access-and-approvals 8, 9.8b;
  * module-map section 3, rule 6), which the composition root hands to `access` at start, with the "has this book held
@@ -243,6 +332,7 @@ export function booksApprovals(audit: AuditInterface, bookHeldStock: BookHeldSto
     effects: new Map<string, DocumentEffect>([
       [ACCOUNT_CHANGE, accountEffect(audit)],
       [BOOK_SETTING_CHANGE, bookSettingEffect(audit, bookHeldStock)],
+      [POSTING_MAP_CHANGE, postingMapEffect(audit)],
     ]),
   };
 }

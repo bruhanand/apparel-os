@@ -27,7 +27,7 @@ interface VersionRow {
   readonly decision: Decision;
 }
 
-function versionView(
+export function versionView(
   row: VersionRow,
   today: string,
   request: LatestRequest | undefined,
@@ -50,19 +50,19 @@ function versionView(
   };
 }
 
-const newestFirst = <T extends VersionRow>(rows: readonly T[]) =>
+export const newestFirst = <T extends VersionRow>(rows: readonly T[]) =>
   [...rows].sort((a, b) => {
     const byStart = datesOf(b.validDuring).start.localeCompare(datesOf(a.validDuring).start);
     return byStart !== 0 ? byStart : b.id.localeCompare(a.id);
   });
-const tokenOf = (rows: readonly VersionRow[]) =>
+export const tokenOf = (rows: readonly VersionRow[]) =>
   rows
     .map((row) => row.id)
     .sort()
     .at(-1);
 
 /** The CA's evidence covering each version named (6.3), by version. */
-async function evidenceOf(
+export async function evidenceOf(
   context: TransactionContext,
   versionIds: readonly string[],
 ): Promise<ReadonlyMap<string, CaEvidenceView[]>> {
@@ -72,6 +72,7 @@ async function evidenceOf(
     .select({
       accountVersionId: caApprovalEvidenceCover.accountVersionId,
       bookSettingVersionId: caApprovalEvidenceCover.bookSettingVersionId,
+      postingMapVersionId: caApprovalEvidenceCover.postingMapVersionId,
       attachmentId: caApprovalEvidenceCover.attachmentId,
       evidence: caApprovalEvidence,
     })
@@ -81,11 +82,12 @@ async function evidenceOf(
       or(
         inArray(caApprovalEvidenceCover.accountVersionId, [...versionIds]),
         inArray(caApprovalEvidenceCover.bookSettingVersionId, [...versionIds]),
+        inArray(caApprovalEvidenceCover.postingMapVersionId, [...versionIds]),
       ),
     )
     .orderBy(asc(caApprovalEvidence.id));
   for (const row of rows) {
-    const versionId = row.accountVersionId ?? row.bookSettingVersionId ?? '';
+    const versionId = row.accountVersionId ?? row.bookSettingVersionId ?? row.postingMapVersionId ?? '';
     const e = row.evidence;
     const view: CaEvidenceView =
       e.kind === 'file'

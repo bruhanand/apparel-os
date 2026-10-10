@@ -12,6 +12,8 @@ export interface LineDimensions {
   /** The book the unit's mapping names on the date: books are reached through the unit, never the Site (2.1). */
   readonly bookId: string;
   readonly legalEntityId: string;
+  /** The unit's Site, a scope fact of its journal lines (12; S1-F09-T02). */
+  readonly siteId: string;
   /** The mapping version read, which the journal keeps (PRD-ACP-013). */
   readonly mappingVersionId: string;
   /** The Store the unit belongs to; none for a warehouse or office unit (PRD-ORG-006). */
@@ -46,6 +48,7 @@ export async function dimensionsOn(
       bookId: mapping.accountingBookId,
       legalEntityId: mapping.legalEntityId,
       mappingVersionId: mapping.mappingVersionId,
+      siteId: mapping.siteId,
       storeId: mapping.storeId,
       brandId: source.brandId,
     },

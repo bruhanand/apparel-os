@@ -310,6 +310,15 @@ const financeRecordTypes = [
   declare('finance.account', ['view', 'create', 'edit', 'approve'], NONE),
   declare('finance.book_setting', ['view', 'edit', 'approve'], NONE),
   declare('finance.ca_approval_evidence', ['view', 'create'], NONE),
+  // The posting half (books-and-posting 4.1, 6, 12; S1-F09-T02). A posting map version is prepared by an authorised
+  // Accounts user (edit; the map is created with its first version) and decided by a different one with the CA's
+  // evidence (approve), as a book setting is (6.3; POL-09.01; GC4-2). A period is defined (create) by an authorised
+  // Accounts user, with no second person, since no source asks for one (4.1). A journal is read only, through the
+  // internal ledger and trial balance: its lines carry the book's legal entity, the unit's place and the brand as
+  // scope facts (12; PRD-SEC-005). **Design choice**; who holds them is KDPS's (V-01).
+  declare('finance.posting_map', ['view', 'edit', 'approve'], NONE),
+  declare('finance.financial_period', ['view', 'create'], NONE),
+  declare('finance.journal', ['view'], ALL),
 ] as const;
 
 /** Every record type declared so far. */

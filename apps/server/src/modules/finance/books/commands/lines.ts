@@ -1,7 +1,7 @@
 import type { MissingItem } from '@apparel-os/schemas';
 import { and, asc, eq, gt, max, sql, type SQL } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
-import { accountVersion, bookSettingVersion } from '../db/schema.js';
+import { accountVersion, bookSettingVersion, postingMapVersion } from '../db/schema.js';
 
 // The version lines of the books part (structure-and-masters 2.2; code-house-rules 7.3; books-and-posting 6.3;
 // S1-F09-T01): the rows of one record's effective-dated versions, an account's or a book setting's. What every change
@@ -14,6 +14,7 @@ import { accountVersion, bookSettingVersion } from '../db/schema.js';
 const tables = {
   account_version: accountVersion,
   book_setting_version: bookSettingVersion as unknown as typeof accountVersion,
+  posting_map_version: postingMapVersion as unknown as typeof accountVersion,
 } as const;
 
 /** One record's line of versions: its table, the record type it is read as, and the condition naming its rows. */
@@ -34,6 +35,15 @@ export function settingLine(recordType: string, settingId: string): Line {
     recordType,
     recordId: settingId,
     where: eq(bookSettingVersion.bookSettingId, settingId),
+  };
+}
+
+export function mapLine(recordType: string, mapId: string): Line {
+  return {
+    table: 'posting_map_version',
+    recordType,
+    recordId: mapId,
+    where: eq(postingMapVersion.postingMapId, mapId),
   };
 }
 

@@ -5,6 +5,7 @@ import {
   BOOK_SETTING_CHANGE,
   BOOK_SETTING_TYPE,
   CA_APPROVAL_EVIDENCE_TYPE,
+  POSTING_MAP_TYPE,
   type AccountDraft,
   type AccountVersionDraft,
   type BookSettingDraft,
@@ -35,6 +36,7 @@ import {
   bookSettingVersion,
   caApprovalEvidence,
   caApprovalEvidenceCover,
+  postingMapVersion,
 } from '../db/schema.js';
 import { costChangeRefusal } from './cost-change.js';
 import { accountLine, approvedOn, refused, settingLine, staleToken, today, type Outcome } from './lines.js';
@@ -69,7 +71,7 @@ export interface MaintainDependencies {
 export class BooksMaintenance {
   constructor(protected readonly dependencies: MaintainDependencies) {}
 
-  private async startOf(context: TransactionContext, validFrom: string): Promise<CommandRefusal | undefined> {
+  protected async startOf(context: TransactionContext, validFrom: string): Promise<CommandRefusal | undefined> {
     const date = await today(context);
     if (typeof date !== 'string') return date;
     // GC2-7, DEC-105: no version ever starts on a past date (6.3; structure-and-masters 2.2).
@@ -78,9 +80,9 @@ export class BooksMaintenance {
   }
 
   /** Locks a record's identity row exclusively at step 1 (code-house-rules 8.2); false when it does not exist. */
-  private async lockRecord(
+  protected async lockRecord(
     context: TransactionContext,
-    table: 'account' | 'book_setting',
+    table: 'account' | 'book_setting' | 'posting_map',
     ids: readonly string[],
   ): Promise<boolean> {
     const locked = await context.lock(
@@ -90,7 +92,7 @@ export class BooksMaintenance {
     return locked.missing.length === 0;
   }
 
-  private async audit(
+  protected async audit(
     context: TransactionContext,
     preparer: Preparer,
     record: { readonly type: string; readonly id: string; readonly versionId?: string },
@@ -108,7 +110,7 @@ export class BooksMaintenance {
   }
 
   /** A different authorised Accounts user decides it; an open request on an earlier version is Superseded (9.6). */
-  private request(
+  protected request(
     context: TransactionContext,
     preparer: Preparer,
     actionType: string,
@@ -310,8 +312,21 @@ export class BooksMaintenance {
             })
             .from(bookSettingVersion)
             .where(inArray(bookSettingVersion.id, settingIds));
+    const mapIds = versions.filter((each) => each.recordType === POSTING_MAP_TYPE).map((each) => each.versionId);
+    const maps =
+      mapIds.length === 0
+        ? []
+        : await context.tx
+            .select({
+              id: postingMapVersion.id,
+              ownerId: postingMapVersion.postingMapId,
+              decision: postingMapVersion.decision,
+            })
+            .from(postingMapVersion)
+            .where(inArray(postingMapVersion.id, mapIds));
+    const rowsOf = { [ACCOUNT_TYPE]: accounts, [BOOK_SETTING_TYPE]: settings, [POSTING_MAP_TYPE]: maps };
     return versions.map((each) => {
-      const found = (each.recordType === ACCOUNT_TYPE ? accounts : settings).find((row) => row.id === each.versionId);
+      const found = rowsOf[each.recordType].find((row) => row.id === each.versionId);
       return { ...each, found };
     });
   }
@@ -340,10 +355,12 @@ export class BooksMaintenance {
     ];
     const accounts = owners(ACCOUNT_TYPE);
     const settings = owners(BOOK_SETTING_TYPE);
+    const postingMaps = owners(POSTING_MAP_TYPE);
     // Step 1 (code-house-rules 8.2): the records versioned, so a decision of one waits for, or comes before, this.
     const locked = await context.lock(LOCK_STEP.document, [
       ...accounts.map((id) => ({ table: lockTable('finance', 'account'), id, mode: 'exclusive' as const })),
       ...settings.map((id) => ({ table: lockTable('finance', 'book_setting'), id, mode: 'exclusive' as const })),
+      ...postingMaps.map((id) => ({ table: lockTable('finance', 'posting_map'), id, mode: 'exclusive' as const })),
     ]);
     if (locked.missing.length > 0) throw new Error('A record of a version named could not be locked');
     const under = await this.coveredVersions(context, draft.versions);
@@ -398,6 +415,7 @@ export class BooksMaintenance {
         caApprovalEvidenceId: evidenceId,
         accountVersionId: each.recordType === ACCOUNT_TYPE ? each.versionId : null,
         bookSettingVersionId: each.recordType === BOOK_SETTING_TYPE ? each.versionId : null,
+        postingMapVersionId: each.recordType === POSTING_MAP_TYPE ? each.versionId : null,
         attachmentId,
       });
       covers.push({ versionId: each.versionId, attachmentId });

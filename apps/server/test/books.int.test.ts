@@ -449,6 +449,7 @@ describe('dimensions (books-and-posting 2.1, 3.2; POL-09.11, PRD-ORG-005, PRD-OR
         bookId: mapping.accountingBookId,
         legalEntityId: mapping.legalEntityId,
         mappingVersionId: mappingVersion,
+        siteId: site.recordId,
         storeId: store.recordId,
         brandId,
       },

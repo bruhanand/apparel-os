@@ -329,6 +329,53 @@ export const financeBooksCodes = declareCodes({
 });
 
 /**
+ * The codes of the posting half of `finance` · books (books-and-posting 4.1, 5, 6, 8, 9; S1-F09-T02).
+ *
+ * - `finance.event-kind-not-declared`: no module declares that posting event kind in this build (7.1).
+ * - `finance.component-not-of-kind`: a map line names a component its event kind does not carry (6.1).
+ * - `finance.component-without-line`: a component of the event kind has no line on the map version (6.1; 6.2
+ *   condition 2).
+ * - `finance.account-not-in-book`: a map line names an account of another book, or none (6.1).
+ * - `finance.period-code-taken`, `finance.period-overlaps`, `finance.period-gap`: a period's code is taken in its
+ *   book; it overlaps another period of the book; it would leave a gap after the book's first period (4.1).
+ * - `finance.period-dates-invalid`: a period's last day comes before its first day.
+ * - `finance.no-posting-map`: no approved map version for the book and event kind is in force on the accounting date
+ *   (6.2 condition 1; POL-09.12; SL-23).
+ * - `finance.map-account-not-in-force`: an account on the map's lines is not in force, or retired, on the date (6.2
+ *   condition 3).
+ * - `finance.missing-dimension`: a dimension a line requires is missing (6.2 condition 4; 3.2).
+ * - `finance.journal-unbalanced`: the journal the lines make would not balance (6.2 condition 5; 5.2; POL-09.13).
+ * - `finance.no-period`: the accounting date lies in no period of the book (4.1, 4.4).
+ * - `finance.unknown-amount`: an amount is Unknown, so it is never posted (8.4; PRD-MOD-015).
+ * - `finance.item-changed`: the item was already posted with different content (9.3; PRD-INT-002).
+ * - `finance.store-mismatch`: the Store the caller passed is not the business unit's (8.1).
+ * - `finance.no-journal-series`, `finance.journal-series-paused`: the book has no open journal series for the
+ *   financial year (5.4; numbering-and-audit 3.2).
+ * - `finance.already-reversed`: a journal is reversed at most once (5.3).
+ */
+export const financePostingCodes = declareCodes({
+  'finance.event-kind-not-declared': 'refused',
+  'finance.component-not-of-kind': 'refused',
+  'finance.component-without-line': 'refused',
+  'finance.account-not-in-book': 'refused',
+  'finance.period-code-taken': 'refused',
+  'finance.period-overlaps': 'refused',
+  'finance.period-gap': 'refused',
+  'finance.period-dates-invalid': 'refused',
+  'finance.no-posting-map': 'refused',
+  'finance.map-account-not-in-force': 'refused',
+  'finance.missing-dimension': 'refused',
+  'finance.journal-unbalanced': 'refused',
+  'finance.no-period': 'refused',
+  'finance.unknown-amount': 'refused',
+  'finance.item-changed': 'refused',
+  'finance.store-mismatch': 'refused',
+  'finance.no-journal-series': 'unavailable',
+  'finance.journal-series-paused': 'unavailable',
+  'finance.already-reversed': 'refused',
+});
+
+/**
  * The codes of `site-lifecycle` (module-map 4.16; domain-model 3.6; PRD-LIF-001 to PRD-LIF-003; S1-F04-T02).
  *
  * - `site-lifecycle.check-failed`: a readiness check fails; `missing` names each check and what it lacks.
@@ -717,6 +764,7 @@ export const errorCodes = {
   ...siteLifecycleCodes,
   ...financeTaxRulesCodes,
   ...financeBooksCodes,
+  ...financePostingCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

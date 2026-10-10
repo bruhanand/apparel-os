@@ -1646,6 +1646,61 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "books-and-posting 6.3; code-house-rules 7.1",
       "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.financial_period",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "books-and-posting 4.1, 4.5, 13.1; code-house-rules 7.1, 8.2",
+      "why": "The books' periods and posting maps belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.posting_map",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "books-and-posting 6.1, 13.1; code-house-rules 7.1, 8.2",
+      "why": "The books' periods and posting maps belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.posting_map_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "books-and-posting 6.2, 6.3, 13.1; code-house-rules 7.3, 12.14",
+      "why": "The books' periods and posting maps belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.posting_map_line",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 6.1, 13.1; code-house-rules 7.1",
+      "why": "The books' periods and posting maps belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.journal",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 5.1, 5.3, 12, 13.1; code-house-rules 7.1",
+      "why": "A journal header carries no amount, and its lines may cover several places and brands: its lines carry the scope facts and row-level security, and every read reaches a header through a line the reader sees (books-and-posting 12, 13.1 'As built'); only finance code reads it"
+    },
+    {
+      "table": "finance.journal_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 5.1, 5.2, 12, 13.1; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "finance.posting_source",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 8.3, 9.3, 13.1; code-house-rules 7.1",
+      "why": "Post reads it whatever the poster may see, to answer a replay or refuse a changed item (books-and-posting 9.3); it says only where a line came from, and every reader reaches amounts through the scoped journal lines (books-and-posting 12, 13.1 'As built'); only finance code reads it"
     }
   ]
 }

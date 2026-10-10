@@ -22,6 +22,8 @@ const versionToken = { versionToken: idSchema.optional() };
 export const ACCOUNT_TYPE = 'finance.account';
 export const BOOK_SETTING_TYPE = 'finance.book_setting';
 export const CA_APPROVAL_EVIDENCE_TYPE = 'finance.ca_approval_evidence';
+/** A book's posting map for one event kind (books-and-posting 6; S1-F09-T02). */
+export const POSTING_MAP_TYPE = 'finance.posting_map';
 /** An account version, decided by a different authorised Accounts user (books-and-posting 6.3; POL-09.01; GC4-2). */
 export const ACCOUNT_CHANGE = 'finance.account.change';
 /** A cost-setting or voucher-model-setting version, decided the same way (6.3; POL-09.01; GC4-2). */
@@ -85,9 +87,12 @@ export const bookSettingDraftSchema = z.discriminatedUnion('kind', [
 ]);
 export type BookSettingDraft = z.infer<typeof bookSettingDraftSchema>;
 
-/** A version the CA's approval evidence covers: an account version or a book-setting version (6.3). */
+/**
+ * A version the CA's approval evidence covers: an account version, a book-setting version or a posting map version
+ * (6.3; S1-F09-T02).
+ */
 export const coveredVersionSchema = z.strictObject({
-  recordType: z.enum([ACCOUNT_TYPE, BOOK_SETTING_TYPE]),
+  recordType: z.enum([ACCOUNT_TYPE, BOOK_SETTING_TYPE, POSTING_MAP_TYPE]),
   versionId: idSchema,
 });
 export type CoveredVersion = z.infer<typeof coveredVersionSchema>;

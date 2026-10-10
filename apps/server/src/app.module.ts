@@ -53,7 +53,15 @@ import {
 } from './modules/organisation/index.js';
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
 import { BookStockHistory, LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
-import { BOOK_HELD_STOCK, BooksModule, booksApprovals, type BookHeldStock } from './modules/finance/books/index.js';
+import {
+  BOOK_HELD_STOCK,
+  BooksModule,
+  booksApprovals,
+  JOURNAL_KIND,
+  POSTING_EVENT_KINDS,
+  type BookHeldStock,
+  type PostingEventKind,
+} from './modules/finance/books/index.js';
 
 /** The approval rules and decision effects of several modules, as one (access-and-approvals 9.8b). */
 function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals {
@@ -123,8 +131,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: SCOPE_MEMBERS,
       useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
     },
-    // The kinds the owning modules number (numbering-and-audit 3.1): so far the exception code (S1-F08-T02).
-    { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND] satisfies readonly NumberedKind[] },
+    // The kinds the owning modules number: the exception code (S1-F08-T02) and the journal (books-and-posting 5.4;
+    // S1-F09-T02).
+    { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND] satisfies readonly NumberedKind[] },
+    // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
+    // its kinds of 7.2 with S1-F10.
+    { provide: POSTING_EVENT_KINDS, useValue: [] satisfies readonly PostingEventKind[] },
     // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
     { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
@@ -141,6 +153,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     SUPPLIER_ROLES,
     SCOPE_MEMBERS,
     NUMBERED_KINDS,
+    POSTING_EVENT_KINDS,
     EXCEPTION_TYPES,
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
