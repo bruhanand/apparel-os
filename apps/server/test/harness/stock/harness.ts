@@ -19,10 +19,12 @@ import {
   type TransactionContext,
 } from '../../../src/kernel/index.js';
 import type { ApprovalRule } from '../../../src/modules/access/index.js';
+import type { ExceptionTypeRegistration } from '../../../src/modules/exceptions/index.js';
 import {
   catalogueSkus,
   organisationPlaces,
   type CallerRegistration,
+  type ImportKind,
   type LedgerItem,
   type Written,
 } from '../../../src/modules/stock/ledger/index.js';
@@ -31,11 +33,13 @@ import {
   HARNESS_DOCUMENT_TYPE,
   HARNESS_MODULE,
   HARNESS_RECORD_TYPE,
+  HARNESS_REJECT_DAMAGE,
   SYNTHETIC_COST_LIMIT_PAISE,
 } from '../../fixtures/stock-harness.js';
 import { syntheticCode, syntheticName } from '../../fixtures/synthetic.js';
 import { syntheticTimezone, writeSyntheticUser, type SyntheticUser } from '../../support/access.js';
 import { grantSynthetic } from '../../support/grants.js';
+import { recorded } from '../../support/books.js';
 import { approved, decided } from '../../support/organisation.js';
 import { allowVerifier, connect } from '../../support/postgres.js';
 import {
@@ -84,6 +88,18 @@ export const harnessCaller: CallerRegistration = {
         'cost-adjustment',
         'supplier-return-departure',
         'supplier-handover',
+        // S1-F10-T06: rejection returns, damage, transfer cancellation, disposal, counts and corrections.
+        'supplier-rejection-return',
+        'place-hold',
+        'release-hold',
+        'condition-change',
+        'end-reservation',
+        'disposal',
+        'start-count-freeze',
+        'end-count-freeze',
+        'count-difference',
+        'reversal',
+        'piece-correction',
       ],
       importKinds: ['none'],
     },
@@ -101,19 +117,43 @@ export const harnessDocumentType: RecordTypeDeclaration = {
 };
 
 /** The driver's approval rules (15.3; H4): independent, cost as the value basis, labelled synthetic. */
-export const harnessRules: readonly ApprovalRule[] = Object.values(HARNESS_ACTIONS).map((actionType) => ({
+export const harnessRules: readonly ApprovalRule[] = [
+  ...Object.values(HARNESS_ACTIONS).map((actionType) => ({ actionType, value: 'cost' as const })),
+  { actionType: HARNESS_REJECT_DAMAGE, value: 'none' as const },
+].map(({ actionType, value }) => ({
   actionType,
   module: HARNESS_MODULE,
   recordType: HARNESS_DOCUMENT_TYPE,
   independent: true,
-  value: 'cost' as const,
+  value,
   freeTextReason: false,
   decisionEvidenceClasses: [],
   synthetic: true,
 }));
 
+/** The exception the driver raises after a posting refused rolled its command back (SL-23 Outcome A; DEC-105). */
+export const HARNESS_POSTING_REFUSED: ExceptionTypeRegistration = {
+  code: `${HARNESS_MODULE}.posting-refused`,
+  category: 'unfinished-operation',
+  module: HARNESS_MODULE,
+  linksTo: [HARNESS_DOCUMENT_TYPE],
+  evidenceClasses: [],
+  resolutionCheck: () => Promise.resolve({ kind: 'verified' }),
+};
+
 export type DocumentKind =
-  'receipt' | 'pt-approval' | 'transfer' | 'sale' | 'customer-return' | 'cost-change' | 'supplier-return';
+  | 'receipt'
+  | 'pt-approval'
+  | 'transfer'
+  | 'sale'
+  | 'customer-return'
+  | 'cost-change'
+  | 'supplier-return'
+  | 'damage'
+  | 'disposal'
+  | 'count'
+  | 'reversal'
+  | 'earlier-pos-report';
 
 /** One line of a driver document (15.2 `document_line`). */
 export interface DocumentLine {
@@ -144,8 +184,19 @@ export interface HarnessDocument {
 /** One step's outcome: the ledger's answer, and a replay of the same request under the same key (PRD-INT-002). */
 export interface StepOutcome {
   readonly written: Written;
+  readonly key: string;
   readonly replay: () => Promise<IdempotentAnswer<StepAnswer>>;
 }
+
+/** A step sent once: written, or refused with the whole command rolled back (13.1; SL-23 Outcome A). */
+export type StepSent =
+  | ({ readonly kind: 'written' } & StepOutcome)
+  | {
+      readonly kind: 'refused';
+      readonly refusal: CommandRefusal;
+      readonly key: string;
+      readonly replay: () => Promise<IdempotentAnswer<StepAnswer>>;
+    };
 
 /** What a step keeps under its key: identifiers only (code-house-rules 12.4 "Storage"). */
 export interface StepAnswer {
@@ -158,6 +209,8 @@ export interface StepAnswer {
 /** The fixtures of one combination (S1-F10 spec 3.3): book BK-SYN with W1 and S1, and SKU X. */
 export interface HarnessFixtures extends SyntheticCombination {
   readonly sku: { readonly skuId: string; readonly brandId: string };
+  /** A second location of S1's unit, such as its backroom (S1-F10-T06: counts across two locations). */
+  readonly s1b: At;
 }
 
 type Outcome<A> = { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } };
@@ -341,7 +394,7 @@ export class StockHarness extends ValuedWorld {
    * SKU X through `merchandise` · catalogue (structure-and-masters 4.1 to 4.6): a brand, a colour attribute with one
    * confirmed value, a category whose tracking profile is piece-tracked or not from today, and one confirmed product.
    */
-  async catalogueSku(pieceTracked: boolean): Promise<{ skuId: string; brandId: string }> {
+  async catalogueSku(pieceTracked: boolean, batchExpiryRequired = false): Promise<{ skuId: string; brandId: string }> {
     const today = this.setup.today();
     const recorded = (outcome: Outcome<CatalogueChanged>) => ok(outcome);
     const brandId = recorded(
@@ -394,7 +447,7 @@ export class StockHarness extends ValuedWorld {
           code: syntheticCode(this.next('PROFILE')),
           name: syntheticName(pieceTracked ? 'Piece profile' : 'Quantity profile'),
           pieceTracked,
-          batchExpiryRequired: false,
+          batchExpiryRequired,
           requiredIdentifiers: [],
           validFrom: today,
         }),
@@ -438,10 +491,112 @@ export class StockHarness extends ValuedWorld {
   }
 
   /** The fixtures of one combination: BK-SYN with W1 and S1 under the formula and pool mode, and SKU X (11.1). */
-  async fixtures(formula: CostFormula, poolMode: CostPoolMode): Promise<HarnessFixtures> {
-    const combination = await this.book(formula, poolMode);
-    const sku = await this.catalogueSku(true);
-    return { ...combination, sku };
+  async fixtures(
+    formula: CostFormula,
+    poolMode: CostPoolMode,
+    options: { readonly pieceTracked?: boolean; readonly batch?: boolean; readonly maps?: readonly string[] } = {},
+  ): Promise<HarnessFixtures> {
+    const combination = await this.book(formula, poolMode, options.maps === undefined ? {} : { maps: options.maps });
+    const sku = await this.catalogueSku(options.pieceTracked ?? true, options.batch ?? false);
+    const s1b = {
+      siteId: combination.s1.siteId,
+      businessUnitId: combination.s1.businessUnitId,
+      locationId: await this.location(combination.s1.siteId, combination.s1.businessUnitId),
+    };
+    await this.routePostingRefused(combination.w1.siteId, HARNESS_POSTING_REFUSED.code);
+    await this.routePostingRefused(combination.s1.siteId, HARNESS_POSTING_REFUSED.code);
+    return { ...combination, sku, s1b };
+  }
+
+  protected override exceptionTypes(): ExceptionTypeRegistration[] {
+    return [...super.exceptionTypes(), HARNESS_POSTING_REFUSED];
+  }
+
+  /**
+   * The driver's exception after a refused step rolled its command back (books-and-posting 10 step 3; SL-23 Outcome
+   * A; DEC-105): raised in a command of its own, keyed by the step's idempotency key, so a replay raises none, linking
+   * the document as it stayed.
+   */
+  raiseRefused(key: string, document: HarnessDocument, refusal: CommandRefusal) {
+    return this.run(this.preparer.user.id, (context) =>
+      this.exceptions.raiseInOwnCommand(context, {
+        raisingEvent: key,
+        typeCode: HARNESS_POSTING_REFUSED.code,
+        facts: { siteId: document.from.siteId, storeId: null, businessUnitId: null, brandId: null },
+        links: [
+          {
+            module: HARNESS_MODULE,
+            recordType: HARNESS_DOCUMENT_TYPE,
+            recordId: document.id,
+            versionId: document.versionId,
+          },
+        ],
+        exposure: { kind: 'unknown' },
+        raisedBy: { kind: 'user', id: this.preparer.user.id },
+        comment: `${refusal.code} ${JSON.stringify(refusal.missing)}`,
+      }),
+    );
+  }
+
+  /** A SYNTHETIC supplier and agreement version owning consignment goods until their sale (7.2; G6). */
+  readonly syntheticSupplier = uuidv7();
+  readonly syntheticAgreement = uuidv7();
+
+  /** The excess hold on a count surplus's units, as the read-only role reads it (H6). */
+  async excessHoldOf(originId: string): Promise<string> {
+    return this.verified(
+      `select distinct h.id from stock.hold h join stock.hold_claim c on c.hold_id = h.id
+       left join stock.balance b on b.id = c.balance_id left join stock.piece p on p.id = c.piece_id
+       where h.kind = 'excess' and coalesce(b.receipt_origin_id, p.receipt_origin_id) = $1`,
+      originId,
+    );
+  }
+
+  /** The receipt count movement that made an origin, as the read-only role reads it (H6). */
+  async receiptMovementOf(originId: string): Promise<string> {
+    return this.verified(
+      `select m.id from stock.movement m join stock.movement_leg l on l.movement_id = m.id
+       where m.kind = 'receipt-count' and l.receipt_origin_id = $1`,
+      originId,
+    );
+  }
+
+  private async verified(query: string, parameter: string): Promise<string> {
+    const client = await connect(this.database, 'verify');
+    try {
+      const [row] = (await client.query<{ id: string }>(query, [parameter])).rows;
+      if (row === undefined) throw new Error(`Nothing found for ${parameter}`);
+      return row.id;
+    } finally {
+      await client.end();
+    }
+  }
+
+  /** Locks the book's period, as Accounts (books-and-posting 4.2; PRD-LED-009). */
+  async lockPeriod(periodId: string): Promise<void> {
+    recorded(await this.setup.asPreparerDo((c, p) => this.setup.books.lockPeriod(c, p, periodId)));
+  }
+
+  /**
+   * A reopening of the period naming a driver document as its one correction, requested by Accounts and approved by
+   * a different person (books-and-posting 4.3; PRD-LED-019, PRD-LED-020).
+   */
+  async reopenPeriod(periodId: string, document: HarnessDocument): Promise<void> {
+    const asked = recorded(
+      await this.setup.asPreparerDo((c, p) =>
+        this.setup.books.requestReopening(c, p, periodId, {
+          reason: 'SYNTHETIC correction of a bill refused in a locked period',
+          corrections: [{ module: HARNESS_MODULE, recordType: HARNESS_DOCUMENT_TYPE, recordId: document.id }],
+        }),
+      ),
+    );
+    decided(await this.setup.decide(asked.requestId, asked.reopeningId));
+  }
+
+  /** The book's periods' states, as Period close shows them (books-and-posting 4.1). */
+  async periodStates(bookId: string): Promise<string[]> {
+    const periods = await this.setup.run(this.setup.preparer.id, (c) => this.setup.books.listPeriods(c, bookId));
+    return periods.map((each) => each.state);
   }
 
   // --- documents (15.2) ------------------------------------------------------------------------------------------
@@ -504,7 +659,10 @@ export class StockHarness extends ValuedWorld {
   async approveDocument(
     document: HarnessDocument,
     actionType: string,
-    value: { readonly kind: 'known'; readonly amountPaise: Paise } | { readonly kind: 'unknown' },
+    value:
+      | { readonly kind: 'known'; readonly amountPaise: Paise }
+      | { readonly kind: 'unknown' }
+      | { readonly kind: 'none' },
   ): Promise<string> {
     const requestId = await this.run(this.preparer.user.id, (context) =>
       this.access.requestApproval(context, {
@@ -537,13 +695,31 @@ export class StockHarness extends ValuedWorld {
     items: readonly LedgerItem[],
     approval?: { readonly decisionId: string; readonly actionType: string },
   ): Promise<StepOutcome> {
+    const sent = await this.send(document, name, transition, items, approval);
+    if (sent.kind !== 'written') throw new StepRefused(sent.refusal);
+    return sent;
+  }
+
+  /**
+   * One step sent once under a new idempotency key, which answers whether it was written or refused (13.1); a
+   * refusal rolled the whole command back, so the document stays as it was (SL-23 Outcome A). `importKind` names the
+   * import the source carries, none by default (13.2).
+   */
+  async send(
+    document: HarnessDocument,
+    name: string,
+    transition: { readonly from: string; readonly to: string },
+    items: readonly LedgerItem[],
+    approval?: { readonly decisionId: string; readonly actionType: string },
+    importKind: ImportKind = 'none',
+  ): Promise<StepSent> {
     const key = uuidv7();
     const source = {
       module: HARNESS_MODULE,
       recordType: HARNESS_RECORD_TYPE,
       recordId: document.id,
       versionId: document.versionId,
-      importKind: 'none' as const,
+      importKind,
     };
     const content = {
       pathParameters: { documentId: document.id, step: name },
@@ -585,6 +761,7 @@ export class StockHarness extends ValuedWorld {
                   movementIds: written.movementIds,
                   receiptOriginIds: written.receiptOriginIds,
                   reservationIds: written.reservationIds,
+                  holdIds: written.holdIds,
                 },
                 shows: 'nothing' as const,
               };
@@ -598,11 +775,11 @@ export class StockHarness extends ValuedWorld {
         },
       );
     const first = await send();
-    if (first.kind !== 'success' || written === undefined) {
-      throw new StepRefused(first.kind === 'refusal' ? first.refusal : undefined);
-    }
+    if (first.kind === 'refusal')
+      return { kind: 'refused', refusal: first.refusal as CommandRefusal, key, replay: send };
+    if (written === undefined) throw new StepRefused(undefined);
     document.state = transition.to;
-    return { written, replay: send };
+    return { kind: 'written', written, key, replay: send };
   }
 
   /** Under the step 1 lock: the version posted is the current one, in the state the step expects (10.4; 15.2). */

@@ -17,7 +17,14 @@ import {
 } from './db/schema.js';
 import { STOCK_POSTING_EVENT_KINDS } from './domain/event-kinds.js';
 import { skuKey, unitKey, type UnitKey } from './domain/keys.js';
-import { refusalOf, StockRefused, type Goods, type LedgerItem, type LedgerRequest } from './domain/request.js';
+import {
+  postedRecordType,
+  refusalOf,
+  StockRefused,
+  type Goods,
+  type LedgerItem,
+  type LedgerRequest,
+} from './domain/request.js';
 import type { Formula, PoolMode } from './domain/valuation.js';
 import type { TransitKind } from './domain/working.js';
 import type { LedgerBooks, LedgerPlaces, LedgerSkus, SkuFacts, UnitFacts } from './ports.js';
@@ -55,6 +62,10 @@ export interface LedgerPlan {
   readonly transits: ReadonlyMap<string, TransitTarget>;
   /** The sales the customer returns bring back (7.5). */
   readonly saleIds: ReadonlySet<string>;
+  /** The movements a reversal undoes or a piece correction corrects (7.5, 8.4; S1-F10-T06). */
+  readonly reversedIds: ReadonlySet<string>;
+  /** Origins whose established value a reversal reads, with the units their cost put into pools (7.5). */
+  readonly enteredOrigins: ReadonlySet<string>;
   /**
    * Check postable's answer for each valued item, asked before any lock with every component of its kind (13.1
    * "Plan"; books-and-posting 9.1), whose periods the caller holds at step 7 and journal series at step 8.
@@ -215,6 +226,8 @@ export async function planRequest(
   const poolIds = new Set<string>();
   const transits = new Map<string, TransitTarget>();
   const saleIds = new Set<string>();
+  const reversedIds = new Set<string>();
+  const enteredOrigins = new Set<string>();
   const probes: PostItem[] = [];
   const probeLines = new Map<string, string>();
   const settingOf = async (lineId: string, bookId: string): Promise<CostSetting> => {
@@ -561,7 +574,121 @@ export async function planRequest(
         await goodsAt(item.lineId, unit, item.goods);
         const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
         await poolOf(item.lineId, unit, sku);
-        probe(item.lineId, 'stock.sale-issue', unit, sku);
+        // A supplier-owned unit passing through at its agreed cost posts its own kind (7.2; S1-F10-T06).
+        probe(item.lineId, item.agreedCostPaise === undefined ? 'stock.sale-issue' : 'stock.pass-through', unit, sku);
+        return;
+      }
+      case 'disposal': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        await goodsAt(item.lineId, unit, item.goods);
+        holdIds.add(item.holdId);
+        await claimsOf(
+          item.lineId,
+          await context.tx
+            .select()
+            .from(holdClaim)
+            .where(and(eq(holdClaim.holdId, item.holdId), gt(holdClaim.quantity, 0))),
+        );
+        const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
+        await poolOf(item.lineId, unit, sku);
+        probe(item.lineId, 'stock.disposal-loss', unit, sku);
+        return;
+      }
+      case 'count-difference': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
+        holdIds.add(item.countId);
+        if (item.difference === 'gain') {
+          // New piece codes labelled at the count, unused (8.4; PRD-MER-015).
+          balanceOf(unit, sku);
+          for (const code of item.goods.pieceCodes ?? []) newCodes.add(code);
+          return;
+        }
+        await goodsAt(item.lineId, unit, item.goods);
+        await poolOf(item.lineId, unit, sku);
+        probe(item.lineId, 'stock.count-loss', unit, sku);
+        return;
+      }
+      case 'reversal': {
+        const [reversed] = await context.tx.select().from(movement).where(eq(movement.id, item.movementId));
+        if (reversed === undefined) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]),
+          );
+        }
+        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06).
+        if (reversed.kind !== 'receipt-count' && reversed.kind !== 'count-difference') {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]),
+          );
+        }
+        reversedIds.add(reversed.id);
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
+        const legs = await context.tx
+          .select({ originId: movementLeg.receiptOriginId })
+          .from(movementLeg)
+          .where(eq(movementLeg.movementId, reversed.id));
+        await poolOf(item.lineId, unit, sku);
+        if (reversed.kind === 'receipt-count') {
+          // An inflow made in error: its origin's established value changes, so the origin is locked exclusively
+          // (10.3 step 2); its units leave from the place named (7.5).
+          for (const leg of legs) {
+            originIds.set(leg.originId, 'exclusive');
+            enteredOrigins.add(leg.originId);
+          }
+          await goodsAt(item.lineId, unit, {
+            ...item.goods,
+            ...(sku.pieceTracked ? {} : { receiptOriginId: legs[0]?.originId ?? '' }),
+          });
+          probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
+          return;
+        }
+        // An outflow brought back (7.5, 8.4): its origins only read; the units come back at the place named.
+        for (const leg of legs) shared(leg.originId);
+        await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId);
+        balanceOf(unit, sku);
+        for (const code of item.goods.pieceCodes ?? []) pieceCodes.set(code, item.lineId);
+        if (item.replacesOriginId !== undefined) {
+          await goodsAt(item.lineId, unit, { ...item.goods, receiptOriginId: item.replacesOriginId });
+        }
+        await poolOf(item.lineId, await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId), sku);
+        probe(item.lineId, 'stock.count-loss-reversal', unit, sku);
+        return;
+      }
+      case 'piece-correction': {
+        const [corrected] = await context.tx.select().from(movement).where(eq(movement.id, item.movementId));
+        if (corrected === undefined) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]),
+          );
+        }
+        reversedIds.add(corrected.id);
+        if (item.countId !== undefined) holdIds.add(item.countId);
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        const rows = await context.tx
+          .select({
+            code: piece.code,
+            skuId: piece.skuId,
+            siteId: piece.siteId,
+            businessUnitId: piece.businessUnitId,
+          })
+          .from(piece)
+          .where(inArray(piece.code, [item.foundPieceCode, item.missingPieceCode]));
+        for (const code of [item.foundPieceCode, item.missingPieceCode]) {
+          const row = rows.find((each) => each.code === code);
+          if (row?.skuId == null)
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'piece', code }]));
+          pieceCodes.set(code, item.lineId);
+          const sku = await skuOf(item.lineId, row.skuId, row.siteId);
+          const at = await unitOf(item.lineId, row.siteId, row.businessUnitId);
+          anchor(at, 'shared');
+          balanceOf(at, sku);
+          balanceOf(unit, sku);
+          await poolOf(item.lineId, at, sku);
+          await poolOf(item.lineId, unit, sku);
+          await poolOf(item.lineId, await unitOf(item.lineId, corrected.siteId, corrected.businessUnitId), sku);
+        }
         return;
       }
       case 'customer-return': {
@@ -658,7 +785,7 @@ export async function planRequest(
       : await reads.books.checkPostable(context, {
           sourceModule: request.source.module,
           document: {
-            recordType: request.source.recordType,
+            recordType: postedRecordType(request.source),
             recordId: request.source.recordId,
             versionId: request.source.versionId,
           },
@@ -682,6 +809,8 @@ export async function planRequest(
     poolIds,
     transits,
     saleIds,
+    reversedIds,
+    enteredOrigins,
     postingChecks,
     occurredAt: request.occurredAt ?? context.startedAt,
     units,

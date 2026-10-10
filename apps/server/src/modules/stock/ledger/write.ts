@@ -28,7 +28,7 @@ import {
   valuation,
   valuationLayer,
 } from './db/schema.js';
-import { refusalOf, StockRefused } from './domain/request.js';
+import { postedRecordType, refusalOf, StockRefused } from './domain/request.js';
 import type { PostShare } from './domain/valuing.js';
 import type { LedgerBooks } from './ports.js';
 import type { ClaimState, ExpectedQuantity } from './domain/working.js';
@@ -108,7 +108,7 @@ export async function writeRequest(
         const movementOf = entries.movements.find((each) => each.id === origin.lastStateMovementId);
         return {
           id: origin.id,
-          originKind: 'receipt',
+          originKind: origin.originKind ?? 'receipt',
           parentOriginId: null,
           ...sourceColumns(movementOf?.lineId ?? ''),
           skuId: origin.skuId,
@@ -136,9 +136,9 @@ export async function writeRequest(
         ...sourceColumns(each.lineId),
         ...actorColumns,
         approvalUseId: request.approval?.useId ?? null,
-        reversesMovementId: null,
+        reversesMovementId: each.reversesMovementId ?? null,
         returnsMovementId: each.returnsMovementId ?? null,
-        correctionOfMovementId: null,
+        correctionOfMovementId: each.correctionOfMovementId ?? null,
         ...times,
         ...each.scope,
         brandIds: each.brandIds as string[],
@@ -627,7 +627,7 @@ async function postValues(
   const result = await books.post(context, {
     sourceModule: request.source.module,
     document: {
-      recordType: request.source.recordType,
+      recordType: postedRecordType(request.source),
       recordId: request.source.recordId,
       versionId: request.source.versionId,
     },

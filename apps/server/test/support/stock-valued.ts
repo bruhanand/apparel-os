@@ -63,6 +63,17 @@ export const SYNTHETIC_MAPS: readonly (readonly [string, string, SyntheticAccoun
   ['stock.supplier-return-departure', 'cost', 'RSH', 'INV'],
   ['stock.supplier-handover', 'cost', 'CLM', 'RSH'],
   ['stock.supplier-rejection-return', 'cost', 'INV', 'RSH'],
+  // The reversal of an inflow made in error, as 16.1 lists it (P2, G13).
+  ['stock.cost-established-reversal', 'to-pool', 'PUR', 'INV'],
+  ['stock.cost-established-reversal', 'to-dispatch', 'PUR', 'TRN'],
+  ['stock.cost-established-reversal', 'variance', 'PUR', 'VAR'],
+  // Not in 16.1; SYNTHETIC maps the further scenarios need (S1-F10-T06), which settle no account or recognition rule
+  // (V-10, POL-09.03, SL-3, SL-4): a loss to SYN-LOSS and its reversal back; a pass-through to cost of goods sold,
+  // with purchase clearing on the other side.
+  ['stock.count-loss', 'cost', 'LOSS', 'INV'],
+  ['stock.count-loss-reversal', 'cost', 'INV', 'LOSS'],
+  ['stock.disposal-loss', 'cost', 'LOSS', 'INV'],
+  ['stock.pass-through', 'cost', 'COGS', 'PUR'],
 ];
 
 /** One place the ledger posts at: a Site, a business unit and a SYNTHETIC location identifier. */
@@ -137,9 +148,14 @@ export class ValuedWorld extends StockWorld {
       numbering,
       inbox: new Inbox(),
       audit: new Audit(this.log.logger),
-      types: [POSTING_REFUSED],
+      types: this.exceptionTypes(),
     });
     await this.setup.run(this.setup.preparer.id, (context) => defineSyntheticCodeSeries(context, numbering));
+  }
+
+  /** The exception types the world's callers raise after a refused posting (SL-23; DEC-105). */
+  protected exceptionTypes(): ExceptionTypeRegistration[] {
+    return [POSTING_REFUSED];
   }
 
   /** A SYNTHETIC SKU of a new brand, piece-tracked or quantity-tracked. */
@@ -157,13 +173,13 @@ export class ValuedWorld extends StockWorld {
   }
 
   /** Routes the SYNTHETIC posting-refused type at a Site to the preparer, approved as a fixture (V-03). */
-  async routePostingRefused(siteId: string): Promise<void> {
+  async routePostingRefused(siteId: string, typeCode: string = POSTING_REFUSED.code): Promise<void> {
     const routing = await this.setup.run(this.setup.preparer.id, (context) =>
       this.exceptions.prepareRouting(
         context,
         { userId: this.setup.preparer.id, roleAssignmentId: this.setup.asPreparer.roleAssignmentId },
         {
-          typeCode: POSTING_REFUSED.code,
+          typeCode,
           siteId,
           owner: { kind: 'user', userId: this.setup.preparer.id },
           dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },

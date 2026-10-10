@@ -1,0 +1,78 @@
+{
+  "id": "G6-MA-BOOK",
+  "title": "G6: a consignment piece outside the pool while in custody; at its sale it passes through at its agreed cost",
+  "synthetic": true,
+  "covers": ["PRD-ORG-014", "PRD-ORG-015", "PRD-NAV-015", "POL-01.05", "POL-01.13", "POL-09.03"],
+  "sources": ["stock-ledger 7.2, 11.8 G6, 12 SL-4", "books-and-posting 7.2"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "consignment received, PT approved",
+      "commands": [
+        {
+          "command": "receipt",
+          "receipt": "R1",
+          "at": "S1",
+          "pieces": 2,
+          "owner": "consignment",
+          "movements": ["receipt-count"]
+        },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": []
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 0, "valuePaise": 0 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 2 }]
+      }
+    },
+    {
+      "step": "one piece sold: in and out at its agreed cost",
+      "commands": [
+        {
+          "command": "sale",
+          "sale": "B1",
+          "at": "S1",
+          "pieces": "R1:0",
+          "agreedCostPaise": 9000,
+          "movements": ["sale-issue"],
+          "journals": [
+            {
+              "eventKind": "stock.pass-through",
+              "component": "cost",
+              "debit": "COGS",
+              "credit": "PUR",
+              "amountPaise": 9000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 0, "valuePaise": 0 }],
+        "transitPaise": 0,
+        "cogsPaise": 9000,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 1 }]
+      }
+    },
+    {
+      "step": "without its agreed cost, a sale of the other is refused (SL-4)",
+      "commands": [{ "command": "sale", "sale": "B2", "at": "S1", "pieces": "R1:1", "refused": "stock.rule-not-set" }],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 0, "valuePaise": 0 }],
+        "transitPaise": 0,
+        "cogsPaise": 9000,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 1 }]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 0, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -9000, "COGS": 9000, "LOSS": 0, "VAR": 0 }
+}

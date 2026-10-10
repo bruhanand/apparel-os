@@ -99,10 +99,16 @@ async function checkFreezes(context: TransactionContext, plan: LedgerPlan, worki
   const answers = await recheckHidden(context, {
     touches: plan.request.items.flatMap((item, line) => working.touches(item).map((touch) => ({ ...touch, line }))),
   });
-  const line = firstLine(answers);
+  // An item of a count does not stop at its own count's freeze (8.2; 13.4 "Count difference"; S1-F10-T06).
+  const ownCount = (line: number) => {
+    const item = plan.request.items[line];
+    return item?.kind === 'count-difference' || item?.kind === 'piece-correction' ? item.countId : undefined;
+  };
+  const stopping = answers.filter((each) => each.holdId === null || each.holdId !== ownCount(each.line));
+  const line = firstLine(stopping);
   if (line === undefined) return;
   const lineId = plan.request.items[line]?.lineId;
-  const visible = answers.filter((each) => each.line === line && each.blocker === 'count-freeze');
+  const visible = stopping.filter((each) => each.line === line && each.blocker === 'count-freeze');
   if (visible.length > 0) {
     throw new StockRefused(
       refusalOf(
@@ -406,7 +412,7 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
 
 type ValuingOnly = Pick<
   ValuingInputs,
-  'costSettings' | 'pools' | 'transits' | 'sales' | 'entered' | 'handedOver' | 'lineage' | 'occurredAt'
+  'costSettings' | 'pools' | 'transits' | 'sales' | 'reversed' | 'entered' | 'handedOver' | 'lineage' | 'occurredAt'
 >;
 
 /**
@@ -515,25 +521,32 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
     ),
   }));
   const sales: SaleState[] = [];
-  for (const saleId of plan.saleIds) sales.push(await loadSale(context, saleId));
+  for (const saleId of plan.saleIds) sales.push(await loadSale(context, saleId, 'returns'));
+  const reversed: SaleState[] = [];
+  for (const movementId of plan.reversedIds) reversed.push(await loadSale(context, movementId, 'reverses'));
   const adjusted = plan.request.items.flatMap((item) =>
     item.kind === 'cost-adjustment' ? [item.receiptOriginId] : [],
   );
+  // The units an origin's cost put into pools, less those a reversal of its inflow took off (7.5, 7.7; S1-F10-T06).
   const entered = new Map<string, number>();
-  const handedOver = new Map<string, number>();
-  const lineage = new Map<string, { layerIds: ReadonlySet<string>; handedOver: number }>();
-  for (const originId of adjusted) {
+  for (const originId of new Set([...adjusted, ...plan.enteredOrigins])) {
     const [established] = await context.tx
       .select({ quantity: sql<number>`coalesce(sum(${valuation.quantityDelta}), 0)::integer` })
       .from(valuation)
       .where(
         and(
           eq(valuation.receiptOriginId, originId),
-          eq(valuation.eventKind, 'stock.cost-established'),
-          gt(valuation.quantityDelta, 0),
+          or(
+            and(eq(valuation.eventKind, 'stock.cost-established'), gt(valuation.quantityDelta, 0)),
+            eq(valuation.eventKind, 'stock.cost-established-reversal'),
+          ),
         ),
       );
     entered.set(originId, established?.quantity ?? 0);
+  }
+  const handedOver = new Map<string, number>();
+  const lineage = new Map<string, { layerIds: ReadonlySet<string>; handedOver: number }>();
+  for (const originId of adjusted) {
     const [handed] = await context.tx
       .select({ quantity: sql<number>`coalesce(sum(${movementLeg.quantity}), 0)::integer` })
       .from(movementLeg)
@@ -576,6 +589,7 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
     pools,
     transits,
     sales,
+    reversed,
     entered,
     handedOver,
     lineage,
@@ -583,17 +597,29 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
   };
 }
 
-/** A sale a customer return brings back (7.5): its legs, pieces, valuations and the returns made of it so far. */
-async function loadSale(context: TransactionContext, saleId: string): Promise<SaleState> {
+/**
+ * An outflow units come back from (7.5): a sale a customer return brings back, or a movement a reversal undoes (by
+ * `back`, the link the later movements name it by): its legs, pieces, valuations and what came back of it so far.
+ */
+async function loadSale(context: TransactionContext, saleId: string, back: 'returns' | 'reverses'): Promise<SaleState> {
   const [sale] = await context.tx.select().from(movement).where(eq(movement.id, saleId));
   if (sale === undefined) {
     throw new StockRefused(refusalOf('invalid-item', undefined, [{ kind: 'movement', movementId: saleId }]));
   }
+  // In the order the outflow took them, oldest origin first (PRD-STK-013; working.ts `balancesAt`): UUIDv7s made in
+  // one millisecond are not ordered (PRD-MOD-008), so the legs' own identifiers cannot say (S1-F10-T06, G9).
   const legs = await context.tx
-    .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity })
+    .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity, direction: movementLeg.direction })
     .from(movementLeg)
+    .innerJoin(receiptOrigin, eq(receiptOrigin.id, movementLeg.receiptOriginId))
     .where(eq(movementLeg.movementId, saleId))
-    .orderBy(movementLeg.id);
+    .orderBy(
+      sql`${receiptOrigin.expiryDate} asc nulls last`,
+      receiptOrigin.countDate,
+      receiptOrigin.id,
+      movementLeg.id,
+    );
+  const direction = (legs[0]?.direction ?? null) as 'in' | 'out' | null;
   const pieces = await context.tx
     .select({ pieceId: movementPiece.pieceId })
     .from(movementPiece)
@@ -621,26 +647,38 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
           .select({ layer: valuationLayer, originId: valuation.receiptOriginId })
           .from(valuationLayer)
           .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
+          .innerJoin(costLayer, eq(costLayer.id, valuationLayer.costLayerId))
           .where(
             inArray(
               valuationLayer.valuationId,
               valuations.map((row) => row.id),
             ),
           )
-          .orderBy(valuationLayer.id);
+          // In the order taken: oldest layer first (7.4), not by the rows' identifiers (S1-F10-T06, G9).
+          .orderBy(costLayer.enteredSequence, valuation.sequence, valuationLayer.id);
   const returns = await context.tx
     .select({ id: movement.id })
     .from(movement)
-    .where(eq(movement.returnsMovementId, saleId));
+    .where(
+      back === 'returns'
+        ? eq(movement.returnsMovementId, saleId)
+        : and(eq(movement.reversesMovementId, saleId), sql`${movement.correctionOfMovementId} is null`),
+    );
   const returnIds = returns.map((row) => row.id);
   const returned = new Map<string, { quantity: number; value: number }>();
   const returnedTotal = { quantity: 0, value: 0 };
   const returnedFromLayer = new Map<string, { quantity: number; value: number }>();
   if (returnIds.length > 0) {
+    // What came back is in the legs going the other way: in for an outflow, out for an inflow (7.5).
     const returnLegs = await context.tx
       .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity })
       .from(movementLeg)
-      .where(inArray(movementLeg.movementId, returnIds));
+      .where(
+        and(
+          inArray(movementLeg.movementId, returnIds),
+          direction === 'in' ? eq(movementLeg.direction, 'out') : eq(movementLeg.direction, 'in'),
+        ),
+      );
     for (const leg of returnLegs) {
       const sum = returned.get(leg.originId) ?? { quantity: 0, value: 0 };
       sum.quantity += leg.quantity;
@@ -678,9 +716,11 @@ async function loadSale(context: TransactionContext, saleId: string): Promise<Sa
   }
   return {
     id: sale.id,
+    kind: sale.kind,
+    direction,
     siteId: sale.siteId,
     businessUnitId: sale.businessUnitId,
-    legs,
+    legs: legs.map((leg) => ({ originId: leg.originId, quantity: leg.quantity })),
     pieceIds: new Set(pieces.map((row) => row.pieceId)),
     valued,
     layers: layers.map((row) => ({

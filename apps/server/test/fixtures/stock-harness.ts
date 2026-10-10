@@ -17,7 +17,18 @@ export const HARNESS_ACTIONS = {
   transfer: `${HARNESS_MODULE}.approve-transfer`,
   costChange: `${HARNESS_MODULE}.approve-cost-change`,
   supplierReturn: `${HARNESS_MODULE}.approve-supplier-return`,
+  // S1-F10-T06: damage, disposal, counts and reversals (S1-F10 spec 3.2).
+  damage: `${HARNESS_MODULE}.approve-damage`,
+  disposal: `${HARNESS_MODULE}.approve-disposal`,
+  count: `${HARNESS_MODULE}.approve-count`,
+  reversal: `${HARNESS_MODULE}.approve-reversal`,
 } as const;
+
+/**
+ * The rejection of a damage report (6.1; PRD-DMG-003): independent, but with no value basis, since a release of a hold
+ * answers none (stock-ledger 13.9), so there is no cost under the lock to verify (S1-F10-T06).
+ */
+export const HARNESS_REJECT_DAMAGE = `${HARNESS_MODULE}.reject-damage`;
 
 /**
  * The SYNTHETIC approval limit on cost the harness's approver holds for each action type: ₹1,00,000.00, covering an

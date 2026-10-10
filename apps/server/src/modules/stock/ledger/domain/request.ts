@@ -21,6 +21,16 @@ export interface LedgerSource {
   readonly importKind: ImportKind;
 }
 
+/**
+ * The record type a source's journals carry (books-and-posting 5.1, 4.3): the record type as the permission registry
+ * names it, `<module>.<record type>`, as a reopening names a correction and every other caller of Post passes it. A
+ * movement keeps its module and record type apart (14.2). S1-F10-T06: found by P5, where a reopening could not name a
+ * stock posting's source.
+ */
+export function postedRecordType(source: Pick<LedgerSource, 'module' | 'recordType'>): string {
+  return `${source.module}.${source.recordType}`;
+}
+
 /** Who acts (13.3; PRD-ACS-013, PRD-SEC-018): a user, or a service identity and the person it acts for. */
 export type LedgerActor =
   | { readonly kind: 'user'; readonly userId: string; readonly roleAssignmentId: string }
@@ -192,6 +202,12 @@ export type ValuedItem =
       readonly at: Place;
       readonly handover: 'now' | 'billed-retained';
       readonly goods: Goods;
+      /**
+       * For units supplier- or brand-owned until their sale: the cost per unit the agreement gives at the sale, at
+       * which they pass through (7.2; `PRD-ORG-015`, `POL-01.13`; a working assumption, SL-4). Without it such a sale
+       * is `rule-not-set` (S1-F10-T06).
+       */
+      readonly agreedCostPaise?: Paise;
     }
   | {
       /** Custody back after physical acceptance, at the cost its sale issued (7.5; PRD-RET-013, PRD-LED-017). */
@@ -227,6 +243,60 @@ export type ValuedItem =
       readonly from: UnitPlace;
       readonly to: Place;
       readonly goods: Goods;
+    }
+  | {
+      /**
+       * Disposal (13.4; PRD-DMG-012, PRD-DMG-015, PRD-DMG-016): custody ends for goods under the hold named, a
+       * quarantine, expiry or write-off hold, whose claim on them the disposal ends (S1-F10-T06).
+       */
+      readonly kind: 'disposal';
+      readonly lineId: string;
+      readonly at: Place;
+      readonly condition: Condition;
+      readonly holdId: string;
+      readonly goods: Goods;
+    }
+  | {
+      /**
+       * Count difference (13.4, 8.2 to 8.4; PRD-STK-012, PRD-STK-014): an approved difference of the count whose freeze
+       * is named. A loss leaves at the formula cost; a gain with no known origin is a new surplus origin held as excess,
+       * with new piece codes for piece-tracked goods (S1-F10-T06).
+       */
+      readonly kind: 'count-difference';
+      readonly lineId: string;
+      readonly countId: string;
+      readonly at: Place;
+      readonly condition: Condition;
+      readonly difference: 'loss' | 'gain';
+      readonly reason: string;
+      readonly goods: Goods;
+    }
+  | {
+      /**
+       * Reversal (13.4, 7.5; PRD-MOD-011, PRD-ACS-014, PRD-LED-017, PRD-LED-018): undoes units of the movement named,
+       * at the place the units are, or come back to. A count loss linked to a surplus names the surplus origin whose
+       * units it takes the place of (8.4; S1-F10-T06).
+       */
+      readonly kind: 'reversal';
+      readonly lineId: string;
+      readonly movementId: string;
+      readonly at: Place;
+      readonly goods: Goods;
+      readonly replacesOriginId?: string;
+    }
+  | {
+      /**
+       * Piece correction (13.4, 8.4; PRD-STK-015, DEC-035): piece A, found at the place named, was wrongly named by the
+       * movement named, and piece B of the same SKU left instead (S1-F10-T06).
+       */
+      readonly kind: 'piece-correction';
+      readonly lineId: string;
+      readonly foundPieceCode: string;
+      readonly movementId: string;
+      readonly missingPieceCode: string;
+      readonly at: Place;
+      /** The count whose freeze covers the place, when a count found the piece (8.1, 8.4). */
+      readonly countId?: string;
     };
 
 export type ValuedItemKind = ValuedItem['kind'];
@@ -242,6 +312,10 @@ export const VALUED_ITEM_KINDS: readonly ValuedItemKind[] = [
   'supplier-return-departure',
   'supplier-handover',
   'supplier-rejection-return',
+  'disposal',
+  'count-difference',
+  'reversal',
+  'piece-correction',
 ];
 
 export type LedgerItemKind = LedgerItem['kind'];

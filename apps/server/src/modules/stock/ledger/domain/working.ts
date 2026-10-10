@@ -97,6 +97,8 @@ export interface PieceState {
 export interface OriginState {
   readonly id: string;
   readonly isNew: boolean;
+  /** How a new origin came to be (14.2 `origin_kind`): counted at a receipt, or a count surplus (8.4); receipt if absent. */
+  readonly originKind?: 'receipt' | 'surplus';
   readonly skuId: string | null;
   readonly pieceTracked: boolean;
   readonly batchCode: string | null;
@@ -173,6 +175,10 @@ export interface MovementEntry {
   readonly lineId: string;
   /** For a customer return: the sale movement it brings back (7.5; 14.2). */
   returnsMovementId?: string;
+  /** For a reversal: the movement it undoes (2.1; 14.2). */
+  reversesMovementId?: string;
+  /** For a piece correction's two movements: the movement corrected (8.4; 14.2). */
+  correctionOfMovementId?: string;
   readonly scope: Omit<Scope, 'brandId'>;
   readonly brandIds: (string | null)[];
   readonly legs: LegEntry[];
@@ -193,7 +199,10 @@ export type MovementKind =
   | 'customer-return'
   | 'supplier-return-departure'
   | 'supplier-handover'
-  | 'supplier-rejection-return';
+  | 'supplier-rejection-return'
+  | 'disposal'
+  | 'count-difference'
+  | 'reversal';
 
 export interface LegEntry {
   readonly id: string;
@@ -401,7 +410,7 @@ export class Working {
   /** The ordinal of the item being applied, which the hidden checks name (13.8). */
   protected line = -1;
 
-  constructor(private readonly inputs: WorkingInputs) {
+  constructor(protected readonly inputs: WorkingInputs) {
     for (const row of inputs.skuBalances) this.skuBalances.set(row.id, row);
     for (const row of inputs.balances) this.balances.set(row.id, row);
     for (const row of inputs.origins) this.origins.set(row.id, row);
@@ -597,7 +606,11 @@ export class Working {
     this.hidden.takes.push({ line: this.line, balanceId: balance.id, spare });
   }
 
-  /** The balances of a SKU at a place, in one condition, oldest first: soonest expiry, then count date (PRD-STK-013). */
+  /**
+   * The balances of a SKU at a place, in one condition, oldest first: soonest expiry, then count date (PRD-STK-013),
+   * then the receipt origin made first, whose UUIDv7 sorts first (PRD-MOD-008). The origin, not the balance row,
+   * breaks a tie, so a sale's legs are read back in the order it took them (S1-F10-T06, G9).
+   */
   protected balancesAt(place: Place, condition: Condition, goods: Goods): BalanceState[] {
     return [...this.balances.values()]
       .filter(
@@ -613,6 +626,7 @@ export class Working {
         (a, b) =>
           compareCodeUnits(a.expiryDate ?? '9999-12-31', b.expiryDate ?? '9999-12-31') ||
           compareCodeUnits(a.countDate, b.countDate) ||
+          compareCodeUnits(a.receiptOriginId, b.receiptOriginId) ||
           compareCodeUnits(a.id, b.id),
       );
   }
@@ -896,29 +910,58 @@ export class Working {
 
   /** Receipt count (13.4; PRD-REC-008, PRD-MER-015, PRD-ORG-019): a new receipt origin, its custody and pieces. */
   protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
-    const sku = this.sku(item.skuId);
-    const codes = item.pieceCodes ?? [];
-    for (const code of codes) {
-      if (this.usedCodes.has(code)) refuse('invalid-item', item.lineId, [{ kind: 'piece-code-used', code }]);
-      this.usedCodes.add(code);
-    }
-    const unit = this.unit(item.to.siteId, item.to.businessUnitId);
     const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
     ]);
     movement.owner = item.owner;
+    this.countedOrigin(item.lineId, movement, 'receipt', item.to, item.condition, {
+      skuId: item.skuId,
+      quantity: item.quantity,
+      ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
+      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+      ...(item.batch === undefined ? {} : { batch: item.batch }),
+    });
+    return { kind: 'unknown' };
+  }
+
+  /**
+   * A new receipt origin made by a count (section 4; 8.4): a receipt count's, or a count surplus with no known origin.
+   * Its custody at the place, and a new piece for each new code (PRD-MER-015): a code already used is `invalid-item`.
+   */
+  protected countedOrigin(
+    lineId: string,
+    movement: MovementEntry,
+    originKind: 'receipt' | 'surplus',
+    to: Place,
+    condition: Condition,
+    counted: {
+      readonly skuId: string;
+      readonly quantity: number;
+      readonly pieceCodes?: readonly string[];
+      readonly ownerKind: OriginState['ownerKind'];
+      readonly batch?: { readonly code: string; readonly expiryDate: string };
+    },
+  ): { origin: OriginState; balance: BalanceState; pieces: PieceState[] } {
+    const sku = this.sku(counted.skuId);
+    const codes = counted.pieceCodes ?? [];
+    for (const code of codes) {
+      if (this.usedCodes.has(code)) refuse('invalid-item', lineId, [{ kind: 'piece-code-used', code }]);
+      this.usedCodes.add(code);
+    }
+    const unit = this.unit(to.siteId, to.businessUnitId);
     const origin: OriginState = {
       id: this.newId(),
       isNew: true,
-      skuId: item.skuId,
+      originKind,
+      skuId: counted.skuId,
       pieceTracked: sku.pieceTracked,
-      batchCode: item.batch?.code ?? null,
-      expiryDate: item.batch?.expiryDate ?? null,
+      batchCode: counted.batch?.code ?? null,
+      expiryDate: counted.batch?.expiryDate ?? null,
       countDate: this.inputs.businessDate,
-      quantity: item.quantity,
-      scope: this.scopeAt(item.to.siteId, item.to.businessUnitId, sku.brandId),
+      quantity: counted.quantity,
+      scope: this.scopeAt(to.siteId, to.businessUnitId, sku.brandId),
       stateId: this.newId(),
-      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+      ownerKind: counted.ownerKind,
       valueKnown: false,
       pRatePaise: null,
       establishedValuePaise: null,
@@ -929,23 +972,24 @@ export class Working {
     };
     this.origins.set(origin.id, origin);
     this.entries.origins.push(origin);
-    const balance = this.balanceFor(item.to.siteId, item.to.businessUnitId, item.to.locationId, item.condition, origin);
-    this.addTo(balance, item.quantity, 0);
-    movement.legs.push(this.leg('in', balance, item.quantity, 0));
+    const balance = this.balanceFor(to.siteId, to.businessUnitId, to.locationId, condition, origin);
+    this.addTo(balance, counted.quantity, 0);
+    movement.legs.push(this.leg('in', balance, counted.quantity, 0));
+    const pieces: PieceState[] = [];
     for (const code of codes) {
       const piece: PieceState = {
         id: this.newId(),
         isNew: true,
         code,
-        skuId: item.skuId,
+        skuId: counted.skuId,
         receiptOriginId: origin.id,
-        siteId: item.to.siteId,
+        siteId: to.siteId,
         storeId: unit.storeId,
-        businessUnitId: item.to.businessUnitId,
+        businessUnitId: to.businessUnitId,
         legalEntityId: unit.legalEntityId,
         brandId: sku.brandId,
-        locationId: item.to.locationId,
-        condition: item.condition,
+        locationId: to.locationId,
+        condition,
         heldAs: 'custody',
         transitKind: null,
         transitRef: null,
@@ -958,8 +1002,9 @@ export class Working {
       this.pieces.set(piece.id, piece);
       this.piecesByCode.set(code, piece);
       movement.pieceIds.push(piece.id);
+      pieces.push(piece);
     }
-    return { kind: 'unknown' };
+    return { origin, balance, pieces };
   }
 
   /**

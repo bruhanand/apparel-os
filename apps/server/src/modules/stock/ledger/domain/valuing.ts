@@ -17,6 +17,7 @@ import { enter, issue, nextSequence, share, type LayerState, type PoolState, typ
 import {
   Working,
   type BalanceState,
+  type HoldEntry,
   type MovementEntry,
   type OriginState,
   type PieceState,
@@ -64,6 +65,10 @@ export interface TransitState {
 /** A sale a customer return brings back (7.5): what it issued, by origin and by layer, and what came back since. */
 export interface SaleState {
   readonly id: string;
+  /** Its movement kind: a sale issue, or for a reversal the kind of the movement reversed (S1-F10-T06). */
+  readonly kind: string;
+  /** The direction of its legs: out for an outflow, such as a sale or a count loss; in for an inflow. */
+  readonly direction: 'in' | 'out' | null;
   readonly siteId: string;
   readonly businessUnitId: string;
   /** Its out legs, in order, by origin. */
@@ -94,7 +99,12 @@ export interface ValuingInputs extends WorkingInputs {
   readonly pools: readonly PoolState[];
   readonly transits: readonly TransitState[];
   readonly sales: readonly SaleState[];
-  /** Per origin, the units its cost established put into pools or onto dispatches (7.7). */
+  /**
+   * The movements a reversal undoes or a piece correction corrects (7.5, 8.4): what each moved, by origin and by
+   * layer, and what earlier reversals brought back (S1-F10-T06).
+   */
+  readonly reversed: readonly SaleState[];
+  /** Per origin, the units its cost established put into pools or onto dispatches, less those reversed (7.5, 7.7). */
   readonly entered: ReadonlyMap<string, number>;
   /** Per origin, its units handed over to a supplier (moving average) (7.7 "where they went"). */
   readonly handedOver: ReadonlyMap<string, number>;
@@ -154,6 +164,13 @@ interface Moved {
 
 const SL = (question: string): MissingItem[] => [{ kind: 'open-question', question }];
 
+/** The release event a disposal ends each disposable hold kind's claim with (6.1; 14.2 `hold_release`). */
+const DISPOSAL_RELEASES: Readonly<Record<string, string | undefined>> = {
+  quarantine: 'approved-decision',
+  expiry: 'disposal',
+  'write-off': 'disposal',
+};
+
 /** The origin a moving-average valuation names: the one origin of its units, or none when they have several (13.10). */
 function onlyOrigin(groups: readonly { readonly origin: OriginState }[]): OriginState | null {
   return groups.length === 1 ? (groups[0]?.origin ?? null) : null;
@@ -173,7 +190,10 @@ export class Valuing extends Working {
     for (const pool of inputs.pools) this.pools.set(pool.id, pool);
     for (const transit of inputs.transits) this.transits.set(transit.id, transit);
     for (const sale of inputs.sales) this.sales.set(sale.id, sale);
+    for (const moved of inputs.reversed) this.reversed.set(moved.id, moved);
   }
+
+  private readonly reversed = new Map<string, SaleState>();
 
   protected override applyValued(item: LedgerItem): ItemValue {
     switch (item.kind) {
@@ -192,8 +212,32 @@ export class Valuing extends Working {
       case 'supplier-rejection-return':
       case 'supplier-handover':
         return this.leaveTransit(item);
+      case 'disposal':
+        return this.disposal(item);
+      case 'count-difference':
+        return this.countDifference(item);
+      case 'reversal':
+        return this.reversal(item);
+      case 'piece-correction':
+        return this.pieceCorrection(item);
       default:
         throw new Error(`Not a valued item: ${item.kind}`);
+    }
+  }
+
+  /**
+   * The count whose freeze an item of the count names (8.1, 8.2): a count freeze not yet ended, at the item's unit.
+   * Its own freeze does not stop it (recheck.ts); every other item in the scope is `count-freeze-active`.
+   */
+  private countOf(lineId: string, countId: string, at: Place): void {
+    const freeze = this.header(lineId, countId, 'hold');
+    if (
+      freeze.kind !== 'count-freeze' ||
+      freeze.ended ||
+      freeze.scope.siteId !== at.siteId ||
+      freeze.scope.businessUnitId !== at.businessUnitId
+    ) {
+      refuse('invalid-item', lineId, [{ kind: 'count-freeze', holdId: countId }]);
     }
   }
 
@@ -220,6 +264,19 @@ export class Valuing extends Working {
         ];
       case 'supplier-handover':
         return at(item.from.siteId, item.from.businessUnitId, null, item.goods.skuId);
+      case 'disposal':
+      case 'count-difference':
+      case 'reversal':
+        return at(item.at.siteId, item.at.businessUnitId, item.at.locationId, item.goods.skuId);
+      case 'piece-correction': {
+        const found = this.piecesByCode.get(item.foundPieceCode);
+        const missing = this.piecesByCode.get(item.missingPieceCode);
+        if (found?.skuId == null) return [];
+        return [
+          ...at(item.at.siteId, item.at.businessUnitId, item.at.locationId, found.skuId),
+          ...(missing === undefined ? [] : at(missing.siteId, missing.businessUnitId, missing.locationId, found.skuId)),
+        ];
+      }
       case 'cost-adjustment': {
         const origin = this.origins.get(item.receiptOriginId);
         if (origin?.skuId == null) return [];
@@ -712,7 +769,14 @@ export class Valuing extends Working {
     origin.establishedValuePaise = 0;
     origin.lastStateMovementId = movement.id;
     origin.stateChanged = true;
-    if (origin.ownerKind !== 'organisation') return { kind: 'none' };
+    if (origin.ownerKind !== 'organisation') {
+      // Nothing enters a pool or posts (7.2), but the approval is still on the cost of the covered quantity (15.3;
+      // PRD-ACS-015): its known cost, as for owned goods (S1-F10-T06, a defect found by G6).
+      const units = this.originBalances(origin)
+        .filter((row) => row.transitKind !== 'return-shipment')
+        .reduce((sum, row) => sum + row.quantity, 0);
+      return { kind: 'known', amountPaise: paise(item.pRatePaise * units) };
+    }
     const kind = 'stock.cost-established';
     const own = this.unit(origin.scope.siteId, origin.scope.businessUnitId);
     const toPools = new Map<PoolState, { quantity: number; units: Map<string, number> }>();
@@ -1044,15 +1108,26 @@ export class Valuing extends Working {
       pieces: each.pieces,
     }));
     const groups = this.byOrigin(moved);
-    for (const group of groups) {
-      if (group.origin.ownerKind === 'supplier' || group.origin.ownerKind === 'brand') {
-        refuse('rule-not-set', item.lineId, SL('SL-4'));
-      }
+    const passing = groups.filter(
+      (group) => group.origin.ownerKind === 'supplier' || group.origin.ownerKind === 'brand',
+    );
+    const agreed = item.agreedCostPaise;
+    if (passing.length > 0 && agreed === undefined) refuse('rule-not-set', item.lineId, SL('SL-4'));
+    // An agreed cost is for supplier- or brand-owned units only, all of the line's (7.2): owned units leave the pool.
+    if (agreed !== undefined && (passing.length !== groups.length || !Number.isSafeInteger(agreed) || agreed < 0)) {
+      refuse('invalid-item', item.lineId, [{ kind: 'agreed-cost' }]);
     }
     const movement = this.newMovement('sale-issue', item.lineId, item.at.siteId, item.at.businessUnitId, [
       item.goods.skuId,
     ]);
     this.moveTo(movement, moved, { kind: 'gone' });
+    if (agreed !== undefined) {
+      // The pass-through of 7.2 (G6; a working assumption, SL-4): in and straight out at the agreed cost, never
+      // mixing with the pool's average or layers, so no pool valuation; Post records it (books-and-posting 7.2).
+      const passed = agreed * item.goods.quantity;
+      this.share(movement, unit.businessUnitId, 'stock.pass-through', 'cost', passed);
+      return { kind: 'known', amountPaise: paise(passed) };
+    }
     let total = 0;
     const valued = groups.filter((group) => this.valued(group.origin));
     if (valued.length > 0) {
@@ -1134,9 +1209,6 @@ export class Valuing extends Working {
       item.goods.skuId,
     ]);
     movement.returnsMovementId = sale.id;
-    let total = 0;
-    let allKnown = true;
-    const valuedBack: { origin: OriginState; quantity: number }[] = [];
     for (const group of back.values()) {
       const target = this.balanceFor(
         item.to.siteId,
@@ -1148,22 +1220,62 @@ export class Valuing extends Working {
       this.addTo(target, group.quantity, group.quantity);
       movement.legs.push(this.leg('in', target, group.quantity, group.quantity));
       for (const piece of group.pieces) {
-        piece.siteId = item.to.siteId;
-        piece.businessUnitId = item.to.businessUnitId;
-        piece.storeId = to.storeId;
-        piece.legalEntityId = to.legalEntityId;
-        piece.locationId = item.to.locationId;
-        piece.condition = item.condition;
-        piece.heldAs = 'custody';
-        piece.transitKind = null;
-        piece.transitRef = null;
-        piece.inCustody = true;
+        this.backInCustody(piece, item.to, item.condition, movement);
         piece.acceptedSiteId = item.to.siteId;
-        piece.lastMovementId = movement.id;
-        piece.changed = true;
-        movement.pieceIds.push(piece.id);
       }
-      const pool = this.poolOf(item.lineId, to, item.goods.skuId);
+    }
+    const { total, allKnown } = this.valueBack(
+      item.lineId,
+      movement,
+      sale,
+      [...back.values()],
+      to,
+      item.goods.skuId,
+      'stock.customer-return',
+    );
+    return this.itemValue(total, allKnown);
+  }
+
+  /** A piece back in custody at a place, held there, in the movement that brings it back (2.2). */
+  private backInCustody(piece: PieceState, at: Place, condition: Condition, movement: MovementEntry): void {
+    const unit = this.unit(at.siteId, at.businessUnitId);
+    piece.siteId = at.siteId;
+    piece.businessUnitId = at.businessUnitId;
+    piece.storeId = unit.storeId;
+    piece.legalEntityId = unit.legalEntityId;
+    piece.locationId = at.locationId;
+    piece.condition = condition;
+    piece.heldAs = 'custody';
+    piece.transitKind = null;
+    piece.transitRef = null;
+    piece.inCustody = true;
+    piece.lastMovementId = movement.id;
+    piece.changed = true;
+    movement.pieceIds.push(piece.id);
+  }
+
+  /**
+   * Units that undo an outflow come back into the pool at the cost it took (7.5; PRD-LED-017): under FIFO each a new
+   * layer at that cost, dated now, with lineage to the layer the outflow took, the piece's own for piece-tracked goods
+   * and the newest taken first for a quantity; under moving average the outflow's value × back ÷ out, the last unit
+   * back taking what remains, as one valuation (13.10). A share that does not divide is `rule-not-set` (SL-2). Used
+   * by a customer return and by the reversal of a count loss (S1-F10-T06).
+   */
+  private valueBack(
+    lineId: string,
+    movement: MovementEntry,
+    sale: SaleState,
+    groups: readonly { origin: OriginState; quantity: number; pieces: PieceState[] }[],
+    to: UnitFacts,
+    skuId: string,
+    eventKind: string,
+  ): { total: number; allKnown: boolean } {
+    const back = new Map(groups.map((group) => [group.origin.id, group]));
+    let total = 0;
+    let allKnown = true;
+    const valuedBack: { origin: OriginState; quantity: number }[] = [];
+    for (const group of back.values()) {
+      const pool = this.poolOf(lineId, to, skuId);
       if (pool.formula === 'moving-average') {
         // Valued below, all origins together, from the sale line (7.5).
         if (sale.valuedTotal !== null && this.valued(group.origin)) valuedBack.push(group);
@@ -1211,7 +1323,7 @@ export class Valuing extends Working {
           if (take <= 0) continue;
           const part =
             done.quantity + take === took.quantity ? took.value - done.value : share(took.value, take, took.quantity);
-          if (part === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+          if (part === undefined) refuse('rule-not-set', lineId, SL('SL-2'));
           done.quantity += take;
           done.value += part;
           sale.returnedFromLayer.set(layerId, done);
@@ -1236,12 +1348,12 @@ export class Valuing extends Working {
         group.origin,
         pool,
         { quantity: group.quantity, value, before },
-        { eventKind: 'stock.customer-return', component: 'cost' },
+        { eventKind, component: 'cost' },
         layers,
       );
       for (const layer of pool.layers)
         if (layers.some((each) => each.layerId === layer.id)) layer.fromValuationId = entry.id;
-      this.share(movement, to.businessUnitId, 'stock.customer-return', 'cost', value);
+      this.share(movement, to.businessUnitId, eventKind, 'cost', value);
       total += value;
     }
     if (valuedBack.length > 0 && sale.valuedTotal !== null) {
@@ -1255,8 +1367,8 @@ export class Valuing extends Working {
       }
       const last = returned.quantity + quantity === issued.quantity;
       const value = last ? issued.value - returned.value : share(issued.value, quantity, issued.quantity);
-      if (value === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
-      const pool = this.poolOf(item.lineId, to, item.goods.skuId);
+      if (value === undefined) refuse('rule-not-set', lineId, SL('SL-2'));
+      const pool = this.poolOf(lineId, to, skuId);
       const before = { quantity: pool.quantity, value: pool.value };
       enter(pool, { quantity, value, sequence: 0, at: this.valuing.occurredAt, newLayerId: this.newId });
       returned.quantity += quantity;
@@ -1266,12 +1378,490 @@ export class Valuing extends Working {
         onlyOrigin(valuedBack),
         pool,
         { quantity, value, before },
-        { eventKind: 'stock.customer-return', component: 'cost' },
+        { eventKind, component: 'cost' },
       );
-      this.share(movement, to.businessUnitId, 'stock.customer-return', 'cost', value);
+      this.share(movement, to.businessUnitId, eventKind, 'cost', value);
       total += value;
     }
+    return { total, allKnown };
+  }
+
+  // --- disposal, counts, reversals and piece corrections (S1-F10-T06) ----------------------------------------------
+
+  /**
+   * Disposal (7.9, 13.4; PRD-DMG-012, PRD-DMG-015, PRD-DMG-016): custody ends for goods the named hold claims, a
+   * quarantine, expiry or write-off hold, and the disposal ends that claim on them by its kind's own event (6.1; 14.2
+   * `hold_release`): an approved decision for quarantined goods, disposal for expired or written-off ones. Units the
+   * hold does not claim are `exceeds-source`; a piece another hold or a reservation also claims is `held` or
+   * `reserved`. Value: goods not written off first leave the pool at the formula cost (`stock.disposal-loss`); after a
+   * write-off, none, so a loss is never counted twice; pre-PT or supplier-owned goods, none and no journal (7.6, 13.4).
+   */
+  private disposal(item: ItemOf<'disposal'>): ItemValue {
+    this.checkGoodsShape(item.lineId, item.goods);
+    const hold = this.header(item.lineId, item.holdId, 'hold');
+    const event = DISPOSAL_RELEASES[hold.kind];
+    if (event === undefined) {
+      refuse('wrong-release-event', item.lineId, [{ kind: 'hold', holdKind: hold.kind, event: 'disposal' }]);
+    }
+    const claims = this.activeClaims((claim) => claim.owner === 'hold' && claim.headerId === hold.id);
+    const moved = new Map<string, Moved>();
+    const release = (claim: (typeof claims)[number], quantity: number, piece: PieceState | null) => {
+      claim.quantity -= quantity;
+      claim.changed = true;
+      this.entries.holdReleases.push({
+        id: this.newId(),
+        lineId: item.lineId,
+        holdId: hold.id,
+        holdKind: hold.kind,
+        claimId: claim.id,
+        event,
+        quantity,
+        pieceId: piece?.id ?? null,
+        scope: claim.scope,
+      });
+    };
+    const add = (balance: BalanceState, quantity: number, piece: PieceState | null) => {
+      const entry = moved.get(balance.id) ?? { balance, quantity: 0, pieces: [] };
+      entry.quantity += quantity;
+      if (piece !== null) entry.pieces.push(piece);
+      moved.set(balance.id, entry);
+    };
+    if (this.sku(item.goods.skuId).pieceTracked) {
+      for (const code of item.goods.pieceCodes ?? []) {
+        const piece = this.piece(item.lineId, code);
+        if (
+          !piece.inCustody ||
+          piece.heldAs !== 'custody' ||
+          piece.siteId !== item.at.siteId ||
+          piece.businessUnitId !== item.at.businessUnitId ||
+          piece.locationId !== item.at.locationId ||
+          piece.condition !== item.condition
+        ) {
+          refuse('piece-not-at-place', item.lineId, [{ kind: 'piece', code }]);
+        }
+        const claim = claims.find((each) => each.pieceId === piece.id);
+        if (claim === undefined) refuse('exceeds-source', item.lineId, [{ kind: 'piece', code }]);
+        const others = this.pieceClaims(piece).filter((each) => each !== claim);
+        const other = others.find((each) => each.owner === 'hold');
+        if (other !== undefined)
+          refuse('held', item.lineId, [{ kind: 'hold', holdKind: other.headerKind, holdId: other.headerId }]);
+        if (others.length > 0) refuse('reserved', item.lineId);
+        release(claim, 1, piece);
+        add(
+          this.balanceFor(
+            item.at.siteId,
+            item.at.businessUnitId,
+            item.at.locationId,
+            item.condition,
+            this.origin(item.lineId, piece.receiptOriginId),
+          ),
+          1,
+          piece,
+        );
+        this.hidden.pieces.push({ line: this.line, pieceId: piece.id });
+      }
+    } else {
+      let left = item.goods.quantity;
+      for (const balance of this.balancesAt(item.at, item.condition, item.goods)) {
+        for (const claim of claims.filter((each) => each.balanceId === balance.id)) {
+          if (left === 0) break;
+          const take = Math.min(left, claim.quantity, balance.quantity - (moved.get(balance.id)?.quantity ?? 0));
+          if (take <= 0) continue;
+          release(claim, take, null);
+          add(balance, take, null);
+          left -= take;
+        }
+      }
+      if (left > 0) refuse('exceeds-source', item.lineId, [{ kind: 'hold', holdId: hold.id }]);
+    }
+    const movement = this.newMovement('disposal', item.lineId, item.at.siteId, item.at.businessUnitId, [
+      item.goods.skuId,
+    ]);
+    const units = [...moved.values()];
+    const groups = this.byOrigin(units);
+    this.moveTo(movement, units, { kind: 'gone' });
+    // Written off first: its value left with the write-off; nothing more leaves (7.9; PRD-DMG-015).
+    if (hold.kind === 'write-off') return { kind: 'known', amountPaise: paise(0) };
+    const unit = this.unit(item.at.siteId, item.at.businessUnitId);
+    return this.valuedOutflow(item.lineId, movement, unit, item.goods.skuId, groups, 'stock.disposal-loss');
+  }
+
+  /**
+   * The formula-cost outflow of the valued units of an item that ends custody (7.5): one pool valuation per part and
+   * one share for Post; units of Unknown cost or not owned take none (7.2, 7.6).
+   */
+  private valuedOutflow(
+    lineId: string,
+    movement: MovementEntry,
+    unit: UnitFacts,
+    skuId: string,
+    groups: readonly { origin: OriginState; quantity: number; pieces: PieceState[] }[],
+    eventKind: string,
+  ): ItemValue {
+    const valued = groups.filter((group) => this.valued(group.origin));
+    let total = 0;
+    if (valued.length > 0) {
+      const pool = this.poolOf(lineId, unit, skuId);
+      for (const part of this.outflow(lineId, pool, valued)) {
+        this.poolValuation(
+          movement,
+          part.origin,
+          pool,
+          { quantity: -part.quantity, value: -part.value, before: part.before },
+          { eventKind, component: 'cost' },
+          this.layersOf(part.took),
+        );
+        total += part.value;
+      }
+      this.share(movement, unit.businessUnitId, eventKind, 'cost', total);
+    }
+    return this.itemValue(total, valued.length === groups.length);
+  }
+
+  /**
+   * Count difference (8.2 to 8.4, 13.4; PRD-STK-012, PRD-STK-014): an approved difference of the count whose freeze
+   * the item names, which therefore does not stop it. A loss takes free units at the place, the named pieces or the
+   * oldest first (8.3; PRD-STK-013), and leaves at the formula cost (`stock.count-loss`). A gain with no known origin
+   * is a new surplus origin, owner, coverage and cost Unknown, its custody held as excess (8.4; 6.1): it posts no
+   * value. A gain matched to a recorded loss is that loss's reversal (13.4 "Reversal"), not a count difference.
+   */
+  private countDifference(item: ItemOf<'count-difference'>): ItemValue {
+    this.checkGoodsShape(item.lineId, item.goods);
+    if (item.reason.trim() === '') refuse('invalid-item', item.lineId, [{ kind: 'reason' }]);
+    this.countOf(item.lineId, item.countId, item.at);
+    const movement = this.newMovement('count-difference', item.lineId, item.at.siteId, item.at.businessUnitId, [
+      item.goods.skuId,
+    ]);
+    if (item.difference === 'loss') {
+      const taken = this.take(item.lineId, item.at, item.condition, item.goods);
+      const units: Moved[] = taken.map((each) => ({
+        balance: each.balance,
+        quantity: each.quantity,
+        pieces: each.pieces,
+      }));
+      const groups = this.byOrigin(units);
+      this.moveTo(movement, units, { kind: 'gone' });
+      const unit = this.unit(item.at.siteId, item.at.businessUnitId);
+      return this.valuedOutflow(item.lineId, movement, unit, item.goods.skuId, groups, 'stock.count-loss');
+    }
+    if (item.goods.receiptOriginId !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin' }]);
+    const counted = this.countedOrigin(item.lineId, movement, 'surplus', item.at, item.condition, {
+      skuId: item.goods.skuId,
+      quantity: item.goods.quantity,
+      ...(item.goods.pieceCodes === undefined ? {} : { pieceCodes: item.goods.pieceCodes }),
+      ownerKind: null,
+    });
+    const hold: HoldEntry = {
+      id: this.newId(),
+      lineId: item.lineId,
+      kind: 'excess',
+      reason: item.reason,
+      evidenceFileId: null,
+      withinReservationId: null,
+      scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
+      brandIds: [this.brandOf(item.goods.skuId)],
+      freezeScope: [],
+      claims: [],
+    };
+    if (counted.pieces.length > 0) {
+      for (const piece of counted.pieces) {
+        hold.claims.push(this.newClaim('hold', hold.id, 'excess', null, null, piece.id, 1, counted.balance.scope));
+      }
+    } else {
+      hold.claims.push(
+        this.newClaim(
+          'hold',
+          hold.id,
+          'excess',
+          null,
+          counted.balance.id,
+          null,
+          item.goods.quantity,
+          counted.balance.scope,
+        ),
+      );
+    }
+    this.entries.holds.push(hold);
+    return { kind: 'unknown' };
+  }
+
+  /**
+   * Reversal (7.5, 13.4; PRD-MOD-011, PRD-ACS-014, PRD-LED-017, PRD-LED-018): undoes units of a movement, within what
+   * it moved and was not reversed (`exceeds-source`). Built for the two the golden scenarios need: a receipt count made
+   * in error (G13), whose units leave custody and whose value comes off at the value its cost added; and a count loss
+   * (G3, 8.4), whose units come back at the cost the loss took. A reversal of any other kind is not built yet
+   * (`invalid-item`, naming the kind).
+   */
+  private reversal(item: ItemOf<'reversal'>): ItemValue {
+    this.checkGoodsShape(item.lineId, item.goods);
+    const reversed = this.reversed.get(item.movementId);
+    if (reversed === undefined)
+      refuse('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]);
+    if (reversed.kind === 'receipt-count') return this.reverseInflow(item, reversed);
+    if (reversed.kind === 'count-difference' && reversed.direction === 'out') return this.reverseLoss(item, reversed);
+    refuse('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]);
+  }
+
+  /**
+   * A receipt count made in error (7.5; PRD-LED-018, DEC-034): its units, free at the place, leave custody, and the
+   * value its cost put into the pool for them comes off: the exact share of the origin's established value, or
+   * `rule-not-set` (SL-2). Under moving average from the pool; only a part that would take the pool below zero is a
+   * separate `variance`. Under FIFO from the origin's own layer and the layers that came from it in that pool, while
+   * they hold the units and that value; any rest would come off other layers, which is OPEN (SL-27), so such a reversal
+   * is `rule-not-set`. Posts `stock.cost-established-reversal` (books-and-posting 7.2).
+   */
+  private reverseInflow(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
+    const [leg] = reversed.legs;
+    if (leg === undefined) throw new Error('A receipt count without its leg');
+    const origin = this.origin(item.lineId, leg.originId);
+    if (item.goods.receiptOriginId !== undefined && item.goods.receiptOriginId !== origin.id) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId }]);
+    }
+    for (const code of item.goods.pieceCodes ?? []) {
+      const piece = this.piece(item.lineId, code);
+      if (!reversed.pieceIds.has(piece.id)) refuse('exceeds-source', item.lineId, [{ kind: 'piece', code }]);
+    }
+    const done = reversed.returned.get(origin.id)?.quantity ?? 0;
+    if (item.goods.quantity > leg.quantity - done) {
+      refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+    }
+    const taken = this.take(item.lineId, item.at, 'good', { ...item.goods, receiptOriginId: origin.id });
+    const units: Moved[] = taken.map((each) => ({
+      balance: each.balance,
+      quantity: each.quantity,
+      pieces: each.pieces,
+    }));
+    const movement = this.newMovement('reversal', item.lineId, item.at.siteId, item.at.businessUnitId, [
+      item.goods.skuId,
+    ]);
+    movement.reversesMovementId = reversed.id;
+    this.moveTo(movement, units, { kind: 'gone' });
+    reversed.returned.set(origin.id, { quantity: done + item.goods.quantity, value: 0 });
+    const entered = this.valuing.entered.get(origin.id) ?? 0;
+    if (!this.valued(origin)) {
+      // Pre-PT units take no value (7.6); supplier-owned ones none from a pool (7.2), though their cost is known.
+      return origin.valueKnown
+        ? { kind: 'known', amountPaise: paise((origin.pRatePaise ?? 0) * item.goods.quantity) }
+        : { kind: 'unknown' };
+    }
+    if (entered < item.goods.quantity) throw new Error('A reversal of more valued units than entered the pools');
+    const established = origin.establishedValuePaise ?? 0;
+    const added = share(established, item.goods.quantity, entered);
+    if (added === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+    const quantity = item.goods.quantity;
+    const unit = this.unit(item.at.siteId, item.at.businessUnitId);
+    const pool = this.poolOf(item.lineId, unit, item.goods.skuId);
+    if (quantity > pool.quantity) throw new Error('A pool holds fewer valued units than its goods');
+    const kind = 'stock.cost-established-reversal';
+    const before = { quantity: pool.quantity, value: pool.value };
+    let off = added;
+    const layers: ValuationEntry['layers'] = [];
+    if (pool.formula === 'fifo') {
+      // The inflow's own layer and those that came from it in this pool, oldest first (7.4, 7.5).
+      const own = new Set(pool.layers.filter((layer) => layer.receiptOriginId === origin.id).map((layer) => layer.id));
+      for (const layer of [...pool.layers].sort((a, b) => a.enteredSequence - b.enteredSequence)) {
+        if (layer.fromLayerId !== null && own.has(layer.fromLayerId)) own.add(layer.id);
+      }
+      const staged: { layer: LayerState; quantity: number; value: number }[] = [];
+      let left = quantity;
+      for (const layer of [...pool.layers].sort((a, b) => a.enteredSequence - b.enteredSequence)) {
+        if (left === 0) break;
+        if (!own.has(layer.id) || layer.quantityLeft === 0) continue;
+        const part = Math.min(left, layer.quantityLeft);
+        const value = share(layer.valueLeft, part, layer.quantityLeft);
+        if (value === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+        staged.push({ layer, quantity: part, value });
+        left -= part;
+      }
+      const taken = staged.reduce((sum, each) => sum + each.value, 0);
+      // What is still to come off other layers is OPEN (SL-27).
+      if (left > 0 || taken !== added) refuse('rule-not-set', item.lineId, SL('SL-27'));
+      for (const each of staged) {
+        each.layer.quantityLeft -= each.quantity;
+        each.layer.valueLeft -= each.value;
+        each.layer.changed = true;
+        layers.push({ layerId: each.layer.id, pieceId: null, quantity: each.quantity, value: -each.value });
+      }
+    } else {
+      // Only the part that would take the pool below zero is a separate variance (PRD-LED-018).
+      off = Math.min(added, pool.value);
+    }
+    pool.quantity -= quantity;
+    pool.value -= off;
+    pool.changed = true;
+    this.poolValuation(
+      movement,
+      origin,
+      pool,
+      { quantity: -quantity, value: -off, before },
+      { eventKind: kind, component: 'to-pool' },
+      layers,
+    );
+    this.share(movement, unit.businessUnitId, kind, 'to-pool', off);
+    this.share(movement, unit.businessUnitId, kind, 'variance', added - off);
+    origin.establishedValuePaise = established - added;
+    origin.lastStateMovementId = movement.id;
+    origin.stateChanged = true;
+    return { kind: 'known', amountPaise: paise(added) };
+  }
+
+  /**
+   * A count loss reversed (8.4; PRD-LED-017, PRD-STK-014): found goods matched to the recorded loss come back at the
+   * place named with their receipt origin, owner and coverage, at the cost the loss took (`stock.count-loss-reversal`).
+   * Pieces come back by their codes; a quantity takes the loss's origins newest first. Goods counted as a surplus
+   * with no origin name that surplus origin, whose units at the place they take the place of, once its excess hold is
+   * released by its link to the loss (6.1 `loss-link`). They come back unaccepted, unless a piece was accepted at the
+   * Site before (6.3).
+   */
+  private reverseLoss(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
+    const back = new Map<string, { origin: OriginState; quantity: number; pieces: PieceState[] }>();
+    const add = (origin: OriginState, quantity: number, piece: PieceState | null) => {
+      const group = back.get(origin.id) ?? { origin, quantity: 0, pieces: [] };
+      group.quantity += quantity;
+      if (piece !== null) group.pieces.push(piece);
+      back.set(origin.id, group);
+    };
+    const outOf = (originId: string) =>
+      reversed.legs.filter((leg) => leg.originId === originId).reduce((sum, leg) => sum + leg.quantity, 0);
+    const backOf = (originId: string) => reversed.returned.get(originId)?.quantity ?? 0;
+    if (this.sku(item.goods.skuId).pieceTracked) {
+      if (item.replacesOriginId !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'replaces-origin' }]);
+      for (const code of item.goods.pieceCodes ?? []) {
+        const piece = this.piece(item.lineId, code);
+        if (!reversed.pieceIds.has(piece.id) || piece.inCustody || piece.lastMovementId !== reversed.id) {
+          refuse('exceeds-source', item.lineId, [{ kind: 'piece', code }]);
+        }
+        add(this.origin(item.lineId, piece.receiptOriginId), 1, piece);
+      }
+    } else {
+      let left = item.goods.quantity;
+      for (const originId of [...new Set(reversed.legs.map((leg) => leg.originId))].reverse()) {
+        if (left === 0) break;
+        if (item.goods.receiptOriginId !== undefined && originId !== item.goods.receiptOriginId) continue;
+        const take = Math.min(left, outOf(originId) - backOf(originId));
+        if (take <= 0) continue;
+        add(this.origin(item.lineId, originId), take, null);
+        left -= take;
+      }
+      if (left > 0) refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+    }
+    for (const group of back.values()) {
+      if (group.quantity > outOf(group.origin.id) - backOf(group.origin.id)) {
+        refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+      }
+    }
+    const to = this.unit(item.at.siteId, item.at.businessUnitId);
+    const sold = this.unit(reversed.siteId, reversed.businessUnitId);
+    if (this.poolOf(item.lineId, to, item.goods.skuId) !== this.poolOf(item.lineId, sold, item.goods.skuId)) {
+      // Found at a place of another pool: value moves as for a transfer between pools (8.4, 7.8), not built yet.
+      refuse('route-not-allowed', item.lineId, [{ kind: 'route', route: 'reversal-between-pools' }]);
+    }
+    const movement = this.newMovement('reversal', item.lineId, item.at.siteId, item.at.businessUnitId, [
+      item.goods.skuId,
+    ]);
+    movement.reversesMovementId = reversed.id;
+    if (item.replacesOriginId !== undefined) {
+      // The surplus units the found goods were counted as leave that origin (8.4).
+      const surplus = this.take(item.lineId, item.at, 'good', {
+        skuId: item.goods.skuId,
+        quantity: item.goods.quantity,
+        receiptOriginId: item.replacesOriginId,
+      });
+      for (const each of surplus) {
+        const accepted = Math.min(each.quantity, each.balance.accepted);
+        this.addTo(each.balance, -each.quantity, -accepted);
+        movement.legs.push(this.leg('out', each.balance, each.quantity, accepted));
+      }
+    }
+    for (const group of back.values()) {
+      const target = this.balanceFor(item.at.siteId, item.at.businessUnitId, item.at.locationId, 'good', group.origin);
+      const accepted = group.pieces.filter((piece) => piece.acceptedSiteId === item.at.siteId).length;
+      this.addTo(target, group.quantity, accepted);
+      movement.legs.push(this.leg('in', target, group.quantity, accepted));
+      for (const piece of group.pieces) this.backInCustody(piece, item.at, 'good', movement);
+    }
+    const { total, allKnown } = this.valueBack(
+      item.lineId,
+      movement,
+      reversed,
+      [...back.values()],
+      to,
+      item.goods.skuId,
+      'stock.count-loss-reversal',
+    );
     return this.itemValue(total, allKnown);
+  }
+
+  /**
+   * Piece correction (8.4, 13.4; PRD-STK-015, DEC-035): piece A, found at the place named, was wrongly named by a sale,
+   * and piece B of the same SKU, still in custody by the ledger, is the one that left. A reversal brings A back into
+   * custody with its own receipt origin, coverage and acceptance, and a movement of the sale's kind records B as the
+   * piece that left, both linked to the sale, which never changes. Same pool: no value moves. Between pools value
+   * would move as for a transfer (7.8), not built yet (`route-not-allowed`). While SL-28 is open, pieces of different
+   * owners or legal entities are `rule-not-set`, and the caller takes the no-match route.
+   */
+  private pieceCorrection(item: ItemOf<'piece-correction'>): ItemValue {
+    if (item.countId !== undefined) this.countOf(item.lineId, item.countId, item.at);
+    const corrected = this.reversed.get(item.movementId);
+    if (corrected?.kind !== 'sale-issue')
+      refuse('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]);
+    const found = this.piece(item.lineId, item.foundPieceCode);
+    const missing = this.piece(item.lineId, item.missingPieceCode);
+    if (found.skuId === null || found.skuId !== missing.skuId) {
+      refuse('invalid-item', item.lineId, [{ kind: 'piece', code: item.missingPieceCode }]);
+    }
+    if (found.inCustody || found.lastMovementId !== corrected.id || !corrected.pieceIds.has(found.id)) {
+      refuse('exceeds-source', item.lineId, [{ kind: 'piece', code: item.foundPieceCode }]);
+    }
+    const foundOrigin = this.origin(item.lineId, found.receiptOriginId);
+    const missingOrigin = this.origin(item.lineId, missing.receiptOriginId);
+    if (
+      foundOrigin.ownerKind !== missingOrigin.ownerKind ||
+      foundOrigin.scope.legalEntityId !== missingOrigin.scope.legalEntityId
+    ) {
+      refuse('rule-not-set', item.lineId, SL('SL-28'));
+    }
+    const skuId = found.skuId;
+    const missingAt = {
+      siteId: missing.siteId,
+      businessUnitId: missing.businessUnitId,
+      locationId: missing.locationId,
+    };
+    if (missingAt.locationId === null || missing.heldAs !== 'custody') {
+      refuse('piece-not-at-place', item.lineId, [{ kind: 'piece', code: item.missingPieceCode }]);
+    }
+    const taken = this.take(item.lineId, { ...missingAt, locationId: missingAt.locationId }, missing.condition, {
+      skuId,
+      quantity: 1,
+      pieceCodes: [missing.code],
+    });
+    const pool = (siteId: string, businessUnitId: string) =>
+      this.poolOf(item.lineId, this.unit(siteId, businessUnitId), skuId);
+    const salePool = pool(corrected.siteId, corrected.businessUnitId);
+    if (
+      pool(item.at.siteId, item.at.businessUnitId) !== salePool ||
+      pool(missing.siteId, missing.businessUnitId) !== salePool
+    ) {
+      refuse('route-not-allowed', item.lineId, [{ kind: 'route', route: 'piece-correction-between-pools' }]);
+    }
+    const back = this.newMovement('reversal', item.lineId, item.at.siteId, item.at.businessUnitId, [skuId]);
+    back.reversesMovementId = corrected.id;
+    back.correctionOfMovementId = corrected.id;
+    const target = this.balanceFor(item.at.siteId, item.at.businessUnitId, item.at.locationId, 'good', foundOrigin);
+    const accepted = found.acceptedSiteId === item.at.siteId ? 1 : 0;
+    this.addTo(target, 1, accepted);
+    back.legs.push(this.leg('in', target, 1, accepted));
+    this.backInCustody(found, item.at, 'good', back);
+    const left = this.newMovement('sale-issue', item.lineId, missing.siteId, missing.businessUnitId, [skuId]);
+    left.correctionOfMovementId = corrected.id;
+    this.moveTo(
+      left,
+      taken.map((each) => ({ balance: each.balance, quantity: each.quantity, pieces: each.pieces })),
+      { kind: 'gone' },
+    );
+    return this.valued(foundOrigin) && this.valued(missingOrigin)
+      ? { kind: 'known', amountPaise: paise(0) }
+      : { kind: 'unknown' };
   }
 
   /**

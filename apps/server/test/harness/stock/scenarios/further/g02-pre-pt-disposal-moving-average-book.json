@@ -1,0 +1,91 @@
+{
+  "id": "G2-MA-BOOK",
+  "title": "G2 and P3: a receipt counted before PT approval, one piece damaged and disposed of, then the PT approved",
+  "synthetic": true,
+  "covers": [
+    "PRD-ACP-004",
+    "PRD-DMG-001",
+    "PRD-DMG-005",
+    "PRD-DMG-012",
+    "PRD-DMG-016",
+    "PRD-MOD-015",
+    "POL-17.07",
+    "books-and-posting 15 test 5",
+    "books-and-posting 16.4 P3"
+  ],
+  "sources": ["stock-ledger 7.2, 7.6, 7.9, 11.8 G2", "books-and-posting 16.4 P3"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "receipt counted, PT not yet approved",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "W1", "pieces": 10, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" }
+      ],
+      "after": {
+        "pools": [],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 10 }]
+      }
+    },
+    {
+      "step": "one piece damaged",
+      "commands": [
+        { "command": "damage-report", "damage": "D1", "at": "W1", "pieces": "R1:0" },
+        { "command": "damage-confirm", "damage": "D1", "movements": ["condition-change"] }
+      ],
+      "after": {
+        "pools": [],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "W1", "quantity": 9 },
+          { "origin": "R1", "at": "W1", "quantity": 1, "condition": "damaged" }
+        ]
+      }
+    },
+    {
+      "step": "disposed of, with no value and no journal",
+      "commands": [
+        { "command": "disposal", "disposal": "X1", "damage": "D1", "movements": ["disposal"], "journals": [] }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 0, "valuePaise": 0 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 9 }],
+        "pieces": { "R1:0": false, "R1:1-9": true }
+      }
+    },
+    {
+      "step": "PT approved for the pieces left",
+      "commands": [
+        { "command": "pt-coverage", "receipt": "R1", "pieces": "R1:1-9" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 90000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 9, "valuePaise": 90000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 9 }]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 90000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -90000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

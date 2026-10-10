@@ -20,6 +20,10 @@ const INVENTORY_SIGN: Record<string, Record<string, number>> = {
   'stock.customer-return': { cost: 1 },
   'stock.supplier-return-departure': { cost: -1 },
   'stock.supplier-rejection-return': { cost: 1 },
+  'stock.cost-established-reversal': { 'to-pool': -1 },
+  'stock.count-loss': { cost: -1 },
+  'stock.count-loss-reversal': { cost: 1 },
+  'stock.disposal-loss': { cost: -1 },
 };
 
 /** Runs raw queries as the read-only test role (15.4), which may not write. */

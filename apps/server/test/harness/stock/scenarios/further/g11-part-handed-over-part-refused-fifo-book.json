@@ -1,0 +1,157 @@
+{
+  "id": "G11-FIFO-BOOK",
+  "title": "G11: a supplier return shipment, part handed over and part refused and brought back, under FIFO with a book pool",
+  "synthetic": true,
+  "covers": ["PRD-OFR-012", "PRD-OFR-014", "PRD-TRF-020", "PRD-LED-017", "POL-09.07", "DEC-031"],
+  "sources": ["stock-ledger 7.4, 7.5, 7.8, 11.8 G11", "books-and-posting 16.1"],
+  "combination": { "formula": "fifo", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "receipts",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "pieces": 2, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 20000
+            }
+          ]
+        },
+        { "command": "receipt", "receipt": "R2", "at": "S1", "pieces": 2, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R2" },
+        { "command": "pt-coverage", "receipt": "R2" },
+        {
+          "command": "pt-approval",
+          "receipt": "R2",
+          "pRatePaise": 13000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 26000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [
+          {
+            "pool": "book",
+            "quantity": 4,
+            "valuePaise": 46000,
+            "layers": [
+              [2, 20000],
+              [2, 26000]
+            ]
+          }
+        ],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "departure",
+      "commands": [
+        { "command": "supplier-return-approval", "return": "RTV1", "at": "S1", "pieces": "R1:0,R2:0" },
+        {
+          "command": "departure",
+          "return": "RTV1",
+          "movements": ["supplier-return-departure"],
+          "journals": [
+            {
+              "eventKind": "stock.supplier-return-departure",
+              "component": "cost",
+              "debit": "RSH",
+              "credit": "INV",
+              "amountPaise": 20000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 26000, "layers": [[2, 26000]] }],
+        "transitPaise": 20000,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "part handed over",
+      "commands": [
+        {
+          "command": "handover",
+          "return": "RTV1",
+          "pieces": "R1:0",
+          "movements": ["supplier-handover"],
+          "journals": [
+            {
+              "eventKind": "stock.supplier-handover",
+              "component": "cost",
+              "debit": "CLM",
+              "credit": "RSH",
+              "amountPaise": 10000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 26000, "layers": [[2, 26000]] }],
+        "transitPaise": 10000,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "part refused and brought back",
+      "commands": [
+        {
+          "command": "rejection",
+          "return": "RTV1",
+          "pieces": "R2:0",
+          "movements": ["supplier-rejection-return"],
+          "journals": [
+            {
+              "eventKind": "stock.supplier-rejection-return",
+              "component": "cost",
+              "debit": "INV",
+              "credit": "RSH",
+              "amountPaise": 10000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [
+          {
+            "pool": "book",
+            "quantity": 3,
+            "valuePaise": 36000,
+            "layers": [
+              [2, 26000],
+              [1, 10000]
+            ]
+          }
+        ],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 1 },
+          { "origin": "R2", "at": "S1", "quantity": 2 }
+        ]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 36000, "TRN": 0, "RSH": 0, "CLM": 10000, "PUR": -46000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}
