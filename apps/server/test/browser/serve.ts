@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
+  fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
   type PersonaId,
@@ -55,6 +56,14 @@ import type { GatedOperation, ValidityCheck } from '../../src/modules/configurat
 import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
+import { IMPORT_BATCH_KIND } from '../../src/modules/files-imports/index.js';
+import {
+  SYNTHETIC_PRODUCT_LAYOUT_CODE,
+  SYNTHETIC_PRODUCT_MAPPING_CODE,
+  syntheticProductFileName,
+  syntheticProductWorkbook,
+} from '../fixtures/imports.js';
+import { defineSyntheticImportBatchSeries, writeSyntheticProductLayout } from '../support/imports.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
@@ -600,6 +609,23 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
+// The file intake journey's catalogue, saved layout and batch code series (S1-F06-T01; its people and file are below):
+// a SYNTHETIC category with no size set, the one SYNTHETIC layout and mapping, proposed by the fixture person, and an
+// Open series of the import-batch kind with a SYNTHETIC format (numbering-and-audit 3.5).
+const intakeCategory = { code: syntheticCode('JOURNEY-INTAKE-CAT'), name: syntheticName('Journey Intake Category') };
+recordedCatalogue(
+  await structureFixture.asPreparerDo((c, p) =>
+    structureFixture.catalogue.prepareCategory(c, p, {
+      ...intakeCategory,
+      identityAttributeIds: [],
+      validFrom: structureFixture.today(),
+    }),
+  ),
+);
+await writeSyntheticProductLayout(settingsDatabase, structureFixture.preparer.id);
+await structureFixture.run(structureFixture.preparer.id, (c) =>
+  defineSyntheticImportBatchSeries(c, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
+);
 // The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
 // its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
 const readinessEntity = await approved(structureFixture, (c, p) =>
@@ -1238,6 +1264,54 @@ const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-B
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 
+// The file intake journey (file-intake.spec.ts; S1-F06-T01), in the settings Organisation: a Booking user who uploads
+// the SYNTHETIC product file, stages it with the one SYNTHETIC saved layout and mapping, validates and publishes it.
+// Its SYNTHETIC category has no size set, so the file's one SKU has an Unknown size; the brand is the products
+// journey's. The batch code series has a SYNTHETIC format (numbering-and-audit 3.5). The importer holds every
+// restricted class, since a file whose layout is not confirmed counts as holding them all (imports-and-opening-data
+// 11). Every value is SYNTHETIC.
+const intakeBooking = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-INTAKE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(
+  settingsDatabase,
+  { kind: 'user', id: intakeBooking.id },
+  [
+    { recordType: 'files_imports.stored_file', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    ...productViews,
+    { recordType: 'merchandise.product_proposal', action: 'create' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  { fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })) },
+);
+const intakeSuffix = randomBytes(3).toString('hex').toUpperCase();
+const intakeStyle = syntheticCode(`JOURNEY-INTAKE-STYLE-${intakeSuffix}`);
+const intakeSku = syntheticCode(`JOURNEY-INTAKE-SKU-${intakeSuffix}`);
+const intakeFile = join(dirname(worldFile), syntheticProductFileName('journey-products'));
+mkdirSync(dirname(worldFile), { recursive: true });
+writeFileSync(
+  intakeFile,
+  await syntheticProductWorkbook(
+    [
+      {
+        'Style code': intakeStyle,
+        'SKU code': intakeSku,
+        'Brand code': productsBrand.code,
+        'Category code': intakeCategory.code,
+        Size: undefined,
+        'Stock unit': 'piece',
+        Purpose: 'merchandise',
+      },
+    ],
+    intakeSuffix,
+  ),
+);
+
 // The bank details journey's people (S1-F03-T03): a person who prepares a supplier's bank-detail change, holding the
 // class bank-details to write it, and a different person who approves it from My work and shows the details with the
 // class to read them. Who holds which is KDPS's (V-01, RR-064).
@@ -1834,6 +1908,15 @@ writeFileSync(
       seasonName: productsSeason.name,
       seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
       fitName: productsFit.name,
+    },
+    fileIntake: {
+      organisationCode: settingsCode,
+      booking: credentialsOf(intakeBooking),
+      filePath: intakeFile,
+      // How the screen names the saved layout and mapping (intake.layout.option).
+      layoutOption: `${SYNTHETIC_PRODUCT_LAYOUT_CODE} version 1 · ${SYNTHETIC_PRODUCT_MAPPING_CODE} version 1 (Proposed)`,
+      styleCode: intakeStyle,
+      skuCode: intakeSku,
     },
     bankDetails: {
       organisationCode: settingsCode,

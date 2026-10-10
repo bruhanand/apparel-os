@@ -189,6 +189,19 @@ export interface SyntheticWorld {
     readonly fitName: string;
   };
   /**
+   * The file intake journey (S1-F06-T01), in the security settings Organisation: a Booking user who imports the
+   * SYNTHETIC product file the server of the journeys wrote, the saved layout's option as the screen names it, and the
+   * style and SKU codes the file holds.
+   */
+  readonly fileIntake: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly filePath: string;
+    readonly layoutOption: string;
+    readonly styleCode: string;
+    readonly skuCode: string;
+  };
+  /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's
    * bank-detail change, a different person who approves it and shows it, and the SYNTHETIC supplier's code.
    */
