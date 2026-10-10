@@ -197,7 +197,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F10-T04 Harness and the story under four combinations](s1-f10-stock-ledger/tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | F10-T03, F02-T03, F08-T01, F08-T02, F05-T01, F03-T02, F09-T03 |
 | [F10-T06 Scenarios G2 to G13 with G10a](s1-f10-stock-ledger/tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked | F10-T04, F08-T02 |
 | [F10-T07 Failure, concurrency, large posting and acceptance](s1-f10-stock-ledger/tickets/T07-failure-and-concurrency-suites.md) | blocked | F10-T06, F08-T02, F09-T03 |
-| [F06-T01 Synthetic XLSX tracer](s1-f06-file-intake/tickets/T01-synthetic-xlsx-tracer.md) | blocked | F06-T05, F08-T01, F03-T02 |
+| [F06-T01 Synthetic XLSX tracer](s1-f06-file-intake/tickets/T01-synthetic-xlsx-tracer.md) | done | F06-T05, F08-T01, F03-T02 |
 | [F06-T02 Intake refusals and caps](s1-f06-file-intake/tickets/T02-intake-refusals-and-caps.md) | blocked | F06-T01, F06-T03 + gate |
 | [F06-T03 Layouts, mappings and the validation report](s1-f06-file-intake/tickets/T03-layouts-mappings-and-the-validation-report.md) | blocked | F06-T01, F02-T02, F02-T03, F04-T01 |
 | [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | blocked | F06-T03 |

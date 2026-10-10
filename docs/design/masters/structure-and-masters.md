@@ -438,6 +438,7 @@ Names, keys and constraints. Every table has a UUIDv7 primary key. A table marke
 - `organisation` and `merchandise` register import handlers with `files-imports` for create and update imports of their masters (`PRD-IMP-010`; module-map 4.7).
 - A published row goes through the same Maintain operation as a person's change, so the same checks and approvals apply (module-map section 3, rule 8).
 - New products arrive as product proposals (4.2, `PRD-MER-013`) and source words for vocabulary as proposals (`PRD-IMP-008`). Identity is never filled from an unaccepted guess (`PRD-IMP-009`).
+- **As built** (`S1-F06-T01`): `merchandise` · catalogue registers its create handler for products at start (imports-and-opening-data 13.2 "As built"). Each document is one style with its SKUs; publishing it calls Propose a product, holding create on `merchandise.product_proposal` beside the batch's permission, so the proposal is checked and confirmed by a different person exactly as one made on screen (DM-5). The proposal keeps the import batch, document and staged rows it came from (`product_proposal` gains three columns, migration 0056), and its audit record's source is the import (numbering-and-audit 4.1). The `organisation` handler arrives with `S1-F06-T03`.
 - Brand PT files are stage 2 (`merchandise` · PT). Opening-data layouts are GC-6.
 
 ## 8. Screens
