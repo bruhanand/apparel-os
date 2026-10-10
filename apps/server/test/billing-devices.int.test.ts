@@ -267,11 +267,12 @@ describe('registering a billing device (offline-counter 3.1, 3.2 step 1, 12.1)',
     const call = await register([stores.wholeStore, stores.otherStoreUnit, stores.warehouse, stores.office]);
     expect(call.status).toBe(422);
     expect(errorOf(call)).toMatchObject({ kind: 'refused', code: 'pos.unit-not-of-store' });
-    expect(errorOf(call).missing).toEqual([
+    expect(errorOf(call).missing?.map(({ kind, id }) => ({ kind, id }))).toEqual([
       { kind: 'business-unit', id: stores.otherStoreUnit },
       { kind: 'business-unit', id: stores.warehouse },
       { kind: 'business-unit', id: stores.office },
     ]);
+    expect(errorOf(call).missing?.every((item) => typeof item.code === 'string')).toBe(true);
     expect(errorOf(await register([stores.wholeStore, stores.wholeStore])).code).toBe('pos.unit-listed-twice');
     const unknownStore = await post(admin, '/api/pos/billing-devices', {
       code: nextCode('TILL'),
@@ -308,7 +309,7 @@ describe('registering a billing device (offline-counter 3.1, 3.2 step 1, 12.1)',
     );
     const [row] = await query<{ device: Date; audit: Date; access: Date; event: string }>(
       `select d.recorded_at as device,
-              (select a.recorded_at from audit.audit_record a where a.record_id = d.id and a.operation = 'register') as audit,
+              (select a.recorded_at from audit.audit_record a where a.record_id = d.id and a.operation = 'register-billing-device') as audit,
               (select r.recorded_at from audit.access_record r where r.device_id = d.id and r.kind = 'device-registered') as access,
               (select o.event_type from kernel.outbox_event o where o.subject_record_id = d.id) as event
          from pos.billing_device d where d.id = $1`,
@@ -423,7 +424,7 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
     );
     const [row] = await query<{ event: string; audits: string }>(
       `select (select o.event_type from kernel.outbox_event o where o.subject_record_id = $1 and o.event_type = 'pos.device-enrolled') as event,
-              (select count(*) from audit.audit_record a where a.record_id = $1 and a.operation = 'enrol') as audits`,
+              (select count(*) from audit.audit_record a where a.record_id = $1 and a.operation = 'enrol-billing-device') as audits`,
       [device.deviceId],
     );
     expect(row).toEqual({ event: 'pos.device-enrolled', audits: '1' });
@@ -445,7 +446,7 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
         `select d.public_key as key,
                 (select count(*) from access.device_version v where v.device_id = d.id) as versions,
                 (select count(*) from audit.access_record r where r.device_id = d.id and r.kind = 'device-enrolled') as records,
-                (select count(*) from audit.audit_record a where a.record_id = d.id and a.operation = 'enrol') as audits
+                (select count(*) from audit.audit_record a where a.record_id = d.id and a.operation = 'enrol-billing-device') as audits
            from access.device d where d.id = $1`,
         [two.deviceId],
       );

@@ -29,6 +29,10 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'financial-period' && item.code !== undefined) {
     return t('missing.financial-period.named', { code: item.code });
   }
+  // A unit a billing device cannot bill for, by its code (offline-counter 3.1; PRD-UXP-003; S1-F12-T01).
+  if (item.kind === 'business-unit' && item.code !== undefined) {
+    return t('missing.business-unit.named', { code: item.code });
+  }
   const gate = gateText(item) ?? readinessText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;

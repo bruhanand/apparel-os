@@ -2,7 +2,7 @@ import type { DeviceSeries, SeriesMissing } from '@apparel-os/schemas';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
-import { mappingOn } from '../../organisation/index.js';
+import { mappingOn, taxRegistrationCodes } from '../../organisation/index.js';
 import { billingDeviceUnit } from '../db/schema.js';
 import { BILL_KIND, billDisplayScopeKey, billScopeKey, registrationOfScopeKey } from '../domain/kinds.js';
 
@@ -71,6 +71,8 @@ export async function defineDeviceSeries(
   for (const businessUnitId of unmapped) missing.push({ kind: 'mapping', businessUnitId });
   const definedSeriesIds: string[] = [];
   const series: DeviceSeries[] = [];
+  const codes = await taxRegistrationCodes(context, registrationIds);
+  const codeOf = (id: string) => codes.get(id) ?? id;
   if (format.kind === 'set' && year.kind === 'set') {
     for (const taxRegistrationId of registrationIds) {
       const scopeKey = billScopeKey(device.deviceId, taxRegistrationId);
@@ -80,7 +82,13 @@ export async function defineDeviceSeries(
         financialYear: year.label,
       });
       if (live !== undefined) {
-        series.push({ seriesId: live.seriesId, taxRegistrationId, financialYear: year.label, state: live.state });
+        series.push({
+          seriesId: live.seriesId,
+          taxRegistrationId,
+          taxRegistrationCode: codeOf(taxRegistrationId),
+          financialYear: year.label,
+          state: live.state,
+        });
         continue;
       }
       const defined = await numbering.defineSeries(context, {
@@ -93,7 +101,13 @@ export async function defineDeviceSeries(
       });
       if (defined.kind === 'refused') return { kind: 'refusal', refusal: defined.refusal };
       definedSeriesIds.push(defined.value.seriesId);
-      series.push({ seriesId: defined.value.seriesId, taxRegistrationId, financialYear: year.label, state: 'Open' });
+      series.push({
+        seriesId: defined.value.seriesId,
+        taxRegistrationId,
+        taxRegistrationCode: codeOf(taxRegistrationId),
+        financialYear: year.label,
+        state: 'Open',
+      });
     }
   }
   return { kind: 'success', answer: { series, missing, definedSeriesIds } };
@@ -115,9 +129,18 @@ export async function seriesOfDevice(
     BILL_KIND.kind,
     registrationIds.map((id) => billScopeKey(deviceId, id)),
   );
+  const codes = await taxRegistrationCodes(context, registrationIds);
   return found.flatMap((each) => {
     const taxRegistrationId = registrationOfScopeKey(each.scopeKey);
     if (taxRegistrationId === undefined || each.financialYear === null) return [];
-    return [{ seriesId: each.seriesId, taxRegistrationId, financialYear: each.financialYear, state: each.state }];
+    return [
+      {
+        seriesId: each.seriesId,
+        taxRegistrationId,
+        taxRegistrationCode: codes.get(taxRegistrationId) ?? taxRegistrationId,
+        financialYear: each.financialYear,
+        state: each.state,
+      },
+    ];
   });
 }

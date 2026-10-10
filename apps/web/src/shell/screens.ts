@@ -103,6 +103,8 @@ export const screens = {
   'money.internal-ledger': { section: 'money', path: '/money/internal-ledger', need: view('finance.journal') },
   // Money › Period close (books-and-posting 4.2, 4.3, 14; ui-blueprint Money; S1-F09-T03).
   'money.period-close': { section: 'money', path: '/money/period-close', need: view('finance.financial_period') },
+  // Devices, tills and bill series (ui-blueprint Setup; offline-counter 3.2, 4.4, 12.1; S1-F12-T01).
+  'setup.devices': { section: 'setup', path: '/setup/devices', need: view('pos.billing_device') },
   // Site opening and closure › Readiness (ui-blueprint Setup; module-map 4.16; S1-F04-T02).
   'setup.site-opening': {
     section: 'setup',
@@ -134,6 +136,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.organisation-structure',
       'setup.geography',
       'setup.exception-rules',
+      // The Admin's Setup includes devices (ui-blueprint "Menus by persona"; S1-F12-T01).
+      'setup.devices',
       'setup.operations',
       'setup.policy-readiness',
     ],

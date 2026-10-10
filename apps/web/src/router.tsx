@@ -29,6 +29,7 @@ import { ReasonsScreen } from './setup/ReasonsScreen';
 import { RolesScreen } from './setup/RolesScreen';
 import { PolicyReadinessScreen } from './setup/PolicyReadinessScreen';
 import { ReadinessScreen } from './setup/ReadinessScreen';
+import { DevicesScreen } from './setup/DevicesScreen';
 import { SecuritySettingsScreen } from './setup/SecuritySettingsScreen';
 import { UsersScreen } from './setup/UsersScreen';
 import { AppShell, type RenderLink } from './shell/AppShell';
@@ -131,6 +132,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <PolicyReadinessScreen />;
     case 'setup.site-opening':
       return <ReadinessScreen />;
+    case 'setup.devices':
+      return <DevicesScreen />;
     case 'setup.posting-maps':
       return <PostingMapsScreen />;
     case 'money.internal-ledger':

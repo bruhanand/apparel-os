@@ -98,6 +98,7 @@ export type DeviceState = z.infer<typeof deviceStateSchema>;
 export const deviceSeriesSchema = z.strictObject({
   seriesId: idSchema,
   taxRegistrationId: idSchema,
+  taxRegistrationCode: z.string().min(1),
   financialYear: z.string().min(1),
   state: z.enum(['Open', 'Paused', 'Closed']),
 });

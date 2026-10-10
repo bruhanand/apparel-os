@@ -155,6 +155,8 @@ export const englishIndia = {
   'missing.capability': 'This capability is switched off.',
   'missing.activity': 'This activity is not granted here.',
   'missing.other': 'Something it needs is missing.',
+  'missing.business-unit': 'A business unit that is not a whole-store or brand-counter unit of this Store.',
+  'missing.business-unit.named': 'Business unit {code}',
 
   // Forms (design-language 10.7). Zod's issue codes.
   'form.required': 'Required',
@@ -313,6 +315,18 @@ export const englishIndia = {
   'error.numbering.series-not-paused': 'Only a paused number series can be released.',
   'error.numbering.series-exhausted': 'The number series has used every number its format allows.',
   'error.numbering.document-numbered-elsewhere': 'This document already has its number from another series.',
+  'error.numbering.financial-year-invalid': 'A financial year needs a label and a last day on or after its first.',
+  'error.numbering.financial-year-label-taken': 'Another financial year has this label.',
+  'error.numbering.financial-year-overlaps': 'This financial year overlaps another.',
+  // Billing devices (offline-counter 3.1 to 3.4, 12.1; S1-F12-T01).
+  'error.access.device-code-taken': 'Another device already has this code.',
+  'error.access.device-not-found': 'No billing device has this identifier.',
+  'error.access.device-already-enrolled': 'This device is enrolled already. A new key needs a new device.',
+  'error.access.device-proof-refused': 'The device could not prove itself. Ask for a new challenge and try again.',
+  'error.pos.store-not-found': 'No Store has this identifier.',
+  'error.pos.unit-not-of-store':
+    'A device bills only for whole-store and brand-counter units of its own Store. These units are not:',
+  'error.pos.unit-listed-twice': 'A unit is listed twice.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',
@@ -481,6 +495,8 @@ export const englishIndia = {
   'history.exposure.shown': 'Shown',
   'history.exposure.exported': 'Exported',
   'history.operation.attach-file': 'Attached a file as evidence',
+  'history.operation.register-billing-device': 'Registered a billing device',
+  'history.operation.enrol-billing-device': 'Enrolled a billing device',
   'history.operation.prepare-role': 'Prepared a role',
   'history.operation.prepare-role-version': 'Prepared a role version',
   'history.operation.approve-role-version': 'Approved a role version',
@@ -1881,6 +1897,7 @@ export const englishIndia = {
   // Setup › Site opening and closure › Readiness (module-map 4.16; ui-blueprint; S1-F04-T02).
   'screen.setup.site-opening': 'Site opening and closure',
   'record-type.site_lifecycle.readiness_record': 'Readiness record',
+  'record-type.pos.billing_device': 'Billing device',
   'record-type.site_lifecycle.zero_stock_declaration': 'Zero opening-stock declaration',
   'approval.action.site_lifecycle.activity.grant': 'Activity approval',
   'approval.action.site_lifecycle.site_readiness.approve': 'Site readiness approval',
@@ -1988,6 +2005,32 @@ export const englishIndia = {
   // The posting half of finance · books (books-and-posting 4.1, 6, 9, 12, 14; S1-F09-T02).
   'section.money': 'Money',
   'screen.setup.posting-maps': 'Posting maps',
+  // Setup › Devices, tills and bill series (ui-blueprint Setup; offline-counter 3.1, 3.2, 4.1, 4.4; S1-F12-T01).
+  'screen.setup.devices': 'Devices, tills and bill series',
+  'devices.what': 'billing devices',
+  'devices.register.title': 'Register a billing device',
+  'devices.register.intro':
+    'A billing device bills for whole-store and brand-counter units of its own Store. It is Setting up until it is enrolled in the counter app on the device itself, at /counter/.',
+  'devices.registered': 'Registered. Enrol it in the counter app on the device.',
+  'devices.code': 'Device code',
+  'devices.label': 'Label',
+  'devices.store': 'Store',
+  'devices.choose-store': 'Choose a Store',
+  'devices.units': 'Units it bills for',
+  'devices.units.none': 'This Store has no whole-store or brand-counter unit yet.',
+  'devices.unit-kind.whole-store': 'Whole store',
+  'devices.unit-kind.brand-counter': 'Brand counter',
+  'devices.unit-kind.warehouse': 'Warehouse',
+  'devices.unit-kind.office': 'Office',
+  'devices.register': 'Register device',
+  'devices.list.title': 'Billing devices',
+  'devices.none': 'No billing device is registered yet.',
+  'devices.device': 'Device {code}',
+  'devices.units.listed': 'Units: {units}',
+  'devices.series.after-enrolment': 'Its bill series are defined when it is enrolled.',
+  'devices.series.none':
+    'No bill series yet: the bill-number format or the financial year is not set, or a unit has no mapping.',
+  'devices.series.one': 'Bill series for {registration}, {year}',
   'screen.money.internal-ledger': 'Internal ledger and trial balance',
   'record-type.finance.posting_map': 'Posting map',
   'record-type.finance.financial_period': 'Financial period',

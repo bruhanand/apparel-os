@@ -108,7 +108,9 @@ export async function registerBillingDevice(
       STORE_UNIT_KINDS.includes(head.kind) &&
       head.storeId === draft.storeId &&
       (await businessUnitInForce(context, unitId, today));
-    if (!fits) notOfStore.push({ kind: 'business-unit', id: unitId });
+    // Named by its code where the unit exists, so the screen says which (PRD-UXP-003).
+    if (!fits)
+      notOfStore.push({ kind: 'business-unit', id: unitId, ...(head === undefined ? {} : { code: head.code }) });
   }
   if (notOfStore.length > 0) return refused('refused', 'pos.unit-not-of-store', notOfStore);
   const scope = scopeOf(facts);
@@ -139,7 +141,7 @@ export async function registerBillingDevice(
     roleAssignmentId: by.roleAssignmentId,
     scope,
     record: { module: 'pos', type: 'billing_device', id: deviceId },
-    operation: 'register',
+    operation: 'register-billing-device',
     changes: [
       { kind: 'value', field: 'code', before: null, after: draft.code.trim() },
       { kind: 'value', field: 'label', before: null, after: draft.label.trim() },
@@ -211,7 +213,7 @@ export async function enrolBillingDevice(
     roleAssignmentId: by.roleAssignmentId,
     scope,
     record: { module: 'pos', type: 'billing_device', id: deviceId },
-    operation: 'enrol',
+    operation: 'enrol-billing-device',
     changes: [
       { kind: 'value', field: 'state', before: 'Setting up', after: 'Active' },
       { kind: 'value', field: 'seriesIds', before: null, after: series.answer.definedSeriesIds },
