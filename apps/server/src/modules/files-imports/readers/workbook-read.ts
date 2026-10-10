@@ -64,11 +64,14 @@ export function readWorkbook(bytes: Buffer, caps: IntakeCaps): Promise<WorkbookR
         missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
       });
     });
+    const copy = new Uint8Array(new ArrayBuffer(bytes.length));
+    copy.set(bytes);
     const request: WorkbookWorkerRequest = {
-      bytes: new Uint8Array(bytes),
+      bytes: copy,
       maxExpandedBytes: caps.maxExpandedBytes,
       maxRows: caps.maxRows,
     };
-    worker.postMessage(request);
+    // The copy is handed over, not cloned again, so the bytes are held once more at most.
+    worker.postMessage(request, [copy.buffer]);
   });
 }
