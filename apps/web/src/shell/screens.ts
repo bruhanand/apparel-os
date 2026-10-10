@@ -83,6 +83,9 @@ export const screens = {
     need: view('merchandise.party'),
   },
   'setup.agreement': { section: 'setup', path: '/setup/agreement', need: view('merchandise.agreement') },
+  // File intake and saved layouts: the import upload, the stored file, a batch with its staged rows, Publish
+  // (imports-and-opening-data 16; ui-blueprint Setup; S1-F06-T01).
+  'setup.file-intake': { section: 'setup', path: '/setup/file-intake', need: view('files_imports.import_batch') },
   // Exception rules: owner, due time and escalation per type and Site (access-and-approvals 12.2, 14; S1-F08-T02).
   'setup.exception-rules': {
     section: 'setup',

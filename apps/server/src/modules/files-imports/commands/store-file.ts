@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { StoredFileAnswer, StoreFileRequest } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import {
   ApiRefusal,
   CommandDefect,
@@ -16,10 +16,11 @@ import {
 } from '../../../kernel/index.js';
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
-import { fileReceipt, storedFile } from '../db/schema.js';
+import { fileReceipt, importBatch, storedFile } from '../db/schema.js';
 import { contentHashOf, objectKeyOf, openFile, sealFile } from '../domain/file-seal.js';
 import { sealReceiptText } from '../domain/receipt-seal.js';
-import { checkEvidenceFile } from '../domain/intake-checks.js';
+import { checkEvidenceFile, type IntakeOutcome } from '../domain/intake-checks.js';
+import { checkImportFile, type ImportFileOutcome } from '../domain/workbook-format.js';
 import { fileStoreNotConfigured, type FileStore, type FileStoreHandle } from '../file-store/file-store.js';
 
 export interface StoreFileDependencies {
@@ -39,6 +40,16 @@ export interface StoreFileInput {
   readonly key: string;
   readonly content: RequestContent;
   readonly body: StoreFileRequest;
+  /**
+   * What the file is handed in for: evidence, kept as PDF, JPEG or PNG (S1-F06-T05); or an import, XLSX only, whose
+   * answer names the batches that read the same bytes before (S1-F06-T01; 9.2, 7.2).
+   */
+  readonly purpose: 'evidence' | 'import';
+}
+
+/** The type check of each purpose, on the bytes in memory, before anything is stored (9.2, 9.3). */
+function checkFor(purpose: StoreFileInput['purpose'], bytes: Buffer): IntakeOutcome | ImportFileOutcome {
+  return purpose === 'import' ? checkImportFile(bytes) : checkEvidenceFile(bytes);
 }
 
 const COMMAND = 'files-imports.store-file';
@@ -64,7 +75,7 @@ export async function storeFile(
   const { organisationId } = input.organisation;
   if (organisationId === undefined) throw new CommandDefect('The Organisation was routed without its identifier');
   const bytes = Buffer.from(input.body.contentBase64, 'base64');
-  const checked = checkEvidenceFile(bytes);
+  const checked = checkFor(input.purpose, bytes);
   if (checked.kind === 'refused') {
     throw new ApiRefusal({
       kind: 'refused',
@@ -230,7 +241,7 @@ async function record(
     source: { kind: 'screen' },
     idempotencyKey: input.key,
   });
-  return {
+  const answer = {
     storedFileId,
     receiptId,
     contentHash: file.contentHash,
@@ -238,4 +249,25 @@ async function record(
     format: file.format,
     alreadyStored,
   };
+  if (input.purpose === 'evidence') return answer;
+  return { ...answer, earlierBatches: alreadyStored ? await earlierBatches(context, storedFileId) : [] };
+}
+
+/**
+ * The batches that read the same bytes before, as the reader may see them under row-level security (7.2), oldest
+ * first. Their codes and states only, never the file's content.
+ */
+async function earlierBatches(context: TransactionContext, storedFileId: string): Promise<JsonValue[]> {
+  const rows = await context.tx
+    .select({
+      batchId: importBatch.id,
+      code: importBatch.code,
+      kind: importBatch.kind,
+      target: importBatch.target,
+      state: importBatch.state,
+    })
+    .from(importBatch)
+    .where(eq(importBatch.storedFileId, storedFileId))
+    .orderBy(asc(importBatch.id));
+  return rows.map((row) => ({ ...row }));
 }

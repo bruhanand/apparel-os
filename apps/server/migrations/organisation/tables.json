@@ -544,6 +544,69 @@
       "design": "imports-and-opening-data 11, 13.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
     },
     {
+      "table": "files_imports.layout",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 6.1, 15.1",
+      "why": "A recognised file structure of the Organisation as a whole: it holds no data and no scope fact, so a batch of any scope may use it; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.layout_version",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 6.1, 6.4, 15.1",
+      "why": "A layout's versions, the structure only and never data (6.1), the Organisation's as the layout is; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.mapping",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 6.2, 15.1",
+      "why": "How a layout version fills one target's fields, the Organisation's as the layout is, holding no data and no scope fact; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.mapping_version",
+      "class": "unscoped",
+      "marks": [],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 6.2, 6.4, 15.1",
+      "why": "A mapping's versions, the Organisation's as the mapping is; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.import_batch",
+      "class": "scoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 3.2, 11, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 8.2"
+    },
+    {
+      "table": "files_imports.import_document",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 2, 15.1; code-house-rules 8.2",
+      "why": "Read only with its batch, after row-level security on files_imports.import_batch has shown the batch to the reader and Authorise has granted view on it with the classes its file holds; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.staged_row",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 5, 15.1; code-house-rules 7.1",
+      "why": "Read only with its batch, after row-level security on files_imports.import_batch has shown the batch to the reader and Authorise has granted view on it with the classes its file holds; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.import_outcome",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 7.4, 15.1; code-house-rules 7.1",
+      "why": "Read only with its batch, after row-level security on files_imports.import_batch has shown the batch to the reader and Authorise has granted view on it with the classes its file holds; only files-imports code reads it"
+    },
+    {
       "table": "stock.unit_anchor",
       "class": "scoped",
       "marks": ["append-only", "locked"],

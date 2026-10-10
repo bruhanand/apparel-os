@@ -137,7 +137,22 @@ const inboxRecordTypes = [
  * record it is attached to, authorised on that record's own type and scope facts (section 11), so no permission on
  * the stored file lets anyone read its content.
  */
-const filesImportsRecordTypes = [declare('files_imports.stored_file', ['view', 'create'], NONE)] as const;
+const filesImportsRecordTypes = [
+  declare('files_imports.stored_file', ['view', 'create'], NONE),
+  // An import batch (13.1, 15.1; S1-F06-T01) carries its Site, Store, business unit and legal entity: view reads it
+  // with its staged rows; create starts it, which stages its rows; edit validates and publishes it. Its rows may hold
+  // any restricted class its file holds, every class while its layout is not confirmed (section 11).
+  declareWithFields('files_imports.import_batch', ['view', 'create', 'edit'], LEGAL_ENTITY_AND_PLACE, [
+    'salary-and-payroll',
+    'identity-documents',
+    'bank-details',
+    'customer-contact',
+    'cost',
+    'margin',
+    'employee-photos',
+    'location-evidence',
+  ]),
+] as const;
 
 /** A record type whose fields include restricted field classes (access-and-approvals 4.1, 6). */
 function declareWithFields<const Code extends string>(

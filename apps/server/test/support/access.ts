@@ -37,7 +37,7 @@ import {
 import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
-import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
 import { LOCATION_IN_USE, type LocationInUse } from '../../src/modules/organisation/index.js';
 import { checkEventKinds, POSTING_EVENT_KINDS, type PostingEventKind } from '../../src/modules/finance/books/index.js';
 import {
@@ -347,6 +347,9 @@ export async function startAccessApp(
     .overrideProvider(ORGANISATION_TIMEZONE_SOURCE)
     .useValue(options.timezone ?? syntheticTimezone)
     .overrideProvider(CONFIGURATION_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
+    // The same name for the publishing limit of imports (S1-F06-T01).
+    .overrideProvider(FILES_IMPORTS_ENVIRONMENT)
     .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });

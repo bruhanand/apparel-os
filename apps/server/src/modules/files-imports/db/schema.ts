@@ -1,10 +1,16 @@
-import { bigint, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { FieldClass, ImportBatchState, ImportKind } from '@apparel-os/schemas';
+import { bigint, boolean, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { GridCell, GridNote } from '../domain/grid.js';
+import type { OutcomeCounts, OutcomeDocument } from '../domain/outcome.js';
+import type { StagedRowDraft, StagedValue } from '../domain/staging.js';
 
-// Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0024) and never create or change a table; an integration test compares each with the
+// Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
+// (migrations/organisation/0024, 0055) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
+
+type VersionState = 'Proposed' | 'Confirmed' | 'Rejected';
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -58,5 +64,111 @@ export const attachment = filesImports.table('attachment', {
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id'),
   brandId: uuid('brand_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A layout (imports 6.1; migration 0055; S1-F06-T01). */
+export const layout = filesImports.table('layout', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull(),
+  source: text('source').notNull(),
+  documentType: text('document_type').notNull(),
+  kinds: text('kinds').array().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A layout's versions: the structure, never data (6.1). */
+export const layoutVersion = filesImports.table('layout_version', {
+  id: uuid('id').primaryKey(),
+  layoutId: uuid('layout_id').notNull(),
+  version: integer('version').notNull(),
+  structure: jsonb('structure').$type<unknown>().notNull(),
+  state: text('state').$type<VersionState>().notNull(),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id'),
+  decidedAt: at('decided_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A mapping: one layout version and one target, fixed (6.2). */
+export const mapping = filesImports.table('mapping', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull(),
+  layoutVersionId: uuid('layout_version_id').notNull(),
+  target: text('target').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A mapping's versions (6.2). */
+export const mappingVersion = filesImports.table('mapping_version', {
+  id: uuid('id').primaryKey(),
+  mappingId: uuid('mapping_id').notNull(),
+  version: integer('version').notNull(),
+  fields: jsonb('fields').$type<unknown>().notNull(),
+  state: text('state').$type<VersionState>().notNull(),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id'),
+  decidedAt: at('decided_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An import batch (2, 3.2, 15.1): scoped by its facts under row-level security. */
+export const importBatch = filesImports.table('import_batch', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull(),
+  kind: text('kind').$type<ImportKind>().notNull(),
+  target: text('target').notNull(),
+  state: text('state').$type<ImportBatchState>().notNull(),
+  storedFileId: uuid('stored_file_id').notNull(),
+  fileReceiptId: uuid('file_receipt_id').notNull(),
+  layoutVersionId: uuid('layout_version_id').notNull(),
+  mappingVersionId: uuid('mapping_version_id').notNull(),
+  /** The classes the file is held to carry: every class while its layout version is not Confirmed (section 11). */
+  restrictedClasses: text('restricted_classes').array().$type<FieldClass[]>().notNull(),
+  /** What the reader noted it could not read (9.1, A-11). */
+  readerNotes: jsonb('reader_notes').$type<GridNote[]>().notNull(),
+  startedByUserId: uuid('started_by_user_id').notNull(),
+  startedAt: at('started_at').notNull(),
+  legalEntityId: uuid('legal_entity_id'),
+  siteId: uuid('site_id'),
+  storeId: uuid('store_id'),
+  businessUnitId: uuid('business_unit_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A document inside a batch: the unit of publishing (2). */
+export const importDocument = filesImports.table('import_document', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  reference: text('reference').notNull(),
+  state: text('state').$type<'Staged' | 'Published'>().notNull(),
+  publishedAt: at('published_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One row of the file with every original cell and its normalised values (section 5). */
+export const stagedRow = filesImports.table('staged_row', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  documentId: uuid('document_id'),
+  sheet: text('sheet').notNull(),
+  rowNumber: integer('row_number').notNull(),
+  role: text('role').$type<StagedRowDraft['role']>().notNull(),
+  hidden: boolean('hidden').notNull(),
+  cells: jsonb('cells').$type<GridCell[]>().notNull(),
+  values: jsonb('values').$type<Record<string, StagedValue>>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One publish attempt's outcome (7.4). */
+export const importOutcome = filesImports.table('import_outcome', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  result: text('result').$type<'published' | 'failed'>().notNull(),
+  refusalCode: text('refusal_code'),
+  counts: jsonb('counts').$type<OutcomeCounts>().notNull(),
+  documents: jsonb('documents').$type<OutcomeDocument[]>().notNull(),
+  attemptedByUserId: uuid('attempted_by_user_id').notNull(),
+  attemptedAt: at('attempted_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

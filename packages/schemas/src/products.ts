@@ -79,6 +79,13 @@ export const productProposalSchema = z.strictObject({
   /** The SKUs confirming it made, in the order proposed. */
   skuIds: z.array(idSchema),
   request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
+  /**
+   * For a proposal published from an import, the batch, document and staged rows it came from
+   * (imports-and-opening-data 5; structure-and-masters 7; S1-F06-T01). Absent for one made on screen.
+   */
+  importSource: z
+    .strictObject({ batchId: idSchema, documentId: idSchema, stagedRowIds: z.array(idSchema).min(1) })
+    .optional(),
 });
 export type ProductProposal = z.infer<typeof productProposalSchema>;
 export const productProposalListSchema = z.strictObject({

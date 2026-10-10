@@ -16,7 +16,12 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
-import { decisionEvidence, FilesImportsModule, policyEvidence } from './modules/files-imports/index.js';
+import {
+  decisionEvidence,
+  FilesImportsModule,
+  IMPORT_BATCH_KIND,
+  policyEvidence,
+} from './modules/files-imports/index.js';
 import {
   EXCEPTION_CODE_KIND,
   EXCEPTION_TYPES,
@@ -132,9 +137,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: SCOPE_MEMBERS,
       useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
     },
-    // The kinds the owning modules number: the exception code (S1-F08-T02) and the journal (books-and-posting 5.4;
-    // S1-F09-T02).
-    { provide: NUMBERED_KINDS, useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND] satisfies readonly NumberedKind[] },
+    // The kinds the owning modules number: the exception code (S1-F08-T02), the journal (books-and-posting 5.4;
+    // S1-F09-T02) and the import batch code (imports-and-opening-data 15.1; GC9-9; S1-F06-T01).
+    {
+      provide: NUMBERED_KINDS,
+      useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND, IMPORT_BATCH_KIND] satisfies readonly NumberedKind[],
+    },
     // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
     // its kinds of 7.2 with S1-F10.
     { provide: POSTING_EVENT_KINDS, useFactory: () => checkEventKinds([] satisfies readonly PostingEventKind[]) },

@@ -451,6 +451,26 @@ export const inboxCodes = declareCodes({
  *   the reader's scope answers the same as one that does not exist.
  * - `files-imports.restricted-file-is-an-export`: the attachment carries a restricted class, so reading it is an
  *   export: use the download command, which writes an access record (numbering-and-audit 5.1).
+ *
+ * Imports (S1-F06-T01; imports-and-opening-data 3.1, 3.2, 13.1, 13.2):
+ *
+ * - `files-imports.type-not-allowed` also refuses an import upload that is not XLSX (9.2); PDF, JPEG and PNG are kept
+ *   only as evidence.
+ * - `files-imports.import-file-not-found`: the stored file or receipt named is not an XLSX file this person handed in.
+ * - `files-imports.file-unreadable`: the reader could not open the stored workbook.
+ * - `files-imports.layout-not-found`: the layout or mapping version named does not exist, or the mapping is not of
+ *   that layout version or that target.
+ * - `files-imports.layout-not-matched`: the file lacks the layout's sheet or a required column; `missing` names them.
+ * - `files-imports.no-import-handler`: no handler of the target accepts the kind (4.2).
+ * - `files-imports.no-import-batch-series` / `files-imports.import-batch-series-paused`: no Open series gives batch
+ *   codes, so starting an import is unavailable, naming the series (GC9-9; numbering-and-audit 3.5).
+ * - `files-imports.batch-not-found`: no batch with that identifier is visible to the reader.
+ * - `files-imports.batch-not-staged` / `files-imports.batch-not-validated`: the batch is not in the state the step
+ *   needs (3.2).
+ * - `files-imports.publishing-limited`: publishing is limited to local work, tests and `dev` until the controls
+ *   `missing` names are built (S1-F06-T01; PRD-SEC-017).
+ * - `files-imports.document-refused`: the target's handler refused a document at publishing; `missing` names the
+ *   document and the handler's reason.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -460,6 +480,18 @@ export const filesImportsCodes = declareCodes({
   'files-imports.file-store-not-configured': 'unavailable',
   'files-imports.attachment-not-found': 'not-found',
   'files-imports.restricted-file-is-an-export': 'refused',
+  'files-imports.import-file-not-found': 'not-found',
+  'files-imports.file-unreadable': 'refused',
+  'files-imports.layout-not-found': 'not-found',
+  'files-imports.layout-not-matched': 'refused',
+  'files-imports.no-import-handler': 'refused',
+  'files-imports.no-import-batch-series': 'unavailable',
+  'files-imports.import-batch-series-paused': 'unavailable',
+  'files-imports.batch-not-found': 'not-found',
+  'files-imports.batch-not-staged': 'refused',
+  'files-imports.batch-not-validated': 'refused',
+  'files-imports.publishing-limited': 'unavailable',
+  'files-imports.document-refused': 'refused',
 });
 
 /**

@@ -36,11 +36,25 @@ const CONFLICTS: Readonly<Record<string, string>> = {
   sku_identity_once: 'merchandise.sku-exists',
 };
 
+/**
+ * Where a proposal published from an import came from (imports-and-opening-data 5; structure-and-masters 7;
+ * numbering-and-audit 4.1; S1-F06-T01): the batch, its code, the document and its staged rows. The audit record's
+ * source names the batch's code and the first staged row's number in the file.
+ */
+export interface ProductImportSource {
+  readonly batchId: string;
+  readonly batchCode: string;
+  readonly documentId: string;
+  readonly stagedRowIds: readonly string[];
+  readonly firstRowNumber: number;
+}
+
 export async function proposeProduct(
   context: TransactionContext,
   dependencies: { readonly audit: AuditInterface; readonly access: Pick<AccessInterface, 'requestApproval'> },
   proposer: Preparer,
   draft: ProductProposalDraft,
+  imported?: ProductImportSource,
 ): Promise<Outcome<ProductProposed>> {
   const date = await today(context);
   if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
@@ -60,6 +74,9 @@ export async function proposeProduct(
     sourceWords: draft.sourceWords ?? null,
     proposedByUserId: proposer.userId,
     state: 'Proposed',
+    importBatchId: imported?.batchId ?? null,
+    importDocumentId: imported?.documentId ?? null,
+    importStagedRowIds: imported === undefined ? null : [...imported.stagedRowIds],
   });
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: proposer.userId },
@@ -72,7 +89,10 @@ export async function proposeProduct(
       { kind: 'value', field: 'skuCodes', before: null, after: draft.skus.map((each) => each.code) },
       { kind: 'value', field: 'sourceWords', before: null, after: draft.sourceWords ?? null },
     ],
-    source: { kind: 'screen' },
+    source:
+      imported === undefined
+        ? { kind: 'screen' }
+        : { kind: 'import', reference: imported.batchCode, row: imported.firstRowNumber },
   });
   // The proposer is its one preparer; a different person confirms it (DM-5, DEC-105; access-and-approvals 9.3).
   const requestId = await dependencies.access.requestApproval(context, {

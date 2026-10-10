@@ -29,7 +29,7 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'financial-period' && item.code !== undefined) {
     return t('missing.financial-period.named', { code: item.code });
   }
-  const gate = gateText(item) ?? readinessText(item);
+  const gate = gateText(item) ?? readinessText(item) ?? importText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
@@ -99,6 +99,23 @@ function readinessText(item: MissingItem): string | undefined {
   }
   if (item.kind === 'approval-people' && item.actionType !== undefined) {
     return t('missing.approval-people.named', { actionType: named('approval.action', item.actionType) });
+  }
+  return undefined;
+}
+
+/**
+ * The text of an import's item (imports-and-opening-data 13.1; S1-F06-T01): the number series of a kind named by its
+ * kind, a publishing control still missing, the layout's sheet or column a file lacks. Undefined for any other item.
+ */
+function importText(item: MissingItem): string | undefined {
+  const series = `missing.number-series.${item.numberedKind ?? ''}`;
+  if (item.kind === 'number-series' && isMessageId(series)) return t(series);
+  const control = `missing.publishing-control.${item.control ?? ''}`;
+  if (item.kind === 'publishing-control' && isMessageId(control)) return t(control);
+  if (item.kind === 'layout-sheet' && item.sheet !== undefined)
+    return t('missing.layout-sheet.named', { sheet: item.sheet });
+  if (item.kind === 'layout-column' && item.column !== undefined) {
+    return t('missing.layout-column.named', { column: item.column });
   }
   return undefined;
 }

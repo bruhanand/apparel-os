@@ -19,8 +19,11 @@ export const EVIDENCE_MAX_BYTES = 10 * 1024 * 1024;
  */
 export const STORE_FILE_BODY_LIMIT_BYTES = 2 * Math.ceil(EVIDENCE_MAX_BYTES / 3) * 4 + 8192;
 
-/** The real formats of an evidence file, found from its content and never from its name (9.2, class A-1). */
-export const storedFileFormatSchema = z.enum(['pdf', 'jpeg', 'png']);
+/**
+ * The real formats of a stored file, found from its content and never from its name (9.2, class A-1): PDF, JPEG and
+ * PNG kept as evidence (S1-F06-T05), and XLSX handed in for an import (S1-F06-T01).
+ */
+export const storedFileFormatSchema = z.enum(['pdf', 'jpeg', 'png', 'xlsx']);
 export type StoredFileFormat = z.infer<typeof storedFileFormatSchema>;
 
 /** Store a file (13.1): the bytes, the source system and the document reference claimed, where known. */
