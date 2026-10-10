@@ -21,6 +21,7 @@ import * as configurationTables from '../src/modules/configuration/db/schema.js'
 import * as siteLifecycleTables from '../src/modules/site-lifecycle/db/schema.js';
 import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
 import * as booksTables from '../src/modules/finance/books/db/schema.js';
+import { HARNESS_MIGRATIONS } from './harness/stock/harness.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
@@ -135,6 +136,17 @@ async function read<T extends object>(database: string, text: string): Promise<T
 }
 
 describe.each(['directory', 'organisation'] as const)('the %s set and its register (code-house-rules 10.4)', (set) => {
+  it('code-house-rules 10.4, 11.4 holds no schema a test-only migration set names', async () => {
+    const testOnly = new Set(
+      (
+        JSON.parse(readFileSync(join(HARNESS_MIGRATIONS, 'tables.json'), 'utf8')) as { tables: RegisterEntry[] }
+      ).tables.map((entry) => entry.table.split('.')[0] ?? ''),
+    );
+    expect(testOnly.size).toBeGreaterThan(0);
+    const schemas = await read<{ name: string }>(databases[set], 'select nspname as name from pg_catalog.pg_namespace');
+    expect(schemas.filter((schema) => testOnly.has(schema.name))).toEqual([]);
+  });
+
   it('PRD-SEC-015 lists every table the database has, and no other', async () => {
     const tables = await read<{ name: string }>(
       databases[set],

@@ -1,21 +1,18 @@
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  inventoryReconciliation,
-  rebuildAndCompare,
-  value,
-  type LedgerItem,
-  type SkuFacts,
-} from '../src/modules/stock/ledger/index.js';
+import { rebuildAndCompare, value, type LedgerItem, type SkuFacts } from '../src/modules/stock/ledger/index.js';
 import { syntheticCode } from './fixtures/synthetic.js';
+import { reconciles, trialBalance } from './harness/stock/checks.js';
 import { written } from './support/stock-ledger.js';
-import { ValuedWorld, type At, type SyntheticAccount, type SyntheticCombination } from './support/stock-valued.js';
+import { ValuedWorld, type At, type SyntheticCombination } from './support/stock-valued.js';
 
 // S1-F10-T03: valuation and the hand-off to Post (stock-ledger 7, 13.1, 13.4, 13.6, 13.8; books-and-posting 8, 10,
-// 15 tests 4, 5, 7 and 8). The ledger runs through the real command runner, access, row-level security, `finance` ·
-// books (cost setting, Check postable, Hold periods, Post) and `exceptions` on real PostgreSQL; the organisation
-// records are real, read through stand-ins of the ledger's declared reads (RR-436). Every value is SYNTHETIC: the
-// story, P RATEs, accounts and maps are those of stock-ledger 11 and books-and-posting 16, written by hand.
+// 15 tests 4, 5, 7 and 8). The story of 11.1 under the four combinations runs through the harness's scenario files
+// (stock-harness-story.int.test.ts; S1-F10-T04), whose checks these tests share (harness/stock/checks.ts). The
+// ledger runs through the real command runner, access, row-level security, `finance` · books (cost setting, Check
+// postable, Hold periods, Post) and `exceptions` on real PostgreSQL; the organisation records are real, read through
+// stand-ins of the ledger's declared reads. Every value is SYNTHETIC: the P RATEs, accounts and maps are those of
+// stock-ledger 11 and books-and-posting 16, written by hand.
 
 const world = new ValuedWorld();
 
@@ -79,262 +76,12 @@ async function receiveAt(at: At, sku: SkuFacts, count: number, pRate: number | n
   return { originId, pieceCodes, ptRevisionId };
 }
 
-async function trialBalance(combo: SyntheticCombination): Promise<Record<SyntheticAccount, number>> {
-  const balance = await world.setup.run(world.setup.preparer.id, (context) =>
-    world.setup.books.trialBalance(context, combo.bookId, combo.periodId),
-  );
-  if (balance === undefined) throw new Error('no trial balance');
-  expect(balance.totals.debitPaise).toBe(balance.totals.creditPaise);
-  const closing = {} as Record<SyntheticAccount, number>;
-  for (const [code, accountId] of Object.entries(combo.accounts) as [SyntheticAccount, string][]) {
-    closing[code] = balance.rows.find((row) => row.accountId === accountId)?.closingPaise ?? 0;
-  }
-  return closing;
-}
-
 const read = <T>(work: Parameters<typeof world.run<T>>[1]) => world.run(world.poster.user.id, work);
 const rebuild = async () => (await read((context) => rebuildAndCompare(context))).differences;
-
-/**
- * The inventory account reconciles with the ledger movement by movement (books-and-posting 8.3; PRD-LED-008): each
- * valued movement's pool value change is what its posting-source rows put on the synthetic inventory account.
- */
-async function reconciles(combo: SyntheticCombination) {
-  const ledger = await read((context) => inventoryReconciliation(context, combo.bookId));
-  const sources = await world.setup.run(world.setup.preparer.id, async (context) => {
-    const { sql } = await import('drizzle-orm');
-    const rows = await context.tx.execute<{ item_key: string; account_id: string; side: string; amount: string }>(sql`
-      select s.item_key, l.account_id, l.side, s.amount_paise as amount
-      from finance.posting_source s
-      join finance.journal j on j.id = s.journal_id
-      join finance.journal_line l on l.journal_id = j.id
-      where j.book_id = ${combo.bookId}::uuid and s.source_module = ${'test-syn-stock-ledger'}`);
-    return rows.rows;
-  });
-  expect(sources.length).toBeGreaterThan(0);
-  // Each component's signed amount lands on the inventory account by the map's side for it (16.1).
-  for (const movement of ledger.movements) {
-    const kind = movement.eventKind;
-    const onInventory = SYNTHETIC_INVENTORY_SIGN[kind];
-    if (onInventory === undefined) continue;
-    const rows = await world.setup.run(world.setup.preparer.id, async (context) => {
-      const { sql } = await import('drizzle-orm');
-      return (
-        await context.tx.execute<{ component: string; amount: string }>(sql`
-          select component, amount_paise as amount from finance.posting_source
-          where item_key = ${movement.movementId} or item_key like ${`${movement.movementId}:%`}`)
-      ).rows;
-    });
-    const fromPosting = rows.reduce((sum, row) => sum + (onInventory[row.component] ?? 0) * Number(row.amount), 0);
-    expect(fromPosting).toBe(movement.poolValuePaise);
-  }
-  expect(await poolTotal(combo)).toBe(ledger.poolValuePaise);
-}
-
-/** How a component's positive amount moves the inventory account under the synthetic maps of 16.1. */
-const SYNTHETIC_INVENTORY_SIGN: Record<string, Record<string, number>> = {
-  'stock.cost-established': { 'to-pool': 1 },
-  'stock.cost-adjustment': { 'to-pool': 1 },
-  'stock.pool-dispatch': { cost: -1 },
-  'stock.pool-arrival': { cost: 1 },
-  'stock.sale-issue': { cost: -1 },
-  'stock.customer-return': { cost: 1 },
-  'stock.supplier-return-departure': { cost: -1 },
-  'stock.supplier-rejection-return': { cost: 1 },
-};
-
-async function poolTotal(combo: SyntheticCombination) {
-  return (await read((context) => value(context, { bookId: combo.bookId }))).pools.reduce(
-    (sum, pool) => sum + pool.valuePaise,
-    0,
-  );
-}
 
 async function pools(combo: SyntheticCombination, sku: SkuFacts) {
   return (await read((context) => value(context, { bookId: combo.bookId, skuId: sku.skuId }))).pools;
 }
-
-/**
- * The story of stock-ledger 11.1, steps 1 to 7, as ledger requests: receipts R1 at W1 and R2 at S1 with their cost
- * established; 4 R1 pieces reserved, dispatched, counted at S1 and accepted; a sale of 3 R1 and 2 R2 pieces; 1 R1
- * piece returned; R1's cost up ₹15.00 a piece; 1 R2 piece returned to its supplier and handed over.
- */
-async function story(combo: SyntheticCombination, sku: SkuFacts) {
-  const r1 = await receiveAt(combo.w1, sku, 10, 100, combo.legalEntityId);
-  const r2 = await receiveAt(combo.s1, sku, 6, 130, combo.legalEntityId);
-  expect(await rebuild()).toEqual([]);
-  const moving = r1.pieceCodes.slice(0, 4);
-  const transfer = await posted([
-    {
-      kind: 'reserve',
-      lineId: line(),
-      reservationKind: 'transfer',
-      at: combo.w1,
-      goods: [{ skuId: sku.skuId, quantity: 4, pieceCodes: moving }],
-    },
-  ]);
-  const dispatchId = uuidv7();
-  await posted([
-    {
-      kind: 'dispatch',
-      lineId: line(),
-      dispatchId,
-      reservationId: transfer.reservationIds[0] ?? '',
-      from: combo.w1,
-      to: { siteId: combo.s1.siteId, businessUnitId: combo.s1.businessUnitId },
-      goods: { skuId: sku.skuId, quantity: 4, pieceCodes: moving },
-    },
-  ]);
-  expect(await rebuild()).toEqual([]);
-  await posted([
-    {
-      kind: 'arrival-count',
-      lineId: line(),
-      dispatchId,
-      from: { siteId: combo.w1.siteId, businessUnitId: combo.w1.businessUnitId },
-      to: combo.s1,
-      goods: { skuId: sku.skuId, quantity: 4, pieceCodes: moving },
-    },
-    {
-      kind: 'record-acceptance',
-      lineId: line(),
-      at: combo.s1,
-      goods: { skuId: sku.skuId, quantity: 4, pieceCodes: moving },
-    },
-  ]);
-  const sold = [...moving.slice(0, 3), ...r2.pieceCodes.slice(0, 2)];
-  const sale = await posted([
-    {
-      kind: 'sale-issue',
-      lineId: line(),
-      at: combo.s1,
-      handover: 'now',
-      goods: { skuId: sku.skuId, quantity: 5, pieceCodes: sold },
-    },
-  ]);
-  const saleMovementId = sale.movementIds[0] ?? '';
-  await posted([
-    {
-      kind: 'customer-return',
-      lineId: line(),
-      saleMovementId,
-      to: combo.s1,
-      condition: 'good',
-      goods: { skuId: sku.skuId, quantity: 1, pieceCodes: [moving[0] ?? ''] },
-    },
-  ]);
-  expect(await rebuild()).toEqual([]);
-  await posted([{ kind: 'cost-adjustment', lineId: line(), receiptOriginId: r1.originId, amountPaise: rupees(150) }]);
-  const returning = [r2.pieceCodes[2] ?? ''];
-  const reserved = await posted([
-    {
-      kind: 'reserve',
-      lineId: line(),
-      reservationKind: 'supplier-return',
-      at: combo.s1,
-      goods: [{ skuId: sku.skuId, quantity: 1, pieceCodes: returning }],
-    },
-  ]);
-  const shipmentId = uuidv7();
-  await posted([
-    {
-      kind: 'supplier-return-departure',
-      lineId: line(),
-      shipmentId,
-      reservationId: reserved.reservationIds[0] ?? '',
-      from: combo.s1,
-      goods: { skuId: sku.skuId, quantity: 1, pieceCodes: returning },
-    },
-  ]);
-  await posted([
-    {
-      kind: 'supplier-handover',
-      lineId: line(),
-      shipmentId,
-      from: { siteId: combo.s1.siteId, businessUnitId: combo.s1.businessUnitId },
-      goods: { skuId: sku.skuId, quantity: 1, pieceCodes: returning },
-    },
-  ]);
-  expect(await rebuild()).toEqual([]);
-  return { r1, r2, saleMovementId };
-}
-
-describe('the story under moving average and Site pools (stock-ledger 11.3; books-and-posting 16.2, 16.3)', () => {
-  it('PRD-LED-014 PRD-LED-015 PRD-MOD-013 each step values in posting order and posts its journal; the end state is 11.6', async () => {
-    const combo = await world.book('moving-average', 'site');
-    const sku = world.sku(true);
-    await story(combo, sku);
-    const found = await pools(combo, sku);
-    const at = (place: At) => found.find((pool) => pool.siteId === place.siteId);
-    // stock-ledger 11.3, step 7: W1 6 / 690.00, S1 5 / 615.00; a new pool keeps the cost setting read at Plan (14.2).
-    expect([at(combo.w1)?.quantity, at(combo.w1)?.valuePaise]).toEqual([6, rupees(690)]);
-    expect([at(combo.s1)?.quantity, at(combo.s1)?.valuePaise]).toEqual([5, rupees(615)]);
-    expect(found.every((pool) => pool.formula === 'moving-average' && pool.poolMode === 'site')).toBe(true);
-    expect(found.every((pool) => pool.costSettingVersionId === combo.costVersionId)).toBe(true);
-    // books-and-posting 16.3, moving average and Site pools.
-    expect(await trialBalance(combo)).toMatchObject({
-      INV: rupees(1305),
-      COGS: rupees(502),
-      CLM: rupees(123),
-      TRN: 0,
-      RSH: 0,
-      PUR: credit(1930),
-    });
-    await reconciles(combo);
-  }, 300_000);
-});
-
-describe('the story under FIFO and a book pool (stock-ledger 11.4; books-and-posting 16.2, 16.3)', () => {
-  it('PRD-LED-014 POL-09.07 a sale takes the oldest layer; a return makes a layer with lineage; a late cost follows the lineage', async () => {
-    const combo = await world.book('fifo', 'book');
-    const sku = world.sku(true);
-    await story(combo, sku);
-    const [pool] = await pools(combo, sku);
-    // stock-ledger 11.4, step 7: L1 4 @ 115.00 · L2 6 @ 130.00 · L3 1 @ 115.00 = 11 / 1,355.00.
-    expect(pool?.siteId).toBeNull();
-    expect(pool?.layers.map((layer) => [layer.quantityLeft, layer.valueLeftPaise])).toEqual([
-      [4, rupees(460)],
-      [6, rupees(780)],
-      [1, rupees(115)],
-    ]);
-    expect(pool?.layers[2]?.fromLayerId).toBe(pool?.layers[0]?.id);
-    expect(await trialBalance(combo)).toMatchObject({
-      INV: rupees(1355),
-      COGS: rupees(460),
-      CLM: rupees(115),
-      TRN: 0,
-      RSH: 0,
-      PUR: credit(1930),
-    });
-    await reconciles(combo);
-  }, 300_000);
-});
-
-describe('the story under the other two combinations (stock-ledger 11.2, 11.5, 11.6; books-and-posting 16.3)', () => {
-  // Hand-written from stock-ledger 11.6 and books-and-posting 16.3, in rupees.
-  it.each([
-    ['moving-average', 'book', 1333.75, 475, 121.25],
-    ['fifo', 'site', 1280, 520, 130],
-  ] as const)(
-    'PRD-ACP-018 %s with a %s pool ends at stock %d, cost of goods sold %d, supplier claim %d',
-    async (formula, poolMode, stock, cogs, claim) => {
-      const combo = await world.book(formula, poolMode);
-      const sku = world.sku(true);
-      await story(combo, sku);
-      expect(await trialBalance(combo)).toMatchObject({
-        INV: rupees(stock),
-        COGS: rupees(cogs),
-        CLM: rupees(claim),
-        TRN: 0,
-        RSH: 0,
-        PUR: credit(1930),
-      });
-      expect(await poolTotal(combo)).toBe(rupees(stock));
-      await reconciles(combo);
-    },
-    300_000,
-  );
-});
 
 describe('value Unknown and cost established in transit (stock-ledger 7.2, 7.6; books-and-posting 15 test 5)', () => {
   it('PRD-ACP-004 PRD-MOD-015 pre-PT movements post nothing; cost established on units in transit goes onto the dispatch', async () => {
@@ -364,7 +111,7 @@ describe('value Unknown and cost established in transit (stock-ledger 7.2, 7.6; 
     ]);
     // G2: custody without cost; no journal (PRD-ACP-004).
     expect(dispatched.posting).toBeNull();
-    expect(await trialBalance(combo)).toMatchObject({ INV: 0, TRN: 0, PUR: 0 });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: 0, TRN: 0, PUR: 0 });
     const established = await posted([
       {
         kind: 'cost-established',
@@ -376,7 +123,7 @@ describe('value Unknown and cost established in transit (stock-ledger 7.2, 7.6; 
     ]);
     expect(established.posting?.kind).toBe('posted');
     // 7.6: the unit at W1 enters its pool; the two in transit between Site pools go onto the dispatch.
-    expect(await trialBalance(combo)).toMatchObject({ INV: rupees(100), TRN: rupees(200), PUR: credit(300) });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: rupees(100), TRN: rupees(200), PUR: credit(300) });
     await posted([
       {
         kind: 'arrival-count',
@@ -387,11 +134,11 @@ describe('value Unknown and cost established in transit (stock-ledger 7.2, 7.6; 
         goods: { skuId: sku.skuId, quantity: 2, pieceCodes: r1.pieceCodes.slice(0, 2) },
       },
     ]);
-    expect(await trialBalance(combo)).toMatchObject({ INV: rupees(300), TRN: 0, PUR: credit(300) });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: rupees(300), TRN: 0, PUR: credit(300) });
     const s1Pool = (await pools(combo, sku)).find((pool) => pool.siteId === combo.s1.siteId);
     expect(s1Pool?.layers.map((layer) => [layer.quantityLeft, layer.valueLeftPaise])).toEqual([[2, rupees(200)]]);
     expect(await rebuild()).toEqual([]);
-    await reconciles(combo);
+    await reconciles(world, world.poster.user.id, combo);
   }, 300_000);
 });
 
@@ -439,8 +186,8 @@ describe('one Site, two units in two books (books-and-posting 15 test 7; PRD-ACP
       ]);
       expect(result.posting?.kind).toBe('posted');
     }
-    expect(await trialBalance(first)).toMatchObject({ INV: rupees(100), PUR: credit(100) });
-    expect(await trialBalance(second)).toMatchObject({ INV: rupees(100), PUR: credit(100) });
+    expect(await trialBalance(world, first)).toMatchObject({ INV: rupees(100), PUR: credit(100) });
+    expect(await trialBalance(world, second)).toMatchObject({ INV: rupees(100), PUR: credit(100) });
     const mappings = await world.setup.run(world.setup.preparer.id, async (context) => {
       const { sql } = await import('drizzle-orm');
       return (
@@ -744,7 +491,7 @@ describe('no valid map (books-and-posting 10, 15 tests 4 and 8; SL-23 Outcome A,
     expect(first.raised, JSON.stringify(first.raised)).toMatchObject({ kind: 'done', value: { replayed: false } });
     // Nothing committed: no coverage, no pool, no journal (PRD-INT-004).
     expect(await pools(combo, sku)).toEqual([]);
-    expect(await trialBalance(combo)).toMatchObject({ INV: 0, PUR: 0 });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: 0, PUR: 0 });
     const replay = await attempt();
     expect(replay.raised).toMatchObject({
       kind: 'done',
@@ -754,7 +501,7 @@ describe('no valid map (books-and-posting 10, 15 tests 4 and 8; SL-23 Outcome A,
     await world.map(combo.bookId, combo.accounts, 'stock.cost-established');
     const done = await attempt();
     expect(done.result.kind).toBe('written');
-    expect(await trialBalance(combo)).toMatchObject({ INV: rupees(20), PUR: credit(20) });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: rupees(20), PUR: credit(20) });
     // books-and-posting 15 test 4: Post given the same items again answers the first result, with no second journal.
     const journals =
       done.result.kind === 'written' && done.result.written.posting?.kind === 'posted'
@@ -780,6 +527,6 @@ describe('no valid map (books-and-posting 10, 15 tests 4 and 8; SL-23 Outcome A,
       });
     });
     expect(again.map((check) => check.kind)).toEqual(['posted']);
-    expect(await trialBalance(combo)).toMatchObject({ INV: rupees(20) });
+    expect(await trialBalance(world, combo)).toMatchObject({ INV: rupees(20) });
   }, 300_000);
 });

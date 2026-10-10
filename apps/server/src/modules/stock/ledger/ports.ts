@@ -1,11 +1,13 @@
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import { skuOn } from '../../merchandise/catalogue/index.js';
+import { locationPlace, mappingOn } from '../../organisation/index.js';
 import type { BooksInterface } from '../../finance/books/index.js';
 
 // The read contracts Plan uses (stock-ledger 13.1), as the ledger needs them from `organisation` and `merchandise`
-// (module-map 4.11, 4.12; structure-and-masters 3.8, 4.7). Those modules are not built yet (S1-F02, S1-F03), so the
-// ledger declares the shape it reads; development tests give stand-ins built to it, and acceptance runs through the
-// real modules (S1-F10-T04; product owner, 6 Oct 2026). Each answer is as of the request's business date.
+// (module-map 4.11, 4.12; structure-and-masters 3.8, 4.7). The ledger declares the shape it reads; the production
+// composition wires it to the real modules (RR-436), development tests may give stand-ins built to it, and acceptance
+// runs through the real modules (S1-F10-T04; product owner, 6 Oct 2026). Each answer is as of the request's business
+// date.
 
 /** A business unit at a Site and its mapping in force (structure-and-masters 3.3, 3.4; PRD-ORG-005). */
 export interface UnitFacts {
@@ -54,14 +56,28 @@ export interface LedgerSkus {
   ): Promise<SkuFacts | undefined>;
 }
 
-/** The production composition's reads until `organisation` and `merchandise` provide them (S1-F02, S1-F03). */
-export const placesNotBuilt: LedgerPlaces = {
-  unitAt: () => Promise.reject(new CommandDefect('organisation has no structure read yet (S1-F02)')),
-  locationOf: () => Promise.reject(new CommandDefect('organisation has no structure read yet (S1-F02)')),
-};
-
-export const skusNotBuilt: LedgerSkus = {
-  skuAt: () => Promise.reject(new CommandDefect('merchandise has no SKU read yet (S1-F03)')),
+/**
+ * The place read wired to `organisation` (structure-and-masters 3.5, 3.8; the organisation half of RR-436;
+ * S1-F10-T04): a unit at a Site is its mapping in force on the date, Read a unit's mapping as of a date, with the
+ * mapping version the ledger stores (PRD-ACP-013, PRD-MOD-010); a unit at another Site, or with no mapping in force, is
+ * none. A location is the Site and unit it was made at. The mapping's verification is not asked: the ledger takes no
+ * statutory action (POL-10.08 is for the caller that does).
+ */
+export const organisationPlaces: LedgerPlaces = {
+  async unitAt(context, place, businessDate) {
+    const mapping = await mappingOn(context, place.businessUnitId, businessDate);
+    if (mapping?.siteId !== place.siteId) return undefined;
+    return {
+      siteId: mapping.siteId,
+      storeId: mapping.storeId,
+      businessUnitId: place.businessUnitId,
+      legalEntityId: mapping.legalEntityId,
+      bookId: mapping.accountingBookId,
+      taxRegistrationId: mapping.taxRegistrationId,
+      mappingVersionId: mapping.mappingVersionId,
+    };
+  },
+  locationOf: (context, locationId) => locationPlace(context, locationId),
 };
 
 /**

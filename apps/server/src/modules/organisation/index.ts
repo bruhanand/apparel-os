@@ -19,6 +19,7 @@ export {
   accountingBookExists,
   businessUnitHeads,
   businessUnitInForce,
+  locationPlace,
   siteExists,
   unitLocationIds,
   unitReadiness,

@@ -23,7 +23,7 @@ import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { recorded } from './books.js';
 import { defineSyntheticCodeSeries } from './exceptions.js';
 import { approved, approvedGeography, decided, prepared, structureSetup, type StructureSetup } from './organisation.js';
-import { connect } from './postgres.js';
+import { allowVerifier, connect } from './postgres.js';
 import { StockWorld, SYNTHETIC_DOCUMENT_TYPE, SYNTHETIC_MODULE, syntheticCaller } from './stock-ledger.js';
 
 // S1-F10-T03: the stock ledger composed with the real `finance` · books and `organisation` (books-and-posting 8, 9.1;
@@ -105,13 +105,15 @@ export class ValuedWorld extends StockWorld {
   private counter = 0;
   protected override readonly registrations: readonly CallerRegistration[] = [syntheticCaller];
 
-  private next(prefix: string): string {
+  protected next(prefix: string): string {
     this.counter += 1;
     return `${prefix}-${String(this.counter)}`;
   }
 
   protected override async compose(): Promise<void> {
     const [organisation] = this.world.organisations;
+    // The raw invariant queries of the shared checks read as the read-only test role (stock-ledger 15.4).
+    await allowVerifier(organisation.database);
     this.setup = await structureSetup({
       directory: this.world.directory,
       database: organisation.database,
@@ -285,9 +287,15 @@ export class ValuedWorld extends StockWorld {
       taxRegistrationId: book.registrationId,
       mappingVersionId: answer.versionId,
     });
-    const locationId = uuidv7();
-    this.locations.set(locationId, { siteId, businessUnitId: answer.recordId });
+    const locationId = await this.location(siteId, answer.recordId);
     return { siteId, businessUnitId: answer.recordId, locationId };
+  }
+
+  /** A location of the unit: a SYNTHETIC identifier the stand-in place read answers; the harness makes a real one. */
+  protected location(siteId: string, businessUnitId: string): Promise<string> {
+    const locationId = uuidv7();
+    this.locations.set(locationId, { siteId, businessUnitId });
+    return Promise.resolve(locationId);
   }
 
   async site(physicalKind: 'central-warehouse' | 'retail-site'): Promise<string> {

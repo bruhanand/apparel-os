@@ -409,6 +409,36 @@ export class Valuing extends Working {
     });
   }
 
+  /**
+   * Units coming back into a FIFO pool from the layers they left (7.5, 7.8): one new layer per source layer, dated
+   * now, with lineage to it; the valuation's layer rows keep each piece's part (7.4).
+   */
+  private enterBySource(
+    pool: PoolState,
+    sequence: number,
+    parts: readonly { fromLayerId: string | null; pieceId: string | null; quantity: number; value: number }[],
+  ): ValuationEntry['layers'] {
+    const bySource = new Map<string | null, (typeof parts)[number][]>();
+    for (const part of parts) bySource.set(part.fromLayerId, [...(bySource.get(part.fromLayerId) ?? []), part]);
+    return [...bySource].flatMap(([fromLayerId, group]) => {
+      const layer = enter(pool, {
+        quantity: group.reduce((sum, part) => sum + part.quantity, 0),
+        value: group.reduce((sum, part) => sum + part.value, 0),
+        sequence,
+        at: this.valuing.occurredAt,
+        newLayerId: this.newId,
+        fromLayerId,
+      });
+      if (layer === null) return [];
+      return group.map((part) => ({
+        layerId: layer.id,
+        pieceId: part.pieceId,
+        quantity: part.quantity,
+        value: part.value,
+      }));
+    });
+  }
+
   private layersOf(took: readonly Took[]): ValuationEntry['layers'] {
     return took.flatMap((each) =>
       each.layer === null
@@ -1190,19 +1220,14 @@ export class Valuing extends Working {
         }
       }
       const sequence = pool.lastSequence + 1;
-      for (const each of wanted) {
-        const layer = enter(pool, {
-          quantity: each.quantity,
-          value: each.value,
+      layers.push(
+        ...this.enterBySource(
+          pool,
           sequence,
-          at: this.valuing.occurredAt,
-          newLayerId: this.newId,
-          fromLayerId: each.layerId,
-        });
-        if (layer !== null)
-          layers.push({ layerId: layer.id, pieceId: each.pieceId, quantity: each.quantity, value: each.value });
-        value += each.value;
-      }
+          wanted.map((each) => ({ ...each, fromLayerId: each.layerId })),
+        ),
+      );
+      value += wanted.reduce((sum, each) => sum + each.value, 0);
       returned.quantity += group.quantity;
       returned.value += value;
       sale.returned.set(group.origin.id, returned);
@@ -1458,18 +1483,13 @@ export class Valuing extends Working {
         const sequence = pool.lastSequence + 1;
         const layers: ValuationEntry['layers'] = [];
         if (pool.formula === 'fifo') {
-          for (const part of parts) {
-            const layer = enter(pool, {
-              quantity: part.quantity,
-              value: part.value,
+          layers.push(
+            ...this.enterBySource(
+              pool,
               sequence,
-              at: this.valuing.occurredAt,
-              newLayerId: this.newId,
-              fromLayerId: part.sourceLayerId,
-            });
-            if (layer !== null)
-              layers.push({ layerId: layer.id, pieceId: part.pieceId, quantity: part.quantity, value: part.value });
-          }
+              parts.map((part) => ({ ...part, fromLayerId: part.sourceLayerId })),
+            ),
+          );
         } else
           enter(pool, {
             quantity: group.quantity,

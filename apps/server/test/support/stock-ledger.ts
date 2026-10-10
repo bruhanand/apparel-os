@@ -6,6 +6,7 @@ import {
   newCorrelationId,
   OrganisationRouter,
   type CommandRefusal,
+  type LockTarget,
   type RoutedOrganisation,
   type TransactionContext,
 } from '../../src/kernel/index.js';
@@ -251,6 +252,9 @@ export class StockWorld {
   protected skus: LedgerSkus = syntheticSkus;
   protected books: LedgerBooks = booksNotComposed;
   protected readonly registrations: readonly CallerRegistration[] = [syntheticCaller];
+  /** The approval rules and record types `access` is composed with; a subclass may add its own (15.3). */
+  protected readonly approvalRules: readonly ApprovalRule[] = syntheticRules;
+  protected readonly registry: readonly RecordTypeDeclaration[] = testRegistry;
 
   /** Composes what the ledger reads, after the Organisations are made and before the ledger is (S1-F10-T03). */
   protected async compose(): Promise<void> {
@@ -277,8 +281,8 @@ export class StockWorld {
       origins: localOrigins,
       audit,
       keys: OrganisationKeys.fromEnvironment(this.keysEnvironment),
-      registry: testRegistry,
-      approvalRules: syntheticRules,
+      registry: this.registry,
+      approvalRules: this.approvalRules,
       composition: TEST_COMPOSITION,
     });
     await this.compose();
@@ -363,91 +367,98 @@ export class StockWorld {
   async post(
     actor: Actor,
     items: readonly LedgerItem[],
-    options: {
-      readonly source?: LedgerRequest['source'];
-      readonly approval?: {
-        readonly decisionId: string;
-        readonly actionType: string;
-        readonly preparers?: readonly string[];
-      };
-      readonly hold?: (context: TransactionContext) => Promise<void>;
-      /** Runs after a refusal rolled the command back, as a caller raises its exception (SL-23; DEC-105). */
-      readonly afterRefusal?: (refusal: CommandRefusal, source: LedgerRequest['source']) => Promise<void>;
-    } = {},
+    options: PostOptions = {},
   ): Promise<{ kind: 'written'; written: Written } | { kind: 'refused'; refusal: CommandRefusal }> {
     const source = options.source ?? this.source();
     try {
-      const written = await this.run(actor.user.id, async (context) => {
-        const held = await this.access.holdAuthority(
-          context,
-          { kind: 'user', id: actor.user.id },
-          actor.roleAssignmentId,
-          { action: 'create', recordType: SYNTHETIC_DOCUMENT_TYPE },
-        );
-        if (held !== undefined) throw new Refused(held);
-        const useId = uuidv7();
-        if (options.approval !== undefined) {
-          await context.lock(
-            LOCK_STEP.document,
-            await this.access.approvalLockTargets(context, options.approval.decisionId),
-          );
-        }
-        const request: LedgerRequest = {
-          source,
-          actor: { kind: 'user', userId: actor.user.id, roleAssignmentId: actor.roleAssignmentId },
-          items,
-          ...(options.approval === undefined ? {} : { approval: { decisionId: options.approval.decisionId, useId } }),
-        };
-        const planned = await this.ledger.plan(context, request);
-        if (planned.kind === 'refused') throw new Refused(planned.refusal);
-        const locked = await this.ledger.lock(context, planned.value);
-        // Steps 7 and 8: the periods the valued items post into, then the journal series (13.1; 10.3).
-        const periods = await this.ledger.holdPeriods(context, planned.value);
-        if (periods.kind === 'refused') throw new Refused(periods.refusal);
-        if (periods.value.length > 0) await context.lock(LOCK_STEP.numberSeries, periods.value);
-        const checked = await this.ledger.recheck(context, locked);
-        if (checked.kind === 'refused') throw new Refused(checked.refusal);
-        await options.hold?.(context);
-        if (options.approval !== undefined) {
-          const document = {
-            module: SYNTHETIC_MODULE,
-            recordType: SYNTHETIC_DOCUMENT_TYPE,
-            recordId: source.recordId,
-            versionId: source.versionId,
-          };
-          const check = {
-            decisionId: options.approval.decisionId,
-            actionType: options.approval.actionType,
-            document,
-            preparers: options.approval.preparers ?? [actor.user.id],
-            // The value on the rule's basis: none for a rule without one; the ledger's cost value otherwise (13.1).
-            value:
-              options.approval.actionType === APPROVE_DOCUMENT || checked.value.value.kind === 'none'
-                ? ({ kind: 'none' } as const)
-                : checked.value.value,
-          };
-          const verified = await this.access.verifyUnderLock(context, check);
-          if (verified !== undefined) throw new Refused(verified);
-          const used = await this.access.recordUse(context, {
-            ...check,
-            useId,
-            actor: { kind: 'user', id: actor.user.id },
-          });
-          if (used !== undefined) throw new Refused(used);
-        }
-        const wrote = await this.ledger.write(context, checked.value);
-        if (wrote.kind === 'refused') throw new Refused(wrote.refusal);
-        return wrote.value;
-      });
+      const written = await this.run(actor.user.id, (context) =>
+        this.postIn(context, actor, items, { ...options, source }),
+      );
       return { kind: 'written', written };
     } catch (error) {
-      if (error instanceof Refused) {
+      if (error instanceof PostingRefused) {
         // SL-23 Outcome A (DEC-105): the command rolled back; the caller raises its exception in its own transaction.
         await options.afterRefusal?.(error.refusal, source);
         return { kind: 'refused', refusal: error.refusal };
       }
       throw error;
     }
+  }
+
+  /**
+   * The posting command's steps inside a transaction the caller runs (13.1; module-map 6.1), so a caller may run them
+   * under the idempotency helper. A refusal is thrown as PostingRefused, which rolls the work back.
+   */
+  async postIn(
+    context: TransactionContext,
+    actor: Actor,
+    items: readonly LedgerItem[],
+    options: PostOptions & { readonly source: LedgerRequest['source'] },
+  ): Promise<Written> {
+    const source = options.source;
+    // The registry's record type of the caller's document, Authorised and approved on (15.2, 15.3).
+    const documentType = options.documentType ?? SYNTHETIC_DOCUMENT_TYPE;
+    const held = await this.access.holdAuthority(context, { kind: 'user', id: actor.user.id }, actor.roleAssignmentId, {
+      action: 'create',
+      recordType: documentType,
+    });
+    if (held !== undefined) throw new PostingRefused(held);
+    const useId = uuidv7();
+    const stepOne = [
+      ...(options.document?.targets ?? []),
+      ...(options.approval === undefined
+        ? []
+        : await this.access.approvalLockTargets(context, options.approval.decisionId)),
+    ];
+    if (stepOne.length > 0) await context.lock(LOCK_STEP.document, stepOne);
+    const stale = await options.document?.recheck(context);
+    if (stale !== undefined) throw new PostingRefused(stale);
+    const request: LedgerRequest = {
+      source,
+      actor: { kind: 'user', userId: actor.user.id, roleAssignmentId: actor.roleAssignmentId },
+      items,
+      ...(options.approval === undefined ? {} : { approval: { decisionId: options.approval.decisionId, useId } }),
+    };
+    const planned = await this.ledger.plan(context, request);
+    if (planned.kind === 'refused') throw new PostingRefused(planned.refusal);
+    const locked = await this.ledger.lock(context, planned.value);
+    // Steps 7 and 8: the periods the valued items post into, then the journal series (13.1; 10.3).
+    const periods = await this.ledger.holdPeriods(context, planned.value);
+    if (periods.kind === 'refused') throw new PostingRefused(periods.refusal);
+    if (periods.value.length > 0) await context.lock(LOCK_STEP.numberSeries, periods.value);
+    const checked = await this.ledger.recheck(context, locked);
+    if (checked.kind === 'refused') throw new PostingRefused(checked.refusal);
+    await options.hold?.(context);
+    if (options.approval !== undefined) {
+      const document = {
+        module: source.module,
+        recordType: documentType,
+        recordId: source.recordId,
+        versionId: source.versionId,
+      };
+      const basis = this.approvalRules.find((rule) => rule.actionType === options.approval?.actionType)?.value;
+      const check = {
+        decisionId: options.approval.decisionId,
+        actionType: options.approval.actionType,
+        document,
+        preparers: options.approval.preparers ?? [actor.user.id],
+        // The value on the rule's basis: none for a rule without one; the ledger's cost value otherwise (13.1).
+        value:
+          basis === 'none' || checked.value.value.kind === 'none' ? ({ kind: 'none' } as const) : checked.value.value,
+      };
+      const verified = await this.access.verifyUnderLock(context, check);
+      if (verified !== undefined) throw new PostingRefused(verified);
+      const used = await this.access.recordUse(context, {
+        ...check,
+        useId,
+        actor: { kind: 'user', id: actor.user.id },
+      });
+      if (used !== undefined) throw new PostingRefused(used);
+    }
+    const wrote = await this.ledger.write(context, checked.value);
+    if (wrote.kind === 'refused') throw new PostingRefused(wrote.refusal);
+    await options.document?.after(context, wrote.value);
+    return wrote.value;
   }
 
   /** A code of a step later than any used before: the clock moves on 30 seconds (access-and-approvals 3.3). */
@@ -489,10 +500,35 @@ export class StockWorld {
   }
 }
 
-class Refused extends Error {
+/** A posting refused inside its command, which rolls the command back (13.1). */
+export class PostingRefused extends Error {
   constructor(readonly refusal: CommandRefusal) {
     super(refusal.code);
   }
+}
+
+/** What a posting command may add to its items (13.1, 15.2). */
+export interface PostOptions {
+  readonly source?: LedgerRequest['source'];
+  /** The caller's document type in the permission registry; the synthetic caller's unless given. */
+  readonly documentType?: string;
+  readonly approval?: {
+    readonly decisionId: string;
+    readonly actionType: string;
+    readonly preparers?: readonly string[];
+  };
+  readonly hold?: (context: TransactionContext) => Promise<void>;
+  /**
+   * The caller's own document (stock-ledger 15.2): its rows locked at step 1 with the decision's request, rechecked
+   * under the lock before Plan, and changed after Write, all in the posting's transaction (10.3, 10.4).
+   */
+  readonly document?: {
+    readonly targets: readonly LockTarget[];
+    readonly recheck: (context: TransactionContext) => Promise<CommandRefusal | undefined>;
+    readonly after: (context: TransactionContext, written: Written) => Promise<void>;
+  };
+  /** Runs after a refusal rolled the command back, as a caller raises its exception (SL-23; DEC-105). */
+  readonly afterRefusal?: (refusal: CommandRefusal, source: LedgerRequest['source']) => Promise<void>;
 }
 
 /** Writes the result of a posting that must succeed. */
