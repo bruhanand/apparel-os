@@ -39,8 +39,8 @@ import {
 } from './roles.js';
 import { secretRegistry } from './secret.js';
 import {
-  caEvidenceDraftSchema,
-  caEvidenceRecordedSchema,
+  taxRuleCaEvidenceDraftSchema,
+  taxRuleCaEvidenceRecordedSchema,
   goodsClassificationDraftSchema,
   goodsClassificationVersionDraftSchema,
   priceBasisDraftSchema,
@@ -246,6 +246,19 @@ import {
   skuAsOfAnswerSchema,
   skuAsOfQuerySchema,
 } from './products.js';
+import {
+  accountDraftSchema,
+  accountListSchema,
+  accountReadSchema,
+  accountVersionDraftSchema,
+  bookSettingDraftSchema,
+  bookSettingListSchema,
+  caEvidenceDraftSchema,
+  caEvidenceRecordedSchema,
+  costSettingQuerySchema,
+  costSettingReadSchema,
+  financeChangedSchema,
+} from './books.js';
 import {
   agreementDraftSchema,
   agreementListSchema,
@@ -734,6 +747,33 @@ const BANK_DETAIL_FIELDS = (['accountHolder', 'accountNumber', 'ifsc', 'bankName
   fieldClass: 'bank-details' as const,
 }));
 
+/** The codes every change of the books part can answer (books-and-posting 2, 3, 6.3; S1-F09-T01). */
+const FINANCE_CHANGE_CODES = [
+  'access.not-signed-in',
+  'access.session-locked',
+  'access.sign-in-incomplete',
+  'access.not-authorised',
+  'access.business-date-not-set',
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'finance.record-not-found',
+  'finance.code-taken',
+  'finance.starts-in-past',
+  'finance.version-overlaps',
+  'finance.cost-change-after-stock',
+  'finance.book-stock-unanswered',
+] as const satisfies readonly ErrorCode[];
+const FINANCE_READ_CODES = [...HISTORY_CODES, 'finance.record-not-found'] as const satisfies readonly ErrorCode[];
+/** What a decision on an account or book-setting version adds (6.3; 2.2). */
+const FINANCE_DECISION_CODES = [
+  'finance.record-not-found',
+  'finance.starts-in-past',
+  'finance.version-overlaps',
+  'finance.no-ca-evidence',
+  'finance.cost-change-after-stock',
+  'finance.book-stock-unanswered',
+] as const satisfies readonly ErrorCode[];
+
 /** The routes of the API. A unit adds its routes here as they are built. */
 /** The codes every change of the tax rules part can answer (shared-calculations 3.3, 10; S1-F09-T04). */
 const TAX_RULE_CHANGE_CODES = [
@@ -758,7 +798,7 @@ const TAX_RULE_CHANGE_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes recording the CA's evidence can answer (10.1; books-and-posting 6.3). */
-const CA_EVIDENCE_CODES = [
+const TAX_RULE_CA_EVIDENCE_CODES = [
   'access.not-signed-in',
   'access.session-locked',
   'access.sign-in-incomplete',
@@ -1346,6 +1386,8 @@ export const routes = {
       ...ORGANISATION_STRUCTURE_RULE_CODES,
       // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01).
       ...CATALOGUE_DECISION_CODES,
+      // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
+      ...FINANCE_DECISION_CODES,
       // An activity's approval (module-map 4.16; S1-F04-T02).
       'site-lifecycle.record-not-found',
       'site-lifecycle.unit-not-found',
@@ -3350,6 +3392,96 @@ export const routes = {
     response: zeroStockDeclaredSchema,
     codes: [...READINESS_COMMAND_CODES, 'site-lifecycle.unit-holds-stock'],
   }),
+  // The books part of finance (books-and-posting 2, 3, 6.3, 9.1; S1-F09-T01): API only in stage 1 (DEC-116).
+  listAccounts: defineRoute({
+    method: 'GET',
+    path: '/api/finance/books/{bookId}/accounts',
+    params: z.strictObject({ bookId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'finance.account' },
+    command: false,
+    response: accountListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readAccount: defineRoute({
+    method: 'GET',
+    path: '/api/finance/accounts/{accountId}',
+    params: z.strictObject({ accountId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'finance.account' },
+    command: false,
+    response: accountReadSchema,
+    codes: FINANCE_READ_CODES,
+  }),
+  prepareAccount: defineRoute({
+    method: 'POST',
+    path: '/api/finance/accounts',
+    access: { kind: 'action', action: 'create', recordType: 'finance.account' },
+    command: true,
+    body: accountDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: financeChangedSchema,
+    codes: FINANCE_CHANGE_CODES,
+  }),
+  prepareAccountVersion: defineRoute({
+    method: 'POST',
+    path: '/api/finance/accounts/{accountId}/versions',
+    params: z.strictObject({ accountId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'finance.account' },
+    command: true,
+    body: accountVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: financeChangedSchema,
+    codes: FINANCE_CHANGE_CODES,
+  }),
+  listBookSettings: defineRoute({
+    method: 'GET',
+    path: '/api/finance/books/{bookId}/settings',
+    params: z.strictObject({ bookId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: 'finance.book_setting' },
+    command: false,
+    response: bookSettingListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareBookSetting: defineRoute({
+    method: 'POST',
+    path: '/api/finance/books/{bookId}/settings',
+    params: z.strictObject({ bookId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: 'finance.book_setting' },
+    command: true,
+    body: bookSettingDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: financeChangedSchema,
+    codes: FINANCE_CHANGE_CODES,
+  }),
+  // Read the cost setting of a book on a date (books-and-posting 2.2; stock-ledger 13.1; code-house-rules 12.14).
+  readCostSetting: defineRoute({
+    method: 'GET',
+    path: '/api/finance/books/{bookId}/cost-setting',
+    params: z.strictObject({ bookId: idSchema }),
+    query: costSettingQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: 'finance.book_setting' },
+    command: false,
+    response: costSettingReadSchema,
+    codes: FINANCE_READ_CODES,
+  }),
+  // The CA's approval evidence, recorded against the versions it covers (6.3; POL-09.01; DEC-112, GC4-2).
+  recordCaEvidence: defineRoute({
+    method: 'POST',
+    path: '/api/finance/ca-approval-evidence',
+    access: { kind: 'action', action: 'create', recordType: 'finance.ca_approval_evidence' },
+    command: true,
+    body: caEvidenceDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: caEvidenceRecordedSchema,
+    codes: [...FINANCE_CHANGE_CODES, 'finance.version-not-awaiting'],
+  }),
   // finance · tax rules (shared-calculations 10; module-map 4.14; S1-F09-T04): API only in stage 1 (DEC-116). Each
   // version waits for a different authorised Accounts user, who records the CA's evidence and decides it (10.1).
   listTaxRuleRecords: defineRoute({
@@ -3456,14 +3588,14 @@ export const routes = {
   recordTaxRuleCaEvidence: defineRoute({
     method: 'POST',
     path: '/api/finance/tax-rules/ca-evidence',
-    access: { kind: 'action', action: 'approve', recordType: 'finance.tax_rule' },
+    access: { kind: 'action', action: 'create', recordType: 'finance.ca_approval_evidence' },
     command: true,
-    body: caEvidenceDraftSchema,
+    body: taxRuleCaEvidenceDraftSchema,
     secretFields: [],
     restrictedFields: [],
     shows: 'nothing',
-    response: caEvidenceRecordedSchema,
-    codes: CA_EVIDENCE_CODES,
+    response: taxRuleCaEvidenceRecordedSchema,
+    codes: TAX_RULE_CA_EVIDENCE_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

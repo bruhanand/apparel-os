@@ -106,6 +106,7 @@ beforeAll(async () => {
   approver = await enrolled('TAX-APPROVER', [
     { recordType: 'finance.tax_rule', action: 'view' },
     { recordType: 'finance.tax_rule', action: 'approve' },
+    { recordType: 'finance.ca_approval_evidence', action: 'create' },
   ]);
 });
 
@@ -135,7 +136,7 @@ describe('the tax rules routes (shared-calculations 10; DEC-116)', () => {
       },
     });
     expect(evidence.status, JSON.stringify(evidence.body)).toBe(200);
-    // The preparer may not record it: it takes approve (10.1).
+    // The preparer may not record it: it takes create on the CA's approval evidence (books-and-posting 6.3).
     const own = await post(preparer, '/api/finance/tax-rules/ca-evidence', evidence.body);
     expect(own.status).toBe(403);
     const decided = await post(approver, `/api/access/approval-requests/${String(requestId)}/decision`, {

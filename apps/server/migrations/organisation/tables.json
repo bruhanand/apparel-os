@@ -1598,6 +1598,54 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "shared-calculations 10.1; books-and-posting 6.3; code-house-rules 7.1",
       "why": "The tax rules belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (shared-calculations 10.3; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.book_setting",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "books-and-posting 2.2, 2.3, 13.1; code-house-rules 7.1, 8.2",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.book_setting_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "books-and-posting 2.2, 2.3, 6.3, 13.1; code-house-rules 7.3, 12.14",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.account",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "books-and-posting 3.1, 13.1; code-house-rules 7.1, 8.2",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.account_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "books-and-posting 3.1, 6.3, 13.1; code-house-rules 7.3",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.ca_approval_evidence",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 6.3; code-house-rules 7.1",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
+    },
+    {
+      "table": "finance.ca_approval_evidence_cover",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "books-and-posting 6.3; code-house-rules 7.1",
+      "why": "The books' settings, chart and the CA's approval evidence belong to the Organisation's books as a whole: their record types carry no scope fact for now, so the permission on the record type decides (books-and-posting 13.1; access-and-approvals 5.3); only finance code reads them"
     }
   ]
 }

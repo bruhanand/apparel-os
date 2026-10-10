@@ -129,7 +129,7 @@ export const taxRuleVersionRefSchema = z.strictObject({ kind: taxRuleKindSchema,
  * attached through files-imports (S1-F06-T05), or a reference naming what the evidence is, who gave it, its date and
  * where it is kept.
  */
-export const caEvidenceDraftSchema = z.strictObject({
+export const taxRuleCaEvidenceDraftSchema = z.strictObject({
   versions: z
     .array(taxRuleVersionRefSchema)
     .min(1)
@@ -154,13 +154,13 @@ export type TaxRateRuleDraft = z.infer<typeof taxRateRuleDraftSchema>;
 export type RegistrationApplicabilityDraft = z.infer<typeof registrationApplicabilityDraftSchema>;
 export type PriceBasisDraft = z.infer<typeof priceBasisDraftSchema>;
 export type RoundingRuleDraft = z.infer<typeof roundingRuleDraftSchema>;
-export type CaEvidenceDraft = z.infer<typeof caEvidenceDraftSchema>;
+export type TaxRuleCaEvidenceDraft = z.infer<typeof taxRuleCaEvidenceDraftSchema>;
 
 /** What a change answers: the record and its version, and the approval request. */
 export const taxRuleChangedSchema = z.strictObject({ recordId: idSchema, versionId: idSchema, requestId: idSchema });
 export type TaxRuleChanged = z.infer<typeof taxRuleChangedSchema>;
-export const caEvidenceRecordedSchema = z.strictObject({ evidenceIds: z.array(idSchema) });
-export type CaEvidenceRecorded = z.infer<typeof caEvidenceRecordedSchema>;
+export const taxRuleCaEvidenceRecordedSchema = z.strictObject({ evidenceIds: z.array(idSchema) });
+export type TaxRuleCaEvidenceRecorded = z.infer<typeof taxRuleCaEvidenceRecordedSchema>;
 
 // Read tax rules (10.2): the rules in force on a date, each with its version, in the shapes the calculations take.
 

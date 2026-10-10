@@ -20,6 +20,7 @@ import { accessRecord, auditRecord, auditSeal, retentionDeletion } from '../src/
 import * as configurationTables from '../src/modules/configuration/db/schema.js';
 import * as siteLifecycleTables from '../src/modules/site-lifecycle/db/schema.js';
 import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
+import * as booksTables from '../src/modules/finance/books/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
@@ -609,6 +610,12 @@ describe('the Drizzle definitions of configuration (code-house-rules 3.4, 10.4; 
       await expectDefinitionMatches(world.organisations[0].database, table);
     },
   );
+});
+
+describe('the Drizzle definitions of finance · books (code-house-rules 3.4, 10.4; S1-F09-T01)', () => {
+  it.each(Object.entries(booksTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
+  });
 });
 
 describe('the Drizzle definitions of site-lifecycle (code-house-rules 3.4, 10.4; S1-F04-T02)', () => {

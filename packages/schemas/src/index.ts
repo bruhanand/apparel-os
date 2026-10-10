@@ -525,3 +525,6 @@ export * from './site-lifecycle.js';
 
 // The tax rules part of finance (shared-calculations 10; S1-F09-T04).
 export * from './tax-rules.js';
+
+// The books part of finance (books-and-posting 2, 3, 6.3; S1-F09-T01).
+export * from './books.js';

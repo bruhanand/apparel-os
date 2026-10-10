@@ -303,6 +303,32 @@ export const configurationCodes = declareCodes({
 });
 
 /**
+ * The codes of `finance` · books (books-and-posting 2.2, 3.1, 6.3; S1-F09-T01).
+ *
+ * - `finance.record-not-found`: the book, account, setting or version named does not exist.
+ * - `finance.code-taken`: the book already has an account with that code (3.1).
+ * - `finance.starts-in-past`: a version never starts on a past date (6.3; GC2-7, DEC-105).
+ * - `finance.version-overlaps`: another approved version of the record starts on the same date (6.3).
+ * - `finance.no-ca-evidence`: the version has no CA approval evidence attached or referenced, so a decision gives it
+ *   no effect (6.3; POL-09.01; DEC-112, GC4-2).
+ * - `finance.version-not-awaiting`: CA evidence names a version that is no longer awaiting its decision (6.3).
+ * - `finance.cost-change-after-stock`: the version changes the formula or pool mode of a book that has held stock,
+ *   refused until the CA says how value is divided at the change; `missing` names SL-6 (2.2; stock-ledger 7.12).
+ * - `finance.book-stock-unanswered`: no implementation of "has this book held stock?" answers, so a formula or pool
+ *   change is refused (2.2; DEC-116).
+ */
+export const financeBooksCodes = declareCodes({
+  'finance.record-not-found': 'not-found',
+  'finance.code-taken': 'refused',
+  'finance.starts-in-past': 'refused',
+  'finance.version-overlaps': 'refused',
+  'finance.no-ca-evidence': 'refused',
+  'finance.version-not-awaiting': 'refused',
+  'finance.cost-change-after-stock': 'refused',
+  'finance.book-stock-unanswered': 'unavailable',
+});
+
+/**
  * The codes of `site-lifecycle` (module-map 4.16; domain-model 3.6; PRD-LIF-001 to PRD-LIF-003; S1-F04-T02).
  *
  * - `site-lifecycle.check-failed`: a readiness check fails; `missing` names each check and what it lacks.
@@ -650,13 +676,10 @@ function merchandisePartiesCodes() {
 }
 
 /**
- * The codes of `finance` · tax rules (shared-calculations 3.3, 10; S1-F09-T04). A refusal names what blocks it
- * (PRD-UXP-003).
+ * The codes of `finance` · tax rules (shared-calculations 3.3, 10; S1-F09-T04) beside the books part's, which it
+ * shares: `finance.code-taken`, `finance.record-not-found`, `finance.starts-in-past`, `finance.version-overlaps`,
+ * `finance.no-ca-evidence` and `finance.version-not-awaiting`. A refusal names what blocks it (PRD-UXP-003).
  *
- * - `finance.code-taken`: a classification already has that HSN code (10.3).
- * - `finance.record-not-found`: a record or version the change names does not exist.
- * - `finance.starts-in-past`: a version never starts on a past date (structure-and-masters 2.2; GC2-7, DEC-105).
- * - `finance.version-overlaps`: another approved version of the record starts on the same date (10.1, 10.3).
  * - `finance.reference-not-in-force`: the classification a rate rule names has no approved version in force, not
  *   retired, on the rule's start (10.1).
  * - `finance.tax-registration-not-found`: no tax registration of `organisation` has that identifier (10.1).
@@ -666,22 +689,14 @@ function merchandisePartiesCodes() {
  *   that charges none has components (10.1; GC7-8).
  * - `finance.rounding-unit-not-positive`: a rounding rule's unit is not whole paise above zero (3.3, 10.3).
  * - `finance.rounding-level-invalid`: a level on a discount or bill rule, or none on a tax rule (3.3, 10.3).
- * - `finance.ca-evidence-missing`: the version has no CA evidence attached or referenced (10.1; POL-10.05; GC4-2).
- * - `finance.version-not-awaiting`: CA evidence is recorded only for a version awaiting approval.
  */
 export const financeTaxRulesCodes = declareCodes({
-  'finance.code-taken': 'refused',
-  'finance.record-not-found': 'not-found',
-  'finance.starts-in-past': 'refused',
-  'finance.version-overlaps': 'refused',
   'finance.reference-not-in-force': 'refused',
   'finance.tax-registration-not-found': 'not-found',
   'finance.rate-rule-invalid': 'refused',
   'finance.shares-invalid': 'refused',
   'finance.rounding-unit-not-positive': 'refused',
   'finance.rounding-level-invalid': 'refused',
-  'finance.ca-evidence-missing': 'refused',
-  'finance.version-not-awaiting': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
@@ -701,6 +716,7 @@ export const errorCodes = {
   ...configurationCodes,
   ...siteLifecycleCodes,
   ...financeTaxRulesCodes,
+  ...financeBooksCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

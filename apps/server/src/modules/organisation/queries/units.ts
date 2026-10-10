@@ -1,7 +1,7 @@
 import type { BusinessUnitKind } from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
-import { inForceOn } from '../commands/common.js';
+import { exists, inForceOn } from '../commands/common.js';
 import { businessUnit, location, locationVersion, site } from '../db/schema.js';
 import { mappingOn } from './records.js';
 
@@ -105,6 +105,14 @@ export async function siteExists(context: TransactionContext, siteId: string): P
  * Every location of a unit, retired or not, for asking the stock ledger whether it holds stock at the unit through the
  * location-in-use contract (structure-and-masters 3.5; PRD-LIF-003; RR-483).
  */
+/**
+ * Whether an accounting book exists, for `finance` · books, which keeps each book's settings and chart by the book's
+ * identifier (books-and-posting 2.1, 13; structure-and-masters 2.5; S1-F09-T01).
+ */
+export function accountingBookExists(context: TransactionContext, bookId: string): Promise<boolean> {
+  return exists(context, 'accounting_book', bookId);
+}
+
 export async function unitLocationIds(context: TransactionContext, unitId: string): Promise<string[]> {
   const rows = await context.tx
     .select({ id: location.id })

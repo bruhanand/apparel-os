@@ -51,8 +51,9 @@ import {
   organisationScopeMembers,
   type LocationInUse,
 } from './modules/organisation/index.js';
-import { LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
+import { BookStockHistory, LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
+import { BOOK_HELD_STOCK, BooksModule, booksApprovals, type BookHeldStock } from './modules/finance/books/index.js';
 
 /** The approval rules and decision effects of several modules, as one (access-and-approvals 9.8b). */
 function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals {
@@ -80,9 +81,17 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // ledger answers, and supplier roles, which the parties part answers.
     { provide: STOCK_PRESENCE, useFactory: (): StockPresence => new SkuStockPresence() },
     { provide: SUPPLIER_ROLES, useValue: partiesSupplierRoles satisfies SupplierRoles },
+    // "Has this book held stock?", the contract of `finance` · books that `stock` · ledger answers (books-and-posting
+    // 2.2; stock-ledger 13.7; DEC-116; S1-F09-T01).
+    { provide: BOOK_HELD_STOCK, useFactory: (): BookHeldStock => new BookStockHistory() },
     {
       provide: MODULE_APPROVALS,
-      useFactory: (audit: AuditInterface, locationInUse: LocationInUse, configuration: ConfigurationInterface) =>
+      useFactory: (
+        audit: AuditInterface,
+        locationInUse: LocationInUse,
+        configuration: ConfigurationInterface,
+        bookHeldStock: BookHeldStock,
+      ) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
           routingApprovals(audit),
@@ -103,8 +112,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
             grants: configuration.claimActivityGrants(),
             locationInUse,
           }),
+          // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
+          booksApprovals(audit, bookHeldStock),
         ),
-      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
@@ -125,6 +136,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
   exports: [
     MODULE_APPROVALS,
     LOCATION_IN_USE,
+    BOOK_HELD_STOCK,
     STOCK_PRESENCE,
     SUPPLIER_ROLES,
     SCOPE_MEMBERS,
@@ -164,6 +176,8 @@ export class ModuleApprovalsModule {}
     TaxRulesModule,
     // Readiness checks and unit activation (module-map 4.16; S1-F04-T02).
     SiteLifecycleModule,
+    // Book settings, the chart of accounts and the CA's approval evidence (module-map 4.14; S1-F09-T01).
+    BooksModule,
   ],
 })
 export class AppModule {}

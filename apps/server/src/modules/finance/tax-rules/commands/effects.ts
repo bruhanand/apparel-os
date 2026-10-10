@@ -79,7 +79,7 @@ function effectOf(kind: TaxRuleKind, audit: AuditInterface): DocumentEffect {
       if (overlap !== undefined) return { kind: 'refusal', refusal: overlap };
       // POL-10.05; GC4-2, DEC-116: in force only with the CA's evidence attached or referenced (10.1).
       if ((await caEvidenceCount(context, kind, versionId)) === 0) {
-        return refused('refused', 'finance.ca-evidence-missing', [
+        return refused('refused', 'finance.no-ca-evidence', [
           { kind: 'version', recordType: TAX_RULE_TYPE, recordId: head.ownerId, versionId },
         ]);
       }

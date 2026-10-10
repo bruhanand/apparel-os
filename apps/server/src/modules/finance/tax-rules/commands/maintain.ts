@@ -8,8 +8,8 @@ import { uuidv7 } from '@apparel-os/domain';
 import {
   TAX_RULE_CHANGE,
   TAX_RULE_TYPE,
-  type CaEvidenceDraft,
-  type CaEvidenceRecorded,
+  type TaxRuleCaEvidenceDraft,
+  type TaxRuleCaEvidenceRecorded,
   type GoodsClassificationDraft,
   type GoodsClassificationVersionDraft,
   type PriceBasisDraft,
@@ -75,7 +75,7 @@ const value = (field: string, after: Json): ValueChange => ({ kind: 'value', fie
 const from = (start: string) => `[${start},)`;
 
 /** What a piece of the CA's evidence is, as files-imports keeps it: it carries no restricted class (10.1). */
-export const CA_EVIDENCE = { kind: 'finance.ca-evidence', restrictedClasses: [] } as const;
+export const CA_EVIDENCE = { kind: 'finance.ca-approval', restrictedClasses: [] } as const;
 
 export interface MaintainDependencies {
   readonly audit: AuditInterface;
@@ -506,8 +506,8 @@ export class TaxRulesMaintenance {
   async recordCaEvidence(
     context: TransactionContext,
     recorder: Preparer,
-    draft: CaEvidenceDraft,
-  ): Promise<Outcome<CaEvidenceRecorded>> {
+    draft: TaxRuleCaEvidenceDraft,
+  ): Promise<Outcome<TaxRuleCaEvidenceRecorded>> {
     const heads = [];
     for (const each of draft.versions) {
       const head = await versionHead(context, each.kind, each.versionId);

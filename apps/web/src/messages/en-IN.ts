@@ -1948,4 +1948,40 @@ export const englishIndia = {
   'readiness.facts.checks': 'Checks',
   'readiness.facts.zero-stock': 'Zero opening stock',
   'readiness.facts.zero-stock.none': 'Not relied on',
+  // The books part of finance (books-and-posting 2, 3, 6.3; S1-F09-T01): API only in stage 1, named for history and
+  // approvals (DEC-116).
+  'record-type.finance.account': 'Account',
+  'record-type.finance.book_setting': 'Book setting',
+  'record-type.finance.ca_approval_evidence': 'CA approval evidence',
+  'approval.action.finance.account.change': 'Account version',
+  'approval.action.finance.book_setting.change': 'Book setting version',
+  'error.finance.record-not-found': 'The book, account, setting, tax rule or version named does not exist.',
+  'error.finance.code-taken':
+    'This code is taken: this book already has an account with it, or a goods classification already has it.',
+  'error.finance.starts-in-past': 'A version starts today or later, never on a past date.',
+  'error.finance.version-overlaps': 'Another approved version of this record starts on the same date.',
+  'error.finance.no-ca-evidence':
+    'The CA’s approval evidence is not attached or referenced for this version yet, so it cannot take effect.',
+  'error.finance.version-not-awaiting': 'A version named is no longer awaiting its decision.',
+  'error.finance.cost-change-after-stock':
+    'This book has held stock, so its cost formula or pool mode cannot change until the CA says how value is divided at the change.',
+  'error.finance.book-stock-unanswered':
+    'Whether this book has held stock cannot be answered yet, so its cost formula or pool mode cannot change.',
+  // The tax rules part of finance (shared-calculations 10; S1-F09-T04): API only in stage 1, named for history and
+  // approvals (DEC-116).
+  'record-type.finance.tax_rule': 'Tax rule',
+  'approval.action.finance.goods_classification.change': 'Goods classification version',
+  'approval.action.finance.tax_rate_rule.change': 'Rate and value rule version',
+  'approval.action.finance.registration_tax_applicability.change': 'Registration applicability version',
+  'approval.action.finance.price_basis.change': 'Price basis version',
+  'approval.action.finance.rounding_rule.change': 'Rounding rule version',
+  'error.finance.reference-not-in-force':
+    'The goods classification this rule names is not in force, or is retired, on the rule’s start date.',
+  'error.finance.tax-registration-not-found': 'The tax registration named does not exist.',
+  'error.finance.rate-rule-invalid':
+    'The rates must be exact numbers, and the slabs must start at zero and rise by their lower bound.',
+  'error.finance.shares-invalid':
+    'When the registration charges tax, its component shares must add up to one; when it does not, it has no components.',
+  'error.finance.rounding-unit-not-positive': 'A rounding unit is a whole number of paise above zero.',
+  'error.finance.rounding-level-invalid': 'Only a tax rounding rule has a level, and a tax rounding rule needs one.',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

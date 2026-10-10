@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { priceBill, type PriceBillInput } from '@apparel-os/calculations';
-import type { CaEvidenceDraft, TaxRuleChanged, TaxRuleKind, TaxRulesInForceAnswer } from '@apparel-os/schemas';
+import type { TaxRuleCaEvidenceDraft, TaxRuleChanged, TaxRuleKind, TaxRulesInForceAnswer } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { calculationInputs } from '../src/modules/finance/tax-rules/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
@@ -75,7 +75,7 @@ const SYNTHETIC_REFERENCE = {
 
 /** The CA's evidence of the versions, recorded by the approver before deciding (10.1; GC4-2). */
 async function referenced(versions: { kind: TaxRuleKind; versionId: string }[], on: TaxRulesSetup = setup) {
-  const evidence: CaEvidenceDraft['evidence'] = SYNTHETIC_REFERENCE;
+  const evidence: TaxRuleCaEvidenceDraft['evidence'] = SYNTHETIC_REFERENCE;
   return recorded(await on.asApproverDo((c, r) => on.taxRules.recordCaEvidence(c, r, { versions, evidence })));
 }
 
@@ -201,7 +201,7 @@ describe('what is refused (shared-calculations 10.1, 10.3)', () => {
     const changed = await classification(syntheticCode(next('HSNX')));
     expect(await setup.decide(changed.requestId, changed.versionId)).toMatchObject({
       kind: 'refusal',
-      refusal: { code: 'finance.ca-evidence-missing' },
+      refusal: { code: 'finance.no-ca-evidence' },
     });
     await approve('goods-classification', changed);
   });

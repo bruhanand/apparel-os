@@ -96,7 +96,8 @@ export async function taxRulesSetup(options: {
   const approving = await grantSynthetic(
     options.database,
     { kind: 'user', id: approver.id },
-    grants(['view', 'approve']),
+    // The approver records the CA's evidence too, as the books part's is recorded (books-and-posting 6.3).
+    [...grants(['view', 'approve']), { recordType: 'finance.ca_approval_evidence', action: 'create' }],
   );
   await grantSynthetic(options.database, { kind: 'user', id: outsider.id }, grants(['view']));
   const approveReason = await writeSyntheticReason(options.database, 'approve');
