@@ -27,8 +27,10 @@ function PeriodPicker({
 }) {
   const periods = useQuery(readQuery(api, 'listPeriods', { params: { bookId } }));
   return (
-    <label className="flex flex-col gap-1" htmlFor="finance-period">
-      <span className="text-body-sm font-semibold">{t('finance.period')}</span>
+    <div className="flex flex-col gap-1">
+      <label htmlFor="finance-period" className="text-body-sm font-semibold">
+        {t('finance.period')}
+      </label>
       <select
         id="finance-period"
         className={inputClass}
@@ -48,7 +50,7 @@ function PeriodPicker({
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 

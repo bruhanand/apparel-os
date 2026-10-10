@@ -270,6 +270,31 @@ const settingsSetup = await runSetupStep({
 if (settingsSetup.outcome !== 'created')
   throw new Error(`The settings setup step did not create: ${settingsSetup.outcome}`);
 
+// The posting maps journey's Organisation (S1-F09-T02), made by the setup step like the one above, so My work is fed.
+const postingCode = syntheticCode('ORG-POSTING');
+const postingDatabase = `syn_browser_posting_${randomBytes(3).toString('hex')}`;
+const postingSetup = await runSetupStep({
+  migrationConnectionString: databaseUrl(world.directory, 'migration'),
+  runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
+  request: setupRequestSchema.parse({
+    ...journeyRequest,
+    organisationCode: postingCode,
+    databaseName: postingDatabase,
+    firstAdmin: {
+      ...journeyRequest.firstAdmin,
+      temporaryPassword: journeyRequest.firstAdmin.temporaryPassword.reveal(),
+    },
+    firstApprover: {
+      ...journeyRequest.firstApprover,
+      temporaryPassword: journeyRequest.firstApprover.temporaryPassword.reveal(),
+    },
+  }),
+  serviceIdentities: serviceIdentitiesOf(jobRegistry),
+  logger: setupLog.logger,
+});
+if (postingSetup.outcome !== 'created')
+  throw new Error(`The posting setup step did not create: ${postingSetup.outcome}`);
+
 // The worker that turns approval requests into My work items (module-map 4.8, 6.2 flow A), and runs the operations
 // view journey's failing consumer. It serves every Organisation whose outbox identity the setup step wrote: here, the
 // journeys'. It starts before any fixture below writes an event, since a consumer receives only the events recorded
@@ -310,6 +335,7 @@ const keys = syntheticKeysEnvironment(world);
 const keyring = JSON.parse(keys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
 keyring[journeyCode] = randomBytes(32).toString('base64url');
 keyring[settingsCode] = randomBytes(32).toString('base64url');
+keyring[postingCode] = randomBytes(32).toString('base64url');
 keys[ORGANISATION_KEYS_VARIABLE] = JSON.stringify(keyring);
 
 const firstSignIn = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
@@ -371,8 +397,6 @@ const structureFixture = await structureSetup({
   organisationCode: settingsCode,
   keysEnvironment: keys,
   label: 'BROWSER-GEO',
-  // The posting maps journey's SYNTHETIC event kind, declared in the test composition only (S1-F09-T02).
-  eventKinds: POSTING_JOURNEY_KINDS,
 });
 const structureGeography = await approvedGeography(structureFixture, 'JOURNEY');
 // The business units journey (organisation-units.spec.ts; S1-F02-T02): an approved SYNTHETIC Site in the journey's
@@ -635,58 +659,70 @@ await approved(structureFixture, (c, p) =>
     validFrom: structureFixture.today(),
   }),
 );
-// The posting maps journey (posting-maps.spec.ts; S1-F09-T02): a SYNTHETIC book with a Site, a Store, a whole-store
+// The posting maps journey (posting-maps.spec.ts; S1-F09-T02), in an Organisation of its own made by the setup step,
+// so its fixture's approvals never queue ahead of the other journeys' My work items in the worker: a SYNTHETIC
+// geography, and a SYNTHETIC book with a Site, a Store, a whole-store
 // unit and a warehouse unit mapped to it, the accounts of the synthetic chart of books-and-posting 16.1 in force, one
 // Open period from today with its journal series in a SYNTHETIC format, a map version in force from today, and two
 // journals posted through Post by the synthetic caller (DEC-112 H2), one at each unit, so the trial balance has lines
 // in and out of the Store reader's scope. Every value is SYNTHETIC (GC4-1, GC5-1, V-10).
-const postingEntity = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareLegalEntity(c, p, {
+const postingFixture = await structureSetup({
+  directory: world.directory,
+  database: postingDatabase,
+  organisationCode: postingCode,
+  keysEnvironment: keys,
+  label: 'BROWSER-POST',
+  // The journey's SYNTHETIC event kinds, declared in the test composition only (books-and-posting 7.1; DEC-112 H2).
+  eventKinds: POSTING_JOURNEY_KINDS,
+});
+const postingGeography = await approvedGeography(postingFixture, 'POSTING');
+const postingEntity = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareLegalEntity(c, p, {
     code: syntheticCode('JOURNEY-POST-LE'),
     legalName: syntheticName('Journey Posting Entity'),
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
-const postingRegistration = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareTaxRegistration(c, p, {
+const postingRegistration = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareTaxRegistration(c, p, {
     code: syntheticCode('JOURNEY-POST-GSTIN'),
     legalEntityId: postingEntity.recordId,
     registrationNumber: 'SYNTHETIC-GSTIN-POST',
-    stateId: structureGeography.state.recordId,
-    validityFrom: structureFixture.today(),
-    validFrom: structureFixture.today(),
+    stateId: postingGeography.state.recordId,
+    validityFrom: postingFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
 const postingBookCode = syntheticCode('JOURNEY-POST-BK');
 const postingBookName = syntheticName('Journey Posting Book');
-const postingBook = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareAccountingBook(c, p, {
+const postingBook = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareAccountingBook(c, p, {
     code: postingBookCode,
     legalEntityId: postingEntity.recordId,
     name: postingBookName,
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
-const postingSite = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareSite(c, p, {
+const postingSite = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareSite(c, p, {
     code: syntheticCode('JOURNEY-POST-SITE'),
     name: syntheticName('Journey Posting Site'),
     physicalKind: 'retail-site',
-    areaId: structureGeography.area.recordId,
+    areaId: postingGeography.area.recordId,
     addresses: [syntheticName('1 Posting Road')],
     aliases: [],
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
-const postingStore = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareStore(c, p, {
+const postingStore = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareStore(c, p, {
     code: syntheticCode('JOURNEY-POST-STORE'),
     name: syntheticName('Journey Posting Store'),
     format: 'ebo',
     operatingModel: 'company-owned',
     siteId: postingSite.recordId,
     aliases: [],
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
 const postingMapping = {
@@ -694,25 +730,25 @@ const postingMapping = {
   taxRegistrationId: postingRegistration.recordId,
   accountingBookId: postingBook.recordId,
 };
-const postingStoreUnit = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareBusinessUnit(c, p, {
+const postingStoreUnit = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareBusinessUnit(c, p, {
     code: syntheticCode('JOURNEY-POST-STORE-UNIT'),
     name: syntheticName('Journey Posting Store Unit'),
     siteId: postingSite.recordId,
     kind: 'whole-store',
     storeId: postingStore.recordId,
     ...postingMapping,
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
-const postingWarehouse = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareBusinessUnit(c, p, {
+const postingWarehouse = await approved(postingFixture, (c, p) =>
+  postingFixture.organisation.prepareBusinessUnit(c, p, {
     code: syntheticCode('JOURNEY-POST-WAREHOUSE'),
     name: syntheticName('Journey Posting Warehouse'),
     siteId: postingSite.recordId,
     kind: 'warehouse',
     ...postingMapping,
-    validFrom: structureFixture.today(),
+    validFrom: postingFixture.today(),
   }),
 );
 const postingOutcome = <A>(
@@ -727,20 +763,20 @@ async function postingInForce(
   recordType: 'finance.account' | 'finance.posting_map',
 ) {
   postingOutcome(
-    await structureFixture.asPreparerDo((c, p) =>
-      structureFixture.books.recordCaEvidence(c, p, {
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.recordCaEvidence(c, p, {
         versions: [{ recordType, versionId: change.versionId }],
         evidence: {
           kind: 'reference',
           what: syntheticName('CA approval letter'),
           givenBy: syntheticName('CA'),
-          givenOn: structureFixture.today(),
+          givenOn: postingFixture.today(),
           keptAt: syntheticName('Accounts file'),
         },
       }),
     ),
   );
-  const decided = await structureFixture.decide(change.requestId ?? '', change.versionId);
+  const decided = await postingFixture.decide(change.requestId ?? '', change.versionId);
   if (decided.kind !== 'success') throw new Error(`The synthetic books decision was refused: ${decided.refusal.code}`);
 }
 const postingAccounts: Record<string, string> = {};
@@ -750,13 +786,13 @@ for (const [code, nature, name] of [
   ['SYN-PUR', 'liability', 'SYNTHETIC Purchase clearing'],
 ] as const) {
   const change = postingOutcome(
-    await structureFixture.asPreparerDo((c, p) =>
-      structureFixture.books.prepareAccount(c, p, {
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.prepareAccount(c, p, {
         bookId: postingBook.recordId,
         code,
         nature,
         name,
-        validFrom: structureFixture.today(),
+        validFrom: postingFixture.today(),
       }),
     ),
   );
@@ -764,23 +800,23 @@ for (const [code, nature, name] of [
   postingAccounts[code] = change.recordId;
 }
 const postingPeriod = postingOutcome(
-  await structureFixture.asPreparerDo((c, p) =>
-    structureFixture.books.definePeriod(c, p, postingBook.recordId, {
+  await postingFixture.asPreparerDo((c, p) =>
+    postingFixture.books.definePeriod(c, p, postingBook.recordId, {
       code: syntheticCode('JOURNEY-P1'),
       financialYear: syntheticCode('FY-JOURNEY'),
-      firstDay: structureFixture.today(),
-      lastDay: structureFixture.day(29),
+      firstDay: postingFixture.today(),
+      lastDay: postingFixture.day(29),
     }),
   ),
 );
-await structureFixture.run(structureFixture.preparer.id, async (c) => {
-  await structureFixture.numbering.defineFormatVersion(c, syntheticCode('JOURNEY-JV'), [
+await postingFixture.run(postingFixture.preparer.id, async (c) => {
+  await postingFixture.numbering.defineFormatVersion(c, syntheticCode('JOURNEY-JV'), [
     { kind: 'text', text: 'SYN-JV-' },
     { kind: 'year' },
     { kind: 'text', text: '-' },
     { kind: 'sequence', width: 5 },
   ]);
-  const series = await structureFixture.numbering.defineSeries(c, {
+  const series = await postingFixture.numbering.defineSeries(c, {
     kind: JOURNAL_KIND.kind,
     scopeKey: postingBook.recordId,
     financialYear: syntheticCode('FY-JOURNEY'),
@@ -798,12 +834,12 @@ const postingLine = (component: string, side: 'debit' | 'credit', code: string) 
 });
 await postingInForce(
   postingOutcome(
-    await structureFixture.asPreparerDo((c, p) =>
-      structureFixture.books.preparePostingMap(c, p, {
+    await postingFixture.asPreparerDo((c, p) =>
+      postingFixture.books.preparePostingMap(c, p, {
         bookId: postingBook.recordId,
         eventKind: POSTING_JOURNEY_KIND.kind,
         origin: 'synthetic',
-        validFrom: structureFixture.today(),
+        validFrom: postingFixture.today(),
         lines: [
           postingLine('to-pool', 'debit', 'SYN-INV'),
           postingLine('to-pool', 'credit', 'SYN-PUR'),
@@ -819,7 +855,7 @@ await postingInForce(
   const request = {
     sourceModule: 'test-synthetic',
     document: { recordType: 'test-synthetic.document', recordId: uuidv7() },
-    actor: { kind: 'user' as const, id: structureFixture.preparer.id },
+    actor: { kind: 'user' as const, id: postingFixture.preparer.id },
     items: [
       [postingStoreUnit.recordId, 100_000],
       [postingWarehouse.recordId, 50_000],
@@ -828,19 +864,76 @@ await postingInForce(
       eventKind: POSTING_JOURNEY_KIND.kind,
       businessUnitId: String(businessUnitId),
       brandId: null,
-      businessDate: structureFixture.today(),
+      businessDate: postingFixture.today(),
       components: [{ component: 'to-pool', amount: known(paise(Number(amount))) }],
     })),
   };
-  const result = await structureFixture.run(structureFixture.preparer.id, async (context) => {
-    const checks = await structureFixture.books.checkPostable(context, request);
-    const held = await structureFixture.books.holdPeriods(context, checks);
+  const result = await postingFixture.run(postingFixture.preparer.id, async (context) => {
+    const checks = await postingFixture.books.checkPostable(context, request);
+    const held = await postingFixture.books.holdPeriods(context, checks);
     if (held.kind === 'refused') throw new Error(held.refusal.code);
     await context.lock(LOCK_STEP.numberSeries, held.seriesTargets);
-    return structureFixture.books.post(context, request);
+    return postingFixture.books.post(context, request);
   });
   if (result.kind !== 'posted') throw new Error(`The synthetic journals were not posted: ${JSON.stringify(result)}`);
 }
+await postingFixture.close();
+// The posting maps journey's people (S1-F09-T02): an Accounts user who prepares a map version and attaches the CA's
+// evidence file, a different Accounts user who decides it from My work, and a reader of journals scoped to the one Store.
+const postingBookView = { recordType: 'organisation.accounting_book', action: 'view' as const };
+/** An enrolled SYNTHETIC Accounts user of the posting Organisation holding the authorities given. */
+async function postingUser(label: string, authorities: Parameters<typeof grantSynthetic>[2]): Promise<SyntheticUser> {
+  const user = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+    label,
+    enrolled: true,
+    personas: ['P-ACC'],
+  });
+  await grantSynthetic(postingDatabase, { kind: 'user', id: user.id }, authorities);
+  return user;
+}
+const postingMapsPreparer = await postingUser('BROWSER-POSTING-PREPARER', [
+  postingBookView,
+  { recordType: 'finance.posting_map', action: 'view' },
+  { recordType: 'finance.posting_map', action: 'edit' },
+  // Approve too, so the refusal of their own version is for its preparation alone (POL-09.01; PRD-ACS-006).
+  { recordType: 'finance.posting_map', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  { recordType: 'finance.account', action: 'view' },
+  { recordType: 'finance.ca_approval_evidence', action: 'create' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const postingMapsApprover = await postingUser('BROWSER-POSTING-APPROVER', [
+  postingBookView,
+  { recordType: 'finance.posting_map', action: 'view' },
+  { recordType: 'finance.posting_map', action: 'approve' },
+  { recordType: 'finance.account', action: 'view' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const postingStoreReader = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-POSTING-STORE-READER',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: postingStoreReader.id }, [
+  postingBookView,
+  { recordType: 'finance.financial_period', action: 'view' },
+]);
+await grantSynthetic(
+  postingDatabase,
+  { kind: 'user', id: postingStoreReader.id },
+  [{ recordType: 'finance.journal', action: 'view' }],
+  {
+    scope: {
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'selected', members: [{ type: 'store', id: postingStore.recordId }] },
+      brand: { kind: 'all' },
+    },
+  },
+);
+const postingReasonId = await writeSyntheticReason(postingDatabase, 'approve');
 await structureFixture.close();
 /** Verifying a mapping and storing its evidence file (structure-and-masters 3.4; S1-F06-T05). */
 const verifyAuthorities = [
@@ -1461,49 +1554,6 @@ const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-O
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
-// The posting maps journey's people (S1-F09-T02): an Accounts user who prepares a map version and attaches the CA's
-// evidence file, a different Accounts user who decides it from My work, and a reader of journals scoped to the one Store.
-const postingBookView = { recordType: 'organisation.accounting_book', action: 'view' as const };
-const postingMapsPreparer = await provisionUser('BROWSER-POSTING-PREPARER', 'P-ACC', [
-  postingBookView,
-  { recordType: 'finance.posting_map', action: 'view' },
-  { recordType: 'finance.posting_map', action: 'edit' },
-  { recordType: 'finance.account', action: 'view' },
-  { recordType: 'finance.ca_approval_evidence', action: 'create' },
-  { recordType: 'files_imports.stored_file', action: 'create' },
-  { recordType: 'access.approval_request', action: 'view' },
-]);
-const postingMapsApprover = await provisionUser('BROWSER-POSTING-APPROVER', 'P-ACC', [
-  postingBookView,
-  { recordType: 'finance.posting_map', action: 'view' },
-  { recordType: 'finance.posting_map', action: 'approve' },
-  { recordType: 'finance.account', action: 'view' },
-  { recordType: 'access.approval_request', action: 'view' },
-  { recordType: 'access.approval_reason', action: 'view' },
-]);
-const postingStoreReader = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
-  label: 'BROWSER-POSTING-STORE-READER',
-  enrolled: true,
-  personas: ['P-ACC'],
-});
-await grantSynthetic(settingsDatabase, { kind: 'user', id: postingStoreReader.id }, [
-  postingBookView,
-  { recordType: 'finance.financial_period', action: 'view' },
-]);
-await grantSynthetic(
-  settingsDatabase,
-  { kind: 'user', id: postingStoreReader.id },
-  [{ recordType: 'finance.journal', action: 'view' }],
-  {
-    scope: {
-      kind: 'dimensions',
-      legalEntity: { kind: 'all' },
-      place: { kind: 'selected', members: [{ type: 'store', id: postingStore.recordId }] },
-      brand: { kind: 'all' },
-    },
-  },
-);
-const postingReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
@@ -1709,7 +1759,7 @@ writeFileSync(
     // S1-F09-T02: the posting maps journey's two Accounts users, the reason the approver gives, the Store-scoped
     // reader, and how the screens name the book, the event kind, the accounts and the period.
     postingMaps: {
-      organisationCode: settingsCode,
+      organisationCode: postingCode,
       preparer: credentialsOf(postingMapsPreparer),
       approver: credentialsOf(postingMapsApprover),
       storeReader: credentialsOf(postingStoreReader),
@@ -1752,6 +1802,7 @@ async function stop(): Promise<void> {
   }
   await dropDatabase(journeyDatabase).catch(() => undefined);
   await dropDatabase(settingsDatabase).catch(() => undefined);
+  await dropDatabase(postingDatabase).catch(() => undefined);
   await world.reset().catch(() => undefined);
   await postgres.stop().catch(() => undefined);
   process.exit(0);

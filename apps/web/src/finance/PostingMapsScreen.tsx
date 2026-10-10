@@ -108,8 +108,10 @@ function NewVersionForm({
     >
       <SubmissionBanner state={submission.state} />
       {invalid && <Banner tone="danger" role="alert" message="posting-maps.form-invalid" />}
-      <label className="flex flex-col gap-1" htmlFor="posting-map-kind">
-        <span className="text-body-sm font-semibold">{t('posting-maps.event-kind')}</span>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="posting-map-kind" className="text-body-sm font-semibold">
+          {t('posting-maps.event-kind')}
+        </label>
         <select
           id="posting-map-kind"
           className={inputClass}
@@ -125,13 +127,15 @@ function NewVersionForm({
             </option>
           ))}
         </select>
-      </label>
+      </div>
       {components.map((component) => (
         <fieldset key={component} className="flex flex-col gap-2 rounded-card border border-border p-3">
           <legend className="px-1 font-mono text-body-sm font-semibold">{component}</legend>
           {(['debit', 'credit'] as const).map((side) => (
-            <label key={side} className="flex flex-col gap-1" htmlFor={`posting-map-${component}-${side}`}>
-              <span className="text-body-sm">{t(`posting-maps.side.${side}`)}</span>
+            <div key={side} className="flex flex-col gap-1">
+              <label htmlFor={`posting-map-${component}-${side}`} className="text-body-sm">
+                {t(`posting-maps.side.${side}`)}
+              </label>
               <select
                 id={`posting-map-${component}-${side}`}
                 className={inputClass}
@@ -147,7 +151,7 @@ function NewVersionForm({
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           ))}
           {(['requiresStore', 'requiresBrand'] as const).map((dimension) => (
             <label key={dimension} className="flex items-center gap-2 text-body-sm">
@@ -163,8 +167,10 @@ function NewVersionForm({
           ))}
         </fieldset>
       ))}
-      <label className="flex flex-col gap-1" htmlFor="posting-map-origin">
-        <span className="text-body-sm font-semibold">{t('posting-maps.origin')}</span>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="posting-map-origin" className="text-body-sm font-semibold">
+          {t('posting-maps.origin')}
+        </label>
         <select
           id="posting-map-origin"
           className={inputClass}
@@ -179,7 +185,7 @@ function NewVersionForm({
             </option>
           ))}
         </select>
-      </label>
+      </div>
       <label className="flex flex-col gap-1" htmlFor="posting-map-from">
         <span className="text-body-sm font-semibold">{t('setup.valid-from')}</span>
         <input

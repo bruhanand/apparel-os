@@ -131,7 +131,9 @@ test('POL-09.01 POL-09.12 a posting map version prepared with the CA’s evidenc
       await reader.getByLabel('Book', { exact: true }).selectOption({ label: world.bookOption });
       await reader.getByLabel('Period', { exact: true }).selectOption(world.periodId);
       await expect(reader.getByText(/^as of /)).toBeVisible();
-      await expect(reader.getByRole('status').filter({ hasText: /^Partial: / })).toBeVisible();
+      await expect(
+        reader.getByRole('status').filter({ hasText: 'Partial: your access covers only part of this book' }),
+      ).toBeVisible();
       // The reader sees the Store unit's line only: 1,000.00 debited and credited, not the warehouse's 500.00.
       const totals = reader.getByRole('table', { name: 'Trial balance' }).getByRole('row', { name: /Totals/ });
       await expect(totals).toContainText('₹1,000.00');

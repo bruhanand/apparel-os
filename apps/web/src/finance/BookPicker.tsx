@@ -10,8 +10,10 @@ import { inputClass } from '../setup/parts';
 export function BookPicker({ value, onChange }: { value: string | null; onChange: (bookId: string | null) => void }) {
   const books = useQuery(readQuery(api, 'listAccountingBooks', { query: {} }));
   return (
-    <label className="flex flex-col gap-1" htmlFor="finance-book">
-      <span className="text-body-sm font-semibold">{t('finance.book')}</span>
+    <div className="flex flex-col gap-1">
+      <label htmlFor="finance-book" className="text-body-sm font-semibold">
+        {t('finance.book')}
+      </label>
       <select
         id="finance-book"
         className={inputClass}
@@ -27,6 +29,6 @@ export function BookPicker({ value, onChange }: { value: string | null; onChange
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
