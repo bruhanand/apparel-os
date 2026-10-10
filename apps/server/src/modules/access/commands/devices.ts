@@ -9,8 +9,9 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
-import { device, deviceChallenge, deviceVersion } from '../db/schema.js';
+import { device, deviceChallenge, deviceVersion, session } from '../db/schema.js';
 import { newChallenge, proofVerifies } from '../domain/device-proof.js';
+import { deviceRevoked, sessionRevoked } from '../events.js';
 
 // Devices in `access` (access-and-approvals 2.4, 3.3; offline-counter 3.1 to 3.4; PRD-OFF-002, PRD-OFF-010,
 // PRD-SEC-007, PRD-SEC-008; S1-F12-T01): register a device, Setting up; issue a one-time challenge; enrol it, binding
@@ -149,6 +150,80 @@ export async function enrolDevice(
     ...(by.scope === undefined ? {} : { scope: by.scope }),
   });
   return { kind: 'success', answer: { deviceId } };
+}
+
+/**
+ * End a device's use (offline-counter 3.1, 3.5; access-and-approvals 2.4, 3.3; PRD-SEC-008, PRD-OFF-010, DEC-092;
+ * S1-F12-T02): Revoked, reported lost, or Ended, retired; both are final, so a device Revoked or Ended already is
+ * refused (`access.device-ended`). The caller holds the device row through deviceLockTarget at step 1. A device Setting
+ * up may end too: one lost or retired before its enrolment. In the same transaction every session bound to the device,
+ * of whichever user, is revoked, so its next request is not signed in and its live-update stream closes (3.3): an
+ * audit record per session and, per user, one `session-revoked` access record and one `access.session-revoked`. The
+ * device's own access record is `device-revoked` or `device-ended`; revocation also publishes `access.device-revoked`
+ * for other consumers (offline-counter 3.5, 12.2). Answers the sessions revoked.
+ */
+export async function endDevice(
+  context: TransactionContext,
+  audit: AuditInterface,
+  by: DeviceActor & { readonly roleAssignmentId?: string },
+  deviceId: string,
+  state: 'Revoked' | 'Ended',
+): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>> {
+  const held = context.heldLock(DEVICE, deviceId);
+  if (held?.mode !== 'exclusive') throw new CommandDefect('Ending a device holds the device row (8.2)');
+  const found = (await devicesById(context, [deviceId])).get(deviceId);
+  if (found === undefined) return refusal('not-found', 'access.device-not-found');
+  if (found.state === 'Revoked' || found.state === 'Ended') return refusal('refused', 'access.device-ended');
+  await context.tx.insert(deviceVersion).values({
+    id: uuidv7(),
+    deviceId,
+    version: (await latestVersion(context, deviceId)) + 1,
+    state,
+    occurredAt: context.startedAt,
+  });
+  const revoked = await context.tx
+    .update(session)
+    .set({ state: 'Revoked' })
+    .where(and(eq(session.deviceId, deviceId), inArray(session.state, ['In force', 'Locked'])))
+    .returning({ id: session.id, userId: session.appUserId });
+  const byUser = new Map<string, string[]>();
+  for (const row of [...revoked].sort((a, b) => a.id.localeCompare(b.id))) {
+    byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.id]);
+    await audit.record(context, {
+      actor: { kind: 'user', id: by.userId },
+      ...(by.roleAssignmentId === undefined ? {} : { roleAssignmentId: by.roleAssignmentId }),
+      ...(by.scope === undefined ? {} : { scope: by.scope }),
+      record: { module: 'access', type: 'session', id: row.id },
+      operation: state === 'Revoked' ? 'revoke-device' : 'retire-device',
+      changes: [{ kind: 'value', field: 'state', before: 'In force or Locked', after: 'Revoked' }],
+      source: { kind: 'screen' },
+    });
+  }
+  const address = by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress };
+  for (const [userId, sessionIds] of [...byUser].sort(([a], [b]) => a.localeCompare(b))) {
+    await audit.recordAccess(context, { kind: 'session-revoked', outcome: 'succeeded', userId, ...address });
+    await context.publish(sessionRevoked, {
+      subject: { module: 'access', recordType: 'user', recordId: userId },
+      scope: { subjectUserId: userId },
+      payload: { userId, sessionIds },
+    });
+  }
+  await audit.recordAccess(context, {
+    kind: state === 'Revoked' ? 'device-revoked' : 'device-ended',
+    outcome: 'succeeded',
+    userId: by.userId,
+    deviceId,
+    ...address,
+    ...(by.scope === undefined ? {} : { scope: by.scope }),
+  });
+  if (state === 'Revoked') {
+    await context.publish(deviceRevoked, {
+      subject: { module: 'access', recordType: 'device', recordId: deviceId },
+      ...(by.scope?.storeId === undefined ? {} : { scope: { storeId: by.scope.storeId } }),
+      payload: { deviceId },
+    });
+  }
+  return { kind: 'success', answer: { deviceId, sessionIds: revoked.map((row) => row.id).sort() } };
 }
 
 /**

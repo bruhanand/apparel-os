@@ -1,4 +1,10 @@
-import type { BillingDeviceDraft, BillingDeviceView } from '@apparel-os/schemas';
+import type {
+  BillingDeviceDraft,
+  BillingDeviceReplacement,
+  BillingDeviceUnitChange,
+  BillingDeviceView,
+  DeviceEnding,
+} from '@apparel-os/schemas';
 import { and, asc, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../kernel/index.js';
 import type { RecordFacts } from '../access/index.js';
@@ -14,16 +20,18 @@ import {
   type Enrolment,
   type PosDependencies,
 } from './commands/devices.js';
+import { changeBillingDeviceUnits, endBillingDevice, replaceBillingDevice } from './commands/lifecycle.js';
 import { seriesOfDevice } from './commands/series.js';
+import { unitDevicesCheck } from './queries/devices-check.js';
 import { billingDeviceUnit } from './db/schema.js';
 
 /**
  * The stage 1 part of `pos` (module-map 4.17; offline-counter 3, 4, 12.1; S1-F12-T01): register a billing device for a
  * Store and its units; enrol it, binding its key in `access` and defining its bill series through `numbering`; read the
  * devices with their units and series; and define the missing series of every Active device, for the approved change
- * that defines the bill-number format or the financial year (DEC-117). Revoke, retire, replace, unit changes and the
- * devices readiness check are S1-F12-T02. Every operation joins the caller's transaction; the caller has authorised
- * it with the Store's facts.
+ * that defines the bill-number format or the financial year (DEC-117); revoke, retire and replace a device, change its
+ * units, and answer the devices readiness check (3.5, 12.1, section 11; S1-F12-T02). Every operation joins the caller's
+ * transaction; the caller has authorised it with the Store's facts.
  */
 export class Pos {
   constructor(private readonly dependencies: PosDependencies) {}
@@ -59,6 +67,40 @@ export class Pos {
     today: string,
   ) {
     return enrolBillingDevice(context, this.dependencies, by, facts, deviceId, enrolment, today);
+  }
+
+  /** Revoke a lost device, or retire one taken out of use: final; its sessions end and its series close (3.5). */
+  endBillingDevice(context: TransactionContext, by: Actor, facts: RecordFacts, deviceId: string, ending: DeviceEnding) {
+    return endBillingDevice(context, this.dependencies, by, facts, deviceId, ending);
+  }
+
+  /** Revoke or retire a device and register its replacement for the same Store and units (3.5). */
+  replaceBillingDevice(
+    context: TransactionContext,
+    by: Actor,
+    facts: RecordFacts,
+    deviceId: string,
+    replacement: BillingDeviceReplacement,
+    today: string,
+  ) {
+    return replaceBillingDevice(context, this.dependencies, by, facts, deviceId, replacement, today);
+  }
+
+  /** Change an Active device's units from a date, defining the series a new registration needs (12.1, 4.3). */
+  changeBillingDeviceUnits(
+    context: TransactionContext,
+    by: Actor,
+    facts: RecordFacts,
+    deviceId: string,
+    change: BillingDeviceUnitChange,
+    today: string,
+  ) {
+    return changeBillingDeviceUnits(context, this.dependencies, by, facts, deviceId, change, today);
+  }
+
+  /** What the devices readiness check of selling lacks for a unit on a date; empty when it passes (section 11). */
+  unitDevicesCheck(context: TransactionContext, businessUnitId: string, date: string) {
+    return unitDevicesCheck(context, businessUnitId, date);
   }
 
   /** Define the missing series of every Active device for the date's financial year; retry-safe (4.1; DEC-117). */
@@ -118,6 +160,7 @@ export class Pos {
             return head === undefined ? [] : [{ businessUnitId: head.id, code: head.code, kind: head.kind }];
           }),
         series: await seriesOfDevice(context, this.dependencies.numbering, row.id, date),
+        replacesDeviceId: row.replacesDeviceId,
       });
     }
     return views;

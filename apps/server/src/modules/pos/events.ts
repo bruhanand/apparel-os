@@ -17,3 +17,13 @@ export const deviceEnrolled = defineEvent({
   version: 1,
   payload: z.strictObject({ deviceId: z.uuid(), storeId: z.uuid(), seriesIds: z.array(z.uuid()) }),
 });
+
+/**
+ * A billing device was retired: taken out of use, not lost; Ended, with its series closed (offline-counter 3.5, 12.2;
+ * S1-F12-T02). A revocation publishes `access.device-revoked` instead.
+ */
+export const deviceEnded = defineEvent({
+  type: 'pos.device-ended',
+  version: 1,
+  payload: z.strictObject({ deviceId: z.uuid(), storeId: z.uuid(), closedSeriesIds: z.array(z.uuid()) }),
+});

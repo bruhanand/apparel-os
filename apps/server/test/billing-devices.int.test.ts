@@ -1,7 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import {
+  billingDeviceEndedSchema,
   billingDeviceListSchema,
+  billingDeviceReplacedSchema,
+  billingDeviceUnitsChangedSchema,
   deviceChallengeSchema,
   deviceEnrolledSchema,
   sessionViewSchema,
@@ -12,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOCK_STEP, type TransactionContext } from '../src/kernel/index.js';
 import { Audit } from '../src/modules/audit/index.js';
 import { Numbering, type FormatPart, type NumberingResult } from '../src/modules/numbering/index.js';
-import { BILL_KIND, Pos } from '../src/modules/pos/index.js';
+import { BILL_KIND, Pos, posConsumers, unitDevicesCheck } from '../src/modules/pos/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import {
   codeFor,
@@ -27,7 +30,7 @@ import {
 } from './support/access.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { capturingLogger } from './support/jobs.js';
-import { approvedGeography, structureSetup, type StructureSetup } from './support/organisation.js';
+import { approvedGeography, decided, prepared, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { syntheticDeviceKey, syntheticStores, type SyntheticStores } from './support/pos.js';
 import { connect } from './support/postgres.js';
@@ -588,5 +591,386 @@ describe('proving the device at sign-in (offline-counter 3.3, 3.4)', () => {
     expect(errorOf(notEnrolled).code).toBe('access.sign-in-refused');
     const unknown = await signIn(cashier, await proof(uuidv7(), key));
     expect(errorOf(unknown).code).toBe('access.sign-in-refused');
+  });
+});
+
+// S1-F12-T02: the end of a device's life, its units, its series following a mapping change, and the devices readiness
+// check (offline-counter 3.5, 4.3, 4.4, 11, 12.1, 14.1 tests 3, 5, 6, 7, 8, 9 and 10; numbering-and-audit 7 test 4;
+// access-and-approvals 15 test 5). The format and year set above stay in force: every value is SYNTHETIC.
+
+/** Registers and enrols a device for the units, answering its identifier, code, key and series. */
+async function activeDevice(units: readonly string[]) {
+  const device = await registered(units);
+  const key = await syntheticDeviceKey(organisationCode);
+  const answer = deviceEnrolledSchema.parse((await enrol(device.deviceId, key)).body);
+  return { ...device, key, series: answer.series };
+}
+
+async function end(deviceId: string, how: 'revocation' | 'retirement', by: SyntheticUser = admin): Promise<Call> {
+  return post(by, `/api/pos/billing-devices/${deviceId}/${how}`, {});
+}
+
+function allocateFrom(seriesId: string) {
+  return inChange(async (context) => {
+    await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(seriesId)]);
+    return numbering.allocate(context, { seriesId, documentType: 'test-synthetic.bill', documentId: uuidv7() });
+  });
+}
+
+describe('revoking a lost device (offline-counter 3.5, 4.4; access-and-approvals 15 test 5)', () => {
+  it('PRD-SEC-008 PRD-OFF-010 GC-8 test 5 revoking an online till ends its sessions at their next request and closes its series in the same transaction', async () => {
+    const device = await activeDevice([stores.wholeStore, stores.counterOtherRegistration]);
+    expect(device.series).toHaveLength(2);
+    const onDevice = await signIn(cashier, await proof(device.deviceId, device.key));
+    expect(onDevice.status).toBe(200);
+    expect((await get(onDevice.cookie, '/api/access/session')).status).toBe(200);
+    const call = await end(device.deviceId, 'revocation');
+    expect(call.status).toBe(200);
+    const answer = billingDeviceEndedSchema.parse(call.body);
+    expect(answer.state).toBe('Revoked');
+    expect(answer.closedSeriesIds.sort()).toEqual(device.series.map((each) => each.seriesId).sort());
+    // The session's next request is not signed in (PRD-SEC-008).
+    expect((await get(onDevice.cookie, '/api/access/session')).status).toBe(401);
+    const listedDevice = (await listed(admin)).find((each) => each.deviceId === device.deviceId);
+    expect(listedDevice?.state).toBe('Revoked');
+    expect(listedDevice?.series.map((each) => each.state)).toEqual(['Closed', 'Closed']);
+    const [row] = await query<{ version: Date; audit: Date; access: Date; series: Date; event: string }>(
+      `select (select v.recorded_at from access.device_version v where v.device_id = $1 and v.state = 'Revoked') as version,
+              (select a.recorded_at from audit.audit_record a where a.record_id = $1 and a.operation = 'revoke-billing-device') as audit,
+              (select r.recorded_at from audit.access_record r where r.device_id = $1 and r.kind = 'device-revoked') as access,
+              (select max(e.recorded_at) from numbering.series_event e where e.series_id = any($2::uuid[]) and e.event = 'closed') as series,
+              (select o.event_type from kernel.outbox_event o where o.subject_record_id = $1 and o.event_type = 'access.device-revoked') as event`,
+      [device.deviceId, answer.closedSeriesIds],
+    );
+    expect(row?.audit).toEqual(row?.version);
+    expect(row?.access).toEqual(row?.version);
+    expect(row?.series).toEqual(row?.version);
+    expect(row?.event).toBe('access.device-revoked');
+  });
+
+  it('PRD-LIF-015 numbering-and-audit 7 test 4 a closed series refuses allocation and never reopens', async () => {
+    const device = await activeDevice([stores.wholeStore]);
+    const seriesId = device.series[0]?.seriesId ?? '';
+    expect(await allocateFrom(seriesId)).toMatchObject({ kind: 'done' });
+    expect((await end(device.deviceId, 'revocation')).status).toBe(200);
+    const refused = await allocateFrom(seriesId);
+    expect(refused.kind === 'refused' ? refused.refusal.code : undefined).toBe('numbering.series-closed');
+    const release = await inChange(async (context) => {
+      await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(seriesId)]);
+      return numbering.release(context, seriesId);
+    });
+    expect(release.kind === 'refused' ? release.refusal.code : undefined).toBe('numbering.series-closed');
+  });
+
+  it('PRD-OFF-010 GC-8 test 3 a Revoked device is final: its proof is refused, and revoking or retiring it again is refused', async () => {
+    const device = await activeDevice([stores.wholeStore]);
+    expect((await end(device.deviceId, 'revocation')).status).toBe(200);
+    expect(errorOf(await signIn(cashier, await proof(device.deviceId, device.key))).code).toBe(
+      'access.sign-in-refused',
+    );
+    for (const how of ['revocation', 'retirement'] as const) {
+      const again = await end(device.deviceId, how);
+      expect(again.status).toBe(422);
+      expect(errorOf(again).code).toBe('access.device-ended');
+    }
+    expect((await enrol(device.deviceId, await syntheticDeviceKey(organisationCode))).status).toBe(422);
+  });
+
+  it('POL-02.03 revoking needs edit on the device through a role assignment; an unknown device is not found', async () => {
+    const device = await registered([stores.wholeStore]);
+    expect(errorOf(await end(device.deviceId, 'revocation', outsider)).code).toBe('access.not-authorised');
+    const unknown = await end(uuidv7(), 'revocation');
+    expect(unknown.status).toBe(404);
+    expect(errorOf(unknown).code).toBe('access.device-not-found');
+  });
+});
+
+describe('retiring and replacing a device (offline-counter 3.5)', () => {
+  it('PRD-OFF-010 retiring an online till closes its series and ends its sessions at once; it is Ended, and pos.device-ended is published', async () => {
+    const device = await activeDevice([stores.wholeStore]);
+    const onDevice = await signIn(cashier, await proof(device.deviceId, device.key));
+    const call = await end(device.deviceId, 'retirement');
+    expect(call.status).toBe(200);
+    expect(billingDeviceEndedSchema.parse(call.body)).toEqual({
+      deviceId: device.deviceId,
+      state: 'Ended',
+      closedSeriesIds: device.series.map((each) => each.seriesId),
+    });
+    expect((await get(onDevice.cookie, '/api/access/session')).status).toBe(401);
+    const [row] = await query<{ access: string; event: string }>(
+      `select (select count(*) from audit.access_record r where r.device_id = $1 and r.kind = 'device-ended') as access,
+              (select o.event_type from kernel.outbox_event o where o.subject_record_id = $1 and o.event_type = 'pos.device-ended') as event`,
+      [device.deviceId],
+    );
+    expect(row).toEqual({ access: '1', event: 'pos.device-ended' });
+    expect(errorOf(await signIn(cashier, await proof(device.deviceId, device.key))).code).toBe(
+      'access.sign-in-refused',
+    );
+  });
+
+  it('a device still Setting up may be retired: it has no series to close', async () => {
+    const device = await registered([stores.wholeStore]);
+    expect(billingDeviceEndedSchema.parse((await end(device.deviceId, 'retirement')).body)).toMatchObject({
+      state: 'Ended',
+      closedSeriesIds: [],
+    });
+  });
+
+  it('PRD-OFF-010 PRD-LIF-015 GC-8 test 6 a replacement is a new device with a new code and fresh series; the old series stay closed', async () => {
+    const old = await activeDevice([stores.wholeStore, stores.counterOtherRegistration]);
+    const code = nextCode('TILL');
+    const call = await post(admin, `/api/pos/billing-devices/${old.deviceId}/replacement`, {
+      ending: 'revoke',
+      code,
+      label: syntheticName('Replacement till'),
+    });
+    expect(call.status).toBe(200);
+    const answer = billingDeviceReplacedSchema.parse(call.body);
+    expect(answer.ended).toMatchObject({ deviceId: old.deviceId, state: 'Revoked' });
+    expect(answer.replacement.state).toBe('Setting up');
+    const replacement = (await listed(admin)).find((each) => each.deviceId === answer.replacement.deviceId);
+    expect(replacement).toMatchObject({ code, storeId: stores.storeId, replacesDeviceId: old.deviceId, series: [] });
+    expect(replacement?.units.map((unit) => unit.businessUnitId).sort()).toEqual(
+      [stores.wholeStore, stores.counterOtherRegistration].sort(),
+    );
+    const enrolled = deviceEnrolledSchema.parse(
+      (await enrol(answer.replacement.deviceId, await syntheticDeviceKey(organisationCode))).body,
+    );
+    expect(enrolled.series).toHaveLength(2);
+    for (const fresh of enrolled.series) {
+      expect(old.series.map((each) => each.seriesId)).not.toContain(fresh.seriesId);
+      expect((await inChange((context) => numbering.seriesState(context, fresh.seriesId)))?.nextSequence).toBe(1);
+    }
+    expect((await listed(admin)).find((each) => each.deviceId === old.deviceId)?.series.map((s) => s.state)).toEqual([
+      'Closed',
+      'Closed',
+    ]);
+  });
+
+  it('a replacement whose code is taken is refused whole: the old device stays as it was', async () => {
+    const old = await activeDevice([stores.wholeStore]);
+    const call = await post(admin, `/api/pos/billing-devices/${old.deviceId}/replacement`, {
+      ending: 'retire',
+      code: old.code,
+      label: syntheticName('Replacement till'),
+    });
+    expect(errorOf(call).code).toBe('access.device-code-taken');
+    expect((await listed(admin)).find((each) => each.deviceId === old.deviceId)).toMatchObject({
+      state: 'Active',
+      series: [{ state: 'Open' }],
+    });
+  });
+});
+
+describe('changing a device’s units (offline-counter 12.1, 4.3)', () => {
+  const change = (deviceId: string, businessUnitIds: readonly string[], validFrom: string) =>
+    post(admin, `/api/pos/billing-devices/${deviceId}/units`, { businessUnitIds, validFrom });
+
+  it('PRD-ORG-005 PRD-POS-020 a unit that brings a new registration gets the device’s series for it from the date', async () => {
+    const device = await activeDevice([stores.wholeStore]);
+    const from = setup.day(5);
+    const call = await change(device.deviceId, [stores.wholeStore, stores.counterOtherRegistration], from);
+    expect(call.status).toBe(200);
+    const answer = billingDeviceUnitsChangedSchema.parse(call.body);
+    expect(answer.seriesMissing).toEqual([]);
+    expect(answer.series.map((each) => [each.taxRegistrationId, each.state]).sort()).toEqual(
+      [
+        [stores.registrationIds[0], 'Open'],
+        [stores.registrationIds[1], 'Open'],
+      ].sort(),
+    );
+    // Today it still lists only its first unit.
+    expect(
+      (await listed(admin)).find((each) => each.deviceId === device.deviceId)?.units.map((u) => u.businessUnitId),
+    ).toEqual([stores.wholeStore]);
+    const units = await query<{ unit: string; during: string }>(
+      `select business_unit_id as unit, valid_during::text as during from pos.billing_device_unit
+        where billing_device_id = $1 order by lower(valid_during), business_unit_id`,
+      [device.deviceId],
+    );
+    expect(units).toEqual([
+      { unit: stores.wholeStore, during: `[${setup.today()},)` },
+      { unit: stores.counterOtherRegistration, during: `[${from},)` },
+    ]);
+    // A unit it drops ends at the date of a later change.
+    const later = setup.day(9);
+    expect((await change(device.deviceId, [stores.counterOtherRegistration], later)).status).toBe(200);
+    const after = await query<{ unit: string; during: string }>(
+      `select business_unit_id as unit, valid_during::text as during from pos.billing_device_unit
+        where billing_device_id = $1 and business_unit_id = $2`,
+      [device.deviceId, stores.wholeStore],
+    );
+    expect(after).toEqual([{ unit: stores.wholeStore, during: `[${setup.today()},${later})` }]);
+  });
+
+  it('the refusals: not Active, a past date, a change scheduled on that date or later, the same list, a unit not of the Store', async () => {
+    const settingUp = await registered([stores.wholeStore]);
+    expect(errorOf(await change(settingUp.deviceId, [stores.counterSameRegistration], setup.day(3))).code).toBe(
+      'pos.device-not-active',
+    );
+    const device = await activeDevice([stores.wholeStore]);
+    expect(errorOf(await change(device.deviceId, [stores.counterSameRegistration], setup.day(-1))).code).toBe(
+      'pos.starts-in-past',
+    );
+    expect(errorOf(await change(device.deviceId, [stores.counterSameRegistration], setup.today())).code).toBe(
+      'pos.unit-change-scheduled',
+    );
+    expect(errorOf(await change(device.deviceId, [stores.wholeStore], setup.day(3))).code).toBe('pos.units-unchanged');
+    expect(errorOf(await change(device.deviceId, [stores.otherStoreUnit], setup.day(3))).code).toBe(
+      'pos.unit-not-of-store',
+    );
+    // The database refuses a unit row's start moving, or the row going, the owner included (code-house-rules 7.3).
+    const owner = await connect(database, 'migration');
+    try {
+      await expect(
+        owner.query(
+          `update pos.billing_device_unit set valid_during = daterange(lower(valid_during) + 1, null)
+                      where billing_device_id = $1`,
+          [device.deviceId],
+        ),
+      ).rejects.toThrow(/ending it earlier/);
+      await expect(
+        owner.query(`delete from pos.billing_device_unit where billing_device_id = $1`, [device.deviceId]),
+      ).rejects.toThrow(/never deleted/);
+    } finally {
+      await owner.end();
+    }
+  });
+});
+
+describe('a unit’s mapping changing to another registration (offline-counter 4.3)', () => {
+  it('PRD-ORG-005 PRD-POS-020 PRD-INT-008 GC-8 test 7 the device gets its series for the new registration before the date, once', async () => {
+    const unit = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareBusinessUnit(c, p, {
+          code: nextCode('BU'),
+          siteId: stores.siteId,
+          kind: 'brand-counter',
+          storeId: stores.storeId,
+          name: syntheticName('Moving counter'),
+          legalEntityId: stores.legalEntityId,
+          taxRegistrationId: stores.registrationIds[0],
+          accountingBookId: stores.bookId,
+          validFrom: setup.today(),
+        }),
+      ),
+    );
+    decided(await setup.decide(unit.requestId, unit.versionId));
+    const device = await activeDevice([unit.recordId]);
+    expect(device.series.map((each) => each.taxRegistrationId)).toEqual([stores.registrationIds[0]]);
+    const from = setup.day(20);
+    const mapping = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareBusinessUnitMappingVersion(c, p, unit.recordId, {
+          legalEntityId: stores.legalEntityId,
+          taxRegistrationId: stores.registrationIds[1],
+          accountingBookId: stores.bookId,
+          validFrom: from,
+        }),
+      ),
+    );
+    decided(await setup.decide(mapping.requestId, mapping.versionId));
+    const [outbox] = await query<{ id: string }>(
+      `select id from kernel.outbox_event where event_type = 'organisation.mapping-changed'
+          and payload->>'mappingVersionId' = $1`,
+      [mapping.versionId],
+    );
+    expect(outbox).toBeDefined();
+    const consumer = posConsumers.find((each) => each.name === 'pos.define-series-for-mapping');
+    const deliver = () =>
+      inChange((context) =>
+        (consumer?.handle ?? (() => Promise.reject(new Error('No consumer'))))(
+          context,
+          {
+            id: outbox?.id ?? '',
+            type: 'organisation.mapping-changed',
+            payloadVersion: 1,
+            eventTime: new Date(),
+            actorId: null,
+            onBehalfOfUserId: null,
+            correlationId: uuidv7(),
+            subject: { module: 'organisation', recordType: 'organisation.business_unit', recordId: unit.recordId },
+            scope: {},
+            payload: { businessUnitId: unit.recordId, mappingVersionId: mapping.versionId },
+          },
+          { logger: capturingLogger().logger },
+        ),
+      );
+    expect(await deliver()).toEqual({ kind: 'done' });
+    const scopeKey = `device:${device.deviceId};registration:${stores.registrationIds[1]}`;
+    const series = await query<{ state: string; year: string }>(
+      `select state, financial_year as year from numbering.series where kind = 'pos.bill' and scope_key = $1`,
+      [scopeKey],
+    );
+    expect(series).toEqual([{ state: 'Open', year: YEAR }]);
+    // A second delivery defines nothing twice (PRD-INT-008).
+    expect(await deliver()).toEqual({ kind: 'done' });
+    expect(
+      await query(`select id from numbering.series where kind = 'pos.bill' and scope_key = $1`, [scopeKey]),
+    ).toHaveLength(1);
+  });
+});
+
+describe('the devices readiness check (offline-counter section 11)', () => {
+  const check = (unitId: string, date = setup.today()) =>
+    inChange((context) => unitDevicesCheck(context, unitId, date));
+
+  async function freshUnit(): Promise<string> {
+    const unit = prepared(
+      await setup.prepare((c, p) =>
+        setup.organisation.prepareBusinessUnit(c, p, {
+          code: nextCode('BU'),
+          siteId: stores.siteId,
+          kind: 'brand-counter',
+          storeId: stores.storeId,
+          name: syntheticName('Checked counter'),
+          legalEntityId: stores.legalEntityId,
+          taxRegistrationId: stores.registrationIds[0],
+          accountingBookId: stores.bookId,
+          validFrom: setup.today(),
+        }),
+      ),
+    );
+    decided(await setup.decide(unit.requestId, unit.versionId));
+    return unit.recordId;
+  }
+
+  it('PRD-LIF-002 GC-8 test 9 selling fails with no Active device listing the unit, and passes with one holding its Open series', async () => {
+    const unitId = await freshUnit();
+    expect(await check(unitId)).toEqual([{ kind: 'billing-device', businessUnitId: unitId }]);
+    const settingUp = await registered([unitId]);
+    expect(await check(unitId)).toEqual([{ kind: 'billing-device', businessUnitId: unitId }]);
+    expect((await enrol(settingUp.deviceId, await syntheticDeviceKey(organisationCode))).status).toBe(200);
+    expect(await check(unitId)).toEqual([]);
+  });
+
+  it('PRD-LIF-002 GC-8 test 9 Revoked and Ended devices do not count; a device without its series fails, naming it', async () => {
+    const unitId = await freshUnit();
+    const first = await activeDevice([unitId]);
+    const second = await activeDevice([unitId]);
+    expect(await check(unitId)).toEqual([]);
+    expect((await end(first.deviceId, 'revocation')).status).toBe(200);
+    expect(await check(unitId)).toEqual([]);
+    expect((await end(second.deviceId, 'retirement')).status).toBe(200);
+    expect(await check(unitId)).toEqual([{ kind: 'billing-device', businessUnitId: unitId }]);
+    // An Active device whose series for the unit's registration and year is missing fails, named by its code.
+    const third = await activeDevice([unitId]);
+    await inChange(async (context) => {
+      const live = third.series[0]?.seriesId ?? '';
+      await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(live)]);
+      done(await numbering.pause(context, live));
+    });
+    expect(await check(unitId)).toEqual([
+      { kind: 'device-series', deviceId: third.deviceId, code: third.code, lacks: 'series' },
+    ]);
+  });
+
+  it('POL-10.07 DEC-116 GC-8 test 8 with no financial year for the date, the check fails with that reason', async () => {
+    const unitId = await freshUnit();
+    const device = await activeDevice([unitId]);
+    // A date past the SYNTHETIC year, for which no year is defined.
+    expect(await check(unitId, setup.day(400))).toEqual([
+      { kind: 'device-series', deviceId: device.deviceId, code: device.code, lacks: 'financial-year' },
+    ]);
   });
 });

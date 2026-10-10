@@ -286,6 +286,8 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       // The inbox's consumers of access events (S1-F01-T13).
       { code: 'inbox', permissions: 'inbox.work_item edit' },
       { code: 'outbox', permissions: 'kernel.outbox_event edit' },
+      // pos's consumer of mapping changes, which defines a billing device's series (S1-F12-T02).
+      { code: 'pos', permissions: 'pos.billing_device edit' },
       // The setup step is the platform's own operation: no role assignment authorises it (9.11).
       { code: 'setup', permissions: null },
     ]);
@@ -336,9 +338,9 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
        group by 1 order by 1`,
     );
     expect(types).toEqual([
-      { record_type: 'access.role', count: '7' },
-      { record_type: 'access.role_assignment', count: '7' },
-      { record_type: 'access.service_identity', count: '6' },
+      { record_type: 'access.role', count: '8' },
+      { record_type: 'access.role_assignment', count: '8' },
+      { record_type: 'access.service_identity', count: '7' },
       { record_type: 'access.setting', count: '3' },
       { record_type: 'access.setup_record', count: '1' },
       { record_type: 'access.user', count: '2' },
@@ -348,7 +350,7 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       organisation.databaseName,
       "select count(*)::text as count from audit.access_record where kind = 'permission-changed'",
     );
-    expect(changes).toEqual([{ count: '7' }]);
+    expect(changes).toEqual([{ count: '8' }]);
   });
 
   it('PRD-ACS-023 the first users sign in to the new Organisation, which the running app finds by its code (RR-250)', async () => {

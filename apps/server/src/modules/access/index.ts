@@ -26,7 +26,16 @@ export type { FreshCode, FreshCodeRefusal } from './commands/fresh-code.js';
 export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
 export type { DeviceActor, DeviceOutcome, DeviceRead } from './commands/devices.js';
-export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked, standInChanged } from './events.js';
+export {
+  approvalDecided,
+  approvalRequested,
+  assignmentChanged,
+  deviceRevoked,
+  sessionRevoked,
+  standInChanged,
+} from './events.js';
+// A device's state, for the devices readiness check that site-lifecycle runs (offline-counter 11; S1-F12-T02).
+export { devicesById } from './commands/devices.js';
 export type { BatchInput, BatchOutcome } from './commands/bulk.js';
 export type { BatchItemInput } from './commands/decide.js';
 export { accessApprovalRules } from './domain/approval-rules.js';

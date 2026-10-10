@@ -16,7 +16,15 @@ import {
 } from './commands/settings.js';
 import type { FormatPart } from './domain/format.js';
 import { checkKinds, type NumberedKind, type NumberingResult } from './domain/kinds.js';
-import { liveSeries, seriesOfScopes, seriesRow, stateOf, type SeriesKey, type SeriesState } from './queries/series.js';
+import {
+  liveSeries,
+  seriesOfScopePrefix,
+  seriesOfScopes,
+  seriesRow,
+  stateOf,
+  type SeriesKey,
+  type SeriesState,
+} from './queries/series.js';
 
 export interface NumberingDependencies {
   /** The kinds the owning modules declare, handed over by the composition root (module-map section 3, rule 6). */
@@ -68,6 +76,8 @@ export interface NumberingInterface {
   kindFormatOf(context: TransactionContext, kind: string): Promise<KindFormatRead>;
   /** Every series of a kind under the scope keys named, live or closed (3.7 "Read series state"). */
   seriesOfScopes(context: TransactionContext, kind: string, scopeKeys: readonly string[]): Promise<SeriesState[]>;
+  /** Every series of a kind whose scope key starts with the prefix, live or closed (S1-F12-T02). */
+  seriesOfScopePrefix(context: TransactionContext, kind: string, prefix: string): Promise<SeriesState[]>;
 }
 
 export class Numbering implements NumberingInterface {
@@ -128,6 +138,10 @@ export class Numbering implements NumberingInterface {
 
   kindFormatOf(context: TransactionContext, kind: string) {
     return kindFormatOf(context, kind);
+  }
+
+  seriesOfScopePrefix(context: TransactionContext, kind: string, prefix: string) {
+    return seriesOfScopePrefix(context, kind, prefix);
   }
 
   seriesOfScopes(context: TransactionContext, kind: string, scopeKeys: readonly string[]) {

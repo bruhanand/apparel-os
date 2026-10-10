@@ -821,3 +821,22 @@ export async function mappingOn(
         }),
   };
 }
+
+/**
+ * The start of an approved mapping version of a unit, as `YYYY-MM-DD`, or undefined when no approved version has that
+ * identifier: for a consumer of `organisation.mapping-changed`, which carries identifiers only and reads the version
+ * here (module-map section 8; offline-counter 4.3; S1-F12-T02).
+ */
+export async function mappingVersionStart(
+  context: TransactionContext,
+  mappingVersionId: string,
+): Promise<{ readonly businessUnitId: string; readonly validFrom: string } | undefined> {
+  const [row] = await context.tx
+    .select({
+      businessUnitId: businessUnitMapping.businessUnitId,
+      validFrom: sql<string>`lower(${businessUnitMapping.validDuring})::text`,
+    })
+    .from(businessUnitMapping)
+    .where(and(eq(businessUnitMapping.id, mappingVersionId), eq(businessUnitMapping.decision, 'Approved')));
+  return row;
+}

@@ -19,9 +19,14 @@ export const billingDevice = pos.table('billing_device', {
   roleAssignmentId: uuid('role_assignment_id').notNull(),
   registeredAt: at('registered_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The device this one replaces, set at its registration (offline-counter 3.5; migration 0060). */
+  replacesDeviceId: uuid('replaces_device_id'),
 });
 
-/** A business unit a billing device bills for, from a business date (offline-counter 3.1). Append-only. */
+/**
+ * A business unit a billing device bills for, from a business date (offline-counter 3.1): a dated row, ended earlier
+ * by a change of the device's units, never deleted (12.1; migration 0060).
+ */
 export const billingDeviceUnit = pos.table('billing_device_unit', {
   id: uuid('id').primaryKey(),
   billingDeviceId: uuid('billing_device_id').notNull(),

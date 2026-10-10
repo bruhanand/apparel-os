@@ -5,4 +5,7 @@ export { Pos } from './pos.js';
 export type { PosInterface } from './pos.js';
 export type { Actor as PosActor, Enrolment, PosDependencies } from './commands/devices.js';
 export { BILL_KIND, BILLING_DEVICE_TYPE } from './domain/kinds.js';
-export { deviceEnrolled, deviceRegistered } from './events.js';
+export { deviceEnded, deviceEnrolled, deviceRegistered } from './events.js';
+// The devices readiness check, a read with no instance, for `site-lifecycle` (offline-counter 11; S1-F12-T02).
+export { unitDevicesCheck } from './queries/devices-check.js';
+export { POS_IDENTITY, posConsumers } from './jobs/consumers.js';

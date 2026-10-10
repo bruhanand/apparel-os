@@ -132,6 +132,8 @@ export const billingDeviceViewSchema = z.strictObject({
   storeId: idSchema,
   units: z.array(z.strictObject({ businessUnitId: idSchema, code: z.string().min(1), kind: businessUnitKindSchema })),
   series: z.array(deviceSeriesSchema),
+  /** The device this one replaces, or null (offline-counter 3.5; S1-F12-T02). */
+  replacesDeviceId: idSchema.nullable(),
 });
 export type BillingDeviceView = z.infer<typeof billingDeviceViewSchema>;
 
@@ -140,3 +142,58 @@ export const billingDeviceListSchema = z.strictObject({
   devices: z.array(billingDeviceViewSchema),
 });
 export type BillingDeviceList = z.infer<typeof billingDeviceListSchema>;
+
+/**
+ * How a device leaves use (offline-counter 3.5; S1-F12-T02): revoked, reported lost (PRD-SEC-008, DEC-092), or retired,
+ * taken out of use and not lost. Both are final; every stage 1 device is an online till, so its series close at once.
+ */
+export const deviceEndingSchema = z.enum(['revoke', 'retire']);
+export type DeviceEnding = z.infer<typeof deviceEndingSchema>;
+
+/** A device revoked or retired: its final state, and the series closed with it (offline-counter 3.5, 4.4). */
+export const billingDeviceEndedSchema = z.strictObject({
+  deviceId: idSchema,
+  state: z.enum(['Revoked', 'Ended']),
+  closedSeriesIds: z.array(idSchema),
+});
+export type BillingDeviceEnded = z.infer<typeof billingDeviceEndedSchema>;
+
+/** Revoking or retiring asks nothing more: the route names which. */
+export const billingDeviceEndingRequestSchema = z.strictObject({});
+
+/**
+ * Replace a device (offline-counter 3.5; PRD-OFF-010, PRD-LIF-015): the old one is revoked or retired, and a new device
+ * with a new code is registered for the same Store and the units the old one lists today, Setting up until it is
+ * enrolled with a new key, when it gets fresh series.
+ */
+export const billingDeviceReplacementSchema = z.strictObject({
+  ending: deviceEndingSchema,
+  code: deviceCodeSchema,
+  label: z.string().regex(/\S/),
+});
+export type BillingDeviceReplacement = z.infer<typeof billingDeviceReplacementSchema>;
+
+export const billingDeviceReplacedSchema = z.strictObject({
+  ended: billingDeviceEndedSchema,
+  replacement: z.strictObject({ deviceId: idSchema, state: z.literal('Setting up') }),
+});
+export type BillingDeviceReplaced = z.infer<typeof billingDeviceReplacedSchema>;
+
+/**
+ * Change an Active device's units from a date, today or later (offline-counter 12.1, 4.3; S1-F12-T02): the whole list of
+ * whole-store and brand-counter units of its Store it bills for from that date.
+ */
+export const billingDeviceUnitChangeSchema = z.strictObject({
+  businessUnitIds: z.array(idSchema).min(1),
+  validFrom: businessDateSchema,
+});
+export type BillingDeviceUnitChange = z.infer<typeof billingDeviceUnitChangeSchema>;
+
+/** The units changed: the series the change defined for its date, and why any is missing (4.1, 4.3). */
+export const billingDeviceUnitsChangedSchema = z.strictObject({
+  deviceId: idSchema,
+  validFrom: businessDateSchema,
+  series: z.array(deviceSeriesSchema),
+  seriesMissing: z.array(seriesMissingSchema),
+});
+export type BillingDeviceUnitsChanged = z.infer<typeof billingDeviceUnitsChangedSchema>;

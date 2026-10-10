@@ -21,7 +21,7 @@ import { defineDeviceSeries, type SeriesOutcome } from './series.js';
 // PRD-OFF-010, PRD-POS-020, PRD-ORG-005, PRD-ACS-013, PRD-SEC-007, PRD-INT-004; POL-02.03; DEC-116, DEC-117;
 // S1-F12-T01). The route has authorised the action with the Store's facts and held the actor's authority at step 0.
 
-const BILLING_DEVICE = lockTable('pos', 'billing_device');
+export const BILLING_DEVICE = lockTable('pos', 'billing_device');
 
 export interface PosDependencies {
   readonly audit: AuditInterface;
@@ -33,6 +33,7 @@ export interface PosDependencies {
     | 'registerDevice'
     | 'deviceLockTarget'
     | 'enrolDevice'
+    | 'endDevice'
     | 'devices'
     | 'checkFreshCode'
   >;
@@ -49,12 +50,12 @@ export interface Actor {
 
 export type Outcome<T> = SeriesOutcome<T>;
 
-function refused(kind: CommandRefusal['kind'], code: string, missing: MissingItem[] = []): Outcome<never> {
+export function refused(kind: CommandRefusal['kind'], code: string, missing: MissingItem[] = []): Outcome<never> {
   return { kind: 'refusal', refusal: { kind, code, missing } };
 }
 
 /** The scope facts of a place, as the audit and access records carry them (numbering-and-audit 4.1). */
-function scopeOf(facts: RecordFacts): AuditScope {
+export function scopeOf(facts: RecordFacts): AuditScope {
   return {
     ...(facts.siteId === undefined ? {} : { siteId: facts.siteId }),
     ...(facts.storeId === undefined ? {} : { storeId: facts.storeId }),
@@ -82,6 +83,33 @@ export async function deviceStore(context: TransactionContext, deviceId: string)
 }
 
 /**
+ * Refuses a list of units a device of the Store cannot bill for on the date (offline-counter 3.1; PRD-ORG-005): a unit
+ * listed twice, or one that is not a whole-store or brand-counter unit of the Store in force on the date, named.
+ */
+export async function unitsRefusal(
+  context: TransactionContext,
+  storeId: string,
+  unitIds: readonly string[],
+  date: string,
+): Promise<Outcome<never> | undefined> {
+  if (new Set(unitIds).size !== unitIds.length) return refused('refused', 'pos.unit-listed-twice');
+  const heads = await businessUnitHeads(context, unitIds);
+  const notOfStore: MissingItem[] = [];
+  for (const unitId of unitIds) {
+    const head = heads.get(unitId);
+    const fits =
+      head !== undefined &&
+      STORE_UNIT_KINDS.includes(head.kind) &&
+      head.storeId === storeId &&
+      (await businessUnitInForce(context, unitId, date));
+    // Named by its code where the unit exists, so the screen says which (PRD-UXP-003).
+    if (!fits)
+      notOfStore.push({ kind: 'business-unit', id: unitId, ...(head === undefined ? {} : { code: head.code }) });
+  }
+  return notOfStore.length > 0 ? refused('refused', 'pos.unit-not-of-store', notOfStore) : undefined;
+}
+
+/**
  * Register a billing device (offline-counter 3.2 step 1; 12.1): Setting up, for a Store and its units from today. Each
  * unit must be a whole-store or brand-counter unit of that Store, in force today: a unit of another Store, an office or
  * a warehouse is refused, naming it (3.1; PRD-ORG-005). The code is unique in the Organisation (`access`). Registration
@@ -95,24 +123,11 @@ export async function registerBillingDevice(
   facts: RecordFacts,
   draft: BillingDeviceDraft,
   today: string,
+  /** The device a replacement replaces (3.5; S1-F12-T02). */
+  replacesDeviceId?: string,
 ): Promise<Outcome<{ readonly deviceId: string; readonly state: 'Setting up' }>> {
-  if (new Set(draft.businessUnitIds).size !== draft.businessUnitIds.length) {
-    return refused('refused', 'pos.unit-listed-twice');
-  }
-  const heads = await businessUnitHeads(context, draft.businessUnitIds);
-  const notOfStore: MissingItem[] = [];
-  for (const unitId of draft.businessUnitIds) {
-    const head = heads.get(unitId);
-    const fits =
-      head !== undefined &&
-      STORE_UNIT_KINDS.includes(head.kind) &&
-      head.storeId === draft.storeId &&
-      (await businessUnitInForce(context, unitId, today));
-    // Named by its code where the unit exists, so the screen says which (PRD-UXP-003).
-    if (!fits)
-      notOfStore.push({ kind: 'business-unit', id: unitId, ...(head === undefined ? {} : { code: head.code }) });
-  }
-  if (notOfStore.length > 0) return refused('refused', 'pos.unit-not-of-store', notOfStore);
+  const unitsRefused = await unitsRefusal(context, draft.storeId, draft.businessUnitIds, today);
+  if (unitsRefused !== undefined) return unitsRefused;
   const scope = scopeOf(facts);
   const registered = await dependencies.access.registerDevice(
     context,
@@ -127,6 +142,7 @@ export async function registerBillingDevice(
     registeredByUserId: by.userId,
     roleAssignmentId: by.roleAssignmentId,
     registeredAt: context.startedAt,
+    replacesDeviceId: replacesDeviceId ?? null,
   });
   await context.tx.insert(billingDeviceUnit).values(
     [...draft.businessUnitIds].sort().map((businessUnitId) => ({
@@ -148,6 +164,9 @@ export async function registerBillingDevice(
       { kind: 'value', field: 'storeId', before: null, after: draft.storeId },
       { kind: 'value', field: 'businessUnitIds', before: null, after: [...draft.businessUnitIds].sort() },
       { kind: 'value', field: 'state', before: null, after: 'Setting up' },
+      ...(replacesDeviceId === undefined
+        ? []
+        : [{ kind: 'value' as const, field: 'replacesDeviceId', before: null, after: replacesDeviceId }]),
     ],
     source: { kind: 'screen' },
   });

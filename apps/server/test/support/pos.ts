@@ -17,6 +17,8 @@ import { approved, decided, prepared, type StructureSetup } from './organisation
 export interface SyntheticStores {
   readonly legalEntityId: string;
   readonly registrationIds: readonly [string, string];
+  /** The legal entity's book, for a mapping version of a unit (S1-F12-T02). */
+  readonly bookId: string;
   readonly siteId: string;
   readonly storeId: string;
   readonly otherStoreId: string;
@@ -112,6 +114,7 @@ export function syntheticStores(setup: StructureSetup, geography: { stateId: str
     return {
       legalEntityId: legalEntity.recordId,
       registrationIds: [first.recordId, second.recordId],
+      bookId: book.recordId,
       siteId: site.recordId,
       storeId: storeA.recordId,
       otherStoreId: storeB.recordId,

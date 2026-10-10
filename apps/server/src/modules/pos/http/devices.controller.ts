@@ -31,6 +31,15 @@ const BUSINESS_DATE_NOT_SET: CommandRefusal = {
   missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
 };
 
+/** A billing device that does not exist is not found, named by its identifier. */
+function deviceNotFound(deviceId: string): CommandRefusal {
+  return {
+    kind: 'not-found',
+    code: 'access.device-not-found',
+    missing: [{ kind: 'record', recordType: 'pos.billing_device', recordId: deviceId }],
+  };
+}
+
 /**
  * Setup › Devices, tills and bill series and the counter's enrolment (offline-counter 3.2, 12.1; module-map 4.17;
  * code-house-rules 12.1; S1-F12-T01). A billing device carries its Store's place, so the guard Authenticates only and
@@ -119,6 +128,87 @@ export class DevicesController {
         missing: [{ kind: 'record', recordType: 'pos.billing_device', recordId: deviceId }],
       },
       (c, actor, facts, date) => this.pos.enrolBillingDevice(c, actor, facts, deviceId, input.body, date),
+    );
+  }
+
+  @ApiRoute(routes.revokeBillingDevice)
+  revokeBillingDevice(
+    @RouteInput() input: RouteInputOf<typeof routes.revokeBillingDevice>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { deviceId } = input.params;
+    return this.command(
+      routes.revokeBillingDevice,
+      'pos.revoke-billing-device',
+      user,
+      input,
+      (c, date) => this.pos.deviceFacts(c, deviceId, date),
+      deviceNotFound(deviceId),
+      (c, actor, facts) => this.pos.endBillingDevice(c, actor, facts, deviceId, 'revoke'),
+    );
+  }
+
+  @ApiRoute(routes.retireBillingDevice)
+  retireBillingDevice(
+    @RouteInput() input: RouteInputOf<typeof routes.retireBillingDevice>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { deviceId } = input.params;
+    return this.command(
+      routes.retireBillingDevice,
+      'pos.retire-billing-device',
+      user,
+      input,
+      (c, date) => this.pos.deviceFacts(c, deviceId, date),
+      deviceNotFound(deviceId),
+      (c, actor, facts) => this.pos.endBillingDevice(c, actor, facts, deviceId, 'retire'),
+    );
+  }
+
+  /**
+   * A replacement registers a device, so the route authorises create; it also ends the old one, so the person must hold
+   * edit on it too, with the same Store's facts (offline-counter 3.5).
+   */
+  @ApiRoute(routes.replaceBillingDevice)
+  replaceBillingDevice(
+    @RouteInput() input: RouteInputOf<typeof routes.replaceBillingDevice>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { deviceId } = input.params;
+    return this.command(
+      routes.replaceBillingDevice,
+      'pos.replace-billing-device',
+      user,
+      input,
+      (c, date) => this.pos.deviceFacts(c, deviceId, date),
+      deviceNotFound(deviceId),
+      async (c, actor, facts, date) => {
+        const edit = await this.access.authorise(c, {
+          actorId: user.userId,
+          action: 'edit',
+          recordType: routes.replaceBillingDevice.access.recordType,
+          facts,
+        });
+        if (edit.kind === 'refused') return { kind: 'refusal', refusal: edit.refusal };
+        return this.pos.replaceBillingDevice(c, actor, facts, deviceId, input.body, date);
+      },
+    );
+  }
+
+  @ApiRoute(routes.changeBillingDeviceUnits)
+  changeBillingDeviceUnits(
+    @RouteInput() input: RouteInputOf<typeof routes.changeBillingDeviceUnits>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { deviceId } = input.params;
+    return this.command(
+      routes.changeBillingDeviceUnits,
+      'pos.change-billing-device-units',
+      user,
+      input,
+      (c, date) => this.pos.deviceFacts(c, deviceId, date),
+      deviceNotFound(deviceId),
+      (c, actor, facts, date) => this.pos.changeBillingDeviceUnits(c, actor, facts, deviceId, input.body, date),
     );
   }
 

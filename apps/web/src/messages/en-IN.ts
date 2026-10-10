@@ -549,6 +549,7 @@ export const englishIndia = {
   'access-kind.device-registered': 'Device registered',
   'access-kind.device-enrolled': 'Device enrolled',
   'access-kind.device-revoked': 'Device revoked',
+  'access-kind.device-ended': 'Device retired',
   'access-kind.operator-recovery': 'Recovery by the platform operator',
   'access-kind.demo-sign-in': 'Test sign-in',
   'access-kind.permission-changed': 'Permission changed',

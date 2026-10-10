@@ -84,6 +84,7 @@ import { ownAccess, type OwnAccess } from './queries/own-access.js';
 import {
   deviceLockTarget,
   devicesById,
+  endDevice,
   enrolDevice,
   issueChallenge,
   registerDevice,
@@ -194,6 +195,16 @@ export interface AccessInterface {
     deviceId: string,
     enrolment: { readonly publicKey: DevicePublicKey; readonly challengeId: string; readonly signature: string },
   ): Promise<DeviceOutcome<{ readonly deviceId: string }>>;
+  /**
+   * End a device whose row the command holds (offline-counter 3.5; PRD-SEC-008): Revoked or Ended, final; revokes
+   * every session bound to it; writes the `device-revoked` or `device-ended` access record (S1-F12-T02).
+   */
+  endDevice(
+    context: TransactionContext,
+    by: DeviceActor & { readonly roleAssignmentId?: string },
+    deviceId: string,
+    state: 'Revoked' | 'Ended',
+  ): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>>;
   /** Issue a one-time challenge for a device to sign (offline-counter 3.3), on the sign-in path. */
   issueDeviceChallenge(
     context: TransactionContext,
@@ -579,6 +590,15 @@ export class Access implements AccessInterface {
     enrolment: { readonly publicKey: DevicePublicKey; readonly challengeId: string; readonly signature: string },
   ) {
     return enrolDevice(context, this.dependencies.audit, by, deviceId, enrolment);
+  }
+
+  endDevice(
+    context: TransactionContext,
+    by: DeviceActor & { readonly roleAssignmentId?: string },
+    deviceId: string,
+    state: 'Revoked' | 'Ended',
+  ) {
+    return endDevice(context, this.dependencies.audit, by, deviceId, state);
   }
 
   issueDeviceChallenge(context: TransactionContext) {

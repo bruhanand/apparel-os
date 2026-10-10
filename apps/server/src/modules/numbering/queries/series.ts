@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { numberFormatPart, series } from '../db/schema.js';
 import { patternOf, type FormatPart, type SeriesPattern } from '../domain/format.js';
@@ -71,6 +71,25 @@ export async function seriesOfScopes(
     .select()
     .from(series)
     .where(and(eq(series.kind, kind), inArray(series.scopeKey, [...scopeKeys])))
+    .orderBy(asc(series.id));
+  return rows.map(stateOf);
+}
+
+/**
+ * Every series of a kind whose scope key starts with the prefix, live or closed, oldest first: for an owning module
+ * whose scope key opens with the record every series of it belongs to, such as a billing device's bill series of every
+ * registration (offline-counter 3.5, 4.4; S1-F12-T02). The prefix is matched as text, never as a pattern.
+ */
+export async function seriesOfScopePrefix(
+  context: TransactionContext,
+  kind: string,
+  prefix: string,
+): Promise<SeriesState[]> {
+  if (prefix === '') return [];
+  const rows = await context.tx
+    .select()
+    .from(series)
+    .where(and(eq(series.kind, kind), sql`starts_with(${series.scopeKey}, ${prefix})`))
     .orderBy(asc(series.id));
   return rows.map(stateOf);
 }

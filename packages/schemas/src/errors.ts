@@ -786,6 +786,13 @@ export const financeTaxRulesCodes = declareCodes({
  * - `pos.unit-not-of-store`: a unit listed is not a whole-store or brand-counter unit of the device's Store, such as a
  *   unit of another Store, an office or a warehouse; `missing` names it (offline-counter 3.1; PRD-ORG-005).
  * - `pos.unit-listed-twice`: a unit is listed more than once.
+ * - `access.device-ended`: the device is Revoked or Ended already, which are final (offline-counter 3.1, 3.5;
+ *   S1-F12-T02).
+ * - `pos.device-not-active`: a device's units change only while it is Active (offline-counter 12.1).
+ * - `pos.starts-in-past`: a unit change starts before today (code-house-rules 7.3; GC2-7, DEC-105).
+ * - `pos.unit-change-scheduled`: the device already has a unit listed from that date or later; a later change starts
+ *   after it (offline-counter 3.6).
+ * - `pos.units-unchanged`: the list is the one in force on that date.
  */
 export const deviceCodes = declareCodes({
   'access.device-code-taken': 'refused',
@@ -795,6 +802,11 @@ export const deviceCodes = declareCodes({
   'pos.store-not-found': 'not-found',
   'pos.unit-not-of-store': 'refused',
   'pos.unit-listed-twice': 'refused',
+  'access.device-ended': 'refused',
+  'pos.device-not-active': 'refused',
+  'pos.starts-in-past': 'refused',
+  'pos.unit-change-scheduled': 'refused',
+  'pos.units-unchanged': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
