@@ -110,10 +110,16 @@ export const catalogueSkus: LedgerSkus = {
  */
 export type LedgerBooks = Pick<BooksInterface, 'costSettingOn' | 'checkPostable' | 'holdPeriods' | 'post'>;
 
-/** For a composition whose ledger posts no valued item, such as the quantity tests of S1-F10-T02. */
+const notComposed = () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books'));
+
+/**
+ * For a composition whose ledger posts no valued item, such as the quantity tests of S1-F10-T02. With no books no book
+ * has a cost setting, so a reservation's value is Unknown (13.10 "Value for approval"); anything that would post is a
+ * defect.
+ */
 export const booksNotComposed: LedgerBooks = {
-  costSettingOn: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
-  checkPostable: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
-  holdPeriods: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
-  post: () => Promise.reject(new CommandDefect('This composition gives the ledger no finance books')),
+  costSettingOn: () => Promise.resolve({ kind: 'not-set' }),
+  checkPostable: notComposed,
+  holdPeriods: notComposed,
+  post: notComposed,
 };

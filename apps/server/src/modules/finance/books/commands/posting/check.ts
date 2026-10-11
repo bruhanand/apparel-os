@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   canonicalJson,
   LOCK_STEP,
+  partsOf,
   sha256Hex,
   type CommandRefusal,
   type LockTarget,
@@ -53,14 +54,14 @@ async function postedRows(
 ): Promise<Map<string, { journalId: string; itemHash: string }[]>> {
   const found = new Map<string, { journalId: string; itemHash: string }[]>();
   // One read for every item, in parts of a bounded size (a large document, stock-ledger 10.6; S1-F10-T07).
-  for (let start = 0; start < itemKeys.length; start += KEYS_PER_READ) {
+  for (const keys of partsOf(itemKeys, 1)) {
     const rows = await context.tx
       .select({ itemKey: postingSource.itemKey, journalId: postingSource.journalId, itemHash: postingSource.itemHash })
       .from(postingSource)
       .where(
         and(
           eq(postingSource.sourceModule, sourceModule),
-          inArray(postingSource.itemKey, itemKeys.slice(start, start + KEYS_PER_READ)),
+          inArray(postingSource.itemKey, keys),
           isNull(postingSource.replacesPostingSourceId),
         ),
       );
@@ -73,13 +74,15 @@ async function postedRows(
   return found;
 }
 
-/** Item keys one read of the posted rows takes: a technical bound, inside PostgreSQL's parameter limit. */
-const KEYS_PER_READ = 5000;
-
 /**
  * The reads an item's check makes that many items of one request share (the unit's mapping, the period, its admission,
  * the map version, the accounts in force, the journal series), each made once per request and argument (S1-F10-T07: a
  * 10,000-line document). Within one call they answer what a fresh read would: nothing the request does changes them.
+ *
+ * One instance lives for one call of Check postable only, and is never kept between calls. That matters for the
+ * admission above all: Check postable runs at Plan, before any lock, so what it caches may change before the locks are
+ * taken (a period locked meanwhile, books-and-posting 4.5). Hold periods therefore asks the admission again under the
+ * period lock, uncached, and Post, under the caller's locks, runs Check postable afresh with a new instance (9.1).
  */
 class SharedReads {
   private readonly cache = new Map<string, Promise<unknown>>();

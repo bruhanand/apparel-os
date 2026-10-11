@@ -36,6 +36,7 @@ export type {
 } from './command-runner/transaction-context.js';
 export { connectionToDatabase } from './db/connection.js';
 export { createDb } from './db/create-db.js';
+export { insertInParts, MAX_BOUND_PARAMETERS, MAX_ROWS_PER_STATEMENT, partsOf, rowsPerInsert } from './db/in-parts.js';
 export type { Database, DatabaseHandle, PoolOptions } from './db/create-db.js';
 export { applyDatabasePrivileges } from './db/database-privileges.js';
 export {

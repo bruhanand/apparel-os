@@ -2,7 +2,7 @@ import { uuidv7, type Paise } from '@apparel-os/domain';
 import { postingSource } from '../../db/schema.js';
 import { byText } from '../../domain/order.js';
 import { sumLines, type ItemLine } from '../../domain/posting.js';
-import type { TransactionContext } from '../../../../../kernel/index.js';
+import { insertInParts, type TransactionContext } from '../../../../../kernel/index.js';
 import { checkPostable } from './check.js';
 import { journalsByIds, recordUse, requirePeriodHeld, writeJournal, type JournalLineRow } from './journal.js';
 import type { PostableItem, PostDependencies, PostedJournal, PostRequest, PostResult } from './types.js';
@@ -132,13 +132,7 @@ async function postGroup(
     journalLineId: each.lineId,
     itemHash: hashes.get(each.itemKey) ?? '',
   }));
-  // A large document's rows (stock-ledger 10.6) in multi-row inserts of a bounded size, so no statement passes
-  // PostgreSQL's limit of 65,535 bound parameters (S1-F10-T07). A technical bound, no business value.
-  for (let start = 0; start < rows.length; start += SOURCE_ROWS_PER_INSERT) {
-    await context.tx.insert(postingSource).values(rows.slice(start, start + SOURCE_ROWS_PER_INSERT));
-  }
+  // A large document's rows (stock-ledger 10.6) in multi-row inserts of a bounded size (S1-F10-T07).
+  await insertInParts(context, postingSource, rows);
   return answer;
 }
-
-/** Posting-source rows a multi-row insert takes at once: 8 columns each, well inside the parameter limit. */
-const SOURCE_ROWS_PER_INSERT = 1000;

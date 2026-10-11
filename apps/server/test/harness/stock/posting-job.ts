@@ -19,7 +19,7 @@ import {
   type TransactionContext,
 } from '../../../src/kernel/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
-import { jobIdentities } from '../../../src/modules/access/commands/job-identities.js';
+import { jobIdentities } from '../../../src/modules/access/index.js';
 import type { LedgerItem } from '../../../src/modules/stock/ledger/index.js';
 import { HARNESS_DOCUMENT_TYPE, HARNESS_MODULE, HARNESS_RECORD_TYPE } from '../../fixtures/stock-harness.js';
 import { syntheticIdentifier } from '../../fixtures/synthetic.js';

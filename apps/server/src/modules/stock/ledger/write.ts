@@ -1,6 +1,6 @@
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import { eq, sql } from 'drizzle-orm';
-import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, insertInParts, partsOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditSource } from '../../audit/index.js';
 import type { PostItem, PostResult } from '../../finance/books/index.js';
 import {
@@ -29,7 +29,6 @@ import {
   valuationLayer,
 } from './db/schema.js';
 import { postedRecordType, refusalOf, StockRefused } from './domain/request.js';
-import { insertRows } from './db/sql.js';
 import type { PostShare } from './domain/valuing.js';
 import type { LedgerBooks } from './ports.js';
 import type { ClaimState, ExpectedQuantity } from './domain/working.js';
@@ -100,7 +99,7 @@ export async function writeRequest(
   }
 
   if (entries.origins.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       receiptOrigin,
       entries.origins.map((origin) => {
@@ -130,7 +129,7 @@ export async function writeRequest(
     );
   }
   if (entries.movements.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       movement,
       entries.movements.map((each) => ({
@@ -167,7 +166,7 @@ export async function writeRequest(
         ...leg.scope,
       })),
     );
-    if (legs.length > 0) await insertRows(context, movementLeg, legs);
+    if (legs.length > 0) await insertInParts(context, movementLeg, legs);
   }
   // Origin states: new ones with their owner (PRD-ORG-014, PRD-ORG-019); changed ones in place, under the origin's
   // exclusive lock (14.3).
@@ -193,12 +192,12 @@ export async function writeRequest(
       ...origin.scope,
     };
   });
-  if (newStates.length > 0) await insertRows(context, receiptOriginState, newStates);
+  if (newStates.length > 0) await insertInParts(context, receiptOriginState, newStates);
   // Changed states in place, set-based in parts of a bounded size, so a large document's (a 10,000-line PT approval,
   // 10.6) are a few statements, not one per origin (S1-F10-T07). Each keeps its last movement unless one is named.
   const changedStates = [...working.origins.values()].filter((origin) => !origin.isNew && origin.stateChanged);
-  for (let start = 0; start < changedStates.length; start += STATES_PER_UPDATE) {
-    const rows = changedStates.slice(start, start + STATES_PER_UPDATE).map(
+  for (const part of partsOf(changedStates, 7)) {
+    const rows = part.map(
       (origin) =>
         sql`(${origin.stateId}::uuid, ${origin.ptRevisionId}::uuid, ${origin.coveredQuantity}::integer,
           ${origin.valueKnown}::boolean, ${origin.pRatePaise}::bigint, ${origin.establishedValuePaise}::bigint,
@@ -220,7 +219,7 @@ export async function writeRequest(
   const balances = [...working.balances.values()];
   const newBalances = balances.filter((row) => row.isNew);
   if (newBalances.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       balance,
       newBalances.map((row) => ({
@@ -256,7 +255,7 @@ export async function writeRequest(
   const pieces = [...working.pieces.values()];
   const newPieces = pieces.filter((row) => row.isNew);
   if (newPieces.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       piece,
       newPieces.map((row) => ({
@@ -318,10 +317,10 @@ export async function writeRequest(
       };
     }),
   );
-  if (movedPieces.length > 0) await insertRows(context, movementPiece, movedPieces);
+  if (movedPieces.length > 0) await insertInParts(context, movementPiece, movedPieces);
   const status = { ...actorColumns, ...times };
   if (entries.coverage.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       coverage,
       entries.coverage.map((row) => ({
@@ -340,7 +339,7 @@ export async function writeRequest(
     );
   }
   if (entries.acceptances.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       acceptance,
       entries.acceptances.map((row) => ({
@@ -357,7 +356,7 @@ export async function writeRequest(
     );
   }
   if (entries.reservations.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       reservation,
       entries.reservations.map((row) => ({
@@ -371,7 +370,7 @@ export async function writeRequest(
     );
   }
   if (entries.holds.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       hold,
       entries.holds.map((row) => ({
@@ -398,7 +397,7 @@ export async function writeRequest(
         brandIds: row.brandIds as string[],
       })),
     );
-    if (scopes.length > 0) await insertRows(context, holdScope, scopes);
+    if (scopes.length > 0) await insertInParts(context, holdScope, scopes);
   }
   const newClaims = working.claims.filter((claim) => claim.isNew);
   const claimRow = (claim: ClaimState) => ({
@@ -411,7 +410,7 @@ export async function writeRequest(
   });
   const newHoldClaims = newClaims.filter((claim) => claim.owner === 'hold');
   if (newHoldClaims.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       holdClaim,
       newHoldClaims.map((claim) => ({ ...claimRow(claim), holdId: claim.headerId })),
@@ -419,7 +418,7 @@ export async function writeRequest(
   }
   const newReservationClaims = newClaims.filter((claim) => claim.owner === 'reservation');
   if (newReservationClaims.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       reservationClaim,
       newReservationClaims.map((claim) => ({ ...claimRow(claim), reservationId: claim.headerId })),
@@ -431,7 +430,7 @@ export async function writeRequest(
     await context.tx.update(table).set({ quantity: claim.quantity }).where(eq(table.id, claim.id));
   }
   if (entries.holdReleases.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       holdRelease,
       entries.holdReleases.map((row) => ({
@@ -464,7 +463,7 @@ export async function writeRequest(
     });
   }
   if (entries.reservationEvents.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       reservationEvent,
       entries.reservationEvents.map((row) => ({
@@ -670,11 +669,13 @@ async function postValues(
     })),
   });
   if (result.kind === 'refused') {
+    // Post refuses naming each refused item (books-and-posting 9.2); a refusal naming none is a defect.
     const [first] = result.items;
+    if (first === undefined) throw new CommandDefect('Post refused a request without naming a refused item');
     throw new StockRefused(
-      refusalOf('posting-refused', first === undefined ? undefined : items.get(first.itemKey)?.lineId, [
-        { kind: 'posting', code: first?.refusal.code ?? 'finance.refused' },
-        ...(first?.refusal.missing ?? []),
+      refusalOf('posting-refused', items.get(first.itemKey)?.lineId, [
+        { kind: 'posting', code: first.refusal.code },
+        ...first.refusal.missing,
       ]),
     );
   }
@@ -686,7 +687,7 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
   const { working, plan } = checked;
   const times = { businessDate: plan.businessDate, accountingDate: plan.businessDate };
   if (working.valuations.length > 0) {
-    await insertRows(
+    await insertInParts(
       context,
       valuation,
       working.valuations.map((row) => ({
@@ -719,7 +720,7 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     const scope = { siteId: pool.siteId, legalEntityId: pool.legalEntityId, brandId: pool.brandId };
     const added = pool.layers.filter((layer) => layer.isNew);
     if (added.length > 0) {
-      await insertRows(
+      await insertInParts(
         context,
         costLayer,
         added.map((layer) => ({
@@ -758,7 +759,7 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
       ...row.scope,
     })),
   );
-  if (valuationLayers.length > 0) await insertRows(context, valuationLayer, valuationLayers);
+  if (valuationLayers.length > 0) await insertInParts(context, valuationLayer, valuationLayers);
   for (const transit of working.transits.values()) {
     if (transit.changed) {
       await context.tx
@@ -768,7 +769,7 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     }
     const added = transit.layers.filter((layer) => layer.isNew);
     if (added.length > 0) {
-      await insertRows(
+      await insertInParts(
         context,
         transitValueLayer,
         added.map((layer) => ({
@@ -795,5 +796,3 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
   }
 }
 
-/** Origin states one set-based update takes: a technical bound, inside PostgreSQL's parameter limit (7 a row). */
-const STATES_PER_UPDATE = 1000;

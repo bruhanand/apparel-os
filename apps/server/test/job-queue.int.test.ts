@@ -20,7 +20,10 @@ import { connect, databaseUrl } from './support/postgres.js';
 // and no job is deleted while the retention periods are not set (CH-9).
 
 const SYNTHETIC_POOL_MAX = 4;
-/** A queue made by this test only, as the migration role, standing in for a posting queue (stage 1 has none). */
+/**
+ * A singleton queue made by this test only, as the migration role, to test pg-boss's singleton policy on its own; the
+ * posting queue itself, `kernel.posting-delivery` (migration 0058, S1-F10-T07), with its groups, is tested last.
+ */
 const SINGLETON_QUEUE = 'kernel.synthetic-posting';
 const STANDARD_QUEUE = 'kernel.outbox-delivery';
 
