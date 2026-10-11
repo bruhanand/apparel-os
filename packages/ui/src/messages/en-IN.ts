@@ -1,7 +1,7 @@
-// English (India): every string the screens show (code-house-rules 12.13; design-language 11). Hindi arrives as a file
-// of its own with the same identifiers in stage 5 (PRD-PRO-009). The PRD's words, sentence case, people and rules
-// named rather than the system. `{name}` is a named parameter; a plural message has a form per Intl.PluralRules
-// category.
+// English (India): every string the screens of the web app and the counter app show (code-house-rules 12.13;
+// design-language 11). Hindi arrives as a file of its own with the same identifiers in stage 5 (PRD-PRO-009). The PRD's
+// words, sentence case, people and rules named rather than the system. `{name}` is a named parameter; a plural message
+// has a form per Intl.PluralRules category.
 
 export const englishIndia = {
   'app.name': 'Apparel OS',
@@ -2238,4 +2238,39 @@ export const englishIndia = {
   'reopening.period': 'Period',
   'reopening.reason': 'Reason',
   'reopening.corrections': 'Named corrections',
+
+  // The counter app's enrolment and device sign-in pages (offline-counter 3.2 to 3.4, 5.1; S1-F12-T01). Its refusals
+  // use the `error.` entries above, with what is missing named (PRD-UXP-003).
+  'counter.title': 'Apparel OS counter',
+  'counter.enrol.title': 'Enrol this browser as a billing device',
+  'counter.enrol.intro':
+    'Sign in as a person allowed to enrol devices, choose the device registered for this till in Setup › Devices, tills and bill series, and give a fresh authenticator code. The device key is made in this browser and never leaves it.',
+  'counter.enrol.device': 'Device',
+  'counter.enrol.choose-device': 'Choose a device that is Setting up',
+  'counter.enrol.no-device': 'No device is Setting up. Register one in Setup › Devices, tills and bill series first.',
+  'counter.enrol.fresh-code': 'Fresh authenticator code',
+  'counter.enrol.submit': 'Enrol this browser',
+  'counter.enrol.done': 'This browser is now device {code}.',
+  'counter.enrol.series': { one: 'Bill series: {count}', other: 'Bill series: {count}' },
+  'counter.enrol.series-missing':
+    'No bill series yet: the bill-number format or the financial year is not set. They are defined when it is.',
+  'counter.enrol.signed-in-as': 'Signed in as {name}.',
+  'counter.sign-in.title': 'Sign in on device {code}',
+  'counter.sign-in.office-title': 'Sign in',
+  'counter.sign-in.organisation': 'Organisation code',
+  'counter.sign-in.login': 'Login',
+  'counter.sign-in.password': 'Password',
+  'counter.sign-in.code': 'Authenticator code',
+  'counter.sign-in.submit': 'Sign in',
+  'counter.sign-in.on-device': 'Signed in on device {code}: a shared POS session.',
+  'counter.sign-in.not-finished': 'Finish your first sign-in in the back office, then come back.',
+  'counter.device-not-held': 'This browser holds no key for this device. Enrol it again as a new device.',
+
+  // A setting a refusal names as missing, by name (code-house-rules 12.14; PRD-UXP-003).
+  'missing.setting.named': 'Not set yet: {setting}.',
+  'setting.name.configuration.timezone': 'the Organisation’s timezone',
+  'setting.name.access.sign-in-throttling': 'sign-in throttling',
+  'setting.name.access.password-rules': 'the password rules',
+  'setting.name.access.office-session-limits': 'the office session limits',
+  'setting.name.access.shared-pos-session-limits': 'the shared POS session limits',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

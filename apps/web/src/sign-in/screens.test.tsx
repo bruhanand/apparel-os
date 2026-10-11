@@ -86,7 +86,7 @@ describe('the sign-in form (access-and-approvals 3.1)', () => {
       }),
     });
     expect(text(html)).toContain('Sign-in is not available yet for this Organisation: a setting is missing.');
-    expect(text(html)).toContain('A setting it needs is not set.');
+    expect(text(html)).toContain('Not set yet: the Organisation’s timezone.');
   });
 });
 

@@ -33,6 +33,9 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'business-unit' && item.code !== undefined) {
     return t('missing.business-unit.named', { code: item.code });
   }
+  // A setting not set, by its name where the catalogue has one (code-house-rules 12.14; PRD-UXP-003).
+  const setting = `setting.name.${item.setting ?? ''}`;
+  if (item.kind === 'setting' && isMessageId(setting)) return t('missing.setting.named', { setting: t(setting) });
   const gate = gateText(item) ?? readinessText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;

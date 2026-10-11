@@ -17,6 +17,7 @@
     "@apparel-os/calculations": "workspace:*",
     "@apparel-os/domain": "workspace:*",
     "@apparel-os/schemas": "workspace:*",
+    "@apparel-os/ui": "workspace:*",
     "dexie": "^4.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

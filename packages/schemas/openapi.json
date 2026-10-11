@@ -3622,6 +3622,7 @@
             },
             "x-error-codes": [
               "access.device-already-enrolled",
+              "access.device-ended",
               "access.device-proof-refused",
               "access.enrolment-not-started"
             ]

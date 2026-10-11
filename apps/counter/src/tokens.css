@@ -1,0 +1,8 @@
+/*
+ * The design-language tokens the counter's pages use (design-language 2 and 6, the Stopped family), with their light
+ * values: the counter has no dark theme yet, so its pages keep the browser's light ground.
+ */
+:root {
+  --d-bg: #fbe3e1;
+  --d-fg: #a1261d;
+}

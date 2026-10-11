@@ -324,7 +324,7 @@ describe('proving the device at sign-in (offline-counter 3.3, 3.4)', () => {
 });
 
 describe('the one-time challenge, a route with no actor (offline-counter 3.3; access-and-approvals 3.1)', () => {
-  it('PRD-SEC-001 DEC-116 unused challenges from one source address are bounded as failed sign-ins are, by the throttling setting', async () => {
+  it('PRD-SEC-001 RR-493 unused challenges from one source address are bounded as failed sign-ins are, by the throttling setting (product owner, 10 Oct 2026)', async () => {
     // The SYNTHETIC throttling setting of this file: 50 in 600 seconds. A challenge not yet used counts as an attempt
     // not yet made good; a used one does not count, so a till that signs in is never slowed.
     const address = '10.9.77.1';

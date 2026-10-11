@@ -3836,6 +3836,7 @@ export const routes = {
       'access.enrolment-not-started',
       'access.device-not-found',
       'access.device-already-enrolled',
+      'access.device-ended',
       'access.device-proof-refused',
     ],
   }),

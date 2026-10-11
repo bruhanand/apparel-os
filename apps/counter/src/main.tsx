@@ -7,6 +7,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { t } from './messages';
+import './tokens.css';
 
 document.title = t('counter.title');
 // The selling exports the build holds, named on the page so the chunk is kept: the till screens arrive with S4.

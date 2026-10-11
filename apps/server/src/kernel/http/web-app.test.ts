@@ -195,6 +195,16 @@ describe('the counter app at /counter/ from the one origin', () => {
     }
   });
 
+  it('answers the counter’s client routes by any spelling of its prefix, never the web app (S1-F12 review)', async () => {
+    for (const path of ['/COUNTER/x', '/Counter/sign-in', '/%63ounter/x', '/counter//x', '/x/../counter/x']) {
+      const response = await raw(baseUrl, path);
+      expect(response.body, path).toBe(COUNTER_HTML);
+    }
+    expect(await (await fetch(`${baseUrl}/COUNTER/assets/main-SYNTH456.js`)).text()).toBe(
+      'console.log("SYNTHETIC counter");',
+    );
+  });
+
   it('answers the counter’s hashed assets for a long time, and its other files revalidated', async () => {
     const asset = await fetch(`${baseUrl}/counter/assets/main-SYNTH456.js`);
     expect(asset.status).toBe(200);

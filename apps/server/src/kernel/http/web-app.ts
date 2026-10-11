@@ -70,9 +70,20 @@ export function serveWebApp(app: INestApplication, directory: string, counterDir
       next();
       return;
     }
-    const served: ServedApp = underPrefix(path, COUNTER_PREFIX) ? 'counter' : 'web';
+    // The counter's prefix is matched as its static files are, and as the golden page's refusal is: in the canonical
+    // form, so `/COUNTER/x` or `/%63ounter/x` is the counter's, never the web app's (S1-F12 review).
+    const canonical = canonicalPath(path);
+    if (canonical === undefined) {
+      notFound(request, response);
+      return;
+    }
+    const served: ServedApp = underPrefix(canonical, COUNTER_PREFIX) ? 'counter' : 'web';
     const html = served === 'counter' ? counterHtml : indexHtml;
-    if (html === undefined || (request.method !== 'GET' && request.method !== 'HEAD') || !isClientRoute(path, served)) {
+    if (
+      html === undefined ||
+      (request.method !== 'GET' && request.method !== 'HEAD') ||
+      !isClientRoute(canonical, served)
+    ) {
       notFound(request, response);
       return;
     }

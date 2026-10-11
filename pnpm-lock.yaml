@@ -220,6 +220,9 @@ importers:
       '@apparel-os/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@apparel-os/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       dexie:
         specifier: ^4.4.6
         version: 4.4.6

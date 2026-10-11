@@ -30,7 +30,7 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 
 function Alert({ text }: { text: string }) {
   return (
-    <p role="alert" style={{ color: '#a11', margin: '8px 0' }}>
+    <p role="alert" style={{ color: 'var(--d-fg)', margin: '8px 0' }}>
       {text}
     </p>
   );
@@ -74,7 +74,7 @@ function SignInForm({
       <h1>{title}</h1>
       {refusal !== undefined && <Alert text={refusal} />}
       {organisationCode === undefined && (
-        <Field id="organisation" label={t('sign-in.organisation')}>
+        <Field id="organisation" label={t('counter.sign-in.organisation')}>
           <input
             id="organisation"
             value={organisation}
@@ -84,7 +84,7 @@ function SignInForm({
           />
         </Field>
       )}
-      <Field id="login" label={t('sign-in.login')}>
+      <Field id="login" label={t('counter.sign-in.login')}>
         <input
           id="login"
           autoComplete="username"
@@ -94,7 +94,7 @@ function SignInForm({
           }}
         />
       </Field>
-      <Field id="password" label={t('sign-in.password')}>
+      <Field id="password" label={t('counter.sign-in.password')}>
         <input
           id="password"
           type="password"
@@ -105,7 +105,7 @@ function SignInForm({
           }}
         />
       </Field>
-      <Field id="totp" label={t('sign-in.code')}>
+      <Field id="totp" label={t('counter.sign-in.code')}>
         <input
           id="totp"
           inputMode="numeric"
@@ -117,7 +117,7 @@ function SignInForm({
         />
       </Field>
       <button type="submit" disabled={pending}>
-        {t('sign-in.submit')}
+        {t('counter.sign-in.submit')}
       </button>
     </form>
   );
@@ -134,7 +134,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
   useEffect(() => {
     void api.call('listBillingDevices', {}).then((answer) => {
       if (answer.ok) setDevices(answer.data.devices.filter((each) => each.state === 'Setting up'));
-      else setRefusal(refusalText(answer.error.code));
+      else setRefusal(refusalText(answer.error));
     });
   }, []);
   const enrol = async (): Promise<void> => {
@@ -144,7 +144,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
     const signed = await signedChallenge(pair.privateKey, 'enrol', organisationCode, deviceId);
     if (signed === undefined) {
       await dropUnboundKey(organisationCode, deviceId);
-      setRefusal(t('error.no-answer'));
+      setRefusal(t('error-state.no-answer'));
       return;
     }
     const answer = await api.call('enrolBillingDevice', {
@@ -153,7 +153,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
     });
     if (!answer.ok) {
       await dropUnboundKey(organisationCode, deviceId);
-      setRefusal(refusalText(answer.error.code));
+      setRefusal(refusalText(answer.error));
       return;
     }
     await keepIdentity({ organisationCode, deviceId, code: device.code });
@@ -161,22 +161,22 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
   };
   if (enrolled !== undefined) {
     return (
-      <section aria-label={t('enrol.title')}>
-        <p role="status">{t('enrol.done', { code: enrolled.code })}</p>
+      <section aria-label={t('counter.enrol.title')}>
+        <p role="status">{t('counter.enrol.done', { code: enrolled.code })}</p>
         <p>
           {enrolled.series.length > 0
-            ? t('enrol.series', { count: enrolled.series.length })
-            : t('enrol.series-missing')}
+            ? t('counter.enrol.series', { count: enrolled.series.length })
+            : t('counter.enrol.series-missing')}
         </p>
         <button type="button" onClick={onEnrolled}>
-          {t('sign-in.submit')}
+          {t('counter.sign-in.submit')}
         </button>
       </section>
     );
   }
   return (
     <form
-      aria-label={t('enrol.title')}
+      aria-label={t('counter.enrol.title')}
       onSubmit={(event) => {
         event.preventDefault();
         setPending(true);
@@ -187,10 +187,10 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
       }}
     >
       {refusal !== undefined && <Alert text={refusal} />}
-      {devices?.length === 0 && <p>{t('enrol.no-device')}</p>}
+      {devices?.length === 0 && <p>{t('counter.enrol.no-device')}</p>}
       {devices !== undefined && devices.length > 0 && (
         <>
-          <Field id="device" label={t('enrol.device')}>
+          <Field id="device" label={t('counter.enrol.device')}>
             <select
               id="device"
               value={deviceId}
@@ -198,7 +198,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
                 setDeviceId(event.target.value);
               }}
             >
-              <option value="">{t('enrol.choose-device')}</option>
+              <option value="">{t('counter.enrol.choose-device')}</option>
               {devices.map((each) => (
                 <option key={each.deviceId} value={each.deviceId}>
                   {`${each.code} · ${each.label}`}
@@ -206,7 +206,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
               ))}
             </select>
           </Field>
-          <Field id="fresh-code" label={t('enrol.fresh-code')}>
+          <Field id="fresh-code" label={t('counter.enrol.fresh-code')}>
             <input
               id="fresh-code"
               inputMode="numeric"
@@ -218,7 +218,7 @@ function EnrolForm({ organisationCode, onEnrolled }: { organisationCode: string;
             />
           </Field>
           <button type="submit" disabled={pending || deviceId === '' || totpCode === ''}>
-            {t('enrol.submit')}
+            {t('counter.enrol.submit')}
           </button>
         </>
       )}
@@ -231,15 +231,15 @@ function Enrolment({ onEnrolled }: { onEnrolled: () => void }) {
   const [signedIn, setSignedIn] = useState<{ organisationCode: string; name: string } | undefined>(undefined);
   return (
     <main style={box}>
-      <h1>{t('enrol.title')}</h1>
-      <p>{t('enrol.intro')}</p>
+      <h1>{t('counter.enrol.title')}</h1>
+      <p>{t('counter.enrol.intro')}</p>
       {signedIn === undefined ? (
         <SignInForm
-          title={t('sign-in.office-title')}
+          title={t('counter.sign-in.office-title')}
           onSubmit={async ({ organisationCode, login, password, totpCode }) => {
             const answer = await api.call('signIn', { body: { organisationCode, login, password, totpCode } });
-            if (!answer.ok) return refusalText(answer.error.code);
-            if (answer.data.outcome !== 'signed-in') return t('sign-in.not-finished');
+            if (!answer.ok) return refusalText(answer.error);
+            if (answer.data.outcome !== 'signed-in') return t('counter.sign-in.not-finished');
             const session = await api.call('session', {});
             setSignedIn({ organisationCode, name: session.ok ? session.data.displayName : login });
             return undefined;
@@ -247,7 +247,7 @@ function Enrolment({ onEnrolled }: { onEnrolled: () => void }) {
         />
       ) : (
         <>
-          <p>{t('enrol.signed-in-as', { name: signedIn.name })}</p>
+          <p>{t('counter.enrol.signed-in-as', { name: signedIn.name })}</p>
           <EnrolForm organisationCode={signedIn.organisationCode} onEnrolled={onEnrolled} />
         </>
       )}
@@ -261,20 +261,20 @@ function DeviceSignIn({ held }: { held: DeviceIdentity }) {
   if (signedIn !== undefined) {
     return (
       <main style={box}>
-        <p role="status">{t('sign-in.on-device', { code: signedIn })}</p>
+        <p role="status">{t('counter.sign-in.on-device', { code: signedIn })}</p>
       </main>
     );
   }
   return (
     <main style={box}>
       <SignInForm
-        title={t('sign-in.title', { code: held.code })}
+        title={t('counter.sign-in.title', { code: held.code })}
         organisationCode={held.organisationCode}
         onSubmit={async ({ login, password, totpCode }) => {
           const key = await deviceKey(held.organisationCode, held.deviceId);
-          if (key === undefined) return t('error.access.device-not-found');
+          if (key === undefined) return t('counter.device-not-held');
           const signed = await signedChallenge(key, 'sign-in', held.organisationCode, held.deviceId);
-          if (signed === undefined) return t('error.no-answer');
+          if (signed === undefined) return t('error-state.no-answer');
           const answer = await api.call('signIn', {
             body: {
               organisationCode: held.organisationCode,
@@ -284,8 +284,8 @@ function DeviceSignIn({ held }: { held: DeviceIdentity }) {
               device: { deviceId: held.deviceId, ...signed },
             },
           });
-          if (!answer.ok) return refusalText(answer.error.code);
-          if (answer.data.outcome !== 'signed-in') return t('sign-in.not-finished');
+          if (!answer.ok) return refusalText(answer.error);
+          if (answer.data.outcome !== 'signed-in') return t('counter.sign-in.not-finished');
           const session = await api.call('session', {});
           setSignedIn(session.ok ? (session.data.device?.code ?? held.code) : held.code);
           return undefined;
