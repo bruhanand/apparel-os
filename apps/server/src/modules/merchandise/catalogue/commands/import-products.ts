@@ -220,24 +220,30 @@ async function updatesOf(
   if (categoryId !== owner.categoryId) {
     issues.push({ code: 'merchandise.import-identity-differs', field: 'categoryCode', rowNumber: first.rowNumber });
   }
-  // The style's SKUs the rows name, each with its newest version, in one read; the version token is the newest
+  // The style's SKUs the rows name, then their newest versions, in two reads; the version token is the newest
   // version's, read in the transaction that prepares it (code-house-rules 12.7).
   const codes = document.rows.map((row) => valueOf(row, 'skuCode') ?? '');
-  const found = new Map(
-    (
-      await context.tx
-        .select({
-          id: sku.id,
-          code: sku.code,
-          size: sku.size,
-          newest: sql<
-            string | null
-          >`(select max(${skuVersion.id}::text) from ${skuVersion} where ${skuVersion.skuId} = ${sku.id})`,
-        })
-        .from(sku)
-        .where(and(eq(sku.styleId, owner.id), inArray(sku.code, codes)))
-    ).map((each) => [each.code, each]),
+  const named = await context.tx
+    .select({ id: sku.id, code: sku.code, size: sku.size })
+    .from(sku)
+    .where(and(eq(sku.styleId, owner.id), inArray(sku.code, codes)));
+  const newest = new Map(
+    named.length === 0
+      ? []
+      : (
+          await context.tx
+            .select({ skuId: skuVersion.skuId, id: sql<string>`max(${skuVersion.id}::text)` })
+            .from(skuVersion)
+            .where(
+              inArray(
+                skuVersion.skuId,
+                named.map((each) => each.id),
+              ),
+            )
+            .groupBy(skuVersion.skuId)
+        ).map((each) => [each.skuId, each.id]),
   );
+  const found = new Map(named.map((each) => [each.code, { ...each, newest: newest.get(each.id) ?? null }]));
   const skus: { skuId: string; draft: SkuVersionDraft }[] = [];
   for (const row of document.rows) {
     if (valueOf(row, 'styleCode') !== document.reference) {
