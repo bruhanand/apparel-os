@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { deviceEnrolledSchema, sessionViewSchema } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BILL_KIND } from '../src/modules/pos/index.js';
+import { BILL_KIND, unitDevicesCheck } from '../src/modules/pos/index.js';
 import { syntheticName } from './fixtures/synthetic.js';
 import { codeFor } from './support/access.js';
 import {
@@ -86,6 +86,40 @@ describe('registering a billing device (offline-counter 3.1, 3.2 step 1, 12.1)',
     const again = await w.register([w.stores.wholeStore], code.toLowerCase());
     expect(errorOf(again).code).toBe('access.device-code-taken');
   });
+
+  it('PRD-ACS-013 PRD-SEC-007 PRD-INT-004 GC-8 test 10 a registration commits with its records or not at all', async () => {
+    const code = nextCode('TILL');
+    let deviceId = '';
+    await expect(
+      w.inChange(async (context) => {
+        const today = w.clock.now().toISOString().slice(0, 10);
+        const facts = await w.pos.storeFacts(context, w.stores.storeId, today);
+        if (facts === undefined) throw new Error('No such Store');
+        const registered = await w.pos.registerBillingDevice(
+          context,
+          { userId: w.admin.id, roleAssignmentId: w.adminAssignmentId, networkAddress: '10.9.12.1' },
+          facts,
+          { code, label: syntheticName('Till'), storeId: w.stores.storeId, businessUnitIds: [w.stores.wholeStore] },
+          today,
+        );
+        if (registered.kind !== 'success') throw new Error(registered.refusal.code);
+        deviceId = registered.answer.deviceId;
+        throw new Error('SYNTHETIC failure after the registration');
+      }),
+    ).rejects.toThrow(/SYNTHETIC failure/);
+    expect(deviceId).not.toBe('');
+    const [row] = await w.query<{ devices: string; billing: string; access: string; audits: string; events: string }>(
+      `select (select count(*) from access.device d where d.id = $1 or lower(d.code) = lower($2)) as devices,
+              (select count(*) from pos.billing_device b where b.id = $1) as billing,
+              (select count(*) from audit.access_record r where r.device_id = $1) as access,
+              (select count(*) from audit.audit_record a where a.record_id = $1) as audits,
+              (select count(*) from kernel.outbox_event o where o.subject_record_id = $1) as events`,
+      [deviceId, code],
+    );
+    expect(row).toEqual({ devices: '0', billing: '0', access: '0', audits: '0', events: '0' });
+    // The code stays free: registering it afterwards succeeds.
+    expect((await w.register([w.stores.wholeStore], code)).status).toBe(200);
+  });
 });
 
 describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', () => {
@@ -102,7 +136,7 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
     expect(errorOf(call).code).toBe('access.authenticator-code-refused');
   });
 
-  it('DEC-116 GC-8 test 8 with no bill format and no financial year, enrolment succeeds and defines no series, naming what is missing', async () => {
+  it('DEC-116 POL-10.07 PRD-UXP-003 GC-8 test 8 with no bill format and no financial year, enrolment succeeds and defines no series, and the devices check fails with both reasons', async () => {
     const call = await w.enrol(early.deviceId, earlyKey);
     expect(call.status).toBe(200);
     const answer = deviceEnrolledSchema.parse(call.body);
@@ -115,6 +149,12 @@ describe('enrolling a billing device (offline-counter 3.2 steps 2 and 3, 4.1)', 
       state: 'Active',
       series: [],
     });
+    // The devices check of the unit fails naming both reasons for the device (section 11; PRD-UXP-003).
+    const today = w.clock.now().toISOString().slice(0, 10);
+    expect(await w.inChange((context) => unitDevicesCheck(context, w.stores.wholeStore, today))).toEqual([
+      { kind: 'device-series', deviceId: early.deviceId, code: early.code, lacks: 'bill-format' },
+      { kind: 'device-series', deviceId: early.deviceId, code: early.code, lacks: 'financial-year' },
+    ]);
   });
 
   it('PRD-OFF-010 GC-8 test 3 a second enrolment of a device is refused', async () => {

@@ -12,8 +12,11 @@ create unique index billing_device_replaces on pos.billing_device (replaces_devi
 -- A device's units are a dated table (code-house-rules 7.3): a change of its units from a date ends the rows of the
 -- units it drops at that date and adds rows for the units it brings (offline-counter 12.1). The trigger admits one
 -- change only: moving the end of `valid_during` earlier, never to or before its start; the command checks it is today
--- or later under the Organisation's timezone (section 9). Every other change, and any delete, stays refused.
-create function pos.guard_billing_device_unit_change() returns trigger
+-- or later under the Organisation's timezone (section 9). Every other change, and any delete, stays refused. Its
+-- register entry is marked `versions`, with the overlap key the device and the unit, which the exclusion constraint of
+-- 0058 keeps; its rows need no decision, so the constraint has no `WHERE` clause. Named as each module's version guard
+-- is, which the catalogue checks look for (code-house-rules 10.4).
+create function pos.guard_version_change() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
@@ -32,13 +35,13 @@ begin
   return new;
 end;
 $$;
-revoke execute on function pos.guard_billing_device_unit_change() from public;
+revoke execute on function pos.guard_version_change() from public;
 drop trigger refuse_row_change on pos.billing_device_unit;
 -- No longer append-only, so it keeps no `kernel.refuse_change` guard, as no dated table does (code-house-rules 7.1,
 -- 7.3); a truncate would be the owner's alone, and the owner runs only reviewed migrations.
 drop trigger refuse_truncate on pos.billing_device_unit;
-create trigger guard_billing_device_unit_change before update or delete on pos.billing_device_unit
-  for each row execute function pos.guard_billing_device_unit_change();
+create trigger guard_version_change before update or delete on pos.billing_device_unit
+  for each row execute function pos.guard_version_change();
 
 -- Runtime grants (code-house-rules 5.2): UPDATE on the table, as for every dated table (7.3); the guard admits only
 -- the end of a row moved earlier.

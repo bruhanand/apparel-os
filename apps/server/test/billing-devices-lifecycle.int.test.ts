@@ -83,7 +83,9 @@ describe('revoking a lost device (offline-counter 3.5, 4.4; access-and-approvals
       expect(again.status).toBe(422);
       expect(errorOf(again).code).toBe('access.device-ended');
     }
-    expect((await w.enrol(device.deviceId, await w.newKey())).status).toBe(422);
+    const enrolAgain = await w.enrol(device.deviceId, await w.newKey());
+    expect(enrolAgain.status).toBe(422);
+    expect(errorOf(enrolAgain).code).toBe('access.device-ended');
   });
 
   it('POL-02.03 revoking needs edit on the device through a role assignment; an unknown device is not found', async () => {
@@ -118,7 +120,7 @@ describe('retiring and replacing a device (offline-counter 3.5)', () => {
     );
   });
 
-  it('a device still Setting up may be retired: it has no series to close', async () => {
+  it('PRD-OFF-010 a device still Setting up may be retired: it has no series to close', async () => {
     const device = await w.registered([w.stores.wholeStore]);
     expect(billingDeviceEndedSchema.parse((await w.end(device.deviceId, 'retirement')).body)).toMatchObject({
       state: 'Ended',
@@ -154,7 +156,7 @@ describe('retiring and replacing a device (offline-counter 3.5)', () => {
     ).toEqual(['Closed', 'Closed']);
   });
 
-  it('a replacement whose code is taken is refused whole: the old device stays as it was', async () => {
+  it('PRD-OFF-010 PRD-INT-004 a replacement whose code is taken is refused whole: the old device stays as it was', async () => {
     const old = await w.activeDevice([w.stores.wholeStore]);
     const call = await w.post(w.admin, `/api/pos/billing-devices/${old.deviceId}/replacement`, {
       ending: 'retire',
@@ -210,7 +212,7 @@ describe('changing a device’s units (offline-counter 12.1, 4.3)', () => {
     expect(after).toEqual([{ unit: w.stores.wholeStore, during: `[${w.setup.today()},${later})` }]);
   });
 
-  it('the refusals: not Active, a past date, a change scheduled on that date or later, the same list, a unit not of the Store', async () => {
+  it('PRD-ORG-005 PRD-MOD-010 the refusals: not Active, a past date, a change scheduled on that date or later, the same list, a unit not of the Store', async () => {
     const settingUp = await w.registered([w.stores.wholeStore]);
     expect(errorOf(await change(settingUp.deviceId, [w.stores.counterSameRegistration], w.setup.day(3))).code).toBe(
       'pos.device-not-active',
@@ -285,6 +287,58 @@ describe('a revocation and the commands that rely on the device (code-house-rule
     ).toEqual([]);
   });
 
+  it('PRD-SEC-008 PRD-OFF-010 a revocation waits for a device sign-in that holds the device, then revokes the session it started', async () => {
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    const proof = await w.proof(device.deviceId, device.key);
+    // A SYNTHETIC blocker holds the cashier's authenticator row, so the sign-in stops at the write of its code's step,
+    // after it has taken the device row in shared mode at step 1 (code-house-rules 8.2).
+    const blocker = await connect(w.database, 'superuser');
+    try {
+      await blocker.query('begin');
+      await blocker.query('select id from access.second_factor where app_user_id = $1 for no key update', [
+        w.cashier.id,
+      ]);
+      const blockerPid = (await blocker.query<{ pid: number }>('select pg_catalog.pg_backend_pid() as pid')).rows[0]
+        ?.pid;
+      if (blockerPid === undefined) throw new Error('No backend pid');
+      const signingIn = w.signIn(w.cashier, proof);
+      const signInPid = await waitUntilAnyWaitingForLock(w.database, [blockerPid]);
+      const revoking = w.inChange(async (context) => {
+        const facts = await w.pos.deviceFacts(context, device.deviceId, w.setup.today());
+        if (facts === undefined) throw new Error('No such device');
+        return w.pos.endBillingDevice(context, actor(), facts, device.deviceId, 'revoke');
+      });
+      // The revocation waits for the sign-in's shared hold of the device row.
+      await waitUntilAnyWaitingForLock(w.database, [blockerPid, signInPid]);
+      await blocker.query('rollback');
+      const signedIn = await signingIn;
+      expect(signedIn.status).toBe(200);
+      expect((await revoking).kind).toBe('success');
+      expect((await w.get(signedIn.cookie, '/api/access/session')).status).toBe(401);
+      const sessions = await w.query<{ id: string; state: string }>(
+        `select id, state from access.session where device_id = $1`,
+        [device.deviceId],
+      );
+      expect(sessions.map((each) => each.state)).toEqual(['Revoked']);
+      // The audit records keep the states each had before: the session In force, the device Active.
+      const changes = await w.query<{ operation: string; changes: unknown }>(
+        `select operation, changes from audit.audit_record
+          where (record_id = $1 and operation = 'revoke-device') or (record_id = $2 and operation = 'revoke-billing-device')
+          order by operation`,
+        [sessions[0]?.id, device.deviceId],
+      );
+      expect(changes.map((each) => each.operation)).toEqual(['revoke-billing-device', 'revoke-device']);
+      expect(changes[0]?.changes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'state', before: 'Active', after: 'Revoked' })]),
+      );
+      expect(changes[1]?.changes).toEqual([
+        expect.objectContaining({ field: 'state', before: 'In force', after: 'Revoked' }),
+      ]);
+    } finally {
+      await blocker.end();
+    }
+  });
+
   it('PRD-OFF-010 an enrolment waits for a revocation in progress, then is refused: a Revoked device binds no key', async () => {
     const device = await w.registered([w.stores.wholeStore]);
     const revocation = heldRevocation(device.deviceId);
@@ -293,7 +347,7 @@ describe('a revocation and the commands that rely on the device (code-house-rule
     await waitUntilAnyWaitingForLock(w.database, [revocation.pid()]);
     revocation.release();
     expect((await revocation.revoking).kind).toBe('success');
-    expect(errorOf(await enrolling).code).toBe('access.device-already-enrolled');
+    expect(errorOf(await enrolling).code).toBe('access.device-ended');
     const [row] = await w.query<{ key: unknown }>(`select public_key as key from access.device where id = $1`, [
       device.deviceId,
     ]);

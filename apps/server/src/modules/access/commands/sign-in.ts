@@ -1,7 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import type { DeviceProof, MissingItem, Secret, SignInOutcome } from '@apparel-os/schemas';
-import type { CommandRequest, CommandRunner, RoutedOrganisation, TransactionContext } from '../../../kernel/index.js';
+import {
+  LOCK_STEP,
+  type CommandRequest,
+  type CommandRunner,
+  type RoutedOrganisation,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session, signInFailure } from '../db/schema.js';
 import { findDemoPerson, type DemoSignInSettings } from '../domain/demo-sign-in.js';
@@ -11,7 +17,7 @@ import { verifyPassword } from '../domain/password-hash.js';
 import { SESSION_LIMITS_SETTING, sessionKindOf } from '../domain/sign-in-rules.js';
 import { matchingStep } from '../domain/totp.js';
 import { sessionIdentifierHash } from './authenticate-session.js';
-import { proveDeviceForSignIn } from './devices.js';
+import { deviceSignInLockTarget, proveDeviceForSignIn } from './devices.js';
 import { readSetting } from '../queries/settings.js';
 import { attemptSlowed } from '../queries/throttling.js';
 import { takeStep } from './take-step.js';
@@ -139,6 +145,11 @@ export class SignIn {
     const factor = signable?.confirmedFactor;
 
     return this.dependencies.runner.run(request, async (context): Promise<SignInResult> => {
+      // On a billing device, its row in shared mode at step 1, before any write of this transaction (the code's step,
+      // the failure, the session) and before the proof reads the device and the challenge (code-house-rules 8.2).
+      if (attempt.device !== undefined) {
+        await context.lock(LOCK_STEP.document, [deviceSignInLockTarget(attempt.device.deviceId)]);
+      }
       let step: number | undefined;
       if (factor !== undefined) {
         const secret = openFactorSecret(this.dependencies.keys, attempt.organisation.organisationCode, factor);

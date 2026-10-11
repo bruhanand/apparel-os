@@ -38,7 +38,7 @@ function deviceScopePrefix(deviceId: string): string {
 
 /**
  * Revoke or retire a billing device (offline-counter 3.5): locks the device rows of `access` and `pos` at step 1 and the
- * device's live series at step 8 (code-house-rules 8.2); has `access` make it Revoked or Ended, final, revoking every
+ * device's live series at step 8, before any write (code-house-rules 8.2); has `access` make it Revoked or Ended, final, revoking every
  * session bound to it (PRD-SEC-008); closes every live series of the device, of every registration and year, so a
  * closed series refuses allocation and is never reopened (numbering-and-audit 3.7; PRD-LIF-015). Writes the
  * `revoke-billing-device` or `retire-billing-device` audit record; a retirement publishes `pos.device-ended`, a
@@ -59,6 +59,13 @@ export async function endBillingDevice(
   const live = (await numbering.seriesOfScopePrefix(context, BILL_KIND.kind, deviceScopePrefix(deviceId))).filter(
     (each) => each.state !== 'Closed',
   );
+  // The series last, at step 8, and every lock before the first write, which `access` makes when it ends the device
+  // (numbering-and-audit 3.2; code-house-rules 8.2; stock-ledger 10.3). Read under the device rows, the live series
+  // cannot gain one before they close: every command that defines a device's series holds those rows exclusively.
+  await context.lock(
+    LOCK_STEP.numberSeries,
+    live.map((each) => numbering.seriesLockTarget(each.seriesId)),
+  );
   const scope = scopeOf(facts);
   const state = ending === 'revoke' ? 'Revoked' : 'Ended';
   const ended = await access.endDevice(
@@ -68,11 +75,6 @@ export async function endBillingDevice(
     state,
   );
   if (ended.kind === 'refusal') return ended;
-  // The series last, at step 8, before their first write (numbering-and-audit 3.2; code-house-rules 8.2).
-  await context.lock(
-    LOCK_STEP.numberSeries,
-    live.map((each) => numbering.seriesLockTarget(each.seriesId)),
-  );
   const closedSeriesIds: string[] = [];
   for (const each of live) {
     const closed = await numbering.close(context, each.seriesId);
@@ -86,7 +88,7 @@ export async function endBillingDevice(
     record: { module: 'pos', type: 'billing_device', id: deviceId },
     operation: ending === 'revoke' ? 'revoke-billing-device' : 'retire-billing-device',
     changes: [
-      { kind: 'value', field: 'state', before: null, after: state },
+      { kind: 'value', field: 'state', before: ended.answer.previousState, after: state },
       { kind: 'value', field: 'closedSeriesIds', before: null, after: closedSeriesIds },
       { kind: 'value', field: 'sessionIds', before: null, after: ended.answer.sessionIds },
     ],

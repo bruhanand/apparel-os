@@ -57,6 +57,7 @@ export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } f
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { WithdrawnDocument } from './commands/withdraw-request.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
+export type { HeldNeed } from './commands/authority.js';
 export type { RecordFacts, UncoveredFact } from './domain/scope.js';
 export { SCOPE_MEMBERS } from './contracts/scope-members.js';
 export { DECISION_EVIDENCE, DECISION_EVIDENCE_KIND } from './contracts/decision-evidence.js';

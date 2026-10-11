@@ -442,10 +442,15 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
         `select (select count(*) from pg_catalog.pg_constraint c
                  where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
                    and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
-                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3).
+                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3); every
+                   -- row of a dated table whose rows need no decision, such as pos.billing_device_unit.
                    and (pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%'
                         or pg_catalog.pg_get_constraintdef(c.oid)
-                          like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'))::text
+                          like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'
+                        or (pg_catalog.pg_get_constraintdef(c.oid) not like '%WHERE%'
+                            and not exists (select 1 from pg_catalog.pg_attribute a
+                                            where a.attrelid = c.conrelid and a.attname = 'decision'
+                                              and not a.attisdropped))))::text
                   as exclusion,
                 (select count(*) from pg_catalog.pg_trigger t
                  where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'

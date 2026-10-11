@@ -10,6 +10,7 @@ import {
   type ApprovalRuleSettingVersionDraft,
   type AssignmentWithdrawalDraft,
   type DevicePublicKey,
+  type DeviceState,
   type FieldClass,
   type PermissionAction,
   type RecordTypeDeclaration,
@@ -195,15 +196,18 @@ export interface AccessInterface {
     enrolment: { readonly publicKey: DevicePublicKey; readonly challengeId: string; readonly signature: string },
   ): Promise<DeviceOutcome<{ readonly deviceId: string }>>;
   /**
-   * End a device whose row the command holds (offline-counter 3.5; PRD-SEC-008): Revoked or Ended, final; revokes
-   * every session bound to it; writes the `device-revoked` or `device-ended` access record (S1-F12-T02).
+   * End a device whose row the command holds, with every other row it locks (offline-counter 3.5; PRD-SEC-008;
+   * code-house-rules 8.2): Revoked or Ended, final; revokes every session bound to it; writes the `device-revoked` or
+   * `device-ended` access record (S1-F12-T02). Answers the state it had and the sessions revoked.
    */
   endDevice(
     context: TransactionContext,
     by: DeviceActor,
     deviceId: string,
     state: 'Revoked' | 'Ended',
-  ): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>>;
+  ): Promise<
+    DeviceOutcome<{ readonly deviceId: string; readonly previousState: DeviceState; readonly sessionIds: string[] }>
+  >;
   /**
    * Issue a one-time challenge for a device to sign (offline-counter 3.3), on the sign-in path, to the source address
    * given; slowed as sign-in is (access-and-approvals 3.1).

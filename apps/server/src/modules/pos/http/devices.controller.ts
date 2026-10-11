@@ -1,4 +1,4 @@
-import { routes, type CommandRoute } from '@apparel-os/schemas';
+import { routes, type CommandRoute, type PermissionAction } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -17,7 +17,14 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedInUser } from '../../access/index.js';
+import {
+  ACCESS,
+  SignedIn,
+  type AccessInterface,
+  type HeldNeed,
+  type RecordFacts,
+  type SignedInUser,
+} from '../../access/index.js';
 import type { Actor, Outcome } from '../commands/devices.js';
 import type { PosInterface } from '../pos.js';
 import { POS } from '../tokens.js';
@@ -167,7 +174,8 @@ export class DevicesController {
 
   /**
    * A replacement registers a device, so the route authorises create; it also ends the old one, so the person must hold
-   * edit on it too, with the same Store's facts (offline-counter 3.5).
+   * edit on it too, with the same Store's facts (offline-counter 3.5). Both are authorised before any lock and both
+   * assignments held at step 0 (code-house-rules 8.2 "Authority first"; access-and-approvals 7.1 steps 3 and 4).
    */
   @ApiRoute(routes.replaceBillingDevice)
   replaceBillingDevice(
@@ -182,16 +190,8 @@ export class DevicesController {
       input,
       (c, date) => this.pos.deviceFacts(c, deviceId, date),
       deviceNotFound(deviceId),
-      async (c, actor, facts, date) => {
-        const edit = await this.access.authorise(c, {
-          actorId: user.userId,
-          action: 'edit',
-          recordType: routes.replaceBillingDevice.access.recordType,
-          facts,
-        });
-        if (edit.kind === 'refused') return { kind: 'refusal', refusal: edit.refusal };
-        return this.pos.replaceBillingDevice(c, actor, facts, deviceId, input.body, date);
-      },
+      (c, actor, facts, date) => this.pos.replaceBillingDevice(c, actor, facts, deviceId, input.body, date),
+      ['edit'],
     );
   }
 
@@ -212,19 +212,24 @@ export class DevicesController {
     );
   }
 
-  /** Authorise in the transaction with the record's facts (5.3); a record that does not exist is not found. */
+  /**
+   * Authorise in the transaction with the record's facts (5.3): the route's action and each further action the command
+   * needs on the same record type, all before any lock (7.1 step 3); a record that does not exist is not found.
+   */
   private async authoriseIn(
     context: TransactionContext,
     user: SignedInUser,
     route: CommandRoute & { access: { kind: 'action' } },
     factsOf: FactsOf,
     notFound: CommandRefusal,
+    further: readonly PermissionAction[],
   ): Promise<
     | {
         readonly kind: 'allowed';
         readonly roleAssignmentId: string;
         readonly facts: RecordFacts;
         readonly date: string;
+        readonly further: readonly HeldNeed[];
       }
     | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
   > {
@@ -235,7 +240,13 @@ export class DevicesController {
     const { action, recordType } = route.access;
     const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
     if (authorised.kind === 'refused') return authorised;
-    return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts, date: date.date };
+    const held: HeldNeed[] = [];
+    for (const each of further) {
+      const also = await this.access.authorise(context, { actorId: user.userId, action: each, recordType, facts });
+      if (also.kind === 'refused') return also;
+      held.push({ roleAssignmentId: also.roleAssignmentId, need: { action: each, recordType, facts } });
+    }
+    return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts, date: date.date, further: held };
   }
 
   private async command<R extends CommandRoute & { access: { kind: 'action' } }>(
@@ -250,10 +261,12 @@ export class DevicesController {
       actor: Actor,
       facts: RecordFacts,
       date: string,
-    ) => Promise<Outcome<Record<string, JsonValue> | object> & { readonly causedBySecret?: boolean }>,
+    ) => Promise<Outcome<JsonValue> & { readonly causedBySecret?: boolean }>,
+    /** Further actions the command needs on the same record, besides the route's (offline-counter 3.5). */
+    further: readonly PermissionAction[] = [],
   ) {
     const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.authoriseIn(context, user, route, factsOf, notFound);
+      const authorised = await this.authoriseIn(context, user, route, factsOf, notFound, further);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return {
         kind: 'refused',
@@ -273,17 +286,20 @@ export class DevicesController {
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
           // Authorise with the Store's facts, before any lock (7.1 step 3).
-          const authorised = await this.authoriseIn(context, user, route, factsOf, notFound);
+          const authorised = await this.authoriseIn(context, user, route, factsOf, notFound, further);
           if (authorised.kind === 'refused') {
             return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
           }
-          // Step 0: the actor and the assignment, rechecked under the locks with the same facts (8.2; 7.1 step 4).
+          // Step 0: the actor and every assignment relied on, rechecked under the locks with the same facts (8.2; 7.1
+          // step 4).
           const { action, recordType } = route.access;
           const held = await this.access.holdAuthority(
             context,
             { kind: 'user', id: user.userId },
             authorised.roleAssignmentId,
             { action, recordType, facts: authorised.facts },
+            [],
+            authorised.further,
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
           const outcome = await work(
@@ -292,13 +308,7 @@ export class DevicesController {
             authorised.facts,
             authorised.date,
           );
-          if (outcome.kind === 'success') {
-            return {
-              kind: 'success',
-              answer: JSON.parse(JSON.stringify(outcome.answer)) as JsonValue,
-              shows: 'nothing',
-            };
-          }
+          if (outcome.kind === 'success') return { kind: 'success', answer: outcome.answer, shows: 'nothing' };
           return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: outcome.causedBySecret ?? false };
         },
       },

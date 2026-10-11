@@ -9,17 +9,17 @@ import {
 import { and, asc, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
-  LOCK_STEP,
   lockTable,
   type CommandRefusal,
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
-import { device, deviceChallenge, deviceVersion, session } from '../db/schema.js';
+import { device, deviceChallenge, deviceVersion } from '../db/schema.js';
 import { newChallenge, proofVerifies } from '../domain/device-proof.js';
-import { deviceRevoked, sessionRevoked } from '../events.js';
+import { deviceRevoked } from '../events.js';
 import { readSetting } from '../queries/settings.js';
+import { revokeSessions } from './sessions.js';
 
 // Devices in `access` (access-and-approvals 2.4, 3.3; offline-counter 3.1 to 3.4; PRD-OFF-002, PRD-OFF-010,
 // PRD-SEC-007, PRD-SEC-008; S1-F12-T01): register a device, Setting up; issue a one-time challenge; enrol it, binding
@@ -68,6 +68,15 @@ function refusal<T>(kind: CommandRefusal['kind'], code: string): DeviceOutcome<T
 /** The device row as a lock target: enrolment locks it as its own record at step 1 (code-house-rules 8.2). */
 export function deviceLockTarget(deviceId: string): LockTarget {
   return { table: DEVICE, id: deviceId, mode: 'exclusive' };
+}
+
+/**
+ * The device row as a sign-in's lock target, in shared mode at step 1 (code-house-rules 8.2): a sign-in only relies on
+ * the device, so two sign-ins on one device never wait for each other, while a revocation or retirement, which holds
+ * the row exclusively, waits for them or they for it.
+ */
+export function deviceSignInLockTarget(deviceId: string): LockTarget {
+  return { table: DEVICE, id: deviceId, mode: 'shared' };
 }
 
 /**
@@ -150,8 +159,9 @@ export async function issueChallenge(context: TransactionContext, networkAddress
 
 /**
  * Enrol a device (offline-counter 3.2 steps 2 and 3; PRD-OFF-010): the caller holds the device row through
- * deviceLockTarget at step 1. Refused for a device that does not exist, one already enrolled or not Setting up
- * (`access.device-already-enrolled`: a device is enrolled once and its key never changes), and a proof that does not
+ * deviceLockTarget at step 1. Refused for a device that does not exist, one Revoked or Ended (`access.device-ended`:
+ * both are final), one already enrolled (`access.device-already-enrolled`: a device is enrolled once and its key never
+ * changes), and a proof that does not
  * verify: a challenge unknown or used, or a signature not made with the key given over this purpose, Organisation,
  * device and challenge (`access.device-proof-refused`). Binds the key, marks the challenge used, makes the device
  * Active and writes the `device-enrolled` access record.
@@ -167,6 +177,8 @@ export async function enrolDevice(
   if (held?.mode !== 'exclusive') throw new CommandDefect('Enrolment holds the device row it enrols (8.2)');
   const found = (await devicesById(context, [deviceId])).get(deviceId);
   if (found === undefined) return refusal('not-found', 'access.device-not-found');
+  // Revoked and Ended are final: such a device binds no key, enrolled or not (3.5).
+  if (found.state === 'Revoked' || found.state === 'Ended') return refusal('refused', 'access.device-ended');
   if (found.state !== 'Setting up' || found.enrolled) return refusal('refused', 'access.device-already-enrolled');
   const used = await useChallenge(context, enrolment.challengeId, deviceId, 'enrolment', (challenge) =>
     proofVerifies(enrolment.publicKey, enrolment.signature, {
@@ -201,12 +213,14 @@ export async function enrolDevice(
 /**
  * End a device's use (offline-counter 3.1, 3.5; access-and-approvals 2.4, 3.3; PRD-SEC-008, PRD-OFF-010, DEC-092;
  * S1-F12-T02): Revoked, reported lost, or Ended, retired; both are final, so a device Revoked or Ended already is
- * refused (`access.device-ended`). The caller holds the device row through deviceLockTarget at step 1. A device Setting
- * up may end too: one lost or retired before its enrolment. In the same transaction every session bound to the device,
- * of whichever user, is revoked, so its next request is not signed in and its live-update stream closes (3.3): an
- * audit record per session and, per user, one `session-revoked` access record and one `access.session-revoked`. The
- * device's own access record is `device-revoked` or `device-ended`; revocation also publishes `access.device-revoked`
- * for other consumers (offline-counter 3.5, 12.2). Answers the sessions revoked.
+ * refused (`access.device-ended`). The caller holds the device row through deviceLockTarget at step 1, and every other
+ * row it locks, its series at step 8 included, before this first write (code-house-rules 8.2). A device Setting up may
+ * end too: one lost or retired before its enrolment. In the same transaction every session bound to the device, of
+ * whichever user, is revoked through revokeSessions, so its next request is not signed in and its live-update stream
+ * closes (3.3): an audit record per session with the state it had and, per user, one `session-revoked` access record
+ * and one `access.session-revoked`. The device's own access record is `device-revoked` or `device-ended`; revocation
+ * also publishes `access.device-revoked` for other consumers (offline-counter 3.5, 12.2). Answers the state the device
+ * had and the sessions revoked.
  */
 export async function endDevice(
   context: TransactionContext,
@@ -214,7 +228,9 @@ export async function endDevice(
   by: DeviceActor,
   deviceId: string,
   state: 'Revoked' | 'Ended',
-): Promise<DeviceOutcome<{ readonly deviceId: string; readonly sessionIds: string[] }>> {
+): Promise<
+  DeviceOutcome<{ readonly deviceId: string; readonly previousState: DeviceState; readonly sessionIds: string[] }>
+> {
   const held = context.heldLock(DEVICE, deviceId);
   if (held?.mode !== 'exclusive') throw new CommandDefect('Ending a device holds the device row (8.2)');
   const found = (await devicesById(context, [deviceId])).get(deviceId);
@@ -227,32 +243,14 @@ export async function endDevice(
     state,
     occurredAt: context.startedAt,
   });
-  const revoked = await context.tx
-    .update(session)
-    .set({ state: 'Revoked' })
-    .where(and(eq(session.deviceId, deviceId), inArray(session.state, ['In force', 'Locked'])))
-    .returning({ id: session.id, userId: session.appUserId });
-  const byUser = new Map<string, string[]>();
-  for (const row of [...revoked].sort((a, b) => a.id.localeCompare(b.id))) {
-    byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.id]);
-    await audit.record(context, {
-      actor: { kind: 'user', id: by.userId },
-      ...known(by, 'roleAssignmentId', 'scope'),
-      record: { module: 'access', type: 'session', id: row.id },
-      operation: state === 'Revoked' ? 'revoke-device' : 'retire-device',
-      changes: [{ kind: 'value', field: 'state', before: 'In force or Locked', after: 'Revoked' }],
-      source: { kind: 'screen' },
-    });
-  }
-  const address = known(by, 'networkAddress');
-  for (const [userId, sessionIds] of [...byUser].sort(([a], [b]) => a.localeCompare(b))) {
-    await audit.recordAccess(context, { kind: 'session-revoked', outcome: 'succeeded', userId, ...address });
-    await context.publish(sessionRevoked, {
-      subject: { module: 'access', recordType: 'user', recordId: userId },
-      scope: { subjectUserId: userId },
-      payload: { userId, sessionIds },
-    });
-  }
+  const sessionIds =
+    (await revokeSessions(
+      context,
+      audit,
+      { actor: { kind: 'user', id: by.userId }, ...known(by, 'roleAssignmentId', 'networkAddress', 'scope') },
+      { deviceId },
+      state === 'Revoked' ? 'revoke-device' : 'retire-device',
+    )) ?? [];
   await audit.recordAccess(context, {
     kind: state === 'Revoked' ? 'device-revoked' : 'device-ended',
     outcome: 'succeeded',
@@ -267,7 +265,7 @@ export async function endDevice(
       payload: { deviceId },
     });
   }
-  return { kind: 'success', answer: { deviceId, sessionIds: revoked.map((row) => row.id).sort() } };
+  return { kind: 'success', answer: { deviceId, previousState: found.state, sessionIds } };
 }
 
 /**
@@ -275,18 +273,23 @@ export async function endDevice(
  * bound, and signed this unused challenge for a sign-in in this Organisation; the challenge is then used. Answers
  * whether it holds; a device that is unknown, not Active, or whose key did not sign it, is no proof.
  *
- * The sign-in relies on the device, so it holds the device row in shared mode at step 1 before reading its state and
- * key, and keeps it until it commits the session it starts (code-house-rules 8.1, 8.2): a revocation or retirement,
- * which holds the row exclusively, either commits first, and the device is then no longer Active here, or waits until
- * the session is committed and revokes it with the others (PRD-SEC-008; S1-F12 review).
+ * The sign-in relies on the device, so the caller holds the device row through deviceSignInLockTarget, in shared mode at
+ * step 1, before its first write and before this reads the device's state and key, and keeps it until it commits the
+ * session it starts (code-house-rules 8.1, 8.2): a revocation or retirement, which holds the row exclusively, either
+ * commits first, and the device is then no longer Active here, or waits until the session is committed and revokes it
+ * with the others (PRD-SEC-008; S1-F12 review).
  */
 export async function proveDeviceForSignIn(context: TransactionContext, proof: DeviceProof): Promise<boolean> {
-  await context.lock(LOCK_STEP.document, [{ table: DEVICE, id: proof.deviceId, mode: 'shared' }]);
   const [row] = await context.tx
     .select({ publicKey: device.publicKey })
     .from(device)
     .where(eq(device.id, proof.deviceId));
-  if (row?.publicKey === undefined || row.publicKey === null) return false;
+  // An unknown device has no row to hold; a known one must be held already.
+  if (row === undefined) return false;
+  if (context.heldLock(DEVICE, proof.deviceId) === undefined) {
+    throw new CommandDefect('A device sign-in holds the device row before it reads it (8.2)');
+  }
+  if (row.publicKey === null) return false;
   const state = (await devicesById(context, [proof.deviceId])).get(proof.deviceId)?.state;
   if (state !== 'Active') return false;
   const publicKey = devicePublicKeySchema.safeParse(row.publicKey);

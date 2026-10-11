@@ -218,6 +218,37 @@ describe('the devices readiness check (offline-counter section 11)', () => {
     ]);
   });
 
+  it('POL-10.07 PRD-UXP-003 GC-8 test 8 with no mapping in force for the unit on the date, the check fails with that reason', async () => {
+    // A unit whose first mapping starts later. The application never lets a device list a unit before the unit is in
+    // force (3.1), and a mapping in force always names a registration (migration 0029), so a SYNTHETIC unit row written
+    // by the owner stands for a device listing a unit with no mapping in force.
+    const unit = prepared(
+      await w.setup.prepare((c, p) =>
+        w.setup.organisation.prepareBusinessUnit(c, p, {
+          code: nextCode('BU'),
+          siteId: w.stores.siteId,
+          kind: 'brand-counter',
+          storeId: w.stores.storeId,
+          name: syntheticName('Later counter'),
+          legalEntityId: w.stores.legalEntityId,
+          taxRegistrationId: w.stores.registrationIds[0],
+          accountingBookId: w.stores.bookId,
+          validFrom: w.setup.day(3),
+        }),
+      ),
+    );
+    decided(await w.setup.decide(unit.requestId, unit.versionId));
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    await w.query(
+      `insert into pos.billing_device_unit (id, billing_device_id, business_unit_id, valid_during)
+       values ($1, $2, $3, daterange($4::date, null))`,
+      [uuidv7(), device.deviceId, unit.recordId, w.setup.today()],
+    );
+    expect(await check(unit.recordId)).toEqual([
+      { kind: 'device-series', deviceId: device.deviceId, code: device.code, lacks: 'mapping' },
+    ]);
+  });
+
   it('POL-10.07 DEC-116 GC-8 test 8 with no financial year for the date, the check fails with that reason', async () => {
     const unitId = await freshUnit();
     const device = await w.activeDevice([unitId]);
