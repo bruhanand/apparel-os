@@ -38,7 +38,7 @@ import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
 import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
-import { INTAKE_CAPS_ENVIRONMENT } from '../fixtures/intake-caps.js';
+import { SYNTHETIC_INTAKE_CAPS_ENVIRONMENT } from '../fixtures/intake-caps.js';
 import { LOCATION_IN_USE, type LocationInUse } from '../../src/modules/organisation/index.js';
 import { checkEventKinds, POSTING_EVENT_KINDS, type PostingEventKind } from '../../src/modules/finance/books/index.js';
 import {
@@ -353,7 +353,10 @@ export async function startAccessApp(
     .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
     // The same name for the publishing limit of imports (S1-F06-T01), and the caps at intake (S1-F06-T02).
     .overrideProvider(FILES_IMPORTS_ENVIRONMENT)
-    .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local', ...(options.intakeCaps ?? INTAKE_CAPS_ENVIRONMENT) })
+    .useValue({
+      AOS_ENVIRONMENT: options.environment ?? 'local',
+      ...(options.intakeCaps ?? SYNTHETIC_INTAKE_CAPS_ENVIRONMENT),
+    })
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);

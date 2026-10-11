@@ -23,7 +23,7 @@ import {
   SYNTHETIC_PRODUCT_SHEET,
   syntheticWorkbook,
 } from './fixtures/imports.js';
-import { INTAKE_CAPS_ENVIRONMENT } from './fixtures/intake-caps.js';
+import { SYNTHETIC_INTAKE_CAPS_ENVIRONMENT } from './fixtures/intake-caps.js';
 import { syntheticCode, syntheticFileName } from './fixtures/synthetic.js';
 import { RELATIONSHIP, SYNTHETIC_EXTERNAL_LINK_PART, withParts, withRelationship } from './fixtures/workbook-parts.js';
 import {
@@ -212,7 +212,7 @@ beforeAll(async () => {
   capped = await startAccessApp(world, keysEnvironment, {
     fileStoreEnvironment,
     intakeCaps: {
-      ...INTAKE_CAPS_ENVIRONMENT,
+      ...SYNTHETIC_INTAKE_CAPS_ENVIRONMENT,
       AOS_INTAKE_MAX_UPLOAD_BYTES: String(TIGHT.upload),
       AOS_INTAKE_MAX_EXPANDED_BYTES: String(TIGHT.expanded),
       AOS_INTAKE_MAX_ROWS: String(TIGHT.rows),
@@ -221,14 +221,14 @@ beforeAll(async () => {
   memoryCapped = await startAccessApp(world, keysEnvironment, {
     fileStoreEnvironment,
     intakeCaps: {
-      ...INTAKE_CAPS_ENVIRONMENT,
+      ...SYNTHETIC_INTAKE_CAPS_ENVIRONMENT,
       AOS_INTAKE_MAX_EXPANDED_BYTES: '209715200',
       AOS_INTAKE_MAX_PARSER_MEMORY_MB: String(TIGHT_MEMORY_MB),
     },
   });
   timeCapped = await startAccessApp(world, keysEnvironment, {
     fileStoreEnvironment,
-    intakeCaps: { ...INTAKE_CAPS_ENVIRONMENT, AOS_INTAKE_MAX_PROCESSING_MS: String(TIGHT_TIME_MS) },
+    intakeCaps: { ...SYNTHETIC_INTAKE_CAPS_ENVIRONMENT, AOS_INTAKE_MAX_PROCESSING_MS: String(TIGHT_TIME_MS) },
   });
   preparer = await signedIn(api, 'INTAKE', IMPORTER, ALL_CLASSES);
   const confirmer = await writeSyntheticUser(organisation.database, organisation.code, keysEnvironment, {
