@@ -1,5 +1,6 @@
-import type { DocumentPreview, ImportKind, PermissionAction, ValueSuggestion } from '@apparel-os/schemas';
+import type { DocumentPreview, ImportKind, ValueSuggestion } from '@apparel-os/schemas';
 import type { CommandRefusal, LockTarget, TransactionContext } from '../../../kernel/index.js';
+import type { AuthoriseRequest } from '../../access/index.js';
 import type { EffectiveValue } from '../domain/report.js';
 
 // The import handler contract (imports-and-opening-data 13.2; module-map 4.7 "Register an import handler", section 3
@@ -72,7 +73,10 @@ export interface ImportSource {
   readonly firstRowNumber: number;
 }
 
-/** The person publishing, with the assignment Authorise found for the handler's own permission. */
+/** The permission a document's publish needs: the action, the record type, and its facts where a place scopes it. */
+export type ImportNeed = Pick<AuthoriseRequest, 'action' | 'recordType' | 'facts' | 'movesTo'>;
+
+/** The person publishing, with the assignment Authorise found for the handler's own permission on the document. */
 export interface ImportPublisher {
   readonly userId: string;
   readonly roleAssignmentId: string;
@@ -106,10 +110,13 @@ export interface ImportHandler {
   /** Whether it supports governed revisions (7.3). */
   readonly revisions: ImportRevisions;
   /**
-   * The permission its publish of a kind needs beside the batch's, held at step 0 with it, so publishing goes through
-   * the same checks as a person's change (structure-and-masters 7; module-map section 3, rule 8).
+   * The permission publishing one document needs beside the batch's, with the scope facts of the place the document
+   * changes, as a person's change of the same record would be authorised: held at step 0 with the batch's, so
+   * publishing goes through the same checks as a person's change (structure-and-masters 6.1, 7; module-map section 3,
+   * rule 8). Each document is authorised against its own place, so a Store-scoped preparer publishes only within
+   * their scope (product owner, 10 Oct 2026). A record type no place scopes names no facts.
    */
-  publishNeeds(kind: ImportKind): { readonly action: PermissionAction; readonly recordType: string };
+  publishNeeds(context: TransactionContext, document: HandlerDocument): Promise<ImportNeed>;
   /**
    * The rows of its own that publishing the document locks, which Publish locks with the batch at step 1 in one call
    * (code-house-rules 8.2 "Rows of other modules"); its Maintain operation then finds them held.

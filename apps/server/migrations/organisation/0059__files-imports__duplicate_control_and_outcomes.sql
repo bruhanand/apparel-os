@@ -70,17 +70,17 @@ end;
 $$;
 
 -- The published document of a source identity that no revision has replaced, whatever the actor's scope sees, with
--- its batch and content hash only (7.2: checked at the start, at validation and under the lock at publishing; a
--- narrowly authorised internal function, code-house-rules 6.2). A document of another scope is a duplicate or a
+-- its identifier and content hash only, which is all its callers need (7.2: checked at the start, at validation and
+-- under the lock at publishing; a narrowly authorised internal function, code-house-rules 5.2, 6.2). A document of another scope is a duplicate or a
 -- conflict all the same, since an identity is one across the Organisation.
 create function files_imports.published_document(target text, scope_key text, reference text)
-  returns table (document_id uuid, batch_id uuid, content_hash text)
+  returns table (document_id uuid, content_hash text)
   language sql
   stable
   security definer
   set search_path = pg_catalog, pg_temp
 as $$
-  select d.id, d.batch_id, d.content_hash from files_imports.import_document d
+  select d.id, d.content_hash from files_imports.import_document d
   where d.target = published_document.target and d.scope_key = published_document.scope_key
     and d.reference = published_document.reference and d.state = 'Published' and d.replaced_by_document_id is null
 $$;
@@ -88,7 +88,7 @@ revoke execute on function files_imports.published_document(text, text, text) fr
 grant execute on function files_imports.published_document(text, text, text) to aos_runtime;
 
 -- Whether a stored file is read by a batch for the same target and layout that has not Failed, whatever the actor's
--- scope sees (7.2 "Same file"; 13.1). It answers yes or no only (code-house-rules 6.2).
+-- scope sees (7.2 "Same file"; 13.1). It answers yes or no only (code-house-rules 5.2, 6.2).
 create function files_imports.file_in_open_batch(stored_file_id uuid, target text, layout_id uuid)
   returns boolean
   language sql

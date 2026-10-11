@@ -402,7 +402,7 @@ beforeAll(async () => {
     measures: [],
     sourceScope: () => REVIEWED_TARGET,
     revisions: 'none',
-    publishNeeds: () => ({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
+    publishNeeds: () => Promise.resolve({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
     lockTargets: () => Promise.resolve([]),
     review: { kind: 'approval', actionType: REVIEW_ACTION },
     suggestions: () => Promise.resolve([]),
@@ -1213,5 +1213,105 @@ describe('the organisation create handler (structure-and-masters 7; imports-and-
       [storeCode],
     );
     expect(stores).toEqual([{ decision: 'Awaiting approval' }]);
+  });
+});
+
+describe('publishing each document at its own place (imports-and-opening-data 13.2; product owner, 10 Oct 2026)', () => {
+  const STORE_HEADER = ['Store code', 'Name', 'Format', 'Operating model', 'Site code'];
+  const storeStructure: LayoutStructure = {
+    shape: 'layout-version/1',
+    format: 'xlsx',
+    sheet: SHEET,
+    headerRow: 1,
+    dataStartRow: 2,
+    columns: STORE_HEADER.map((name) => ({ name, required: true })),
+    documentReference: 'Store code',
+  };
+  const storeFields: MappingFields = {
+    shape: 'mapping-version/1',
+    fields: {
+      storeCode: { column: 'Store code', transform: 'text' },
+      name: { column: 'Name', transform: 'text' },
+      format: { column: 'Format', transform: 'text' },
+      operatingModel: { column: 'Operating model', transform: 'text' },
+      siteCode: { column: 'Site code', transform: 'text' },
+    },
+  };
+
+  it('PRD-SEC-005 PRD-IMP-012: a Store-scoped preparer publishes a Store of their scope, and is refused one outside it', async () => {
+    const versions = await proposeLayoutAndMapping(storeStructure, storeFields, 'organisation.store');
+    await confirm(versions);
+    const storePreparer = await enrolled(
+      'STOREPREP',
+      [...IMPORTER, { recordType: 'organisation.store', action: 'edit' }],
+      {
+        scope: {
+          kind: 'dimensions',
+          legalEntity: { kind: 'all' },
+          place: { kind: 'selected', members: [{ type: 'store', id: STORE_A }] },
+          brand: { kind: 'all' },
+        },
+        fieldClasses: ALL_CLASSES.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+      },
+    );
+    const [site] = await rows<{ code: string }>('select code from organisation.site where id = $1', [SITE]);
+    const codeOf = async (id: string) =>
+      (await rows<{ code: string }>('select code from organisation.store where id = $1', [id]))[0]?.code ?? '';
+    const as = (path: string, body: unknown) => call(storePreparer, 'POST', path, body);
+    /** A Store update batch for one Store, started in Store A's scope, validated and submitted by the preparer. */
+    const submitted = async (storeCode: string) => {
+      const marker = next('STOREUPD');
+      const bytes = await syntheticWorkbook({
+        sheet: SHEET,
+        header: STORE_HEADER,
+        rows: [[storeCode, syntheticName('Renamed Store'), 'mbo', 'company-owned', site?.code ?? '']],
+        marker,
+      });
+      const stored = importFileStoredSchema.parse(
+        ok(
+          await as('/api/files-imports/import-files', {
+            sourceSystem: 'manual-upload',
+            originalName: syntheticFileName(marker.toLowerCase(), 'xlsx'),
+            contentBase64: bytes.toString('base64'),
+          }),
+        ),
+      );
+      const started = ok(
+        await as('/api/files-imports/batches', {
+          storedFileId: stored.storedFileId,
+          fileReceiptId: stored.receiptId,
+          kind: 'update',
+          target: 'organisation.store',
+          layoutVersionId: versions.layoutVersionId,
+          mappingVersionId: versions.mappingVersionId,
+          scope: { siteId: SITE, storeId: STORE_A },
+        }),
+      );
+      const batchId = String(started.batchId);
+      ok(await as(`/api/files-imports/batches/${batchId}/validate`, {}));
+      ok(await as(`/api/files-imports/batches/${batchId}/submit`, {}));
+      return batchId;
+    };
+    const publishAs = async (batchId: string) =>
+      as(`/api/files-imports/batches/${batchId}/publish`, {
+        versionId: (await read(batchId, storePreparer)).batch.versionId,
+      });
+    const awaiting = (id: string) =>
+      rows(`select 1 from organisation.store_version where store_id = $1 and decision = 'Awaiting approval'`, [id]);
+
+    const inScope = await submitted(await codeOf(STORE_A));
+    expect(ok(await publishAs(inScope))).toMatchObject({ state: 'Published' });
+    expect(await awaiting(STORE_A)).toHaveLength(1);
+
+    // The batch is inside the preparer's scope; the Store its document changes is not.
+    const outside = await submitted(await codeOf(STORE_B));
+    const refused = await publishAs(outside);
+    expect(refused.status).toBe(403);
+    const error = errorOf(refused);
+    expect(error).toMatchObject({ kind: 'not-authorised' });
+    const [document] = (await read(outside, storePreparer)).documents;
+    expect(error.missing).toContainEqual({ kind: 'import-document', documentId: document?.documentId });
+    expect(document?.state).toBe('Staged');
+    expect(await awaiting(STORE_B)).toEqual([]);
   });
 });

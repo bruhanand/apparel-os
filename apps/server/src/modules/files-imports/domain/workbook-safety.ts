@@ -46,9 +46,15 @@ interface Entry {
   readonly localOffset: number;
 }
 
-function unreadable(error: string): WorkbookSafety {
+export type WorkbookRefusal = Extract<WorkbookSafety, { readonly kind: 'refused' }>;
+
+/** A workbook that cannot be read, naming the reader's error as a word, never its message (PRD-SEC-014). */
+export function unreadable(error: string): WorkbookRefusal {
   return { kind: 'refused', code: 'files-imports.file-unreadable', missing: [{ kind: 'reader-error', error }] };
 }
+
+/** A workbook ExcelJS could not open, or a reader that ended without an answer. */
+export const notRead = (): WorkbookRefusal => unreadable('workbook-not-read');
 
 /** The central directory's entries, or the reason it cannot be read. */
 function entriesOf(bytes: Buffer): Entry[] | string {
@@ -114,18 +120,134 @@ function contentOf(bytes: Buffer, entry: Entry): Buffer | string {
   return content;
 }
 
-/** The relationships of a `.rels` part: each one's type and whether its target is outside the file. */
-function relationshipsOf(xml: string): { readonly type: string; readonly external: boolean }[] {
-  const found: { type: string; external: boolean }[] = [];
-  for (const tag of xml.matchAll(/<(?:\w+:)?Relationship\b([^>]*)>/g)) {
-    const attributes = new Map<string, string>();
-    for (const attribute of (tag[1] ?? '').matchAll(/([\w:]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-      attributes.set(attribute[1] ?? '', attribute[2] ?? attribute[3] ?? '');
-    }
-    const type = attributes.get('Type') ?? '';
-    found.push({ type, external: attributes.get('TargetMode') === 'External' });
+/** One element of an XML part: its local name (any prefix dropped) and its attributes, references resolved. */
+export interface XmlElement {
+  readonly name: string;
+  readonly attributes: ReadonlyMap<string, string>;
+}
+
+/**
+ * A part's text: UTF-16 where a byte order mark or the first character says so (a Power Query part is written so),
+ * otherwise UTF-8 (XML 1.0 appendix F).
+ */
+function textOf(bytes: Buffer): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return bytes.toString('utf16le', 2);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return Buffer.from(bytes.subarray(2)).swap16().toString('utf16le');
+  if (bytes[0] === 0x3c && bytes[1] === 0x00) return bytes.toString('utf16le');
+  if (bytes[0] === 0x00 && bytes[1] === 0x3c) return Buffer.from(bytes).swap16().toString('utf16le');
+  const text = bytes.toString('utf8');
+  return text.startsWith('﻿') ? text.slice(1) : text;
+}
+
+const PREDEFINED: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const XML_NAME = /^[A-Za-z_][\w.:-]*$/;
+
+/** A reference's text: a predefined entity or a character reference, or undefined for any other. */
+function referenced(body: string): string | undefined {
+  const named = PREDEFINED[body];
+  if (named !== undefined) return named;
+  const code = /^#x[0-9a-fA-F]{1,6}$/.test(body)
+    ? Number.parseInt(body.slice(2), 16)
+    : /^#[0-9]{1,7}$/.test(body)
+      ? Number.parseInt(body.slice(1), 10)
+      : Number.NaN;
+  return code >= 1 && code <= 0x10ffff ? String.fromCodePoint(code) : undefined;
+}
+
+/** An attribute value with its references resolved, or undefined where it holds `<` or a reference XML does not define. */
+function resolved(raw: string): string | undefined {
+  if (raw.includes('<')) return undefined;
+  let value = '';
+  let at = 0;
+  for (const reference of raw.matchAll(/&([^;&]*)(;?)/g)) {
+    const text = reference[2] === ';' ? referenced(reference[1] ?? '') : undefined;
+    if (text === undefined) return undefined;
+    value += raw.slice(at, reference.index) + text;
+    at = reference.index + reference[0].length;
   }
-  return found;
+  return value + raw.slice(at);
+}
+
+/**
+ * The elements of an XML part, in document order, or undefined when it is not well formed (S1-F06 review). A minimal
+ * tokenizer, not a validating parser: it skips the declaration, processing instructions, comments and CDATA sections,
+ * so no tag inside them counts; it reads each quoted attribute value whole, so a `>` inside one ends nothing, and
+ * resolves its character and predefined references; it refuses a document type declaration, so no entity of the
+ * file's own is ever expanded; and every end tag must close the element open, so a cut or forged part is refused
+ * rather than read in part.
+ */
+export function elementsOf(xml: string): XmlElement[] | undefined {
+  const elements: XmlElement[] = [];
+  const open: string[] = [];
+  const past = (closing: string, from: number) => {
+    const end = xml.indexOf(closing, from);
+    return end < 0 ? -1 : end + closing.length;
+  };
+  let at = 0;
+  while (at < xml.length) {
+    const tag = xml.indexOf('<', at);
+    if (tag < 0) break;
+    if (xml.startsWith('<?', tag)) at = past('?>', tag + 2);
+    else if (xml.startsWith('<!--', tag)) at = past('-->', tag + 4);
+    else if (xml.startsWith('<![CDATA[', tag)) at = past(']]>', tag + 9);
+    // A document type declaration, or anything else opened by `<!`, could declare entities: refused.
+    else if (xml.startsWith('<!', tag)) return undefined;
+    else if (xml.startsWith('</', tag)) {
+      const end = xml.indexOf('>', tag);
+      if (end < 0 || open.pop() !== xml.slice(tag + 2, end).trim()) return undefined;
+      at = end + 1;
+    } else {
+      const element = startTag(xml, tag);
+      if (element === undefined) return undefined;
+      elements.push({ name: element.name.slice(element.name.lastIndexOf(':') + 1), attributes: element.attributes });
+      if (!element.empty) open.push(element.name);
+      at = element.end;
+    }
+    if (at < 0) return undefined;
+  }
+  return open.length === 0 ? elements : undefined;
+}
+
+/** The start tag at `tag`: its qualified name, attributes, whether it is empty and where it ends; or not well formed. */
+function startTag(
+  xml: string,
+  tag: number,
+):
+  | { readonly name: string; readonly attributes: Map<string, string>; readonly empty: boolean; readonly end: number }
+  | undefined {
+  const name = /^[^\s/>]+/.exec(xml.slice(tag + 1, tag + 257))?.[0] ?? '';
+  if (!XML_NAME.test(name)) return undefined;
+  const attributes = new Map<string, string>();
+  let cursor = tag + 1 + name.length;
+  for (;;) {
+    const space = /^\s*/.exec(xml.slice(cursor, cursor + 4096))?.[0].length ?? 0;
+    cursor += space;
+    if (xml.startsWith('/>', cursor)) return { name, attributes, empty: true, end: cursor + 2 };
+    if (xml.startsWith('>', cursor)) return { name, attributes, empty: false, end: cursor + 1 };
+    const attribute = /^([^\s=/>]+)\s*=\s*(["'])/.exec(xml.slice(cursor, cursor + 512));
+    if (space === 0 || attribute === null) return undefined;
+    const [whole, attributeName = '', quote = '"'] = attribute;
+    const valueStart = cursor + whole.length;
+    const valueEnd = xml.indexOf(quote, valueStart);
+    if (valueEnd < 0 || !XML_NAME.test(attributeName) || attributes.has(attributeName)) return undefined;
+    const value = resolved(xml.slice(valueStart, valueEnd));
+    if (value === undefined) return undefined;
+    attributes.set(attributeName, value);
+    cursor = valueEnd + 1;
+  }
+}
+
+/**
+ * The relationships of a `.rels` part: each one's type and whether its target is outside the file. Any target mode
+ * but `Internal`, the one other value the packaging conventions allow, counts as outside.
+ */
+function relationshipsOf(elements: readonly XmlElement[]): { readonly type: string; readonly external: boolean }[] {
+  return elements
+    .filter((element) => element.name === 'Relationship')
+    .map((element) => {
+      const mode = element.attributes.get('TargetMode');
+      return { type: element.attributes.get('Type') ?? '', external: mode !== undefined && mode !== 'Internal' };
+    });
 }
 
 /** The last word of a relationship type, such as `hyperlink` or `externalLink`. */
@@ -150,8 +272,10 @@ function unapprovedLink(found: string): WorkbookSafety {
 }
 
 /** Whether a part's content is kept for the checks: the content types, the relationships and custom XML parts. */
+const CONTENT_TYPES = '[content_types].xml';
+
 const keptForChecks = (name: string) =>
-  name === '[content_types].xml' || name.endsWith('.rels') || name.startsWith('customxml/');
+  name === CONTENT_TYPES || name.endsWith('.rels') || name.startsWith('customxml/');
 
 /**
  * The checks of the parts, in this order: macros, active controls, embedded objects, dependency, links (9.3). Every
@@ -159,10 +283,21 @@ const keptForChecks = (name: string) =>
  */
 function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buffer>): WorkbookSafety {
   const names = allNames.map(lower);
-  const contentTypes = parts.get('[Content_Types].xml')?.toString('utf8') ?? '';
-  const relationships = [...parts]
-    .filter(([name]) => lower(name).endsWith('.rels'))
-    .flatMap(([, content]) => relationshipsOf(content.toString('utf8')));
+  // Every part kept is read by the tokenizer, its name matched whatever its case, as `keptForChecks` keeps it: a part
+  // that is not well formed is refused rather than read in part (S1-F06 review).
+  const read: { readonly name: string; readonly text: string; readonly elements: readonly XmlElement[] }[] = [];
+  for (const [name, content] of parts) {
+    const text = textOf(content);
+    const elements = elementsOf(text);
+    if (elements === undefined) return unreadable('part-not-well-formed');
+    read.push({ name: lower(name), text, elements });
+  }
+  const partsWhere = (test: (name: string) => boolean) => read.filter((part) => test(part.name));
+  // The content types part's values, each attribute resolved, so an encoded word is read as itself.
+  const contentTypes = partsWhere((name) => name === CONTENT_TYPES)
+    .flatMap((part) => part.elements.flatMap((element) => [...element.attributes.values()]))
+    .join('\n');
+  const relationships = partsWhere((name) => name.endsWith('.rels')).flatMap((part) => relationshipsOf(part.elements));
   const relationshipNamed = (word: string) => relationships.some((each) => lower(typeName(each.type)) === word);
 
   if (
@@ -186,8 +321,8 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
   }
   const external = relationships.find((each) => each.external && lower(typeName(each.type)) !== 'hyperlink');
   if (external !== undefined) return unapprovedLink(typeName(external.type));
-  const dataMashup = [...parts].some(
-    ([name, content]) => lower(name).startsWith('customxml/') && content.includes('DataMashup'),
+  const dataMashup = partsWhere((name) => name.startsWith('customxml/')).some((part) =>
+    part.text.includes('DataMashup'),
   );
   if (names.includes('xl/connections.xml') || names.some((name) => name.startsWith('xl/querytables/')) || dataMashup) {
     return unapprovedLink('data-connection');

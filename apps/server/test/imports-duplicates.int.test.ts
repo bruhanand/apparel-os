@@ -368,7 +368,7 @@ beforeAll(async () => {
     measures: [{ field: 'quantity', kind: 'quantity' }],
     sourceScope: () => FAILING_TARGET,
     revisions: 'none',
-    publishNeeds: () => ({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
+    publishNeeds: () => Promise.resolve({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
     lockTargets: () => Promise.resolve([]),
     review: { kind: 'submission' },
     suggestions: () => Promise.resolve([]),

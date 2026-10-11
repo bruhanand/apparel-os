@@ -8,14 +8,21 @@ import {
   type SkuVersionDraft,
   type ValueSuggestion,
 } from '@apparel-os/schemas';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { lockTable, type CommandRefusal, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
-import { knownValue, type HandlerDocument, type HandlerRow, type ImportHandler } from '../../../files-imports/index.js';
-import { brand, brandVersion, category, categoryVersion, sku, style } from '../db/schema.js';
+import {
+  closeSuggestions,
+  knownValue,
+  optionSuggestions,
+  type HandlerDocument,
+  type HandlerRow,
+  type ImportHandler,
+} from '../../../files-imports/index.js';
+import { brand, brandVersion, category, categoryVersion, sku, skuVersion, style } from '../db/schema.js';
 import type { StoredProposal } from '../domain/products.js';
-import { newestVersion, today } from './common.js';
+import { today } from './common.js';
 import type { CataloguePreparation } from './maintain.js';
 import { proposalRefusal } from './product-rules.js';
 import { proposeProduct } from './products.js';
@@ -57,9 +64,34 @@ function valueOf(row: HandlerRow, field: string): string | undefined {
   return knownValue(row.values[field]);
 }
 
-/** The trigram similarity below which a code or name is no close match (PRD Stack: Search). A builder's choice. */
+/**
+ * The trigram similarity below which a code or name is no close match (PRD Stack: Search). Technical tuning of a
+ * suggestion a person still accepts, never a business value: imports-and-opening-data 13.2, a design choice accepted
+ * as a builder value by the product owner, 10 Oct 2026. The most offered is `MOST_SUGGESTIONS`, shared by handlers.
+ */
 const CLOSE = 0.3;
-const MOST = 5;
+
+/** The refusal of a value the catalogue does not accept. */
+const NOT_ACCEPTED = 'merchandise.import-value-not-accepted';
+
+/**
+ * A row's stock unit and purpose, each a value the catalogue accepts (4.1), with an issue for each that is not.
+ */
+function unitAndPurpose(row: HandlerRow, issues: Issue[]) {
+  const stockUnit = stockUnitSchema.safeParse(valueOf(row, 'stockUnit'));
+  const purpose = skuPurposeSchema.safeParse(valueOf(row, 'purpose'));
+  if (!stockUnit.success) issues.push({ code: NOT_ACCEPTED, field: 'stockUnit', rowNumber: row.rowNumber });
+  if (!purpose.success) issues.push({ code: NOT_ACCEPTED, field: 'purpose', rowNumber: row.rowNumber });
+  return stockUnit.success && purpose.success ? { stockUnit: stockUnit.data, purpose: purpose.data } : undefined;
+}
+
+/** The handler's refusal of a document, from the first of its issues (PRD-UXP-003). */
+function refusedFor(issues: readonly Issue[]) {
+  return {
+    kind: 'refused' as const,
+    refusal: { kind: 'refused' as const, code: issues[0]?.code ?? NOT_ACCEPTED, missing: [] },
+  };
+}
 
 /**
  * Exact or close matches for a brand or category code (section 5; PRD-IMP-009): the record whose code is the value;
@@ -83,26 +115,7 @@ async function codeSuggestions(
     .innerJoin(version, and(eq(owner, identity.id), eq(version.decision, 'Approved')))
     .where(sql`${score} >= ${CLOSE}`)
     .orderBy(desc(score), identity.code);
-  const seen = new Set<string>();
-  const suggestions: ValueSuggestion[] = [];
-  for (const row of rows) {
-    if (seen.has(row.code) || suggestions.length === MOST) continue;
-    seen.add(row.code);
-    suggestions.push({ kind: 'close', value: row.code, label: row.name });
-  }
-  return suggestions;
-}
-
-/** Exact or close matches among the values the catalogue accepts, such as the stock units (section 5). */
-function optionSuggestions(options: readonly string[], value: string | undefined): ValueSuggestion[] {
-  if (value === undefined || value === '') return [];
-  const said = value.toLowerCase();
-  const exact = options.filter((option) => option.toLowerCase() === said);
-  if (exact.length > 0) return exact.map((option) => ({ kind: 'exact', value: option }));
-  return options
-    .filter((option) => option.includes(said) || said.includes(option) || option.startsWith(said.slice(0, 3)))
-    .slice(0, MOST)
-    .map((option) => ({ kind: 'close', value: option }));
+  return closeSuggestions(rows.map((row) => ({ value: row.code, label: row.name })));
 }
 
 /** Whether a code names a brand or category of the catalogue. */
@@ -143,22 +156,14 @@ async function draftOf(
         issues.push({ code: 'merchandise.import-style-differs', field, rowNumber: row.rowNumber });
       }
     }
-    const stockUnit = stockUnitSchema.safeParse(valueOf(row, 'stockUnit'));
-    if (!stockUnit.success) {
-      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'stockUnit', rowNumber: row.rowNumber });
-    }
-    const purpose = skuPurposeSchema.safeParse(valueOf(row, 'purpose'));
-    if (!purpose.success) {
-      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'purpose', rowNumber: row.rowNumber });
-    }
+    const accepted = unitAndPurpose(row, issues);
     const size = valueOf(row, 'size');
-    if (stockUnit.success && purpose.success) {
+    if (accepted !== undefined) {
       skus.push({
         code: valueOf(row, 'skuCode') ?? '',
         ...(size === undefined ? {} : { size }),
         identity: [],
-        stockUnit: stockUnit.data,
-        purpose: purpose.data,
+        ...accepted,
       });
     }
   }
@@ -175,7 +180,7 @@ async function draftOf(
     style: { code: document.reference, brandId, categoryId, attributes: [] },
     skus,
   });
-  if (!draft.success) return { issues: [{ code: 'merchandise.import-value-not-accepted' }] };
+  if (!draft.success) return { issues: [{ code: NOT_ACCEPTED }] };
   return { draft: draft.data };
 }
 
@@ -215,41 +220,42 @@ async function updatesOf(
   if (categoryId !== owner.categoryId) {
     issues.push({ code: 'merchandise.import-identity-differs', field: 'categoryCode', rowNumber: first.rowNumber });
   }
+  // The style's SKUs the rows name, each with its newest version, in one read; the version token is the newest
+  // version's, read in the transaction that prepares it (code-house-rules 12.7).
+  const codes = document.rows.map((row) => valueOf(row, 'skuCode') ?? '');
+  const found = new Map(
+    (
+      await context.tx
+        .select({
+          id: sku.id,
+          code: sku.code,
+          size: sku.size,
+          newest: sql<
+            string | null
+          >`(select max(${skuVersion.id}::text) from ${skuVersion} where ${skuVersion.skuId} = ${sku.id})`,
+        })
+        .from(sku)
+        .where(and(eq(sku.styleId, owner.id), inArray(sku.code, codes)))
+    ).map((each) => [each.code, each]),
+  );
   const skus: { skuId: string; draft: SkuVersionDraft }[] = [];
   for (const row of document.rows) {
     if (valueOf(row, 'styleCode') !== document.reference) {
       issues.push({ code: 'merchandise.import-style-differs', field: 'styleCode', rowNumber: row.rowNumber });
     }
-    const [found] = await context.tx
-      .select({ id: sku.id, size: sku.size })
-      .from(sku)
-      .where(and(eq(sku.code, valueOf(row, 'skuCode') ?? ''), eq(sku.styleId, owner.id)));
-    if (found === undefined) {
+    const each = found.get(valueOf(row, 'skuCode') ?? '');
+    if (each === undefined) {
       issues.push({ code: 'merchandise.record-not-found', field: 'skuCode', rowNumber: row.rowNumber });
       continue;
     }
-    if ((valueOf(row, 'size') ?? null) !== found.size) {
+    if ((valueOf(row, 'size') ?? null) !== each.size) {
       issues.push({ code: 'merchandise.import-identity-differs', field: 'size', rowNumber: row.rowNumber });
     }
-    const stockUnit = stockUnitSchema.safeParse(valueOf(row, 'stockUnit'));
-    const purpose = skuPurposeSchema.safeParse(valueOf(row, 'purpose'));
-    if (!stockUnit.success) {
-      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'stockUnit', rowNumber: row.rowNumber });
-    }
-    if (!purpose.success) {
-      issues.push({ code: 'merchandise.import-value-not-accepted', field: 'purpose', rowNumber: row.rowNumber });
-    }
-    if (!stockUnit.success || !purpose.success) continue;
-    // The version token is the newest version's, read in the transaction that prepares it (code-house-rules 12.7).
-    const versionToken = await newestVersion(context, 'sku', found.id);
+    const accepted = unitAndPurpose(row, issues);
+    if (accepted === undefined) continue;
     skus.push({
-      skuId: found.id,
-      draft: {
-        stockUnit: stockUnit.data,
-        purpose: purpose.data,
-        validFrom: date,
-        ...(versionToken === undefined ? {} : { versionToken }),
-      },
+      skuId: each.id,
+      draft: { ...accepted, validFrom: date, ...(each.newest === null ? {} : { versionToken: each.newest }) },
     });
   }
   if (issues.length > 0) return { issues };
@@ -276,10 +282,13 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
     // A product's source identity is the style record type and the style's code (imports-and-opening-data 7.1).
     sourceScope: () => STYLE_TYPE,
     revisions: 'new-version',
-    publishNeeds: (kind) =>
-      kind === 'update'
-        ? { action: 'edit', recordType: SKU_TYPE }
-        : { action: 'create', recordType: PRODUCT_PROPOSAL_TYPE },
+    // Products and SKUs belong to no place, so a document's need carries no scope facts (structure-and-masters 6.1).
+    publishNeeds: (_context, document) =>
+      Promise.resolve(
+        document.kind === 'update'
+          ? { action: 'edit', recordType: SKU_TYPE }
+          : { action: 'create', recordType: PRODUCT_PROPOSAL_TYPE },
+      ),
     // An update locks the SKUs it versions with the batch at step 1, as Prepare a SKU version would lock them (8.2).
     async lockTargets(context, document): Promise<LockTarget[]> {
       if (document.kind !== 'update') return [];
@@ -318,11 +327,11 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
         case 'stockUnit':
           return stockUnitSchema.safeParse(target).success
             ? undefined
-            : { kind: 'refused', code: 'merchandise.import-value-not-accepted', missing };
+            : { kind: 'refused', code: NOT_ACCEPTED, missing };
         case 'purpose':
           return skuPurposeSchema.safeParse(target).success
             ? undefined
-            : { kind: 'refused', code: 'merchandise.import-value-not-accepted', missing };
+            : { kind: 'refused', code: NOT_ACCEPTED, missing };
         default:
           return {
             kind: 'refused',
@@ -368,13 +377,7 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
     async publish(context, publisher, document, source) {
       if (document.kind === 'update') {
         const updated = await updatesOf(context, document);
-        if ('issues' in updated) {
-          const [issue] = updated.issues;
-          return {
-            kind: 'refused',
-            refusal: { kind: 'refused', code: issue?.code ?? 'merchandise.import-value-not-accepted', missing: [] },
-          };
-        }
+        if ('issues' in updated) return refusedFor(updated.issues);
         // Prepare a SKU version, the catalogue's own Maintain operation, for each SKU (module-map section 3, rule 8):
         // each waits Awaiting approval for a different authorised person (structure-and-masters 2.3).
         for (const each of updated.updates.skus) {
@@ -387,13 +390,7 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
         };
       }
       const drafted = await draftOf(context, document);
-      if ('issues' in drafted) {
-        const [issue] = drafted.issues;
-        return {
-          kind: 'refused',
-          refusal: { kind: 'refused', code: issue?.code ?? 'merchandise.import-value-not-accepted', missing: [] },
-        };
-      }
+      if ('issues' in drafted) return refusedFor(drafted.issues);
       const proposed = await proposeProduct(context, dependencies, publisher, drafted.draft, source);
       if (proposed.kind !== 'success') return { kind: 'refused', refusal: proposed.refusal };
       return {

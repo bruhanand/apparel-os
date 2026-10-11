@@ -8,16 +8,23 @@ import type {
   RequestContent,
   TransactionContext,
 } from '../../../kernel/index.js';
-import { importBatch, rowIssue, stagedValueEntry } from '../db/schema.js';
-import { factsOfBatch, handlerOf, type BatchRow, type ImportActor, type ImportDependencies } from './import-common.js';
+import { importBatch, rowIssue } from '../db/schema.js';
+import {
+  batchPreparers,
+  factsOfBatch,
+  handlerOf,
+  type BatchRow,
+  type ImportActor,
+  type ImportDependencies,
+} from './import-common.js';
 import { countsRefusal } from './outcomes.js';
 import { batchReplayAuthorisation, heldBatch } from './validate-import.js';
 
 // The review of a batch (imports-and-opening-data 3.1 step 8, 8.2, 13.1, 13.2; PRD-IMP-005, PRD-IMP-007, PRD-ACS-007;
 // S1-F06-T03): a Warning of the validation report is marked seen by the person who submits or approves the batch, one
 // by one or every Warning of one class in one action; Submit for review refuses a batch that is not Validated, still
-// has Blocking issues, has a Warning nobody marked seen, or whose counts do not close (7.4; S1-F06-T04); it records the version submitted, and where the handler
-// requires an approval in `access`, requests it bound to that exact version.
+// has Blocking issues, has a Warning nobody marked seen, or whose counts do not close (7.4; S1-F06-T04); it records the version
+// submitted, and where the handler requires an approval in `access`, requests it bound to that exact version.
 
 const refusal = (
   kind: CommandRefusal['kind'],
@@ -123,15 +130,6 @@ export interface SubmitInput {
   readonly content: RequestContent;
 }
 
-/** Every user who recorded a change in the batch version: who started it, who entered values, who submits (9.1). */
-async function preparersOf(context: TransactionContext, batch: BatchRow, submitter: string): Promise<string[]> {
-  const entries = await context.tx
-    .select({ userId: stagedValueEntry.enteredByUserId })
-    .from(stagedValueEntry)
-    .where(eq(stagedValueEntry.batchId, batch.id));
-  return [...new Set([batch.startedByUserId, submitter, ...entries.map((entry) => entry.userId)])].sort();
-}
-
 /** Submit for review (13.1). */
 export async function submitImport(deps: ImportDependencies, input: SubmitInput): Promise<IdempotentAnswer<JsonValue>> {
   return deps.helper.run(
@@ -184,7 +182,7 @@ export async function submitImport(deps: ImportDependencies, input: SubmitInput)
               versionId: batch.versionId,
             },
             value: { kind: 'none' },
-            preparers: await preparersOf(context, batch, input.actor.userId),
+            preparers: await batchPreparers(context, batch, input.actor.userId),
             requestedBy: { userId: input.actor.userId, roleAssignmentId: held.roleAssignmentId },
             facts: factsOfBatch(batch),
           });

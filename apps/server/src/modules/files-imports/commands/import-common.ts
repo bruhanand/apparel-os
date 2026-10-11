@@ -225,6 +225,22 @@ export async function entriesOf(context: TransactionContext, batchId: string): P
     .orderBy(asc(stagedValueEntry.id));
 }
 
+/**
+ * Every user who recorded a change in the batch version: who started it, who entered values, and the submitter or
+ * publisher (access-and-approvals 9.1, 9.7), so none of them decides its approval.
+ */
+export async function batchPreparers(
+  context: TransactionContext,
+  batch: Pick<BatchRow, 'id' | 'startedByUserId'>,
+  actorId: string,
+): Promise<string[]> {
+  const entries = await context.tx
+    .select({ userId: stagedValueEntry.enteredByUserId })
+    .from(stagedValueEntry)
+    .where(eq(stagedValueEntry.batchId, batch.id));
+  return [...new Set([batch.startedByUserId, actorId, ...entries.map((entry) => entry.userId)])].sort();
+}
+
 /** The staged rows named, of the batch. */
 export async function rowsNamed(context: TransactionContext, batchId: string, ids: readonly string[]) {
   if (ids.length === 0) return [];
@@ -263,14 +279,12 @@ export function handlerOf(handlers: ImportHandlers, batch: BatchRow): ImportHand
 export async function publishedDocument(
   context: TransactionContext,
   identity: { readonly target: string; readonly scopeKey: string; readonly reference: string },
-): Promise<{ readonly documentId: string; readonly batchId: string; readonly contentHash: string | null } | undefined> {
-  const result = await context.tx.execute<{ document_id: string; batch_id: string; content_hash: string | null }>(
-    sql`select document_id, batch_id, content_hash from files_imports.published_document(${identity.target}, ${identity.scopeKey}, ${identity.reference})`,
+): Promise<{ readonly documentId: string; readonly contentHash: string | null } | undefined> {
+  const result = await context.tx.execute<{ document_id: string; content_hash: string | null }>(
+    sql`select document_id, content_hash from files_imports.published_document(${identity.target}, ${identity.scopeKey}, ${identity.reference})`,
   );
   const [row] = result.rows;
-  return row === undefined
-    ? undefined
-    : { documentId: row.document_id, batchId: row.batch_id, contentHash: row.content_hash };
+  return row === undefined ? undefined : { documentId: row.document_id, contentHash: row.content_hash };
 }
 
 /** A document's source identity and content, and what it is against the published document of its identity (7.1). */

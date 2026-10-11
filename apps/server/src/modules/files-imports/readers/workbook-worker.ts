@@ -35,12 +35,6 @@ port.once('message', (request: WorkbookWorkerRequest) => {
         code: 'files-imports.over-intake-cap',
         missing: [{ kind: 'intake-cap', cap: 'rows', limit: String(request.maxRows) }],
       });
-    } else {
-      port.postMessage({
-        kind: 'refused',
-        code: 'files-imports.file-unreadable',
-        missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
-      });
-    }
+    } else port.postMessage(safety.notRead());
   })();
 });

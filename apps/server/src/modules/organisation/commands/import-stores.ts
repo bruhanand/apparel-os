@@ -7,11 +7,16 @@ import {
   type DocumentPreview,
   type StoreDraft,
   type StoreVersionDraft,
-  type ValueSuggestion,
 } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
-import { knownValue, type HandlerDocument, type ImportHandler } from '../../files-imports/index.js';
+import {
+  closeSuggestions,
+  knownValue,
+  optionSuggestions,
+  type HandlerDocument,
+  type ImportHandler,
+} from '../../files-imports/index.js';
 import { store } from '../db/schema.js';
 import { recordTypeOf } from '../domain/kinds.js';
 import { structureOn } from '../queries/records.js';
@@ -132,16 +137,6 @@ async function draftOf(
   return { draft: draft.data };
 }
 
-function optionSuggestions(options: readonly string[], value: string | undefined): ValueSuggestion[] {
-  if (value === undefined || value === '') return [];
-  const said = value.toLowerCase();
-  const exact = options.filter((option) => option === said);
-  if (exact.length > 0) return exact.map((option) => ({ kind: 'exact', value: option }));
-  return options
-    .filter((option) => option.includes(said) || said.includes(option))
-    .map((option) => ({ kind: 'close', value: option }));
-}
-
 /** The handler `organisation` registers with files-imports at start, for Stores. */
 export function storeImportHandler(organisation: Organisation): ImportHandler {
   return {
@@ -155,7 +150,20 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
     // A Store's source identity is its record type and code (imports-and-opening-data 7.1).
     sourceScope: () => recordTypeOf('store'),
     revisions: 'new-version',
-    publishNeeds: (kind) => ({ action: kind === 'update' ? 'edit' : 'create', recordType: recordTypeOf('store') }),
+    // Each document authorised at its own place, as Prepare a Store and Prepare a Store version are on screen
+    // (structure-and-masters 5.2, 6.1; product owner, 10 Oct 2026): a new Store at its Site, which a selected Site
+    // covers; the next version of a Store with the Store's facts today, and the Site it moves the Store to.
+    async publishNeeds(context, document) {
+      const recordType = recordTypeOf('store');
+      const drafted = await draftOf(context, document);
+      if (document.kind !== 'update') {
+        return { action: 'create', recordType, facts: 'draft' in drafted ? { siteId: drafted.draft.siteId } : {} };
+      }
+      const date = await today(context);
+      if (!('update' in drafted) || date === undefined) return { action: 'edit', recordType, facts: {} };
+      const facts = await organisation.placeFacts(context, 'store', drafted.update.storeId, date);
+      return { action: 'edit', recordType, facts, movesTo: { ...facts, siteId: drafted.update.draft.siteId } };
+    },
     // Preparing a Store or its version takes no lock of its own: its approval checks it under its locks (2.3).
     lockTargets: () => Promise.resolve([]),
     // Each Store's first version waits for a different authorised person (2.3), so the submission is the review.
@@ -173,10 +181,11 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
           const exact = sites.filter((site) => site.code === value);
           if (exact.length > 0) return exact.map((site) => ({ kind: 'exact', value: site.code, label: site.name }));
           const said = value.toLowerCase();
-          return sites
-            .filter((site) => site.code.toLowerCase().includes(said) || site.name.toLowerCase().includes(said))
-            .slice(0, 5)
-            .map((site) => ({ kind: 'close', value: site.code, label: site.name }));
+          return closeSuggestions(
+            sites
+              .filter((site) => site.code.toLowerCase().includes(said) || site.name.toLowerCase().includes(said))
+              .map((site) => ({ value: site.code, label: site.name })),
+          );
         }
         default:
           return [];

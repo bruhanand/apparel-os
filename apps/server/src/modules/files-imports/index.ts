@@ -11,6 +11,7 @@ export { FILE_STORE_VARIABLES } from './file-store/s3-file-store.js';
 // The import handler contract the target modules implement and register at start (imports-and-opening-data 13.2;
 // module-map 4.7; S1-F06-T01), and the batch code kind the composition root hands to `numbering` (GC9-9).
 export { IMPORT_HANDLERS, ImportHandlers, knownValue } from './contracts/import-handlers.js';
+export { closeSuggestions, MOST_SUGGESTIONS, optionSuggestions } from './domain/suggestions.js';
 export type {
   HandlerDocument,
   HandlerPublished,
@@ -18,6 +19,7 @@ export type {
   ImportField,
   ImportHandler,
   ImportMeasure,
+  ImportNeed,
   ImportPublisher,
   ImportReview,
   ImportRevisions,

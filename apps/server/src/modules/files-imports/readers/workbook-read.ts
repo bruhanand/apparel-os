@@ -1,7 +1,7 @@
 import { Worker } from 'node:worker_threads';
 import type { Grid } from '../domain/grid.js';
 import type { IntakeCaps } from '../domain/intake-caps.js';
-import type { WorkbookSafety } from '../domain/workbook-safety.js';
+import { notRead, type WorkbookRefusal } from '../domain/workbook-safety.js';
 import type { WorkbookWorkerRequest } from './workbook-worker.js';
 
 // Reading a workbook under the caps at intake (imports-and-opening-data 9.1, 9.3; DEC-112 GC6-5; PRD-SEC-011;
@@ -10,8 +10,7 @@ import type { WorkbookWorkerRequest } from './workbook-worker.js';
 // and nothing of it is kept: it is never truncated to fit. The same read serves intake, before anything is stored,
 // and every later read of the stored file (Start an import, Detect a layout), so a cap holds wherever the file is read.
 
-export type WorkbookRead =
-  { readonly kind: 'read'; readonly grid: Grid } | Extract<WorkbookSafety, { readonly kind: 'refused' }>;
+export type WorkbookRead = { readonly kind: 'read'; readonly grid: Grid } | WorkbookRefusal;
 
 function overCap(cap: 'parser-memory' | 'processing-time', limit: number): WorkbookRead {
   return {
@@ -50,19 +49,10 @@ export function readWorkbook(bytes: Buffer, caps: IntakeCaps): Promise<WorkbookR
     worker.once('error', (error: Error & { code?: string }) => {
       if (error.code === 'ERR_WORKER_OUT_OF_MEMORY') settle(overCap('parser-memory', caps.maxParserMemoryMb));
       // Anything else the reader threw is a workbook it could not read; the error itself may quote the file.
-      else
-        settle({
-          kind: 'refused',
-          code: 'files-imports.file-unreadable',
-          missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
-        });
+      else settle(notRead());
     });
     worker.once('exit', () => {
-      settle({
-        kind: 'refused',
-        code: 'files-imports.file-unreadable',
-        missing: [{ kind: 'reader-error', error: 'workbook-not-read' }],
-      });
+      settle(notRead());
     });
     const copy = new Uint8Array(new ArrayBuffer(bytes.length));
     copy.set(bytes);

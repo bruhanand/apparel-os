@@ -119,6 +119,126 @@ describe('inspectWorkbook', () => {
     });
   });
 
+  // S1-F06 review: the relationship parts are read by an XML tokenizer, so neither a `>` inside a quoted attribute,
+  // a character reference, a comment nor a CDATA section hides or fakes a relationship.
+  const sheetRelationship = (attributes: string) => (old: string) =>
+    old.replace('</Relationships>', `<Relationship ${attributes}/></Relationships>`);
+  const imageType = `Type="${RELATIONSHIP.image}"`;
+
+  it('PRD-SEC-011 finds an external target after a `>` inside a quoted attribute', async () => {
+    const workbook = await syntheticWorkbook();
+    const changed = withParts(workbook, {
+      [SHEET_RELS]: sheetRelationship(
+        `Id="rIdSyn" ${imageType} Target="https://example.invalid/a>b.png" TargetMode="External"`,
+      ),
+    });
+    expect(inspectWorkbook(changed, LOOSE)).toMatchObject({
+      code: 'files-imports.workbook-unapproved-link',
+      missing: [{ found: 'image' }],
+    });
+  });
+
+  it('PRD-SEC-011 reads character references in a relationship attribute', async () => {
+    const workbook = await syntheticWorkbook();
+    const changed = withParts(workbook, {
+      [SHEET_RELS]: sheetRelationship(
+        `Id="rIdSyn" ${imageType} Target="https://example.invalid/a.png" TargetMode="&#69;xtern&#x61;l"`,
+      ),
+    });
+    expect(inspectWorkbook(changed, LOOSE)).toMatchObject({ code: 'files-imports.workbook-unapproved-link' });
+  });
+
+  it('PRD-SEC-011 finds a relationship after a comment or CDATA that holds a `>` or a fake tag', async () => {
+    const workbook = await syntheticWorkbook();
+    for (const before of ['<!-- > <Relationship -->', '<![CDATA[ <Relationship Id="x" ]]>']) {
+      const changed = withParts(workbook, {
+        [SHEET_RELS]: (old) =>
+          old.replace(
+            '</Relationships>',
+            `${before}<Relationship Id="rIdSyn" ${imageType} Target="file:///SYNTHETIC.png" TargetMode="External"/></Relationships>`,
+          ),
+      });
+      expect(inspectWorkbook(changed, LOOSE)).toMatchObject({ code: 'files-imports.workbook-unapproved-link' });
+    }
+  });
+
+  it('PRD-SEC-011 takes no relationship from inside a comment', async () => {
+    const workbook = await syntheticWorkbook();
+    const changed = withParts(workbook, {
+      [SHEET_RELS]: (old) =>
+        old.replace(
+          '</Relationships>',
+          `<!-- <Relationship Id="rIdSyn" ${imageType} Target="file:///x.png" TargetMode="External"/> --></Relationships>`,
+        ),
+    });
+    expect(inspectWorkbook(changed, LOOSE)).toEqual({ kind: 'safe' });
+  });
+
+  it('PRD-SEC-011 counts any target mode other than Internal as external', async () => {
+    const workbook = await syntheticWorkbook();
+    const changed = withParts(workbook, {
+      [SHEET_RELS]: sheetRelationship(`Id="rIdSyn" ${imageType} Target="file:///x.png" TargetMode="external"`),
+    });
+    expect(inspectWorkbook(changed, LOOSE)).toMatchObject({ code: 'files-imports.workbook-unapproved-link' });
+  });
+
+  it('A-1 refuses a relationship part that is not well formed, or declares a DTD, as unreadable', async () => {
+    const workbook = await syntheticWorkbook();
+    for (const broken of [
+      (old: string) => old.replace('</Relationships>', '<Relationship Id="x'),
+      (old: string) => old.replace('<Relationships', '<!DOCTYPE r [<!ENTITY e "External">]><Relationships'),
+    ]) {
+      expect(inspectWorkbook(withParts(workbook, { [SHEET_RELS]: broken }), LOOSE)).toEqual({
+        kind: 'refused',
+        code: 'files-imports.file-unreadable',
+        missing: [{ kind: 'reader-error', error: 'part-not-well-formed' }],
+      });
+    }
+  });
+
+  it('PRD-SEC-011 reads a relationship part written in UTF-16', async () => {
+    const workbook = await syntheticWorkbook();
+    const rels = partsOf(workbook).get(SHEET_RELS)?.toString('utf8') ?? '';
+    const changed = sheetRelationship(`Id="rIdSyn" ${imageType} Target="file:///x.png" TargetMode="External"`)(rels);
+    const utf16 = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(changed.replace('UTF-8', 'UTF-16'), 'utf16le'),
+    ]);
+    expect(inspectWorkbook(withParts(workbook, { [SHEET_RELS]: utf16 }), LOOSE)).toMatchObject({
+      code: 'files-imports.workbook-unapproved-link',
+    });
+  });
+
+  it('PRD-SEC-011 finds a Power Query part written in UTF-16, as its writer stores it', async () => {
+    const workbook = await syntheticWorkbook();
+    const mashup = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(
+        '<?xml version="1.0" encoding="utf-16"?><DataMashup xmlns="http://schemas.microsoft.com/DataMashup">U1lO</DataMashup>',
+        'utf16le',
+      ),
+    ]);
+    expect(inspectWorkbook(withParts(workbook, { 'customXml/item1.xml': mashup }), LOOSE)).toEqual({
+      kind: 'refused',
+      code: 'files-imports.workbook-unapproved-link',
+      missing: [{ kind: 'unapproved-link', found: 'data-connection' }],
+    });
+  });
+
+  it('PRD-SEC-011 checks the content types part whatever the case of its name, and its encoded values', async () => {
+    const workbook = await syntheticWorkbook();
+    const types = partsOf(workbook).get('[Content_Types].xml')?.toString('utf8') ?? '';
+    const macro = types.replace(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
+      'application/vnd.ms-excel.sheet.&#109;acroEnabled.main+xml',
+    );
+    const renamed = withParts(workbook, { '[Content_Types].xml': null, '[content_types].XML': macro });
+    expect(inspectWorkbook(renamed, LOOSE)).toMatchObject({
+      code: 'files-imports.workbook-active-content',
+      missing: [{ found: 'macros' }],
+    });
+  });
+
   it('GC6-5 refuses a container that expands past its cap, naming the cap, before inflating past it', async () => {
     const workbook = withParts(await syntheticWorkbook(), { 'xl/SYNTHETIC-filler.xml': Buffer.alloc(200_000, 0x20) });
     const total = [...partsOf(workbook).values()].reduce((sum, part) => sum + part.length, 0);
