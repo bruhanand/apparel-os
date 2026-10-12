@@ -19,3 +19,4 @@ export type { SupplierRoles } from './contracts/supplier-roles.js';
 export { skuOn } from './queries/sku.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
+export { catalogueRestoreParticipant } from './restore-participant.js';

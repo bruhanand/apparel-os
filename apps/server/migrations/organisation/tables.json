@@ -193,6 +193,14 @@
       "why": "Which event was handed to which consumer and by which job; only kernel's outbox processor reads it (code-house-rules 12.8 \"Dispatch\")"
     },
     {
+      "table": "kernel.backup_record",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "backup-and-restore 3.2 step 8, section 11",
+      "why": "Technical rows only kernel reads, for the operations view's backup status; written only by the backup command as the migration role, and holding no record data and no key (backup-and-restore section 11)"
+    },
+    {
       "table": "access.persona_held",
       "class": "unscoped",
       "marks": ["append-only"],
@@ -1846,6 +1854,14 @@
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "offline-counter 3.2, 3.3; code-house-rules 6.3",
       "why": "Read by sign-in before any actor exists (code-house-rules 6.3); only access code reads it"
+    },
+    {
+      "table": "access.key_version",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "backup-and-restore 2.4, section 11; access-and-approvals 6",
+      "why": "Technical rows with no scope fact: the identifiers of the Organisation's data key versions, never a key, read only by access code at start and by the backup command (backup-and-restore section 11)"
     },
     {
       "table": "numbering.financial_year",

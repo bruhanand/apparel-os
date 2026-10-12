@@ -305,6 +305,7 @@ export class PartiesMaintenance {
       partyId,
       sealed: sealed.ciphertext,
       scheme: sealed.scheme,
+      keyVersion: sealed.keyVersion,
       validDuring: from(draft.validFrom),
       decision: 'Awaiting approval',
       preparedByUserId: preparer.userId,

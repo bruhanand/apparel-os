@@ -6,3 +6,4 @@ export type { TaxRulesDependencies, TaxRulesInterface } from './tax-rules.js';
 export { taxRulesApprovals } from './commands/effects.js';
 export { calculationInputs } from './queries/read.js';
 export type { PageRequest, TaxRulesQuery } from './queries/read.js';
+export { taxRulesRestoreParticipant } from './restore-participant.js';

@@ -21,6 +21,7 @@ export interface StartedPostgresServer {
 export async function startPostgresServer(): Promise<StartedPostgresServer> {
   const container = await new PostgreSqlContainer('postgres:17-alpine').start();
   const credentials = {
+    containerId: container.getId(),
     host: container.getHost(),
     port: container.getPort(),
     superuserUrl: container.getConnectionUri(),

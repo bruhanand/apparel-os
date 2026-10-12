@@ -97,6 +97,7 @@ export class OwnCredentials {
           appUserId: own.userId,
           secretScheme: sealed.scheme,
           secretCiphertext: sealed.ciphertext,
+          secretKeyVersion: sealed.keyVersion,
           state: 'Setting up',
           lastUsedStep: null,
           confirmedAt: null,

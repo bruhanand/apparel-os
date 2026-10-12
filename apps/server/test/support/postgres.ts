@@ -5,6 +5,8 @@ import { applyDatabasePrivileges, type MigrationSetName } from '../../src/kernel
 
 /** The container global-setup.ts starts, as test files see it. */
 export interface PostgresServer {
+  /** The container's identifier, for running PostgreSQL's own client tools of the server's version inside it. */
+  readonly containerId: string;
   readonly host: string;
   readonly port: number;
   readonly superuserUrl: string;
@@ -32,7 +34,7 @@ export function usePostgresServer(server: PostgresServer): void {
   outsideVitest = server;
 }
 
-function testServer(): PostgresServer {
+export function testServer(): PostgresServer {
   return outsideVitest ?? inject('postgres');
 }
 

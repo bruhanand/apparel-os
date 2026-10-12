@@ -73,15 +73,25 @@ export const syntheticTimezone: OrganisationTimezoneSource = {
   read: () => Promise.resolve({ kind: 'set', timezone: SYNTHETIC_TIMEZONE, versionId: SYNTHETIC_TIMEZONE_VERSION }),
 };
 
-/** A SYNTHETIC key for each Organisation of the world, as AOS_ORGANISATION_KEYS holds them. */
+const keysByWorld = new Map<string, Record<string, string>>();
+
+/**
+ * A SYNTHETIC key for each Organisation of the world, as AOS_ORGANISATION_KEYS holds them: the same keys each time it
+ * is asked for one world, since the server refuses to start with a key that is not a version the Organisation's
+ * database lists (backup-and-restore 2.4).
+ */
 export function syntheticKeysEnvironment(world: SyntheticWorld): Record<string, string> {
-  return {
+  const kept = keysByWorld.get(world.directory);
+  if (kept !== undefined) return kept;
+  const made = {
     [ORGANISATION_KEYS_VARIABLE]: JSON.stringify(
       Object.fromEntries(
         world.organisations.map((organisation) => [organisation.code, randomBytes(32).toString('base64url')]),
       ),
     ),
   };
+  keysByWorld.set(world.directory, made);
+  return made;
 }
 
 function dayAgo(): string {
@@ -152,9 +162,10 @@ export async function writeSyntheticUser(
         factorSecret,
       );
       await owner.query(
-        `insert into access.second_factor (id, app_user_id, secret_scheme, secret_ciphertext, state, last_used_step, confirmed_at)
-         values ($1, $2, $3, $4, 'Confirmed', null, now())`,
-        [factorId, id, sealed.scheme, sealed.ciphertext],
+        `insert into access.second_factor (id, app_user_id, secret_scheme, secret_ciphertext, secret_key_version, state,
+           last_used_step, confirmed_at)
+         values ($1, $2, $3, $4, $5, 'Confirmed', null, now())`,
+        [factorId, id, sealed.scheme, sealed.ciphertext, sealed.keyVersion],
       );
     }
     return { id, versionId, login, displayName, password, factorSecret };

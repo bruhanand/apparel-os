@@ -8,6 +8,8 @@ export type { Attached, AttachedRecord, AttachRequest, EvidenceKind } from './co
 export { FILE_STORE, FILE_STORE_ENVIRONMENT } from './file-store/file-store.js';
 export type { FileStore, FileStoreHandle } from './file-store/file-store.js';
 export { FILE_STORE_VARIABLES } from './file-store/s3-file-store.js';
+export { backupFileName, copyOrganisationFiles } from './file-store/backup-copy.js';
+export type { FileCopyOutcome } from './file-store/backup-copy.js';
 // The import handler contract the target modules implement and register at start (imports-and-opening-data 13.2;
 // module-map 4.7; S1-F06-T01), and the batch code kind the composition root hands to `numbering` (GC9-9).
 export { IMPORT_HANDLERS, ImportHandlers, knownValue } from './contracts/import-handlers.js';
@@ -32,3 +34,4 @@ export type { EffectiveValue } from './domain/report.js';
 export { filesImportsApprovals } from './commands/effects.js';
 export { importFailed, importPublished, mappingConfirmed } from './events.js';
 export { IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY } from './domain/batch-code.js';
+export { filesImportsRestoreParticipant } from './restore-participant.js';

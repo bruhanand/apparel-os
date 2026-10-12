@@ -19,3 +19,4 @@ export type { SeriesKey, SeriesState } from './queries/series.js';
 // S1-F12-T02): the financial year of a date, the format in force for a kind, and the live series of a key.
 export { financialYearOn, kindFormatOf } from './commands/settings.js';
 export { liveSeries } from './queries/series.js';
+export { numberingRestoreParticipant } from './restore-participant.js';

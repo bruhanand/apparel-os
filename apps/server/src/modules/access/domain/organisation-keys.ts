@@ -25,6 +25,11 @@ export type KeyPurpose =
 export interface SealedValue {
   readonly scheme: string;
   readonly ciphertext: string;
+  /**
+   * The identifier of the key version that sealed it (backup-and-restore 2.3, 2.4; GC9-18). Set on every value sealed
+   * now; a value read back from a row written before key versions were recorded has none.
+   */
+  readonly keyVersion?: string;
 }
 
 const SCHEME = 'aes-256-gcm/hkdf-sha256/1';
@@ -32,6 +37,8 @@ const KEY_BYTES = 32;
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
+const VERSION_LABEL = 'apparel-os/key-version';
+const VERSION_BYTES = 16;
 
 /** No key is configured for the Organisation: a deployment defect, answered `failed`. Names no key. */
 export class OrganisationKeyMissing extends Error {
@@ -82,7 +89,26 @@ export class OrganisationKeys {
     const cipher = createCipheriv('aes-256-gcm', this.subkey(organisationCode, purpose), nonce);
     cipher.setAAD(Buffer.from(context, 'utf8'));
     const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-    return { scheme: SCHEME, ciphertext: Buffer.concat([nonce, cipher.getAuthTag(), body]).toString('base64url') };
+    return {
+      scheme: SCHEME,
+      ciphertext: Buffer.concat([nonce, cipher.getAuthTag(), body]).toString('base64url'),
+      keyVersion: this.version(organisationCode),
+    };
+  }
+
+  /**
+   * The identifier of the Organisation's key version (backup-and-restore 2.4; GC9-18): HMAC-SHA-256 of a fixed label
+   * under the key, shortened to 128 bits, as lower-case hex. It names the key without revealing it.
+   */
+  version(organisationCode: string): string {
+    const key = this.#keys.get(organisationCode);
+    if (key === undefined) throw new OrganisationKeyMissing();
+    return createHmac('sha256', key).update(VERSION_LABEL, 'utf8').digest().subarray(0, VERSION_BYTES).toString('hex');
+  }
+
+  /** The key version of every Organisation this server holds a key for, by code: what the start check compares. */
+  versions(): ReadonlyMap<string, string> {
+    return new Map([...this.#keys.keys()].map((code) => [code, this.version(code)]));
   }
 
   /** Reads a value back. Throws when the Organisation, the purpose or the context differs, or it was changed. */

@@ -12,3 +12,4 @@ export type { Outcome } from './commands/common.js';
 export { EXCEPTIONS_IDENTITY, exceptionsConsumers, exceptionsJobKinds } from './jobs/jobs.js';
 export { ROUTING_ACTION_TYPE, routingApprovals } from './commands/routing.js';
 export { exceptionAssigned, exceptionRaised, exceptionReopened, exceptionResolved } from './events.js';
+export { exceptionsRestoreParticipant } from './restore-participant.js';

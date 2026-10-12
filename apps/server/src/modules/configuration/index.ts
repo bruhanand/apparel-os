@@ -27,3 +27,4 @@ export { POLICY_EVIDENCE } from './contracts/policy-evidence.js';
 export type { PolicyEvidence, PolicyEvidenceLink } from './contracts/policy-evidence.js';
 export { activityChanged, capabilityChanged, policyStatusChanged } from './events.js';
 export type { ActivityGranter, ActivityGrantRequest, ActivityGrantWriter } from './commands/activity-grants.js';
+export { configurationRestoreParticipant } from './restore-participant.js';

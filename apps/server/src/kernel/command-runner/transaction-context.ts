@@ -7,10 +7,11 @@ export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /**
  * The paths that run with no actor set (code-house-rules 6.3): authenticating a request or a job step, sign-in with
- * a user's actions on their own credentials and sessions, and the setup step of a new Organisation until it acts
- * under its service identity. Every other query runs after the actor is set.
+ * a user's actions on their own credentials and sessions, the setup step of a new Organisation until it acts under
+ * its service identity, and the server's start check of key versions, which reads and first records an unscoped,
+ * technical row before any request (backup-and-restore 2.4). Every other query runs after the actor is set.
  */
-export type NoActorPath = 'authenticate' | 'sign-in' | 'setup';
+export type NoActorPath = 'authenticate' | 'sign-in' | 'setup' | 'start-check';
 
 /**
  * Who a command runs as. An actor is a user or a service identity that Authenticate has found (access-and-approvals

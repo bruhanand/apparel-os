@@ -26,3 +26,4 @@ export {
 export type { BusinessUnitHead, UnitReadinessAnswer } from './queries/units.js';
 // A tax registration's code, for the registration applicability of `finance` · tax rules (S1-F09-T04).
 export { taxRegistrationCodes } from './queries/tax-registrations.js';
+export { organisationRestoreParticipant } from './restore-participant.js';

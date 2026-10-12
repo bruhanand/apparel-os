@@ -183,6 +183,41 @@ export { systemClock } from './time/clock.js';
 export type { Clock } from './time/clock.js';
 export { timezoneNotConfigured } from './time/organisation-timezone.js';
 export type { OrganisationTimezoneSource, TimezoneSetting } from './time/organisation-timezone.js';
+export { RestoreRegistry, tablesOf, tableTotals } from './operations/restore-contract.js';
+export type {
+  CheckResult,
+  ControlTotal,
+  KeyVersionUse,
+  ParticipantContext,
+  ParticipantTotals,
+  ReferencedRecord,
+  RestoreParticipant,
+  SealFact,
+  TypedReference,
+} from './operations/restore-contract.js';
+export { kernelRestoreParticipant } from './operations/kernel-participant.js';
+export {
+  BACKUP_PUBLIC_KEY_VARIABLE,
+  BackupPrivateKey,
+  BackupPublicKey,
+  backupPublicKeyFromEnvironment,
+  BackupSealer,
+} from './operations/backup-cipher.js';
+export type { SealCheck } from './operations/backup-cipher.js';
+export { BACKUP_STORE_VARIABLES, bucketSettingsFrom, S3Bucket } from './operations/backup-store.js';
+export type { BackupStore, BucketSettings } from './operations/backup-store.js';
+export { DumpToolFailed, pgDumpTool, runDump } from './operations/dump-tool.js';
+export type { DumpTarget, DumpTool } from './operations/dump-tool.js';
+export { BackupRefused, MANIFEST_FORMAT, takeBackup } from './operations/backup.js';
+export type {
+  BackupFailure,
+  BackupFailureKind,
+  BackupManifest,
+  BackupOptions,
+  BackupOutcome,
+  DumpPart,
+  OrganisationPart,
+} from './operations/backup.js';
 export { PRODUCTION_COMPOSITION } from './composition.js';
 export type { Composition } from './composition.js';
 export {

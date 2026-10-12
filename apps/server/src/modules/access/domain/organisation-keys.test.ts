@@ -61,4 +61,19 @@ describe('the Organisation keys (access-and-approvals 6)', () => {
     expect(JSON.stringify(made)).not.toContain(keyA);
     expect(String(made)).not.toContain(keyA);
   });
+
+  it('POL-18.02 names each key version by an identifier that reveals no key, and records it with every value it seals', () => {
+    const version = keys().version(CODE_A);
+    expect(version).toMatch(/^[0-9a-f]{32}$/);
+    expect(keys().version(CODE_A)).toBe(version);
+    expect(keys().version(CODE_B)).not.toBe(version);
+    expect(version).not.toContain(Buffer.from(keyA, 'base64url').toString('hex').slice(0, 32));
+    expect(keys().encrypt(CODE_A, 'bank-details', Buffer.from('x'), 'v').keyVersion).toBe(version);
+    expect(keys().versions()).toEqual(
+      new Map([
+        [CODE_A, version],
+        [CODE_B, keys().version(CODE_B)],
+      ]),
+    );
+  });
 });

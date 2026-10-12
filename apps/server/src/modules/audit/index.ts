@@ -23,3 +23,4 @@ export type {
 export { AUDIT_CHANGES_FORMAT, AuditChangeRefused } from './domain/changes.js';
 export { AUDIT_JOBS_IDENTITY, auditJobKinds } from './jobs/job-kinds.js';
 export type { AuditChange, VersionReference } from './domain/changes.js';
+export { auditRestoreParticipant } from './restore-participant.js';

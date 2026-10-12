@@ -41,3 +41,4 @@ export type { AvailabilityRow } from './queries/availability.js';
 export { rebuildAndCompare } from './queries/rebuild.js';
 export type { RebuildAnswer, RebuildDifference } from './queries/rebuild.js';
 export { countFreezeChanged, holdChanged, movementsPosted, reservationChanged } from './events.js';
+export { stockLedgerRestoreParticipant } from './restore-participant.js';

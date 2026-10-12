@@ -68,9 +68,23 @@ export const secondFactor = access.table('second_factor', {
   appUserId: uuid('app_user_id').notNull(),
   secretScheme: text('secret_scheme').notNull(),
   secretCiphertext: text('secret_ciphertext').notNull(),
+  /** The key version that encrypted the secret (backup-and-restore 2.4). Null on rows written before migration 0067. */
+  secretKeyVersion: text('secret_key_version'),
   state: text('state').notNull(),
   lastUsedStep: bigint('last_used_step', { mode: 'number' }),
   confirmedAt: at('confirmed_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
+ * The identifiers of the Organisation's data key versions, never a key (migrations/organisation/0067;
+ * backup-and-restore 2.4). Append-only.
+ */
+export const keyVersion = access.table('key_version', {
+  id: uuid('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  purpose: text('purpose').notNull(),
+  firstUsedAt: at('first_used_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

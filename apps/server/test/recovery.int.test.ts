@@ -165,8 +165,9 @@ describe('the recovery command (access-and-approvals 3.2; test 3f; DEC-116)', ()
   it('restores a lost authenticator of the first approver: the user enrols again at the next sign-in', async () => {
     const approver = await userId(APPROVER_LOGIN);
     await rows(
-      `insert into access.second_factor (id, app_user_id, secret_scheme, secret_ciphertext, state, last_used_step, confirmed_at)
-       values ($1, $2, 'synthetic', 'SYNTHETIC-not-a-secret', 'Confirmed', null, now())`,
+      `insert into access.second_factor (id, app_user_id, secret_scheme, secret_ciphertext, secret_key_version, state,
+         last_used_step, confirmed_at)
+       values ($1, $2, 'synthetic', 'SYNTHETIC-not-a-secret', '5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e', 'Confirmed', null, now())`,
       [uuidv7(), approver],
     );
     const outcome = await recover({

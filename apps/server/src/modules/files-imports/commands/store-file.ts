@@ -145,6 +145,7 @@ export async function storeFile(
             format: checked.format,
             objectKey,
             scheme: sealed.scheme,
+            keyVersion: sealed.keyVersion,
           }),
           shows: 'nothing',
         };
@@ -250,6 +251,7 @@ async function record(
     readonly format: StoredFileAnswer['format'];
     readonly objectKey: string;
     readonly scheme: string;
+    readonly keyVersion: string | undefined;
   },
 ): Promise<JsonValue> {
   const inserted = await context.tx
@@ -261,6 +263,7 @@ async function record(
       format: file.format,
       objectKey: file.objectKey,
       encryptionScheme: file.scheme,
+      keyVersion: file.keyVersion,
       restrictedClasses: null,
     })
     .onConflictDoNothing({ target: storedFile.contentHash })
@@ -293,6 +296,7 @@ async function record(
     claimedReferenceSealed: claimed === undefined ? null : claimed.ciphertext,
     originalNameSealed: name.ciphertext,
     encryptionScheme: name.scheme,
+    keyVersion: name.keyVersion,
     correlationId: context.correlationId,
   });
   await deps.audit.record(context, {

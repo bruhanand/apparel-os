@@ -6,6 +6,7 @@ import {
   CommandRunnerModule,
   IDEMPOTENCY_HELPER,
   JOB_IDENTITIES,
+  LoggingModule,
   OrganisationRoutingModule,
   ORGANISATION_ROUTER,
   REPLAY_SECRET_CHECK,
@@ -36,7 +37,8 @@ import { HISTORY, HistoryController } from './http/history.controller.js';
 import { PolicyReadinessController } from './http/policy-readiness.controller.js';
 import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
-import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS } from './tokens.js';
+import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS, ORGANISATION_KEYS } from './tokens.js';
+import { KeyVersionStartCheck } from './commands/key-version-check.js';
 import type { ModuleApprovals } from './domain/approval-rules.js';
 import { SCOPE_MEMBERS, type ScopeMembers } from './contracts/scope-members.js';
 import { DECISION_EVIDENCE, type DecisionEvidence } from './contracts/decision-evidence.js';
@@ -46,9 +48,7 @@ import { AuthenticateGuard } from './http/authenticate.guard.js';
 import { CREDENTIAL_RESETS, SESSIONS, SessionsController } from './http/sessions.controller.js';
 import { OWN_CREDENTIALS, SIGN_IN, SignInController, UNKNOWABLE_HASH } from './http/sign-in.controller.js';
 
-export { ACCESS, MODULE_APPROVALS } from './tokens.js';
-/** The token of the Organisation keys (access-and-approvals 6). */
-export const ORGANISATION_KEYS = 'access.OrganisationKeys';
+export { ACCESS, MODULE_APPROVALS, ORGANISATION_KEYS } from './tokens.js';
 /** The variables the Organisation keys are read from: the process's, unless a test gives others. */
 export const ACCESS_ENVIRONMENT = 'access.Environment';
 
@@ -105,7 +105,7 @@ export class AccessJobIdentitiesModule {}
  * (7.1 steps 1 and 3), service identities (2.3), and preparing roles, role assignments and withdrawals (4, 5, 9.11). Needs the global idempotency module built with AccessContractsModule (idempotencyModuleWith).
  */
 @Module({
-  imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule],
+  imports: [CommandRunnerModule, OrganisationRoutingModule, AuditModule, AccessContractsModule, LoggingModule],
   controllers: [
     SignInController,
     AccessChangesController,
@@ -118,6 +118,9 @@ export class AccessJobIdentitiesModule {}
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },
+    // The start check of key versions: the server refuses to start with a key its database does not list
+    // (backup-and-restore 2.4; S1-F14-T02).
+    KeyVersionStartCheck,
     // What the live-update stream and the operations view ask of access (code-house-rules 12.12; S1-F08-T04).
     { provide: SESSION_ACCESS, useValue: sessionAccess },
     {

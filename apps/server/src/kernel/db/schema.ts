@@ -116,3 +116,22 @@ export const outboxDispatch = kernel.table(
   },
   (table) => [unique('outbox_dispatch_once').on(table.outboxConsumerId, table.outboxEventId)],
 );
+
+/**
+ * One application backup that covered this Organisation (migrations/organisation/0066; backup-and-restore 3.2 step 8,
+ * section 11; PRD-SEC-013). Append-only; written by the backup command as the migration role, read by the operations
+ * view. Holds no record data and no key.
+ */
+export const backupRecord = kernel.table('backup_record', {
+  id: uuid('id').primaryKey(),
+  backupId: uuid('backup_id').notNull().unique(),
+  environment: text('environment').notNull(),
+  codeCommit: text('code_commit'),
+  snapshotAt: timestamp('snapshot_at', { withTimezone: true }).notNull(),
+  backupKeyVersion: text('backup_key_version').notNull(),
+  manifestSha256: text('manifest_sha256').notNull(),
+  result: text('result').notNull(),
+  failures: text('failures').array().notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+});

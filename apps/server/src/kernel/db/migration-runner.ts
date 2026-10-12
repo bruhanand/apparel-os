@@ -62,7 +62,7 @@ export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<
  * (code-house-rules 5.1). A superuser or any other role would leave objects under the wrong owner, and the runtime
  * role's grants and the owner's guards rest on aos_migration owning every object.
  */
-async function checkConnectedAsOwner(client: Client): Promise<void> {
+export async function checkConnectedAsOwner(client: Client, refused = 'Migration refused'): Promise<void> {
   const result = await client.query<{
     session_user: string;
     current_user: string;
@@ -88,7 +88,7 @@ async function checkConnectedAsOwner(client: Client): Promise<void> {
     problems.push(`database ${session.database} is owned by ${session.database_owner}, not ${MIGRATION_ROLE}`);
   }
   if (problems.length > 0) {
-    throw new Error(`Migration refused, nothing changed: ${problems.join('; ')}`);
+    throw new Error(`${refused}, nothing changed: ${problems.join('; ')}`);
   }
 }
 

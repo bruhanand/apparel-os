@@ -180,6 +180,9 @@ export async function writeSyntheticTaxRegistration(database: string, code: stri
   }
 }
 
+/** A SYNTHETIC key version identifier for rows that name no real key (backup-and-restore 2.4). */
+const SYNTHETIC_KEY_VERSION = '5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e';
+
 /**
  * A SYNTHETIC stored file with one receipt, written as the migration role, as a fixture (code-house-rules 11.2): a
  * file to attach as the CA's evidence without a file store. Its bytes are never read.
@@ -195,15 +198,23 @@ export async function writeSyntheticStoredFile(
     const hash = createHash('sha256').update(storedFileId).digest('hex');
     await client.query(
       `insert into files_imports.stored_file (id, content_hash, size_bytes, format, object_key, encryption_scheme,
-         restricted_classes)
-       values ($1, $2, 0, 'pdf', $3, 'SYNTHETIC', null)`,
-      [storedFileId, hash, `SYNTHETIC/${hash}`],
+         key_version, restricted_classes)
+       values ($1, $2, 0, 'pdf', $3, 'SYNTHETIC', $4, null)`,
+      [storedFileId, hash, `SYNTHETIC/${hash}`, SYNTHETIC_KEY_VERSION],
     );
     await client.query(
       `insert into files_imports.file_receipt (id, stored_file_id, received_by_kind, received_by_id, received_at,
-         source_system, claimed_reference_sealed, original_name_sealed, encryption_scheme, correlation_id)
-       values ($1, $2, 'user', $3, now(), $4, null, $5, 'SYNTHETIC', $6)`,
-      [fileReceiptId, storedFileId, receivedBy, syntheticName('Tests'), syntheticName('CA evidence'), uuidv7()],
+         source_system, claimed_reference_sealed, original_name_sealed, encryption_scheme, key_version, correlation_id)
+       values ($1, $2, 'user', $3, now(), $4, null, $5, 'SYNTHETIC', $6, $7)`,
+      [
+        fileReceiptId,
+        storedFileId,
+        receivedBy,
+        syntheticName('Tests'),
+        syntheticName('CA evidence'),
+        SYNTHETIC_KEY_VERSION,
+        uuidv7(),
+      ],
     );
     return { storedFileId, fileReceiptId };
   } finally {

@@ -43,3 +43,4 @@ export type { VersionHead } from './commands/decisions.js';
 export { caEvidenceCovers, caEvidenceOf, recordCaEvidence } from './commands/ca-evidence.js';
 export type { CaEvidence, EvidenceDependencies, EvidenceTarget, EvidenceVersions } from './commands/ca-evidence.js';
 export { FinanceRoutes } from './http/finance-routes.js';
+export { booksRestoreParticipant } from './restore-participant.js';

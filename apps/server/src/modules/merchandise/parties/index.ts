@@ -7,3 +7,4 @@ export { partiesApprovals } from './commands/effects.js';
 export { agreementChanged } from './events.js';
 export { partiesSupplierRoles } from './queries/supplier-roles.js';
 export type { Page, PageRequest } from './queries/records.js';
+export { partiesRestoreParticipant } from './restore-participant.js';

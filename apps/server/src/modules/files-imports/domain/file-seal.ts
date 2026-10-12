@@ -26,6 +26,8 @@ function contextOf(contentHash: string): string {
 export interface SealedFile {
   readonly scheme: string;
   readonly bytes: Buffer;
+  /** The key version that sealed it (backup-and-restore 2.4). */
+  readonly keyVersion: string | undefined;
 }
 
 export function sealFile(
@@ -35,7 +37,7 @@ export function sealFile(
   plaintext: Buffer,
 ): SealedFile {
   const sealed = keys.encrypt(organisationCode, 'stored-file', plaintext, contextOf(contentHash));
-  return { scheme: sealed.scheme, bytes: Buffer.from(sealed.ciphertext, 'base64url') };
+  return { scheme: sealed.scheme, bytes: Buffer.from(sealed.ciphertext, 'base64url'), keyVersion: sealed.keyVersion };
 }
 
 export function openFile(

@@ -90,3 +90,4 @@ export type {
 } from './operator/add-service-identities.js';
 export type { Authority, ServiceIdentityGrant } from './commands/setup.js';
 export { SETUP_IDENTITY } from './domain/first-roles.js';
+export { accessRestoreParticipant } from './restore-participant.js';

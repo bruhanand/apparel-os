@@ -166,9 +166,19 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
  * `stock.rebuild_partial`, which answers only that (13.6; DEC-117). Run by tests and, later, a scheduled job.
  */
 export async function rebuildAndCompare(context: TransactionContext): Promise<RebuildAnswer> {
+  const differences = await rebuildDifferences(context.tx);
+  const partial = await context.tx.execute<{ partial: boolean }>(sql`select stock.rebuild_partial() as partial`);
+  return { asOf: context.startedAt.toISOString(), partial: partial.rows[0]?.partial ?? true, differences };
+}
+
+/**
+ * The differences between the projections and what the entries give, read in the transaction given: Rebuild and
+ * compare's own reading, also run by the restore participant in a backup's snapshot (backup-and-restore 5.1).
+ */
+export async function rebuildDifferences(tx: Pick<TransactionContext['tx'], 'execute'>): Promise<RebuildDifference[]> {
   const differences: RebuildDifference[] = [];
   for (const check of CHECKS) {
-    const result = await context.tx.execute<{
+    const result = await tx.execute<{
       id: string | null;
       stored: string | number | null;
       rebuilt: string | number | null;
@@ -183,6 +193,5 @@ export async function rebuildAndCompare(context: TransactionContext): Promise<Re
       });
     }
   }
-  const partial = await context.tx.execute<{ partial: boolean }>(sql`select stock.rebuild_partial() as partial`);
-  return { asOf: context.startedAt.toISOString(), partial: partial.rows[0]?.partial ?? true, differences };
+  return differences;
 }

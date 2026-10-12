@@ -6,3 +6,4 @@ export type { SiteLifecycleDependencies, SiteLifecycleInterface } from './site-l
 export { activityApprovalRule, siteLifecycleApprovals, siteReadinessApprovalRule } from './commands/effects.js';
 export type { SiteLifecycleApprovalDependencies } from './commands/effects.js';
 export type { OpeningPlans } from './contracts/opening-plans.js';
+export { siteLifecycleRestoreParticipant } from './restore-participant.js';

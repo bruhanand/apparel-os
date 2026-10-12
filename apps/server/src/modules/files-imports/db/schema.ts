@@ -38,6 +38,8 @@ export const storedFile = filesImports.table('stored_file', {
   format: text('format').notNull(),
   objectKey: text('object_key').notNull(),
   encryptionScheme: text('encryption_scheme').notNull(),
+  /** The key version that encrypted the object (backup-and-restore 2.4). Null on rows written before migration 0068. */
+  keyVersion: text('key_version'),
   /** Null is Unknown: the classes are not known until a layout or an attachment declares them (section 11). */
   restrictedClasses: text('restricted_classes').array(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
@@ -56,6 +58,8 @@ export const fileReceipt = filesImports.table('file_receipt', {
   /** Encrypted likewise. */
   originalNameSealed: text('original_name_sealed').notNull(),
   encryptionScheme: text('encryption_scheme').notNull(),
+  /** The key version that encrypted the name and reference (backup-and-restore 2.4). Null before migration 0068. */
+  keyVersion: text('key_version'),
   correlationId: uuid('correlation_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

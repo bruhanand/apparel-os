@@ -5,3 +5,4 @@ export { WORK_ITEM_ROUTING_ACTION_TYPE, workItemRoutingApprovals } from './comma
 export { Inbox, INBOX } from './inbox.js';
 export type { InboxInterface, ItemActor, ItemOwner, PublishedItem } from './inbox.js';
 export { announceItems, WORK_ITEM_RECORD_TYPE, workItemChanged } from './events.js';
+export { inboxRestoreParticipant } from './restore-participant.js';
