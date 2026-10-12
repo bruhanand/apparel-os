@@ -271,6 +271,15 @@ export class StockHarness extends ValuedWorld {
   protected override readonly registrations: readonly CallerRegistration[] = [syntheticCaller, harnessCaller];
   protected override readonly approvalRules: readonly ApprovalRule[] = [...syntheticRules, ...harnessRules];
   protected override readonly registry: readonly RecordTypeDeclaration[] = [...testRegistry, harnessDocumentType];
+  /**
+   * How a policy's evidence file is made for its signature and validation: by default a SYNTHETIC stored-file row with
+   * no object behind it (code-house-rules 11.2); a test that backs the world up and restores it stores real files
+   * through files-imports instead, since a restore checks every stored file against its object (backup-and-restore
+   * 5.1; S1-F14-T04).
+   */
+  evidenceFile: (receivedBy: string) => Promise<{ readonly storedFileId: string; readonly fileReceiptId: string }> = (
+    receivedBy,
+  ) => writeSyntheticStoredFile(this.database, receivedBy);
   /** The person who prepares the driver's documents and posts their steps. */
   preparer!: Actor;
   /** A different person, who decides the driver's approvals within a SYNTHETIC limit (PRD-ACS-006). */
@@ -602,7 +611,7 @@ export class StockHarness extends ValuedWorld {
           signatory: syntheticName('policy 9 signatory'),
           signedOn: this.setup.today(),
           origin: 'synthetic',
-          evidence: [await writeSyntheticStoredFile(this.database, signer.id)],
+          evidence: [await this.evidenceFile(signer.id)],
         }),
       ),
     );
@@ -612,7 +621,7 @@ export class StockHarness extends ValuedWorld {
           context,
           { userId: validator.id, roleAssignmentId: validatorGrant.assignmentId },
           9,
-          { origin: 'synthetic', evidence: [await writeSyntheticStoredFile(this.database, validator.id)] },
+          { origin: 'synthetic', evidence: [await this.evidenceFile(validator.id)] },
         ),
       ),
     );

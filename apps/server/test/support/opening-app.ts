@@ -8,6 +8,7 @@ import {
   importFileStoredSchema,
   permissionRegistry,
   type AssignmentScope,
+  type PersonaId,
   type ImportBatchRead,
 } from '@apparel-os/schemas';
 import {
@@ -78,7 +79,6 @@ import { startTestFileStore, type TestFileStore } from './minio.js';
 import { OPENING_STOCK_CALLER, OPENING_STOCK_TARGET, openingStockHandler } from './opening-stock.js';
 import { decided } from './organisation.js';
 import { connect, databaseUrl } from './postgres.js';
-import { writeSyntheticStoredFile } from './tax-rules.js';
 
 // S1-F13-T03: the whole application on real PostgreSQL and MinIO over a stock harness world, with the test-only
 // opening-stock handler composed into it with its posting half and a ledger of its own registration (code-house-rules
@@ -161,6 +161,7 @@ export class OpeningApp {
   private readonly cookies = new Map<string, string>();
   private layout!: { layoutVersionId: string; mappingVersionId: string };
   private counter = 0;
+  private clerk: SyntheticUser | undefined;
   private serviceIdentityId: string | undefined;
   private readonly workers: OpeningWorker[] = [];
   /** The book a test names for a document instead of its unit's, SYNTHETIC (`files-imports.several-books`). */
@@ -170,14 +171,69 @@ export class OpeningApp {
     return this.harness.database;
   }
 
+  /** The MinIO file store the application stores into. */
+  get fileStore(): TestFileStore {
+    return this.minio;
+  }
+
+  /** An authenticator code of the user for the application's clock, moved on 30 seconds so it is fresh (3.3). */
+  freshCode(user: SyntheticUser): string {
+    this.clock.advance(30);
+    return codeFor(user.factorSecret ?? Buffer.alloc(0), 0, this.clock.now());
+  }
+
+  /**
+   * A SYNTHETIC PDF stored through files-imports (Store a file, imports 13.1) by a SYNTHETIC clerk who may store files;
+   * answers the stored file and its receipt, as evidence is handed to a record.
+   */
+  async storedFile(label: string): Promise<{ readonly storedFileId: string; readonly fileReceiptId: string }> {
+    this.clerk ??= await this.enrolled('FILE-CLERK', [{ recordType: 'files_imports.stored_file', action: 'create' }]);
+    const bytes = Buffer.from(
+      `%PDF-1.4\n% SYNTHETIC ${label} ${this.next('FILE')}\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n`,
+      'latin1',
+    );
+    const stored = await this.ok(this.clerk, 'POST', '/api/files-imports/files', {
+      sourceSystem: 'manual-upload',
+      originalName: syntheticFileName(label, 'pdf'),
+      contentBase64: bytes.toString('base64'),
+    });
+    const { storedFileId, receiptId } = stored.body as { storedFileId: string; receiptId: string };
+    return { storedFileId, fileReceiptId: receiptId };
+  }
+
   next(label: string): string {
     this.counter += 1;
     return syntheticCode(`${label}-${String(this.counter)}`);
   }
 
-  async start(label: string): Promise<void> {
+  /**
+   * Starts the world: the harness, the application on it, then the harness's fixtures. A `restorable` world holds only
+   * what a restore can prove (backup-and-restore 5.1; S1-F14-T04): every policy's evidence is a real file stored
+   * through files-imports by a SYNTHETIC clerk, not a SYNTHETIC row with no object (code-house-rules 11.2), and no
+   * scope names a brand no catalogue record holds.
+   */
+  async start(label: string, options: { readonly restorable?: boolean } = {}): Promise<void> {
     const { harness } = this;
+    if (options.restorable === true) harness.withBrandLimitedActor = false;
     await harness.start(label);
+    this.minio = await startTestFileStore();
+    this.clock = new SyntheticClock();
+    const organisation = harness.world.organisations[0];
+    await writeSyntheticSetting(organisation.database, 'access.sign-in-throttling', {
+      failureLimit: 50,
+      windowSeconds: 600,
+    });
+    await writeSyntheticSetting(organisation.database, 'access.password-rules', { minimumLength: 12 });
+    await writeSyntheticSetting(organisation.database, 'access.office-session-limits', {
+      idleLockSeconds: 1800,
+      absoluteSeconds: 28800,
+    });
+    this.api = await startAccessApp(harness.world, harness.keys(), {
+      fileStoreEnvironment: this.minio.environment,
+      clock: this.clock,
+      validityChecks: [POLICY_FOURTEEN_VALUES],
+    });
+    if (options.restorable === true) harness.evidenceFile = () => this.storedFile('policy-evidence');
     this.fixtures = await harness.fixtures('moving-average', 'book', { pieceTracked: false });
     const { setup } = harness;
     const seasonAttribute = await setup.asPreparerDo((c, p) =>
@@ -209,24 +265,6 @@ export class OpeningApp {
       legalEntity: codeOfId(structure.legalEntities, this.fixtures.legalEntityId),
       season,
     };
-
-    this.minio = await startTestFileStore();
-    this.clock = new SyntheticClock();
-    const organisation = harness.world.organisations[0];
-    await writeSyntheticSetting(organisation.database, 'access.sign-in-throttling', {
-      failureLimit: 50,
-      windowSeconds: 600,
-    });
-    await writeSyntheticSetting(organisation.database, 'access.password-rules', { minimumLength: 12 });
-    await writeSyntheticSetting(organisation.database, 'access.office-session-limits', {
-      idleLockSeconds: 1800,
-      absoluteSeconds: 28800,
-    });
-    this.api = await startAccessApp(harness.world, harness.keys(), {
-      fileStoreEnvironment: this.minio.environment,
-      clock: this.clock,
-      validityChecks: [POLICY_FOURTEEN_VALUES],
-    });
     const { app } = this.api;
     // The handler's own ledger, composed with its synthetic registration only (stock-ledger 13.2; H2, H5).
     const ledger = new StockLedger({
@@ -297,11 +335,13 @@ export class OpeningApp {
     label: string,
     authorities: readonly SyntheticAuthority[],
     scope?: AssignmentScope,
+    personas?: readonly PersonaId[],
   ): Promise<SyntheticUser> {
     const organisation = this.harness.world.organisations[0];
     const user = await writeSyntheticUser(organisation.database, organisation.code, this.harness.keys(), {
       label: `${label}${String(randomInt(1_000_000))}`,
       enrolled: true,
+      ...(personas === undefined ? {} : { personas }),
     });
     await grantSynthetic(organisation.database, { kind: 'user', id: user.id }, authorities, {
       fieldClasses: ALL_CLASSES.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
@@ -465,14 +505,14 @@ export class OpeningApp {
         signatory: syntheticName('policy 14 signatory'),
         signedOn: setup.today(),
         origin: 'synthetic',
-        evidence: [await writeSyntheticStoredFile(this.database, signer.id)],
+        evidence: [await this.harness.evidenceFile(signer.id)],
       }),
     );
     if (signed.kind !== 'success') throw new Error(`Policy 14 was not signed: ${signed.refusal.code}`);
     const validated = await this.command(validator.id, async (context) =>
       configuration.recordValidation(context, { userId: validator.id, roleAssignmentId: validating.assignmentId }, 14, {
         origin: 'synthetic',
-        evidence: [await writeSyntheticStoredFile(this.database, validator.id)],
+        evidence: [await this.harness.evidenceFile(validator.id)],
       }),
     );
     if (validated.kind !== 'success') throw new Error(`Policy 14 was not validated: ${validated.refusal.code}`);

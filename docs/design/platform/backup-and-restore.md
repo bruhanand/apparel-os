@@ -396,6 +396,15 @@ What the restore's build settled where this design left it open. None is a KDPS 
 - **Retention schedules** (8.1, 8.2): `configuration.retention_schedule` and its versions exist with no row and no command that writes one; the command is built with the first retention deletion (10.2).
 - **Open items** ([open-items.md](../../plan/open-items.md)): the operator command that records a key recovery (2.4, 10.3), in no `S1-F14` ticket (RR-530); screens for the recovery commands (RR-531); how an outside system's outcome is reconciled after a restore, with the first consumer that reaches one, stage 4 or 5 (RR-532; `reaches: 'outside-system'` is kept, unused until that consumer); whether `add-service-identities` giving the restore identity outside `dev` needs a `DEC` entry (RR-533, as RR-457); the routing of recovery gaps set before a backup (RR-534); references not checked yet (RR-535). Raising an exception for a gap, item (3) of the earlier list, is built (above). `configuration.retention_schedule` is kept as the design says, unused until its first writer.
 
+### 10.6 As built (`S1-F14-T04`, test 1 in CI, 13 Oct 2026)
+
+Test 1 runs in CI as `apps/server/test/restore-drill.int.test.ts`, in the ordinary integration run. What it settled; none is a KDPS value, and the recovery time it measures is measured, never a target (deployment.md section 4; RR-075 stays OPEN).
+
+- **The Organisation** is the stock harness's world with the whole application on it: masters, books and journals and valued stock movements from the moving-average book story; an opening-stock batch on a stored workbook, posted by its queued job; a role and its assignment prepared and approved through `access`; an exception linked to the opening batch, with a stored file as its evidence; a billing device registered and enrolled through the application, with one bill numbered; policies 9 and 14 Signed and validated with stored files as evidence; one audit block sealed. It is restored alone (`--organisation`) into a fresh target.
+- **Links across modules** (5.1): a policy's signature is read, authorised and attached to as `configuration.policy_status`, and is kept in `configuration.policy_signature`; `configuration`'s participant answers for that record type, so the evidence attached to a signature resolves. Before, the attachment check named it as a reference no participant answered for, and every restore of an Organisation with a Signed policy stayed held.
+- **Counts** (section 6): the stock ledger's check that balances equal the sum of their movements counts as checked every projection row it compares, not the differences it found, so the drill record says how much was compared.
+- **Test data a restore cannot prove** is kept out of a world that is backed up: policy evidence written as a row with no object, and a scope naming a brand no catalogue record holds, are each reported by the checks of 5.1, as they should be.
+
 ## 11. Tables
 
 Every table has a UUIDv7 primary key and an entry in its set's table register (code-house-rules 3.2). **Design choice** throughout; other columns are left to reviewed migrations.

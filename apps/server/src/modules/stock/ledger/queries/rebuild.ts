@@ -249,3 +249,19 @@ export async function rebuildDifferences(tx: Pick<TransactionContext['tx'], 'exe
   }
   return differences;
 }
+
+/**
+ * How many projection rows Rebuild and compare covers: the rows of each table it compares, each table counted once.
+ * The restore participant reports it as what its check checked, so a drill record says how much was compared, not
+ * only how much differed (backup-and-restore 5.1, section 6; S1-F14-T04).
+ */
+export async function rebuildCoveredRows(tx: Pick<TransactionContext['tx'], 'execute'>): Promise<number> {
+  let covered = 0;
+  for (const table of [...new Set(CHECKS.map((check) => check.table))]) {
+    const result = await tx.execute<{ n: string }>(
+      sql`select count(*)::text as n from ${sql.identifier('stock')}.${sql.identifier(table)}`,
+    );
+    covered += Number(result.rows[0]?.n ?? 0);
+  }
+  return covered;
+}

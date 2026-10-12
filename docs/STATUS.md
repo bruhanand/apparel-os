@@ -42,7 +42,7 @@ Updated 13 Oct 2026.
 
 ## What's next
 
-1. The restore drill on `dev` (`S1-F14-T04`): the last open stage 1 ticket. It needs your Railway go-ahead (a backup bucket, a backup service, a separate target PostgreSQL server) and the custodian's backup and signing key pairs.
+1. The restore drill on `dev` (`S1-F14-T04`): the last open stage 1 ticket. Its CI half is built on `s1/f14-t04` (13 Oct 2026, waiting for review): a synthetic company with records from every stage 1 feature is backed up, restored into an empty server, checked, its number series fixed, validated by Operations and Accounts and reopened, with its drill record. It found and fixed two faults: a signed policy's evidence kept every restore held, and the stock check reported 0 checked. The drill on `dev` needs your Railway go-ahead (a backup bucket, a backup service, a separate target PostgreSQL server) and the custodian's backup and signing key pairs.
 
 ## Waiting on you
 

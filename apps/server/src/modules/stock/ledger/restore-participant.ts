@@ -1,6 +1,6 @@
 import { tablesOf, type RestoreParticipant } from '../../../kernel/index.js';
 import * as ledgerTables from './db/schema.js';
-import { rebuildDifferences } from './queries/rebuild.js';
+import { rebuildCoveredRows, rebuildDifferences } from './queries/rebuild.js';
 
 /**
  * The stock ledger's part in backup and restore (backup-and-restore 3.2 step 2, 5.1, 10.1, 10.2; PRD-ACP-019): the
@@ -18,7 +18,7 @@ export const stockLedgerRestoreParticipant: RestoreParticipant = {
       {
         check: 'stock balances equal the sum of their movements',
         passed: differences.length === 0,
-        checked: differences.length,
+        checked: await rebuildCoveredRows(context.tx),
         failed: differences.length,
       },
     ];

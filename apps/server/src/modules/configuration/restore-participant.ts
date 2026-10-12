@@ -10,4 +10,7 @@ export const configurationRestoreParticipant: RestoreParticipant = {
   unit: 'configuration',
   tier: 1,
   tables: tablesOf(configurationTables),
+  // A policy's signature is read, authorised and attached to as `configuration.policy_status` (policy-status.ts), so
+  // its evidence attachments name that type; it is kept in `configuration.policy_signature` (S1-F14-T04).
+  records: [{ recordType: 'configuration.policy_status', table: 'configuration.policy_signature' }],
 };
