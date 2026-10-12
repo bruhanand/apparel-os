@@ -1,11 +1,13 @@
 import { is, sql, type SQL } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
-import type { Transaction } from '../command-runner/transaction-context.js';
+import type { Transaction, TransactionContext } from '../command-runner/transaction-context.js';
+import type { JobAuthority } from '../jobs/contracts.js';
 
 // The restore contract (backup-and-restore 10.1; module-map section 3, rule 6). `kernel` sits at tier 0 and calls no
 // module above it, so it defines the contract and keeps the registry; each module that holds records implements it and
 // registers its participant at start, as a target module registers an import handler. S1-F14-T02 builds the two parts
-// that read: control totals (3.2 step 2, 5.2) and checks (5.1). The after-restore steps and gap checks are S1-F14-T03's.
+// that read: control totals (3.2 step 2, 5.2) and checks (5.1). S1-F14-T03 adds the
+// after-restore steps: commands under the restore's internal service identity, and checks that may report recovery gaps.
 //
 // A participant reads only its own tables, in the transaction context it is given, never in one it opens itself
 // (PRD-MOD-006). A reference to another module's record is checked through that module's participant, which answers
@@ -46,6 +48,113 @@ export interface CheckResult {
   readonly checked: number;
   /** How many failed. */
   readonly failed: number;
+  /**
+   * The one item a failed check names, where it names one, such as a stored file's object key: an identifier, never
+   * record data (section 6; PRD-SEC-014).
+   */
+  readonly subject?: string;
+}
+
+/**
+ * A recovery gap a restore found (4.5): evidence outside the restored records that they cannot explain, such as an
+ * object of the file store that no stored-file record names (3.3), with the time it was stored where it is known. Its
+ * name says what kind of gap it is; its subject is an identifier, never record data (PRD-SEC-014).
+ */
+export interface RecoveryGap {
+  readonly unit: string;
+  readonly name: string;
+  readonly subject: string;
+  readonly subjectAt: Date | null;
+}
+
+/**
+ * Whether an object was stored after the recovery point, so it may be evidence of work the restore lost (3.3, 4.5):
+ * when the time it was stored is not known, or is not before the recovery point to the second, since a file store
+ * keeps an object's time to the second. Errs towards listing an object as possible lost work.
+ */
+export function storedAfterRecoveryPoint(storedAt: Date | null, recoveryPoint: Date): boolean {
+  return storedAt === null || storedAt.getTime() > recoveryPoint.getTime() - 1000;
+}
+
+/** An object of the restored file store, as a check lists it: its key and when it was first stored, where known. */
+export interface RestoredObject {
+  readonly key: string;
+  readonly storedAt: Date | null;
+}
+
+/** The restored Organisation's file store as a restore check reads it; nothing writes through it (3.3). */
+export interface RestoredObjects {
+  list(prefix: string): Promise<RestoredObject[]>;
+  /** Reads an object whole; rejects when it is not there. */
+  get(key: string): Promise<Buffer>;
+}
+
+/** One result recorded as a `kernel.recovery_event` row, for the step that records them as audit records (5.4). */
+export interface RecordedResult extends CheckResult {
+  readonly eventId: string;
+  readonly kind: 'step' | 'check';
+}
+
+/** What a restore step is given about the restore it is part of (4.2). */
+export interface RestoreRun {
+  readonly restoreId: string;
+  readonly backupId: string;
+  readonly organisationId: string;
+  readonly organisationCode: string;
+  /** This Organisation's recovery point: the time of its database's snapshot in the backup. */
+  readonly recoveryPoint: Date;
+  readonly objects: RestoredObjects;
+  /** Every result recorded so far, for the last step, `audit`'s, which records each as an audit record. */
+  readonly recorded: readonly RecordedResult[];
+}
+
+/**
+ * An after-restore step that writes (4.2 step 7, 10.1): a command in the restored database, as the runtime role, under
+ * the restore's internal service identity (access-and-approvals 2.3; PRD-SEC-018), which must hold what it declares.
+ * Its name is one the recovery hold lets run (recovery-hold.ts). `last` runs after every check: `audit`'s.
+ */
+export interface RestoreCommandStep {
+  readonly kind: 'command';
+  readonly unit: string;
+  readonly tier: number;
+  readonly commandName: string;
+  readonly authorises?: JobAuthority;
+  readonly last?: boolean;
+  run(context: TransactionContext, run: RestoreRun): Promise<Omit<CheckResult, 'unit'>[]>;
+}
+
+/**
+ * An after-restore check that reads what the restored database alone cannot prove, such as every stored file against
+ * its object (5.1), in the transaction it is given as the migration role, which row-level security does not filter;
+ * it may report recovery gaps (4.5).
+ */
+export interface RestoreCheckStep {
+  readonly kind: 'check';
+  readonly unit: string;
+  readonly tier: number;
+  run(
+    context: ParticipantContext,
+    run: RestoreRun,
+  ): Promise<{ readonly results: Omit<CheckResult, 'unit'>[]; readonly gaps: Omit<RecoveryGap, 'unit'>[] }>;
+}
+
+export type RestoreStep = RestoreCommandStep | RestoreCheckStep;
+
+/**
+ * The code of the restore's internal service identity (access-and-approvals 2.3, 9.11; backup-and-restore 4.2 step
+ * 7): created with the Organisation like the worker's, holding exactly what the restore's command steps declare.
+ */
+export const RESTORE_IDENTITY = 'restore';
+
+/** The authorities the restore's internal service identity holds: what its command steps declare, once each. */
+export function restoreIdentityAuthorities(steps: readonly RestoreStep[]): JobAuthority[] {
+  const found: JobAuthority[] = [];
+  for (const step of steps) {
+    if (step.kind !== 'command' || step.authorises === undefined) continue;
+    const need = step.authorises;
+    if (!found.some((each) => each.action === need.action && each.recordType === need.recordType)) found.push(need);
+  }
+  return found;
 }
 
 /**

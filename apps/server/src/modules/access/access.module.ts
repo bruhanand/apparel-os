@@ -35,6 +35,7 @@ import { AccessRecordsController } from './http/access-records.controller.js';
 import { ApprovalsController } from './http/approvals.controller.js';
 import { HISTORY, HistoryController } from './http/history.controller.js';
 import { PolicyReadinessController } from './http/policy-readiness.controller.js';
+import { RecoveryController } from './http/recovery.controller.js';
 import { History } from './queries/history.js';
 import { jobIdentities } from './commands/job-identities.js';
 import { ACCESS, DEMO_SIGN_IN, MODULE_APPROVALS, ORGANISATION_KEYS } from './tokens.js';
@@ -115,6 +116,8 @@ export class AccessJobIdentitiesModule {}
     HistoryController,
     // Setup › Policy readiness and Check availability, for `configuration`, which calls no one (S1-F04-T01).
     PolicyReadinessController,
+    // A restored Organisation's recovery status and commands, for `configuration` (backup-and-restore 4.3; S1-F14-T03).
+    RecoveryController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthenticateGuard },

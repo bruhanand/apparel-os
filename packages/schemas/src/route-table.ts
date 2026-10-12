@@ -360,6 +360,16 @@ import {
   policyValidationRecordedSchema,
 } from './policy-readiness.js';
 import {
+  recoveryReopenedSchema,
+  recoveryReopeningDraftSchema,
+  recoveryStatusSchema,
+  recoveryValidationDraftSchema,
+  recoveryValidationRecordedSchema,
+  seriesParamSchema,
+  seriesReconciledSchema,
+  seriesReconciliationDraftSchema,
+} from './recovery.js';
+import {
   activationRequestedSchema,
   readinessRanSchema,
   readinessRecordParamsSchema,
@@ -539,6 +549,9 @@ export function codesOfRoute(route: Route): ErrorCode[] {
   const codes = new Set<ErrorCode>([...READ_CODES, ...route.codes]);
   if (needsIdempotencyKey(route)) {
     for (const code of KEYED_CODES) codes.add(code);
+    // Every command but those that run while a restored Organisation is held is refused with it (backup-and-restore
+    // 4.3; S1-F14-T03); which run is the command runner's, by name, so every keyed command lists it.
+    codes.add('kernel.recovery-hold');
     if (route.command && route.secretFields.some((field) => field.kind === 'new-secret')) {
       codes.add('kernel.secret-not-comparable');
     }
@@ -1639,6 +1652,61 @@ export const routes = {
     command: false,
     response: backupStatusSchema,
     codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete', 'access.not-authorised'],
+  }),
+  // A restored Organisation's recovery (backup-and-restore 4.3, 5.3; GC9-8; POL-18.03, POL-18.04, PRD-SEC-013;
+  // S1-F14-T03). `configuration` owns the commands and calls no one above it, so `access`, which uses it, serves the
+  // routes, as it serves policy readiness (module-map section 3, rule 6). The status is a read for whoever holds view on
+  // `kernel.recovery_event`; each command runs while the hold is on, under Authorise, with its audit record.
+  readRecoveryStatus: defineRoute({
+    method: 'GET',
+    path: '/api/access/recovery',
+    access: { kind: 'action', action: 'view', recordType: 'kernel.recovery_event' },
+    command: false,
+    response: recoveryStatusSchema,
+    codes: HISTORY_CODES,
+  }),
+  reconcileSeriesAfterRestore: defineRoute({
+    method: 'POST',
+    path: '/api/access/recovery/series/{seriesId}/reconcile',
+    params: seriesParamSchema,
+    access: { kind: 'action', action: 'create', recordType: 'configuration.series_reconciliation' },
+    command: true,
+    body: seriesReconciliationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: seriesReconciledSchema,
+    codes: [...PREPARE_CODES, 'numbering.series-not-found', 'numbering.series-not-paused-after-restore'],
+  }),
+  recordRecoveryValidation: defineRoute({
+    method: 'POST',
+    path: '/api/access/recovery/validations',
+    access: { kind: 'action', action: 'create', recordType: 'configuration.recovery_validation' },
+    command: true,
+    body: recoveryValidationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: recoveryValidationRecordedSchema,
+    codes: [...PREPARE_CODES, 'configuration.not-held'],
+  }),
+  reopenAfterRestore: defineRoute({
+    method: 'POST',
+    path: '/api/access/recovery/reopen',
+    access: { kind: 'action', action: 'create', recordType: 'configuration.reopening' },
+    command: true,
+    body: recoveryReopeningDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: recoveryReopenedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'configuration.not-held',
+      'configuration.restore-check-failed',
+      'configuration.validations-missing',
+      'configuration.series-not-reconciled',
+    ],
   }),
   // Stored files and evidence (imports-and-opening-data 3.1, 9.3, 11, 13.1; PRD-IMP-002, PRD-SEC-005, PRD-SEC-006;
   // S1-F06-T05). The file travels as base64 in the JSON body. Storing needs create on the stored file; reading goes

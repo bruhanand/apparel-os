@@ -15,6 +15,7 @@
     "recover-first-user": "node dist/recover-first-user.js",
     "add-service-identities": "node dist/add-service-identities.js",
     "backup": "node dist/backup.js",
+    "restore": "node dist/restore.js",
     "seed": "node dist-seed/test/seed/seed.js",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",

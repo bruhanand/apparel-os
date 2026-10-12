@@ -286,12 +286,64 @@ export class BackupPrivateKey {
 
   /** Opens a whole sealed object stored under `name`. Throws when it was changed, renamed or sealed for another key. */
   open(name: string, object: Buffer): Buffer {
-    const header = object.subarray(0, HEADER_BYTES);
+    if (object.length < HEADER_BYTES + TAG_BYTES) throw new Error('The sealed object is incomplete');
+    const decipher = this.decipherOf(name, object.subarray(0, HEADER_BYTES));
+    decipher.setAuthTag(object.subarray(object.length - TAG_BYTES));
+    return Buffer.concat([decipher.update(object.subarray(HEADER_BYTES, object.length - TAG_BYTES)), decipher.final()]);
+  }
+
+  /**
+   * A stream that opens a sealed object stored under `name` as it passes through, such as a dump on its way to
+   * PostgreSQL's restore tool (backup-and-restore 4.2 step 2). It fails at its end when the object was changed, renamed
+   * or sealed for another key; the restore checks the object's hash against the manifest before it reads it, so only
+   * an object already proved whole is opened this way.
+   */
+  openStream(name: string): Transform {
+    let header: Buffer | undefined;
+    let pending = Buffer.alloc(0);
+    let decipher: DecipherGCM | undefined;
+    const open = (headerBytes: Buffer): DecipherGCM => this.decipherOf(name, headerBytes);
+    return new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        try {
+          pending = Buffer.concat([pending, chunk]);
+          if (header === undefined) {
+            if (pending.length < HEADER_BYTES) {
+              done();
+              return;
+            }
+            header = pending.subarray(0, HEADER_BYTES);
+            pending = pending.subarray(HEADER_BYTES);
+            decipher = open(header);
+          }
+          if (decipher !== undefined && pending.length > TAG_BYTES) {
+            const body = pending.subarray(0, pending.length - TAG_BYTES);
+            pending = pending.subarray(pending.length - TAG_BYTES);
+            done(null, decipher.update(body));
+            return;
+          }
+          done();
+        } catch {
+          done(new Error('The sealed object does not open with the backup key given'));
+        }
+      },
+      flush(done) {
+        try {
+          if (decipher === undefined || pending.length !== TAG_BYTES) throw new Error('incomplete');
+          decipher.setAuthTag(pending);
+          done(null, decipher.final());
+        } catch {
+          done(new Error('The sealed object does not open with the backup key given'));
+        }
+      },
+    });
+  }
+
+  private decipherOf(name: string, header: Buffer): DecipherGCM {
     const found = parseHeader(header);
     if (found.versionBytes.toString('hex') !== this.version) {
       throw new Error('The object was sealed under another backup key version');
     }
-    if (object.length < HEADER_BYTES + TAG_BYTES) throw new Error('The sealed object is incomplete');
     const shared = diffieHellman({
       privateKey: this.#key,
       publicKey: createPublicKey({
@@ -305,8 +357,7 @@ export class BackupPrivateKey {
       found.nonce,
     );
     decipher.setAAD(Buffer.concat([header, Buffer.from(name, 'utf8')]));
-    decipher.setAuthTag(object.subarray(object.length - TAG_BYTES));
-    return Buffer.concat([decipher.update(object.subarray(HEADER_BYTES, object.length - TAG_BYTES)), decipher.final()]);
+    return decipher;
   }
 
   toJSON(): string {

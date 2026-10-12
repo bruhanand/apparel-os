@@ -6,7 +6,7 @@ import * as accessTables from './db/schema.js';
  * Access's part in backup and restore (backup-and-restore 10.1, 10.2; PRD-ACP-019): the totals of its tables, the
  * records others refer to (users, roles, role assignments, service identities, approval decisions and uses, devices,
  * approval requests), and the key versions its authenticator secrets name (2.3). Its after-restore step, ending every
- * session, is S1-F14-T03's.
+ * session, is in restore-steps.ts (S1-F14-T03).
  */
 export const accessRestoreParticipant: RestoreParticipant = {
   unit: 'access',

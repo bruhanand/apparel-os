@@ -534,6 +534,8 @@ export * from './products.js';
 
 // Policy readiness and the Available check (module-map 4.4; S1-F04-T01).
 export * from './policy-readiness.js';
+// The recovery of a restored Organisation: its status and the recovery commands (backup-and-restore 4.3; S1-F14-T03).
+export * from './recovery.js';
 export * from './site-lifecycle.js';
 export * from './devices.js';
 

@@ -19,4 +19,15 @@ export type { SeriesKey, SeriesState } from './queries/series.js';
 // S1-F12-T02): the financial year of a date, the format in force for a kind, and the live series of a key.
 export { financialYearOn, kindFormatOf } from './commands/settings.js';
 export { liveSeries } from './queries/series.js';
-export { numberingRestoreParticipant } from './restore-participant.js';
+export { numberingRestoreParticipant, numberingRestoreSteps } from './restore-participant.js';
+// Series after a restore (numbering-and-audit 3.6, 3.7; backup-and-restore 5.3; S1-F14-T03): the pause numbering's
+// own after-restore step runs, and the reconciliation `configuration`'s recovery command calls (GC9-8), with no
+// instance, as the reads above.
+export {
+  pauseEverySeriesAfterRestore,
+  reconcileAfterRestore,
+  reconciliationsAfterRestore,
+  seriesAwaitingReconciliation,
+} from './commands/after-restore.js';
+export type { Reconciled, ReconciliationInput, SeriesAwaitingReconciliation } from './commands/after-restore.js';
+export { seriesLockTarget } from './commands/lock-target.js';

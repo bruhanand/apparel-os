@@ -8,6 +8,7 @@ import {
   type ServiceIdentityGrant,
 } from './modules/access/index.js';
 import { askWithSecrets } from './operator-prompt.js';
+import { restoreIdentityGrant } from './restore-steps.js';
 import { jobRegistry } from './worker.module.js';
 
 // The setup step of a new Organisation, `pnpm --filter @apparel-os/server setup-organisation <request.json>`
@@ -24,9 +25,14 @@ const logger = new PinoLoggerService();
 
 /**
  * The internal service identities the worker runs as, from what it runs (RR-271, RR-290): the outbox processor, and
- * the identity of each job kind and consumer with the action its steps declare.
+ * the identity of each job kind and consumer with the action its steps declare; and the restore's, with what its
+ * after-restore steps declare (access-and-approvals 2.3; backup-and-restore 4.2 step 7; S1-F14-T03).
  */
 export function serviceIdentitiesOf(registry: JobRegistry): ServiceIdentityGrant[] {
+  return [...workerIdentitiesOf(registry), restoreIdentityGrant()];
+}
+
+function workerIdentitiesOf(registry: JobRegistry): ServiceIdentityGrant[] {
   const byCode = new Map<string, ServiceIdentityGrant['authorities'][number][]>([
     [OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]],
   ]);

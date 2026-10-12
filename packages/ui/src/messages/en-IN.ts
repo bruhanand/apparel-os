@@ -192,6 +192,11 @@ export const englishIndia = {
   'error.kernel.outcome-unknown':
     'It is not known whether this was saved. Send it again: the same request is never applied twice.',
   'error.kernel.cross-site-request': 'This came from another site, so nothing was done. Open the app again and retry.',
+  // A restored Organisation held until it is validated and reopened (backup-and-restore 4.3, 4.5; S1-F14-T03).
+  'error.kernel.recovery-hold':
+    'The Organisation was restored from a backup and is held until it is validated and reopened. Only sign-in, access changes, reading and the recovery steps work until then.',
+  'error.kernel.outside-outcome-unreconciled':
+    'This was not sent: it may have reached the other system before the restore. It waits until its outcome there is reconciled.',
   // Sign-in, enrolment and the password change (access-and-approvals 3.1 to 3.3; S1-F01-T08).
   'error.access.sign-in-refused': 'The Organisation code, login, password or authenticator code is not right.',
   'error.access.sign-in-slowed': 'Too many attempts failed. Wait a while, then try again.',
@@ -316,6 +321,8 @@ export const englishIndia = {
   'error.numbering.series-not-paused': 'Only a paused number series can be released.',
   'error.numbering.series-exhausted': 'The number series has used every number its format allows.',
   'error.numbering.document-numbered-elsewhere': 'This document already has its number from another series.',
+  'error.numbering.series-not-paused-after-restore':
+    'This number series is not waiting to be reconciled after a restore: it was reconciled already, or the restore did not pause it.',
   'error.numbering.financial-year-invalid': 'A financial year needs a label and a last day on or after its first.',
   'error.numbering.financial-year-label-taken': 'Another financial year has this label.',
   'error.numbering.financial-year-overlaps': 'This financial year overlaps another.',
@@ -621,6 +628,32 @@ export const englishIndia = {
   'operations.backup.failure.manifest-does-not-decrypt': 'Its list of contents did not decrypt',
   'operations.backup.failure.dump-tool-failed': 'A database could not be copied',
   'operations.backup.failure.file-copy-failed': 'The stored files could not be copied',
+  'record-type.kernel.recovery_event': 'Recovery',
+  'operations.recovery': 'Recovery after a restore',
+  'operations.recovery.what': 'the recovery status',
+  'operations.recovery.empty.title': 'No restore recorded',
+  'operations.recovery.empty.body':
+    'When this Organisation is restored from a backup, it is held here until it is validated and reopened.',
+  'operations.recovery.summary': 'Restored from the data as it was at {point}; restored at {at}.',
+  'operations.recovery.reopened': 'Reopened at {at}.',
+  'operations.recovery.checks-passed': 'Every check passed ({count}).',
+  'operations.recovery.checks-failed':
+    '{failed} of {count} checks failed. The Organisation stays held: restore again from another backup, or find out why.',
+  'operations.recovery.check.unit': 'Part',
+  'operations.recovery.check.name': 'Check',
+  'operations.recovery.check.counts': 'Found',
+  'operations.recovery.check.subject': 'What it names',
+  'operations.recovery.check.failed-of': '{failed} of {checked} failed',
+  'operations.recovery.gaps':
+    'Recovery gaps: {count} stored file(s) no record names, {after} of them stored after the recovery point.',
+  'operations.recovery.series': 'Number series waiting to be reconciled: {count}.',
+  'operations.recovery.validations': 'Validations recorded: {recorded}.',
+  'operations.recovery.validates.operations': 'Operations',
+  'operations.recovery.validates.accounts': 'Accounts',
+  'operations.recovery.none': 'none',
+  'operations.recovery.may-reopen': 'Nothing blocks reopening.',
+  'operations.recovery.blocked': '{count} thing(s) block reopening.',
+  'record-type.numbering.series': 'Number series',
   'record-type.stock.balance': 'Stock balance',
   'record-type.stock.receipt_origin': 'Receipt origin',
   'record-type.stock.movement': 'Stock movement',
@@ -1855,6 +1888,9 @@ export const englishIndia = {
   'record-type.configuration.policy_status': 'Policy status',
   'record-type.configuration.policy_validation': 'Policy validation',
   'record-type.configuration.capability': 'Capability',
+  'record-type.configuration.series_reconciliation': 'Series reconciliation after a restore',
+  'record-type.configuration.recovery_validation': 'Validation after a restore',
+  'record-type.configuration.reopening': 'Reopening after a restore',
   'history.operation.record-policy-signature': 'Policy recorded as Signed',
   'history.operation.record-policy-validation': 'Policy values validated',
   'history.operation.switch-capability': 'Capability switched',
@@ -1873,6 +1909,14 @@ export const englishIndia = {
     'This environment does not accept a value of that origin: SYNTHETIC only in local work and dev, test setup only on KDPS test.',
   'error.configuration.no-values-to-validate':
     'No part of the system reports values of this policy yet, so there is nothing to validate.',
+  'error.configuration.not-held':
+    'The Organisation is not held after a restore, so there is nothing to validate or reopen.',
+  'error.configuration.restore-check-failed':
+    'A check of the restore failed, so the Organisation stays held. Restore again from another backup, or find out why.',
+  'error.configuration.validations-missing':
+    'Reopening needs both validations of this restore: one by Operations and one by Accounts.',
+  'error.configuration.series-not-reconciled':
+    'Reopening needs every number series the restore paused reconciled with its evidence first.',
   'error.configuration.validator-entered-values':
     'You entered some of this policy’s values, so you cannot validate them. A person who did not enter them does.',
   'policy-readiness.what': 'policy readiness',
@@ -2084,6 +2128,12 @@ export const englishIndia = {
   'history.operation.change-billing-device-units': 'Changed a billing device’s units',
   'history.operation.revoke-device': 'Revoked a session with its device',
   'history.operation.retire-device': 'Ended a session with its retired device',
+  'history.operation.end-session-after-restore': 'Ended a session after a restore',
+  'history.operation.restore-step': 'Ran a step of a restore',
+  'history.operation.restore-check': 'Ran a check of a restore',
+  'history.operation.reconcile-series-after-restore': 'Reconciled a number series after a restore',
+  'history.operation.record-recovery-validation': 'Validated a restored Organisation',
+  'history.operation.reopen-after-restore': 'Reopened a restored Organisation',
   'error.access.device-ended': 'This device is revoked or retired already, which is final.',
   'error.pos.device-not-active': 'A device’s units change only while it is Active.',
   'error.pos.starts-in-past': 'The change cannot start before today.',

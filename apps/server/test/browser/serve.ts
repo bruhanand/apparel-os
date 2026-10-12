@@ -1859,6 +1859,10 @@ const operationsViewer = await provisionUser('BROWSER-OPERATIONS', 'P-ADM', [
   // And backup status (S1-F14-T02): one SYNTHETIC complete backup recorded as the backup command records it, written
   // as the migration role, as a fixture (code-house-rules 11.2); no backup is taken here.
   { recordType: 'kernel.backup_record', action: 'view' },
+  // And recovery status (S1-F14-T03): one SYNTHETIC restore, every check passed and reopened, recorded as the restore
+  // and reopen commands record one, written as the migration role, as a fixture (code-house-rules 11.2); nothing is
+  // restored here and the Organisation is not held.
+  { recordType: 'kernel.recovery_event', action: 'view' },
 ]);
 const backupFixture = await connect(settingsDatabase, 'migration');
 const syntheticBackupId = uuidv7();
@@ -1867,6 +1871,16 @@ await backupFixture.query(
      manifest_sha256, result, failures, finished_at)
    values ($1, $2, 'local', null, now() - interval '1 minute', $3, $4, 'complete', '{}', now())`,
   [uuidv7(), syntheticBackupId, '5e'.repeat(16), '5e'.repeat(32)],
+);
+const syntheticRestoreId = uuidv7();
+await backupFixture.query(
+  `insert into kernel.recovery_event (id, restore_id, kind, backup_id, recovery_point, unit, name, passed, checked,
+     failed, actor_id, role_assignment_id, occurred_at)
+   values ($1, $5, 'restored', $6, now() - interval '1 minute', null, null, null, null, null, null, null, now()),
+          ($2, $5, 'hold-placed', null, null, null, null, null, null, null, null, null, now()),
+          ($3, $5, 'check', null, null, 'audit', 'audit seal chain verifies', true, 1, 0, null, null, now()),
+          ($4, $5, 'hold-lifted', null, null, null, null, null, null, null, $7, $8, now() + interval '1 second')`,
+  [uuidv7(), uuidv7(), uuidv7(), uuidv7(), syntheticRestoreId, syntheticBackupId, operationsViewer.id, uuidv7()],
 );
 await backupFixture.end();
 await writeSyntheticServiceIdentity(settingsDatabase, SYNTHETIC_FAILING_IDENTITY, [syntheticAlwaysFails.authorises]);

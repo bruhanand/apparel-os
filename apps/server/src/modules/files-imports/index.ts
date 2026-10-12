@@ -35,3 +35,7 @@ export { filesImportsApprovals } from './commands/effects.js';
 export { importFailed, importPublished, mappingConfirmed } from './events.js';
 export { IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY } from './domain/batch-code.js';
 export { filesImportsRestoreParticipant } from './restore-participant.js';
+// Its after-restore check of every stored file and attachment, and the objects with no record (backup-and-restore 5.1;
+// S1-F14-T03).
+export { filesImportsRestoreChecks } from './restore-check.js';
+export type { FilesRestoreCheckDependencies } from './restore-check.js';

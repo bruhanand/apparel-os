@@ -35,7 +35,11 @@ export interface Revoker {
  * Whose sessions: one of a user's, every one of a user's (access-and-approvals 3.3), or every one bound to a device, of
  * whichever user, when the device is revoked or retired (offline-counter 3.5; S1-F12-T02).
  */
-export type RevocationTarget = { readonly userId: string; readonly sessionId?: string } | { readonly deviceId: string };
+export type RevocationTarget =
+  | { readonly userId: string; readonly sessionId?: string }
+  | { readonly deviceId: string }
+  /** Every session of the Organisation, of every user: after a restore (backup-and-restore 4.4; PRD-SEC-008). */
+  | { readonly every: true };
 
 /**
  * Revokes sessions (access-and-approvals 3.3; offline-counter 3.5; PRD-SEC-008): one of a user's, every one of a
@@ -53,11 +57,13 @@ export async function revokeSessions(
   operation: string,
 ): Promise<string[] | undefined> {
   const whose =
-    'deviceId' in target
-      ? sql`device_id = ${target.deviceId}`
-      : target.sessionId === undefined
-        ? sql`app_user_id = ${target.userId}`
-        : sql`app_user_id = ${target.userId} and id = ${target.sessionId}`;
+    'every' in target
+      ? sql`true`
+      : 'deviceId' in target
+        ? sql`device_id = ${target.deviceId}`
+        : target.sessionId === undefined
+          ? sql`app_user_id = ${target.userId}`
+          : sql`app_user_id = ${target.userId} and id = ${target.sessionId}`;
   // Each session's state as it is when this transaction holds its row: the locking read waits for a change in progress
   // and answers the row as committed, and the update changes only the rows that read holds, so the audit record's
   // before-value is the state the session really had, In force or Locked. These are the row locks the update always
@@ -73,7 +79,7 @@ export async function revokeSessions(
      where s.id = prior.id
     returning s.id as "id", prior.app_user_id as "userId", prior.state as "before"`);
   const rows = [...revoked.rows].sort((a, b) => a.id.localeCompare(b.id));
-  if (!('deviceId' in target) && target.sessionId !== undefined && rows.length === 0) return undefined;
+  if ('userId' in target && target.sessionId !== undefined && rows.length === 0) return undefined;
   const byUser = new Map<string, string[]>();
   for (const row of rows) {
     byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.id]);

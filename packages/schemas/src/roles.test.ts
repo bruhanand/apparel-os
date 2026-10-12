@@ -40,6 +40,7 @@ describe('the permission registry (access-and-approvals 4.1, 9.11)', () => {
       'audit.audit_seal',
       'inbox.work_item',
       'kernel.outbox_event',
+      'numbering.series',
     ]);
     expect(isServiceOnly('audit.audit_seal')).toBe(true);
     expect(isServiceOnly('access.role')).toBe(false);

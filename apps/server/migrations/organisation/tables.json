@@ -201,6 +201,22 @@
       "why": "Technical rows only kernel reads, for the operations view's backup status; written only by the backup command as the migration role, and holding no record data and no key (backup-and-restore section 11)"
     },
     {
+      "table": "kernel.recovery_event",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "backup-and-restore 4.2, 4.3, 4.5, section 6, section 11",
+      "why": "Technical rows only kernel reads, for the recovery hold, the operations view's recovery status and the drill record: counts, names and identifiers of a restore's steps, checks and gaps, no record data and no key; written by the restore command as the migration role, except the row of reopening (backup-and-restore section 11)"
+    },
+    {
+      "table": "kernel.recovery_hold",
+      "class": "unscoped",
+      "marks": ["projection", "locked"],
+      "runtime": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "design": "backup-and-restore 4.3, section 11",
+      "why": "Read by the command runner at the start of every command, of every actor and of none, before Authorise (code-house-rules 6.3): at most one row, holding no scope fact; placed by the restore command, lifted by the reopen command"
+    },
+    {
       "table": "access.persona_held",
       "class": "unscoped",
       "marks": ["append-only"],
@@ -519,6 +535,30 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "module-map 4.4, 4.16; domain-model 3.6; PRD-LIF-001; code-house-rules 6.3",
       "why": "Read by the policy gate for every request of every actor, as Authorise reads its own tables, so no actor's scope may hide a grant (code-house-rules 6.3); only configuration code reads it"
+    },
+    {
+      "table": "configuration.recovery_validation",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "backup-and-restore 4.3, section 11; code-house-rules 7.1",
+      "why": "A restored Organisation's validations belong to the Organisation as a whole: their record type carries no scope fact, so the permission on the record type decides (access-and-approvals 5.3); only configuration code reads them"
+    },
+    {
+      "table": "configuration.retention_schedule",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "backup-and-restore 8.1, 8.2, section 11; POL-18.05",
+      "why": "Organisation-wide settings, one per record class, guarded by Authorise once a command sets one; none is written while every period is OPEN (V-13), so nothing is deleted"
+    },
+    {
+      "table": "configuration.retention_schedule_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["SELECT"],
+      "design": "backup-and-restore 8.1, 8.2, section 11; code-house-rules 7.3; POL-18.05",
+      "why": "Organisation-wide settings, one per record class, guarded by Authorise once a command sets one; none is written while every period is OPEN (V-13), so nothing is deleted"
     },
     {
       "table": "access.setup_record",

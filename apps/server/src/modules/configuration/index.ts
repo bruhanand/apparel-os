@@ -28,3 +28,6 @@ export type { PolicyEvidence, PolicyEvidenceLink } from './contracts/policy-evid
 export { activityChanged, capabilityChanged, policyStatusChanged } from './events.js';
 export type { ActivityGranter, ActivityGrantRequest, ActivityGrantWriter } from './commands/activity-grants.js';
 export { configurationRestoreParticipant } from './restore-participant.js';
+// The validations of a restore, read with no instance, for the drill record (backup-and-restore section 6; S1-F14-T03).
+export { recoveryValidationsOf } from './commands/recovery.js';
+export type { RecoveryValidationRead } from './commands/recovery.js';

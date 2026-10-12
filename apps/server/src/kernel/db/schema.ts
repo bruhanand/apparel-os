@@ -1,4 +1,4 @@
-import { integer, jsonb, pgSchema, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, integer, jsonb, pgSchema, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of kernel's tables (code-house-rules 3.4). They mirror the reviewed migrations and never
 // create or change a table; an integration test compares each with the migrated database. Never exported from the
@@ -133,5 +133,37 @@ export const backupRecord = kernel.table('backup_record', {
   result: text('result').notNull(),
   failures: text('failures').array().notNull(),
   finishedAt: timestamp('finished_at', { withTimezone: true }).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * What happened to this Organisation in a restore, one row per fact (migrations/organisation/0070; backup-and-restore
+ * 4.2, 4.3, 4.5, section 6, section 11): restored, hold placed, a step or check with its result and counts, a gap, the
+ * hold lifted. Append-only; counts, names and identifiers only (PRD-SEC-014).
+ */
+export const recoveryEvent = kernel.table('recovery_event', {
+  id: uuid('id').primaryKey(),
+  restoreId: uuid('restore_id').notNull(),
+  kind: text('kind').notNull(),
+  backupId: uuid('backup_id'),
+  recoveryPoint: timestamp('recovery_point', { withTimezone: true }),
+  unit: text('unit'),
+  name: text('name'),
+  passed: boolean('passed'),
+  checked: bigint('checked', { mode: 'number' }),
+  failed: bigint('failed', { mode: 'number' }),
+  subject: text('subject'),
+  subjectAt: timestamp('subject_at', { withTimezone: true }),
+  actorId: uuid('actor_id'),
+  roleAssignmentId: uuid('role_assignment_id'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** The recovery hold (migrations/organisation/0070; backup-and-restore 4.3): at most one row, while held. */
+export const recoveryHold = kernel.table('recovery_hold', {
+  id: uuid('id').primaryKey(),
+  restoreId: uuid('restore_id').notNull(),
+  placedAt: timestamp('placed_at', { withTimezone: true }).notNull(),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,6 +1,50 @@
 import { sql } from 'drizzle-orm';
-import { tablesOf, type RestoreParticipant } from '../../kernel/index.js';
+import { CommandDefect, tablesOf, type RestoreCommandStep, type RestoreParticipant } from '../../kernel/index.js';
+import { recordChange } from './commands/record.js';
 import * as auditTables from './db/schema.js';
+
+/**
+ * Audit's last after-restore step (backup-and-restore 4.2 step 7, 5.4, 10.1; PRD-SEC-007, PRD-SEC-018; S1-F14-T03):
+ * once every other step and check has run and is kept as a `kernel.recovery_event`, each outcome is recorded as an
+ * audit record of that event under the restore's internal service identity, with its check, result and counts. The
+ * seal chain itself is checked with the other invariants, and against the manifest's seal, before this runs; the rows
+ * this writes come after the last seal and are sealed by the sealing job after reopening.
+ */
+export const auditRestoreSteps: readonly RestoreCommandStep[] = [
+  {
+    kind: 'command',
+    unit: 'audit',
+    tier: 1,
+    commandName: 'audit.record-restore',
+    last: true,
+    async run(context, run) {
+      if (context.actor.kind !== 'actor') throw new CommandDefect('The restore records its steps as its identity');
+      for (const result of run.recorded) {
+        await recordChange(context, {
+          actor: { kind: 'service-identity', id: context.actor.actorId },
+          record: { module: 'kernel', type: 'recovery_event', id: result.eventId },
+          operation: result.kind === 'step' ? 'restore-step' : 'restore-check',
+          changes: [
+            { kind: 'value', field: 'unit', before: null, after: result.unit },
+            { kind: 'value', field: 'check', before: null, after: result.check },
+            { kind: 'value', field: 'passed', before: null, after: result.passed },
+            { kind: 'value', field: 'checked', before: null, after: result.checked },
+            { kind: 'value', field: 'failed', before: null, after: result.failed },
+          ],
+          source: { kind: 'operator-command', reference: run.restoreId },
+        });
+      }
+      return [
+        {
+          check: 'every step and check recorded as an audit record',
+          passed: true,
+          checked: run.recorded.length,
+          failed: 0,
+        },
+      ];
+    },
+  },
+];
 
 /**
  * Audit's part in backup and restore (backup-and-restore 3.2 step 3, 5.4, 10.1, 10.2; PRD-SEC-007): the totals of its

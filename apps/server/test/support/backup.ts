@@ -2,7 +2,14 @@ import { spawn } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { buffer } from 'node:stream/consumers';
 import { CreateBucketCommand, GetObjectCommand, type S3Client } from '@aws-sdk/client-s3';
-import { BackupPrivateKey, BACKUP_STORE_VARIABLES, runDump, type DumpTool } from '../../src/kernel/index.js';
+import {
+  BackupPrivateKey,
+  BACKUP_STORE_VARIABLES,
+  runDump,
+  runRestore,
+  type DumpTool,
+  type RestoreTool,
+} from '../../src/kernel/index.js';
 import { createEmptyDatabase, testServer } from './postgres.js';
 
 // Helpers for the tests of backup and restore (backup-and-restore section 12; S1-F14-T02). PostgreSQL's own client
@@ -43,6 +50,33 @@ export const containerDumpTool: DumpTool = {
       ],
       { PATH: process.env.PATH },
       into,
+    );
+  },
+};
+
+/**
+ * `pg_restore` of the server's version, run inside the test container over its local socket as the migration role,
+ * as the restore command runs it (backup-and-restore 4.2 step 2; S1-F14-T03).
+ */
+export const containerRestoreTool: RestoreTool = {
+  restore(target, from) {
+    const database = decodeURIComponent(new URL(target.connectionString).pathname.slice(1));
+    return runRestore(
+      'docker',
+      [
+        'exec',
+        '-i',
+        testServer().containerId,
+        'pg_restore',
+        '--host=/var/run/postgresql',
+        '--username=aos_migration',
+        `--dbname=${database}`,
+        '--exit-on-error',
+        '--single-transaction',
+        '--no-password',
+      ],
+      { PATH: process.env.PATH },
+      from,
     );
   },
 };

@@ -120,7 +120,19 @@ const kernelRecordTypes = [
   // The backups that covered the Organisation, for the operations view's backup status (backup-and-restore 3.2
   // step 8; PRD-SEC-013; S1-F14-T02). Who holds it is KDPS's (V-01, RR-064).
   declare('kernel.backup_record', ['view'], NONE),
+  // A restore's history, for the operations view's recovery status: the hold, each step and check with its result,
+  // the gaps, the series to reconcile and the validations (backup-and-restore 4.2, 4.3; PRD-SEC-013; S1-F14-T03).
+  // Who holds it is KDPS's (V-01, RR-064).
+  declare('kernel.recovery_event', ['view'], NONE),
 ] as const;
+
+/**
+ * `numbering` (numbering-and-audit 3.6, 3.7; backup-and-restore 5.3; S1-F14-T03): a series is named by its owning
+ * module's opaque scope key, and a person reaches a number only through that module's document, so no person holds a
+ * permission on it. Edit is what the restore's internal service identity holds to pause every series after a restore
+ * (access-and-approvals 2.3; PRD-SEC-018), so it is service-only.
+ */
+const numberingRecordTypes = [declareServiceOnly('numbering.series', ['edit'], NONE)] as const;
 
 /**
  * `inbox` (access-and-approvals 11; module-map 4.8). My work needs no permission (11.2, 9.11); `inbox.work_item`
@@ -302,6 +314,13 @@ const configurationRecordTypes = [
   declare('configuration.policy_status', ['view', 'create'], NONE),
   declare('configuration.policy_validation', ['view', 'create'], NONE),
   declare('configuration.capability', ['view', 'edit'], NONE),
+  // The recovery commands of a restored Organisation, while it is held (backup-and-restore 4.3; GC9-8; POL-18.03,
+  // POL-18.04; S1-F14-T03): create on a series reconciliation reconciles a paused series with its evidence; create on a
+  // recovery validation records the Operations or the Accounts validation; create on a reopening lifts the hold. Who
+  // holds them, and whether one person may record both validations, is KDPS's (GC9-6, V-01).
+  declare('configuration.series_reconciliation', ['create'], NONE),
+  declare('configuration.recovery_validation', ['view', 'create'], NONE),
+  declare('configuration.reopening', ['create'], NONE),
 ] as const;
 
 /**
@@ -367,6 +386,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
   ...auditRecordTypes,
   ...kernelRecordTypes,
+  ...numberingRecordTypes,
   ...inboxRecordTypes,
   ...filesImportsRecordTypes,
   ...stockRecordTypes,

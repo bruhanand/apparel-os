@@ -1,5 +1,11 @@
 import type { Readable } from 'node:stream';
-import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 
 // The backup store (backup-and-restore 3.2, 3.3; GC9-A4): an S3-compatible bucket apart from the file store, whose
 // credentials `app` and `worker` do not hold. Only the backup command (and the restore, S1-F14-T03) reach it. Nothing
@@ -51,14 +57,36 @@ export function bucketSettingsFrom(
   };
 }
 
-/** The backup store as the backup command uses it. */
+/**
+ * The metadata name under which a copy of a file-store object keeps the time the object was first stored, so a restore
+ * can say when an object with no record was stored (backup-and-restore 3.3, 4.5). A time, never record data.
+ */
+export const STORED_AT_METADATA = 'stored-at';
+
+/** The backup store as the backup and restore commands use it. */
 export interface BackupStore {
-  /** Writes an object under a key that holds none; `already-there` when the key is taken, writing nothing. */
-  putOnce(name: string, body: Buffer | Readable, length: number): Promise<'written' | 'already-there'>;
+  /**
+   * Writes an object under a key that holds none, with the metadata given; `already-there` when the key is taken,
+   * writing nothing.
+   */
+  putOnce(
+    name: string,
+    body: Buffer | Readable,
+    length: number,
+    metadata?: Readonly<Record<string, string>>,
+  ): Promise<'written' | 'already-there'>;
   /** Reads an object as a stream. */
   get(name: string): Promise<Readable>;
   /** The keys under a prefix, from the store's own listing (3.3). */
   list(prefix: string): Promise<string[]>;
+}
+
+/** An object read with what the store keeps about it. */
+export interface StoredObjectRead {
+  readonly body: Readable;
+  readonly length: number;
+  readonly metadata: Readonly<Record<string, string>>;
+  readonly lastModified: Date | undefined;
 }
 
 /** A bucket reached with the AWS SDK. Used for the backup store, and by `files-imports` to read the file store. */
@@ -76,10 +104,22 @@ export class S3Bucket implements BackupStore {
     });
   }
 
-  async putOnce(name: string, body: Buffer | Readable, length: number): Promise<'written' | 'already-there'> {
+  async putOnce(
+    name: string,
+    body: Buffer | Readable,
+    length: number,
+    metadata?: Readonly<Record<string, string>>,
+  ): Promise<'written' | 'already-there'> {
     try {
       await this.#client.send(
-        new PutObjectCommand({ Bucket: this.#bucket, Key: name, Body: body, ContentLength: length, IfNoneMatch: '*' }),
+        new PutObjectCommand({
+          Bucket: this.#bucket,
+          Key: name,
+          Body: body,
+          ContentLength: length,
+          IfNoneMatch: '*',
+          ...(metadata === undefined ? {} : { Metadata: { ...metadata } }),
+        }),
       );
       return 'written';
     } catch (error) {
@@ -95,13 +135,34 @@ export class S3Bucket implements BackupStore {
     return answer.Body as Readable;
   }
 
-  /** Reads an object as a stream with its length. */
-  async getWithLength(name: string): Promise<{ readonly body: Readable; readonly length: number }> {
+  /** Reads an object as a stream with its length, its metadata and when the store last wrote it. */
+  async getWithLength(name: string): Promise<StoredObjectRead> {
     const answer = await this.#client.send(new GetObjectCommand({ Bucket: this.#bucket, Key: name }));
     if (answer.Body === undefined || answer.ContentLength === undefined) {
       throw new Error('The store answered an object with no body or length');
     }
-    return { body: answer.Body as Readable, length: answer.ContentLength };
+    return {
+      body: answer.Body as Readable,
+      length: answer.ContentLength,
+      metadata: answer.Metadata ?? {},
+      lastModified: answer.LastModified,
+    };
+  }
+
+  /** What the store keeps about an object, without its body; undefined when it is not there. */
+  async head(
+    name: string,
+  ): Promise<
+    { readonly metadata: Readonly<Record<string, string>>; readonly lastModified: Date | undefined } | undefined
+  > {
+    try {
+      const answer = await this.#client.send(new HeadObjectCommand({ Bucket: this.#bucket, Key: name }));
+      return { metadata: answer.Metadata ?? {}, lastModified: answer.LastModified };
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      if (status === 404) return undefined;
+      throw error;
+    }
   }
 
   async list(prefix: string): Promise<string[]> {

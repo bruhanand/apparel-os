@@ -3,8 +3,10 @@ import type { AccessActionType, LimitStanding, MissingItem, RecordTypeDeclaratio
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   CommandDefect,
+  isRecoveryHeld,
   LOCK_STEP,
   lockTable,
+  RECOVERY_HOLD_CODE,
   scopeFactsOf,
   type CommandRefusal,
   type LockTarget,
@@ -941,6 +943,12 @@ export class Approvals {
     if (found === undefined) return refused('not-found', 'access.approval-request-not-found');
     if (actor.kind !== 'user') return refused('not-authorised', 'access.not-eligible', [{ kind: 'person' }]);
     const rule = this.ruleOf(found.actionType);
+    // While a restored Organisation is held, an access change is decided, so a revocation known from outside evidence
+    // can be applied again; another module's document is not, since its effect is a business change (backup-and-
+    // restore 4.3, 4.4; POL-18.03).
+    if (rule.module !== 'access' && (await isRecoveryHeld(context.tx))) {
+      return refused('unavailable', RECOVERY_HOLD_CODE, [{ kind: 'recovery-hold' }]);
+    }
     const handler = this.handlerOf(found.actionType);
     // Step 0: the approver's user row, the assignment they rely on and its role, shared, with the authority rows the
     // decision changes, exclusive (code-house-rules 8.2 "Authority first"; RR-325, RR-360). The assignment is the one Authorise finds

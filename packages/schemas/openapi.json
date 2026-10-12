@@ -117,7 +117,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -435,7 +436,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -624,7 +626,8 @@
             },
             "x-error-codes": [
               "access.authenticator-code-refused",
-              "access.password-rules-not-set"
+              "access.password-rules-not-set",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -980,7 +983,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -1171,7 +1175,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -1354,7 +1359,8 @@
               }
             },
             "x-error-codes": [
-              "access.authenticator-code-refused"
+              "access.authenticator-code-refused",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -1545,6 +1551,7 @@
               "access.not-eligible",
               "access.unknown-value-not-covered",
               "finance.book-stock-unanswered",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -1990,7 +1997,8 @@
               "access.authenticator-code-refused",
               "access.business-date-not-set",
               "access.no-reason-list-in-force",
-              "access.not-eligible"
+              "access.not-eligible",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -2214,7 +2222,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -2400,7 +2409,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -3383,7 +3393,8 @@
               "access.authenticator-code-refused",
               "access.business-date-not-set",
               "access.not-authorised",
-              "files-imports.file-store-not-configured"
+              "files-imports.file-store-not-configured",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -3567,7 +3578,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -3867,7 +3879,8 @@
             "x-error-codes": [
               "access.authenticator-code-refused",
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -4139,7 +4152,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "files-imports.ai-suggestions-unavailable"
+              "files-imports.ai-suggestions-unavailable",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -4414,7 +4428,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -5687,7 +5702,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -6941,7 +6957,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -8243,7 +8260,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "access.scope-members-not-available"
+              "access.scope-members-not-available",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -9115,7 +9133,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -9543,7 +9562,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -9989,6 +10009,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -10674,7 +10695,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -11209,7 +11231,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -11731,6 +11754,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -12193,7 +12217,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -13212,6 +13237,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -13711,6 +13737,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -14410,7 +14437,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -14851,7 +14879,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -15300,7 +15329,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -15750,7 +15780,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -16262,7 +16293,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -16857,7 +16889,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -17667,7 +17700,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -18109,7 +18143,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -19148,7 +19183,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -19613,6 +19649,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -20110,7 +20147,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -21056,6 +21094,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -21773,7 +21812,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -22801,7 +22841,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -23642,7 +23683,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "access.scope-members-not-available"
+              "access.scope-members-not-available",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -24380,7 +24422,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -25475,7 +25518,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -25974,6 +26018,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -27073,7 +27118,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -27807,7 +27853,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -28536,7 +28583,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -29321,7 +29369,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -30299,6 +30348,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -30763,7 +30813,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "access.password-rules-not-set"
+              "access.password-rules-not-set",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -31192,7 +31243,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -31983,7 +32035,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -32255,7 +32308,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -32445,7 +32499,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -32810,7 +32865,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -33048,7 +33104,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -33252,7 +33309,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -33476,7 +33534,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -34137,7 +34196,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -34330,7 +34390,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -34530,7 +34591,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -34736,7 +34798,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -34940,7 +35003,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -35138,6 +35202,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -35358,7 +35423,8 @@
             "x-error-codes": [
               "access.authenticator-code-refused",
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -35592,6 +35658,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -35829,6 +35896,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -36055,6 +36123,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -36283,6 +36352,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -36511,6 +36581,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -36732,6 +36803,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -36971,7 +37043,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -37175,7 +37248,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -37379,7 +37453,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -37583,7 +37658,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -37777,7 +37853,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -37999,7 +38076,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -38226,7 +38304,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -38430,7 +38509,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -38643,7 +38723,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -38849,6 +38930,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -39085,6 +39167,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -39340,7 +39423,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -39562,7 +39646,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -39812,7 +39897,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -40073,7 +40159,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -40289,7 +40376,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -40543,7 +40631,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -40820,7 +40909,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -41064,7 +41154,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -41474,7 +41565,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -41731,6 +41823,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -41959,6 +42052,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -42193,7 +42287,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -42399,6 +42494,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "organisation.location-in-use-unanswered"
             ]
           },
@@ -42614,7 +42710,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -42871,6 +42968,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -43116,7 +43214,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -43444,7 +43543,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -43665,6 +43765,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -43911,7 +44012,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -44140,6 +44242,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "kernel.recovery-hold",
               "merchandise.stock-presence-unanswered"
             ]
           },
@@ -44356,7 +44459,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -44723,7 +44827,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -45194,7 +45299,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -45395,7 +45501,8 @@
               "exceptions.exception-code-series-exhausted",
               "exceptions.exception-code-series-paused",
               "exceptions.no-exception-code-series",
-              "exceptions.no-routing"
+              "exceptions.no-routing",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -60527,6 +60634,369 @@
         }
       }
     },
+    "/api/access/recovery": {
+      "get": {
+        "operationId": "readRecoveryStatus",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "kernel.recovery_event"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "held": {
+                      "type": "boolean"
+                    },
+                    "restore": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "restoreId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "backupId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "recoveryPoint": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "restoredAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "reopenedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "checks": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "unit": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "check": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "passed": {
+                                    "type": "boolean"
+                                  },
+                                  "checked": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "failed": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "subject": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "unit",
+                                  "check",
+                                  "passed",
+                                  "checked",
+                                  "failed",
+                                  "subject"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "gaps": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "unit": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "subject": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "subjectAt": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "afterRecoveryPoint": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "unit",
+                                  "name",
+                                  "subject",
+                                  "subjectAt",
+                                  "afterRecoveryPoint"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "seriesToReconcile": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "seriesId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "nextSequence": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "restoredHighest": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "seriesId",
+                                  "kind",
+                                  "nextSequence",
+                                  "restoredHighest"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "validations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "validationId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "validates": {
+                                    "type": "string",
+                                    "enum": [
+                                      "operations",
+                                      "accounts"
+                                    ]
+                                  },
+                                  "compared": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "stock",
+                                        "bills",
+                                        "financial-totals"
+                                      ]
+                                    }
+                                  },
+                                  "comparedAgainst": {
+                                    "type": "string"
+                                  },
+                                  "evidence": {
+                                    "type": "string"
+                                  },
+                                  "validatedBy": {
+                                    "type": "string"
+                                  },
+                                  "validatedAt": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  }
+                                },
+                                "required": [
+                                  "validationId",
+                                  "validates",
+                                  "compared",
+                                  "comparedAgainst",
+                                  "evidence",
+                                  "validatedBy",
+                                  "validatedAt"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "blocking": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "restoreId",
+                            "backupId",
+                            "recoveryPoint",
+                            "restoredAt",
+                            "reopenedAt",
+                            "checks",
+                            "gaps",
+                            "seriesToReconcile",
+                            "validations",
+                            "blocking"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "held",
+                    "restore"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/finance/period-reopenings/{reopeningId}": {
       "get": {
         "operationId": "readReopening",
@@ -67027,7 +67497,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -67162,6 +67633,231 @@
         }
       }
     },
+    "/api/access/recovery/series/{seriesId}/reconcile": {
+      "post": {
+        "operationId": "reconcileSeriesAfterRestore",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "configuration.series_reconciliation"
+        },
+        "parameters": [
+          {
+            "name": "seriesId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "seriesId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "restoredHighest": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "nextSequenceBefore": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "nextSequenceAfter": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "seriesId",
+                    "restoredHighest",
+                    "nextSequenceBefore",
+                    "nextSequenceAfter"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "numbering.series-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "numbering.series-not-paused-after-restore"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "evidenceHighest": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "evidence",
+                  "evidenceHighest",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/finance/ca-approval-evidence": {
       "post": {
         "operationId": "recordCaEvidence",
@@ -67245,7 +67941,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -67530,7 +68227,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -67742,7 +68440,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -67853,6 +68552,198 @@
         }
       }
     },
+    "/api/access/recovery/validations": {
+      "post": {
+        "operationId": "recordRecoveryValidation",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "configuration.recovery_validation"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "validationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "validationId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "configuration.not-held"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "validates": {
+                    "type": "string",
+                    "enum": [
+                      "operations",
+                      "accounts"
+                    ]
+                  },
+                  "compared": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "stock",
+                        "bills",
+                        "financial-totals"
+                      ]
+                    }
+                  },
+                  "comparedAgainst": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "validates",
+                  "compared",
+                  "comparedAgainst",
+                  "evidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/finance/tax-rules/ca-evidence": {
       "post": {
         "operationId": "recordTaxRuleCaEvidence",
@@ -67935,7 +68826,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -68126,6 +69018,189 @@
         }
       }
     },
+    "/api/access/recovery/reopen": {
+      "post": {
+        "operationId": "reopenAfterRestore",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "configuration.reopening"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "restoreId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "reopenedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "restoreId",
+                    "reopenedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "configuration.not-held",
+              "configuration.restore-check-failed",
+              "configuration.series-not-reconciled",
+              "configuration.validations-missing"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revocationsPlacedAgain": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "legalHoldsPlacedAgain": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "gapsSettled": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                },
+                "required": [
+                  "revocationsPlacedAgain",
+                  "legalHoldsPlacedAgain",
+                  "gapsSettled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/exceptions/exceptions/{exceptionId}/reopen": {
       "post": {
         "operationId": "reopenException",
@@ -68228,7 +69303,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -68465,7 +69541,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -68672,7 +69749,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -68860,7 +69938,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -69095,7 +70174,8 @@
               "access.authenticator-code-refused",
               "access.business-date-not-set",
               "access.not-authorised",
-              "access.password-rules-not-set"
+              "access.password-rules-not-set",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -69528,7 +70608,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -69723,7 +70804,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -69878,6 +70960,19 @@
               "access.not-signed-in",
               "access.session-locked",
               "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -70049,7 +71144,8 @@
               }
             },
             "x-error-codes": [
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -70238,7 +71334,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -70420,7 +71517,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -70805,7 +71903,8 @@
             "x-error-codes": [
               "access.authenticator-code-refused",
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -71155,6 +72254,19 @@
               "access.not-signed-in"
             ]
           },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.recovery-hold"
+            ]
+          },
           "409": {
             "description": "The error envelope (code-house-rules 12.3)",
             "content": {
@@ -71478,6 +72590,19 @@
               "access.sign-in-incomplete"
             ]
           },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.recovery-hold"
+            ]
+          },
           "409": {
             "description": "The error envelope (code-house-rules 12.3)",
             "content": {
@@ -71660,7 +72785,8 @@
               "access.not-authorised",
               "files-imports.file-store-not-configured",
               "files-imports.import-batch-series-paused",
-              "files-imports.no-import-batch-series"
+              "files-imports.no-import-batch-series",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -71956,7 +73082,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "files-imports.file-store-not-configured"
+              "files-imports.file-store-not-configured",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -72220,7 +73347,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "files-imports.file-store-not-configured"
+              "files-imports.file-store-not-configured",
+              "kernel.recovery-hold"
             ]
           },
           "409": {
@@ -72441,7 +73569,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -72635,7 +73764,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -72829,7 +73959,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -72997,7 +74128,8 @@
               }
             },
             "x-error-codes": [
-              "access.sign-in-unavailable"
+              "access.sign-in-unavailable",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -73182,7 +74314,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -73380,7 +74513,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -73604,7 +74738,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -73791,7 +74926,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "finance.book-stock-unanswered"
+              "finance.book-stock-unanswered",
+              "kernel.recovery-hold"
             ]
           },
           "404": {

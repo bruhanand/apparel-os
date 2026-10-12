@@ -82,6 +82,8 @@ describe('the kernel codes (code-house-rules 12.3, 12.4, 12.5, 12.6)', () => {
       'kernel.failed': 'failed',
       'kernel.outcome-unknown': 'failed',
       'kernel.cross-site-request': 'invalid',
+      'kernel.recovery-hold': 'unavailable',
+      'kernel.outside-outcome-unreconciled': 'refused',
     });
   });
 

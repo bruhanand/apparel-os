@@ -1,4 +1,4 @@
-import type { BackupStore, S3Bucket } from '../../../kernel/index.js';
+import { STORED_AT_METADATA, type BackupStore, type S3Bucket } from '../../../kernel/index.js';
 
 // The file-store copy of an application backup (backup-and-restore 3.3, 10.2; PRD-IMP-002, POL-18.02): run after
 // every database snapshot is taken, so a copy holds every object the snapshots' records name, because an object is
@@ -42,7 +42,15 @@ export async function copyOrganisationFiles(input: {
       continue;
     }
     const object = await input.fileStore.getWithLength(key);
-    const written = await input.backupStore.putOnce(name, object.body, object.length);
+    // When the object was stored, kept beside its copy, so a restore can say when an object with no record was
+    // stored (4.5): the time the file store wrote it, or the one an earlier copy kept (S1-F14-T03).
+    const storedAt = object.metadata[STORED_AT_METADATA] ?? object.lastModified?.toISOString();
+    const written = await input.backupStore.putOnce(
+      name,
+      object.body,
+      object.length,
+      storedAt === undefined ? undefined : { [STORED_AT_METADATA]: storedAt },
+    );
     if (written === 'written') copied += 1;
     else alreadyThere += 1;
   }

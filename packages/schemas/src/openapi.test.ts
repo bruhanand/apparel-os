@@ -82,6 +82,8 @@ describe('the OpenAPI document (code-house-rules 12.2)', () => {
     });
     expect(responses['400']?.['x-error-codes']).toEqual(['kernel.idempotency-key-required', 'kernel.invalid-request']);
     expect(responses['500']?.['x-error-codes']).toEqual(['kernel.failed', 'kernel.outcome-unknown']);
-    expect(Object.keys(responses).sort()).toEqual(['200', '400', '409', '500', '503']);
+    // 403: a command refused while a restored Organisation is held (backup-and-restore 4.3; S1-F14-T03).
+    expect(responses['403']?.['x-error-codes']).toEqual(['kernel.recovery-hold']);
+    expect(Object.keys(responses).sort()).toEqual(['200', '400', '403', '409', '500', '503']);
   });
 });

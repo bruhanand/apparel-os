@@ -56,6 +56,7 @@ export type NumberingReason =
   | 'series-not-paused'
   | 'series-exhausted'
   | 'document-numbered-elsewhere'
+  | 'series-not-paused-after-restore'
   | 'financial-year-invalid'
   | 'financial-year-label-taken'
   | 'financial-year-overlaps';

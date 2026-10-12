@@ -5,8 +5,12 @@ import {
   type PolicyRecordOrigin,
   type PolicySignatureDraft,
   type PolicyValidationDraft,
+  type RecoveryValidationDraft,
+  type RecoveryReopeningDraft,
+  type SeriesReconciliationDraft,
   type SettingOrigin,
 } from '@apparel-os/schemas';
+import { reconcileSeries, recordRecoveryValidation, recoveryStatus, reopenAfterRestore } from './commands/recovery.js';
 import { CommandDefect, type CommandRefusal, type Composition, type TransactionContext } from '../../kernel/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import {
@@ -151,6 +155,27 @@ export interface ConfigurationInterface {
     context: TransactionContext,
     place: { readonly siteId: string; readonly businessUnitId?: string | undefined },
   ): ReturnType<typeof grantedActivities>;
+  /** Reconcile a series after a restore, through `numbering` (backup-and-restore 4.3, 5.3; GC9-8). */
+  reconcileSeriesAfterRestore(
+    context: TransactionContext,
+    by: Recorder,
+    seriesId: string,
+    draft: SeriesReconciliationDraft,
+  ): ReturnType<typeof reconcileSeries>;
+  /** Record the Operations or the Accounts validation of the held Organisation (4.3; POL-18.03). */
+  recordRecoveryValidation(
+    context: TransactionContext,
+    by: Recorder,
+    draft: RecoveryValidationDraft,
+  ): ReturnType<typeof recordRecoveryValidation>;
+  /** Reopen the held Organisation (4.3). */
+  reopenAfterRestore(
+    context: TransactionContext,
+    by: Recorder,
+    draft: RecoveryReopeningDraft,
+  ): ReturnType<typeof reopenAfterRestore>;
+  /** Recovery status for the operations view (4.2 step 8; PRD-SEC-013). */
+  recoveryStatus(context: TransactionContext): ReturnType<typeof recoveryStatus>;
 }
 
 /** The next action an unavailable operation names: open Setup › Policy readiness (design-language 10.17). */
@@ -309,5 +334,26 @@ export class Configuration implements ConfigurationInterface {
     place: { readonly siteId: string; readonly businessUnitId?: string | undefined },
   ) {
     return grantedActivities(context, place);
+  }
+
+  reconcileSeriesAfterRestore(
+    context: TransactionContext,
+    by: Recorder,
+    seriesId: string,
+    draft: SeriesReconciliationDraft,
+  ) {
+    return reconcileSeries(context, this.dependencies.audit, by, seriesId, draft);
+  }
+
+  recordRecoveryValidation(context: TransactionContext, by: Recorder, draft: RecoveryValidationDraft) {
+    return recordRecoveryValidation(context, this.dependencies.audit, by, draft);
+  }
+
+  reopenAfterRestore(context: TransactionContext, by: Recorder, draft: RecoveryReopeningDraft) {
+    return reopenAfterRestore(context, this.dependencies.audit, by, draft);
+  }
+
+  recoveryStatus(context: TransactionContext) {
+    return recoveryStatus(context);
   }
 }

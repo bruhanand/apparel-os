@@ -114,6 +114,7 @@ describe('defineRoute (code-house-rules 12.1, 12.2)', () => {
       'kernel.idempotency-key-reused',
       'kernel.invalid-request',
       'kernel.outcome-unknown',
+      'kernel.recovery-hold',
       'kernel.request-in-progress',
       'kernel.secret-not-comparable',
       'kernel.stale-version',

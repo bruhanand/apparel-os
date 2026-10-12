@@ -102,6 +102,12 @@ export const kernelCodes = declareCodes({
   'kernel.outcome-unknown': 'failed',
   // A command whose Origin is not the app's own: a write from another site (code-house-rules 12.1; RR-245).
   'kernel.cross-site-request': 'invalid',
+  // A command refused while the Organisation is held after a restore, until it is reopened; `missing` names the hold
+  // (backup-and-restore 4.3; POL-18.03; S1-F14-T03).
+  'kernel.recovery-hold': 'unavailable',
+  // A delivery to an outside system of an event recorded at or before the recovery point, kept undelivered until its
+  // outcome is reconciled with that system (backup-and-restore 4.5; PRD-INT-006).
+  'kernel.outside-outcome-unreconciled': 'refused',
 });
 
 /**
@@ -300,6 +306,18 @@ export const configurationCodes = declareCodes({
   'configuration.origin-not-allowed': 'refused',
   'configuration.validator-entered-values': 'refused',
   'configuration.no-values-to-validate': 'refused',
+  // The recovery commands of a restored Organisation (backup-and-restore 4.3, 5.3; GC9-8; S1-F14-T03):
+  // - `configuration.not-held`: the Organisation is not held after a restore, so there is nothing to validate or reopen.
+  // - `configuration.restore-check-failed`: a check of the restore failed; the Organisation stays held (5.1), and
+  //   `missing` names each failed check.
+  // - `configuration.validations-missing`: reopening needs the Operations and the Accounts validations of this restore;
+  //   `missing` names each one not recorded.
+  // - `configuration.series-not-reconciled`: reopening needs every series the restore paused reconciled; `missing`
+  //   names each one waiting.
+  'configuration.not-held': 'refused',
+  'configuration.restore-check-failed': 'refused',
+  'configuration.validations-missing': 'refused',
+  'configuration.series-not-reconciled': 'refused',
 });
 
 /**
@@ -741,6 +759,9 @@ export const numberingCodes = declareCodes({
   'numbering.series-not-paused': 'refused',
   'numbering.series-exhausted': 'refused',
   'numbering.document-numbered-elsewhere': 'refused',
+  // Reconcile after a restore (numbering-and-audit 3.6, 3.7; backup-and-restore 5.3; S1-F14-T03): the series is not
+  // waiting for a reconciliation after a restore.
+  'numbering.series-not-paused-after-restore': 'refused',
 });
 
 /**

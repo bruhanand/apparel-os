@@ -10,6 +10,7 @@ import { correlationIdOf, newCorrelationId } from '../command-runner/correlation
 import { IdempotencyConflict } from '../idempotency/idempotency-errors.js';
 import { LOGGER } from '../logging/logging.module.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
+import { RECOVERY_HOLD_CODE, RecoveryHoldRefused } from '../operations/recovery-hold.js';
 import { ApiRefusal, type RefusalBody } from './api-refusal.js';
 import type { HttpRequest, HttpResponse } from './http-types.js';
 
@@ -45,6 +46,9 @@ export class ErrorEnvelopeFilter implements ExceptionFilter {
     if (exception instanceof CommandTimedOut) return { kind: 'timed-out', code: 'kernel.timed-out' };
     if (exception instanceof CommandOutcomeUnknown) return { kind: 'failed', code: 'kernel.outcome-unknown' };
     if (exception instanceof CommandCancelled) return { kind: 'failed', code: 'kernel.failed' };
+    if (exception instanceof RecoveryHoldRefused) {
+      return { kind: 'unavailable', code: RECOVERY_HOLD_CODE, missing: [{ kind: 'recovery-hold' }] };
+    }
     if (exception instanceof HttpException && exception.getStatus() === 404) {
       return { kind: 'not-found', code: 'kernel.not-found' };
     }

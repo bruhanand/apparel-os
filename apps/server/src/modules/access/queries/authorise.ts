@@ -1,6 +1,6 @@
 import type { FieldClass, MissingItem, PermissionAction, RecordTypeDeclaration } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
-import { scopeCoversMove, type AssignmentInForce, type RecordFacts } from '../domain/scope.js';
+import { scopeCoversMove, type AssignmentInForce, type RecordFacts, type StoredPermission } from '../domain/scope.js';
 import { assignmentsInForce } from './assignments.js';
 
 /** A restricted field class an action reads or writes (access-and-approvals 6). */
@@ -255,4 +255,62 @@ export async function restrictFields(
     else masked.push(fieldClass);
   }
   return { granted, masked };
+}
+
+/**
+ * The reader check a restore makes of every attachment (backup-and-restore 5.1 "Attachments", 4.2 step 7; PRD-SEC-005,
+ * PRD-ACP-019; S1-F14-T03): Authorise's own rule for viewing the attached record, put to two synthetic readers held
+ * only in memory, never written to the restored database. The authorised one holds view on the record type with
+ * all-members scope and every restricted class the attachment carries, and must be allowed; the outsider holds view on
+ * it with a scope covering another place than the record's, or another legal entity or brand where the type carries no
+ * place, or, for a type that carries no scope fact, no view on it, and must be refused. A record type the registry does
+ * not declare is read by no one, so its attachment fails the check.
+ */
+export function syntheticReaderCheck(
+  registry: ReadonlyMap<string, RecordTypeDeclaration>,
+  record: { readonly recordType: string; readonly facts: RecordFacts; readonly fieldClasses: readonly FieldClass[] },
+): { readonly authorisedAllowed: boolean; readonly outsiderRefused: boolean } {
+  const declaration = registry.get(record.recordType);
+  const request = {
+    actorId: 'synthetic-reader',
+    action: 'view' as const,
+    recordType: record.recordType,
+    fieldClasses: record.fieldClasses.map((fieldClass) => ({ fieldClass, use: 'view' as const })),
+  };
+  if (declaration?.actions.includes('view') !== true) return { authorisedAllowed: false, outsiderRefused: true };
+  const permissions: StoredPermission[] = [
+    { kind: 'action', recordType: record.recordType, action: 'view' },
+    ...record.fieldClasses.map((fieldClass) => ({ kind: 'field-class' as const, fieldClass, fieldAccess: 'view' })),
+  ];
+  const all = { kind: 'all' } as const;
+  const elsewhere = '00000000-0000-7000-8000-000000000000';
+  const reader = (scope: AssignmentInForce['scope']): Granting => ({
+    kind: 'granting',
+    declaration,
+    assignments: [{ assignmentId: 'synthetic', actorId: request.actorId, roleId: 'synthetic', scope, permissions }],
+  });
+  const authorised = authoriseFacts(
+    reader({ kind: 'dimensions', legalEntity: all, place: all, brand: all }),
+    request,
+    record.facts,
+    undefined,
+  );
+  const declared = declaration.scopeFacts;
+  const outsiderScope: AssignmentInForce['scope'] | undefined = declared.place
+    ? {
+        kind: 'dimensions',
+        legalEntity: all,
+        place: { kind: 'selected', members: [{ type: 'site', id: elsewhere }] },
+        brand: all,
+      }
+    : declared.legalEntity
+      ? { kind: 'dimensions', legalEntity: { kind: 'selected', members: [elsewhere] }, place: all, brand: all }
+      : declared.brand
+        ? { kind: 'dimensions', legalEntity: all, place: all, brand: { kind: 'selected', members: [elsewhere] } }
+        : undefined;
+  const outsider =
+    outsiderScope === undefined
+      ? ({ kind: 'refused' } as const)
+      : authoriseFacts(reader(outsiderScope), request, record.facts, undefined);
+  return { authorisedAllowed: authorised.kind === 'allowed', outsiderRefused: outsider.kind === 'refused' };
 }

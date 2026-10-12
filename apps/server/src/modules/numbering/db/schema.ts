@@ -64,13 +64,23 @@ export const allocation = numbering.table('allocation', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** What happened to a series (3.7). */
+/**
+ * What happened to a series (3.7), and after a restore its pause and its reconciliation with their restore, evidence,
+ * highest numbers, next number before and after and reason (3.6; migration 0071).
+ */
 export const seriesEvent = numbering.table('series_event', {
   id: uuid('id').primaryKey(),
   seriesId: uuid('series_id').notNull(),
   event: text('event').notNull(),
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  restoreId: uuid('restore_id'),
+  evidence: text('evidence'),
+  evidenceHighest: bigint('evidence_highest', { mode: 'number' }),
+  restoredHighest: bigint('restored_highest', { mode: 'number' }),
+  nextSequenceBefore: bigint('next_sequence_before', { mode: 'number' }),
+  nextSequenceAfter: bigint('next_sequence_after', { mode: 'number' }),
+  reason: text('reason'),
 });
 
 /** A half-open range of business dates, `[first, after last)`, in PostgreSQL's text form. */

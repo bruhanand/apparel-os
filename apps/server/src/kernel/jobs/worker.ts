@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { and, asc, eq, gte, notExists, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, notExists, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { fromDrizzle, type JobResult, type PgBoss } from 'pg-boss';
 import { CommandDefect } from '../command-runner/command-errors.js';
 import type { CommandRequest, CommandRunner } from '../command-runner/command-runner.js';
@@ -20,6 +20,7 @@ import {
   type JobKindDefinition,
   type JobRegistry,
 } from './registry.js';
+import { isRecoveryHeld } from '../operations/recovery-hold.js';
 import { retryRuleOf } from './retry-rule.js';
 import type { RetrySettings, WorkerSettings } from './worker-settings.js';
 
@@ -174,6 +175,10 @@ export class Worker {
           }
           const payload = consumer.event.payload.safeParse(event.payload);
           if (!payload.success) throw new CommandDefect(`The payload of event ${event.id} does not match its schema`);
+          if (consumer.reaches === 'outside-system' && (await restoredEvent(context, event.id))) {
+            // A delivery job restored with its event: never delivered again until reconciled (4.5; PRD-INT-006).
+            return refusal({ kind: 'refused', code: 'kernel.outside-outcome-unreconciled', missing: [] });
+          }
           const outcome = await consumer.handle(
             context,
             { ...event, payload: payload.data },
@@ -253,6 +258,10 @@ export class Worker {
     if (this.stopped) return;
     for (const organisation of await this.dependencies.router.listOrganisations()) {
       if (this.served.has(organisation.organisationCode)) continue;
+      // A restored Organisation held until it reopens is not served: no job runs and nothing is delivered, so a
+      // delivery made after the recovery point is not made again before its outcome is known (backup-and-restore 4.3,
+      // 4.5). It is served at the first pass after it reopens.
+      if (await this.held(organisation)) continue;
       const boss = await startJobQueue(organisation, this.dependencies.logger, SERVICE);
       try {
         for (const queue of [OUTBOX_DELIVERY_QUEUE, ...this.dependencies.registry.jobKinds.map((kind) => kind.name)]) {
@@ -317,8 +326,23 @@ export class Worker {
     });
   }
 
+  /** Whether the Organisation is held after a restore (backup-and-restore 4.3): read on its own no-actor path (6.3). */
+  private held(organisation: RoutedOrganisation): Promise<boolean> {
+    return this.dependencies.runner.read(
+      {
+        commandName: 'kernel.read-recovery-hold',
+        organisation,
+        correlationId: newCorrelationId(),
+        actor: { kind: 'no-actor', path: 'recovery-hold' },
+      },
+      (context) => isRecoveryHeld(context.tx),
+    );
+  }
+
   private async dispatch(served: Served): Promise<void> {
     const { organisation } = served;
+    // Nothing is dispatched while held (4.3); an Organisation held after it was first served waits here.
+    if (await this.held(organisation)) return;
     const actorId = await this.authenticate(organisation, OUTBOX_PROCESSOR_IDENTITY);
     if (actorId === undefined) {
       this.log(
@@ -609,11 +633,32 @@ async function pendingEvents(
               and(eq(outboxDispatch.outboxEventId, outboxEvent.id), eq(outboxDispatch.outboxConsumerId, consumerId)),
             ),
         ),
+        consumer.reaches === 'outside-system' ? notRestored(outboxEvent.recordedAt) : undefined,
       ),
     )
     .orderBy(asc(outboxEvent.id))
     .limit(DISPATCH_BATCH);
   return rows.map((row) => row.id);
+}
+
+/**
+ * An event recorded after every recovery point the Organisation was restored to (backup-and-restore 4.5): only such an
+ * event is handed to, or delivered by, a consumer that reaches an outside system. One recorded at or before a recovery
+ * point stays undelivered until its outcome is reconciled with that system (PRD-INT-006, PRD-INT-007); how an outcome
+ * is reconciled arrives with the first such consumer (stage 4, 5).
+ */
+function notRestored(recordedAt: SQLWrapper): SQL {
+  return sql`not exists (select 1 from kernel.recovery_event r
+                          where r.kind = 'restored' and ${recordedAt} <= r.recovery_point)`;
+}
+
+/** Whether the event was recorded at or before a recovery point the Organisation was restored to (4.5). */
+async function restoredEvent(context: TransactionContext, eventId: string): Promise<boolean> {
+  const rows = await context.tx
+    .select({ id: outboxEvent.id })
+    .from(outboxEvent)
+    .where(and(eq(outboxEvent.id, eventId), notRestored(outboxEvent.recordedAt)));
+  return rows.length === 0;
 }
 
 /**

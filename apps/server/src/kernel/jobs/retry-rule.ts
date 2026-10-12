@@ -5,6 +5,7 @@ import {
   sqlStateOf,
 } from '../command-runner/command-errors.js';
 import { IdempotencyConflict } from '../idempotency/idempotency-errors.js';
+import { RecoveryHoldRefused } from '../operations/recovery-hold.js';
 import { StaleAuthority } from './contracts.js';
 
 /**
@@ -30,6 +31,8 @@ const ENDED_CONNECTION = /^Connection terminated|^Client has encountered a conne
 export function retryRuleOf(error: unknown): RetryRule {
   if (error instanceof CommandTimedOut || error instanceof CommandCancelled) return 'retry';
   if (error instanceof CommandOutcomeUnknown || error instanceof StaleAuthority) return 'retry';
+  // Held after a restore: the step runs once the Organisation reopens (backup-and-restore 4.3).
+  if (error instanceof RecoveryHoldRefused) return 'retry';
   if (error instanceof IdempotencyConflict) return error.code === 'kernel.request-in-progress' ? 'retry' : 'defect';
   const sqlState = sqlStateOf(error);
   if (sqlState !== undefined && TRANSIENT_SQLSTATE.test(sqlState)) return 'retry';

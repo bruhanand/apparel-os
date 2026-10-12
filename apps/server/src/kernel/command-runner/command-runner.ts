@@ -29,6 +29,7 @@ import {
   type LockTarget,
 } from './lock-helper.js';
 import type { EventDefinition, PublishedEvent } from '../outbox/event-definition.js';
+import { isRecoveryHeld, RecoveryHoldRefused, runsWhileHeld } from '../operations/recovery-hold.js';
 import { writeOutboxEvent } from '../outbox/outbox-writer.js';
 import type { ActorSetting, BusinessDate, Transaction, TransactionContext } from './transaction-context.js';
 
@@ -147,6 +148,11 @@ export class CommandRunner {
                 if (today.kind === 'set') {
                   await tx.execute(sql`select set_config('aos.business_date', ${today.date}, true)`);
                 }
+              }
+              // The recovery hold of a restored Organisation (backup-and-restore 4.3; POL-18.03): every command but
+              // those that run while held is refused, naming the hold, before it does anything.
+              if (!readOnly && !runsWhileHeld(request.commandName) && (await isRecoveryHeld(tx))) {
+                throw new RecoveryHoldRefused(request.commandName);
               }
               let result: T;
               try {

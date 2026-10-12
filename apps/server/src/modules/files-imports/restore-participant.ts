@@ -7,7 +7,8 @@ import * as filesImportsTables from './db/schema.js';
  * PRD-ACP-019): the totals of its tables, the records others refer to (attachments, receipts, stored files, import
  * batches), the object key of every stored file, which the backup must hold (3.2 step 7), the key versions its files
  * and receipts name (2.3), and that every attachment's record resolves through the participant that answers for its
- * type. Opening each file and attachment after a restore is S1-F14-T03's.
+ * type. Opening each file and attachment after a restore is
+ * its after-restore check, restore-check.ts (S1-F14-T03).
  */
 export const filesImportsRestoreParticipant: RestoreParticipant = {
   unit: 'files-imports',

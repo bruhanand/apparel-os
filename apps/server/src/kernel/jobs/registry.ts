@@ -45,6 +45,14 @@ export interface ConsumerDefinition<Payload extends Record<string, unknown> = Re
   readonly serviceIdentity: string;
   /** The action its steps need, authorised in each step and again before a redelivery is answered (RR-273; CH-14). */
   readonly authorises: JobAuthority;
+  /**
+   * Whether it delivers to a system outside the Organisation, such as Tally, GST, a bank or messaging. After a restore
+   * such a consumer is never handed an event recorded at or before the recovery point, nor delivers one, until its
+   * outcome is reconciled with that system, since it may already have reached it (backup-and-restore 4.5;
+   * PRD-INT-006, PRD-INT-007). Left out, it reaches a module inside, whose consumers are idempotent (PRD-INT-008).
+   * No consumer reaches outside in stage 1.
+   */
+  readonly reaches?: 'inside' | 'outside-system';
   /** Handles one delivery in its step's transaction; the tools are the worker's, as a job kind's are. */
   readonly handle: (
     context: TransactionContext,

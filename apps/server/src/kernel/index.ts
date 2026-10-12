@@ -183,18 +183,68 @@ export { systemClock } from './time/clock.js';
 export type { Clock } from './time/clock.js';
 export { timezoneNotConfigured } from './time/organisation-timezone.js';
 export type { OrganisationTimezoneSource, TimezoneSetting } from './time/organisation-timezone.js';
-export { RestoreRegistry, tablesOf, tableTotals } from './operations/restore-contract.js';
+export {
+  RESTORE_IDENTITY,
+  RestoreRegistry,
+  restoreIdentityAuthorities,
+  storedAfterRecoveryPoint,
+  tablesOf,
+  tableTotals,
+} from './operations/restore-contract.js';
 export type {
   CheckResult,
   ControlTotal,
   KeyVersionUse,
   ParticipantContext,
   ParticipantTotals,
+  RecordedResult,
+  RecoveryGap,
   ReferencedRecord,
+  RestoreCheckStep,
+  RestoreCommandStep,
+  RestoredObject,
+  RestoredObjects,
   RestoreParticipant,
+  RestoreRun,
+  RestoreStep,
   SealFact,
   TypedReference,
 } from './operations/restore-contract.js';
+export { isRecoveryHeld, RECOVERY_HOLD_CODE, RecoveryHoldRefused, runsWhileHeld } from './operations/recovery-hold.js';
+export {
+  latestRestoreOf,
+  liftRecoveryHold,
+  recoveryEventsOf,
+  recoveryHoldLockTarget,
+  recoveryHoldOf,
+} from './operations/recovery.js';
+export type { RecoveryEventRead, RecoveryHoldState } from './operations/recovery.js';
+export { keepDrillRecord, restoreBackup, RestoreRefused } from './operations/restore.js';
+export { refreshDrillRecord } from './operations/drill-record-refresh.js';
+export type {
+  DrillRecordRefreshOptions,
+  DrillRecordRefreshOutcome,
+  OrganisationRecoveryFacts,
+} from './operations/drill-record-refresh.js';
+export type {
+  RestoreBackupStore,
+  RestoredOrganisation,
+  RestoreFileStore,
+  RestoreOptions,
+  RestoreOutcome,
+} from './operations/restore.js';
+export { DRILL_RECORD_FORMAT, drillRecordNames, drillRecordText, measuredTimes } from './operations/drill-record.js';
+export type {
+  DrillCheck,
+  DrillGap,
+  DrillKeyVersion,
+  DrillOrganisation,
+  DrillPurpose,
+  DrillReconciliation,
+  DrillRecord,
+  DrillStep,
+  DrillValidation,
+} from './operations/drill-record.js';
 export { kernelRestoreParticipant } from './operations/kernel-participant.js';
 export {
   BACKUP_PUBLIC_KEY_VARIABLE,
@@ -204,10 +254,10 @@ export {
   BackupSealer,
 } from './operations/backup-cipher.js';
 export type { SealCheck } from './operations/backup-cipher.js';
-export { BACKUP_STORE_VARIABLES, bucketSettingsFrom, S3Bucket } from './operations/backup-store.js';
-export type { BackupStore, BucketSettings } from './operations/backup-store.js';
-export { DumpToolFailed, pgDumpTool, runDump } from './operations/dump-tool.js';
-export type { DumpTarget, DumpTool } from './operations/dump-tool.js';
+export { BACKUP_STORE_VARIABLES, bucketSettingsFrom, S3Bucket, STORED_AT_METADATA } from './operations/backup-store.js';
+export type { BackupStore, BucketSettings, StoredObjectRead } from './operations/backup-store.js';
+export { DumpToolFailed, pgDumpTool, pgRestoreTool, runDump, runRestore } from './operations/dump-tool.js';
+export type { DumpTarget, DumpTool, RestoreTool } from './operations/dump-tool.js';
 export { BackupRefused, MANIFEST_FORMAT, takeBackup } from './operations/backup.js';
 export type {
   BackupFailure,
