@@ -1,7 +1,8 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE, type DocumentPreview } from '@apparel-os/schemas';
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
+  insertInParts,
   LOCK_STEP,
   lockTable,
   type CommandOutcome,
@@ -11,7 +12,7 @@ import {
   type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { controlTotal, importBatch, layout, mapping, rowIssue, stagedRow } from '../db/schema.js';
+import { controlTotal, importBatch, layout, mapping, rowIssue } from '../db/schema.js';
 import { checkedForPublishing, validationReport, type Report } from '../domain/report.js';
 import {
   BATCH_NOT_FOUND,
@@ -21,11 +22,13 @@ import {
   identityOf,
   previewOf,
   scopeColumnsOf,
+  stagedRowsOf,
   versionsOf,
   visibleBatch,
   type BatchRow,
   type ImportActor,
   type ImportDependencies,
+  type LoadedDocument,
 } from './import-common.js';
 
 // Validate and preview (imports-and-opening-data 3.1 steps 6 and 7, 3.2, 8, 13.1, 13.2; PRD-IMP-005, PRD-IMP-007,
@@ -131,12 +134,15 @@ export function staleBatchVersion(batch: BatchRow, versionId: string): CommandOu
 
 const NOTHING: DocumentPreview = { kind: 'would-create', records: [] };
 
-/** The validation report of a batch's current version, worked out without writing (8). */
+/**
+ * The validation report of a batch's current version, worked out without writing (8), with the batch's documents it
+ * was worked out from. The staged rows are read once, in parts (`stagedRowsOf`), and the documents built from them.
+ */
 export async function reportOf(
   deps: ImportDependencies,
   context: TransactionContext,
   batch: BatchRow,
-): Promise<Report> {
+): Promise<{ report: Report; documents: LoadedDocument[] }> {
   const handler = handlerOf(deps.handlers, batch);
   const versions = await versionsOf(context, batch);
   const [names] = await context.tx
@@ -144,12 +150,8 @@ export async function reportOf(
     .from(layout)
     .innerJoin(mapping, eq(mapping.id, versions.mapping.mappingId))
     .where(eq(layout.id, versions.layout.layoutId));
-  const documents = await documentsOf(context, batch);
-  const rows = await context.tx
-    .select()
-    .from(stagedRow)
-    .where(eq(stagedRow.batchId, batch.id))
-    .orderBy(asc(stagedRow.sheet), asc(stagedRow.rowNumber));
+  const rows = await stagedRowsOf(context, batch.id, 'all');
+  const documents = await documentsOf(context, batch, rows);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const reportDocuments = [];
   for (const document of documents.filter((each) => each.state === 'Staged')) {
@@ -176,7 +178,7 @@ export async function reportOf(
       })),
     });
   }
-  return validationReport({
+  const report = validationReport({
     layoutName: `${names?.layoutCode ?? ''} v${String(versions.layout.version)}`,
     mappingName: `${names?.mappingCode ?? ''} v${String(versions.mapping.version)}`,
     target: batch.target,
@@ -196,6 +198,7 @@ export async function reportOf(
         cells: row.cells,
       })),
   });
+  return { report, documents };
 }
 
 export async function validateImport(
@@ -224,11 +227,13 @@ export async function validateImport(
             causedBySecret: false,
           };
         }
-        const report = await reportOf(deps, context, batch);
+        const { report, documents } = await reportOf(deps, context, batch);
         const columns = scopeColumnsOf(batch);
         const kept = { batchId: batch.id, batchVersionId: batch.versionId, runAt: context.startedAt, ...columns };
         if (report.issues.length > 0) {
-          await context.tx.insert(rowIssue).values(
+          await insertInParts(
+            context,
+            rowIssue,
             report.issues.map((issue) => ({
               id: uuidv7(),
               ...kept,
@@ -250,7 +255,9 @@ export async function validateImport(
           );
         }
         if (report.controlTotals.length > 0) {
-          await context.tx.insert(controlTotal).values(
+          await insertInParts(
+            context,
+            controlTotal,
             report.controlTotals.map((total) => ({
               id: uuidv7(),
               ...kept,
@@ -267,7 +274,7 @@ export async function validateImport(
         const duplicates = new Set(
           report.issues.filter((issue) => issue.class === 'duplicate').map((issue) => issue.documentId),
         );
-        const anyDocument = (await documentsOf(context, batch)).some(
+        const anyDocument = documents.some(
           (each) => each.state === 'Staged' && !each.excluded && !duplicates.has(each.documentId),
         );
         const state = blocking === 0 && anyDocument ? 'Validated' : 'Staged';

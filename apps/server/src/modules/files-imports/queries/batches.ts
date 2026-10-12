@@ -39,6 +39,7 @@ import {
   parsedOrDefect,
   previewOf,
   reviewOf,
+  stagedRowsOf,
   versionsOf,
   visibleBatch,
   type ImportDependencies,
@@ -125,11 +126,7 @@ export async function readBatch(
     .from(importDocument)
     .where(eq(importDocument.batchId, batch.id))
     .orderBy(...documentsInFileOrder);
-  const rows = await context.tx
-    .select()
-    .from(stagedRow)
-    .where(eq(stagedRow.batchId, batch.id))
-    .orderBy(asc(stagedRow.sheet), asc(stagedRow.rowNumber));
+  const rows = await stagedRowsOf(context, batch.id, 'all');
   const header = rows.find((row) => row.role === 'header');
   const plan = maskPlan({
     layoutConfirmed: versions.layout.state === 'Confirmed',

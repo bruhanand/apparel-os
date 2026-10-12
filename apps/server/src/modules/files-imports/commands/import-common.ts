@@ -7,10 +7,11 @@ import {
   type LayoutStructure,
   type StagedValueView,
 } from '@apparel-os/schemas';
-import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   CommandDefect,
+  MAX_ROWS_PER_STATEMENT,
   scopeFactsOf,
   type CommandRefusal,
   type CommandRunner,
@@ -187,7 +188,6 @@ export interface LoadedDocument extends HandlerDocument {
   readonly revisesDocumentId: string | null;
 }
 
-/** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
 /**
  * A batch's documents in the order of its file: by the sheet and row number of each document's first data row, the
  * order its rows are staged and read in (imports-and-opening-data 3.2, 13.3; PRD-IMP-012). Their UUIDv7 identifiers
@@ -201,9 +201,102 @@ export const documentsInFileOrder: readonly SQL[] = [
   asc(importDocument.id),
 ];
 
+export type StagedRow = typeof stagedRow.$inferSelect;
+
+/**
+ * Runs `read` on each part of a batch's staged rows, in the file's order (9.3, 9.4; fix/large-batch-validate). A batch
+ * may hold as many rows as the row cap at intake lets in, and every row is checked by row-level security as it is
+ * read, so one statement over them all grows with the batch and passes the runtime role's statement limit
+ * (code-house-rules 5.1, CH-3). Each part is bounded whatever the batch's size and whatever plan PostgreSQL chooses,
+ * which for a batch just staged it chooses without statistics of its rows (a part read as "the next 1,000 rows in
+ * order" was planned as a sort of every row after it): the first row at or after a position is found on the batch's
+ * unique (sheet, row number) index, then the part is that sheet's rows from its row number up to
+ * `MAX_ROWS_PER_STATEMENT` row numbers on, which `read` names by `partOf`, so no statement touches more rows than that.
+ * The parts are read in one transaction, so they see one snapshot.
+ */
+async function inStagedParts(
+  context: TransactionContext,
+  batchId: string,
+  read: (partOf: SQL | undefined) => Promise<void>,
+): Promise<void> {
+  let at: { readonly sheet: string; readonly rowNumber: number } | undefined;
+  for (;;) {
+    const from = at;
+    const [first] = await context.tx
+      .select({ sheet: stagedRow.sheet, rowNumber: stagedRow.rowNumber })
+      .from(stagedRow)
+      .where(
+        and(
+          eq(stagedRow.batchId, batchId),
+          from === undefined
+            ? undefined
+            : sql`(${stagedRow.sheet}, ${stagedRow.rowNumber}) >= (${from.sheet}, ${from.rowNumber})`,
+        ),
+      )
+      .orderBy(asc(stagedRow.sheet), asc(stagedRow.rowNumber))
+      .limit(1);
+    if (first === undefined) return;
+    const end = first.rowNumber + MAX_ROWS_PER_STATEMENT;
+    await read(
+      and(
+        eq(stagedRow.batchId, batchId),
+        eq(stagedRow.sheet, first.sheet),
+        gte(stagedRow.rowNumber, first.rowNumber),
+        lt(stagedRow.rowNumber, end),
+      ),
+    );
+    at = { sheet: first.sheet, rowNumber: end };
+  }
+}
+
+/** A batch's staged rows in the file's order, every row or its data rows only, read in parts (`inStagedParts`). */
+export async function stagedRowsOf(
+  context: TransactionContext,
+  batchId: string,
+  which: 'all' | 'data',
+): Promise<StagedRow[]> {
+  const rows: StagedRow[] = [];
+  await inStagedParts(context, batchId, async (partOf) => {
+    rows.push(
+      ...(await context.tx
+        .select()
+        .from(stagedRow)
+        .where(and(partOf, which === 'data' ? eq(stagedRow.role, 'data') : undefined))
+        .orderBy(asc(stagedRow.rowNumber))),
+    );
+  });
+  return rows;
+}
+
+/** How many data rows each document of a batch holds, and how many rows it holds in all, counted in parts. */
+export async function stagedRowCounts(
+  context: TransactionContext,
+  batchId: string,
+): Promise<{ readonly all: number; readonly byDocument: ReadonlyMap<string, number> }> {
+  let all = 0;
+  const byDocument = new Map<string, number>();
+  await inStagedParts(context, batchId, async (partOf) => {
+    const counts = await context.tx
+      .select({ documentId: stagedRow.documentId, rows: sql<number>`count(*)::int` })
+      .from(stagedRow)
+      .where(partOf)
+      .groupBy(stagedRow.documentId);
+    for (const { documentId, rows } of counts) {
+      all += rows;
+      if (documentId !== null) byDocument.set(documentId, (byDocument.get(documentId) ?? 0) + rows);
+    }
+  });
+  return { all, byDocument };
+}
+
+/**
+ * A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. A
+ * caller that has read the batch's staged rows already passes them, so they are not read again.
+ */
 export async function documentsOf(
   context: TransactionContext,
   batch: Pick<BatchRow, 'id' | 'kind' | 'legalEntityId' | 'siteId' | 'storeId' | 'businessUnitId'>,
+  dataRows?: readonly StagedRow[],
 ): Promise<LoadedDocument[]> {
   const place = scopeFactsOf({
     legalEntityId: batch.legalEntityId,
@@ -217,12 +310,16 @@ export async function documentsOf(
     .from(importDocument)
     .where(eq(importDocument.batchId, batchId))
     .orderBy(...documentsInFileOrder);
-  const rows = await context.tx
-    .select()
-    .from(stagedRow)
-    .where(and(eq(stagedRow.batchId, batchId), eq(stagedRow.role, 'data')))
-    .orderBy(asc(stagedRow.sheet), asc(stagedRow.rowNumber));
+  const rows = dataRows ?? (await stagedRowsOf(context, batchId, 'data'));
   const entries = latestEntries(await entriesOf(context, batchId));
+  // Each document's rows, in the file's order, found by one pass over the rows rather than one per document.
+  const rowsOf = new Map<string, StagedRow[]>();
+  for (const row of rows) {
+    if (row.role !== 'data' || row.documentId === null) continue;
+    const list = rowsOf.get(row.documentId) ?? [];
+    list.push(row);
+    rowsOf.set(row.documentId, list);
+  }
   return documents.map((document) => ({
     documentId: document.id,
     reference: document.reference,
@@ -231,14 +328,12 @@ export async function documentsOf(
     state: document.state,
     excluded: document.excluded,
     revisesDocumentId: document.revisesDocumentId,
-    rows: rows
-      .filter((row) => row.documentId === document.id)
-      .map((row) => ({
-        stagedRowId: row.id,
-        sheet: row.sheet,
-        rowNumber: row.rowNumber,
-        values: effectiveValues(row.values, entries.get(row.id)),
-      })),
+    rows: (rowsOf.get(document.id) ?? []).map((row) => ({
+      stagedRowId: row.id,
+      sheet: row.sheet,
+      rowNumber: row.rowNumber,
+      values: effectiveValues(row.values, entries.get(row.id)),
+    })),
   }));
 }
 
