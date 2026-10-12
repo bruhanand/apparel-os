@@ -172,6 +172,10 @@ export const productProposal = merchandise.table('product_proposal', {
   decidedByUserId: uuid('decided_by_user_id'),
   decidedAt: at('decided_at'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** For a proposal published from an import (migration 0062; S1-F06-T01): its batch, document and staged rows. */
+  importBatchId: uuid('import_batch_id'),
+  importDocumentId: uuid('import_document_id'),
+  importStagedRowIds: uuid('import_staged_row_ids').array(),
 });
 
 export const style = merchandise.table('style', {

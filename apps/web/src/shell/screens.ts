@@ -83,6 +83,9 @@ export const screens = {
     need: view('merchandise.party'),
   },
   'setup.agreement': { section: 'setup', path: '/setup/agreement', need: view('merchandise.agreement') },
+  // File intake and saved layouts: the import upload, the stored file, a batch with its staged rows, Publish
+  // (imports-and-opening-data 16; ui-blueprint Setup; S1-F06-T01).
+  'setup.file-intake': { section: 'setup', path: '/setup/file-intake', need: view('files_imports.import_batch') },
   // Exception rules: owner, due time and escalation per type and Site (access-and-approvals 12.2, 14; S1-F08-T02).
   'setup.exception-rules': {
     section: 'setup',
@@ -103,6 +106,8 @@ export const screens = {
   'money.internal-ledger': { section: 'money', path: '/money/internal-ledger', need: view('finance.journal') },
   // Money › Period close (books-and-posting 4.2, 4.3, 14; ui-blueprint Money; S1-F09-T03).
   'money.period-close': { section: 'money', path: '/money/period-close', need: view('finance.financial_period') },
+  // Devices, tills and bill series (ui-blueprint Setup; offline-counter 3.2, 4.4, 12.1; S1-F12-T01).
+  'setup.devices': { section: 'setup', path: '/setup/devices', need: view('pos.billing_device') },
   // Site opening and closure › Readiness (ui-blueprint Setup; module-map 4.16; S1-F04-T02).
   'setup.site-opening': {
     section: 'setup',
@@ -134,6 +139,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
       'setup.organisation-structure',
       'setup.geography',
       'setup.exception-rules',
+      // The Admin's Setup includes devices (ui-blueprint "Menus by persona"; S1-F12-T01).
+      'setup.devices',
       'setup.operations',
       'setup.policy-readiness',
     ],

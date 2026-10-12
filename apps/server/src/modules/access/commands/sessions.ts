@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { Secret } from '@apparel-os/schemas';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   CommandDefect,
   type CommandOutcome,
@@ -11,7 +11,7 @@ import {
   type ReplayAuthorisation,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { AuditActor, AuditInterface } from '../../audit/index.js';
+import type { AuditActor, AuditInterface, AuditScope } from '../../audit/index.js';
 import { session, signInFailure } from '../db/schema.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
@@ -27,20 +27,23 @@ export interface Revoker {
   readonly roleAssignmentId?: string;
   readonly approvalDecisionId?: string;
   readonly networkAddress?: string;
-}
-
-/** Whose sessions: one of the user's, or every one (access-and-approvals 3.3). */
-export interface RevocationTarget {
-  readonly userId: string;
-  readonly sessionId?: string;
+  /** The place the sessions' audit records are read in, where the revocation has one: a device's Store (4.1). */
+  readonly scope?: AuditScope;
 }
 
 /**
- * Revokes sessions of a user (access-and-approvals 3.3; PRD-SEC-008): one, or every one In force or Locked. Revoked is
- * final, and the next request of a revoked session is not signed in. Joins the caller's transaction, so a credential
- * reset or the decision that disables a user (2.1, 4.3) revokes in its own transaction. Writes an audit record per
- * session, one `session-revoked` access record and one `access.session-revoked` event; nothing when no session was
- * there to revoke. Answers the sessions revoked, or undefined when the one named is not the user's or is over.
+ * Whose sessions: one of a user's, every one of a user's (access-and-approvals 3.3), or every one bound to a device, of
+ * whichever user, when the device is revoked or retired (offline-counter 3.5; S1-F12-T02).
+ */
+export type RevocationTarget = { readonly userId: string; readonly sessionId?: string } | { readonly deviceId: string };
+
+/**
+ * Revokes sessions (access-and-approvals 3.3; offline-counter 3.5; PRD-SEC-008): one of a user's, every one of a
+ * user's, or every one bound to a device, In force or Locked. Revoked is final, and the next request of a revoked
+ * session is not signed in. Joins the caller's transaction, so a credential reset, the decision that disables a user
+ * (2.1, 4.3) or a device's end revokes in its own transaction. Writes an audit record per session, with the state it
+ * had, and per user one `session-revoked` access record and one `access.session-revoked` event; nothing when no session
+ * was there to revoke. Answers the sessions revoked, or undefined when the one named is not the user's or is over.
  */
 export async function revokeSessions(
   context: TransactionContext,
@@ -49,43 +52,56 @@ export async function revokeSessions(
   target: RevocationTarget,
   operation: string,
 ): Promise<string[] | undefined> {
-  const revoked = await context.tx
-    .update(session)
-    .set({ state: 'Revoked' })
-    .where(
-      and(
-        eq(session.appUserId, target.userId),
-        inArray(session.state, ['In force', 'Locked']),
-        target.sessionId === undefined ? undefined : eq(session.id, target.sessionId),
-      ),
-    )
-    .returning({ id: session.id });
-  const sessionIds = revoked.map((row) => row.id).sort();
-  if (target.sessionId !== undefined && sessionIds.length === 0) return undefined;
-  if (sessionIds.length === 0) return sessionIds;
-  for (const sessionId of sessionIds) {
+  const whose =
+    'deviceId' in target
+      ? sql`device_id = ${target.deviceId}`
+      : target.sessionId === undefined
+        ? sql`app_user_id = ${target.userId}`
+        : sql`app_user_id = ${target.userId} and id = ${target.sessionId}`;
+  // Each session's state as it is when this transaction holds its row: the locking read waits for a change in progress
+  // and answers the row as committed, and the update changes only the rows that read holds, so the audit record's
+  // before-value is the state the session really had, In force or Locked. These are the row locks the update always
+  // took; no other row is locked here.
+  const revoked = await context.tx.execute<{ id: string; userId: string; before: string }>(sql`
+    with prior as (
+      select id, app_user_id, state from access.session
+       where ${whose} and state in ('In force', 'Locked')
+       order by id
+       for no key update)
+    update access.session s set state = 'Revoked'
+      from prior
+     where s.id = prior.id
+    returning s.id as "id", prior.app_user_id as "userId", prior.state as "before"`);
+  const rows = [...revoked.rows].sort((a, b) => a.id.localeCompare(b.id));
+  if (!('deviceId' in target) && target.sessionId !== undefined && rows.length === 0) return undefined;
+  const byUser = new Map<string, string[]>();
+  for (const row of rows) {
+    byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row.id]);
     await audit.record(context, {
       actor: by.actor,
       ...(by.roleAssignmentId === undefined ? {} : { roleAssignmentId: by.roleAssignmentId }),
       ...(by.approvalDecisionId === undefined ? {} : { approval: { decisionId: by.approvalDecisionId } }),
-      record: { module: 'access', type: 'session', id: sessionId },
+      ...(by.scope === undefined ? {} : { scope: by.scope }),
+      record: { module: 'access', type: 'session', id: row.id },
       operation,
-      changes: [{ kind: 'value', field: 'state', before: 'In force or Locked', after: 'Revoked' }],
+      changes: [{ kind: 'value', field: 'state', before: row.before, after: 'Revoked' }],
       source: { kind: by.actor.kind === 'service-identity' ? 'operator-command' : 'screen' },
     });
   }
-  await audit.recordAccess(context, {
-    kind: 'session-revoked',
-    outcome: 'succeeded',
-    userId: target.userId,
-    ...(by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress }),
-  });
-  await context.publish(sessionRevoked, {
-    subject: { module: 'access', recordType: 'user', recordId: target.userId },
-    scope: { subjectUserId: target.userId },
-    payload: { userId: target.userId, sessionIds },
-  });
-  return sessionIds;
+  for (const [userId, sessionIds] of [...byUser].sort(([a], [b]) => a.localeCompare(b))) {
+    await audit.recordAccess(context, {
+      kind: 'session-revoked',
+      outcome: 'succeeded',
+      userId,
+      ...(by.networkAddress === undefined ? {} : { networkAddress: by.networkAddress }),
+    });
+    await context.publish(sessionRevoked, {
+      subject: { module: 'access', recordType: 'user', recordId: userId },
+      scope: { subjectUserId: userId },
+      payload: { userId, sessionIds },
+    });
+  }
+  return rows.map((row) => row.id);
 }
 
 export interface SessionsDependencies {

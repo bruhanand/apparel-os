@@ -430,7 +430,7 @@ export const transitValue = stock.table('transit_value', {
   transitRef: uuid('transit_ref').notNull(),
   bookId: uuid('book_id').notNull(),
   skuId: uuid('sku_id').notNull(),
-  /** Its book's formula when it was made, which its valuations are worked out under (0056; 7.8). */
+  /** Its book's formula when it was made, which its valuations are worked out under (0067; 7.8). */
   formula: text('formula').$type<Formula>().notNull(),
   quantity: integer('quantity').notNull(),
   valuePaise: bigint('value_paise', { mode: 'number' }).$type<Paise>().notNull(),
@@ -445,11 +445,11 @@ export const transitValue = stock.table('transit_value', {
 export const valuation = stock.table('valuation', {
   id: uuid('id').primaryKey(),
   movementId: uuid('movement_id').notNull(),
-  /** The one origin whose units the value belongs to; none for a moving-average item of several (0056; 13.10). */
+  /** The one origin whose units the value belongs to; none for a moving-average item of several (0067; 13.10). */
   receiptOriginId: uuid('receipt_origin_id'),
   costPoolId: uuid('cost_pool_id'),
   transitValueId: uuid('transit_value_id'),
-  /** The formula it was worked out under: its pool's, or its transit value's (0056). */
+  /** The formula it was worked out under: its pool's, or its transit value's (0067). */
   formula: text('formula').$type<Formula>().notNull(),
   sequence: bigint('sequence', { mode: 'number' }),
   quantityDelta: integer('quantity_delta').notNull(),

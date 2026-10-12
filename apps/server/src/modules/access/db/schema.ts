@@ -87,6 +87,41 @@ export const session = access.table('session', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
+/**
+ * A device (access-and-approvals 2.4, 13.1; offline-counter 3.1, 3.2; migration 0055): its code, unique without regard
+ * to letter case, its label, and once enrolled its public key, an ECDSA P-256 JWK set once and never changed.
+ */
+export const device = access.table('device', {
+  id: uuid('id').primaryKey(),
+  code: text('code').notNull(),
+  label: text('label').notNull(),
+  publicKey: jsonb('public_key').$type<Record<string, unknown>>(),
+  enrolledAt: at('enrolled_at'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A device's states in order: Setting up, Active, then Revoked or Ended, both final (offline-counter 3.1). */
+export const deviceVersion = access.table('device_version', {
+  id: uuid('id').primaryKey(),
+  deviceId: uuid('device_id').notNull(),
+  version: integer('version').notNull(),
+  state: text('state').$type<'Setting up' | 'Active' | 'Revoked' | 'Ended'>().notNull(),
+  occurredAt: at('occurred_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A one-time challenge a device signs (offline-counter 3.2, 3.3), used at most once. */
+export const deviceChallenge = access.table('device_challenge', {
+  id: uuid('id').primaryKey(),
+  challenge: text('challenge').notNull(),
+  issuedAt: at('issued_at').notNull(),
+  networkAddress: inet('network_address').notNull(),
+  usedAt: at('used_at'),
+  usedFor: text('used_for').$type<'enrolment' | 'sign-in'>(),
+  deviceId: uuid('device_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
 /** Service identities (access-and-approvals 2.3; PRD-SEC-018). Never changed or deleted. */
 export const serviceIdentity = access.table('service_identity', {
   id: uuid('id').primaryKey(),

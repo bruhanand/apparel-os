@@ -66,6 +66,30 @@ function* streamsOf(text: string): Generator<{ start: number; end: number }> {
 
 type PdfOutcome = IntakeOutcome | undefined;
 
+/**
+ * The stream filters the check can look behind (RR-434; S1-F06-T02): zlib, which it inflates, and the image filters,
+ * whose streams hold image data and never PDF objects. A stream behind any other filter (LZW, ASCII85, ASCIIHex,
+ * run-length, Crypt) could hide a name the check cannot see, so the file is refused rather than trusted.
+ */
+const OPENED_FILTERS = new Set([
+  'FlateDecode',
+  'Fl',
+  'DCTDecode',
+  'DCT',
+  'JPXDecode',
+  'CCITTFaxDecode',
+  'CCF',
+  'JBIG2Decode',
+]);
+
+function hasUnopenedFilter(text: string): boolean {
+  for (const found of text.matchAll(/\/Filter\s*(\[[^\]]*\]|\/[^\s/<>[\]()]+)/g)) {
+    const names = [...(found[1] ?? '').matchAll(/\/([^\s/<>[\]()]+)/g)].map((name) => name[1] ?? '');
+    if (names.some((name) => !OPENED_FILTERS.has(name))) return true;
+  }
+  return false;
+}
+
 function checkPdf(bytes: Buffer): PdfOutcome {
   const text = bytes.toString('latin1');
   if (/\/Encrypt(?![A-Za-z0-9_.#-])/.test(withNameEscapesUndone(text))) {
@@ -73,6 +97,8 @@ function checkPdf(bytes: Buffer): PdfOutcome {
   }
   const direct = activeNameIn(text);
   if (direct !== undefined) return activeContent(direct);
+  if (hasUnopenedFilter(withNameEscapesUndone(text)))
+    return { kind: 'refused', code: 'files-imports.pdf-not-inspectable' };
   let budget = INFLATE_BUDGET_BYTES;
   for (const { start, end } of streamsOf(text)) {
     let inflated: Buffer;

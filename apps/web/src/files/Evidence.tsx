@@ -30,6 +30,7 @@ const MEDIA_TYPE: Readonly<Record<AttachedFile['format'], string>> = {
   pdf: 'application/pdf',
   jpeg: 'image/jpeg',
   png: 'image/png',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 /** A size in bytes as the screens write it (design-language 8). */

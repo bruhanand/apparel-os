@@ -19,7 +19,7 @@ import { runAddServiceIdentities, runSetupStep, type ServiceIdentityGrant } from
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { configurationTimezoneSource } from '../src/modules/configuration/index.js';
-import { exceptionsConsumers, exceptionsJobKinds } from '../src/modules/exceptions/index.js';
+import { EXCEPTIONS_IDENTITY } from '../src/modules/exceptions/index.js';
 import { serviceIdentitiesOf } from '../src/setup-organisation.js';
 import { jobRegistry } from '../src/worker.module.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
@@ -48,12 +48,12 @@ afterAll(async () => {
 /** The registry as it stood before S1-F08-T02 added the exceptions job and consumer. */
 const olderRegistry: JobRegistry = {
   events: jobRegistry.events,
-  consumers: jobRegistry.consumers.filter((each) => !exceptionsConsumers.includes(each)),
-  jobKinds: jobRegistry.jobKinds.filter((each) => !exceptionsJobKinds.includes(each)),
+  consumers: jobRegistry.consumers.filter((each) => each.serviceIdentity !== EXCEPTIONS_IDENTITY),
+  jobKinds: jobRegistry.jobKinds.filter((each) => each.serviceIdentity !== EXCEPTIONS_IDENTITY),
 };
 
 const escalateOverdue: JobKindDefinition = (() => {
-  const found = exceptionsJobKinds.find((each) => each.name === 'exceptions.escalate-overdue');
+  const found = jobRegistry.jobKinds.find((each) => each.name === 'exceptions.escalate-overdue');
   if (found === undefined) throw new Error('The registry has no exceptions.escalate-overdue');
   return found;
 })();

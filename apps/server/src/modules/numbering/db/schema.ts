@@ -1,4 +1,4 @@
-import { bigint, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, customType, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the numbering module's tables (code-house-rules 3.4). They mirror the reviewed migration
 // (migrations/organisation/0033) and never create or change a table; an integration test compares each with the
@@ -72,3 +72,27 @@ export const seriesEvent = numbering.table('series_event', {
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
+
+/** A half-open range of business dates, `[first, after last)`, in PostgreSQL's text form. */
+const daterange = customType<{ data: string; driverData: string }>({ dataType: () => 'daterange' });
+
+/** A financial year, its label and dates (numbering-and-audit 3.3; migration 0057). Never overlapping. */
+export const financialYear = numbering.table('financial_year', {
+  id: uuid('id').primaryKey(),
+  label: text('label').notNull(),
+  dates: daterange('dates').notNull(),
+  origin: text('origin').$type<SettingOrigin>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The format a declared kind's new series take; the latest row of a kind is in force (3.5; migration 0057). */
+export const kindFormat = numbering.table('kind_format', {
+  id: uuid('id').primaryKey(),
+  kind: text('kind').notNull(),
+  numberFormatId: uuid('number_format_id').notNull(),
+  origin: text('origin').$type<SettingOrigin>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** Where a setting's value came from (code-house-rules 12.14). */
+type SettingOrigin = 'kdps' | 'test-setup' | 'synthetic';

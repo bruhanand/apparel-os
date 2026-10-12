@@ -258,7 +258,7 @@ export async function lockPlan(
 }
 
 /**
- * The pool admission of 14.3 (code-house-rules 6.2; migration 0057): names, for the rest of the transaction, each pool
+ * The pool admission of 14.3 (code-house-rules 6.2; migration 0068): names, for the rest of the transaction, each pool
  * the request's items reach, so a poster whose scope covers the items' places but not the pool, such as a seller of
  * one Store under a book or Site pool (SL-25 (c), (e)), can lock, value and write it. Called only once steps 2 to 5
  * have locked every row of the items' own places, which row-level security admits only within the actor's scope. It

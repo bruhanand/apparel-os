@@ -22,7 +22,7 @@ import { connect, databaseUrl } from './support/postgres.js';
 const SYNTHETIC_POOL_MAX = 4;
 /**
  * A singleton queue made by this test only, as the migration role, to test pg-boss's singleton policy on its own; the
- * posting queue itself, `kernel.posting-delivery` (migration 0058, S1-F10-T07), with its groups, is tested last.
+ * posting queue itself, `kernel.posting-delivery` (migration 0069, S1-F10-T07), with its groups, is tested last.
  */
 const SINGLETON_QUEUE = 'kernel.synthetic-posting';
 const STANDARD_QUEUE = 'kernel.outbox-delivery';

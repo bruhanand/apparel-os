@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { errorCodes, permissionRegistry } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { families, stateFamilies, stateIds } from '../components/states';
-import { englishIndia } from './en-IN';
+import { englishIndia } from './catalogue';
 import { isMessageId, t } from './catalogue';
 
 const SRC = join(import.meta.dirname, '..');

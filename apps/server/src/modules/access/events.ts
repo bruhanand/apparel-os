@@ -16,6 +16,17 @@ export const sessionRevoked = defineEvent({
 });
 
 /**
+ * A device was revoked, reported lost (offline-counter 3.5, 12.2; access-and-approvals 2.4; PRD-SEC-008, DEC-092;
+ * S1-F12-T02): its sessions are revoked in the same transaction, and the owning module (`pos`, for a billing device)
+ * makes its own changes there too, rather than waiting for this event. Published for other consumers; identifiers only.
+ */
+export const deviceRevoked = defineEvent({
+  type: 'access.device-revoked',
+  version: 1,
+  payload: z.strictObject({ deviceId: z.uuid() }),
+});
+
+/**
  * An approval request opened (access-and-approvals 9.1; module-map section 8): `inbox` publishes it to My work, for
  * whoever is eligible when My work is read (11.1, 11.2). Identifiers only; the subject is the request, its version
  * the document version it binds to.

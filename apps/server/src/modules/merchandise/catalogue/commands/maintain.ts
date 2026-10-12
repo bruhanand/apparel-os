@@ -184,7 +184,14 @@ export class CataloguePreparation {
         : []),
       ...parents.map((id): LockTarget => ({ table: lockTable('merchandise', change.kind), id, mode: 'shared' })),
     ];
-    if (targets.length > 0) {
+    // A command that calls this inside its own, such as publishing an import, locks these rows with its own at step 1
+    // in one call, as the module offers them (code-house-rules 8.2 "Rows of other modules"); held in a mode at least as
+    // strong, they are not locked again (S1-F06-T04).
+    const unheld = targets.filter((each) => {
+      const held = context.heldLock(each.table, each.id);
+      return held?.step !== LOCK_STEP.document || (each.mode === 'exclusive' && held.mode !== 'exclusive');
+    });
+    if (unheld.length > 0) {
       const locked = await context.lock(LOCK_STEP.document, targets);
       if (target.kind === 'existing' && locked.missing.some((each) => each.id === recordId)) {
         return refused('not-found', 'merchandise.record-not-found', [recordItem(change.kind, recordId)]);

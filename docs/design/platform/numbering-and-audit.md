@@ -55,6 +55,7 @@ It fixes no number format, no financial-year date and no retention period. Label
 - A kind that restarts each financial year has one series per year. The year is the one the document's business date falls in, under the Organisation's timezone (`PRD-MOD-009`). **Design choice** of using the business date.
 - The financial year's start and end are an Organisation setting with no default. OPEN (GC5-1).
 - The owning module defines the next year's series before the year starts, so the first document of a year never waits. An offline counter receives its next series while online, since series are allocated online (GC-8; `PRD-OFF-002`). **Design choice.**
+- **As built** (`S1-F12-T01`). **Design choice**; no date is chosen. `numbering` keeps the financial years (`numbering.financial_year`, migration 0057): a label, which a yearly series names, and the first and last day as a range of business dates, with the value's origin (code-house-rules 12.14); two years never overlap or share a label (`numbering.financial-year-overlaps`, `numbering.financial-year-label-taken`, `numbering.financial-year-invalid`). Define a financial year and read the one a date falls in, or not set, are operations of its interface. It also keeps the format a declared kind's new series take (`numbering.kind_format`; 3.5): the latest one set for a kind is in force, and a series keeps its format version for life. Both are set through the interface by the owning module's authorised change; no route or screen sets them yet (offline-counter 4.3a). A read of every series under scope keys named, live or closed, serves the devices screen (3.7 "Read series state").
 
 ### 3.4 Bill series per billing device
 
@@ -88,6 +89,8 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 | Pause, release, close | The owning module | Changes the state; close is final | The series is closed |
 | Record used numbers | `pos`, on an offline upload | Keeps numbers the device already used as allocations | A number is already recorded with another document |
 | Read series state | `pos` | The financial year and the next sequence number (`PRD-OFF-012`) | — |
+| Pause every series after a restore | `numbering`'s own restore participant, under the restore's internal service identity; no owning module calls it | Pauses every open series and writes a series event for each (3.6; [backup-and-restore.md](backup-and-restore.md) 5.3) | — |
+| Reconcile after a restore | `configuration`'s recovery command, the one call it makes to `numbering` (module-map 4.4; GC9-8, product owner, 10 Oct 2026) | Sets the next number past the higher of the evidence and the highest restored allocation, records the skip and its reason as the series event "reconciled after a restore", and releases the series (`POL-18.04`, `PRD-ACP-019`; backup-and-restore 5.3) | The series is not paused after a restore; the evidence is missing. It never lowers a next number |
 
 ## 4. The audit record
 
@@ -154,9 +157,10 @@ The operations of module-map 4.6, made concrete, with Pause, release, close and 
 
 The access record logs sign-ins, permission changes and sensitive access (`PRD-SEC-007`):
 
+- a key version put back or copied again after a loss or damage, `key-recovered`: which version (its identifier, never the key), why, how it was found and who gave the kept copy, written by the platform operator's command ([backup-and-restore.md](backup-and-restore.md) 2.4; GC9-18, product owner, 10 Oct 2026);
 - sign-in attempts and their outcome, a test sign-in of `local` and `dev` as its own kind, `demo-sign-in` ([access-and-approvals.md](../access/access-and-approvals.md) 3.4; DEC-121); sign-out; a session locked, ended or revoked;
 - enrolment and reset of the second factor; password changes and resets, including the platform operator's recovery of a first user's password or authenticator, with how the person's identity was verified ([access-and-approvals.md](../access/access-and-approvals.md) 3.2; DEC-116);
-- device registration and revocation;
+- device registration, enrolment (`device-enrolled`, offline-counter 3.6; `S1-F12-T01`), revocation and retirement (`device-ended`, offline-counter 3.7; `S1-F12-T02`);
 - permission changes, each pointing to its audit record ([access-and-approvals.md](../access/access-and-approvals.md) 9.11);
 - sensitive access: showing an encrypted field unmasked, and an export that includes any restricted field. **Design choice.**
 

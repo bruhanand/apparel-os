@@ -25,7 +25,19 @@ export type { Decider, EffectOptions, Prepared, Preparer } from './commands/acce
 export type { FreshCode, FreshCodeRefusal } from './commands/fresh-code.js';
 export { freshCodeRefusal, takeFreshCode } from './commands/fresh-code.js';
 export type { Revoker, RevocationTarget } from './commands/sessions.js';
-export { approvalDecided, approvalRequested, assignmentChanged, sessionRevoked, standInChanged } from './events.js';
+export type { DeviceActor, DeviceOutcome, DeviceRead } from './commands/devices.js';
+export {
+  approvalDecided,
+  approvalRequested,
+  assignmentChanged,
+  deviceRevoked,
+  sessionRevoked,
+  standInChanged,
+} from './events.js';
+// A device's state, for the devices readiness check that site-lifecycle runs (offline-counter 11; S1-F12-T02).
+export { devicesById } from './commands/devices.js';
+// The device row as a lock target, for `pos` defining a device's series with no instance of access (S1-F12 review).
+export { deviceLockTarget } from './commands/devices.js';
 export type { BatchInput, BatchOutcome } from './commands/bulk.js';
 export type { BatchItemInput } from './commands/decide.js';
 export { accessApprovalRules } from './domain/approval-rules.js';
@@ -45,6 +57,7 @@ export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } f
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { WithdrawnDocument } from './commands/withdraw-request.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
+export type { HeldNeed } from './commands/authority.js';
 export type { RecordFacts, UncoveredFact } from './domain/scope.js';
 export { SCOPE_MEMBERS } from './contracts/scope-members.js';
 export { DECISION_EVIDENCE, DECISION_EVIDENCE_KIND } from './contracts/decision-evidence.js';

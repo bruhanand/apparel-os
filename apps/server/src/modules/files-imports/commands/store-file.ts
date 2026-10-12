@@ -1,9 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { StoredFileAnswer, StoreFileRequest } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import {
   ApiRefusal,
   CommandDefect,
+  type CommandRunner,
+  type DeploymentEnvironment,
   type CommandOutcome,
   type IdempotencyHelper,
   type IdempotentAnswer,
@@ -16,19 +18,31 @@ import {
 } from '../../../kernel/index.js';
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
-import { fileReceipt, storedFile } from '../db/schema.js';
+import { layoutStructureSchema } from '@apparel-os/schemas';
+import { fileReceipt, importBatch, layout, layoutVersion, storedFile } from '../db/schema.js';
+import { checkCustomerContact } from '../domain/customer-contact.js';
+import type { Grid } from '../domain/grid.js';
+import type { IntakeCaps } from '../domain/intake-caps.js';
+import { readWorkbook } from '../readers/workbook-read.js';
+import { parsedOrDefect } from './import-common.js';
 import { contentHashOf, objectKeyOf, openFile, sealFile } from '../domain/file-seal.js';
 import { sealReceiptText } from '../domain/receipt-seal.js';
-import { checkEvidenceFile } from '../domain/intake-checks.js';
+import { checkEvidenceFile, type IntakeOutcome } from '../domain/intake-checks.js';
+import { checkImportFile, type ImportFileOutcome } from '../domain/workbook-format.js';
 import { fileStoreNotConfigured, type FileStore, type FileStoreHandle } from '../file-store/file-store.js';
 
 export interface StoreFileDependencies {
+  readonly runner: CommandRunner;
   readonly helper: IdempotencyHelper;
   readonly access: AccessInterface;
   readonly audit: AuditInterface;
   readonly keys: OrganisationKeys;
   readonly fileStore: FileStoreHandle;
   readonly logger: StructuredLogger;
+  /** The environment's name: on `kdps-test` intake refuses customer-contact columns (section 11; S1-F06-T02). */
+  readonly environment: DeploymentEnvironment;
+  /** The caps at intake (9.3; S1-F06-T02). */
+  readonly caps: IntakeCaps;
 }
 
 export interface StoreFileInput {
@@ -39,6 +53,16 @@ export interface StoreFileInput {
   readonly key: string;
   readonly content: RequestContent;
   readonly body: StoreFileRequest;
+  /**
+   * What the file is handed in for: evidence, kept as PDF, JPEG or PNG (S1-F06-T05); or an import, XLSX only, whose
+   * answer names the batches that read the same bytes before (S1-F06-T01; 9.2, 7.2).
+   */
+  readonly purpose: 'evidence' | 'import';
+}
+
+/** The type check of each purpose, on the bytes in memory, before anything is stored (9.2, 9.3). */
+function checkFor(purpose: StoreFileInput['purpose'], bytes: Buffer): IntakeOutcome | ImportFileOutcome {
+  return purpose === 'import' ? checkImportFile(bytes) : checkEvidenceFile(bytes);
 }
 
 const COMMAND = 'files-imports.store-file';
@@ -64,7 +88,7 @@ export async function storeFile(
   const { organisationId } = input.organisation;
   if (organisationId === undefined) throw new CommandDefect('The Organisation was routed without its identifier');
   const bytes = Buffer.from(input.body.contentBase64, 'base64');
-  const checked = checkEvidenceFile(bytes);
+  const checked = checkFor(input.purpose, bytes);
   if (checked.kind === 'refused') {
     throw new ApiRefusal({
       kind: 'refused',
@@ -72,6 +96,7 @@ export async function storeFile(
       ...(checked.missing === undefined ? {} : { missing: [...checked.missing] }),
     });
   }
+  if (input.purpose === 'import') await checkWorkbook(deps, input, bytes);
   const contentHash = contentHashOf(bytes);
   const sealed = sealFile(deps.keys, input.organisation.organisationCode, contentHash, bytes);
   const objectKey = objectKeyOf(organisationId, contentHash);
@@ -137,6 +162,61 @@ export async function storeFile(
     );
   }
   return answer;
+}
+
+/**
+ * The workbook's own checks at intake, on the bytes in memory, before anything is stored (9.3; S1-F06-T02): the
+ * uploaded-size cap; then, in the reader's worker, the safety checks, the expanded-size cap, the read under the row,
+ * memory and time caps; and on `kdps-test` the customer-contact check of section 11 (RR-203). The first failure is the
+ * reason, and a refused file is neither stored nor truncated.
+ */
+async function checkWorkbook(deps: StoreFileDependencies, input: StoreFileInput, bytes: Buffer): Promise<void> {
+  if (bytes.length > deps.caps.maxUploadBytes) {
+    throw new ApiRefusal({
+      kind: 'refused',
+      code: 'files-imports.over-intake-cap',
+      missing: [{ kind: 'intake-cap', cap: 'uploaded-size', limit: String(deps.caps.maxUploadBytes) }],
+    });
+  }
+  const read = await readWorkbook(bytes, deps.caps);
+  if (read.kind === 'refused') throw new ApiRefusal({ kind: 'refused', code: read.code, missing: [...read.missing] });
+  if (deps.environment.name === 'kdps-test') await checkContactColumns(deps, input, read.grid);
+}
+
+/**
+ * On the test setup, a file with customer-contact columns, or one whose sheets no Confirmed layout version recognises,
+ * is refused before it is stored (section 11; DEC-052; DEC-112 GC6-6; RR-203). The layout versions are read in a
+ * transaction of their own, before the object is written.
+ */
+async function checkContactColumns(deps: StoreFileDependencies, input: StoreFileInput, grid: Grid): Promise<void> {
+  const versions = await deps.runner.read(
+    {
+      commandName: COMMAND,
+      organisation: input.organisation,
+      correlationId: input.correlationId,
+      actor: { kind: 'actor', actorId: input.userId },
+    },
+    async (context) =>
+      context.tx
+        .select({ version: layoutVersion, layout })
+        .from(layoutVersion)
+        .innerJoin(layout, eq(layout.id, layoutVersion.layoutId))
+        .where(eq(layoutVersion.state, 'Confirmed')),
+  );
+  const checked = checkCustomerContact(
+    grid,
+    versions.map((row) => ({
+      layoutVersionId: row.version.id,
+      layoutCode: row.layout.code,
+      source: row.layout.source,
+      version: row.version.version,
+      state: row.version.state,
+      structure: parsedOrDefect(layoutStructureSchema, row.version.structure, 'layout version'),
+    })),
+  );
+  if (checked.kind === 'refused') {
+    throw new ApiRefusal({ kind: 'refused', code: checked.code, missing: [...checked.missing] });
+  }
 }
 
 async function checkExisting(
@@ -230,7 +310,7 @@ async function record(
     source: { kind: 'screen' },
     idempotencyKey: input.key,
   });
-  return {
+  const answer = {
     storedFileId,
     receiptId,
     contentHash: file.contentHash,
@@ -238,4 +318,25 @@ async function record(
     format: file.format,
     alreadyStored,
   };
+  if (input.purpose === 'evidence') return answer;
+  return { ...answer, earlierBatches: alreadyStored ? await earlierBatches(context, storedFileId) : [] };
+}
+
+/**
+ * The batches that read the same bytes before, as the reader may see them under row-level security (7.2), oldest
+ * first. Their codes and states only, never the file's content.
+ */
+async function earlierBatches(context: TransactionContext, storedFileId: string): Promise<JsonValue[]> {
+  const rows = await context.tx
+    .select({
+      batchId: importBatch.id,
+      code: importBatch.code,
+      kind: importBatch.kind,
+      target: importBatch.target,
+      state: importBatch.state,
+    })
+    .from(importBatch)
+    .where(eq(importBatch.storedFileId, storedFileId))
+    .orderBy(asc(importBatch.id));
+  return rows.map((row) => ({ ...row }));
 }

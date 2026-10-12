@@ -102,7 +102,7 @@ export interface ValuationEntry {
   readonly movementId: string;
   /**
    * The one origin whose units the value belongs to; none only for a moving-average valuation of units of several
-   * origins, of the kinds migration 0056 names (13.10).
+   * origins, of the kinds migration 0067 names (13.10).
    */
   readonly receiptOriginId: string | null;
   readonly poolId: string | null;

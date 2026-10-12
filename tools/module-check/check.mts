@@ -82,7 +82,8 @@ const SAME_TIER_CALLS: Readonly<Record<string, readonly string[]>> = {
   // Tier 1 (4.3 to 4.10)
   access: ['configuration', 'audit'],
   configuration: ['audit'],
-  'files-imports': ['access', 'configuration', 'audit', 'ai-gateway'],
+  // `numbering` gives import batch codes (4.7; GC9-9; S1-F06-T01).
+  'files-imports': ['access', 'configuration', 'audit', 'numbering', 'ai-gateway'],
   inbox: ['access', 'audit'],
   notifications: ['access', 'configuration', 'audit'],
   'ai-gateway': ['access', 'audit'],

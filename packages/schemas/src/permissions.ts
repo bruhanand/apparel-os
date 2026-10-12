@@ -137,7 +137,30 @@ const inboxRecordTypes = [
  * record it is attached to, authorised on that record's own type and scope facts (section 11), so no permission on
  * the stored file lets anyone read its content.
  */
-const filesImportsRecordTypes = [declare('files_imports.stored_file', ['view', 'create'], NONE)] as const;
+const filesImportsRecordTypes = [
+  declare('files_imports.stored_file', ['view', 'create'], NONE),
+  // An import batch (13.1, 15.1; S1-F06-T01) carries its Site, Store, business unit and legal entity: view reads it
+  // with its staged rows; create starts it, which stages its rows; edit validates and publishes it. Its rows may hold
+  // any restricted class its file holds, every class while its layout is not confirmed (section 11). Approve decides
+  // a batch whose handler requires an approval in `access` bound to the batch version (3.1 step 8, 13.2; S1-F06-T03);
+  // no stage 1 handler does.
+  declareWithFields('files_imports.import_batch', ['view', 'create', 'edit', 'approve'], LEGAL_ENTITY_AND_PLACE, [
+    'salary-and-payroll',
+    'identity-documents',
+    'bank-details',
+    'customer-contact',
+    'cost',
+    'margin',
+    'employee-photos',
+    'location-evidence',
+  ]),
+  // Layouts, mappings and mapping rules (6.1 to 6.4, 14; S1-F06-T03): the Organisation's, holding no data and no scope
+  // fact. Create proposes a version; approve confirms or rejects it, by a different person from its proposer
+  // (PRD-IMP-008, POL-02.07; DEC-112 GC6-4). Who may confirm is the KDPS Owner's to name (RR-197).
+  declare('files_imports.layout', ['view', 'create', 'approve'], NONE),
+  declare('files_imports.mapping', ['view', 'create', 'approve'], NONE),
+  declare('files_imports.mapping_rule', ['view', 'create', 'approve'], NONE),
+] as const;
 
 /** A record type whose fields include restricted field classes (access-and-approvals 4.1, 6). */
 function declareWithFields<const Code extends string>(
@@ -326,6 +349,16 @@ const financeRecordTypes = [
   declare('finance.period_reopening', ['view', 'create', 'approve', 'cancel'], NONE),
 ] as const;
 
+/**
+ * `pos`: billing devices (offline-counter 3.1, 3.2; module-map 4.17; S1-F12-T01). Create registers a device for a
+ * Store and its units; edit enrols it, binding its key in the counter app, a protected action asking a fresh code
+ * (GC8-8, DEC-116). No independent approval: device registration is not among the independently approved actions of
+ * POL-02.07 (3.2). The permission comes only through a role assignment (POL-02.03); the first Admin of the setup step
+ * does not hold it (access-and-approvals 9.11). A device carries its Store's place, so an assignment's place scope
+ * decides where (5.3). Who holds them is KDPS's.
+ */
+const posRecordTypes = [declare('pos.billing_device', ['view', 'create', 'edit'], PLACE)] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -341,6 +374,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...siteLifecycleRecordTypes,
   ...financeTaxRulesRecordTypes,
   ...financeRecordTypes,
+  ...posRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -357,7 +391,8 @@ export type RecordTypeCode =
   | (typeof configurationRecordTypes)[number]['code']
   | (typeof siteLifecycleRecordTypes)[number]['code']
   | (typeof financeTaxRulesRecordTypes)[number]['code']
-  | (typeof financeRecordTypes)[number]['code'];
+  | (typeof financeRecordTypes)[number]['code']
+  | (typeof posRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

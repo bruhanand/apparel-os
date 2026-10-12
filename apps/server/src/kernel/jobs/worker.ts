@@ -26,7 +26,7 @@ import type { RetrySettings, WorkerSettings } from './worker-settings.js';
 /** The queue of outbox deliveries, one job per event and consumer (migration 0009; code-house-rules 12.8). */
 export const OUTBOX_DELIVERY_QUEUE = 'kernel.outbox-delivery';
 /**
- * The queue of a posting consumer's deliveries (migration 0058; stock-ledger 10.6; code-house-rules 12.9): pg-boss's
+ * The queue of a posting consumer's deliveries (migration 0069; stock-ledger 10.6; code-house-rules 12.9): pg-boss's
  * `singleton` policy, the delivery's accounting book as its singleton key, so the deliveries of one book run one at a
  * time however many workers run, and a second waits until the first ends.
  */

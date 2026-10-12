@@ -49,6 +49,11 @@ export interface UnitReadinessFacts {
   readonly stockHeld: boolean;
   /** `merchandise`: the brands its coverage holds in force today (structure-and-masters 3.3). */
   readonly brandsInForce: number;
+  /**
+   * `pos`: what the devices check lacks for the unit today, for selling only (offline-counter section 11): empty when an
+   * Active device of its Store lists it with an Open series for its registration and year.
+   */
+  readonly devices: readonly MissingItem[];
 }
 
 function judged(check: ReadinessCheckCode, missing: MissingItem[]): ReadinessCheck {
@@ -65,7 +70,7 @@ function twoPeople(preparers: readonly string[], approvers: readonly string[]): 
 /**
  * The Site's shared checks: the required policies. An activity no operation declares has nothing whose policy could
  * be checked, so it is not ready and cannot be activated (RR-482; product owner, 10 Oct 2026). The devices check
- * (offline-counter section 11) joins with S1-F12-T02.
+ * (offline-counter section 11) is a unit's, since it asks about the unit's Store, mapping and devices (S1-F12-T02).
  */
 export function judgeSiteReadiness(activity: Activity, facts: SiteReadinessFacts): ReadinessCheck[] {
   const policies: MissingItem[] = facts.operationsDeclared
@@ -105,10 +110,13 @@ export function judgeUnitReadiness(activity: Activity, facts: UnitReadinessFacts
     facts.kind === 'brand-counter'
       ? judged('brand-coverage', facts.brandsInForce > 0 ? [] : [{ kind: 'brand-coverage', businessUnitId: unit }])
       : notNeeded('brand-coverage');
+  // Only selling numbers bills; receiving and movement are tied to no billing device (offline-counter 11; PRD-LIF-001).
+  const devices = activity === 'selling' ? judged('devices', [...facts.devices]) : notNeeded('devices');
   return [
     judged('mappings', mapping),
     judged('locations', locations),
     judged('users-and-access', people),
+    devices,
     judged('site-readiness', site),
     stockPlan,
     brands,

@@ -104,7 +104,7 @@ export interface TransitTarget {
   readonly create: boolean;
   readonly unit: UnitFacts;
   readonly brandId: string;
-  /** Its book's formula, which a new transit value keeps (7.8; 0056). */
+  /** Its book's formula, which a new transit value keeps (7.8; 0067). */
   readonly formula: Formula;
 }
 

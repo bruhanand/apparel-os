@@ -1,6 +1,6 @@
 import { cn } from '@apparel-os/ui';
 import type { ButtonHTMLAttributes } from 'react';
-import { t, type MessageId } from '../messages/catalogue';
+import { t, type MessageId, type MessageParams } from '../messages/catalogue';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 
@@ -24,9 +24,12 @@ export function Button({
   reason,
   className,
   type = 'button',
+  labelParams,
   ...rest
 }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'title'> & {
   label: MessageId;
+  /** The label's named parameters, where its message has any. */
+  labelParams?: MessageParams;
   variant?: ButtonVariant;
   size?: keyof typeof sizes;
   reason?: MessageId;
@@ -44,7 +47,7 @@ export function Button({
       )}
       {...rest}
     >
-      {t(label)}
+      {t(label, labelParams)}
     </button>
   );
 }

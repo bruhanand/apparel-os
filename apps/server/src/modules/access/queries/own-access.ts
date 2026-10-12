@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { effectiveGrant, personaHeld } from '../db/schema.js';
 import { assignmentsInForce } from './assignments.js';
+import { SESSION_LIMITS_SETTING, type SessionKind } from '../domain/sign-in-rules.js';
 import { readSetting } from './settings.js';
 import { userInForce } from './users.js';
 
@@ -27,7 +28,12 @@ export interface OwnAccess {
  * timezone, in which screens show times (PRD-MOD-017; RR-310), and the idle-lock limit in force, from which the screen
  * shows its lock without polling (access-and-approvals 3.3; S1-F01-T30).
  */
-export async function ownAccess(context: TransactionContext, userId: string): Promise<OwnAccess> {
+export async function ownAccess(
+  context: TransactionContext,
+  userId: string,
+  /** A shared POS session reads its own limits (POL-02.18; S1-F12-T01); an office session the office limits. */
+  sessionKind: SessionKind = 'office',
+): Promise<OwnAccess> {
   const today = await context.businessDate();
   if (today.kind === 'not-set') {
     return { personasHeld: [], grants: [], roleAssignmentInForce: false, timezone: null, idleLockSeconds: null };
@@ -53,7 +59,7 @@ export async function ownAccess(context: TransactionContext, userId: string): Pr
     }
   }
   const assignments = await assignmentsInForce(context, today.date, userId);
-  const limits = await readSetting(context, 'access.office-session-limits');
+  const limits = await readSetting(context, SESSION_LIMITS_SETTING[sessionKind]);
   return {
     personasHeld: personas.map((row) => row.persona as PersonaId),
     grants: [...grants.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, grant]) => grant),

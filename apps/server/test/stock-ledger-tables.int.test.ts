@@ -425,7 +425,7 @@ describe('cost pools (stock-ledger 7.1, 14.2)', () => {
     expect(await sqlState(insert(owner, 'valuation', valuation()))).toBe('23505');
     // A pool row names no Store or unit (SL-25 (e)).
     expect(await sqlState(insert(owner, 'valuation', valuation({ sequence: 3, ...AT_STORE_1 })))).toBe('23514');
-    // Its formula is its pool's (migration 0056).
+    // Its formula is its pool's (migration 0067).
     expect(await sqlState(insert(owner, 'valuation', valuation({ sequence: 3, formula: 'fifo' })))).toBe('23503');
   });
 

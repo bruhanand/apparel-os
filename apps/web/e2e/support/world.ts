@@ -189,6 +189,60 @@ export interface SyntheticWorld {
     readonly fitName: string;
   };
   /**
+   * The file intake journey (S1-F06-T01), in the posting maps journey's Organisation: a Booking user who imports the
+   * SYNTHETIC product file the server of the journeys wrote, the saved layout's option as the screen names it, and the
+   * style and SKU codes the file holds.
+   */
+  readonly fileIntake: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly filePath: string;
+    readonly layoutOption: string;
+    readonly styleCode: string;
+    readonly skuCode: string;
+    /** A Booking user of the mapping rule journey, apart from the intake one, so each signs in on its own. */
+    readonly ruleBooking: EnrolledUser;
+    /** A different person who confirms layouts, mappings and mapping rules (S1-F06-T03). */
+    readonly confirmer: EnrolledUser;
+    /** The SYNTHETIC brand code a mapping rule may target, and today as a business date. */
+    readonly brandCode: string;
+    readonly today: string;
+    /** The duplicate journey's own Booking user and two files: one style, then it again with a new one (S1-F06-T04). */
+    readonly duplicate: {
+      readonly booking: EnrolledUser;
+      readonly firstFile: string;
+      readonly secondFile: string;
+      readonly style: string;
+      readonly newStyle: string;
+    };
+    /** A reader scoped to one Store, and the codes of a batch in that Store and of one in another (S1-F06-T04). */
+    readonly outcomes: {
+      readonly reader: EnrolledUser;
+      readonly storeBatchCode: string;
+      readonly otherBatchCode: string;
+    };
+    /**
+     * The intake refusal journey (S1-F06-T02): a Booking user of its own, a SYNTHETIC workbook holding a macro project
+     * and its clean copy.
+     */
+    readonly refusal: {
+      readonly booking: EnrolledUser;
+      readonly macroFilePath: string;
+      readonly cleanFilePath: string;
+    };
+    /**
+     * The masked cost journey (S1-F06-T02): a Booking user not granted the class cost, a SYNTHETIC file of the
+     * Confirmed costed layout, how the screen names that layout, the file's style code and its cost value.
+     */
+    readonly cost: {
+      readonly reader: EnrolledUser;
+      readonly filePath: string;
+      readonly layoutOption: string;
+      readonly styleCode: string;
+      readonly costValue: string;
+    };
+  };
+  /**
    * The bank details journey (S1-F03-T03), in the security settings Organisation: a person who prepares a supplier's
    * bank-detail change, a different person who approves it and shows it, and the SYNTHETIC supplier's code.
    */
@@ -209,6 +263,16 @@ export interface SyntheticWorld {
     readonly validator: EnrolledUser;
     readonly operation: string;
     readonly capability: string;
+  };
+  /** S1-F12-T01: the devices journey's Admin, and how Setup › Devices names the two Stores and their units. */
+  readonly devices: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    /** S1-F12-T02: a second Admin for the lifecycle journey, so the two journeys never share authenticator steps. */
+    readonly lifecycleAdmin: EnrolledUser;
+    readonly storeOption: string;
+    readonly otherStoreOption: string;
+    readonly units: readonly { readonly code: string; readonly name: string; readonly store: number }[];
   };
   /** S1-F04-T02: the readiness journey's Operations user and approver, the approve reason, and the unit's option. */
   readonly readiness: {

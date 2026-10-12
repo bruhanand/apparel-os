@@ -4,9 +4,27 @@ import { changeState } from './commands/change-state.js';
 import { defineFormatVersion, type FormatVersion } from './commands/define-format.js';
 import { defineSeries, type SeriesDefinition } from './commands/define-series.js';
 import { seriesLockTarget } from './commands/lock-target.js';
+import {
+  defineFinancialYear,
+  financialYearOn,
+  kindFormatOf,
+  setKindFormat,
+  type FinancialYearDraft,
+  type FinancialYearRead,
+  type KindFormatRead,
+  type SettingOrigin,
+} from './commands/settings.js';
 import type { FormatPart } from './domain/format.js';
 import { checkKinds, type NumberedKind, type NumberingResult } from './domain/kinds.js';
-import { liveSeries, seriesRow, stateOf, type SeriesKey, type SeriesState } from './queries/series.js';
+import {
+  liveSeries,
+  seriesOfScopePrefix,
+  seriesOfScopes,
+  seriesRow,
+  stateOf,
+  type SeriesKey,
+  type SeriesState,
+} from './queries/series.js';
 
 export interface NumberingDependencies {
   /** The kinds the owning modules declare, handed over by the composition root (module-map section 3, rule 6). */
@@ -40,6 +58,26 @@ export interface NumberingInterface {
   close(context: TransactionContext, seriesId: string): Promise<NumberingResult<SeriesState>>;
   /** Read series state: the financial year and the next sequence number (PRD-OFF-012). */
   seriesState(context: TransactionContext, seriesId: string): Promise<SeriesState | undefined>;
+  /** Define a financial year, its label and dates (3.3; GC5-1): an Organisation setting with no default. */
+  defineFinancialYear(
+    context: TransactionContext,
+    draft: FinancialYearDraft,
+  ): Promise<NumberingResult<{ readonly financialYearId: string }>>;
+  /** The financial year a business date falls in, or not set (3.3; PRD-MOD-009). */
+  financialYearOn(context: TransactionContext, date: string): Promise<FinancialYearRead>;
+  /** Set the format a declared kind's new series take (3.5), such as the bill-number format (V-40, POL-10.07). */
+  setKindFormat(
+    context: TransactionContext,
+    kind: string,
+    formatCode: string,
+    origin: SettingOrigin,
+  ): Promise<NumberingResult<{ readonly kindFormatId: string }>>;
+  /** The format in force for a kind, or not set (3.5). */
+  kindFormatOf(context: TransactionContext, kind: string): Promise<KindFormatRead>;
+  /** Every series of a kind under the scope keys named, live or closed (3.7 "Read series state"). */
+  seriesOfScopes(context: TransactionContext, kind: string, scopeKeys: readonly string[]): Promise<SeriesState[]>;
+  /** Every series of a kind whose scope key starts with the prefix, live or closed (S1-F12-T02). */
+  seriesOfScopePrefix(context: TransactionContext, kind: string, prefix: string): Promise<SeriesState[]>;
 }
 
 export class Numbering implements NumberingInterface {
@@ -84,5 +122,29 @@ export class Numbering implements NumberingInterface {
   async seriesState(context: TransactionContext, seriesId: string) {
     const row = await seriesRow(context, seriesId);
     return row === undefined ? undefined : stateOf(row);
+  }
+
+  defineFinancialYear(context: TransactionContext, draft: FinancialYearDraft) {
+    return defineFinancialYear(context, draft);
+  }
+
+  financialYearOn(context: TransactionContext, date: string) {
+    return financialYearOn(context, date);
+  }
+
+  setKindFormat(context: TransactionContext, kind: string, formatCode: string, origin: SettingOrigin) {
+    return setKindFormat(context, this.kinds, kind, formatCode, origin);
+  }
+
+  kindFormatOf(context: TransactionContext, kind: string) {
+    return kindFormatOf(context, kind);
+  }
+
+  seriesOfScopePrefix(context: TransactionContext, kind: string, prefix: string) {
+    return seriesOfScopePrefix(context, kind, prefix);
+  }
+
+  seriesOfScopes(context: TransactionContext, kind: string, scopeKeys: readonly string[]) {
+    return seriesOfScopes(context, kind, scopeKeys);
   }
 }

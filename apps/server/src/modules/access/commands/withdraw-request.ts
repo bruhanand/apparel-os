@@ -48,19 +48,46 @@ export async function withdrawRequest(
   document: WithdrawnDocument,
   by: { readonly userId: string; readonly roleAssignmentId?: string },
 ): Promise<'withdrawn' | 'not-open'> {
+  const closed = await closeRequest(context, audit, document, by, 'Withdrawn');
+  return closed === 'closed' ? 'withdrawn' : 'not-open';
+}
+
+/**
+ * Supersedes the open request on the document version, under the lock the owning module took through
+ * requestLockTargets, when the owning module changed the document so that version can no longer be decided, such as
+ * an import batch returned to Staged (9.6; imports-and-opening-data 3.2; PRD-ACS-007; S1-F06-T03): its state becomes
+ * Superseded, with its audit record, and `access.approval-decided` says so. Answers `superseded`, or `not-open`.
+ */
+export async function supersedeRequest(
+  context: TransactionContext,
+  audit: AuditInterface,
+  document: WithdrawnDocument,
+  by: { readonly userId: string; readonly roleAssignmentId?: string },
+): Promise<'superseded' | 'not-open'> {
+  const closed = await closeRequest(context, audit, document, by, 'Superseded');
+  return closed === 'closed' ? 'superseded' : 'not-open';
+}
+
+async function closeRequest(
+  context: TransactionContext,
+  audit: AuditInterface,
+  document: WithdrawnDocument,
+  by: { readonly userId: string; readonly roleAssignmentId?: string },
+  state: 'Withdrawn' | 'Superseded',
+): Promise<'closed' | 'not-open'> {
   const [request] = await context.tx.select().from(approvalRequest).where(openRequest(document));
   if (request === undefined) return 'not-open';
   const held = context.heldLock(APPROVAL_REQUEST, request.id);
   if (held?.mode !== 'exclusive') {
-    throw new CommandDefect('A request is withdrawn only under the lock its owning module took at step 1 (8.2)');
+    throw new CommandDefect('A request is closed only under the lock its owning module took at step 1 (8.2)');
   }
-  await context.tx.update(approvalRequest).set({ state: 'Withdrawn' }).where(eq(approvalRequest.id, request.id));
+  await context.tx.update(approvalRequest).set({ state }).where(eq(approvalRequest.id, request.id));
   await audit.record(context, {
     actor: { kind: 'user', id: by.userId },
     ...(by.roleAssignmentId === undefined ? {} : { roleAssignmentId: by.roleAssignmentId }),
     record: { module: 'access', type: 'approval_request', id: request.id, versionId: request.documentVersionId },
-    operation: 'withdraw-approval-request',
-    changes: [{ kind: 'value', field: 'state', before: 'Awaiting approval', after: 'Withdrawn' }],
+    operation: state === 'Withdrawn' ? 'withdraw-approval-request' : 'supersede-approval-request',
+    changes: [{ kind: 'value', field: 'state', before: 'Awaiting approval', after: state }],
     source: { kind: 'screen' },
   });
   await context.publish(approvalDecided, {
@@ -72,12 +99,12 @@ export async function withdrawRequest(
     },
     payload: {
       requestId: request.id,
-      state: 'Withdrawn',
+      state,
       preparerIds: await storedPreparers(context, request.id),
       documentRecordType: request.documentRecordType,
       documentRecordId: request.documentRecordId,
       documentVersionId: request.documentVersionId,
     },
   });
-  return 'withdrawn';
+  return 'closed';
 }

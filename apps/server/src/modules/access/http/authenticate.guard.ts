@@ -31,6 +31,8 @@ export interface SignedInUser {
   readonly networkAddress: string;
   /** For an `action` route, the role assignment Authorise used (access-and-approvals 7.1 step 3). */
   readonly roleAssignmentId?: string;
+  /** The billing device of a shared POS session; absent for an office session (3.3; POL-02.18; S1-F12-T01). */
+  readonly deviceId?: string;
 }
 
 const signedIn = new WeakMap<object, SignedInUser>();
@@ -155,6 +157,7 @@ export class AuthenticateGuard implements CanActivate {
       correlationId,
       networkAddress,
       ...(roleAssignmentId === undefined ? {} : { roleAssignmentId }),
+      ...(found.deviceId === undefined ? {} : { deviceId: found.deviceId }),
     });
     return true;
   }
