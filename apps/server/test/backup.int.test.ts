@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { routes } from '@apparel-os/schemas';
+import { backupStatusSchema, routes } from '@apparel-os/schemas';
 import { ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -65,6 +65,21 @@ async function storeFile(index: number, label: string): Promise<{ storedFileId: 
   });
   expect(response.status).toBe(200);
   return (await response.json()) as { storedFileId: string; receiptId: string };
+}
+
+async function signIn(code: string, user: SyntheticUser): Promise<string> {
+  const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.41' },
+    body: JSON.stringify({
+      organisationCode: code,
+      login: user.login,
+      password: user.password,
+      totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0)),
+    }),
+  });
+  expect(response.status).toBe(200);
+  return (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
 }
 
 /** A SYNTHETIC Site whose version names a real preparer, so every reference it holds resolves. */
@@ -209,19 +224,8 @@ beforeAll(async () => {
     await grantSynthetic(organisation.database, { kind: 'user', id: user.id }, [
       { recordType: 'files_imports.stored_file', action: 'create' },
     ]);
-    const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.41' },
-      body: JSON.stringify({
-        organisationCode: organisation.code,
-        login: user.login,
-        password: user.password,
-        totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0)),
-      }),
-    });
-    expect(response.status).toBe(200);
     users.push(user);
-    cookies.push((response.headers.get('set-cookie') ?? '').split(';')[0] ?? '');
+    cookies.push(await signIn(organisation.code, user));
     const stored = await storeFile(index, 'evidence');
     await attach(organisation.database, stored, await writeSite(organisation.database, user.id), user.id);
   }
@@ -525,5 +529,34 @@ describe('the application backup (backup-and-restore 3.2; PRD-SEC-012)', () => {
     ]) {
       expect(text).not.toContain(value);
     }
+  });
+
+  it('PRD-SEC-013 PRD-SEC-005 shows backup status to an authorised operator of each Organisation, and to nobody else', async () => {
+    const seen: string[][] = [];
+    for (const [index, organisation] of world.organisations.entries()) {
+      const operator = await writeSyntheticUser(organisation.database, organisation.code, keysEnvironment, {
+        label: `OPERATOR${String(index)}`,
+        enrolled: true,
+      });
+      await grantSynthetic(organisation.database, { kind: 'user', id: operator.id }, [
+        { recordType: 'kernel.backup_record', action: 'view' },
+      ]);
+      const response = await fetch(`${api.baseUrl}${routes.listBackups.path}`, {
+        headers: { cookie: await signIn(organisation.code, operator), origin: SYNTHETIC_ORIGIN },
+      });
+      expect(response.status).toBe(200);
+      const status = backupStatusSchema.parse(await response.json());
+      const recorded = await backupRecords(organisation.database);
+      expect(status.backups.map((entry) => entry.backupId)).toEqual(recorded.map((row) => row.backup_id).reverse());
+      expect(status.lastComplete?.result).toBe('complete');
+      expect(status.backups.some((entry) => entry.result === 'failed')).toBe(true);
+      seen.push(status.backups.map((entry) => entry.backupId));
+    }
+    // One backup covers both Organisations, so each sees the same backups, read from its own database.
+    expect(seen[0]).toEqual(seen[1]);
+    const refused = await fetch(`${api.baseUrl}${routes.listBackups.path}`, {
+      headers: { cookie: cookies[0] ?? '', origin: SYNTHETIC_ORIGIN },
+    });
+    expect(refused.status).toBe(403);
   });
 });

@@ -107,3 +107,47 @@ export const failedJobListSchema = z.strictObject({
   next: failedJobCursorSchema.nullable(),
 });
 export type FailedJobList = z.infer<typeof failedJobListSchema>;
+
+/** Why an application backup failed: kinds only, never record data (backup-and-restore 3.2 step 7; PRD-SEC-014). */
+export const backupFailureKindSchema = z.enum([
+  'object-missing',
+  'dump-hash-differs',
+  'dump-does-not-decrypt',
+  'manifest-does-not-decrypt',
+  'dump-tool-failed',
+  'file-copy-failed',
+]);
+
+/**
+ * One application backup that covered the Organisation, as `kernel.backup_record` keeps it (backup-and-restore 3.2
+ * step 8, section 11): no record data and no key. A failed backup is never offered for restore.
+ */
+export const backupEntrySchema = z.strictObject({
+  backupId: idSchema,
+  environment: z.enum(['local', 'dev', 'kdps-test']),
+  /** The snapshot time of this Organisation's database: the backup's recovery point for it. */
+  snapshotAt: z.iso.datetime({ offset: true }),
+  finishedAt: z.iso.datetime({ offset: true }),
+  result: z.enum(['complete', 'failed']),
+  failures: z.array(backupFailureKindSchema),
+  /** The identifier of the backup key version that sealed it (backup-and-restore 2.4), never the key. */
+  backupKeyVersion: z.string().regex(/^[0-9a-f]{32}$/),
+});
+export type BackupEntry = z.infer<typeof backupEntrySchema>;
+
+/**
+ * The most backups the operations view lists at once, newest first: a technical cap the builders set
+ * (code-house-rules 12.1 "Reads"), not a KDPS value. The last complete backup is always shown beside them.
+ */
+export const BACKUP_STATUS_CAP = 20;
+
+/**
+ * Backup status in the operations view (backup-and-restore 3.2 step 8, 10.2; module-map 4.1; PRD-SEC-013): the last
+ * complete backup, or none, and the latest backups, complete or failed, with the time it was read (PRD-PRF-004).
+ */
+export const backupStatusSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  lastComplete: backupEntrySchema.nullable(),
+  backups: z.array(backupEntrySchema),
+});
+export type BackupStatus = z.infer<typeof backupStatusSchema>;

@@ -228,8 +228,20 @@ export {
   LIVE_RESYNC,
   liveMessageSchema,
   liveSubjectSchema,
+  BACKUP_STATUS_CAP,
+  backupEntrySchema,
+  backupFailureKindSchema,
+  backupStatusSchema,
 } from './operations.js';
-export type { FailedJob, FailedJobList, FailedJobOutcome, FailedJobPageQuery, LiveMessage } from './operations.js';
+export type {
+  BackupEntry,
+  BackupStatus,
+  FailedJob,
+  FailedJobList,
+  FailedJobOutcome,
+  FailedJobPageQuery,
+  LiveMessage,
+} from './operations.js';
 
 export {
   errorCodes,

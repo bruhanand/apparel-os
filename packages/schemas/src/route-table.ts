@@ -95,7 +95,7 @@ import {
   workItemRoutingListSchema,
   workItemRoutingPreparedSchema,
 } from './work-item.js';
-import { failedJobListSchema, failedJobPageQuerySchema, liveMessageSchema } from './operations.js';
+import { backupStatusSchema, failedJobListSchema, failedJobPageQuerySchema, liveMessageSchema } from './operations.js';
 import {
   commentRequestSchema,
   exceptionChangedSchema,
@@ -1627,6 +1627,17 @@ export const routes = {
     access: { kind: 'action', action: 'view', recordType: 'kernel.job' },
     command: false,
     response: failedJobListSchema,
+    codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete', 'access.not-authorised'],
+  }),
+  // The operations view's backup status (backup-and-restore 3.2 step 8, 10.2; module-map 4.1; PRD-SEC-013;
+  // S1-F14-T02): view on `kernel.backup_record`, which carries no scope fact. A read only: a backup is taken by the
+  // operator command, never through the API (backup-and-restore 3.2, 10.3; PRD-SEC-018).
+  listBackups: defineRoute({
+    method: 'GET',
+    path: '/api/kernel/backups',
+    access: { kind: 'action', action: 'view', recordType: 'kernel.backup_record' },
+    command: false,
+    response: backupStatusSchema,
     codes: ['access.not-signed-in', 'access.session-locked', 'access.sign-in-incomplete', 'access.not-authorised'],
   }),
   // Stored files and evidence (imports-and-opening-data 3.1, 9.3, 11, 13.1; PRD-IMP-002, PRD-SEC-005, PRD-SEC-006;

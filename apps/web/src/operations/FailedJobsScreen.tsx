@@ -12,14 +12,16 @@ import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
 import { ListRead, Th, Toolbar } from '../setup/parts';
 import { useTimeZone } from '../shell/session';
+import { BackupStatusSection } from './BackupStatusSection';
 
 /**
  * Setup › Operations view (code-house-rules 12.9; module-map 4.1 "Operations view"; PRD-SEC-013; S1-F08-T04): the
  * failed jobs as a simple list from the design language's table, each with its diagnostic evidence and a link to the
  * unfinished-operation exception raised for it, where one was (access-and-approvals 9.8 step 4; DEC-116). For
  * whoever holds view on `kernel.job`; who that is, is KDPS's (V-01). It refreshes live when a job fails (12.12).
- * Backup and recovery status join it in S1-F14. The list is read a page at a time; Load more reads the next
- * (code-house-rules 12.1 "Reads").
+ * Backup status sits above the failed jobs for whoever holds view on `kernel.backup_record` (S1-F14-T02); recovery
+ * status joins it in S1-F14-T03. The list is read a page at a time; Load more reads the next (code-house-rules 12.1
+ * "Reads").
  */
 export function FailedJobsScreen() {
   const timeZone = useTimeZone();
@@ -32,6 +34,7 @@ export function FailedJobsScreen() {
   const [exceptionId, setExceptionId] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-4">
+      <BackupStatusSection />
       <Toolbar>
         <h2 className="m-0 flex-1 text-h2 font-semibold">{t('operations.failed-jobs')}</h2>
         <Button

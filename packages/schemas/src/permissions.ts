@@ -117,6 +117,9 @@ const auditRecordTypes = [
 const kernelRecordTypes = [
   declareServiceOnly('kernel.outbox_event', ['view', 'edit'], NONE),
   declare('kernel.job', ['view'], NONE),
+  // The backups that covered the Organisation, for the operations view's backup status (backup-and-restore 3.2
+  // step 8; PRD-SEC-013; S1-F14-T02). Who holds it is KDPS's (V-01, RR-064).
+  declare('kernel.backup_record', ['view'], NONE),
 ] as const;
 
 /**
