@@ -69,7 +69,8 @@ test('PRD-SEC-017 a gated action names policy 14 until it is Signed and its valu
       await expect(
         drawer.getByRole('list', { name: 'Evidence' }).getByText('SYNTHETIC-policy-14-signed.pdf'),
       ).toBeVisible();
-      await drawer.getByRole('button', { name: 'Switch on' }).click();
+      // Policy 14 governs opening-data publishing too (S1-F13-T03): this operation's own capability is switched on.
+      await drawer.getByRole('group', { name: world.capability }).getByRole('button', { name: 'Switch on' }).click();
       await expect(drawer.getByText(`The capability ${world.capability} is on.`)).toBeVisible();
       await drawer.getByRole('button', { name: 'Close' }).click();
       await expect(operation.getByText('Policy 14 · Opening and cutover is not signed.')).toHaveCount(0);

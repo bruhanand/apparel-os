@@ -2399,6 +2399,7 @@ export const englishIndia = {
   'history.operation.validate-import': 'Import validated',
   'history.operation.publish-import': 'Import published',
   'history.operation.publish-import-document': 'Import document published',
+  'history.operation.request-publish': 'Asked to post the import',
   'history.operation.withdraw-import': 'Import withdrawn',
   'history.operation.run-comparison': 'Comparison run',
   'history.operation.publish-reference': 'Earlier-POS report kept for reference',

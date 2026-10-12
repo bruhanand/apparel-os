@@ -60,8 +60,9 @@ function OperationAvailability({ operation }: { operation: Operation }) {
 function CapabilitySwitch({ operation }: { operation: Operation }) {
   const switching = useSubmission('switchCapability', READS);
   const name = named('capability', operation.capability);
+  // Named by its capability, since a policy may govern several operations (S1-F13-T03).
   return (
-    <div className="flex flex-col gap-2">
+    <div role="group" aria-label={name} className="flex flex-col gap-2">
       <span className="text-body-sm">
         {t(operation.capabilityOn ? 'policy-readiness.capability.on' : 'policy-readiness.capability.off', {
           capability: name,
