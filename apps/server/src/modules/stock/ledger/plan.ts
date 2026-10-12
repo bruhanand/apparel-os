@@ -805,6 +805,7 @@ export async function planRequest(
             recordType: postedRecordType(request.source),
             recordId: request.source.recordId,
             versionId: request.source.versionId,
+            importKind: request.source.importKind,
           },
           items: probes,
         });

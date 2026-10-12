@@ -23,6 +23,7 @@ import {
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
+import type { CountSets } from '../contracts/count-sets.js';
 import type { HandlerDocument, ImportHandler, ImportHandlers, ImportReview } from '../contracts/import-handlers.js';
 import {
   importBatch,
@@ -55,6 +56,8 @@ export interface ImportDependencies {
   readonly environment: DeploymentEnvironment;
   /** The caps at intake, which every read of a stored workbook keeps to (9.3; S1-F06-T02). */
   readonly caps: IntakeCaps;
+  /** The count side of a comparison run (10.3; S1-F13-T01), from the composition root; none, and no count is read. */
+  readonly counts?: CountSets | undefined;
 }
 
 /** The person a route found: who, in which Organisation, under which request. */
@@ -184,8 +187,14 @@ export interface LoadedDocument extends HandlerDocument {
 /** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
 export async function documentsOf(
   context: TransactionContext,
-  batch: Pick<BatchRow, 'id' | 'kind'>,
+  batch: Pick<BatchRow, 'id' | 'kind' | 'legalEntityId' | 'siteId' | 'storeId' | 'businessUnitId'>,
 ): Promise<LoadedDocument[]> {
+  const place = scopeFactsOf({
+    legalEntityId: batch.legalEntityId,
+    siteId: batch.siteId,
+    storeId: batch.storeId,
+    businessUnitId: batch.businessUnitId,
+  });
   const batchId = batch.id;
   const documents = await context.tx
     .select()
@@ -202,6 +211,7 @@ export async function documentsOf(
     documentId: document.id,
     reference: document.reference,
     kind: batch.kind,
+    place,
     state: document.state,
     excluded: document.excluded,
     revisesDocumentId: document.revisesDocumentId,

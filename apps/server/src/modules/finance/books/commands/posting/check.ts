@@ -299,6 +299,15 @@ export async function checkPostable(
   request: Pick<PostRequest, 'sourceModule' | 'items'> & { readonly document?: PostRequest['document'] },
 ): Promise<ItemCheck[]> {
   const checks: ItemCheck[] = [];
+  // 9.1; imports-and-opening-data 4.2 (PRD-LIF-014, PRD-IMP-010): a document an import of historical reference brought
+  // never posts, whatever its items; a last guard behind the handler's own rule, as the stock ledger's (13.2).
+  if (request.document?.importKind === 'historical-reference') {
+    return request.items.map((item) =>
+      refusal(item.itemKey, 'finance.historical-reference-source', [
+        { kind: 'source', sourceModule: request.sourceModule, recordType: request.document?.recordType ?? '' },
+      ]),
+    );
+  }
   const source = sourceOf(request);
   const reads = new SharedReads(context, dependencies.numbering);
   const posted = await postedRows(

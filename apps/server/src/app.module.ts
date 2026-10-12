@@ -18,12 +18,15 @@ import {
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { numberedKinds } from './numbered-kinds.js';
 import {
+  COUNT_SETS,
   decisionEvidence,
   filesImportsApprovals,
   FilesImportsModule,
   IMPORT_HANDLERS,
   ImportHandlers,
+  openingPlansOf,
   policyEvidence,
+  type CountSets,
 } from './modules/files-imports/index.js';
 import {
   EXCEPTION_TYPES,
@@ -42,6 +45,7 @@ import {
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
 import { PosModule } from './modules/pos/index.js';
+import { EboImportsModule } from './modules/ebo-imports/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -62,6 +66,7 @@ import {
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
 import {
   BookStockHistory,
+  LedgerCountSet,
   LocationStock,
   SkuStockPresence,
   STOCK_POSTING_EVENT_KINDS,
@@ -103,6 +108,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // with at start (imports-and-opening-data 13.2; module-map 4.7). Provided here because `files-imports`' own
     // decision effects check a mapping rule's target through the handler that owns it (6.3; S1-F06-T03).
     { provide: IMPORT_HANDLERS, useFactory: () => new ImportHandlers() },
+    // The count side of a comparison run, which `stock` · ledger answers from Custody (imports-and-opening-data 10.3;
+    // S1-F13-T01).
+    { provide: COUNT_SETS, useFactory: (): CountSets => new LedgerCountSet() },
     // The catalogue's contracts (structure-and-masters 4.3, 4.4, 4.6; S1-F03-T02): stock presence, which `stock` ·
     // ledger answers, and supplier roles, which the parties part answers.
     { provide: STOCK_PRESENCE, useFactory: (): StockPresence => new SkuStockPresence() },
@@ -138,6 +146,8 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
             configuration,
             grants: configuration.claimActivityGrants(),
             locationInUse,
+            // The opening plan read of files-imports: an approved, unpublished opening-stock batch (DEC-117; S1-F13-T01).
+            openingPlans: openingPlansOf(importHandlers),
           }),
           // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
           booksApprovals(audit, bookHeldStock),
@@ -176,6 +186,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
   exports: [
     MODULE_APPROVALS,
     IMPORT_HANDLERS,
+    COUNT_SETS,
     LOCATION_IN_USE,
     BOOK_HELD_STOCK,
     STOCK_PRESENCE,
@@ -222,6 +233,9 @@ export class ModuleApprovalsModule {}
     BooksModule,
     // Billing devices, their enrolment and bill series (module-map 4.17; offline-counter 3, 4; S1-F12-T01).
     PosModule,
+    // The historical-reference handler for the earlier POS's SOH and daily sales, which never moves stock (module-map
+    // section 5, 11.1; imports-and-opening-data 4.1; DEC-116; S1-F13-T01).
+    EboImportsModule,
   ],
 })
 export class AppModule {}

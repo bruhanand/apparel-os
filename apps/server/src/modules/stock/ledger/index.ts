@@ -2,6 +2,7 @@
 export { BOOK_STOCK_HISTORY, STOCK_LEDGER, StockLedgerModule } from './stock-ledger.module.js';
 export { BookStockHistory, type BookStockHistoryContract } from './contracts/book-stock-history.js';
 export { LocationStock } from './contracts/location-stock.js';
+export { LedgerCountSet } from './contracts/count-set.js';
 export { SkuStockPresence } from './contracts/stock-presence.js';
 export { StockLedger } from './ledger.js';
 export { STOCK_POSTING_EVENT_KINDS } from './domain/event-kinds.js';

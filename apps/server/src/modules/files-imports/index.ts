@@ -12,13 +12,22 @@ export { FILE_STORE_VARIABLES } from './file-store/s3-file-store.js';
 // module-map 4.7; S1-F06-T01), and the batch code kind the composition root hands to `numbering` (GC9-9).
 export { IMPORT_HANDLERS, ImportHandlers, knownValue } from './contracts/import-handlers.js';
 export { closeSuggestions, MOST_SUGGESTIONS, optionSuggestions } from './domain/suggestions.js';
+// The count side of a comparison run, which `stock` · ledger implements (imports-and-opening-data 10.3; S1-F13-T01);
+// the rows a comparison compares; and the opening plan read the stock-plan readiness check uses (module-map 4.16;
+// DEC-117).
+export { COUNT_SETS } from './contracts/count-sets.js';
+export type { CountSets } from './contracts/count-sets.js';
+export type { ComparisonRow } from './domain/comparison.js';
+export { openingPlansOf } from './queries/opening-plans.js';
 export type {
   HandlerDocument,
   HandlerPublished,
   HandlerRow,
   ImportField,
+  ImportComparison,
   ImportHandler,
   ImportMeasure,
+  ImportPlace,
   ImportNeed,
   ImportPublisher,
   ImportReview,

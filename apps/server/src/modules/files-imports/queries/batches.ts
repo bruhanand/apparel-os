@@ -158,6 +158,7 @@ export async function readBatch(
       documentId: document.id,
       reference: document.reference,
       kind: batch.kind,
+      place: factsOfBatch(batch),
       rows: effective.map(({ row, values }) => ({
         stagedRowId: row.id,
         sheet: row.sheet,

@@ -15701,6 +15701,712 @@
         }
       }
     },
+    "/api/files-imports/comparison-runs": {
+      "get": {
+        "operationId": "listComparisonRuns",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "files_imports.comparison_run",
+          "authorisedIn": "command"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "runId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "run": {
+                            "type": "string",
+                            "enum": [
+                              "manifest-against-soh",
+                              "count-against-manifest",
+                              "count-against-soh"
+                            ]
+                          },
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "barcode-then-sku",
+                              "sku-and-location"
+                            ]
+                          },
+                          "left": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "batch"
+                                  },
+                                  "set": {
+                                    "type": "string",
+                                    "enum": [
+                                      "manifest",
+                                      "stock-on-hand"
+                                    ]
+                                  },
+                                  "batchId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "batchCode": {
+                                    "type": "string"
+                                  },
+                                  "batchVersionId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "set",
+                                  "batchId",
+                                  "batchCode",
+                                  "batchVersionId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "count"
+                                  },
+                                  "set": {
+                                    "type": "string",
+                                    "const": "count"
+                                  },
+                                  "siteId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "businessUnitId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "asOf": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "set",
+                                  "siteId",
+                                  "businessUnitId",
+                                  "asOf"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "right": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "batch"
+                                  },
+                                  "set": {
+                                    "type": "string",
+                                    "enum": [
+                                      "manifest",
+                                      "stock-on-hand"
+                                    ]
+                                  },
+                                  "batchId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "batchCode": {
+                                    "type": "string"
+                                  },
+                                  "batchVersionId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "set",
+                                  "batchId",
+                                  "batchCode",
+                                  "batchVersionId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "count"
+                                  },
+                                  "set": {
+                                    "type": "string",
+                                    "const": "count"
+                                  },
+                                  "siteId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "businessUnitId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "asOf": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "set",
+                                  "siteId",
+                                  "businessUnitId",
+                                  "asOf"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "runByUserId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "runAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "counts": {
+                            "type": "object",
+                            "properties": {
+                              "same": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "different": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "not-listed-left": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "not-listed-right": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "unknown": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "unresolved": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "same",
+                              "different",
+                              "not-listed-left",
+                              "not-listed-right",
+                              "unknown",
+                              "unresolved"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "runId",
+                          "run",
+                          "key",
+                          "left",
+                          "right",
+                          "runByUserId",
+                          "runAt",
+                          "counts"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "runs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      },
+      "post": {
+        "operationId": "runComparison",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "files_imports.comparison_run",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "same": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "different": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "not-listed-left": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "not-listed-right": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "unknown": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "unresolved": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "same",
+                        "different",
+                        "not-listed-left",
+                        "not-listed-right",
+                        "unknown",
+                        "unresolved"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "counts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "files-imports.comparison-count-unavailable",
+              "files-imports.comparison-side-masked"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "files-imports.comparison-set-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.starts-in-past",
+              "files-imports.comparison-places-differ",
+              "files-imports.comparison-set-wrong"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "const": "manifest-against-soh"
+                      },
+                      "manifest": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "stockOnHand": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "run",
+                      "manifest",
+                      "stockOnHand"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "const": "count-against-manifest"
+                      },
+                      "count": {
+                        "type": "object",
+                        "properties": {
+                          "siteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "businessUnitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "siteId",
+                          "businessUnitId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "manifest": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "run",
+                      "count",
+                      "manifest"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "const": "count-against-soh"
+                      },
+                      "count": {
+                        "type": "object",
+                        "properties": {
+                          "siteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "businessUnitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "siteId",
+                          "businessUnitId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "stockOnHand": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "run",
+                      "count",
+                      "stockOnHand"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/organisation/countries": {
       "get": {
         "operationId": "listCountries",
@@ -51063,6 +51769,536 @@
             },
             "x-error-codes": [
               "organisation.record-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/files-imports/comparison-runs/{runId}": {
+      "get": {
+        "operationId": "readComparisonRun",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "files_imports.comparison_run",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "runId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "run": {
+                      "type": "string",
+                      "enum": [
+                        "manifest-against-soh",
+                        "count-against-manifest",
+                        "count-against-soh"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "barcode-then-sku",
+                        "sku-and-location"
+                      ]
+                    },
+                    "left": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "batch"
+                            },
+                            "set": {
+                              "type": "string",
+                              "enum": [
+                                "manifest",
+                                "stock-on-hand"
+                              ]
+                            },
+                            "batchId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "batchCode": {
+                              "type": "string"
+                            },
+                            "batchVersionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "set",
+                            "batchId",
+                            "batchCode",
+                            "batchVersionId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "count"
+                            },
+                            "set": {
+                              "type": "string",
+                              "const": "count"
+                            },
+                            "siteId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "businessUnitId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "set",
+                            "siteId",
+                            "businessUnitId",
+                            "asOf"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "right": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "batch"
+                            },
+                            "set": {
+                              "type": "string",
+                              "enum": [
+                                "manifest",
+                                "stock-on-hand"
+                              ]
+                            },
+                            "batchId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "batchCode": {
+                              "type": "string"
+                            },
+                            "batchVersionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "set",
+                            "batchId",
+                            "batchCode",
+                            "batchVersionId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "count"
+                            },
+                            "set": {
+                              "type": "string",
+                              "const": "count"
+                            },
+                            "siteId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "businessUnitId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "set",
+                            "siteId",
+                            "businessUnitId",
+                            "asOf"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "runByUserId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "runAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "same": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "different": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "not-listed-left": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "not-listed-right": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "unknown": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "unresolved": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "same",
+                        "different",
+                        "not-listed-left",
+                        "not-listed-right",
+                        "unknown",
+                        "unresolved"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lineNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "keyedBy": {
+                            "type": "string",
+                            "enum": [
+                              "barcode",
+                              "sku",
+                              "sku-and-location",
+                              "unresolved"
+                            ]
+                          },
+                          "barcode": {
+                            "type": "string"
+                          },
+                          "skuId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "locationId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "left": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "listed"
+                                  },
+                                  "quantity": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "quantity"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "not-listed"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "right": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "listed"
+                                  },
+                                  "quantity": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "quantity"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "not-listed"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "result": {
+                            "type": "string",
+                            "enum": [
+                              "same",
+                              "different",
+                              "not-listed-left",
+                              "not-listed-right",
+                              "unknown",
+                              "unresolved"
+                            ]
+                          },
+                          "leftRows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rightRows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "lineNumber",
+                          "keyedBy",
+                          "left",
+                          "right",
+                          "result",
+                          "leftRows",
+                          "rightRows"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "runId",
+                    "run",
+                    "key",
+                    "left",
+                    "right",
+                    "runByUserId",
+                    "runAt",
+                    "counts",
+                    "lines"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "files-imports.comparison-run-not-found"
             ]
           },
           "500": {

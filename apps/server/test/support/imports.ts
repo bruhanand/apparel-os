@@ -55,6 +55,10 @@ export async function writeSyntheticLayout(
     readonly mappingCode: string;
     readonly structure: unknown;
     readonly fields: unknown;
+    /** The mapping's target, the layout's kinds and its document type: a product create layout unless given. */
+    readonly target?: string;
+    readonly kinds?: readonly string[];
+    readonly documentType?: string;
   },
   proposedByUserId: string,
   confirmedByUserId?: string,
@@ -69,9 +73,14 @@ export async function writeSyntheticLayout(
   try {
     await owner.query('begin');
     await owner.query(
-      `insert into files_imports.layout (id, code, source, document_type, kinds)
-       values ($1, $2, $3, 'product-master', array['create'])`,
-      [layoutId, layout.layoutCode, SYNTHETIC_LAYOUT_SOURCE],
+      `insert into files_imports.layout (id, code, source, document_type, kinds) values ($1, $2, $3, $4, $5)`,
+      [
+        layoutId,
+        layout.layoutCode,
+        SYNTHETIC_LAYOUT_SOURCE,
+        layout.documentType ?? 'product-master',
+        layout.kinds ?? ['create'],
+      ],
     );
     await owner.query(
       `insert into files_imports.layout_version (id, layout_id, version, structure, state, proposed_by_user_id,
@@ -80,8 +89,8 @@ export async function writeSyntheticLayout(
       [layoutVersionId, layoutId, JSON.stringify(layout.structure), state, proposedByUserId, ...decided],
     );
     await owner.query(
-      `insert into files_imports.mapping (id, code, layout_version_id, target) values ($1, $2, $3, 'merchandise')`,
-      [mappingId, layout.mappingCode, layoutVersionId],
+      `insert into files_imports.mapping (id, code, layout_version_id, target) values ($1, $2, $3, $4)`,
+      [mappingId, layout.mappingCode, layoutVersionId, layout.target ?? 'merchandise'],
     );
     await owner.query(
       `insert into files_imports.mapping_version (id, mapping_id, version, fields, state, proposed_by_user_id,

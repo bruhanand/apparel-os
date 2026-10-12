@@ -50,6 +50,9 @@ export type {
   ValueBasis,
 } from './domain/approval-rules.js';
 export type { LatestRequest } from './queries/access-records.js';
+// The latest approval request of each document version, for a read that composes no `Access`, such as the opening
+// plan read of files-imports that the stock-plan readiness check uses (module-map 4.16; DEC-117; S1-F13-T01).
+export { latestRequests } from './queries/access-records.js';
 export type { PartyNames, RoleHeldQuestion } from './queries/parties.js';
 // Who holds a permission at a place, for the users-and-access readiness check (module-map 4.16; S1-F04-T02).
 export { permissionHolders } from './queries/holders.js';

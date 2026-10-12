@@ -114,6 +114,11 @@ import {
 } from './exceptions.js';
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
+  COMPARISON_RUN_TYPE,
+  comparisonRunListSchema,
+  comparisonRunReadSchema,
+  comparisonRunStartedSchema,
+  runComparisonRequestSchema,
   detectLayoutQuerySchema,
   documentExclusionRequestSchema,
   IMPORT_BATCH_TYPE,
@@ -2002,6 +2007,46 @@ export const routes = {
     command: false,
     response: importOutcomesSchema,
     codes: [...HISTORY_CODES],
+  }),
+  // Comparison runs (imports-and-opening-data 2, 10.3, 13.1, 14; PRD-LIF-027, POL-14.07; S1-F13-T01): two sets
+  // compared by the key the run kind names, every difference listed; neither set is changed. Create on the run with its
+  // two sides' places, and view on each side, are authorised in the command, since the places are known only from the
+  // sets.
+  runComparison: defineRoute({
+    method: 'POST',
+    path: '/api/files-imports/comparison-runs',
+    access: { kind: 'action', action: 'create', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: runComparisonRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: comparisonRunStartedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'files-imports.comparison-set-not-found',
+      'files-imports.comparison-set-wrong',
+      'files-imports.comparison-side-masked',
+      'files-imports.comparison-places-differ',
+      'files-imports.comparison-count-unavailable',
+    ],
+  }),
+  listComparisonRuns: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/comparison-runs',
+    access: { kind: 'action', action: 'view', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: comparisonRunListSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  readComparisonRun: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/comparison-runs/{runId}',
+    params: z.strictObject({ runId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: comparisonRunReadSchema,
+    codes: [...HISTORY_CODES, 'files-imports.comparison-run-not-found'],
   }),
   // The organisation structure (structure-and-masters 2.3, 3, 8; module-map 4.11, 6.2 flow A; S1-F02-T01): each master's
   // paged list and one record with every version, preparing a new master with its first version, and preparing a later version. Preparing

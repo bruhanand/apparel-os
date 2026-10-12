@@ -1,4 +1,8 @@
 import type {
+  ComparisonCounts,
+  ComparisonKeyName,
+  ComparisonResultName,
+  ComparisonRunKind,
   FieldClass,
   ImportBatchState,
   ImportKind,
@@ -7,12 +11,13 @@ import type {
   ValueSuggestion,
 } from '@apparel-os/schemas';
 import { bigint, boolean, customType, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { ComparisonLineDraft, SideQuantity } from '../domain/comparison.js';
 import type { GridCell, GridNote } from '../domain/grid.js';
 import type { OutcomeControlTotal, OutcomeCounts, OutcomeDocument, OutcomeMeasure } from '../domain/outcome.js';
 import type { SheetSummary, StagedRowDraft, StagedValue } from '../domain/staging.js';
 
 // Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0024, 0061, 0063, 0065) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0024, 0061, 0063, 0065, 0070) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
@@ -299,4 +304,46 @@ export const importOutcome = filesImports.table('import_outcome', {
   /** The control totals as reported, summed and accepted (7.4; 0065). */
   controlTotals: jsonb('control_totals').$type<OutcomeControlTotal[]>().notNull(),
   ...scopeColumns(),
+});
+
+/** A comparison run (imports-and-opening-data 2, 10.3, 15.1; 0070; S1-F13-T01): append-only, never changing a side. */
+export const comparisonRun = filesImports.table('comparison_run', {
+  id: uuid('id').primaryKey(),
+  runKind: text('run_kind').$type<ComparisonRunKind>().notNull(),
+  comparisonKey: text('comparison_key').$type<ComparisonKeyName>().notNull(),
+  leftSet: text('left_set').$type<'manifest' | 'count'>().notNull(),
+  leftBatchId: uuid('left_batch_id'),
+  leftBatchVersionId: uuid('left_batch_version_id'),
+  leftSiteId: uuid('left_site_id'),
+  leftBusinessUnitId: uuid('left_business_unit_id'),
+  leftAsOf: at('left_as_of'),
+  rightSet: text('right_set').$type<'manifest' | 'stock-on-hand'>().notNull(),
+  rightBatchId: uuid('right_batch_id').notNull(),
+  rightBatchVersionId: uuid('right_batch_version_id').notNull(),
+  counts: jsonb('counts').$type<ComparisonCounts>().notNull(),
+  runByUserId: uuid('run_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  runAt: at('run_at').notNull(),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One line of a comparison run (10.3; 0070). */
+export const comparisonLine = filesImports.table('comparison_line', {
+  id: uuid('id').primaryKey(),
+  runId: uuid('run_id').notNull(),
+  lineNumber: integer('line_number').notNull(),
+  keyedBy: text('keyed_by').$type<ComparisonLineDraft['keyedBy']>().notNull(),
+  barcode: text('barcode'),
+  skuId: uuid('sku_id'),
+  locationId: uuid('location_id'),
+  leftState: text('left_state').$type<SideQuantity['state']>().notNull(),
+  leftQuantity: bigint('left_quantity', { mode: 'number' }),
+  rightState: text('right_state').$type<SideQuantity['state']>().notNull(),
+  rightQuantity: bigint('right_quantity', { mode: 'number' }),
+  result: text('result').$type<ComparisonResultName>().notNull(),
+  leftRows: jsonb('left_rows').$type<string[]>().notNull(),
+  rightRows: jsonb('right_rows').$type<string[]>().notNull(),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
 });

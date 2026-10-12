@@ -160,6 +160,9 @@ const filesImportsRecordTypes = [
   declare('files_imports.layout', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping_rule', ['view', 'create', 'approve'], NONE),
+  // A comparison run (2, 10.3, 14, 15.1; S1-F13-T01): view reads it with its lines; create runs one, which also needs
+  // view on each side it reads. It carries both sides' places; its lines hold keys and quantities only, no cost.
+  declare('files_imports.comparison_run', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
 /** A record type whose fields include restricted field classes (access-and-approvals 4.1, 6). */
@@ -359,6 +362,16 @@ const financeRecordTypes = [
  */
 const posRecordTypes = [declare('pos.billing_device', ['view', 'create', 'edit'], PLACE)] as const;
 
+/**
+ * `ebo-imports` (module-map section 5, 11.1; imports-and-opening-data 4.1, 12; DEC-116; S1-F13-T01): in stage 1 only the
+ * reference records of the earlier POS's SOH and daily sales, kept for checking and reports and never moving stock
+ * (PRD-LIF-014, PRD-LIF-016). View reads them; create is what publishing a historical-reference batch needs, at the
+ * batch's place, beside edit on the batch. Who holds them is KDPS's.
+ */
+const eboImportsRecordTypes = [
+  declare('ebo_imports.reference_document', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -375,6 +388,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...financeTaxRulesRecordTypes,
   ...financeRecordTypes,
   ...posRecordTypes,
+  ...eboImportsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -392,7 +406,8 @@ export type RecordTypeCode =
   | (typeof siteLifecycleRecordTypes)[number]['code']
   | (typeof financeTaxRulesRecordTypes)[number]['code']
   | (typeof financeRecordTypes)[number]['code']
-  | (typeof posRecordTypes)[number]['code'];
+  | (typeof posRecordTypes)[number]['code']
+  | (typeof eboImportsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

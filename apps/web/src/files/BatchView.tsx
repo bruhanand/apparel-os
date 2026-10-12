@@ -390,6 +390,10 @@ export function Batch({ read }: { read: ImportBatchRead }) {
         {t('intake.batch.mapping')} <StatusBadge state={stateIdOf(batch.mappingState)} />
         {submitted && <span className="text-text-2">{t('intake.batch.submitted')}</span>}
       </p>
+      {batch.kind === 'historical-reference' && (
+        // imports-and-opening-data 16; PRD-LIF-014: a historical-reference batch never moves stock.
+        <Banner tone="info" role="status" message="intake.batch.reference-only" />
+      )}
       {batch.maskedClasses.length > 0 && (
         <Banner tone="info" role="status" message="intake.batch.masked">
           {batch.maskedClasses.map(className).join(', ')}

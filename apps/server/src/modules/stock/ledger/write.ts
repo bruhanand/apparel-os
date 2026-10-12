@@ -657,6 +657,7 @@ async function postValues(
       recordType: postedRecordType(request.source),
       recordId: request.source.recordId,
       versionId: request.source.versionId,
+      importKind: request.source.importKind,
     },
     actor:
       actor.kind === 'user' ? { kind: 'user', id: actor.userId } : { kind: 'service', id: actor.serviceIdentityId },

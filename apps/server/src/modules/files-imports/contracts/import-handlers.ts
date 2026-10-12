@@ -1,6 +1,7 @@
 import type { DocumentPreview, ImportKind, ValueSuggestion } from '@apparel-os/schemas';
 import type { CommandRefusal, LockTarget, TransactionContext } from '../../../kernel/index.js';
 import type { AuthoriseRequest } from '../../access/index.js';
+import type { ComparisonRow } from '../domain/comparison.js';
 import type { EffectiveValue } from '../domain/report.js';
 
 // The import handler contract (imports-and-opening-data 13.2; module-map 4.7 "Register an import handler", section 3
@@ -43,12 +44,36 @@ export function knownValue(value: EffectiveValue | undefined): string | undefine
  */
 export type ImportReview = { readonly kind: 'submission' } | { readonly kind: 'approval'; readonly actionType: string };
 
-/** One document of a batch, with its data rows, and the batch's kind, which says what publishing it does (4.1). */
+/** A batch's place, its scope facts as the preparer named them at the start, each left out where Unknown (15.1). */
+export interface ImportPlace {
+  readonly legalEntityId?: string;
+  readonly siteId?: string;
+  readonly storeId?: string;
+  readonly businessUnitId?: string;
+}
+
+/**
+ * One document of a batch, with its data rows, the batch's kind, which says what publishing it does (4.1), and the
+ * batch's place, which a handler whose records belong to a place reads (S1-F13-T01).
+ */
 export interface HandlerDocument {
   readonly documentId: string;
   readonly reference: string;
   readonly kind: ImportKind;
   readonly rows: readonly HandlerRow[];
+  readonly place: ImportPlace;
+}
+
+/**
+ * What a handler's batches are as a set of a comparison run (10.3; S1-F13-T01): an opening manifest, or the earlier
+ * POS's stock on hand; the fields its rows are read from, which the reader must be shown (section 11); and each row's
+ * barcode, SKU, location and quantity, worked out through the handler's own module (a barcode through Resolve a code),
+ * without writing.
+ */
+export interface ImportComparison {
+  readonly set: 'manifest' | 'stock-on-hand';
+  readonly fields: readonly string[];
+  rows(context: TransactionContext, documents: readonly HandlerDocument[]): Promise<ComparisonRow[]>;
 }
 
 /**
@@ -96,17 +121,28 @@ export interface ImportHandler {
   readonly recordType: string;
   /** The kinds it accepts (4.2); Start an import refuses any other. */
   readonly kinds: readonly ImportKind[];
-  /** The effects it may have (4.2). */
-  readonly effects: 'master-records';
+  /**
+   * The effects it may have (4.2): master records; reference records, for a historical-reference handler, which never
+   * moves stock or money (PRD-LIF-014, PRD-IMP-010); or stock, for an opening-balance handler (10.2).
+   */
+  readonly effects: 'master-records' | 'reference-records' | 'stock';
+  /**
+   * The opening kind an opening-balance handler fills (10.1, 10.2, 10.4): opening stock, whose approved, unpublished
+   * batch is the unit's opening plan for the stock-plan readiness check (module-map 4.16; DEC-117). None otherwise.
+   */
+  readonly openingKind?: 'stock';
+  /** What its batches are as a set of a comparison run (10.3), where they are one. */
+  readonly comparison?: ImportComparison;
   /** The fields of its staged row. */
   readonly fields: readonly ImportField[];
   /** The fields an outcome sums as quantities and values (7.4); none for a master. */
   readonly measures: readonly ImportMeasure[];
   /**
-   * The scope key of a document's source identity (7.1): for a master create or update, the record type. With the
-   * target and the document reference it is the idempotency key of publishing (PRD-INT-002).
+   * The scope key of a document's source identity (7.1): for a master create or update, the record type; for an
+   * earlier-POS report, its kind and the batch's Store. With the target and the document reference it is the
+   * idempotency key of publishing (PRD-INT-002).
    */
-  sourceScope(document: Pick<HandlerDocument, 'reference' | 'rows'>): string;
+  sourceScope(document: Pick<HandlerDocument, 'reference' | 'rows' | 'place'>): string;
   /** Whether it supports governed revisions (7.3). */
   readonly revisions: ImportRevisions;
   /**
@@ -168,6 +204,11 @@ export class ImportHandlers {
   /** The handler of a target, whatever kind it accepts. */
   ofTarget(target: string): ImportHandler | undefined {
     return this.handlers.get(target);
+  }
+
+  /** The targets whose handlers fill the opening kind (10.1; DEC-117). */
+  openingTargets(kind: 'stock'): string[] {
+    return [...this.handlers.values()].filter((each) => each.openingKind === kind).map((each) => each.target);
   }
 }
 
