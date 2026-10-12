@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import {
   CommandDefect,
   LOCK_STEP,
@@ -127,7 +128,7 @@ export const toPublish = (documents: readonly LoadedDocument[]) =>
  * step 3): each need Authorise allows, with its assignment, to hold at step 0 beside the batch's; or the first refusal,
  * naming the document too (PRD-UXP-003). A need asked for several documents is authorised once.
  */
-async function handlerAuthority(
+export async function handlerAuthority(
   deps: ImportDependencies,
   context: TransactionContext,
   handler: ImportHandler,
@@ -209,32 +210,69 @@ async function held(
     ...decisionLocks,
     ...(await more(found, handler)),
   ]);
-  const batch = await visibleBatch(context, input.batchId);
-  if (batch === undefined) return { kind: 'refused', refusal: BATCH_NOT_FOUND };
+  const checked = await recheckBatch(deps, context, {
+    batchId: input.batchId,
+    versionId: input.versionId,
+    approvalDecisionId: input.approvalDecisionId,
+    preparerId: actorId,
+  });
+  if (checked.kind === 'refused') return checked;
+  return {
+    kind: 'held',
+    held: {
+      batch: checked.batch,
+      handler,
+      roleAssignmentId: authorised.roleAssignmentId,
+      handlerAssignments: forHandler.assignments,
+      approvalCheck: checked.approvalCheck,
+    },
+  };
+}
+
+/**
+ * The rechecks of a Publish under its locks (code-house-rules 8.1; 3.1 step 8, 6.4, 7.4, 13.1), a person's and a
+ * queued publish's job's alike (10.6; S1-F13-T03): the batch read again, Validated, at the version asked for, submitted
+ * at it, its layout and mapping versions Confirmed, its counts closed, an opening batch's gate open (4.2, 10.1), and,
+ * where the handler requires an approval, the decision named verified under the lock without using it, the person who
+ * publishes counted among the preparers (access-and-approvals 9.7).
+ */
+export async function recheckBatch(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  ask: {
+    readonly batchId: string;
+    /** The batch version the screen read, or the one the request to post names (code-house-rules 12.7). */
+    readonly versionId: string;
+    readonly approvalDecisionId: string | undefined;
+    /** Who publishes, or who asked for the queued publish. */
+    readonly preparerId: string;
+  },
+): Promise<
+  | { readonly kind: 'held'; readonly batch: BatchRow; readonly approvalCheck: Held['approvalCheck'] }
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+> {
+  const refusal = (value: CommandRefusal) => ({ kind: 'refused' as const, refusal: value });
+  const batch = await visibleBatch(context, ask.batchId);
+  if (batch === undefined) return refusal(BATCH_NOT_FOUND);
   if (batch.state !== 'Validated') {
-    return { kind: 'refused', refusal: { kind: 'refused', code: 'files-imports.batch-not-validated', missing: [] } };
+    return refusal({ kind: 'refused', code: 'files-imports.batch-not-validated', missing: [] });
   }
-  // The version token (code-house-rules 12.7): a Publish made on a stale screen is refused, naming the current one.
-  if (batch.versionId !== input.versionId) {
-    return {
-      kind: 'refused',
-      refusal: {
-        kind: 'conflict',
-        code: 'kernel.stale-version',
-        missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId }],
-      },
-    };
+  // The version token (code-house-rules 12.7): a Publish made on a stale screen, or a request to post made for a
+  // version since changed (access-and-approvals 9.6, 9.8 step 5), is refused, naming the current one.
+  if (batch.versionId !== ask.versionId) {
+    return refusal({
+      kind: 'conflict',
+      code: 'kernel.stale-version',
+      missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId }],
+    });
   }
   // The review: the version submitted (13.1), and its approval where the handler requires one (3.1 step 8).
   if (batch.submittedVersionId !== batch.versionId) {
-    return {
+    return refusal({
       kind: 'refused',
-      refusal: {
-        kind: 'refused',
-        code: 'files-imports.review-missing',
-        missing: [{ kind: 'review', review: 'submission' }],
-      },
-    };
+      code: 'files-imports.review-missing',
+      missing: [{ kind: 'review', review: 'submission' }],
+    });
   }
   // A batch may preview with Proposed versions; Publish needs Confirmed ones (6.4; GC6-4, DEC-112).
   const versions = await versionsOf(context, batch);
@@ -247,57 +285,41 @@ async function held(
       : [{ kind: 'mapping-version', mappingVersionId: versions.mapping.id, state: versions.mapping.state }]),
   ];
   if (unconfirmed.length > 0) {
-    return {
-      kind: 'refused',
-      refusal: { kind: 'refused', code: 'files-imports.version-not-confirmed', missing: unconfirmed },
-    };
+    return refusal({ kind: 'refused', code: 'files-imports.version-not-confirmed', missing: unconfirmed });
   }
   // The counts close (7.4): every row the reader read is staged.
   const counts = await countsRefusal(context, batch);
-  if (counts !== undefined) return { kind: 'refused', refusal: counts };
+  if (counts !== undefined) return refusal(counts);
+  const handler = handlerOf(deps.handlers, batch);
   // An opening batch publishes only where its gate allows it (4.2, 10.1; PRD-SEC-017; S1-F13-T03).
   if (batch.kind === 'opening-balance') {
-    const refusal = gateRefusal(await openingGateOf(deps, context, handler, factsOfBatch(batch)));
-    if (refusal !== undefined) return { kind: 'refused', refusal };
+    const gate = gateRefusal(await openingGateOf(deps, context, handler, factsOfBatch(batch)));
+    if (gate !== undefined) return refusal(gate);
   }
-  let approvalCheck: Held['approvalCheck'];
   const review = reviewOf(handler, batch);
-  if (review.kind === 'approval') {
-    if (input.approvalDecisionId === undefined) {
-      return {
-        kind: 'refused',
-        refusal: {
-          kind: 'refused',
-          code: 'files-imports.review-missing',
-          missing: [{ kind: 'review', review: 'approval' }],
-        },
-      };
-    }
-    approvalCheck = {
-      decisionId: input.approvalDecisionId,
-      actionType: review.actionType,
-      document: {
-        module: 'files-imports',
-        recordType: review.recordType,
-        recordId: batch.id,
-        versionId: batch.versionId,
-      },
-      preparers: await batchPreparers(context, batch, actorId),
-      value: { kind: 'none' },
-    };
-    const verified = await deps.access.verifyUnderLock(context, approvalCheck);
-    if (verified !== undefined) return { kind: 'refused', refusal: verified };
+  if (review.kind !== 'approval') return { kind: 'held', batch, approvalCheck: undefined };
+  if (ask.approvalDecisionId === undefined) {
+    return refusal({
+      kind: 'refused',
+      code: 'files-imports.review-missing',
+      missing: [{ kind: 'review', review: 'approval' }],
+    });
   }
-  return {
-    kind: 'held',
-    held: {
-      batch,
-      handler,
-      roleAssignmentId: authorised.roleAssignmentId,
-      handlerAssignments: forHandler.assignments,
-      approvalCheck,
+  const approvalCheck: NonNullable<Held['approvalCheck']> = {
+    decisionId: ask.approvalDecisionId,
+    actionType: review.actionType,
+    document: {
+      module: 'files-imports',
+      recordType: review.recordType,
+      recordId: batch.id,
+      versionId: batch.versionId,
     },
+    preparers: await batchPreparers(context, batch, ask.preparerId),
+    value: { kind: 'none' },
   };
+  const verified = await deps.access.verifyUnderLock(context, approvalCheck);
+  if (verified !== undefined) return refusal(verified);
+  return { kind: 'held', batch, approvalCheck };
 }
 
 /** What one document's run answers: published, a duplicate, or already published or excluded (skipped). */
@@ -307,6 +329,24 @@ interface DocumentAnswer {
   readonly records: readonly { readonly recordType: string; readonly recordId: string }[];
   readonly publishedDocumentId?: string;
   readonly revisesDocumentId?: string;
+}
+
+const documentAnswerSchema = z.object({
+  documentId: z.string(),
+  result: z.enum(['published', 'duplicate', 'skipped']),
+  records: z.array(z.object({ recordType: z.string(), recordId: z.string() })),
+  publishedDocumentId: z.string().optional(),
+  revisesDocumentId: z.string().optional(),
+});
+
+/** One document's answer, read back from its kept JSON and checked, never assumed (code-house-rules 12.2). */
+export function documentAnswerOf(answer: JsonValue): DocumentAnswer {
+  const { publishedDocumentId, revisesDocumentId, ...parsed } = documentAnswerSchema.parse(answer);
+  return {
+    ...parsed,
+    ...(publishedDocumentId === undefined ? {} : { publishedDocumentId }),
+    ...(revisesDocumentId === undefined ? {} : { revisesDocumentId }),
+  };
 }
 
 /**
@@ -515,7 +555,7 @@ function attemptOf(
         }
       : { result: 'refused', records: [], refusalCode: reason };
   }
-  const value = answer.answer as unknown as DocumentAnswer;
+  const value = documentAnswerOf(answer.answer);
   // Published or excluded before this run: the batch's run reads which from the document itself.
   if (value.result === 'skipped') return undefined;
   return {
@@ -534,7 +574,8 @@ function attemptOf(
 export interface Attempting {
   readonly attemptedByUserId: string;
   readonly actor: AuditActor;
-  readonly roleAssignmentId: string;
+  /** The assignment its audit record cites; none where the attempt was refused before any authority was found. */
+  readonly roleAssignmentId: string | undefined;
   readonly key: string;
   readonly source: AuditSource;
   readonly useRecorded: boolean;
@@ -615,7 +656,7 @@ export async function writeOutcome(
   const facts = factsOfBatch(batch);
   await deps.audit.record(context, {
     actor: attempting.actor,
-    roleAssignmentId: attempting.roleAssignmentId,
+    ...(attempting.roleAssignmentId === undefined ? {} : { roleAssignmentId: attempting.roleAssignmentId }),
     scope: facts,
     record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
     operation: 'publish-import',
@@ -672,7 +713,8 @@ export async function pendingRequest(
         sql`not exists (select 1 from ${importOutcome} where ${importOutcome.publishRequestId} = ${publishRequest.id})`,
       ),
     )
-    .orderBy(desc(publishRequest.id))
+    // By the time it was asked (code-house-rules 9), the identifier only breaking a tie.
+    .orderBy(desc(publishRequest.requestedAt), desc(publishRequest.id))
     .limit(1);
   return row;
 }

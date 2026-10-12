@@ -2,7 +2,7 @@ import { paise } from '@apparel-os/domain';
 import { freeUnits } from '../availability.js';
 import { refuse, type ItemValue, type ValuedItem } from '../request.js';
 import { negate, oldestFirst, share, sumPaise, takeInOrder } from '../valuation.js';
-import type { ClaimState, HoldEntry, OriginState, PieceState } from '../working.js';
+import type { ClaimState, OriginState, PieceState } from '../working.js';
 import { SaleItems } from './sale.js';
 import { SL, type Moved, type OriginGroup, type SaleState, type ValuationLayerEntry } from './state.js';
 
@@ -174,37 +174,7 @@ export abstract class Corrections extends SaleItems {
       ...(item.goods.pieceCodes === undefined ? {} : { pieceCodes: item.goods.pieceCodes }),
       ownerKind: null,
     });
-    const hold: HoldEntry = {
-      id: this.newId(),
-      lineId: item.lineId,
-      kind: 'excess',
-      reason: item.reason,
-      evidenceFileId: null,
-      withinReservationId: null,
-      scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
-      brandIds: [this.brandOf(item.goods.skuId)],
-      freezeScope: [],
-      claims: [],
-    };
-    if (counted.pieces.length > 0) {
-      for (const piece of counted.pieces) {
-        hold.claims.push(this.newClaim('hold', hold.id, 'excess', null, null, piece.id, 1, counted.balance.scope));
-      }
-    } else {
-      hold.claims.push(
-        this.newClaim(
-          'hold',
-          hold.id,
-          'excess',
-          null,
-          counted.balance.id,
-          null,
-          item.goods.quantity,
-          counted.balance.scope,
-        ),
-      );
-    }
-    this.entries.holds.push(hold);
+    this.holdAsExcess(item.lineId, item.at, item.goods.skuId, item.reason, counted, item.goods.quantity);
     return { kind: 'unknown' };
   }
 

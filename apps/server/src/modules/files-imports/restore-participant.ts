@@ -4,11 +4,12 @@ import * as filesImportsTables from './db/schema.js';
 
 /**
  * Files-imports' part in backup and restore (backup-and-restore 3.2 step 6, 3.3, 5.1, 10.1, 10.2; PRD-IMP-002,
- * PRD-ACP-019): the totals of its tables, comparison runs and their lines included (RR-523), the records others refer
- * to (attachments, receipts, stored files, import batches, documents and staged rows), the object key of every stored file, which the backup must hold (3.2 step 7), the key versions its files
- * and receipts name (2.3), and that every attachment's record resolves through the participant that answers for its
- * type. Opening each file and attachment after a restore is
- * its after-restore check, restore-check.ts (S1-F14-T03).
+ * PRD-ACP-019): the totals of its tables, every table of its schema, comparison runs and their lines (RR-523) and the
+ * requests to post of a queued publish (`publish_request`, migration 0082; S1-F13-T03) included; the records others
+ * refer to (attachments, receipts, stored files, import batches, documents and staged rows); the object key of every
+ * stored file, which the backup must hold (3.2 step 7); the key versions its files and receipts name (2.3); and that
+ * every attachment's record resolves through the participant that answers for its type. Opening each file and
+ * attachment after a restore is its after-restore check, restore-check.ts (S1-F14-T03).
  */
 export const filesImportsRestoreParticipant: RestoreParticipant = {
   unit: 'files-imports',

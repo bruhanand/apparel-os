@@ -1,3 +1,5 @@
+import { uuidv7 } from '@apparel-os/domain';
+import { errorEnvelopeSchema, IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { organisationPlaces } from '../src/modules/stock/ledger/index.js';
 import { asVerifier } from './harness/stock/checks.js';
@@ -9,7 +11,7 @@ import { gate } from './support/transactions.js';
 // S1-F13-T03: the publish gate and the synthetic opening count job (imports-and-opening-data 4.2, 10.1, 10.5, 10.6,
 // 12, 17 tests 20, 22 and 24; stock-ledger 9, 10.6, 13.4; access-and-approvals 9.8; PRD-SEC-017, PRD-UXP-003,
 // PRD-LIF-003 to PRD-LIF-006, PRD-LIF-008, PRD-LIF-011, PRD-STK-014, PRD-ACP-014, PRD-INT-004, POL-14.02, POL-14.07,
-// DEC-071, DEC-097), through the whole application on real PostgreSQL and MinIO. The opening-balance handler is the
+// DEC-071, DEC-097, DEC-124), through the whole application on real PostgreSQL and MinIO. The opening-balance handler is the
 // test-only one of `support/opening-stock.ts`, composed into this test application only, and its posting consumer is
 // the tests' own (GC6-18, DEC-116). Policy 14 is signed and validated as SYNTHETIC here only (code-house-rules 11.1).
 // Every file, code and value is SYNTHETIC; every expected value is written by hand from the files below.
@@ -46,8 +48,13 @@ beforeAll(async () => {
 /** What the read-only role reads of a batch's posting (H6): its movements, holds, origins and the decision's uses. */
 async function postingOf(batchId: string, decisionId: string) {
   return asVerifier(world.database, async (client) => {
-    const movements = await client.query<{ kind: string; quantity: number; owner_kind: string | null }>(
-      `select m.kind, l.quantity, s.owner_kind from stock.movement m
+    const movements = await client.query<{
+      kind: string;
+      quantity: number;
+      owner_kind: string | null;
+      origin_kind: string;
+    }>(
+      `select m.kind, l.quantity, s.owner_kind, o.origin_kind from stock.movement m
          join stock.movement_leg l on l.movement_id = m.id
          join stock.receipt_origin o on o.id = l.receipt_origin_id
          join stock.receipt_origin_state s on s.receipt_origin_id = o.id
@@ -151,12 +158,191 @@ describe('the publish gate (4.2, 10.1; GC-6 17 test 22)', () => {
   }, 600_000);
 });
 
+/** Maps a SYNTHETIC barcode to a SKU as an internal code (structure-and-masters 4.7); answers the barcode. */
+async function barcodeFor(skuId: string, label: string): Promise<string> {
+  const { setup } = world.harness;
+  const code = world.next(label);
+  const mapped = await setup.asPreparerDo((c, p) =>
+    setup.catalogue.mapCode(c, p, {
+      code,
+      kind: 'internal',
+      scope: { kind: 'organisation' },
+      skuId,
+      alias: false,
+      validFrom: setup.today(),
+    }),
+  );
+  if (mapped.kind !== 'success') throw new Error(`The SYNTHETIC barcode was refused: ${mapped.refusal.code}`);
+  return code;
+}
+
+/** An opening of the rows, verified and Published: its request to post, waiting for a job no worker runs yet. */
+async function requested(rows: readonly (string | null)[][]) {
+  await world.stopWorkers();
+  const batchId = await world.opening(rows);
+  const { versionId, decisionId } = await world.verified(batchId);
+  const queued = await world.publish(batchId, versionId, decisionId);
+  expect(queued.body).toMatchObject({ result: 'queued', state: 'Validated' });
+  return { batchId, versionId, decisionId, publishRequestId: queued.body.publishRequestId as string };
+}
+
+/** The batch's outcome of a request to post, its state and the request still waiting, as Setup › File intake reads. */
+async function shown(batchId: string, publishRequestId: string) {
+  const read = await world.readBatch(batchId);
+  return {
+    state: read.batch.state,
+    waiting: read.batch.posting?.publishRequestId,
+    outcome: read.outcomes.find((each) => each.publishRequestId === publishRequestId),
+  };
+}
+
+describe('the queued publish job under its locks (10.6; access-and-approvals 9.8; code-house-rules 12.9)', () => {
+  it('DEC-124 one request at a time: a second Publish while one waits is refused; a request followed by a later one is superseded, the later one posts, and a request is answered once', async () => {
+    const first = await requested([
+      world.manifestRow('SYN-Q-1', { barcode: barcodeX, quantity: '1', valuationEvidence: 'SYN invoice 21' }),
+    ]);
+    const again = await world.publish(first.batchId, first.versionId, first.decisionId);
+    expect(codeOf(again)).toBe('files-imports.publish-queued');
+    expect(again.body).toMatchObject({
+      error: { missing: [{ kind: 'publish-request', publishRequestId: first.publishRequestId }] },
+    });
+    const movementsBefore = await movementsCount();
+    const identity = await world.postingIdentity();
+    // A later request for the same batch (written as a Publish would write it): the first's job finds it superseded,
+    // posts nothing and keeps a failed outcome the batch shows, the decision unused (DEC-097).
+    const later = await world.requestAgain(first.publishRequestId);
+    expect(await world.publishRequested(identity, first.publishRequestId)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'failed', state: 'Validated' },
+    });
+    expect(await shown(first.batchId, first.publishRequestId)).toMatchObject({
+      state: 'Validated',
+      waiting: later,
+      outcome: { result: 'failed', refusalCode: 'files-imports.publish-request-superseded' },
+    });
+    expect(await movementsCount()).toBe(movementsBefore);
+    expect((await postingOf(first.batchId, first.decisionId)).uses).toEqual({ uses: 0, carried: 0 });
+    // The later request posts, naming the same decision (access-and-approvals 9.8 step 5).
+    expect(await world.publishRequested(identity, later)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'published', state: 'Published' },
+    });
+    expect((await postingOf(first.batchId, first.decisionId)).uses).toEqual({ uses: 1, carried: 1 });
+    // Delivered again, either request is answered already: no second outcome and no second effect (PRD-INT-002).
+    for (const request of [later, first.publishRequestId]) {
+      expect(await world.publishRequested(identity, request)).toEqual({
+        kind: 'refused',
+        refusal: { kind: 'refused', code: 'files-imports.publish-request-answered', missing: [] },
+      });
+    }
+    expect((await world.readBatch(first.batchId)).outcomes).toHaveLength(2);
+    expect((await postingOf(first.batchId, first.decisionId)).uses).toEqual({ uses: 1, carried: 1 });
+  }, 600_000);
+
+  it('code-house-rules 12.7 DEC-097 a request whose batch version has changed since is refused in the job as a stale version; the request of the current version posts', async () => {
+    const { batchId, decisionId, publishRequestId } = await requested([
+      world.manifestRow('SYN-V-1', { barcode: barcodeX, quantity: '1', valuationEvidence: 'SYN invoice 22' }),
+    ]);
+    const identity = await world.postingIdentity();
+    // A request naming another version of the batch, the latest: under the locks the batch is not at that version.
+    const stale = await world.requestAgain(publishRequestId, uuidv7());
+    const movementsBefore = await movementsCount();
+    expect(await world.publishRequested(identity, stale)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'failed' },
+    });
+    expect(await shown(batchId, stale)).toMatchObject({
+      state: 'Validated',
+      waiting: publishRequestId,
+      outcome: { result: 'failed', refusalCode: 'kernel.stale-version' },
+    });
+    expect(await movementsCount()).toBe(movementsBefore);
+    expect((await postingOf(batchId, decisionId)).uses).toEqual({ uses: 0, carried: 0 });
+    expect(await world.publishRequested(identity, publishRequestId)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'published' },
+    });
+  }, 600_000);
+
+  it('code-house-rules 12.9 GC-6 3.2 a job whose service identity may not publish the batch keeps a failed outcome the batch shows, so it never shows posting for ever', async () => {
+    const { batchId, decisionId, publishRequestId } = await requested([
+      world.manifestRow('SYN-A-1', { barcode: barcodeX, quantity: '1', valuationEvidence: 'SYN invoice 23' }),
+    ]);
+    // An identity that sees the batch but may not edit it: Authorise refuses before the locks.
+    const viewer = await world.identity('opening-viewer', [{ recordType: IMPORT_BATCH_TYPE, action: 'view' }]);
+    const movementsBefore = await movementsCount();
+    expect(await world.publishRequested(viewer, publishRequestId)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'failed', state: 'Validated' },
+    });
+    const after = await shown(batchId, publishRequestId);
+    expect(after).toMatchObject({ state: 'Validated', waiting: undefined, outcome: { result: 'failed' } });
+    expect(after.outcome?.refusalCode).toMatch(/^access\./);
+    expect(await movementsCount()).toBe(movementsBefore);
+    expect((await postingOf(batchId, decisionId)).uses).toEqual({ uses: 0, carried: 0 });
+    // Publish asked again is a new request, which the posting identity posts with the same decision.
+    const read = await world.readBatch(batchId);
+    const retried = await world.publish(batchId, read.batch.versionId, decisionId);
+    expect(retried.body).toMatchObject({ result: 'queued' });
+    expect(
+      await world.publishRequested(await world.postingIdentity(), retried.body.publishRequestId as string),
+    ).toMatchObject({ kind: 'answered', answer: { result: 'published' } });
+  }, 600_000);
+
+  it('PRD-INT-004 PRD-IMP-012 DEC-097 a document refused after the decision’s use is recorded rolls the whole batch back: nothing posts, the use is gone, and the failure shows', async () => {
+    const pieces = await world.harness.catalogueSku(true);
+    const pieceBarcode = await barcodeFor(pieces.skuId, 'BC-P');
+    const { batchId, decisionId, publishRequestId } = await requested([
+      world.manifestRow('SYN-S-1', { barcode: barcodeX, quantity: '2', valuationEvidence: 'SYN invoice 24' }),
+      // Piece IDs are labelled at the switch count, never imported (PRD-LIF-025): the handler refuses the row.
+      world.manifestRow('SYN-S-2', { barcode: pieceBarcode, quantity: '1', valuationEvidence: 'SYN invoice 25' }),
+    ]);
+    const movementsBefore = await movementsCount();
+    expect(await world.publishRequested(await world.postingIdentity(), publishRequestId)).toMatchObject({
+      kind: 'answered',
+      answer: { result: 'failed' },
+    });
+    expect(await shown(batchId, publishRequestId)).toMatchObject({
+      state: 'Validated',
+      waiting: undefined,
+      outcome: { result: 'failed', refusalCode: 'files-imports.document-refused' },
+    });
+    // The use recorded first, and the first document's counts, rolled back with the savepoint.
+    expect(await movementsCount()).toBe(movementsBefore);
+    expect(await postingOf(batchId, decisionId)).toEqual({ movements: [], holds: [], uses: { uses: 0, carried: 0 } });
+  }, 600_000);
+
+  it('stock-ledger 10.6 a batch whose documents post into several books is refused at Publish, naming the books, and nothing is requested', async () => {
+    const otherBook = uuidv7();
+    world.bookOf = (reference) => (reference === 'SYN-K-2' ? otherBook : undefined);
+    try {
+      await world.stopWorkers();
+      const batchId = await world.opening([
+        world.manifestRow('SYN-K-1', { barcode: barcodeX, quantity: '1', valuationEvidence: 'SYN invoice 26' }),
+        world.manifestRow('SYN-K-2', { barcode: barcodeX, quantity: '1', valuationEvidence: 'SYN invoice 27' }),
+      ]);
+      const { versionId, decisionId } = await world.verified(batchId);
+      const refused = await world.publish(batchId, versionId, decisionId);
+      expect(codeOf(refused)).toBe('files-imports.several-books');
+      const { missing } = errorEnvelopeSchema.parse(refused.body).error;
+      expect(missing).toHaveLength(2);
+      expect(missing).toContainEqual({ kind: 'accounting-book', bookId: otherBook });
+      const read = await world.readBatch(batchId);
+      expect(read.batch.posting).toBeUndefined();
+      expect(read.outcomes).toEqual([]);
+    } finally {
+      world.bookOf = undefined;
+    }
+  }, 600_000);
+});
+
 describe('the synthetic opening count job (10.5, 10.6; GC-6 17 tests 20 and 24)', () => {
   it('GC-6 17 test 20 PRD-LIF-004 PRD-STK-014 PRD-LIF-008 PRD-LIF-006 DEC-097: one queued job posts the opening counts, a row without valuation evidence held as excess; no delivery, booking, invoice, liability or journal; the decision used once', async () => {
     const batchId = await world.opening([
       // Owned by the legal entity Operations verified, with its valuation evidence: opening stock.
       world.manifestRow('SYN-O-1', { barcode: barcodeX, quantity: '3', valuationEvidence: 'SYN invoice 12' }),
-      // No valuation evidence, and an explicit Unknown season below: held as excess, owner Unknown (PRD-STK-014).
+      // Owned by the same legal entity, verified, but no valuation evidence, and an explicit Unknown season below: not
+      // opening stock but a surplus origin held as excess, owner Unknown (PRD-STK-014; stock-ledger 9 step 3).
       world.manifestRow('SYN-O-1', { barcode: barcodeX, quantity: '2', season: '' }),
       // A billed-retained item, not opening stock (PRD-LIF-028): nothing posts for it.
       world.manifestRow('SYN-O-1', {
@@ -213,11 +399,12 @@ describe('the synthetic opening count job (10.5, 10.6; GC-6 17 tests 20 and 24)'
     expect(outcome).toMatchObject({ result: 'published' });
     expect(after.batch.state).toBe('Published');
     expect(after.batch.posting).toBeUndefined();
-    // PRD-LIF-004 PRD-STK-014: two opening counts; the row without evidence is held as excess, owner Unknown.
+    // PRD-LIF-004 PRD-STK-014: two opening counts; the row without evidence is a surplus origin held as excess,
+    // owner Unknown, and only the row with evidence is opening stock.
     expect(await postingOf(batchId, decisionId)).toEqual({
       movements: [
-        { kind: 'opening-count', quantity: 2, owner_kind: null },
-        { kind: 'opening-count', quantity: 3, owner_kind: 'organisation' },
+        { kind: 'opening-count', quantity: 2, owner_kind: null, origin_kind: 'surplus' },
+        { kind: 'opening-count', quantity: 3, owner_kind: 'organisation', origin_kind: 'opening' },
       ],
       holds: [{ kind: 'excess', reason: NO_VALUATION_EVIDENCE, quantity: 2 }],
       // DEC-097: the decision used once, and every movement keeps its use.

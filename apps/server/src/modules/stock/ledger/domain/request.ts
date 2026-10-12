@@ -90,7 +90,8 @@ export type LedgerItem =
        * Opening count (stock-ledger 9, 13.4; S1-F13-T03): a receipt count from an opening batch, its source's import
        * kind opening balance; it creates opening receipt origins, whose value stays Unknown until an opening PT is
        * approved (PRD-LIF-004, PRD-LIF-027, POL-14.02). A counted row without the valuation evidence PRD-LIF-005 needs
-       * is not opening stock: it is held as excess, its owner, coverage and cost Unknown (9 step 3; PRD-STK-014).
+       * is not opening stock: a surplus origin, held as excess, its owner, coverage and cost Unknown (9 step 3;
+       * PRD-STK-014).
        */
       readonly kind: 'opening-count';
       readonly lineId: string;
@@ -404,9 +405,12 @@ export type StockReason =
   | 'not-sellable'
   | 'posting-refused';
 
+/**
+ * The kind of each refusal that is not `refused` (code-house-rules 12.3). `plan-stale` is `refused`: the request is
+ * submitted again under a new key (13.1, 13.8), and the one conflict a command decides is a stale version (12.7).
+ */
 const KIND_OF: Partial<Record<StockReason, CommandRefusal['kind']>> = {
   'business-date-not-set': 'unavailable',
-  'plan-stale': 'conflict',
   'rule-not-set': 'unavailable',
   'no-cost-setting': 'unavailable',
 };

@@ -8,8 +8,10 @@ import { OpeningApp } from './support/opening-app.js';
 // validated and verified through the application, then Publish asks for the job, which posts every opening count in
 // one transaction, one job per book, while tills sell the opening's SKUs at the same Store, each bill one unit, and one
 // till sells a SKU the opening does not name. By the method of S1-F10-T07 (stock-posting-large.int.test.ts): the
-// timings are recorded, not judged, since the PRD sets no number here and the binding measurement is the counter in
-// stage 4 (RR-189). They print when AOS_STOCK_LARGE_REPORT is 1. Every value is SYNTHETIC.
+// target is the PRD's online local bill finalisation, under 1 second ("Performance"; PRD-PRF-003). The timings are
+// recorded against it, not asserted: on a shared laptop they are an early signal, a miss of the same pattern as RR-504
+// is accepted for stage 1 by the product owner, and the binding measurement is the counter in stage 4 (RR-189, RR-504).
+// They print when AOS_STOCK_LARGE_REPORT is 1. Every value is SYNTHETIC.
 
 /** SYNTHETIC: the opening's size, the size GC-6 17 test 24 names. */
 const ROWS = 30_000;

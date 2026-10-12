@@ -1291,3 +1291,12 @@
 - **Why.** The picks were already decided in `DEC-112`; the PRD must say them before the code that implements them (`S1-F03`, `S1-F13`).
 - **Changed.** PRD "Words used" (new row Gift-with-purchase); `PRD-MER-019`, `PRD-MER-020`, `PRD-MER-021`, `PRD-BKG-014`, `PRD-PAY-015`, `PRD-LIF-030`, `PRD-LIF-031` (new). structure-and-masters 4.1, 5.1 and 5.2; imports-and-opening-data 10.2; `plan/open-items.md` RR-047. Still OPEN: the season order and the cutoff for "old" (RR-199); the supplier-term values (RR-235).
 
+## DEC-124 — An opening batch's request to post is recorded at Publish
+
+- **Date:** 13 Oct 2026 · **Decided by:** product owner · **Report item:** `S1-F13-T03` review (design choice 1 in the ticket's Notes), 13 Oct 2026
+- **Question.** `DEC-097` says the approval click records the decision and a request to post, and the queued job then posts. For an opening batch, when is its request to post recorded: at the approval click, as `DEC-097` is written, or at a separate Publish click?
+- **Options.** At the approval click (`DEC-097` as written) · At a separate Publish click, for opening batches only.
+- **Choice.** At a separate Publish click, for opening batches only. Operations' verification of an opening batch records the decision and nothing else; Publish names that decision and records the request to post; the queued job then locks, rechecks, records the decision's use and posts, in one transaction, as `DEC-097` says, and a failed job leaves the decision unused. Every other document keeps `DEC-097`: its approval click records the request to post. This amends `DEC-097` for opening batches.
+- **Why.** An approved but unpublished opening batch is the unit's opening plan (`DEC-117`), verified before the switch, and posts only at the Store's switch (`POL-14.07`, `PRD-LIF-026`). Recording the request at the verification would post it before the switch.
+- **Changed.** No PRD or policy text changes: `DEC-097` is a decision, not a PRD or policy bullet. imports-and-opening-data 10.6; ticket `S1-F13-T03`.
+

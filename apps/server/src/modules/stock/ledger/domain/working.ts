@@ -935,54 +935,69 @@ export class Working {
   /**
    * Opening count (stock-ledger 9, 13.4; PRD-LIF-004, PRD-LIF-027, POL-14.02; S1-F13-T03): a new opening receipt origin,
    * its custody and pieces, as a receipt count's, with no value until its opening PT is approved. A row without
-   * valuation evidence (PRD-LIF-005) is not opening stock: its custody is held as excess, owner, coverage and cost
-   * Unknown, until the evidence and an opening PT arrive (9 step 3; PRD-STK-014), as a count surplus is (8.4).
+   * valuation evidence (PRD-LIF-005) is not opening stock (9 step 3): a count surplus with no known receipt origin, of
+   * the origin kind `surplus`, its custody held as excess, owner, coverage and cost Unknown, until its owner is
+   * established and a PT approved (PRD-STK-014), as a count surplus is (8.4; product owner, 13 Oct 2026).
    */
   protected openingCount(item: ItemOf<'opening-count'>): ItemValue {
     const movement = this.newMovement('opening-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
     ]);
     movement.owner = item.owner;
-    const counted = this.countedOrigin(item.lineId, movement, 'opening', item.to, item.condition, {
-      skuId: item.skuId,
-      quantity: item.quantity,
-      ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
-      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
-      ...(item.batch === undefined ? {} : { batch: item.batch }),
-    });
-    if (item.withoutValuationEvidence === undefined) return { kind: 'unknown' };
+    const excess = item.withoutValuationEvidence;
+    const counted = this.countedOrigin(
+      item.lineId,
+      movement,
+      excess === undefined ? 'opening' : 'surplus',
+      item.to,
+      item.condition,
+      {
+        skuId: item.skuId,
+        quantity: item.quantity,
+        ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
+        ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+        ...(item.batch === undefined ? {} : { batch: item.batch }),
+      },
+    );
+    if (excess !== undefined)
+      this.holdAsExcess(item.lineId, item.to, item.skuId, excess.reason, counted, item.quantity);
+    return { kind: 'unknown' };
+  }
+
+  /**
+   * The excess hold of a count surplus with no known receipt origin (8.4; PRD-STK-014), a count difference's gain or
+   * an opening row without valuation evidence (section 9 step 3): one `excess` hold claiming each new piece, or the
+   * new origin's balance for its quantity.
+   */
+  protected holdAsExcess(
+    lineId: string,
+    at: { readonly siteId: string; readonly businessUnitId: string },
+    skuId: string,
+    reason: string,
+    counted: { readonly balance: BalanceState; readonly pieces: readonly PieceState[] },
+    quantity: number,
+  ): void {
     const hold: HoldEntry = {
       id: this.newId(),
-      lineId: item.lineId,
+      lineId,
       kind: 'excess',
-      reason: item.withoutValuationEvidence.reason,
+      reason,
       evidenceFileId: null,
       withinReservationId: null,
-      scope: this.headerScopeAt(item.to.siteId, item.to.businessUnitId),
-      brandIds: [this.brandOf(item.skuId)],
+      scope: this.headerScopeAt(at.siteId, at.businessUnitId),
+      brandIds: [this.brandOf(skuId)],
       freezeScope: [],
       claims: [],
     };
-    const claimed =
-      counted.pieces.length > 0
-        ? counted.pieces.map((piece) => ({ balanceId: null, pieceId: piece.id, quantity: 1 }))
-        : [{ balanceId: counted.balance.id, pieceId: null, quantity: item.quantity }];
-    for (const each of claimed) {
-      hold.claims.push(
-        this.newClaim(
-          'hold',
-          hold.id,
-          'excess',
-          null,
-          each.balanceId,
-          each.pieceId,
-          each.quantity,
-          counted.balance.scope,
-        ),
-      );
+    const { scope } = counted.balance;
+    if (counted.pieces.length > 0) {
+      for (const piece of counted.pieces) {
+        hold.claims.push(this.newClaim('hold', hold.id, 'excess', null, null, piece.id, 1, scope));
+      }
+    } else {
+      hold.claims.push(this.newClaim('hold', hold.id, 'excess', null, counted.balance.id, null, quantity, scope));
     }
     this.entries.holds.push(hold);
-    return { kind: 'unknown' };
   }
 
   /**

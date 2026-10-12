@@ -832,7 +832,7 @@ describe('plan staleness (stock-ledger 13.1)', () => {
     proceed();
     const checked = await stale;
     expect(checked.kind === 'refused' && checked.refusal).toEqual({
-      kind: 'conflict',
+      kind: 'refused',
       code: 'stock.plan-stale',
       missing: [{ kind: 'line', lineId }],
     });

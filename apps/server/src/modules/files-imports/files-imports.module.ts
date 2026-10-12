@@ -38,7 +38,7 @@ import { IMPORT_DEPENDENCIES, ImportsController } from './http/imports.controlle
 export const FILES_IMPORTS = 'files-imports.FilesImports';
 /**
  * The token of the variables the environment's name is read from (AOS_ENVIRONMENT; code-house-rules 12.14): the
- * process's, unless a test gives others. It decides the publishing limit of S1-F06-T01.
+ * process's, unless a test gives others. The hosting part of an opening batch's publish gate reads it (4.2; S1-F13-T03).
  */
 export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
 /** The token of the caps at intake, read at start from the same variables (9.3; code-house-rules 12.14; S1-F06-T02). */
@@ -50,7 +50,9 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
 export const QUEUED_PUBLISHING = 'files-imports.QueuedPublishing';
 
 /**
- * The files-imports module (module-map 4.7): tier 1, uses `access`, `audit`, `numbering` and `kernel`. It holds the
+ * The files-imports module (module-map 4.7): tier 1, uses `access`, `audit`, `numbering`, `configuration` (the policy
+ * gate's Available, for publishing an opening batch, and the declaration of that operation at start; S1-F13-T03) and
+ * `kernel`. It holds the
  * stored files, their receipts and the attachments that link a file to a record of any module as evidence
  * (S1-F06-T05), and imports: the import upload, layouts and mappings, batches with their staged rows, and publishing
  * through the handlers the target modules register at start under IMPORT_HANDLERS, which the composition root provides,

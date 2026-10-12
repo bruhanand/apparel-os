@@ -210,4 +210,4 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F14-T04 Restore drill on dev](s1-f14-backup-and-restore/tickets/T04-restore-drill-on-dev.md) | blocked | F14-T03 + gate |
 | [F13-T01 Opening-stock manifest and comparison runs](s1-f13-opening-data/tickets/T01-opening-stock-manifest-and-comparison-runs.md) | done | F06-T03, F10-T03, F04-T02 + gate |
 | [F13-T02 Dues, advances and deposits](s1-f13-opening-data/tickets/T02-dues-advances-and-deposits.md) | done | F13-T01 |
-| [F13-T03 Publish gate and synthetic opening count job](s1-f13-opening-data/tickets/T03-publish-gate-and-synthetic-opening-count-job.md) | blocked | F10-T07, F04-T01, F13-T01 |
+| [F13-T03 Publish gate and synthetic opening count job](s1-f13-opening-data/tickets/T03-publish-gate-and-synthetic-opening-count-job.md) | done | F10-T07, F04-T01, F13-T01 |

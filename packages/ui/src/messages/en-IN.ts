@@ -2539,7 +2539,8 @@ export const englishIndia = {
   'error.files-imports.publish-request-not-found': 'The request to post this batch is not there.',
   'error.files-imports.publish-request-answered': 'The request to post this batch has its outcome already.',
   'error.files-imports.publish-request-superseded': 'A later request to post this batch replaced this one.',
-  'missing.hosting': 'Opening data publishes only on hosting where a Store switches, never on the test setup.',
+  'missing.hosting':
+    'Opening data publishes only on production hosting, where a Store switches, or with synthetic data in development; never on the test setup.',
   'missing.opening-switch': 'The unit has no approved switch with its cutover still open.',
   'missing.publish-request': 'A request to post this batch that is still waiting.',
   'intake.publish.queued': 'Queued to post. The outcome shows here when the job ends.',

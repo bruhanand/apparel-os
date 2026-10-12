@@ -6,6 +6,7 @@ import {
   type DocumentPreview,
 } from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import type { TransactionContext } from '../../src/kernel/index.js';
 import {
   knownValue,
@@ -27,6 +28,7 @@ import type { OrganisationInterface } from '../../src/modules/organisation/index
 import {
   organisationPlaces,
   type CallerRegistration,
+  type Condition,
   type LedgerItem,
   type LedgerRequest,
   type Owner,
@@ -124,6 +126,11 @@ export interface OpeningStockDependencies {
   readonly ledger?: StockLedgerInterface;
   /** Where the posting's phases add their milliseconds, for the measurement (10.6; RR-189). */
   readonly timings?: Record<string, number>;
+  /**
+   * The book a document posts into, given the book of its unit's mapping: a test may name another, SYNTHETIC, to see a
+   * batch whose documents post into several books refused (`files-imports.several-books`; 10.6).
+   */
+  readonly bookOf?: (document: HandlerDocument, unitBookId: string) => string;
 }
 
 /** The module the test handler posts as, a synthetic caller of the stock ledger (stock-ledger 13.2; H2, H5). */
@@ -142,6 +149,9 @@ export const OPENING_STOCK_CALLER: CallerRegistration = {
     { recordType: OPENING_STOCK_RECORD_TYPE, itemKinds: ['opening-count'], importKinds: ['opening-balance'] },
   ],
 };
+
+/** A row's condition, as the stock ledger names conditions (stock-ledger 2.2), checked rather than assumed. */
+const conditionSchema = z.enum(['good', 'damaged', 'wrong', 'unidentified']) satisfies z.ZodType<Condition>;
 
 /** Why a counted row without valuation evidence is held (stock-ledger 9 step 3; PRD-STK-014; POL-14.03). */
 export const NO_VALUATION_EVIDENCE = 'Counted at the opening without valuation evidence (POL-14.03)';
@@ -316,7 +326,7 @@ async function switchOf(context: TransactionContext, place: ImportPlace): Promis
       select s.id, exists (select 1 from test_opening_stock.cutover c where c.switch_id = s.id) as complete
         from test_opening_stock.switch s
        where s.business_unit_id = ${place.businessUnitId} and s.site_id = ${place.siteId}
-       order by s.id desc limit 1`)
+       order by s.approved_at desc, s.id desc limit 1`)
   ).rows;
   if (row === undefined) return { kind: 'none' };
   return { kind: 'approved', switchId: row.id, cutover: row.complete ? 'complete' : 'open' };
@@ -325,8 +335,10 @@ async function switchOf(context: TransactionContext, place: ImportPlace): Promis
 /**
  * The posting half (10.5, 10.6; stock-ledger 9, 13.4; S1-F13-T03): each opening-stock row of the manifest becomes an
  * opening count at its location, through the ledger's four operations in the job's transaction, after files-imports
- * recorded the decision's use, which every movement keeps (13.3). A row with valuation evidence is opening stock owned
- * by the legal entity Operations verified (POL-14.02); one without is held as excess, owner Unknown (PRD-STK-014).
+ * recorded the decision's use, which every movement keeps (13.3). Ownership and valuation are kept apart: the owner is
+ * the legal entity Operations verified (POL-14.02); valuation evidence, Accounts' (POL-14.03), decides only whether a
+ * row is opening stock. One without is a surplus with no known receipt origin, held as excess, owner Unknown
+ * (PRD-STK-014).
  * Values stay Unknown until an opening PT is approved, so nothing posts to the books: no journal (PRD-LIF-008).
  * Billed-retained items are not opening stock and are not counted here: their recognition rule is OPEN (stock-ledger 9
  * step 4; V-35, SL-17). Piece IDs are labelled at the switch count, never imported (PRD-LIF-025), so a piece-tracked
@@ -366,18 +378,25 @@ async function postOpening(
     const read = await skuRead(context, dependencies.catalogue, skuId, siteId, date);
     if ('refusal' in read) return refused('row-not-resolved', row.rowNumber);
     if (read.sku.tracking?.pieceTracked === true) return refused('pieces-labelled-at-the-count', row.rowNumber);
+    const condition = conditionSchema.safeParse(value('condition'));
+    if (!condition.success) return refused('row-not-resolved', row.rowNumber);
     const batchCode = value('batchCode');
     const expiryDate = value('expiryDate');
+    // Ownership and valuation stay apart: the owner is the one Operations verified (POL-14.02), whatever the row's
+    // valuation evidence, which is Accounts' (POL-14.03) and decides only whether the row is opening stock.
+    const verifiedOwner: Owner = { kind: 'organisation', legalEntityId };
     const evidence = value('valuationEvidence') !== undefined;
-    const owner: Owner = evidence ? { kind: 'organisation', legalEntityId } : { kind: 'unknown' };
     items.push({
       kind: 'opening-count',
       lineId: row.stagedRowId,
       skuId,
       quantity: Number(value('quantity')),
       to: { siteId, businessUnitId, locationId },
-      condition: value('condition') as 'good' | 'damaged' | 'wrong' | 'unidentified',
-      owner,
+      condition: condition.data,
+      // A row without valuation evidence is not opening stock but a count surplus with no known receipt origin, whose
+      // owner stays Unknown until it is established (PRD-STK-014; stock-ledger 9 step 3): the owner verified above
+      // stays on the staged row as the evidence for that.
+      owner: evidence ? verifiedOwner : { kind: 'unknown' },
       ...(read.sku.tracking?.batchExpiryRequired === true && batchCode !== undefined && expiryDate !== undefined
         ? { batch: { code: batchCode, expiryDate } }
         : {}),
@@ -496,7 +515,7 @@ export function openingStockHandler(dependencies: OpeningStockDependencies): Imp
         if (siteId === undefined || businessUnitId === undefined) throw new Error('An opening names no unit');
         const unit = await organisationPlaces.unitAt(context, { siteId, businessUnitId }, await today(context));
         if (unit === undefined) throw new Error('The opening unit has no mapping in force');
-        return unit.bookId;
+        return dependencies.bookOf?.(document, unit.bookId) ?? unit.bookId;
       },
     },
     publish: (context, publisher, document, source) => postOpening(context, dependencies, publisher, document, source),

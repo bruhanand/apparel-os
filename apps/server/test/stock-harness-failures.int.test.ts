@@ -122,6 +122,51 @@ describe('a map made invalid between Plan and the locks (books-and-posting 6.2, 
   }, 600_000);
 });
 
+describe('a receipt origin that appears between Plan and the locks (stock-ledger 13.1 "Plan staleness", 13.8)', () => {
+  it('stock-ledger 13.8 code-house-rules 12.3 a sale refused as plan-stale answers a refusal the till submits again under a new key, and the new key posts', async () => {
+    const harness = new StockHarness();
+    worlds.push(harness);
+    await harness.start('failures');
+    const fixtures = await harness.fixtures('moving-average', 'book', { pieceTracked: false });
+    const run = new ScenarioRun(harness, fixtures, false);
+    await run.done({ command: 'receipt', receipt: 'R1', at: 'S1', quantity: 3 });
+    await run.done({ command: 'receipt-acceptance', receipt: 'R1' });
+    await run.done({ command: 'pt-coverage', receipt: 'R1' });
+    await run.done({ command: 'pt-approval', receipt: 'R1', pRatePaise: 10_000 });
+    const before = await counts(harness, fixtures.bookId);
+    const planned = gate();
+    const goOn = gate();
+    // The sale names no origin, so Plan names every origin of the SKU with stock at S1 (13.1).
+    const pending = await run.prepared({ command: 'sale', sale: 'B1', at: 'S1', quantity: 1 });
+    const sending = run.send(pending, {
+      afterPlan: async () => {
+        planned.open();
+        await goOn.wait;
+      },
+    });
+    await planned.wait;
+    // A new origin of the same SKU at S1 commits between the sale's Plan and its locks.
+    await run.done({ command: 'receipt', receipt: 'R2', at: 'S1', quantity: 2 });
+    const movementsBefore = (await counts(harness, fixtures.bookId))?.movements;
+    goOn.open();
+    const sent = await sending;
+    // A refusal the till may submit again, not a defect (code-house-rules 12.3: `refused`, kept under its key).
+    expect(refusalOf(sent)).toMatchObject({ kind: 'refused', code: 'stock.plan-stale' });
+    expect((await counts(harness, fixtures.bookId))?.movements).toBe(movementsBefore);
+    if (sent.kind !== 'refused') throw new Error('not refused');
+    expect(await sent.replay()).toMatchObject({
+      kind: 'refusal',
+      replayed: true,
+      refusal: { code: 'stock.plan-stale' },
+    });
+    // Submitted again under a new key, the sale finds every origin locked and posts.
+    expect((await run.send(pending)).kind).toBe('written');
+    expect((await counts(harness, fixtures.bookId))?.journals).toBeGreaterThan(before?.journals ?? 0);
+    await rebuilds(harness, harness.preparer.user.id);
+    await invariantsHold(harness.database);
+  }, 600_000);
+});
+
 describe('a document changed after its approval (access-and-approvals 9.6, 9.7; PRD-ACS-007; stock-ledger 11.9)', () => {
   it('PRD-ACS-007 DEC-097 posting a version the decision did not approve is refused, nothing commits and the decision stays unused', async () => {
     const harness = new StockHarness();

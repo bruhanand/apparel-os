@@ -53,7 +53,7 @@ export interface ImportDependencies {
   readonly logger: StructuredLogger;
   readonly numbering: NumberingInterface;
   readonly handlers: ImportHandlers;
-  /** The environment's name (code-house-rules 12.14); the publishing limit of S1-F06-T01 that read it is lifted. */
+  /** The environment's name (code-house-rules 12.14), which the hosting part of an opening batch's gate reads (4.2). */
   readonly environment: DeploymentEnvironment;
   /** The caps at intake, which every read of a stored workbook keeps to (9.3; S1-F06-T02). */
   readonly caps: IntakeCaps;

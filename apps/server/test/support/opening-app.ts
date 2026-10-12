@@ -163,6 +163,8 @@ export class OpeningApp {
   private counter = 0;
   private serviceIdentityId: string | undefined;
   private readonly workers: OpeningWorker[] = [];
+  /** The book a test names for a document instead of its unit's, SYNTHETIC (`files-imports.several-books`). */
+  bookOf: ((reference: string) => string | undefined) | undefined;
 
   get database(): string {
     return this.harness.database;
@@ -242,6 +244,7 @@ export class OpeningApp {
         seasonAttributeId: seasonAttribute.answer.recordId,
         ledger,
         timings: this.timings,
+        bookOf: (document, unitBookId) => this.bookOf?.(document.reference) ?? unitBookId,
       }),
     );
     this.approveReason = await writeSyntheticReason(organisation.database, 'approve');
@@ -520,19 +523,8 @@ export class OpeningApp {
    */
   async worker(hooks: { beforeStep?: () => Promise<void> } = {}): Promise<OpeningWorker> {
     // One worker at a time, so the hooks given are the ones the next delivery meets.
-    for (const running of this.workers.splice(0)) await running.stop();
-    const organisation = this.harness.world.organisations[0];
-    if (this.serviceIdentityId === undefined) {
-      await writeSyntheticServiceIdentity(organisation.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
-      this.serviceIdentityId = await writeSyntheticServiceIdentity(organisation.database, OPENING_POSTING_IDENTITY);
-      await grantSynthetic(organisation.database, { kind: 'service-identity', id: this.serviceIdentityId }, [
-        ...permissionRegistry
-          .filter((declaration) => declaration.actions.includes('view') && !declaration.code.startsWith('access.'))
-          .map((declaration) => ({ recordType: declaration.code, action: 'view' as const })),
-        { recordType: IMPORT_BATCH_TYPE, action: 'edit' },
-      ]);
-    }
-    const serviceIdentityId = this.serviceIdentityId;
+    await this.stopWorkers();
+    const serviceIdentityId = await this.postingIdentity();
     const queued = this.api.app.get<QueuedPublishingInterface>(QUEUED_PUBLISHING);
     const consumer = defineConsumer({
       name: `${syntheticIdentifier('opening-stock')}.post-opening`,
@@ -580,5 +572,69 @@ export class OpeningApp {
     };
     this.workers.push(running);
     return running;
+  }
+
+  /** Stops every worker, so a request to post waits until a test runs its job itself. */
+  async stopWorkers(): Promise<void> {
+    for (const running of this.workers.splice(0)) await running.stop();
+  }
+
+  /**
+   * The SYNTHETIC internal service identity the posting consumer runs as, written once: view on every record type but
+   * `access`'s, and edit on import batches (PRD-SEC-018); with the outbox processor's own.
+   */
+  async postingIdentity(): Promise<string> {
+    if (this.serviceIdentityId !== undefined) return this.serviceIdentityId;
+    const organisation = this.harness.world.organisations[0];
+    await writeSyntheticServiceIdentity(organisation.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
+    const id = await writeSyntheticServiceIdentity(organisation.database, OPENING_POSTING_IDENTITY);
+    await grantSynthetic(organisation.database, { kind: 'service-identity', id }, [
+      ...permissionRegistry
+        .filter((declaration) => declaration.actions.includes('view') && !declaration.code.startsWith('access.'))
+        .map((declaration) => ({ recordType: declaration.code, action: 'view' as const })),
+      { recordType: IMPORT_BATCH_TYPE, action: 'edit' },
+    ]);
+    this.serviceIdentityId = id;
+    return id;
+  }
+
+  /** A further SYNTHETIC internal service identity holding only the authorities given. */
+  identity(label: string, authorities: readonly SyntheticAuthority[]): Promise<string> {
+    return writeSyntheticServiceIdentity(this.database, syntheticIdentifier(label), authorities);
+  }
+
+  /**
+   * Runs the queued publish of a request to post as the job's step would, in one command as the service identity
+   * named (10.6; code-house-rules 12.9), without the worker: so a test can deliver a request twice, or one it wrote.
+   */
+  publishRequested(serviceIdentityId: string, publishRequestId: string) {
+    const queued = this.api.app.get<QueuedPublishingInterface>(QUEUED_PUBLISHING);
+    return this.command(serviceIdentityId, (context) =>
+      queued.publishRequested(context, { serviceIdentityId }, publishRequestId),
+    );
+  }
+
+  /**
+   * A further request to post the batch an earlier one names, written directly as the migration role, as a Publish
+   * would write one, a second later, with the batch version given: SYNTHETIC, for the job's rechecks under its locks.
+   */
+  async requestAgain(publishRequestId: string, batchVersionId?: string): Promise<string> {
+    const id = uuidv7();
+    const owner = await connect(this.database, 'migration');
+    try {
+      await owner.query(
+        `insert into files_imports.publish_request
+           (id, batch_id, batch_version_id, approval_decision_id, accounting_book_id, requested_by_user_id, requested_at,
+            legal_entity_id, site_id, store_id, business_unit_id)
+         select $1, batch_id, coalesce($3, batch_version_id), approval_decision_id, accounting_book_id,
+                requested_by_user_id, requested_at + interval '1 second', legal_entity_id, site_id, store_id,
+                business_unit_id
+           from files_imports.publish_request where id = $2`,
+        [id, publishRequestId, batchVersionId ?? null],
+      );
+    } finally {
+      await owner.end();
+    }
+    return id;
   }
 }

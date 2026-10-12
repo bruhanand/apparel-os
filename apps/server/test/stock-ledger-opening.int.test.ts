@@ -8,7 +8,7 @@ import { at, PLACES, SKUS, StockWorld, SYNTHETIC_MODULE, written } from './suppo
 // S1-F13-T03: the opening count (stock-ledger 9, 13.4; imports-and-opening-data 10.5, 10.6; PRD-LIF-003,
 // PRD-LIF-004, PRD-LIF-008, PRD-LIF-027, PRD-STK-014, POL-14.02). An opening count is a receipt count from an opening
 // batch: it creates opening receipt origins, their custody, and no value until an opening PT is approved. A counted row
-// without valuation evidence is not opening stock: it is held as excess, owner, coverage and cost Unknown. Posted by
+// without valuation evidence is not opening stock: a surplus origin, held as excess, owner, coverage and cost Unknown. Posted by
 // the synthetic caller through the real command runner, access and row-level security on real PostgreSQL. Every place,
 // SKU and document is SYNTHETIC.
 
@@ -90,7 +90,7 @@ describe('the opening count (stock-ledger 9, 13.4)', () => {
     expect(rebuilt.differences).toEqual([]);
   });
 
-  it('PRD-STK-014 a counted row without valuation evidence is held as excess, its owner Unknown', async () => {
+  it('PRD-STK-014 stock-ledger 9 a counted row without valuation evidence is not opening stock: a surplus origin held as excess, its owner Unknown', async () => {
     const result = written(
       await world.post(
         world.poster,
@@ -106,7 +106,8 @@ describe('the opening count (stock-ledger 9, 13.4)', () => {
     expect(result.holdIds).toHaveLength(1);
     expect(await writtenRows(result.movementIds, result.receiptOriginIds)).toEqual({
       movements: [{ kind: 'opening-count', source_import_kind: 'opening-balance', valued: false }],
-      origins: [{ origin_kind: 'opening', owner_kind: null, quantity: 2 }],
+      // No known receipt origin (PRD-STK-014): a count surplus's origin kind, not an opening's.
+      origins: [{ origin_kind: 'surplus', owner_kind: null, quantity: 2 }],
       holds: [{ kind: 'excess', quantity: 2 }],
     });
     const rebuilt = await world.run(world.poster.user.id, (context) => rebuildAndCompare(context));

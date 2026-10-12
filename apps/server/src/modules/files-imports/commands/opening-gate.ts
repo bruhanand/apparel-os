@@ -28,6 +28,7 @@ export async function openingGateOf(
   const opening = handler.switchOf === undefined ? { kind: 'none' as const } : await handler.switchOf(context, place);
   return openingGate({
     environment: deps.environment.name,
+    organisationCode: context.organisationCode,
     availability: answer.missing,
     opening,
     unitId: place.businessUnitId,

@@ -661,6 +661,8 @@ export const eboImportsCodes = declareCodes({
  * The codes of `stock` · ledger (stock-ledger 13.8; S1-F10-T02). Each refusal names the item and what failed, so the
  * caller can show the reason (PRD-UXP-003). `stock.blocked` is the one generic refusal of a recheck that a hold, a
  * reservation or a count freeze the actor cannot see covers the units: it names nothing of that record (DEC-117).
+ * `stock.plan-stale` is `refused`, kept under its key, so the person or job submits the request again under a new one
+ * (13.1, 13.8; code-house-rules 12.3: the one conflict a command decides is a stale version; S1-F13-T03 review).
  */
 export const stockLedgerCodes = declareCodes({
   'stock.caller-not-registered': 'refused',
@@ -670,7 +672,7 @@ export const stockLedgerCodes = declareCodes({
   'stock.invalid-item': 'refused',
   'stock.place-invalid': 'refused',
   'stock.route-not-allowed': 'refused',
-  'stock.plan-stale': 'conflict',
+  'stock.plan-stale': 'refused',
   'stock.insufficient-available': 'refused',
   'stock.not-in-custody': 'refused',
   'stock.piece-not-at-place': 'refused',
