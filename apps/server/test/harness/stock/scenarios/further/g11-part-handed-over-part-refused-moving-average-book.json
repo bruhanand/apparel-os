@@ -52,7 +52,13 @@
     {
       "step": "departure",
       "commands": [
-        { "command": "supplier-return-approval", "return": "RTV1", "at": "S1", "pieces": "R1:0,R2:0" },
+        {
+          "command": "supplier-return-approval",
+          "return": "RTV1",
+          "approvedPaise": 23000,
+          "at": "S1",
+          "pieces": "R1:0,R2:0"
+        },
         {
           "command": "departure",
           "return": "RTV1",

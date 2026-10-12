@@ -1,6 +1,8 @@
+import { paise, type Paise } from '@apparel-os/domain';
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import { costLayer, costPool, transitValue, valuation } from '../db/schema.js';
+import { sumPaise, type Formula, type PoolMode } from '../domain/valuation.js';
 
 // The ledger's reads of value (stock-ledger 13.6 "Value" and "Inventory reconciliation"; S1-F10-T03): pools and FIFO
 // layers, values held on dispatches and shipments, and each valued movement's effect on them, for matching with the
@@ -14,8 +16,8 @@ export interface ValueLayer {
   readonly enteredSequence: number;
   readonly quantityIn: number;
   readonly quantityLeft: number;
-  readonly valueInPaise: number;
-  readonly valueLeftPaise: number;
+  readonly valueInPaise: Paise;
+  readonly valueLeftPaise: Paise;
   readonly fromLayerId: string | null;
   readonly receiptOriginId: string | null;
 }
@@ -24,12 +26,12 @@ export interface PoolValue {
   readonly id: string;
   readonly bookId: string;
   readonly skuId: string;
-  readonly poolMode: string;
+  readonly poolMode: PoolMode;
   readonly siteId: string | null;
-  readonly formula: string;
+  readonly formula: Formula;
   readonly costSettingVersionId: string;
   readonly quantity: number;
-  readonly valuePaise: number;
+  readonly valuePaise: Paise;
   /** Under FIFO its layers, oldest first. */
   readonly layers: ValueLayer[];
 }
@@ -41,7 +43,7 @@ export interface TransitHeld {
   readonly bookId: string;
   readonly skuId: string;
   readonly quantity: number;
-  readonly valuePaise: number;
+  readonly valuePaise: Paise;
 }
 
 /** Value (13.6; PRD-LED-014, PRD-LED-015): the open pools with their layers, and the values held in transit, now. */
@@ -124,9 +126,9 @@ export interface ReconciledMovement {
   readonly movementId: string;
   readonly eventKind: string;
   /** The signed change of the book's pool value, which the inventory account matches (PRD-LED-008). */
-  readonly poolValuePaise: number;
+  readonly poolValuePaise: Paise;
   /** The signed change of the value held on dispatches and shipments. */
-  readonly transitValuePaise: number;
+  readonly transitValuePaise: Paise;
 }
 
 /**
@@ -139,8 +141,8 @@ export async function inventoryReconciliation(
   bookId: string,
 ): Promise<{
   readonly asOf: string;
-  readonly poolValuePaise: number;
-  readonly transitValuePaise: number;
+  readonly poolValuePaise: Paise;
+  readonly transitValuePaise: Paise;
   readonly movements: ReconciledMovement[];
 }> {
   const pools = await context.tx
@@ -169,13 +171,13 @@ export async function inventoryReconciliation(
   }
   return {
     asOf: context.startedAt.toISOString(),
-    poolValuePaise: pools.reduce((total, row) => total + row.value, 0),
-    transitValuePaise: transits.reduce((total, row) => total + row.value, 0),
+    poolValuePaise: sumPaise(pools.map((row) => row.value)),
+    transitValuePaise: sumPaise(transits.map((row) => row.value)),
     movements: [...byMovement].map(([movementId, sum]) => ({
       movementId,
       eventKind: sum.eventKind,
-      poolValuePaise: sum.pool,
-      transitValuePaise: sum.transit,
+      poolValuePaise: paise(sum.pool),
+      transitValuePaise: paise(sum.transit),
     })),
   };
 }

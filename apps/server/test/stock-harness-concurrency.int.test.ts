@@ -92,7 +92,14 @@ describe('stock-ledger 11.9 concurrency on separate connections (code-house-rule
     const world = await stocked('moving-average', 'book', [{ receipt: 'R1', at: 'W1', count: 1, pRatePaise: 10_000 }]);
     const { run } = world;
     const transfer = (name: string) =>
-      run.prepared({ command: 'transfer-approval', transfer: name, from: 'W1', to: 'S1', pieces: 'R1:0' });
+      run.prepared({
+        command: 'transfer-approval',
+        transfer: name,
+        from: 'W1',
+        to: 'S1',
+        pieces: 'R1:0',
+        approvedPaise: 10_000,
+      });
     const first = await holdStep(run, await transfer('T1'));
     const second = await sendBehind(run, first, await transfer('T2'));
     written(await first.release());

@@ -104,6 +104,8 @@ export interface TransitTarget {
   readonly create: boolean;
   readonly unit: UnitFacts;
   readonly brandId: string;
+  /** Its book's formula, which a new transit value keeps (7.8; 0056). */
+  readonly formula: Formula;
 }
 
 /** The key of the pool a unit's goods of a SKU are in, under its book's pool mode (7.1; PRD-LED-015). */
@@ -230,16 +232,22 @@ export async function planRequest(
   const enteredOrigins = new Set<string>();
   const probes: PostItem[] = [];
   const probeLines = new Map<string, string>();
-  const settingOf = async (lineId: string, bookId: string): Promise<CostSetting> => {
+  /** The book's cost setting in force on the business date, if it has one (books-and-posting 2.2). */
+  const settingIfAny = async (bookId: string): Promise<CostSetting | undefined> => {
     let setting = costSettings.get(bookId);
     if (setting === undefined) {
       const read = await reads.books.costSettingOn(context, bookId, businessDate);
-      // books-and-posting 2.2; PRD-SEC-017: a book with no approved cost setting takes no valued movement.
-      if (read.kind !== 'set') {
-        throw new StockRefused(refusalOf('no-cost-setting', lineId, [{ kind: 'book-setting', bookId }]));
-      }
+      if (read.kind !== 'set') return undefined;
       setting = { versionId: read.versionId, formula: read.formula, poolMode: read.poolMode };
       costSettings.set(bookId, setting);
+    }
+    return setting;
+  };
+  const settingOf = async (lineId: string, bookId: string): Promise<CostSetting> => {
+    const setting = await settingIfAny(bookId);
+    // books-and-posting 2.2; PRD-SEC-017: a book with no approved cost setting takes no valued movement.
+    if (setting === undefined) {
+      throw new StockRefused(refusalOf('no-cost-setting', lineId, [{ kind: 'book-setting', bookId }]));
     }
     return setting;
   };
@@ -266,6 +274,7 @@ export async function planRequest(
     return target;
   };
   const transitOf = async (
+    lineId: string,
     kind: TransitKind,
     ref: string,
     unit: UnitFacts,
@@ -298,6 +307,7 @@ export async function planRequest(
       create,
       unit,
       brandId: sku.brandId,
+      formula: (await settingOf(lineId, unit.bookId)).formula,
     };
     transits.set(key, target);
     return target;
@@ -345,7 +355,7 @@ export async function planRequest(
     for (const row of held) {
       const at = await unitOf(lineId, row.siteId, row.businessUnitId);
       if (row.transitKind !== null && row.transitRef !== null) {
-        const transit = await transitOf(row.transitKind as TransitKind, row.transitRef, at, sku, false);
+        const transit = await transitOf(lineId, row.transitKind as TransitKind, row.transitRef, at, sku, false);
         if (transit === undefined && row.transitKind === 'dispatch') await poolOf(lineId, at, sku);
       } else await poolOf(lineId, at, sku);
     }
@@ -371,7 +381,7 @@ export async function planRequest(
           .innerJoin(transitValue, eq(transitValue.id, transitValueLayer.transitValueId))
           .where(and(inArray(transitValueLayer.sourceLayerId, layerIds), gt(transitValueLayer.quantity, 0)));
         for (const row of inTransit) {
-          await transitOf(row.kind as TransitKind, row.ref, { ...unit, bookId: row.bookId }, sku, false);
+          await transitOf(lineId, row.kind as TransitKind, row.ref, { ...unit, bookId: row.bookId }, sku, false);
         }
       }
     }
@@ -438,6 +448,13 @@ export async function planRequest(
         for (const goods of item.goods) await goodsAt(item.lineId, unit, goods, item.kind === 'reserve');
         if (item.kind === 'place-hold' && item.withinReservationId !== undefined)
           reservationIds.add(item.withinReservationId);
+        // A reservation is valued for its approval at its pool's cost of the units (13.10 "Value for approval";
+        // product owner, 11 Oct 2026): the pool is locked at step 6 and read under the lock. A book with no cost
+        // setting has no pool, and the reservation's value is Unknown.
+        if (item.kind === 'reserve' && (await settingIfAny(unit.bookId)) !== undefined) {
+          for (const goods of item.goods)
+            await poolOf(item.lineId, unit, await skuOf(item.lineId, goods.skuId, unit.siteId));
+        }
         return;
       }
       case 'record-coverage': {
@@ -531,7 +548,7 @@ export async function planRequest(
         reservationIds.add(item.reservationId);
         const source = await poolOf(item.lineId, from, sku);
         if (item.kind === 'supplier-return-departure') {
-          await transitOf('return-shipment', item.shipmentId, from, sku, true);
+          await transitOf(item.lineId, 'return-shipment', item.shipmentId, from, sku, true);
           probe(item.lineId, 'stock.supplier-return-departure', from, sku);
           return;
         }
@@ -539,7 +556,7 @@ export async function planRequest(
         const destination = await poolOf(item.lineId, to, sku);
         // Different pools (Site pools, or two books): value leaves the source pool onto the dispatch (7.8).
         if (destination.key !== source.key) {
-          await transitOf('dispatch', item.dispatchId, from, sku, true);
+          await transitOf(item.lineId, 'dispatch', item.dispatchId, from, sku, true);
           probe(item.lineId, 'stock.pool-dispatch', from, sku);
         }
         return;
@@ -550,7 +567,7 @@ export async function planRequest(
         const source = await transitPlace(item.lineId, item.from, item.goods);
         const kind: TransitKind = item.kind === 'arrival-count' ? 'dispatch' : 'return-shipment';
         const ref = item.kind === 'arrival-count' ? item.dispatchId : item.shipmentId;
-        const transit = await transitOf(kind, ref, source.unit, source.sku, false);
+        const transit = await transitOf(item.lineId, kind, ref, source.unit, source.sku, false);
         if (item.kind === 'supplier-handover') {
           if (transit !== undefined) probe(item.lineId, 'stock.supplier-handover', source.unit, source.sku);
           return;

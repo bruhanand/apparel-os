@@ -130,3 +130,34 @@ describe('a document changed after its approval (access-and-approvals 9.6, 9.7; 
     await invariantsHold(harness.database);
   }, 600_000);
 });
+
+describe('a transfer valued for its approval at its pool’s cost (stock-ledger 13.10 "Value for approval"; product owner, 11 Oct 2026)', () => {
+  it('PRD-ACS-015 PRD-ACS-016 an approver’s cost limit routes a transfer; one approved on an Unknown value is refused under the lock', async () => {
+    const harness = new StockHarness();
+    worlds.push(harness);
+    await harness.start('failures');
+    const fixtures = await harness.fixtures('moving-average', 'book');
+    const run = new ScenarioRun(harness, fixtures, true);
+    // SYNTHETIC: two receipts of a piece at ₹60,000.00, each within the checker's SYNTHETIC limit of ₹1,00,000.00,
+    // the two together above it.
+    for (const receipt of ['R1', 'R2']) {
+      await run.done({ command: 'receipt', receipt, at: 'W1', pieces: 1 });
+      await run.done({ command: 'receipt-acceptance', receipt });
+      await run.done({ command: 'pt-coverage', receipt });
+      await run.done({ command: 'pt-approval', receipt, pRatePaise: 6_000_000 });
+    }
+    const transfer = (name: string, pieces: string, approvedPaise: number | null) =>
+      run.prepared({ command: 'transfer-approval', transfer: name, from: 'W1', to: 'S1', pieces, approvedPaise });
+    // Above the checker's limit the checker cannot decide it: it is for an approver whose limit covers it.
+    await expect(transfer('T1', 'R1:0,R2:0', 12_000_000)).rejects.toThrow(/access\.above-approval-limit/);
+    // Approved on an Unknown value, it is refused under the lock, since the ledger values it at ₹60,000.00 (DEC-066).
+    const unknown = await transfer('T2', 'R1:0', null);
+    const refused = await run.send(unknown);
+    expect(refusalOf(refused)?.code).toMatch(/^access\./);
+    // Within the limit, on the pool's cost of the piece, it is written once.
+    const within = await transfer('T3', 'R1:0', 6_000_000);
+    expect((await run.send(within)).kind).toBe('written');
+    await rebuilds(harness, harness.preparer.user.id);
+    await invariantsHold(harness.database);
+  }, 600_000);
+});

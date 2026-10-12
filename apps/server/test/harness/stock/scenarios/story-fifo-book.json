@@ -102,6 +102,7 @@
         {
           "command": "transfer-approval",
           "transfer": "T1",
+          "approvedPaise": 40000,
           "from": "W1",
           "to": "S1",
           "pieces": "R1:0-3",
@@ -272,6 +273,7 @@
         {
           "command": "supplier-return-approval",
           "return": "RTV1",
+          "approvedPaise": 11500,
           "at": "S1",
           "pieces": "R2:2",
           "movements": [],

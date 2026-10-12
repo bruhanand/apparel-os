@@ -117,6 +117,74 @@ describe('reversals (stock-ledger 7.5, 13.4 "Reversal")', () => {
   }, 300_000);
 });
 
+describe('disposal of quantity-tracked goods (stock-ledger 6.2, 7.9, 13.4 "Disposal")', () => {
+  it('PRD-DMG-012 units another hold also claims are held, as for a piece; units only the hold claims are disposed', async () => {
+    const combo = await world.book('moving-average', 'book');
+    const sku = world.sku(false);
+    // SYNTHETIC: 3 units at S1 at ₹100.00, covered, accepted and costed.
+    const receipt = await posted([
+      {
+        kind: 'receipt-count',
+        lineId: line(),
+        skuId: sku.skuId,
+        quantity: 3,
+        to: combo.s1,
+        condition: 'good',
+        owner: { kind: 'organisation', legalEntityId: combo.legalEntityId },
+      },
+    ]);
+    const originId = receipt.receiptOriginIds[0] ?? '';
+    const ptRevisionId = uuidv7();
+    const goods = (quantity: number) => ({ skuId: sku.skuId, quantity });
+    await posted([
+      { kind: 'record-coverage', lineId: line(), ptRevisionId, receiptOriginId: originId, quantity: 3 },
+      { kind: 'record-acceptance', lineId: line(), at: combo.s1, goods: goods(3) },
+      { kind: 'cost-established', lineId: line(), receiptOriginId: originId, ptRevisionId, pRatePaise: rupees(100) },
+    ]);
+    const hold = async (holdKind: 'quarantine' | 'expiry', quantity: number) =>
+      (
+        await posted([
+          {
+            kind: 'place-hold',
+            lineId: line(),
+            holdKind,
+            reason: 'SYNTHETIC',
+            at: combo.s1,
+            condition: 'good',
+            goods: [goods(quantity)],
+          },
+        ])
+      ).holdIds[0] ?? '';
+    const quarantine = await hold('quarantine', 2);
+    const expiry = await hold('expiry', 1);
+    const disposal = (quantity: number): LedgerItem => ({
+      kind: 'disposal',
+      lineId: line(),
+      at: combo.s1,
+      condition: 'good',
+      holdId: quarantine,
+      goods: goods(quantity),
+    });
+    // The quarantine claims 2 units; the expiry hold claims the third. The quarantine's own 2 go.
+    await posted([disposal(2)]);
+    // A third would take a unit the expiry hold claims: held, naming it, and nothing commits.
+    const third = await hold('quarantine', 1);
+    expect(
+      await refused([
+        {
+          kind: 'disposal',
+          lineId: line(),
+          at: combo.s1,
+          condition: 'good',
+          holdId: third,
+          goods: goods(1),
+        },
+      ]),
+    ).toMatchObject({ code: 'stock.held', missing: [{ kind: 'line' }, { holdKind: 'expiry', holdId: expiry }] });
+    expect((await trialBalance(world, combo)).INV).toBe(10_000);
+  }, 300_000);
+});
+
 describe('piece correction (stock-ledger 8.4, 13.4; PRD-STK-015)', () => {
   it('SL-28 a piece correction between pieces of different owners is refused, for the no-match route', async () => {
     const combo = await world.book('moving-average', 'book');

@@ -696,13 +696,14 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
         receiptOriginId: row.receiptOriginId,
         costPoolId: row.poolId,
         transitValueId: row.transitId,
+        formula: row.formula,
         sequence: row.sequence,
         quantityDelta: row.quantityDelta,
         valueDeltaPaise: row.valueDelta,
         quantityBefore: row.quantityBefore,
         quantityAfter: row.quantityBefore + row.quantityDelta,
         valueBeforePaise: row.valueBefore,
-        valueAfterPaise: row.valueBefore + row.valueDelta,
+        valueAfterPaise: paise(row.valueBefore + row.valueDelta),
         eventKind: row.eventKind,
         component: row.component,
         ...times,
@@ -795,4 +796,3 @@ async function writeValues(context: TransactionContext, checked: CheckedRequest)
     }
   }
 }
-

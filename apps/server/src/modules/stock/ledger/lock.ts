@@ -1,4 +1,4 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { paise, uuidv7 } from '@apparel-os/domain';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
@@ -186,7 +186,7 @@ export async function lockPlan(
         formula: target.formula,
         costSettingVersionId: target.costSettingVersionId,
         quantity: 0,
-        valuePaise: 0,
+        valuePaise: paise(0),
         lastSequence: 0,
         legalEntityId: target.legalEntityId,
         brandId: target.brandId,
@@ -203,8 +203,9 @@ export async function lockPlan(
         transitRef: target.ref,
         bookId: target.bookId,
         skuId: target.skuId,
+        formula: target.formula,
         quantity: 0,
-        valuePaise: 0,
+        valuePaise: paise(0),
         siteId: target.unit.siteId,
         storeId: target.unit.storeId,
         businessUnitId: target.unit.businessUnitId,

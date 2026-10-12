@@ -398,6 +398,7 @@ describe('cost pools (stock-ledger 7.1, 14.2)', () => {
       receipt_origin_id: origin,
       cost_pool_id: pool,
       transit_value_id: null,
+      formula: 'moving-average',
       sequence: 1,
       quantity_delta: 2,
       value_delta_paise: 200,
@@ -424,6 +425,47 @@ describe('cost pools (stock-ledger 7.1, 14.2)', () => {
     expect(await sqlState(insert(owner, 'valuation', valuation()))).toBe('23505');
     // A pool row names no Store or unit (SL-25 (e)).
     expect(await sqlState(insert(owner, 'valuation', valuation({ sequence: 3, ...AT_STORE_1 })))).toBe('23514');
+    // Its formula is its pool's (migration 0056).
+    expect(await sqlState(insert(owner, 'valuation', valuation({ sequence: 3, formula: 'fifo' })))).toBe('23503');
+  });
+
+  it('stock-ledger 13.10 a valuation names no origin only under moving average and only for the named kinds', async () => {
+    const { movement, origin } = await stockAt(AT_STORE_1, BRAND_A);
+    const average = await insert(owner, 'cost_pool', poolRow());
+    const fifo = await insert(owner, 'cost_pool', poolRow({ formula: 'fifo', sku_id: uuidv7() }));
+    const row = (pool: string, formula: string, sequence: number, eventKind: string, originId: string | null): Row => ({
+      id: uuidv7(),
+      movement_id: movement,
+      receipt_origin_id: originId,
+      cost_pool_id: pool,
+      transit_value_id: null,
+      formula,
+      sequence,
+      quantity_delta: 0,
+      value_delta_paise: 0,
+      quantity_before: 0,
+      quantity_after: 0,
+      value_before_paise: 0,
+      value_after_paise: 0,
+      event_kind: eventKind,
+      component: 'cost',
+      business_date: today(),
+      accounting_date: today(),
+      site_id: null,
+      store_id: null,
+      business_unit_id: null,
+      legal_entity_id: LEGAL_ENTITY,
+      brand_id: BRAND_A,
+    });
+    await insert(owner, 'valuation', row(average, 'moving-average', 1, 'stock.sale-issue', null));
+    await insert(owner, 'valuation', row(fifo, 'fifo', 1, 'stock.sale-issue', origin));
+    expect(await sqlState(insert(owner, 'valuation', row(fifo, 'fifo', 2, 'stock.sale-issue', null)))).toBe('23514');
+    expect(
+      await sqlState(insert(owner, 'valuation', row(average, 'moving-average', 2, 'stock.cost-adjustment', null))),
+    ).toBe('23514');
+    expect(
+      await sqlState(insert(owner, 'valuation', row(average, 'moving-average', 2, 'stock.pass-through', null))),
+    ).toBe('23514');
   });
 
   it('stock-ledger 7.8 a transit value is one row per kind, reference, book and SKU', async () => {
@@ -432,6 +474,7 @@ describe('cost pools (stock-ledger 7.1, 14.2)', () => {
       transit_ref: uuidv7(),
       book_id: BOOK,
       sku_id: uuidv7(),
+      formula: 'fifo',
       quantity: 1,
       value_paise: 100,
       ...scope(AT_STORE_1),
@@ -833,6 +876,7 @@ describe('row-level security (stock-ledger 14.1, 14.3; SL-25; code-house-rules 6
       receipt_origin_id: origin,
       cost_pool_id: pool,
       transit_value_id: null,
+      formula: 'fifo',
       sequence: 1,
       quantity_delta: 2,
       value_delta_paise: 200,

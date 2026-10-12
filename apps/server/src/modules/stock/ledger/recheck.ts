@@ -24,7 +24,7 @@ import {
   valuationLayer,
 } from './db/schema.js';
 import { Valuing, type SaleState, type TransitState, type ValuingInputs } from './domain/valuing.js';
-import type { Formula, PoolMode, PoolState } from './domain/valuation.js';
+import type { PoolState } from './domain/valuation.js';
 import { paise } from '@apparel-os/domain';
 import { recheckHidden, type HiddenAnswer } from './db/recheck-hidden.js';
 import { refusalOf, StockRefused, type Condition, type ItemValue } from './domain/request.js';
@@ -439,9 +439,9 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
     isNew: false,
     bookId: row.bookId,
     skuId: row.skuId,
-    mode: row.poolMode as PoolMode,
+    mode: row.poolMode,
     siteId: row.siteId,
-    formula: row.formula as Formula,
+    formula: row.formula,
     costSettingVersionId: row.costSettingVersionId,
     legalEntityId: row.legalEntityId,
     brandId: row.brandId,
@@ -491,7 +491,7 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
           })
           .from(valuationLayer)
           .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
-          .where(and(inArray(valuation.transitValueId, transitIds), gt(valuationLayer.valuePaise, 0)))
+          .where(and(inArray(valuation.transitValueId, transitIds), gt(valuationLayer.valuePaise, paise(0))))
           .orderBy(valuationLayer.id);
   const transits: TransitState[] = transitRows.map((row) => ({
     id: row.id,
@@ -499,6 +499,7 @@ async function loadValuing(context: TransactionContext, locked: LockedPlan): Pro
     ref: row.transitRef,
     bookId: row.bookId,
     skuId: row.skuId,
+    formula: row.formula,
     scope: scopeOf(row),
     quantity: row.quantity,
     value: row.valuePaise,
@@ -728,7 +729,7 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
       layerId: row.layer.costLayerId,
       pieceId: row.layer.pieceId,
       quantity: row.layer.quantity,
-      value: -row.layer.valuePaise,
+      value: 0 - row.layer.valuePaise,
     })),
     returned,
     returnedFromLayer,

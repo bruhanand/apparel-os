@@ -1,3 +1,4 @@
+import type { Paise } from '@apparel-os/domain';
 import type { MissingItem } from '../../../../kernel/index.js';
 import type { SkuFacts, UnitFacts } from '../ports.js';
 import {
@@ -111,8 +112,8 @@ export interface OriginState {
   readonly ownerKind: 'organisation' | 'supplier' | 'brand' | null;
   /** Whether its cost is established, its P RATE and the exact value its cost items added (14.2; 7.6, 7.7). */
   valueKnown: boolean;
-  pRatePaise: number | null;
-  establishedValuePaise: number | null;
+  pRatePaise: Paise | null;
+  establishedValuePaise: Paise | null;
   ptRevisionId: string | null;
   coveredQuantity: number;
   lastStateMovementId: string | null;
