@@ -1,6 +1,6 @@
 # S1-F10-T07 — Failure, concurrency, large posting and acceptance
 
-Status: in-progress
+Status: done
 Blocked by: T06 (on `s1/f10-stock-ledger-2`); S1-F08-T02 (done); S1-F09-T03 (done)
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
@@ -29,3 +29,5 @@ books-and-posting 15 tests 8, 9, 16, 17 and 18 pass; stock-ledger 11.9 passes; e
   - Measured (SYNTHETIC; local container on a shared laptop, so possibly inflated): see stock-ledger 13.12. 25 of 548 counter bills overlapping the job reached the 1 s lock limit (RR-200), including bills of a SKU the job did not touch, which wait on the book's journal series (GC4-4). Recorded, not judged (RR-189).
   - Not met as written in "Done when": "the large-posting job finishes without blocking the concurrent sales of the test". It finishes, and bills outside its locked part are not delayed, but bills during its locked part wait and some time out. For the product owner.
   - Not done here: a CI run (the branch is not pushed); Rebuild and compare at 10,000 origins passes the 5 s statement limit, so the large test checks the 8.3 reconciliation and the raw invariants instead; how a real document shows a failed posting job is its own module's (stages 2 to 4).
+- Closed 11 Oct 2026 on `s1/f10-stock-ledger-2`, reviewed with `/code-review` (Opus); review fixes `eb985e7`, `0382f03`, `e5052f3`; no blocking finding left. Its own commits: `f039ddc`, `27dba30`, `22c042b`, `325c028`, `30faa75`, `5a82d48`.
+- Accepted by the product owner, 11 Oct 2026, on the measured timeouts: 25 of 548 bills reached the 1 s lock limit while the 10,000-line posting held its locks for about 6 s, on a shared laptop. "Done when" on blocking is accepted on that basis; the fix is decided before live counter sales in stage 4, measured on the real counter (RR-189, RR-504). Pool admission approved as designed. Open items from this ticket: RR-512, RR-513, RR-514.

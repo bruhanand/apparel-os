@@ -1,6 +1,6 @@
 # S1-F10-T04 — Harness and the story under four combinations
 
-Status: in-progress
+Status: done
 Blocked by: T03; S1-F02-T03, S1-F03-T02, S1-F05-T01, S1-F08-T01, S1-F08-T02, S1-F09-T03 (scenario P5: a locked period, then a reopening)
 Feature: [S1-F10 Stock ledger with balanced posting](../spec.md)
 
@@ -28,3 +28,5 @@ The harness calls only public interfaces; every value says SYNTHETIC; expected v
   - A T03 gap closed: under moving average an emptying outflow of several receipt origins needs no rounding; one valuation per item (migration `0056__stock.ledger__item_valuation`); a customer return valued from the sale line (7.5).
   - A T03 defect fixed: units back into a FIFO pool make one layer per source layer (7.5, 7.8), not one per piece.
   - Not built: a mapping's verification in the fixtures (needs an evidence file through the route); P5 and the other 16.4 scenarios (T06, T07).
+- Closed 11 Oct 2026 on `s1/f10-stock-ledger-2`, reviewed with `/code-review` (Opus); review fixes `8d04ab3`, `0520fed`, `e5052f3`; no blocking finding left. Its own commits: `16b2ff8`, `08ebdd5`, `49e5bc7`.
+- Review fixes for this ticket: the fixture of spec 3.3 added, policy 9 recorded Signed and its values validated by a different person, as labelled synthetic status, through `configuration`'s real interface (stock-ledger 15.6); transfers and supplier returns approved on their pool's cost, written by hand into the scenario files (`approvedPaise`). RR-436 closed. Still not built: a mapping's verification in the fixtures.
