@@ -16,7 +16,7 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
-import { numberedKinds } from './numbered-kinds.js';
+import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import { decisionEvidence, FilesImportsModule, policyEvidence } from './modules/files-imports/index.js';
 import {
   EXCEPTION_TYPES,
@@ -34,7 +34,7 @@ import {
   type ConfigurationInterface,
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
-import { PosModule } from './modules/pos/index.js';
+import { PosModule, posApprovals } from './modules/pos/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -123,6 +123,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           }),
           // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
           booksApprovals(audit, bookHeldStock),
+          // The financial years and the bill-number format, whose approval defines every Active billing device's
+          // missing series, through `numbering` built with every declared kind (offline-counter 4.3b; DEC-117;
+          // S1-F12-T03).
+          posApprovals({ audit, numbering: composedNumbering() }),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK],
     },

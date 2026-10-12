@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { businessDateSchema, idSchema, organisationCodeSchema, totpCodeSchema } from './common.js';
+import { approvalRequestStateSchema } from './approvals.js';
 import { businessUnitKindSchema, masterCodeSchema } from './organisation.js';
+import { settingOriginSchema } from './settings.js';
 
 // Billing devices, their enrolment and the device proof (offline-counter 3.1 to 3.4, 4.1, 12.1; access-and-approvals
 // 2.4, 3.3; PRD-OFF-002, PRD-OFF-010, PRD-POS-020, POL-02.18; DEC-005, DEC-116; S1-F12-T01). Shared by the server, the
@@ -197,3 +199,101 @@ export const billingDeviceUnitsChangedSchema = z.strictObject({
   seriesMissing: z.array(seriesMissingSchema),
 });
 export type BillingDeviceUnitsChanged = z.infer<typeof billingDeviceUnitsChangedSchema>;
+
+// The financial years and the bill-number format (offline-counter 4.1, 4.3b; numbering-and-audit 3.3, 3.5;
+// PRD-POS-020, PRD-ACS-006, POL-10.07; DEC-116, DEC-117; S1-F12-T03): Organisation settings `numbering` keeps, each
+// changed by one person and approved by a different one, whose approval gives every Active billing device its missing
+// series. Neither has a default: the dates are OPEN (GC5-1, RR-060) and the format is OPEN (V-40, RR-101); the preparer
+// states every value and its origin (AGENTS.md "Never invent a value").
+
+/** A change that defines a financial year, decided by a different person (offline-counter 4.3b). */
+export const FINANCIAL_YEAR_CHANGE_TYPE = 'pos.financial_year_change';
+export const FINANCIAL_YEAR_CHANGE_APPROVAL = 'pos.financial_year_change.approval';
+/** A change that sets the bill-number format, decided by a different person (offline-counter 4.3b). */
+export const BILL_FORMAT_CHANGE_TYPE = 'pos.bill_format_change';
+export const BILL_FORMAT_CHANGE_APPROVAL = 'pos.bill_format_change.approval';
+
+/** A financial year as it is to be defined: its label, its first and last day, and where the dates come from (3.3). */
+export const financialYearDraftSchema = z.strictObject({
+  label: z.string().regex(/\S/),
+  firstDay: businessDateSchema,
+  lastDay: businessDateSchema,
+  origin: settingOriginSchema,
+});
+export type FinancialYearDraftInput = z.input<typeof financialYearDraftSchema>;
+
+/**
+ * One part of a number format, in the order the text is written (numbering-and-audit 3.5): fixed text, the part taken
+ * from the series' scope (for a bill, the device's code), the financial-year label, or the sequence number at a width.
+ */
+export const formatPartSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('text'), text: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('scope') }),
+  z.strictObject({ kind: z.literal('year') }),
+  z.strictObject({ kind: z.literal('sequence'), width: z.number().int() }),
+]);
+export type FormatPartView = z.infer<typeof formatPartSchema>;
+
+/** The bill-number format as it is to be set: its code, its parts and where it comes from (3.5; POL-10.07). */
+export const billFormatDraftSchema = z.strictObject({
+  formatCode: masterCodeSchema,
+  parts: z.array(formatPartSchema).min(1),
+  origin: settingOriginSchema,
+});
+export type BillFormatDraftInput = z.input<typeof billFormatDraftSchema>;
+
+/** A change prepared: the change, and the approval request a different person decides (access-and-approvals 9.1). */
+export const numberingChangePreparedSchema = z.strictObject({ changeId: idSchema, requestId: idSchema });
+
+/** Who prepared a change and when, and the state of its approval request (access-and-approvals 9.1, 9.6). */
+const changeHeadSchema = {
+  changeId: idSchema,
+  origin: settingOriginSchema,
+  preparedByUserId: idSchema,
+  preparedAt: z.iso.datetime(),
+  requestId: idSchema.nullable(),
+  state: approvalRequestStateSchema,
+};
+
+/** A financial year defined (3.3). */
+export const financialYearViewSchema = z.strictObject({
+  financialYearId: idSchema,
+  label: z.string().min(1),
+  firstDay: businessDateSchema,
+  lastDay: businessDateSchema,
+  origin: settingOriginSchema,
+});
+export type FinancialYearView = z.infer<typeof financialYearViewSchema>;
+
+/** The financial years defined, and every change prepared, newest first (offline-counter 4.3b). */
+export const financialYearListSchema = z.strictObject({
+  asOf: z.iso.datetime(),
+  years: z.array(financialYearViewSchema),
+  changes: z.array(
+    z.strictObject({
+      ...changeHeadSchema,
+      label: z.string().min(1),
+      firstDay: businessDateSchema,
+      lastDay: businessDateSchema,
+    }),
+  ),
+});
+export type FinancialYearList = z.infer<typeof financialYearListSchema>;
+
+/** The bill-number format in force, or not set (code-house-rules 12.14), and every change prepared, newest first. */
+export const billFormatReadSchema = z.strictObject({
+  asOf: z.iso.datetime(),
+  format: z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('set'),
+      formatCode: z.string().min(1),
+      parts: z.array(formatPartSchema),
+      origin: settingOriginSchema,
+    }),
+    z.strictObject({ kind: z.literal('not-set') }),
+  ]),
+  changes: z.array(
+    z.strictObject({ ...changeHeadSchema, formatCode: z.string().min(1), parts: z.array(formatPartSchema) }),
+  ),
+});
+export type BillFormatRead = z.infer<typeof billFormatReadSchema>;

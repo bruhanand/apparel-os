@@ -6,13 +6,17 @@ export type { NumberingDependencies, NumberingInterface } from './numbering.js';
 export type { Allocated, AllocationRequest } from './commands/allocate.js';
 export type { FormatVersion } from './commands/define-format.js';
 export type {
+  FinancialYearDefined,
   FinancialYearDraft,
   FinancialYearRead,
+  KindFormatDetail,
   KindFormatRead,
   SettingOrigin as NumberingSettingOrigin,
 } from './commands/settings.js';
 export type { SeriesDefinition } from './commands/define-series.js';
 export type { FormatPart } from './domain/format.js';
+// The plain check of a format's parts, for an owning module preparing a format before it is defined (3.5; S1-F12-T03).
+export { checkFormat } from './domain/format.js';
 export type { NumberedKind, NumberingResult } from './domain/kinds.js';
 export type { SeriesKey, SeriesState } from './queries/series.js';
 // Reads with no instance, for a check another module runs, such as the devices readiness check (offline-counter 11;
