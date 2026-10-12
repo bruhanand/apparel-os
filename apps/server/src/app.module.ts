@@ -16,24 +16,23 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
+import { numberedKinds } from './numbered-kinds.js';
 import {
   decisionEvidence,
   filesImportsApprovals,
   FilesImportsModule,
-  IMPORT_BATCH_KIND,
   IMPORT_HANDLERS,
   ImportHandlers,
   policyEvidence,
 } from './modules/files-imports/index.js';
 import {
-  EXCEPTION_CODE_KIND,
   EXCEPTION_TYPES,
   ExceptionsModule,
   routingApprovals,
   type ExceptionTypeRegistration,
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
-import { NUMBERED_KINDS, type NumberedKind } from './modules/numbering/index.js';
+import { NUMBERED_KINDS } from './modules/numbering/index.js';
 import {
   CONFIGURATION,
   ConfigurationModule,
@@ -42,6 +41,7 @@ import {
   type ConfigurationInterface,
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
+import { PosModule } from './modules/pos/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
@@ -66,7 +66,6 @@ import {
   BooksModule,
   booksApprovals,
   checkEventKinds,
-  JOURNAL_KIND,
   POSTING_EVENT_KINDS,
   type BookHeldStock,
   type PostingEventKind,
@@ -148,10 +147,11 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
     },
     // The kinds the owning modules number: the exception code (S1-F08-T02), the journal (books-and-posting 5.4;
-    // S1-F09-T02) and the import batch code (imports-and-opening-data 15.1; GC9-9; S1-F06-T01).
+    // S1-F09-T02), the bill, per billing device and tax registration (offline-counter 4.1; S1-F12-T01), and the import
+    // batch code (imports-and-opening-data 15.1; GC9-9; S1-F06-T01): `numbered-kinds.ts`.
     {
       provide: NUMBERED_KINDS,
-      useValue: [EXCEPTION_CODE_KIND, JOURNAL_KIND, IMPORT_BATCH_KIND] satisfies readonly NumberedKind[],
+      useValue: numberedKinds,
     },
     // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
     // its kinds of 7.2 with S1-F10.
@@ -211,6 +211,8 @@ export class ModuleApprovalsModule {}
     SiteLifecycleModule,
     // Book settings, the chart of accounts and the CA's approval evidence (module-map 4.14; S1-F09-T01).
     BooksModule,
+    // Billing devices, their enrolment and bill series (module-map 4.17; offline-counter 3, 4; S1-F12-T01).
+    PosModule,
   ],
 })
 export class AppModule {}

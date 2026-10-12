@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { numberFormatPart, series } from '../db/schema.js';
 import { patternOf, type FormatPart, type SeriesPattern } from '../domain/format.js';
@@ -55,6 +55,43 @@ export async function liveSeries(context: TransactionContext, key: SeriesKey): P
     );
   const row = rows[0];
   return row === undefined ? undefined : stateOf(row);
+}
+
+/**
+ * Every series of a kind under the scope keys named, live or closed, oldest first: for an owning module's read of its
+ * documents' series, such as a billing device's (offline-counter 4.4; S1-F12-T01).
+ */
+export async function seriesOfScopes(
+  context: TransactionContext,
+  kind: string,
+  scopeKeys: readonly string[],
+): Promise<SeriesState[]> {
+  if (scopeKeys.length === 0) return [];
+  const rows = await context.tx
+    .select()
+    .from(series)
+    .where(and(eq(series.kind, kind), inArray(series.scopeKey, [...scopeKeys])))
+    .orderBy(asc(series.id));
+  return rows.map(stateOf);
+}
+
+/**
+ * Every series of a kind whose scope key starts with the prefix, live or closed, oldest first: for an owning module
+ * whose scope key opens with the record every series of it belongs to, such as a billing device's bill series of every
+ * registration (offline-counter 3.5, 4.4; S1-F12-T02). The prefix is matched as text, never as a pattern.
+ */
+export async function seriesOfScopePrefix(
+  context: TransactionContext,
+  kind: string,
+  prefix: string,
+): Promise<SeriesState[]> {
+  if (prefix === '') return [];
+  const rows = await context.tx
+    .select()
+    .from(series)
+    .where(and(eq(series.kind, kind), sql`starts_with(${series.scopeKey}, ${prefix})`))
+    .orderBy(asc(series.id));
+  return rows.map(stateOf);
 }
 
 /** The parts of format versions, in order, by version. */

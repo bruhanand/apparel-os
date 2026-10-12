@@ -7,7 +7,7 @@
 -- document's guard only admits more (code-house-rules 4.2). No layout, mapping, rule or value is written here.
 
 -- A layout or mapping version is proposed by the runtime role now, and decided by a different person through
--- `access` (6.4); the decision guard of 0055 and its independence constraint stay as they were.
+-- `access` (6.4); the decision guard of 0061 and its independence constraint stay as they were.
 grant insert on files_imports.layout to aos_runtime;
 grant insert, update on files_imports.layout_version to aos_runtime;
 grant insert on files_imports.mapping to aos_runtime;

@@ -23,6 +23,10 @@ export const SETTING_FORMATS = {
   'access.sign-in-throttling': 'access.sign-in-throttling/1',
   'access.password-rules': 'access.password-rules/1',
   'access.office-session-limits': 'access.office-session-limits/1',
+  // The limits of a shared POS session, a session on a billing device (POL-02.18; access-and-approvals 3.3; RR-303;
+  // S1-F12-T01): the same shape as the office limits, with no default; values OPEN until policy 2 is Signed and
+  // validated (V-04). While it is not set, a device sign-in is unavailable naming it.
+  'access.shared-pos-session-limits': 'access.shared-pos-session-limits/1',
 } as const;
 export type AccessSettingKey = keyof typeof SETTING_FORMATS;
 
@@ -30,7 +34,27 @@ export const SETTING_SCHEMAS = {
   'access.sign-in-throttling': signInThrottlingSchema,
   'access.password-rules': passwordRulesSchema,
   'access.office-session-limits': sessionLimitsSchema,
+  'access.shared-pos-session-limits': sessionLimitsSchema,
 } as const satisfies Record<AccessSettingKey, z.ZodType>;
+
+/** A session's kind: an office session, or a shared POS session bound to a billing device (3.3; POL-02.18). */
+export type SessionKind = 'office' | 'shared-pos';
+
+/** The setting holding the limits of each session kind (3.3; POL-02.18; RR-303): the one map every reader uses. */
+export const SESSION_LIMITS_SETTING = {
+  office: 'access.office-session-limits',
+  'shared-pos': 'access.shared-pos-session-limits',
+} as const satisfies Record<SessionKind, AccessSettingKey>;
+
+/** The kind of a session: shared POS when it is bound to a device, otherwise office (3.3; POL-02.18). */
+export function sessionKindOf(deviceId: string | null | undefined): SessionKind {
+  return deviceId === undefined || deviceId === null ? 'office' : 'shared-pos';
+}
+
+/** The limits setting of a session kind as stored; undefined for a kind no setting serves. */
+export function limitsSettingOf(kind: string): (typeof SESSION_LIMITS_SETTING)[SessionKind] | undefined {
+  return Object.hasOwn(SESSION_LIMITS_SETTING, kind) ? SESSION_LIMITS_SETTING[kind as SessionKind] : undefined;
+}
 
 /** The failed sign-ins counted in the window. */
 export interface FailureCounts {

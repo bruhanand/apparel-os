@@ -371,7 +371,7 @@ The valued movement, its balance and pool rows, and the balanced journals per bo
 Every transaction takes row locks in this order, and in ascending ID order inside each step (`PRD-INT-003`):
 
 0. The rows the actor's authority rests on: the user or service identity, the role assignment, and the approval limits and stand-in grant relied on. In shared mode; a command that changes one of them takes it in exclusive mode, so it waits for the commands relying on it ([code-house-rules.md](../platform/code-house-rules.md) 8.2; `PRD-INT-003`).
-1. The business document rows (and their approval rows).
+1. The business document rows (and their approval rows). A sign-in on a billing device holds the device's row here in shared mode, since it only relies on the device; a command that changes the device holds it exclusively (offline-counter 3.6; code-house-rules 8.2).
 2. Receipt origin rows: exclusive when the origin's state changes, shared when it is only read, as by a sale or a transfer (14.3). A late cost change works out which pools and dispatches it touches here, under this lock.
 3. The unit anchor of each affected Site and business unit, shared for every item and exclusive to start or end a count freeze, and stock balance rows for each affected Site, business unit and SKU, in one call (14.3). Missing rows are first created, idempotently, in the same key order.
 4. Piece rows.

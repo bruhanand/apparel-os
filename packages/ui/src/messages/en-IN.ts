@@ -1,7 +1,7 @@
-// English (India): every string the screens show (code-house-rules 12.13; design-language 11). Hindi arrives as a file
-// of its own with the same identifiers in stage 5 (PRD-PRO-009). The PRD's words, sentence case, people and rules
-// named rather than the system. `{name}` is a named parameter; a plural message has a form per Intl.PluralRules
-// category.
+// English (India): every string the screens of the web app and the counter app show (code-house-rules 12.13;
+// design-language 11). Hindi arrives as a file of its own with the same identifiers in stage 5 (PRD-PRO-009). The PRD's
+// words, sentence case, people and rules named rather than the system. `{name}` is a named parameter; a plural message
+// has a form per Intl.PluralRules category.
 
 export const englishIndia = {
   'app.name': 'Apparel OS',
@@ -155,6 +155,8 @@ export const englishIndia = {
   'missing.capability': 'This capability is switched off.',
   'missing.activity': 'This activity is not granted here.',
   'missing.other': 'Something it needs is missing.',
+  'missing.business-unit': 'A business unit that is not a whole-store or brand-counter unit of this Store.',
+  'missing.business-unit.named': 'Business unit {code}',
 
   // Forms (design-language 10.7). Zod's issue codes.
   'form.required': 'Required',
@@ -314,6 +316,18 @@ export const englishIndia = {
   'error.numbering.series-not-paused': 'Only a paused number series can be released.',
   'error.numbering.series-exhausted': 'The number series has used every number its format allows.',
   'error.numbering.document-numbered-elsewhere': 'This document already has its number from another series.',
+  'error.numbering.financial-year-invalid': 'A financial year needs a label and a last day on or after its first.',
+  'error.numbering.financial-year-label-taken': 'Another financial year has this label.',
+  'error.numbering.financial-year-overlaps': 'This financial year overlaps another.',
+  // Billing devices (offline-counter 3.1 to 3.4, 12.1; S1-F12-T01).
+  'error.access.device-code-taken': 'Another device already has this code.',
+  'error.access.device-not-found': 'No billing device has this identifier.',
+  'error.access.device-already-enrolled': 'This device is enrolled already. A new key needs a new device.',
+  'error.access.device-proof-refused': 'The device could not prove itself. Ask for a new challenge and try again.',
+  'error.pos.store-not-found': 'No Store has this identifier.',
+  'error.pos.unit-not-of-store':
+    'A device bills only for whole-store and brand-counter units of its own Store. These units are not:',
+  'error.pos.unit-listed-twice': 'A unit is listed twice.',
 
   // State names (design-language 7).
   'state.draft': 'Draft',
@@ -482,6 +496,8 @@ export const englishIndia = {
   'history.exposure.shown': 'Shown',
   'history.exposure.exported': 'Exported',
   'history.operation.attach-file': 'Attached a file as evidence',
+  'history.operation.register-billing-device': 'Registered a billing device',
+  'history.operation.enrol-billing-device': 'Enrolled a billing device',
   'history.operation.prepare-role': 'Prepared a role',
   'history.operation.prepare-role-version': 'Prepared a role version',
   'history.operation.approve-role-version': 'Approved a role version',
@@ -532,7 +548,9 @@ export const englishIndia = {
   'access-kind.password-changed': 'Password changed',
   'access-kind.password-reset': 'Password reset',
   'access-kind.device-registered': 'Device registered',
+  'access-kind.device-enrolled': 'Device enrolled',
   'access-kind.device-revoked': 'Device revoked',
+  'access-kind.device-ended': 'Device retired',
   'access-kind.operator-recovery': 'Recovery by the platform operator',
   'access-kind.demo-sign-in': 'Test sign-in',
   'access-kind.permission-changed': 'Permission changed',
@@ -1881,6 +1899,7 @@ export const englishIndia = {
   // Setup › Site opening and closure › Readiness (module-map 4.16; ui-blueprint; S1-F04-T02).
   'screen.setup.site-opening': 'Site opening and closure',
   'record-type.site_lifecycle.readiness_record': 'Readiness record',
+  'record-type.pos.billing_device': 'Billing device',
   'record-type.site_lifecycle.zero_stock_declaration': 'Zero opening-stock declaration',
   'approval.action.site_lifecycle.activity.grant': 'Activity approval',
   'approval.action.site_lifecycle.site_readiness.approve': 'Site readiness approval',
@@ -1988,6 +2007,80 @@ export const englishIndia = {
   // The posting half of finance · books (books-and-posting 4.1, 6, 9, 12, 14; S1-F09-T02).
   'section.money': 'Money',
   'screen.setup.posting-maps': 'Posting maps',
+  // Setup › Devices, tills and bill series (ui-blueprint Setup; offline-counter 3.1, 3.2, 4.1, 4.4; S1-F12-T01).
+  'screen.setup.devices': 'Devices, tills and bill series',
+  'devices.what': 'billing devices',
+  'devices.register.title': 'Register a billing device',
+  'devices.register.intro':
+    'A billing device bills for whole-store and brand-counter units of its own Store. It is Setting up until it is enrolled in the counter app on the device itself, at /counter/.',
+  'devices.registered': 'Registered. Enrol it in the counter app on the device.',
+  'devices.code': 'Device code',
+  'devices.label': 'Label',
+  'devices.store': 'Store',
+  'devices.choose-store': 'Choose a Store',
+  'devices.units': 'Units it bills for',
+  'devices.units.none': 'This Store has no whole-store or brand-counter unit yet.',
+  'devices.unit-kind.whole-store': 'Whole store',
+  'devices.unit-kind.brand-counter': 'Brand counter',
+  'devices.unit-kind.warehouse': 'Warehouse',
+  'devices.unit-kind.office': 'Office',
+  'devices.register': 'Register device',
+  'devices.list.title': 'Billing devices',
+  'devices.none': 'No billing device is registered yet.',
+  'devices.device': 'Device {code}',
+  'devices.units.listed': 'Units: {units}',
+  'devices.series.after-enrolment': 'Its bill series are defined when it is enrolled.',
+  'devices.series.none':
+    'No bill series yet: the bill-number format or the financial year is not set, or a unit has no mapping.',
+  'devices.series.one': 'Bill series for {registration}, {year}',
+  // Revoke, retire, replace and change units (offline-counter 3.5, 12.1; S1-F12-T02).
+  'devices.revoke': 'Revoke (lost)',
+  'devices.retire': 'Retire',
+  'devices.revoke.confirm':
+    'Revoke {code} as lost? Its sessions end at their next request and its bill series close. This cannot be undone: a replacement is a new device.',
+  'devices.retire.confirm':
+    'Retire {code}? Its sessions end and its bill series close. This cannot be undone: a replacement is a new device.',
+  'devices.revoke.do': 'Revoke device',
+  'devices.retire.do': 'Retire device',
+  'devices.cancel': 'Cancel',
+  'devices.replace': 'Replace',
+  'devices.replace.title': 'Replace {code}',
+  'devices.replace.ending': 'The old device',
+  'devices.replace.choose': 'Choose how it leaves use',
+  'devices.replace.revoke': 'Revoke it: it is lost',
+  'devices.replace.retire': 'Retire it: it is taken out of use',
+  'devices.replace.code': 'New device code',
+  'devices.replace.label': 'New device label',
+  'devices.replace.do': 'Replace device',
+  'devices.replaces':
+    'Replaces an earlier device. It gets fresh bill series when it is enrolled; the old ones stay closed.',
+  'devices.units.change': 'Change units',
+  'devices.units.change.title': 'Units {code} bills for',
+  'devices.units.change.from': 'From',
+  'devices.units.change.do': 'Change units',
+  'devices.units.changed': 'Units changed. A unit with a new tax registration has its bill series from that date.',
+  'history.operation.revoke-billing-device': 'Revoked a billing device',
+  'history.operation.retire-billing-device': 'Retired a billing device',
+  'history.operation.change-billing-device-units': 'Changed a billing device’s units',
+  'history.operation.revoke-device': 'Revoked a session with its device',
+  'history.operation.retire-device': 'Ended a session with its retired device',
+  'error.access.device-ended': 'This device is revoked or retired already, which is final.',
+  'error.pos.device-not-active': 'A device’s units change only while it is Active.',
+  'error.pos.starts-in-past': 'The change cannot start before today.',
+  'error.pos.unit-change-scheduled':
+    'The device already has a unit listed from that date or later. Choose a later date.',
+  'error.pos.units-unchanged': 'These are the units it bills for on that date already.',
+  // The devices readiness check (offline-counter section 11; S1-F12-T02).
+  'readiness.check.devices': 'Devices',
+  'missing.billing-device':
+    'No Active billing device of the unit’s Store lists the unit. Register one on Devices, tills and bill series and enrol it.',
+  'missing.device-series': 'A billing device of the unit has no Open bill series for its registration and year.',
+  'missing.device-series.bill-format': 'Device {code} has no bill series: the bill-number format is not set.',
+  'missing.device-series.financial-year':
+    'Device {code} has no bill series: no financial year is defined for this date.',
+  'missing.device-series.mapping': 'Device {code} has no bill series: the unit has no mapping in force.',
+  'missing.device-series.series':
+    'Device {code} has no Open bill series for the unit’s tax registration and this financial year.',
   'screen.money.internal-ledger': 'Internal ledger and trial balance',
   'record-type.finance.posting_map': 'Posting map',
   'record-type.finance.financial_period': 'Financial period',
@@ -2549,4 +2642,39 @@ export const englishIndia = {
   'error.files-imports.version-not-confirmed':
     'The batch’s layout or mapping is not confirmed yet. A different person confirms it first.',
   'error.files-imports.not-a-warning': 'Only a warning is marked seen.',
+
+  // The counter app's enrolment and device sign-in pages (offline-counter 3.2 to 3.4, 5.1; S1-F12-T01). Its refusals
+  // use the `error.` entries above, with what is missing named (PRD-UXP-003).
+  'counter.title': 'Apparel OS counter',
+  'counter.enrol.title': 'Enrol this browser as a billing device',
+  'counter.enrol.intro':
+    'Sign in as a person allowed to enrol devices, choose the device registered for this till in Setup › Devices, tills and bill series, and give a fresh authenticator code. The device key is made in this browser and never leaves it.',
+  'counter.enrol.device': 'Device',
+  'counter.enrol.choose-device': 'Choose a device that is Setting up',
+  'counter.enrol.no-device': 'No device is Setting up. Register one in Setup › Devices, tills and bill series first.',
+  'counter.enrol.fresh-code': 'Fresh authenticator code',
+  'counter.enrol.submit': 'Enrol this browser',
+  'counter.enrol.done': 'This browser is now device {code}.',
+  'counter.enrol.series': { one: 'Bill series: {count}', other: 'Bill series: {count}' },
+  'counter.enrol.series-missing':
+    'No bill series yet: the bill-number format or the financial year is not set. They are defined when it is.',
+  'counter.enrol.signed-in-as': 'Signed in as {name}.',
+  'counter.sign-in.title': 'Sign in on device {code}',
+  'counter.sign-in.office-title': 'Sign in',
+  'counter.sign-in.organisation': 'Organisation code',
+  'counter.sign-in.login': 'Login',
+  'counter.sign-in.password': 'Password',
+  'counter.sign-in.code': 'Authenticator code',
+  'counter.sign-in.submit': 'Sign in',
+  'counter.sign-in.on-device': 'Signed in on device {code}: a shared POS session.',
+  'counter.sign-in.not-finished': 'Finish your first sign-in in the back office, then come back.',
+  'counter.device-not-held': 'This browser holds no key for this device. Enrol it again as a new device.',
+
+  // A setting a refusal names as missing, by name (code-house-rules 12.14; PRD-UXP-003).
+  'missing.setting.named': 'Not set yet: {setting}.',
+  'setting.name.configuration.timezone': 'the Organisation’s timezone',
+  'setting.name.access.sign-in-throttling': 'sign-in throttling',
+  'setting.name.access.password-rules': 'the password rules',
+  'setting.name.access.office-session-limits': 'the office session limits',
+  'setting.name.access.shared-pos-session-limits': 'the shared POS session limits',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

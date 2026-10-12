@@ -8,9 +8,14 @@ const app = await NestFactory.create(AppModule, { bufferLogs: true });
 const logger = app.get<PinoLoggerService>(LOGGER);
 app.useLogger(logger);
 configureApp(app);
-// The web app from the same origin as the API (deployment.md section 3): apps/web/dist, which `pnpm build` makes beside
-// this package's dist. The server refuses to start without it.
-serveWebApp(app, fileURLToPath(new URL('../../web/dist', import.meta.url)));
+// The web app and the counter app from the same origin as the API (deployment.md section 3; offline-counter 5.2;
+// RR-420): apps/web/dist at / and apps/counter/dist at /counter/, which `pnpm build` makes beside this package's dist.
+// The server refuses to start without either.
+serveWebApp(
+  app,
+  fileURLToPath(new URL('../../web/dist', import.meta.url)),
+  fileURLToPath(new URL('../../counter/dist', import.meta.url)),
+);
 // On SIGTERM from a deploy, close every database pool before the process ends (OrganisationRouter).
 app.enableShutdownHooks();
 

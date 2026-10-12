@@ -280,7 +280,7 @@ export function reviewOf(handler: ImportHandler, batch: Pick<BatchRow, 'kind'>):
   return handler.review(batch.kind);
 }
 
-/** The published document of a source identity, whatever the actor's scope sees (7.2; migration 0059). */
+/** The published document of a source identity, whatever the actor's scope sees (7.2; migration 0065). */
 export async function publishedDocument(
   context: TransactionContext,
   identity: { readonly target: string; readonly scopeKey: string; readonly reference: string },

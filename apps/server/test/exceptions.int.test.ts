@@ -736,7 +736,7 @@ describe('a job that still fails after its retries (code-house-rules 12.9; acces
     });
     const registry: JobRegistry = {
       events: [failed, jobFailed],
-      consumers: [alwaysFails, ...exceptionsConsumers],
+      consumers: [alwaysFails, ...exceptionsConsumers(numbering)],
       jobKinds: [],
     };
     // SYNTHETIC: five attempts in all with growing delays (DEC-118, DEC-119); only the first wait is shortened.
@@ -808,6 +808,50 @@ describe('a job that still fails after its retries (code-house-rules 12.9; acces
       },
     });
   }, 180_000);
+});
+
+describe('the worker’s exceptions take numbering from the composition root (module-map section 3, rule 6)', () => {
+  it('PRD-EXC-001 the unfinished-operation consumer numbers its exception through the numbering it is handed', async () => {
+    const called: string[] = [];
+    const handed = new Proxy(numbering, {
+      get(target, property, receiver) {
+        const value: unknown = Reflect.get(target, property, receiver);
+        if (typeof value !== 'function') return value;
+        return (...args: unknown[]) => {
+          called.push(String(property));
+          return (value as (...each: unknown[]) => unknown).apply(target, args);
+        };
+      },
+    });
+    const consumer = exceptionsConsumers(handed).find((each) => each.name === 'exceptions.raise-unfinished-operation');
+    const jobId = uuidv7();
+    const handled = await run((context) =>
+      (consumer?.handle ?? (() => Promise.reject(new Error('No consumer'))))(
+        context,
+        {
+          id: uuidv7(),
+          type: jobFailed.type,
+          payloadVersion: 1,
+          eventTime: new Date(),
+          actorId: null,
+          onBehalfOfUserId: null,
+          correlationId: uuidv7(),
+          subject: { module: 'kernel', recordType: 'kernel.job', recordId: jobId },
+          scope: { siteId: JOB_SITE },
+          payload: { jobId, jobKind: 'kernel.synthetic-always-fails', eventId: null },
+        },
+        { logger: log.logger },
+      ),
+    );
+    expect(handled).toEqual({ kind: 'done' });
+    expect(called).not.toEqual([]);
+    const linked = await rows<{ record_id: string }>(
+      databaseA,
+      `select l.record_id from exceptions.exception_link l where l.record_id = $1`,
+      [jobId],
+    );
+    expect(linked).toEqual([{ record_id: jobId }]);
+  });
 });
 
 describe('a second Organisation (PRD-ACS-020)', () => {

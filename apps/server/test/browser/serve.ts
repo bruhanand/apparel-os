@@ -678,6 +678,73 @@ await approved(structureFixture, (c, p) =>
     validFrom: structureFixture.today(),
   }),
 );
+// The devices journey (billing-devices.spec.ts; S1-F12-T01): a SYNTHETIC Site with two Stores, the first with a
+// whole-store unit and a brand counter, the second with a whole-store unit, each mapped to the readiness journey's
+// registration, so the Admin registers a device for the first Store and sees a unit of the second refused. No bill
+// format or financial year is set: a device's series come with its enrolment in the counter app (offline-counter 4.1).
+const devicesSite = await approved(structureFixture, (c, p) =>
+  structureFixture.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-DEVICES-SITE'),
+    name: syntheticName('Journey Devices Site'),
+    physicalKind: 'retail-site',
+    areaId: structureGeography.area.recordId,
+    addresses: [syntheticName('1 Till Road')],
+    aliases: [],
+    validFrom: structureFixture.today(),
+  }),
+);
+const devicesStore = { code: syntheticCode('JOURNEY-DEVICES-STORE'), name: syntheticName('Journey Devices Store') };
+const devicesOtherStore = { code: syntheticCode('JOURNEY-DEVICES-OTHER'), name: syntheticName('Journey Other Store') };
+const devicesStores: { readonly recordId: string }[] = [];
+for (const store of [devicesStore, devicesOtherStore]) {
+  devicesStores.push(
+    await approved(structureFixture, (c, p) =>
+      structureFixture.organisation.prepareStore(c, p, {
+        ...store,
+        format: 'ebo',
+        operatingModel: 'company-owned',
+        siteId: devicesSite.recordId,
+        aliases: [],
+        validFrom: structureFixture.today(),
+      }),
+    ),
+  );
+}
+const devicesUnits = [
+  {
+    code: syntheticCode('JOURNEY-DEVICES-WHOLE'),
+    name: syntheticName('Journey Devices Whole Store'),
+    kind: 'whole-store',
+    store: 0,
+  },
+  {
+    code: syntheticCode('JOURNEY-DEVICES-COUNTER'),
+    name: syntheticName('Journey Devices Counter'),
+    kind: 'brand-counter',
+    store: 0,
+  },
+  {
+    code: syntheticCode('JOURNEY-DEVICES-ELSEWHERE'),
+    name: syntheticName('Journey Other Whole Store'),
+    kind: 'whole-store',
+    store: 1,
+  },
+] as const;
+for (const unit of devicesUnits) {
+  await approved(structureFixture, (c, p) =>
+    structureFixture.organisation.prepareBusinessUnit(c, p, {
+      code: unit.code,
+      name: unit.name,
+      siteId: devicesSite.recordId,
+      kind: unit.kind,
+      storeId: devicesStores[unit.store]?.recordId ?? '',
+      legalEntityId: readinessEntity.recordId,
+      taxRegistrationId: readinessRegistration.recordId,
+      accountingBookId: readinessBook.recordId,
+      validFrom: structureFixture.today(),
+    }),
+  );
+}
 // The posting maps journey (posting-maps.spec.ts; S1-F09-T02), in an Organisation of its own made by the setup step,
 // so its fixture's approvals never queue ahead of the other journeys' My work items in the worker: a SYNTHETIC
 // geography, and a SYNTHETIC book with a Site, a Store, a whole-store
@@ -2045,6 +2112,23 @@ const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
   // The unit list the screen chooses from (structure-and-masters 8).
   { recordType: 'organisation.business_unit', action: 'view' },
 ]);
+// The devices journey's Admin (S1-F12-T01, S1-F12-T02): register, view, enrol, revoke and replace billing devices, and
+// the Stores and units the form chooses from. SYNTHETIC grants: who registers devices is KDPS's (POL-02.03).
+const devicesAdmin = await provisionUser('BROWSER-DEVICES-ADMIN', 'P-ADM', [
+  { recordType: 'pos.billing_device', action: 'view' },
+  { recordType: 'pos.billing_device', action: 'create' },
+  { recordType: 'pos.billing_device', action: 'edit' },
+  { recordType: 'organisation.store', action: 'view' },
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
+// The devices lifecycle journey's Admin (S1-F12-T02), with the same SYNTHETIC grants, apart so the journeys run at once.
+const devicesLifecycleAdmin = await provisionUser('BROWSER-DEVICES-LIFECYCLE', 'P-ADM', [
+  { recordType: 'pos.billing_device', action: 'view' },
+  { recordType: 'pos.billing_device', action: 'create' },
+  { recordType: 'pos.billing_device', action: 'edit' },
+  { recordType: 'organisation.store', action: 'view' },
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
 const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
   { recordType: 'site_lifecycle.readiness_record', action: 'view' },
   { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
@@ -2056,6 +2140,8 @@ const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve'
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
 const webApp = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
+// The built counter app at /counter/ beside it (offline-counter 5.2; RR-420; S1-F12-T02).
+const counterApp = fileURLToPath(new URL('../../../../counter/dist', import.meta.url));
 // A MinIO container for the evidence files of the business units journey (code-house-rules 12.10).
 const fileStore = await startTestFileStore();
 const app = await startAccessApp(
@@ -2069,6 +2155,7 @@ const app = await startAccessApp(
     origin,
     port,
     webApp,
+    counterApp,
     fileStoreEnvironment: fileStore.environment,
     exceptionTypes: [syntheticMismatch],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
@@ -2347,6 +2434,15 @@ writeFileSync(
       approver: credentialsOf(readinessApprover),
       reasonId: readinessReasonId,
       unitOption: `${readinessUnit.code} · ${readinessUnit.name}`,
+    },
+    // S1-F12-T01: the devices journey's Admin, and how the screen names the Stores and units.
+    devices: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(devicesAdmin),
+      lifecycleAdmin: credentialsOf(devicesLifecycleAdmin),
+      storeOption: `${devicesStore.code} · ${devicesStore.name}`,
+      otherStoreOption: `${devicesOtherStore.code} · ${devicesOtherStore.name}`,
+      units: devicesUnits.map((unit) => ({ code: unit.code, name: unit.name, store: unit.store })),
     },
     // S1-F09-T02: the posting maps journey's two Accounts users, the reason the approver gives, the Store-scoped
     // reader, and how the screens name the book, the event kind, the accounts and the period.

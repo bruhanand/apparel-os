@@ -12,7 +12,7 @@ import type { OutcomeControlTotal, OutcomeCounts, OutcomeDocument, OutcomeMeasur
 import type { SheetSummary, StagedRowDraft, StagedValue } from '../domain/staging.js';
 
 // Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0024, 0055, 0057, 0059) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0024, 0061, 0063, 0065) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
@@ -22,7 +22,7 @@ type VersionState = 'Proposed' | 'Confirmed' | 'Rejected';
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 const daterange = customType<{ data: string; driverData: string }>({ dataType: () => 'daterange' });
 
-/** The scope facts a batch's documents, rows, entries, issues and totals copy from their batch (15.1; 0057). */
+/** The scope facts a batch's documents, rows, entries, issues and totals copy from their batch (15.1; 0063). */
 const scopeColumns = () => ({
   legalEntityId: uuid('legal_entity_id'),
   siteId: uuid('site_id'),
@@ -83,7 +83,7 @@ export const attachment = filesImports.table('attachment', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A layout (imports 6.1; migration 0055; S1-F06-T01). */
+/** A layout (imports 6.1; migration 0061; S1-F06-T01). */
 export const layout = filesImports.table('layout', {
   id: uuid('id').primaryKey(),
   code: text('code').notNull(),
@@ -150,7 +150,7 @@ export const importBatch = filesImports.table('import_batch', {
   storeId: uuid('store_id'),
   businessUnitId: uuid('business_unit_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
-  /** The batch version: a new one when a value is entered or a document excluded or put back (3.2; 0057). */
+  /** The batch version: a new one when a value is entered or a document excluded or put back (3.2; 0063). */
   versionId: uuid('version_id').notNull(),
   /** The version submitted for review, which Publish needs (13.1). */
   submittedVersionId: uuid('submitted_version_id'),
@@ -169,13 +169,13 @@ export const importDocument = filesImports.table('import_document', {
   state: text('state').$type<'Staged' | 'Published'>().notNull(),
   publishedAt: at('published_at'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
-  /** Excluded from publishing, while Staged (3.2; 0057). */
+  /** Excluded from publishing, while Staged (3.2; 0063). */
   excluded: boolean('excluded').notNull(),
   ...scopeColumns(),
-  /** The source identity (7.1; 0059): the target and the scope key its handler names, with the reference. */
+  /** The source identity (7.1; 0065): the target and the scope key its handler names, with the reference. */
   target: text('target'),
   scopeKey: text('scope_key'),
-  /** The hash of the document's values as published (7.2); null while Staged, and for one published before 0059. */
+  /** The hash of the document's values as published (7.2); null while Staged, and for one published before 0065. */
   contentHash: text('content_hash'),
   /** The published document this one revises (7.3). */
   revisesDocumentId: uuid('revises_document_id'),
@@ -199,7 +199,7 @@ export const stagedRow = filesImports.table('staged_row', {
   ...scopeColumns(),
 });
 
-/** A mapping rule: one source word of one attribute in one scope (6.3; 0057). */
+/** A mapping rule: one source word of one attribute in one scope (6.3; 0063). */
 export const mappingRule = filesImports.table('mapping_rule', {
   id: uuid('id').primaryKey(),
   attribute: text('attribute').notNull(),
@@ -224,7 +224,7 @@ export const mappingRuleVersion = filesImports.table('mapping_rule_version', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A value entered by a person in a staged row (section 5; 0057). */
+/** A value entered by a person in a staged row (section 5; 0063). */
 export const stagedValueEntry = filesImports.table('staged_value_entry', {
   id: uuid('id').primaryKey(),
   batchId: uuid('batch_id').notNull(),
@@ -240,7 +240,7 @@ export const stagedValueEntry = filesImports.table('staged_value_entry', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A row issue of the validation report (8.2; 0057). */
+/** A row issue of the validation report (8.2; 0063). */
 export const rowIssue = filesImports.table('row_issue', {
   id: uuid('id').primaryKey(),
   batchId: uuid('batch_id').notNull(),
@@ -266,7 +266,7 @@ export const rowIssue = filesImports.table('row_issue', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A control total reported against the sum of the lines (8.1; 0057). */
+/** A control total reported against the sum of the lines (8.1; 0063). */
 export const controlTotal = filesImports.table('control_total', {
   id: uuid('id').primaryKey(),
   batchId: uuid('batch_id').notNull(),
@@ -292,11 +292,11 @@ export const importOutcome = filesImports.table('import_outcome', {
   attemptedByUserId: uuid('attempted_by_user_id').notNull(),
   attemptedAt: at('attempted_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
-  /** The batch version attempted (0059); null for an attempt before it. */
+  /** The batch version attempted (0065); null for an attempt before it. */
   batchVersionId: uuid('batch_version_id'),
-  /** The quantities and values of the handler's measures, by result (7.4; 0059). */
+  /** The quantities and values of the handler's measures, by result (7.4; 0065). */
   measures: jsonb('measures').$type<OutcomeMeasure[]>().notNull(),
-  /** The control totals as reported, summed and accepted (7.4; 0059). */
+  /** The control totals as reported, summed and accepted (7.4; 0065). */
   controlTotals: jsonb('control_totals').$type<OutcomeControlTotal[]>().notNull(),
   ...scopeColumns(),
 });

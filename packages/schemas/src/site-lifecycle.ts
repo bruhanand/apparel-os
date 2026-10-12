@@ -22,13 +22,14 @@ export const SITE_READINESS_APPROVAL = 'site_lifecycle.site_readiness.approve';
 /**
  * The readiness checks, in the order the screen shows them (PRD-LIF-002; domain-model 3.6; DEC-116). A Site's shared
  * readiness runs the required policies; a unit's run every other check, and the site-readiness check, that its Site is
- * ready for the activity (PRD-LIF-001; product owner, 10 Oct 2026). The devices check of offline-counter section 11
- * joins them with S1-F12-T02; until then there is none.
+ * ready for the activity (PRD-LIF-001; product owner, 10 Oct 2026). The devices check of offline-counter section 11 is
+ * a unit's: it asks about the unit's Store, its mapping and its devices (S1-F12-T02).
  */
 export const readinessCheckCodes = [
   'mappings',
   'locations',
   'users-and-access',
+  'devices',
   'required-policies',
   'site-readiness',
   'stock-plan',
@@ -39,7 +40,8 @@ export type ReadinessCheckCode = z.infer<typeof readinessCheckCodeSchema>;
 
 /**
  * One check's answer: passed; failed, naming what is missing; or not needed for the unit, as a stock plan is not for an
- * office unit (PRD-LIF-003) and brand coverage only for a brand counter (PRD-ORG-006).
+ * office unit (PRD-LIF-003), brand coverage only for a brand counter (PRD-ORG-006), and devices only for selling
+ * (offline-counter section 11).
  */
 export const readinessCheckSchema = z.strictObject({
   check: readinessCheckCodeSchema,

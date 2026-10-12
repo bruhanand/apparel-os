@@ -5,6 +5,7 @@ import { permissionHolders, type RecordFacts } from '../../access/index.js';
 import type { ConfigurationInterface } from '../../configuration/index.js';
 import { unitBrandsOn } from '../../merchandise/catalogue/index.js';
 import { unitLocationIds, type LocationInUse, type UnitReadinessAnswer } from '../../organisation/index.js';
+import { unitDevicesCheck } from '../../pos/index.js';
 import type { OpeningPlans } from '../contracts/opening-plans.js';
 import { activation, readinessRecord, siteReadinessApproval, zeroStockDeclaration } from '../db/schema.js';
 import { allPassed, judgeSiteReadiness, judgeUnitReadiness } from '../domain/checks.js';
@@ -12,8 +13,8 @@ import { allPassed, judgeSiteReadiness, judgeUnitReadiness } from '../domain/che
 // Asking each module's check (module-map 4.16 "Run readiness checks"; domain-model 3.6; PRD-LIF-001, PRD-LIF-002;
 // S1-F04-T02): for a Site's shared readiness, `configuration` for the policies; for a unit, `organisation` for the
 // mapping and the locations, `access` for the people, this module's own records for the Site's readiness, the stock
-// ledger through the location-in-use contract with the opening plan and the zero declaration for the stock plan, and
-// `merchandise` for the brand coverage.
+// ledger through the location-in-use contract with the opening plan and the zero declaration for the stock plan,
+// `merchandise` for the brand coverage, and `pos` for the devices of selling (offline-counter section 11; S1-F12-T02).
 
 export interface CheckDependencies {
   readonly configuration: Pick<ConfigurationInterface, 'operations' | 'policyMissing'>;
@@ -108,7 +109,7 @@ export async function siteReadinessOf(context: TransactionContext, siteId: strin
   return { activationId, latest, approved };
 }
 
-/** The Site's shared checks for the activity, now: the required policies (devices with S1-F12-T02). */
+/** The Site's shared checks for the activity, now: the required policies (the devices check is a unit's). */
 export async function runSiteChecks(
   context: TransactionContext,
   dependencies: Pick<CheckDependencies, 'configuration'>,
@@ -180,6 +181,7 @@ export async function runUnitChecks(
         ? false
         : await unitHoldsStock(context, dependencies.locationInUse, unit.businessUnitId),
     brandsInForce: unit.kind === 'brand-counter' ? (await unitBrandsOn(context, unit.businessUnitId, today)).length : 0,
+    devices: activity === 'selling' ? await unitDevicesCheck(context, unit.businessUnitId, today) : [],
   });
   return { checks, zeroStockDeclarationId: declaration?.id ?? null };
 }

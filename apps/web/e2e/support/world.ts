@@ -264,6 +264,16 @@ export interface SyntheticWorld {
     readonly operation: string;
     readonly capability: string;
   };
+  /** S1-F12-T01: the devices journey's Admin, and how Setup › Devices names the two Stores and their units. */
+  readonly devices: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    /** S1-F12-T02: a second Admin for the lifecycle journey, so the two journeys never share authenticator steps. */
+    readonly lifecycleAdmin: EnrolledUser;
+    readonly storeOption: string;
+    readonly otherStoreOption: string;
+    readonly units: readonly { readonly code: string; readonly name: string; readonly store: number }[];
+  };
   /** S1-F04-T02: the readiness journey's Operations user and approver, the approve reason, and the unit's option. */
   readonly readiness: {
     readonly organisationCode: string;

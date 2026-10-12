@@ -18,8 +18,9 @@ export const structureChanged = defineEvent({
 
 /**
  * A business unit's mapping version was approved and takes effect from its start (module-map section 8;
- * structure-and-masters 3.4, 3.8; S1-F02-T02): saved in the decision's transaction, identifiers only. `reports` and
- * `site-lifecycle` consume it when they are built; until then no consumer is registered.
+ * structure-and-masters 3.4, 3.8; S1-F02-T02): saved in the decision's transaction, identifiers only. `pos` consumes it
+ * to define a billing device's series for a new registration before the date (offline-counter 4.3; S1-F12-T02);
+ * `reports` and `site-lifecycle` will when they are built.
  */
 export const mappingChanged = defineEvent({
   type: 'organisation.mapping-changed',

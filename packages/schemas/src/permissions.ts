@@ -349,6 +349,16 @@ const financeRecordTypes = [
   declare('finance.period_reopening', ['view', 'create', 'approve', 'cancel'], NONE),
 ] as const;
 
+/**
+ * `pos`: billing devices (offline-counter 3.1, 3.2; module-map 4.17; S1-F12-T01). Create registers a device for a
+ * Store and its units; edit enrols it, binding its key in the counter app, a protected action asking a fresh code
+ * (GC8-8, DEC-116). No independent approval: device registration is not among the independently approved actions of
+ * POL-02.07 (3.2). The permission comes only through a role assignment (POL-02.03); the first Admin of the setup step
+ * does not hold it (access-and-approvals 9.11). A device carries its Store's place, so an assignment's place scope
+ * decides where (5.3). Who holds them is KDPS's.
+ */
+const posRecordTypes = [declare('pos.billing_device', ['view', 'create', 'edit'], PLACE)] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -364,6 +374,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...siteLifecycleRecordTypes,
   ...financeTaxRulesRecordTypes,
   ...financeRecordTypes,
+  ...posRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -380,7 +391,8 @@ export type RecordTypeCode =
   | (typeof configurationRecordTypes)[number]['code']
   | (typeof siteLifecycleRecordTypes)[number]['code']
   | (typeof financeTaxRulesRecordTypes)[number]['code']
-  | (typeof financeRecordTypes)[number]['code'];
+  | (typeof financeRecordTypes)[number]['code']
+  | (typeof posRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

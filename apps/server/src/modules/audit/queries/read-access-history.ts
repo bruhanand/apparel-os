@@ -6,7 +6,7 @@ import { beyond, positionTime } from './position.js';
 
 /** The kinds read under record types of their own (numbering-and-audit 4.5; migration 0011's read policy). */
 const SENSITIVE_KINDS = ['sensitive-access'];
-const DEVICE_KINDS = ['device-registered', 'device-revoked'];
+const DEVICE_KINDS = ['device-registered', 'device-enrolled', 'device-revoked', 'device-ended'];
 
 function groupFilter(group: AccessRecordGroup): SQL {
   if (group === 'sensitive-access') return inArray(accessRecord.kind, SENSITIVE_KINDS);

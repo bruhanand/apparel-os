@@ -146,7 +146,7 @@ beforeAll(async () => {
   runner = new CommandRunner({ clock: { now: () => new Date() }, timezones: syntheticTimezone, logger: log.logger });
   const registry: JobRegistry = {
     events: [failing, jobFailed],
-    consumers: [alwaysFails, ...exceptionsConsumers],
+    consumers: [alwaysFails, ...exceptionsConsumers(new Numbering({ kinds: [EXCEPTION_CODE_KIND] }))],
     jobKinds: [],
   };
   // SYNTHETIC: five attempts in all with growing delays (DEC-118, DEC-119); only the first wait is shortened.

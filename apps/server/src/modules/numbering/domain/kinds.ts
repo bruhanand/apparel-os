@@ -55,7 +55,10 @@ export type NumberingReason =
   | 'series-not-open'
   | 'series-not-paused'
   | 'series-exhausted'
-  | 'document-numbered-elsewhere';
+  | 'document-numbered-elsewhere'
+  | 'financial-year-invalid'
+  | 'financial-year-label-taken'
+  | 'financial-year-overlaps';
 
 const NOT_FOUND: readonly NumberingReason[] = ['format-not-found', 'series-not-found'];
 

@@ -29,6 +29,13 @@ export function missingText(item: MissingItem): string {
   if (item.kind === 'financial-period' && item.code !== undefined) {
     return t('missing.financial-period.named', { code: item.code });
   }
+  // A unit a billing device cannot bill for, by its code (offline-counter 3.1; PRD-UXP-003; S1-F12-T01).
+  if (item.kind === 'business-unit' && item.code !== undefined) {
+    return t('missing.business-unit.named', { code: item.code });
+  }
+  // A setting not set, by its name where the catalogue has one (code-house-rules 12.14; PRD-UXP-003).
+  const setting = `setting.name.${item.setting ?? ''}`;
+  if (item.kind === 'setting' && isMessageId(setting)) return t('missing.setting.named', { setting: t(setting) });
   const gate = gateText(item) ?? readinessText(item) ?? importText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
@@ -96,6 +103,11 @@ function readinessText(item: MissingItem): string | undefined {
       action: t(action),
       recordType: named('record-type', item.recordType),
     });
+  }
+  // A billing device with no Open series, by its code and why (offline-counter section 11; S1-F12-T02).
+  const lacks = `missing.device-series.${item.lacks ?? ''}`;
+  if (item.kind === 'device-series' && item.code !== undefined && isMessageId(lacks)) {
+    return t(lacks, { code: item.code });
   }
   if (item.kind === 'approval-people' && item.actionType !== undefined) {
     return t('missing.approval-people.named', { actionType: named('approval.action', item.actionType) });

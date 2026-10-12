@@ -20,6 +20,7 @@ import type { AccessInterface } from '../access.js';
 import type { OwnCredentials } from '../commands/own-credentials.js';
 import type { SignIn, SignInResult } from '../commands/sign-in.js';
 import type { DemoSignInSettings } from '../domain/demo-sign-in.js';
+import { sessionKindOf } from '../domain/sign-in-rules.js';
 import { verifyPassword } from '../domain/password-hash.js';
 import { networkAddressOf, SignedIn, type SignedInUser } from './authenticate.guard.js';
 import { ACCESS, DEMO_SIGN_IN } from '../tokens.js';
@@ -65,8 +66,41 @@ export class SignInController {
       login: input.body.login,
       password: input.body.password,
       totpCode: input.body.totpCode,
+      device: input.body.device,
     });
     return answerOf(result, routed.organisation.organisationCode, response);
+  }
+
+  /**
+   * A one-time challenge for a device to sign (offline-counter 3.2, 3.3; PRD-OFF-010), on the sign-in path with no
+   * actor (code-house-rules 6.3), like sign-in a public command with no key. An unknown Organisation gets the one
+   * sign-in refusal; unused challenges from one source address are slowed by the sign-in throttling setting.
+   */
+  @ApiRoute(routes.issueDeviceChallenge)
+  async issueDeviceChallenge(
+    @RouteInput() input: RouteInputOf<typeof routes.issueDeviceChallenge>,
+    @Req() request: HttpRequest,
+  ) {
+    const routed = await this.router.resolveForSignIn(input.body.organisationCode);
+    if (!routed.routed) throw refused();
+    const issued = await this.runner.run(
+      {
+        commandName: 'access.issue-device-challenge',
+        organisation: routed.organisation,
+        correlationId: correlationIdOf(request) ?? newCorrelationId(),
+        actor: { kind: 'no-actor', path: 'sign-in' },
+      },
+      (context) => this.access.issueDeviceChallenge(context, networkAddressOf(request)),
+    );
+    // Slowed and unavailable as sign-in is (access-and-approvals 3.1; S1-F12 review).
+    switch (issued.kind) {
+      case 'slowed':
+        throw new ApiRefusal({ kind: 'not-signed-in', code: 'access.sign-in-slowed' });
+      case 'unavailable':
+        throw new ApiRefusal({ kind: 'unavailable', code: 'access.sign-in-unavailable', missing: issued.missing });
+      case 'issued':
+        return { challengeId: issued.challengeId, challenge: issued.challenge };
+    }
   }
 
   // The test sign-in of the development environments (access-and-approvals 3.4; POL-02.17, PRD-ACS-017; DEC-121).
@@ -104,7 +138,15 @@ export class SignInController {
         correlationId: user.correlationId,
         actor: { kind: 'actor', actorId: user.userId },
       },
-      (context) => this.access.ownAccess(context, user.userId),
+      async (context) => {
+        const access = await this.access.ownAccess(context, user.userId, sessionKindOf(user.deviceId));
+        // A shared POS session names its device (access-and-approvals 3.3; POL-02.18; S1-F12-T01).
+        const device =
+          user.deviceId === undefined
+            ? undefined
+            : (await this.access.devices(context, [user.deviceId])).get(user.deviceId);
+        return { ...access, device };
+      },
     );
     // Screens show times in the Organisation's timezone only (PRD-MOD-017; DEC-118). With none in force no session
     // authenticates (authenticate-session.ts), so this answers as the guard does if it ended since; nothing falls back
@@ -123,6 +165,7 @@ export class SignInController {
       roleAssignmentInForce: own.roleAssignmentInForce,
       timezone: own.timezone,
       idleLockSeconds: own.idleLockSeconds,
+      ...(own.device === undefined ? {} : { device: { deviceId: own.device.deviceId, code: own.device.code } }),
     };
   }
 

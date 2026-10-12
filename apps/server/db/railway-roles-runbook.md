@@ -64,15 +64,17 @@ The steps as planned:
 3. Set up the two synthetic Organisations: `pnpm seed` from a shell in `app` (`railway ssh --service app`); it refuses unless both `AOS_ENVIRONMENT` and the Railway environment are `dev`. Then the setup step (`setup-organisation`) for each, as AGENTS.md "Code workspace" says.
 4. Read the `worker` log for `The worker is running`; it starts serving each Organisation the directory newly lists on its next pass, with no restart.
 5. Check step 8's role limits again and `GET /api/health` on the public domain.
-6. Open the public domain at `/`: the web app's sign-in page, with the `dev` banner. The server serves the web app from `apps/web/dist`, which `pnpm build` makes with `AOS_ENVIRONMENT` from the service's variables (deployment.md section 3; `S1-F01-T27`).
+6. Open the public domain at `/`: the web app's sign-in page, with the `dev` banner. The server serves the web app from `apps/web/dist`, which `pnpm build` makes with `AOS_ENVIRONMENT` from the service's variables (deployment.md section 3; `S1-F01-T27`). Open `/counter/` too: the counter's enrolment page, served from `apps/counter/dist` (offline-counter 5.2; `S1-F12-T02`).
 
 ## After a deploy that adds a job kind or a consumer
 
-The setup step gives an Organisation the worker's service identities as the registry stood when it ran. A deploy whose worker registry needs a new identity (a new job kind or consumer, such as the `exceptions` identity of `S1-F08-T02`) leaves every Organisation set up before it without that identity, and the worker ends those steps `identity-not-enabled` (access-and-approvals 9.11a; RR-331). After such a deploy, and once the `app` deploy, with its pre-deploy `pnpm migrate`, has finished, run for each Organisation the directory lists, from a shell in `app` (`railway ssh --service app`), which holds `AOS_RUNTIME_DATABASE_URL` and the build:
+The setup step gives an Organisation the worker's service identities as the registry stood when it ran. A deploy whose worker registry needs a new identity (a new job kind or consumer, such as the `exceptions` identity of `S1-F08-T02` or the `pos` identity of `S1-F12-T02`) leaves every Organisation set up before it without that identity, and the worker ends those steps `identity-not-enabled` (access-and-approvals 9.11a; RR-331). After such a deploy, and once the `app` deploy, with its pre-deploy `pnpm migrate`, has finished, run for each Organisation the directory lists, from a shell in `app` (`railway ssh --service app`), which holds `AOS_RUNTIME_DATABASE_URL` and the build:
 
 ```sh
 pnpm --filter @apparel-os/server add-service-identities <organisation-code>
 ```
+
+Before the `worker` deploy starts, its `AOS_WORKER_SETTINGS` needs a retry entry for each new job kind or consumer, or the worker refuses to start (CH-10), as for `pos.define-series-for-mapping` of `S1-F12-T02`.
 
 It prints one JSON line: `added` with the codes it wrote, `unchanged` when nothing was missing, or `refused` with its reason (exit code 1). A `grants-differ` refusal names an identity that exists with other grants; nothing was written, and it is not corrected by this command. The worker picks the new identity up at its next step, with no restart; a job that already failed `identity-not-enabled` stays failed until an operator runs it again (code-house-rules 12.9). Running it when nothing is missing is harmless. Whether the command needs a decision entry under `PRD-ACS-023` before use outside `dev` is RR-457.
 

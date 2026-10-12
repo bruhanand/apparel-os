@@ -21,6 +21,7 @@ import * as configurationTables from '../src/modules/configuration/db/schema.js'
 import * as siteLifecycleTables from '../src/modules/site-lifecycle/db/schema.js';
 import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
 import * as booksTables from '../src/modules/finance/books/db/schema.js';
+import * as posTables from '../src/modules/pos/db/schema.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
 
@@ -61,7 +62,7 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     // names a record its owning module admitted the actor to (migration 0039; RR-452).
     'files_imports.attached_record',
     // imports-and-opening-data 7.2: a source identity's published document and whether a file is in a batch that has
-    // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0059; S1-F06-T04).
+    // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0065; S1-F06-T04).
     'files_imports.file_in_open_batch',
     'files_imports.published_document',
     'files_imports.record_admitted',
@@ -446,11 +447,16 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
                  where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
                    and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
                    -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3); for
-                   -- a proposal's versions, whose states are Proposed, Confirmed and Rejected (DM-4), Confirmed ones.
+                   -- a proposal's versions, whose states are Proposed, Confirmed and Rejected (DM-4), Confirmed ones;
+                   -- every row of a dated table whose rows need no decision, such as pos.billing_device_unit.
                    and (pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%'
                         or pg_catalog.pg_get_constraintdef(c.oid)
                           like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'
-                        or pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((state = ''Confirmed''::text))%'))::text
+                        or pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((state = ''Confirmed''::text))%'
+                        or (pg_catalog.pg_get_constraintdef(c.oid) not like '%WHERE%'
+                            and not exists (select 1 from pg_catalog.pg_attribute a
+                                            where a.attrelid = c.conrelid and a.attname = 'decision'
+                                              and not a.attisdropped))))::text
                   as exclusion,
                 (select count(*) from pg_catalog.pg_trigger t
                  where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'
@@ -636,6 +642,12 @@ describe('the Drizzle definitions of site-lifecycle (code-house-rules 3.4, 10.4;
       await expectDefinitionMatches(world.organisations[0].database, table);
     },
   );
+});
+
+describe('the Drizzle definitions of pos (code-house-rules 3.4, 10.4; S1-F12-T01)', () => {
+  it.each(Object.entries(posTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
+  });
 });
 
 async function expectDefinitionMatches(database: string, table: Parameters<typeof getTableConfig>[0]): Promise<void> {

@@ -166,7 +166,11 @@ export async function writeSyntheticUser(
 /** Writes a SYNTHETIC setting of access, Approved, in force from a day before now, labelled synthetic (12.14; 11.1). */
 export async function writeSyntheticSetting(
   database: string,
-  key: 'access.sign-in-throttling' | 'access.password-rules' | 'access.office-session-limits',
+  key:
+    | 'access.sign-in-throttling'
+    | 'access.password-rules'
+    | 'access.office-session-limits'
+    | 'access.shared-pos-session-limits',
   value: Record<string, number>,
 ): Promise<void> {
   const owner = await connect(database, 'migration');
@@ -253,6 +257,8 @@ export async function startAccessApp(
     readonly clock?: Clock;
     /** A built web app to serve from the same origin, as the real server does (S1-F01-T27). */
     readonly webApp?: string;
+    /** The built counter app, served at /counter/ beside the web app (offline-counter 5.2; S1-F12-T02). */
+    readonly counterApp?: string;
     /** The file store variables (files-imports); none by default, so file storage is not configured. */
     readonly fileStoreEnvironment?: Record<string, string>;
     /** The caps at intake (files-imports; S1-F06-T02): those documented for tests unless a test gives its own. */
@@ -360,7 +366,7 @@ export async function startAccessApp(
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
-  if (options.webApp !== undefined) serveWebApp(app, options.webApp);
+  if (options.webApp !== undefined) serveWebApp(app, options.webApp, options.counterApp);
   app.enableShutdownHooks();
   // After the modules register their own validity checks at start, so an operation may name one (module-map 4.4).
   await app.init();

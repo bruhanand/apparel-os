@@ -1,15 +1,23 @@
 import { randomBytes } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import type { MissingItem, Secret, SignInOutcome } from '@apparel-os/schemas';
-import type { CommandRequest, CommandRunner, RoutedOrganisation, TransactionContext } from '../../../kernel/index.js';
+import type { DeviceProof, MissingItem, Secret, SignInOutcome } from '@apparel-os/schemas';
+import {
+  LOCK_STEP,
+  type CommandRequest,
+  type CommandRunner,
+  type RoutedOrganisation,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { session, signInFailure } from '../db/schema.js';
 import { findDemoPerson, type DemoSignInSettings } from '../domain/demo-sign-in.js';
 import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { verifyPassword } from '../domain/password-hash.js';
+import { SESSION_LIMITS_SETTING, sessionKindOf } from '../domain/sign-in-rules.js';
 import { matchingStep } from '../domain/totp.js';
 import { sessionIdentifierHash } from './authenticate-session.js';
+import { deviceSignInLockTarget, proveDeviceForSignIn } from './devices.js';
 import { readSetting } from '../queries/settings.js';
 import { attemptSlowed } from '../queries/throttling.js';
 import { takeStep } from './take-step.js';
@@ -24,6 +32,11 @@ export interface SignInAttempt {
   readonly login: string;
   readonly password: Secret;
   readonly totpCode: string | undefined;
+  /**
+   * On a billing device, its proof (offline-counter 3.3, 3.4): with a valid one the session is a shared POS session
+   * bound to the device; with none, an office session (POL-02.18; access-and-approvals 3.3).
+   */
+  readonly device?: DeviceProof | undefined;
 }
 
 /** One test sign-in, as the controller gives it: no password and no code (access-and-approvals 3.4; DEC-121). */
@@ -113,6 +126,14 @@ export class SignIn {
     };
     const looked = await this.dependencies.runner.read(request, (context) => this.look(context, attempt));
     if (looked.kind === 'unavailable') return looked;
+    if (attempt.device !== undefined) {
+      // A sign-in on a billing device keeps a shared POS session, whose limits are a setting of their own with no
+      // default; while it is not set, the device sign-in is unavailable, naming it (POL-02.18; code-house-rules 12.14;
+      // RR-303). An office sign-in never needs it.
+      const setting = SESSION_LIMITS_SETTING['shared-pos'];
+      const posLimits = await this.dependencies.runner.read(request, (context) => readSetting(context, setting));
+      if (posLimits.kind === 'not-set') return { kind: 'unavailable', missing: [{ kind: 'setting', setting }] };
+    }
     if (looked.slowed) {
       await this.dependencies.runner.run(request, (context) => this.recordAccess(context, attempt, looked, false));
       return { kind: 'slowed' };
@@ -124,6 +145,11 @@ export class SignIn {
     const factor = signable?.confirmedFactor;
 
     return this.dependencies.runner.run(request, async (context): Promise<SignInResult> => {
+      // On a billing device, its row in shared mode at step 1, before any write of this transaction (the code's step,
+      // the failure, the session) and before the proof reads the device and the challenge (code-house-rules 8.2).
+      if (attempt.device !== undefined) {
+        await context.lock(LOCK_STEP.document, [deviceSignInLockTarget(attempt.device.deviceId)]);
+      }
       let step: number | undefined;
       if (factor !== undefined) {
         const secret = openFactorSecret(this.dependencies.keys, attempt.organisation.organisationCode, factor);
@@ -134,6 +160,9 @@ export class SignIn {
         // The step is taken once: a code is never accepted twice, even by two attempts at once (PRD-SEC-001).
         passed = await takeStep(context, factor.id, step);
       }
+      // A device's proof that does not hold refuses the sign-in like any wrong part (offline-counter 3.3; PRD-OFF-010):
+      // an unknown device or key, a device not Active, a challenge used before, or a signature not the device's.
+      if (passed && attempt.device !== undefined) passed = await proveDeviceForSignIn(context, attempt.device);
       if (!passed || signable === undefined || looked.userId === undefined) {
         await context.tx.insert(signInFailure).values({
           id: uuidv7(),
@@ -144,8 +173,8 @@ export class SignIn {
         await this.recordAccess(context, attempt, looked, false);
         return { kind: 'refused' };
       }
-      const identifier = await startSession(context, looked.userId);
-      await this.recordAccess(context, attempt, looked, true);
+      const identifier = await startSession(context, looked.userId, attempt.device?.deviceId);
+      await this.recordAccess(context, attempt, looked, true, 'sign-in', attempt.device?.deviceId);
       return { kind: 'signed-in', outcome: outcomeOf(signable), sessionIdentifier: identifier };
     });
   }
@@ -222,26 +251,32 @@ export class SignIn {
     looked: Extract<Looked, { kind: 'looked' }>,
     succeeded: boolean,
     kind: 'sign-in' | 'demo-sign-in' = 'sign-in',
+    deviceId?: string,
   ): Promise<void> {
     return this.dependencies.audit.recordAccess(context, {
       kind,
       outcome: succeeded ? 'succeeded' : 'refused',
       // Only a login that matched a user names one; a typed login is never kept (numbering-and-audit 5.2).
       ...(looked.userId === undefined ? {} : { userId: looked.userId }),
+      // The device where registered (5.2): only a sign-in whose proof held names it.
+      ...(deviceId === undefined ? {} : { deviceId }),
       networkAddress: attempt.networkAddress,
     });
   }
 }
 
-/** Starts an office session for the user and answers its random identifier, for the cookie only (3.3). */
-async function startSession(context: TransactionContext, userId: string): Promise<string> {
+/**
+ * Starts a session for the user and answers its random identifier, for the cookie only (3.3): a shared POS session
+ * bound to the device whose proof held, otherwise an office session (POL-02.18).
+ */
+async function startSession(context: TransactionContext, userId: string, deviceId?: string): Promise<string> {
   const identifier = randomBytes(SESSION_IDENTIFIER_BYTES).toString('base64url');
   await context.tx.insert(session).values({
     id: uuidv7(),
     appUserId: userId,
     identifierHash: sessionIdentifierHash(identifier),
-    kind: 'office',
-    deviceId: null,
+    kind: sessionKindOf(deviceId),
+    deviceId: deviceId ?? null,
     state: 'In force',
     startedAt: context.startedAt,
     lastActivityAt: context.startedAt,

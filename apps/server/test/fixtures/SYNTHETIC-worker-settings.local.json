@@ -18,6 +18,12 @@
       "retryDelaySeconds": 10,
       "retryBackoff": true,
       "activeLimitSeconds": 300
+    },
+    "pos.define-series-for-mapping": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
     }
   },
   "jobKinds": {

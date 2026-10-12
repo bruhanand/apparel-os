@@ -21,6 +21,7 @@ const ready: UnitReadinessFacts = {
   zeroStockDeclared: true,
   stockHeld: false,
   brandsInForce: 0,
+  devices: [],
 };
 
 const stateOf = (facts: UnitReadinessFacts, check: string) =>
@@ -34,6 +35,7 @@ describe('PRD-LIF-002 the readiness checks', () => {
       ['mappings', 'passed'],
       ['locations', 'passed'],
       ['users-and-access', 'passed'],
+      ['devices', 'not-needed'],
       ['site-readiness', 'passed'],
       ['stock-plan', 'passed'],
       ['brand-coverage', 'not-needed'],
@@ -120,6 +122,19 @@ describe('PRD-LIF-002 the readiness checks', () => {
       { kind: 'brand-coverage', businessUnitId: UNIT },
     ]);
     expect(stateOf({ ...ready, kind: 'brand-counter', brandsInForce: 1 }, 'brand-coverage')?.state).toBe('passed');
+  });
+
+  it('PRD-LIF-002 PRD-LIF-001 GC-8 test 9 the devices check is judged for selling only, failing with what pos names', () => {
+    const lacking = [{ kind: 'device-series', deviceId: UNIT, code: 'SYN-TILL', lacks: 'bill-format' }];
+    expect(judgeUnitReadiness('selling', ready).find((each) => each.check === 'devices')?.state).toBe('passed');
+    expect(
+      judgeUnitReadiness('selling', { ...ready, devices: lacking }).find((each) => each.check === 'devices'),
+    ).toEqual({ check: 'devices', state: 'failed', missing: lacking });
+    for (const activity of ['receiving', 'movement'] as const) {
+      expect(
+        judgeUnitReadiness(activity, { ...ready, devices: lacking }).find((each) => each.check === 'devices')?.state,
+      ).toBe('not-needed');
+    }
   });
 
   it('a refusal names each failing check, then what it lacks', () => {
