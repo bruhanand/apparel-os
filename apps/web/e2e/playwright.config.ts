@@ -27,7 +27,9 @@ export default defineConfig({
     {
       command: 'node ../server/dist-browser/test/browser/serve.js',
       cwd: '..',
-      url: `http://127.0.0.1:${String(SERVER_PORT)}/api/health`,
+      // Ready once the server has written the world file the journeys read, not merely once the API answers: the
+      // harness beside it, on the server's port + 11, answers `/ready` then (serve.ts).
+      url: `http://127.0.0.1:${String(SERVER_PORT + 11)}/ready`,
       env: {
         AOS_E2E_ORIGIN: WEB_ORIGIN,
         AOS_E2E_PORT: String(SERVER_PORT),

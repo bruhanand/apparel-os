@@ -1199,9 +1199,16 @@ const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 // The harness the journey asks to post the correction (code-house-rules 11.4: test code, composed only here), on a
-// local port of its own beside the server of the journeys.
+// local port of its own beside the server of the journeys. It also answers `GET /ready` once the world file is
+// written, which Playwright waits for: the API answers before the seeding done through it ends, so its health alone
+// would let the journeys read a world file that is missing or left by an earlier run.
 const harnessPort = port + 11;
+let worldWritten = false;
 const harness = createServer((request, response) => {
+  if (request.method === 'GET' && request.url === '/ready') {
+    response.writeHead(worldWritten ? 200 : 503).end();
+    return;
+  }
   if (request.method !== 'POST' || request.url !== '/post-period-correction') {
     response.writeHead(404).end();
     return;
@@ -2484,6 +2491,7 @@ writeFileSync(
     },
   }),
 );
+worldWritten = true;
 process.stdout.write(`Browser journey server listening on port ${String(port)} for ${origin}\n`);
 
 let stopping = false;
