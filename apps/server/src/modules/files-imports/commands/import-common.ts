@@ -7,7 +7,7 @@ import {
   type LayoutStructure,
   type StagedValueView,
 } from '@apparel-os/schemas';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   CommandDefect,
@@ -182,6 +182,19 @@ export interface LoadedDocument extends HandlerDocument {
 }
 
 /** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
+/**
+ * A batch's documents in the order of its file: by the sheet and row number of each document's first data row, the
+ * order its rows are staged and read in (imports-and-opening-data 3.2, 13.3; PRD-IMP-012). Their UUIDv7 identifiers
+ * do not order documents staged within one millisecond (`PRD-MOD-008`), so they only break a tie.
+ */
+export const documentsInFileOrder: readonly SQL[] = [
+  sql`(select ${stagedRow.sheet} from ${stagedRow} where ${stagedRow.documentId} = ${importDocument.id}
+    order by ${stagedRow.sheet}, ${stagedRow.rowNumber} limit 1)`,
+  sql`(select ${stagedRow.rowNumber} from ${stagedRow} where ${stagedRow.documentId} = ${importDocument.id}
+    order by ${stagedRow.sheet}, ${stagedRow.rowNumber} limit 1)`,
+  asc(importDocument.id),
+];
+
 export async function documentsOf(
   context: TransactionContext,
   batch: Pick<BatchRow, 'id' | 'kind'>,
@@ -191,7 +204,7 @@ export async function documentsOf(
     .select()
     .from(importDocument)
     .where(eq(importDocument.batchId, batchId))
-    .orderBy(asc(importDocument.id));
+    .orderBy(...documentsInFileOrder);
   const rows = await context.tx
     .select()
     .from(stagedRow)
