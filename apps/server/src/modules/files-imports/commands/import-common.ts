@@ -56,8 +56,8 @@ export interface ImportDependencies {
   readonly environment: DeploymentEnvironment;
   /** The caps at intake, which every read of a stored workbook keeps to (9.3; S1-F06-T02). */
   readonly caps: IntakeCaps;
-  /** The count side of a comparison run (10.3; S1-F13-T01), from the composition root; none, and no count is read. */
-  readonly counts?: CountSets | undefined;
+  /** The count side of a comparison run (10.3; S1-F13-T01), from the composition root. */
+  readonly counts: CountSets;
 }
 
 /** The person a route found: who, in which Organisation, under which request. */

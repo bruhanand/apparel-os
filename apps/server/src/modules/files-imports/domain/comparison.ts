@@ -10,6 +10,18 @@
 //   its own as unresolved, never dropped (PRD-LIF-005).
 // - A quantity Unknown on either side keeps the line Unknown: no difference is worked out from zero (PRD-MOD-015).
 
+import {
+  groupBy,
+  resultOf,
+  totalOf,
+  unresolvedSides,
+  type ComparisonResult,
+  type Side,
+  type SideTotal,
+} from './compare.js';
+
+export type { ComparisonResult } from './compare.js';
+
 /** One row of a set: where it came from, and its key and quantity, each Unknown as null. */
 export interface ComparisonRow {
   /** The staged row of a batch side, or the read-model key of a count side. */
@@ -25,12 +37,7 @@ export interface ComparisonRow {
 export type ComparisonKey = 'barcode-then-sku' | 'sku-and-location';
 
 /** One side's quantity of a key: listed with its sum, listed with an Unknown quantity, or not listed (I-1). */
-export type SideQuantity =
-  | { readonly state: 'listed'; readonly quantity: number }
-  | { readonly state: 'unknown' }
-  | { readonly state: 'not-listed' };
-
-export type ComparisonResult = 'same' | 'different' | 'not-listed-left' | 'not-listed-right' | 'unknown' | 'unresolved';
+export type SideQuantity = SideTotal;
 
 export interface ComparisonLineDraft {
   readonly keyedBy: 'barcode' | 'sku' | 'sku-and-location' | 'unresolved';
@@ -48,40 +55,19 @@ export interface ComparisonLineDraft {
 
 type Keyed = 'barcode' | 'sku' | 'sku-and-location';
 
-/** The rows of one side grouped by a key, in the order each key first appears. */
-function groupBy(rows: readonly ComparisonRow[], keyOf: (row: ComparisonRow) => string | null) {
-  const groups = new Map<string, ComparisonRow[]>();
-  for (const row of rows) {
-    const key = keyOf(row);
-    if (key === null) continue;
-    groups.set(key, [...(groups.get(key) ?? []), row]);
-  }
-  return groups;
-}
-
 /** The sum of a group's quantities, Unknown when any is; not listed when the group is empty. */
-function quantityOf(rows: readonly ComparisonRow[]): SideQuantity {
-  if (rows.length === 0) return { state: 'not-listed' };
-  let sum = 0;
-  for (const row of rows) {
-    if (row.quantity === null) return { state: 'unknown' };
-    sum += row.quantity;
-  }
-  return { state: 'listed', quantity: sum };
-}
+const quantityOf = (rows: readonly ComparisonRow[]): SideQuantity =>
+  totalOf(
+    rows,
+    (row) => row.quantity,
+    (sum, value) => sum + value,
+  );
 
 /** The one value the rows that hold one share, or null: none holds one, or they hold different ones. */
 function shared(rows: readonly ComparisonRow[], field: 'barcode' | 'skuId' | 'locationId'): string | null {
   const values = new Set(rows.map((row) => row[field]).filter((value) => value !== null));
   const [only] = values;
   return values.size === 1 && only !== undefined ? only : null;
-}
-
-function resultOf(left: SideQuantity, right: SideQuantity): ComparisonResult {
-  if (left.state === 'unknown' || right.state === 'unknown') return 'unknown';
-  if (left.state === 'not-listed') return 'not-listed-left';
-  if (right.state === 'not-listed') return 'not-listed-right';
-  return left.quantity === right.quantity ? 'same' : 'different';
 }
 
 function lineOf(keyedBy: Keyed, left: readonly ComparisonRow[], right: readonly ComparisonRow[]): ComparisonLineDraft {
@@ -101,18 +87,13 @@ function lineOf(keyedBy: Keyed, left: readonly ComparisonRow[], right: readonly 
   };
 }
 
-function unresolvedOf(side: 'left' | 'right', row: ComparisonRow): ComparisonLineDraft {
-  const listed = quantityOf([row]);
+function unresolvedOf(side: Side, row: ComparisonRow): ComparisonLineDraft {
   return {
     keyedBy: 'unresolved',
     barcode: row.barcode,
     skuId: row.skuId,
     locationId: row.locationId,
-    left: side === 'left' ? listed : { state: 'not-listed' },
-    right: side === 'right' ? listed : { state: 'not-listed' },
-    result: 'unresolved',
-    leftRows: side === 'left' ? [row.rowId] : [],
-    rightRows: side === 'right' ? [row.rowId] : [],
+    ...unresolvedSides(side, row.rowId, quantityOf([row])),
   };
 }
 
@@ -146,7 +127,7 @@ function matchOn(
 
 /** The lines of one side's rows that the other side does not list, grouped by the key; the rest unresolved. */
 function oneSided(
-  side: 'left' | 'right',
+  side: Side,
   rows: readonly ComparisonRow[],
   keyedBy: Keyed,
   keyOf: (row: ComparisonRow) => string | null,
@@ -193,7 +174,7 @@ export function compareSets(
   ];
 }
 
-function oneSidedByBarcodeThenSku(side: 'left' | 'right', rows: readonly ComparisonRow[]) {
+function oneSidedByBarcodeThenSku(side: Side, rows: readonly ComparisonRow[]) {
   const withSku = oneSided(side, rows, 'sku', skuKey);
   const barcodeOnly = rows.filter((row) => row.skuId === null);
   const byBarcode = oneSided(side, barcodeOnly, 'barcode', barcodeKey);

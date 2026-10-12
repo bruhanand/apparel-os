@@ -123,7 +123,10 @@ export interface JournalLineRow {
 export async function writeJournal(
   context: TransactionContext,
   numbering: NumberingInterface,
-  request: Pick<PostRequest, 'sourceModule' | 'document' | 'actor' | 'onBehalfOfUserId'>,
+  request: Pick<PostRequest, 'sourceModule' | 'actor' | 'onBehalfOfUserId'> & {
+    // A journal keeps its source document, not the import kind Post checked before it (9.1).
+    readonly document: Omit<PostRequest['document'], 'importKind'>;
+  },
   head: JournalHead,
   lines: readonly JournalLineRow[],
 ): Promise<{ kind: 'written'; journal: PostedJournal } | { kind: 'refused'; refusal: CommandRefusal }> {

@@ -1,5 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { businessDateSchema, type DocumentPreview, type ExternalCodeKind } from '@apparel-os/schemas';
+import {
+  businessDateSchema,
+  IMPORT_BATCH_APPROVAL,
+  IMPORT_BATCH_TYPE,
+  type DocumentPreview,
+  type ExternalCodeKind,
+} from '@apparel-os/schemas';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import {
@@ -24,11 +30,15 @@ import { referenceDocument, referenceLine } from '../db/schema.js';
 // and the batch's Store (7.1). The stock on hand is also a set of a comparison run: each row's barcode, the SKU it
 // resolves to on the report date, and its quantity (10.3).
 //
-// Design choices (S1-F13-T01): the review is the preparer's submission, since a reference record moves no stock and
-// no money and creates nothing another module acts on; a barcode resolves through Resolve a code as a supplier barcode
-// or an internal code, a code that names two SKUs staying unresolved; an item code is kept as its source word, since
-// which code kind the earlier POS's item code is has no answer yet; a quantity is a whole number, a negative one kept
-// as given (a return line of the daily sales, H-5). No revision is supported: a changed report is a conflict.
+// The review is a second person's: an independent approval of the batch version before it is kept (PRD-IMP-005;
+// product owner, 12 Oct 2026), not the preparer's submission. Confirmed by the product owner, 12 Oct 2026: a barcode
+// resolves through Resolve a code as a supplier barcode or an internal code, a code that names two SKUs staying
+// unresolved; the earlier POS's item code is kept as its source word, since which code kind it is stays OPEN for KDPS.
+// Design choices (S1-F13-T01): a quantity is a whole number, a negative one kept as given (a return line of the daily
+// sales, H-5); a daily-sales amount is integer paise, staged by the `paise` transform (PRD-MOD-014), a finer one
+// Unknown (GC6-13). No revision is supported: a changed report is a conflict. Codes resolve on the report date, the
+// document's reference; a report with no date resolves none, so no date is ever taken from the server's clock
+// (code-house-rules 9).
 
 /** The record type of a reference document (permissions: `ebo_imports.reference_document`). */
 export const REFERENCE_DOCUMENT_TYPE = 'ebo_imports.reference_document';
@@ -74,6 +84,9 @@ type Issue = Extract<DocumentPreview, { kind: 'issues' }>['issues'][number];
 
 const WHOLE = /^-?\d+$/;
 
+/** An integer of paise as staged by the `paise` transform, signed for a return line (PRD-MOD-014). */
+const PAISE = /^-?\d+$/;
+
 /** A whole quantity, or null where it is Unknown or not whole (PRD-MOD-015). */
 function wholeOf(row: HandlerRow): number | null {
   const text = knownValue(row.values.quantity);
@@ -95,8 +108,18 @@ function issuesOf(document: HandlerDocument): Issue[] {
     if (quantity !== undefined && !WHOLE.test(quantity)) {
       issues.push({ code: 'ebo-imports.quantity-not-whole', field: 'quantity', rowNumber: row.rowNumber });
     }
+    const amount = knownValue(row.values.amount);
+    if (amount !== undefined && !PAISE.test(amount)) {
+      issues.push({ code: 'ebo-imports.amount-not-paise', field: 'amount', rowNumber: row.rowNumber });
+    }
   }
   return issues;
+}
+
+/** A line's amount in integer paise, or null where it is Unknown or not paise (PRD-MOD-014, PRD-MOD-015). */
+function paiseOf(row: HandlerRow): number | null {
+  const text = knownValue(row.values.amount);
+  return text !== undefined && PAISE.test(text) ? Number(text) : null;
 }
 
 /** The SKU a barcode names on a date, or null: not found, or two SKUs (structure-and-masters 4.7). */
@@ -104,9 +127,9 @@ async function skuOfBarcode(
   context: TransactionContext,
   catalogue: Pick<CatalogueInterface, 'resolveCode'>,
   barcode: string | undefined,
-  date: string,
+  date: string | undefined,
 ): Promise<string | null> {
-  if (barcode === undefined) return null;
+  if (barcode === undefined || date === undefined) return null;
   const found = new Set<string>();
   for (const kind of BARCODE_KINDS) {
     const resolved = await catalogue.resolveCode(context, { code: barcode, kind, date });
@@ -116,11 +139,12 @@ async function skuOfBarcode(
   return found.size === 1 && only !== undefined ? only : null;
 }
 
-/** The date a document's codes resolve on: its report date, or today where it is not a date. */
-async function dateOf(context: TransactionContext, document: HandlerDocument): Promise<string> {
-  if (businessDateSchema.safeParse(document.reference).success) return document.reference;
-  const today = await context.businessDate();
-  return today.kind === 'set' ? today.date : context.startedAt.toISOString().slice(0, 10);
+/**
+ * The date a document's codes resolve on: its report date, or undefined where the report gives none, so its codes
+ * resolve to no SKU. Never the server's date (code-house-rules 9; PRD-MOD-009).
+ */
+function reportDateOf(document: HandlerDocument): string | undefined {
+  return businessDateSchema.safeParse(document.reference).success ? document.reference : undefined;
 }
 
 export interface HistoricalReferenceDependencies {
@@ -142,13 +166,15 @@ export function historicalReferenceHandler(
     effects: 'reference-records',
     fields,
     measures: MEASURES[kind],
-    // A report's source identity is its kind and its Store, with the report date as the reference (7.1).
-    sourceScope: (document) => `${REFERENCE_DOCUMENT_TYPE}:${kind}:${document.place.storeId ?? 'store-unknown'}`,
+    // A report's source identity is its kind and its Store, with the report date as the reference (7.1). A batch that
+    // names no Store keeps its Store Unknown in the key, and cannot publish (`ebo-imports.store-not-named`).
+    sourceScope: (document) => JSON.stringify([REFERENCE_DOCUMENT_TYPE, kind, document.place.storeId ?? null]),
     revisions: 'none',
     publishNeeds: (_context, document) =>
       Promise.resolve({ action: 'create', recordType: REFERENCE_DOCUMENT_TYPE, facts: document.place }),
     lockTargets: () => Promise.resolve([]),
-    review: () => ({ kind: 'submission' }),
+    // A second person reviews the batch version before it is kept (PRD-IMP-005; product owner, 12 Oct 2026).
+    review: () => ({ kind: 'approval', actionType: IMPORT_BATCH_APPROVAL, recordType: IMPORT_BATCH_TYPE }),
     suggestions: () => Promise.resolve([]),
     checkRuleTarget: (_context, field) =>
       Promise.resolve({
@@ -192,11 +218,14 @@ export function historicalReferenceHandler(
         publishedAt: context.startedAt,
         ...scope,
       });
-      const date = await dateOf(context, document);
+      const date = reportDateOf(document);
       const lines = [];
       for (const row of document.rows) {
+        // The source words as given, the amount apart in paise (PRD-MOD-014).
         const values: Record<string, string | null> = {};
-        for (const field of fields) values[field.name] = knownValue(row.values[field.name]) ?? null;
+        for (const field of fields) {
+          if (field.name !== 'amount') values[field.name] = knownValue(row.values[field.name]) ?? null;
+        }
         lines.push({
           id: uuidv7(),
           referenceDocumentId: id,
@@ -204,6 +233,7 @@ export function historicalReferenceHandler(
           rowNumber: row.rowNumber,
           values,
           skuId: await skuOfBarcode(context, dependencies.catalogue, knownValue(row.values.barcode), date),
+          amountPaise: kind === 'daily-sales' ? paiseOf(row) : null,
           ...scope,
         });
       }
@@ -230,7 +260,7 @@ export function historicalReferenceHandler(
             async rows(context: TransactionContext, documents: readonly HandlerDocument[]): Promise<ComparisonRow[]> {
               const rows: ComparisonRow[] = [];
               for (const document of documents) {
-                const date = await dateOf(context, document);
+                const date = reportDateOf(document);
                 for (const row of document.rows) {
                   const barcode = knownValue(row.values.barcode) ?? null;
                   rows.push({

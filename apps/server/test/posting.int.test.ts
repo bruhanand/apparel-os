@@ -339,7 +339,7 @@ const item = (b: Book, amounts: { pool?: number; dispatch?: number }, overrides:
 
 const document = (items: PostItem[], on: StructureSetup = setup): PostRequest => ({
   sourceModule: SOURCE,
-  document: { recordType: 'test-synthetic.document', recordId: uuidv7() },
+  document: { recordType: 'test-synthetic.document', recordId: uuidv7(), importKind: 'none' },
   actor: { kind: 'user', id: on.preparer.id },
   items,
 });

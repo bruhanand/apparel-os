@@ -1,4 +1,14 @@
-import { addPaise, paise, type Paise } from '@apparel-os/domain';
+import { addPaise, type Paise } from '@apparel-os/domain';
+import {
+  groupBy,
+  inResultOrder,
+  resultOf,
+  totalOf,
+  unresolvedSides,
+  type ComparisonResult,
+  type Side,
+  type SideTotal,
+} from './compare.js';
 
 // The lines of a run of opening balances against the closed books (imports-and-opening-data 10.4; PRD-LIF-009,
 // PRD-LIF-011, POL-14.03; S1-F13-T02). Pure: no database. Each opening kind's totals are compared per party and per
@@ -7,9 +17,8 @@ import { addPaise, paise, type Paise } from '@apparel-os/domain';
 // - Rows are kept apart by their accounting book (PRD-ORG-005) and account. A party line sums the rows of one book,
 //   account and party; an account line sums every row of one book and account, a row with no party included, so a
 //   closed-books balance kept only per account still reconciles with the opening total.
-// - A key one side does not list is "not listed", never zero (class I-1).
-// - An amount Unknown on either side keeps the line Unknown: no difference is worked out from zero (PRD-MOD-015).
-// - A row with no book or no account is listed on its own as unresolved, never dropped.
+// - What every run shares (a key one side does not list is not listed, an Unknown amount keeps its line Unknown, a row
+//   with no book or account is unresolved) is in compare.ts.
 
 /** One row of a balance set: where it came from, its book, account and party, and its amount in paise or Unknown. */
 export interface BalanceRow {
@@ -21,16 +30,13 @@ export interface BalanceRow {
   /** The party, as the handler names it; null where the row names none (an account balance). */
   readonly party: string | null;
   /** Integer paise (PRD-MOD-014); null is Unknown (PRD-MOD-015). */
-  readonly paise: number | null;
+  readonly paise: Paise | null;
 }
 
-/** One side's total of a key: listed with its sum, listed with an Unknown amount, or not listed (I-1). */
-export type SideAmount =
-  | { readonly state: 'listed'; readonly paise: Paise }
-  | { readonly state: 'unknown' }
-  | { readonly state: 'not-listed' };
+/** One side's total of a key in paise: listed with its sum, listed with an Unknown amount, or not listed (I-1). */
+export type SideAmount = SideTotal<Paise>;
 
-export type BalanceResult = 'same' | 'different' | 'not-listed-left' | 'not-listed-right' | 'unknown' | 'unresolved';
+export type BalanceResult = ComparisonResult;
 
 export interface BalanceLineDraft {
   readonly keyedBy: 'party' | 'account' | 'unresolved';
@@ -50,52 +56,16 @@ interface Key {
   readonly party: string | null;
 }
 
+interface Sided {
+  readonly side: Side;
+  readonly row: BalanceRow;
+}
+
 const resolvedRow = (row: BalanceRow) => row.accountingBookId !== null && row.account !== null;
 const keyText = (key: Key) => JSON.stringify([key.accountingBookId, key.account, key.party]);
 
-/** The rows grouped by key, in the order each key first appears on the left, then on the right. */
-function grouped(left: readonly BalanceRow[], right: readonly BalanceRow[], keyOf: (row: BalanceRow) => Key | null) {
-  const groups = new Map<string, { key: Key; left: BalanceRow[]; right: BalanceRow[] }>();
-  const add = (side: 'left' | 'right', row: BalanceRow) => {
-    const key = keyOf(row);
-    if (key === null) return;
-    const text = keyText(key);
-    const group = groups.get(text) ?? { key, left: [], right: [] };
-    group[side].push(row);
-    groups.set(text, group);
-  };
-  for (const row of left) add('left', row);
-  for (const row of right) add('right', row);
-  return [...groups.values()];
-}
-
 /** The sum of a group's amounts, Unknown when any is; not listed when the group is empty. */
-function amountOf(rows: readonly BalanceRow[]): SideAmount {
-  if (rows.length === 0) return { state: 'not-listed' };
-  let sum = paise(0);
-  for (const row of rows) {
-    if (row.paise === null) return { state: 'unknown' };
-    sum = addPaise(sum, paise(row.paise));
-  }
-  return { state: 'listed', paise: sum };
-}
-
-function resultOf(left: SideAmount, right: SideAmount): BalanceResult {
-  if (left.state === 'unknown' || right.state === 'unknown') return 'unknown';
-  if (left.state === 'not-listed') return 'not-listed-left';
-  if (right.state === 'not-listed') return 'not-listed-right';
-  return left.paise === right.paise ? 'same' : 'different';
-}
-
-/** Orders a level's lines as the stock runs do: matched first, then those only the left lists, then the right. */
-const ORDER: Readonly<Record<BalanceResult, number>> = {
-  same: 0,
-  different: 0,
-  unknown: 0,
-  'not-listed-right': 1,
-  'not-listed-left': 2,
-  unresolved: 3,
-};
+const amountOf = (rows: readonly BalanceRow[]): SideAmount => totalOf(rows, (row) => row.paise, addPaise);
 
 function lines(
   keyedBy: 'party' | 'account',
@@ -103,14 +73,27 @@ function lines(
   right: readonly BalanceRow[],
   keyOf: (row: BalanceRow) => Key | null,
 ): BalanceLineDraft[] {
-  const drafts = grouped(left, right, keyOf).map(({ key, left: leftRows, right: rightRows }) => {
+  // The rows of both sides grouped by key, in the order each key first appears on the left, then on the right.
+  const sided: Sided[] = [
+    ...left.map((row) => ({ side: 'left' as const, row })),
+    ...right.map((row) => ({ side: 'right' as const, row })),
+  ];
+  const groups = groupBy(sided, ({ row }) => {
+    const key = keyOf(row);
+    return key === null ? null : keyText(key);
+  });
+  const drafts = [...groups.values()].map((group): BalanceLineDraft => {
+    const [first] = group;
+    const key = first === undefined ? null : keyOf(first.row);
+    const leftRows = group.filter((each) => each.side === 'left').map((each) => each.row);
+    const rightRows = group.filter((each) => each.side === 'right').map((each) => each.row);
     const leftAmount = amountOf(leftRows);
     const rightAmount = amountOf(rightRows);
     return {
       keyedBy,
-      accountingBookId: key.accountingBookId,
-      account: key.account,
-      party: key.party,
+      accountingBookId: key?.accountingBookId ?? null,
+      account: key?.account ?? null,
+      party: key?.party ?? null,
       left: leftAmount,
       right: rightAmount,
       result: resultOf(leftAmount, rightAmount),
@@ -118,22 +101,16 @@ function lines(
       rightRows: rightRows.map((row) => row.rowId),
     };
   });
-  // A stable sort keeps first-appearance order within each group of results.
-  return drafts.sort((a, b) => ORDER[a.result] - ORDER[b.result]);
+  return inResultOrder(drafts);
 }
 
-function unresolvedOf(side: 'left' | 'right', row: BalanceRow): BalanceLineDraft {
-  const listed = amountOf([row]);
+function unresolvedOf(side: Side, row: BalanceRow): BalanceLineDraft {
   return {
     keyedBy: 'unresolved',
     accountingBookId: row.accountingBookId,
     account: row.account,
     party: row.party,
-    left: side === 'left' ? listed : { state: 'not-listed' },
-    right: side === 'right' ? listed : { state: 'not-listed' },
-    result: 'unresolved',
-    leftRows: side === 'left' ? [row.rowId] : [],
-    rightRows: side === 'right' ? [row.rowId] : [],
+    ...unresolvedSides(side, row.rowId, amountOf([row])),
   };
 }
 
@@ -143,11 +120,13 @@ function unresolvedOf(side: 'left' | 'right', row: BalanceRow): BalanceLineDraft
  */
 export function compareBalances(left: readonly BalanceRow[], right: readonly BalanceRow[]): BalanceLineDraft[] {
   const byParty = (row: BalanceRow): Key | null =>
-    resolvedRow(row) && row.party !== null
-      ? { accountingBookId: row.accountingBookId ?? '', account: row.account ?? '', party: row.party }
+    row.accountingBookId !== null && row.account !== null && row.party !== null
+      ? { accountingBookId: row.accountingBookId, account: row.account, party: row.party }
       : null;
   const byAccount = (row: BalanceRow): Key | null =>
-    resolvedRow(row) ? { accountingBookId: row.accountingBookId ?? '', account: row.account ?? '', party: null } : null;
+    row.accountingBookId !== null && row.account !== null
+      ? { accountingBookId: row.accountingBookId, account: row.account, party: null }
+      : null;
   return [
     ...lines('party', left, right, byParty),
     ...lines('account', left, right, byAccount),

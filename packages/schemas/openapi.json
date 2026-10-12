@@ -15710,7 +15710,18 @@
           "recordType": "files_imports.comparison_run",
           "authorisedIn": "command"
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -15787,7 +15798,6 @@
                                   "kind",
                                   "set",
                                   "batchId",
-                                  "batchCode",
                                   "batchVersionId"
                                 ],
                                 "additionalProperties": false
@@ -15866,7 +15876,6 @@
                                   "kind",
                                   "set",
                                   "batchId",
-                                  "batchCode",
                                   "batchVersionId"
                                 ],
                                 "additionalProperties": false
@@ -15976,11 +15985,24 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "asOf",
-                    "runs"
+                    "runs",
+                    "next"
                   ],
                   "additionalProperties": false
                 }
@@ -16185,7 +16207,6 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "files-imports.comparison-count-unavailable",
               "files-imports.comparison-side-masked"
             ]
           },
@@ -51941,7 +51962,6 @@
                             "kind",
                             "set",
                             "batchId",
-                            "batchCode",
                             "batchVersionId"
                           ],
                           "additionalProperties": false
@@ -52020,7 +52040,6 @@
                             "kind",
                             "set",
                             "batchId",
-                            "batchCode",
                             "batchVersionId"
                           ],
                           "additionalProperties": false
@@ -54086,6 +54105,9 @@
                                 "actionType": {
                                   "type": "string"
                                 },
+                                "recordType": {
+                                  "type": "string"
+                                },
                                 "requestId": {
                                   "type": "string",
                                   "format": "uuid",
@@ -54094,7 +54116,8 @@
                               },
                               "required": [
                                 "kind",
-                                "actionType"
+                                "actionType",
+                                "recordType"
                               ],
                               "additionalProperties": false
                             }

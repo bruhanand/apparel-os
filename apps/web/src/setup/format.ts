@@ -16,6 +16,11 @@ export function formatPaise(paise: number): string {
   return t('money.inr', { sign, rupees: grouping.format(rupees), paise: String(rest).padStart(2, '0') });
 }
 
+/** A whole quantity with Indian grouping, "1,23,456" (design-language 8; code-house-rules 12.13). */
+export function formatQuantity(quantity: number): string {
+  return grouping.format(quantity);
+}
+
 /**
  * Rupees as a person types them, with Indian grouping commas allowed and at most two decimals, as whole paise
  * (PRD-MOD-014): read with integer arithmetic, never through a binary fraction. Undefined for anything else, or an

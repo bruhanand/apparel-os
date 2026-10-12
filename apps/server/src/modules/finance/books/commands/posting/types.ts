@@ -1,5 +1,5 @@
 import type { MaybeKnown, Paise } from '@apparel-os/domain';
-import type { PeriodState } from '@apparel-os/schemas';
+import type { ImportKind, PeriodState } from '@apparel-os/schemas';
 import type { CommandRefusal } from '../../../../../kernel/index.js';
 import type { NumberingInterface } from '../../../../numbering/index.js';
 import type { journal } from '../../db/schema.js';
@@ -37,10 +37,11 @@ export interface PostRequest {
     readonly recordId: string;
     readonly versionId?: string;
     /**
-     * The import kind of a document an import brought (imports-and-opening-data 4.2; stock-ledger 13.2), or none. Post
-     * refuses historical reference, as a last guard behind the handler's own rule (PRD-LIF-014, PRD-IMP-010).
+     * The import kind of a document an import brought (imports-and-opening-data 4.2; stock-ledger 13.2), or `none`.
+     * Every caller states it, so the guard is never left out by a caller that forgot it: Post refuses historical
+     * reference, as a last guard behind the handler's own rule (PRD-LIF-014, PRD-IMP-010; books-and-posting 9.1).
      */
-    readonly importKind?: string;
+    readonly importKind: ImportKind | 'none';
   };
   readonly actor: { readonly kind: 'user' | 'service'; readonly id: string };
   /** The person a job acts for (access-and-approvals 9.8). */

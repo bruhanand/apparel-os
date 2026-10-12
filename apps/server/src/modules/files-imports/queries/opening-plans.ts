@@ -17,7 +17,7 @@ export function openingPlansOf(handlers: ImportHandlers): {
 } {
   return {
     async approvedPlanFor(context, businessUnitId, siteId) {
-      const targets = handlers.openingTargets('stock');
+      const targets = handlers.openingStockTargets();
       if (targets.length === 0) return false;
       const found = await context.tx.execute<{ batch_id: string; version_id: string }>(
         sql`select batch_id, version_id from files_imports.opening_plan_versions(${businessUnitId}, ${siteId}, array[${sql.join(

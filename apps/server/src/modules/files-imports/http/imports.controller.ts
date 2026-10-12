@@ -296,9 +296,12 @@ export class ImportsController {
   }
 
   @ApiRoute(routes.listComparisonRuns)
-  async listComparisonRuns(@SignedIn() user: SignedInUser) {
+  async listComparisonRuns(
+    @RouteInput() input: RouteInputOf<typeof routes.listComparisonRuns>,
+    @SignedIn() user: SignedInUser,
+  ) {
     const answer = await this.imports.runner.read(this.request('files-imports.list-comparison-runs', user), (c) =>
-      comparisonRuns(this.imports, c, user.userId),
+      comparisonRuns(this.imports, c, user.userId, input.query),
     );
     return routeAnswer(answer, { replayed: false });
   }

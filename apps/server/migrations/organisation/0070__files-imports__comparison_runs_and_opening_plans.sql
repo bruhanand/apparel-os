@@ -99,11 +99,12 @@ create policy row_scope on files_imports.comparison_line for all to aos_runtime
 grant select, insert on files_imports.comparison_run to aos_runtime;
 grant select, insert on files_imports.comparison_line to aos_runtime;
 
--- The opening plan of a unit (module-map 4.16; domain-model 3.6; DEC-117): its opening-stock batches of the opening
--- balance kind, for the targets whose handlers fill opening stock, that are Validated and submitted at their current
--- version, so not yet published; the caller asks `access` whether that version is approved. Read whatever the actor's
--- scope sees, since the stock-plan check checks the batch's approval and scope on their own, independently of
--- activation, and answers yes or no only (code-house-rules 5.2, 6.2).
+-- The opening plan of a unit (module-map 4.16; domain-model 3.6; DEC-117): the identifier and current version of each
+-- opening-stock batch of the unit at its Site, of the opening balance kind, for the targets whose handlers fill
+-- opening stock, that is Validated and submitted at its current version, so not yet published. It answers those two
+-- identifiers only; the caller asks `access` whether a version is approved, and the stock-plan check answers yes or no.
+-- Read whatever the actor's scope sees, since that check reads the batch's approval and scope on their own,
+-- independently of activation (code-house-rules 5.2, 6.2).
 create function files_imports.opening_plan_versions(business_unit_id uuid, site_id uuid, targets text[])
   returns table (batch_id uuid, version_id uuid)
   language sql

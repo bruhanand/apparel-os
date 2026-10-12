@@ -602,7 +602,6 @@ export const filesImportsCodes = declareCodes({
   'files-imports.comparison-set-wrong': 'refused',
   'files-imports.comparison-side-masked': 'not-authorised',
   'files-imports.comparison-places-differ': 'refused',
-  'files-imports.comparison-count-unavailable': 'unavailable',
 });
 
 /**

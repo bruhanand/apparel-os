@@ -115,6 +115,7 @@ import {
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
   COMPARISON_RUN_TYPE,
+  comparisonRunListQuerySchema,
   comparisonRunListSchema,
   comparisonRunReadSchema,
   comparisonRunStartedSchema,
@@ -2028,12 +2029,12 @@ export const routes = {
       'files-imports.comparison-set-wrong',
       'files-imports.comparison-side-masked',
       'files-imports.comparison-places-differ',
-      'files-imports.comparison-count-unavailable',
     ],
   }),
   listComparisonRuns: defineRoute({
     method: 'GET',
     path: '/api/files-imports/comparison-runs',
+    query: comparisonRunListQuerySchema,
     access: { kind: 'action', action: 'view', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
     command: false,
     response: comparisonRunListSchema,

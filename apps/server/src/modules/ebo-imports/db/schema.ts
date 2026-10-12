@@ -1,4 +1,4 @@
-import { integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the ebo-imports module's tables (code-house-rules 3.4). They mirror the reviewed migration
 // (migrations/organisation/0071) and never create or change a table; an integration test compares each with the
@@ -30,7 +30,10 @@ export const referenceDocument = eboImports.table('reference_document', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** One line of a reference document, its values by field, null where Unknown (PRD-MOD-015). */
+/**
+ * One line of a reference document, its values by field, null where Unknown (PRD-MOD-015), and a daily-sales line's
+ * amount in integer paise (PRD-MOD-014), null where Unknown.
+ */
 export const referenceLine = eboImports.table('reference_line', {
   id: uuid('id').primaryKey(),
   referenceDocumentId: uuid('reference_document_id').notNull(),
@@ -38,6 +41,7 @@ export const referenceLine = eboImports.table('reference_line', {
   rowNumber: integer('row_number').notNull(),
   values: jsonb('values').$type<Record<string, string | null>>().notNull(),
   skuId: uuid('sku_id'),
+  amountPaise: bigint('amount_paise', { mode: 'number' }),
   ...scopeColumns(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

@@ -1,8 +1,9 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { paise, uuidv7 } from '@apparel-os/domain';
 import {
   businessDateSchema,
-  IMPORT_BATCH_APPROVAL,
   IMPORT_BATCH_TYPE,
+  OPENING_BALANCES_APPROVAL,
+  OPENING_BALANCES_TYPE,
   type DocumentPreview,
 } from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
@@ -339,13 +340,14 @@ export function openingBalanceHandler(kind: BalanceKind, dependencies: OpeningBa
     fields: spec.fields,
     measures: [{ field: spec.amount, kind: 'value' }],
     // An opening's source identity is the unit and the opening kind (7.1), with the opening reference.
-    sourceScope: (document) => `${target}:${kind}:${document.place.businessUnitId ?? 'unit-unknown'}`,
+    sourceScope: (document) => JSON.stringify([target, kind, document.place.businessUnitId ?? null]),
     revisions: 'none',
     publishNeeds: (_context, document) =>
       Promise.resolve({ action: 'edit', recordType: IMPORT_BATCH_TYPE, facts: document.place }),
     lockTargets: () => Promise.resolve([]),
-    // Accounts verifies the values (POL-14.03): an independent approval of the batch version, as for opening stock.
-    review: () => ({ kind: 'approval', actionType: IMPORT_BATCH_APPROVAL }),
+    // Accounts verifies the values (POL-14.03): an independent approval of the batch version, under the verification
+    // of opening balances, apart from Operations' of opening stock (product owner, 12 Oct 2026).
+    review: () => ({ kind: 'approval', actionType: OPENING_BALANCES_APPROVAL, recordType: OPENING_BALANCES_TYPE }),
     suggestions: (_context, name, value) =>
       Promise.resolve(name === 'direction' ? optionSuggestions(DIRECTIONS, value) : []),
     async checkRuleTarget(context, name, ruleTarget) {
@@ -398,7 +400,7 @@ export function openingBalanceHandler(kind: BalanceKind, dependencies: OpeningBa
               accountingBookId: mapping?.accountingBookId ?? null,
               account: spec.account(row) ?? null,
               party: knownValue(row.values[spec.party]) ?? null,
-              paise: amount !== undefined && WHOLE.test(amount) ? Number(amount) : null,
+              paise: amount !== undefined && WHOLE.test(amount) ? paise(Number(amount)) : null,
             });
           }
         }
@@ -440,7 +442,7 @@ export function closedBooksHandler(dependencies: Pick<OpeningBalanceDependencies
     effects: 'reference-records',
     fields,
     measures: [{ field: 'balance', kind: 'value' }],
-    sourceScope: (document) => `${CLOSED_BOOKS_TARGET}:${document.place.legalEntityId ?? 'legal-entity-unknown'}`,
+    sourceScope: (document) => JSON.stringify([CLOSED_BOOKS_TARGET, document.place.legalEntityId ?? null]),
     revisions: 'none',
     publishNeeds: (_context, document) =>
       Promise.resolve({ action: 'edit', recordType: IMPORT_BATCH_TYPE, facts: document.place }),
@@ -501,7 +503,7 @@ export function closedBooksHandler(dependencies: Pick<OpeningBalanceDependencies
               accountingBookId: (await bookOf(context, row)) ?? null,
               account: isAccount(account) ? account : null,
               party: knownValue(row.values.partyCode) ?? null,
-              paise: balance !== undefined && SIGNED.test(balance) ? Number(balance) : null,
+              paise: balance !== undefined && SIGNED.test(balance) ? paise(Number(balance)) : null,
             });
           }
         }

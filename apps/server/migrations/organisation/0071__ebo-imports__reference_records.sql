@@ -42,7 +42,8 @@ create policy row_scope on ebo_imports.reference_document for all to aos_runtime
   with check (access.row_visible('ebo_imports.reference_document', site_id, store_id, business_unit_id, legal_entity_id, null, null));
 
 -- One line of a reference document, as published: its staged row, its values by field (null where Unknown, never
--- zero; PRD-MOD-015), and the SKU its barcode resolved to on the report date, where it resolved to one.
+-- zero; PRD-MOD-015), the SKU its barcode resolved to on the report date, where it resolved to one, and a daily-sales
+-- line's amount in integer paise (PRD-MOD-014), null where Unknown or where the report holds no amount.
 create table ebo_imports.reference_line (
   id uuid primary key,
   reference_document_id uuid not null references ebo_imports.reference_document (id),
@@ -50,6 +51,7 @@ create table ebo_imports.reference_line (
   row_number integer not null,
   "values" jsonb not null,
   sku_id uuid,
+  amount_paise bigint,
   legal_entity_id uuid,
   site_id uuid,
   store_id uuid,

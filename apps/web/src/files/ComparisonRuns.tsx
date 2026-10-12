@@ -6,20 +6,21 @@ import {
   type ComparisonRunKind,
   type ComparisonRunRead,
   type ComparisonSide,
+  type MasterLists,
 } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
 import { readQuery } from '../api/query';
 import { EmptyState } from '../components/StandardStates';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
-import { t } from '../messages/catalogue';
+import { isMessageId, t } from '../messages/catalogue';
 import { useBusinessToday } from '../setup/business-date';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th } from '../setup/parts';
-import { formatPaise } from '../setup/format';
-import { useTimeZone } from '../shell/session';
+import { formatPaise, formatQuantity } from '../setup/format';
+import { useSession, useTimeZone } from '../shell/session';
 
 // Comparison runs on Setup › File intake and saved layouts (imports-and-opening-data 10.3, 13.1, 14, 16; PRD-LIF-027,
 // POL-14.07; S1-F13-T01): run a comparison of two sets by the key its kind names (the manifest, or the count, against
@@ -27,18 +28,29 @@ import { useTimeZone } from '../shell/session';
 // every line. A line the other side does not list says so, never zero (I-1). The server shows only the runs and
 // batches inside the reader's scope; neither side is ever changed. S1-F13-T02 adds the run of opening dues, advances
 // or deposits against the closed-books balances (10.4; POL-14.03), whose lines are totals in paise per party and per
-// account.
+// account. Lines name things as people know them (code-house-rules 12.13): a SKU by its code, a location by its code
+// and name, an account by its name; quantities and amounts formatted with Intl. A batch or SKU the reader may not see
+// is said to be so.
 
 const READS = ['listComparisonRuns'] as const;
 
+/** Whether the reader's role assignments grant view on a record type: a read they lack is not attempted. */
+function useViewable(recordType: string): boolean {
+  const { session } = useSession();
+  if (session.state === 'signed-out') return false;
+  return session.grants.some((grant) => grant.recordType === recordType && grant.action === 'view');
+}
+
 function sideText(side: ComparisonSide): string {
-  return side.kind === 'batch'
-    ? t('comparison.side.batch', { set: t(`comparison.set.${side.set}`), code: side.batchCode })
-    : t('comparison.side.count');
+  if (side.kind === 'count') return t('comparison.side.count');
+  const set = t(`comparison.set.${side.set}`);
+  return side.batchCode === undefined
+    ? t('comparison.side.batch-not-visible', { set })
+    : t('comparison.side.batch', { set, code: side.batchCode });
 }
 
 function quantityText(side: ComparisonLine['left']): string {
-  if (side.state === 'listed') return String(side.quantity);
+  if (side.state === 'listed') return formatQuantity(side.quantity);
   return t(side.state === 'unknown' ? 'comparison.unknown' : 'comparison.not-listed');
 }
 
@@ -47,18 +59,61 @@ function amountText(side: ComparisonBalanceLine['left']): string {
   return t(side.state === 'unknown' ? 'comparison.unknown' : 'comparison.not-listed');
 }
 
+/** An account by its name; one no entry names (a later handler's) by the handler's own word. */
+function accountName(account: string): string {
+  const id = `comparison.account.${account}`;
+  return isMessageId(id) ? t(id) : account;
+}
+
 function balanceKey(line: ComparisonBalanceLine): string {
   if (line.keyedBy === 'unresolved') return t('comparison.balance.unresolved');
-  const account = line.account ?? '';
+  const account = accountName(line.account ?? '');
   return line.keyedBy === 'account'
     ? t('comparison.balance.account-total', { account })
     : `${account} · ${line.party ?? ''}`;
 }
 
+/** A SKU by its code, read where the reader may view SKUs; otherwise said to be not visible. */
+function SkuCode({ skuId }: { skuId: string }) {
+  const viewable = useViewable('merchandise.sku');
+  const query = useQuery({ ...readQuery(api, 'readSku', { params: { recordId: skuId } }), enabled: viewable });
+  if (!viewable || query.isError) return <>{t('comparison.sku-not-visible')}</>;
+  return <>{query.data?.record.code ?? ''}</>;
+}
+
+/** A location by its code and name, from the master lists the reader may see. */
+function locationText(locations: MasterLists['locations'], locationId: string): string {
+  const location = locations.find((each) => each.id === locationId);
+  return location === undefined ? t('comparison.unresolved') : `${location.code} · ${location.name}`;
+}
+
+/** A stock line's key: its barcode, its SKU's code, the SKU at its location, or not resolved. */
+function StockKey({ line, locations }: { line: ComparisonLine; locations: MasterLists['locations'] }) {
+  const sku = line.skuId === undefined ? undefined : <SkuCode skuId={line.skuId} />;
+  switch (line.keyedBy) {
+    case 'barcode':
+      return <>{line.barcode}</>;
+    case 'sku':
+      return sku ?? <>{t('comparison.unresolved')}</>;
+    case 'sku-and-location':
+      return (
+        <>
+          {sku}
+          {line.locationId !== undefined && ` · ${locationText(locations, line.locationId)}`}
+        </>
+      );
+    case 'unresolved':
+      return <>{line.barcode ?? t('comparison.unresolved')}</>;
+  }
+}
+
 function RunLines({ runId }: { runId: string }) {
   const timeZone = useTimeZone();
+  const today = useBusinessToday();
   const [differencesOnly, setDifferencesOnly] = useState(true);
   const query = useQuery(readQuery(api, 'readComparisonRun', { params: { runId } }));
+  const structure = useQuery(readQuery(api, 'readMasterLists', { query: { date: today } }));
+  const locations = structure.data?.locations ?? [];
   return (
     <Card>
       <ListRead query={query} what="comparison.what">
@@ -67,10 +122,16 @@ function RunLines({ runId }: { runId: string }) {
           const balanceLines = differencesOnly
             ? run.balanceLines.filter((line) => line.result !== 'same')
             : run.balanceLines;
-          const rows = [
+          const rows: {
+            lineNumber: number;
+            key: ReactNode;
+            left: string;
+            right: string;
+            result: ComparisonLine['result'];
+          }[] = [
             ...lines.map((line) => ({
               lineNumber: line.lineNumber,
-              key: line.barcode ?? line.skuId ?? t('comparison.unresolved'),
+              key: <StockKey line={line} locations={locations} />,
               left: quantityText(line.left),
               right: quantityText(line.right),
               result: line.result,
@@ -249,7 +310,9 @@ function RunForm() {
 export function ComparisonRuns() {
   const timeZone = useTimeZone();
   const [opened, setOpened] = useState<string | null>(null);
-  const query = useQuery(readQuery(api, 'listComparisonRuns', {}));
+  // One page of runs at a time, newest first (14): `after` names the last run of the page before.
+  const [after, setAfter] = useState<string | undefined>(undefined);
+  const query = useQuery(readQuery(api, 'listComparisonRuns', { query: after === undefined ? {} : { after } }));
   return (
     <div className="flex flex-col gap-4">
       <RunForm />
@@ -306,6 +369,30 @@ export function ComparisonRuns() {
                   </table>
                 </div>
               )}
+              <div className="flex flex-wrap gap-2">
+                {after !== undefined && (
+                  <button
+                    type="button"
+                    className="text-body-sm text-accent underline"
+                    onClick={() => {
+                      setAfter(undefined);
+                    }}
+                  >
+                    {t('comparison.newest')}
+                  </button>
+                )}
+                {list.next !== null && (
+                  <button
+                    type="button"
+                    className="text-body-sm text-accent underline"
+                    onClick={() => {
+                      setAfter(list.next ?? undefined);
+                    }}
+                  >
+                    {t('comparison.older')}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </ListRead>

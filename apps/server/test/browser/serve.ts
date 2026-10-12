@@ -973,7 +973,7 @@ await postingInForce(
 {
   const request = {
     sourceModule: 'test-synthetic',
-    document: { recordType: 'test-synthetic.document', recordId: uuidv7() },
+    document: { recordType: 'test-synthetic.document', recordId: uuidv7(), importKind: 'none' as const },
     actor: { kind: 'user' as const, id: postingFixture.preparer.id },
     items: [
       [postingStoreUnit.recordId, 100_000],
@@ -1097,7 +1097,11 @@ const periodCorrection = { module: 'test-synthetic', recordType: 'test-synthetic
 async function postPeriodCorrection(): Promise<string> {
   const request = {
     sourceModule: periodCorrection.module,
-    document: { recordType: periodCorrection.recordType, recordId: periodCorrection.recordId },
+    document: {
+      recordType: periodCorrection.recordType,
+      recordId: periodCorrection.recordId,
+      importKind: 'none' as const,
+    },
     actor: { kind: 'user' as const, id: postingFixture.preparer.id },
     items: [
       {

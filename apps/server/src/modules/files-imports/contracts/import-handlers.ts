@@ -41,9 +41,14 @@ export function knownValue(value: EffectiveValue | undefined): string | undefine
 
 /**
  * The review a handler requires (3.1 step 8, 13.2): the preparer's submission after the preview, where the records it
- * creates have their own approvals; or an approval rule in `access` bound to the exact batch version.
+ * creates have their own approvals; or an approval rule in `access` bound to the exact batch version, under the record
+ * type its rule names, whose approve permission decides it: the import batch's own, or the record type of an opening
+ * kind's verification, so Operations and Accounts each verify their own kind (POL-14.02, POL-14.03; product owner,
+ * 12 Oct 2026).
  */
-export type ImportReview = { readonly kind: 'submission' } | { readonly kind: 'approval'; readonly actionType: string };
+export type ImportReview =
+  | { readonly kind: 'submission' }
+  | { readonly kind: 'approval'; readonly actionType: string; readonly recordType: string };
 
 /** A batch's place, its scope facts as the preparer named them at the start, each left out where Unknown (15.1). */
 export interface ImportPlace {
@@ -99,10 +104,15 @@ export type ImportComparison = StockComparison | BalanceComparison;
  */
 export type ImportRevisions = 'none' | 'new-version';
 
-/** A field an outcome sums by result: a quantity or a value (7.4; PRD-IMP-013). */
+/**
+ * A field an outcome sums by result: a quantity or a value (7.4; PRD-IMP-013). A value that stands only on its evidence
+ * names the field holding it: a row without that evidence counts its value as Unknown, so a total of such rows is
+ * Unknown, never summed as known (imports-and-opening-data 10.2; POL-14.03; PRD-MOD-015).
+ */
 export interface ImportMeasure {
   readonly field: string;
   readonly kind: 'quantity' | 'value';
+  readonly evidence?: string;
 }
 
 /** Where a published record came from: the batch, its code, the document and its staged rows (section 5). */
@@ -230,9 +240,9 @@ export class ImportHandlers {
     return this.handlers.get(target);
   }
 
-  /** The targets whose handlers fill the opening kind (10.1; DEC-117). */
-  openingTargets(kind: 'stock'): string[] {
-    return [...this.handlers.values()].filter((each) => each.openingKind === kind).map((each) => each.target);
+  /** The targets whose handlers fill opening stock, whose approved batch is a unit's opening plan (10.1; DEC-117). */
+  openingStockTargets(): string[] {
+    return [...this.handlers.values()].filter((each) => each.openingKind === 'stock').map((each) => each.target);
   }
 }
 

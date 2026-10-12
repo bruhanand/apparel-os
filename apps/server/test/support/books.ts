@@ -224,7 +224,7 @@ export function syntheticDocument(
   };
   return {
     sourceModule: SYNTHETIC_SOURCE,
-    document: { recordType: SYNTHETIC_DOCUMENT_TYPE, recordId: options.recordId ?? uuidv7() },
+    document: { recordType: SYNTHETIC_DOCUMENT_TYPE, recordId: options.recordId ?? uuidv7(), importKind: 'none' },
     actor: { kind: 'user', id: setup.preparer.id },
     items: [item],
   };

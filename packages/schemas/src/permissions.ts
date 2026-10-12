@@ -142,8 +142,9 @@ const filesImportsRecordTypes = [
   // An import batch (13.1, 15.1; S1-F06-T01) carries its Site, Store, business unit and legal entity: view reads it
   // with its staged rows; create starts it, which stages its rows; edit validates and publishes it. Its rows may hold
   // any restricted class its file holds, every class while its layout is not confirmed (section 11). Approve decides
-  // a batch whose handler requires an approval in `access` bound to the batch version (3.1 step 8, 13.2; S1-F06-T03);
-  // no stage 1 handler does.
+  // a batch whose handler requires an approval in `access` bound to the batch version (3.1 step 8, 13.2; S1-F06-T03):
+  // an update batch of product masters, and a batch of historical reference, reviewed by a second person before it is
+  // kept (PRD-IMP-005; product owner, 12 Oct 2026).
   declareWithFields('files_imports.import_batch', ['view', 'create', 'edit', 'approve'], LEGAL_ENTITY_AND_PLACE, [
     'salary-and-payroll',
     'identity-documents',
@@ -160,6 +161,12 @@ const filesImportsRecordTypes = [
   declare('files_imports.layout', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping_rule', ['view', 'create', 'approve'], NONE),
+  // The verification of an opening batch, one per opening kind (10.2, 10.4; product owner, 12 Oct 2026): approve on
+  // opening stock is Operations' (POL-14.02), on opening balances, the dues, advances and deposits, Accounts'
+  // (POL-14.03); each company assigns them through roles, and a holder of one cannot verify the other. The record is
+  // the batch at its version, read through `files_imports.import_batch`, so approve is the only action.
+  declare('files_imports.opening_stock', ['approve'], LEGAL_ENTITY_AND_PLACE),
+  declare('files_imports.opening_balances', ['approve'], LEGAL_ENTITY_AND_PLACE),
   // A comparison run (2, 10.3, 14, 15.1; S1-F13-T01): view reads it with its lines; create runs one, which also needs
   // view on each side it reads. It carries both sides' places; its lines hold keys and quantities only, no cost.
   declare('files_imports.comparison_run', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),

@@ -104,9 +104,13 @@ export function sumOrUnknown(texts: readonly (string | undefined)[]): string | n
   return sumDecimals(known.map((text) => text.trim()));
 }
 
-/** The quantities and values of the handler's measures, by result (7.4). */
+/**
+ * The quantities and values of the handler's measures, by result (7.4). A measure that stands on evidence counts a row
+ * without it as Unknown, so a value without its evidence is never summed as known (imports-and-opening-data 10.2;
+ * POL-14.03; PRD-MOD-015).
+ */
 export function outcomeMeasures(
-  measures: readonly { readonly field: string; readonly kind: 'quantity' | 'value' }[],
+  measures: readonly { readonly field: string; readonly kind: 'quantity' | 'value'; readonly evidence?: string }[],
   documents: readonly {
     readonly result: DocumentResult;
     readonly rows: readonly Readonly<Record<string, string | undefined>>[];
@@ -117,7 +121,11 @@ export function outcomeMeasures(
       sumOrUnknown(
         documents
           .filter((document) => bucketOf(document.result) === bucket)
-          .flatMap((document) => document.rows.map((row) => row[measure.field])),
+          .flatMap((document) =>
+            document.rows.map((row) =>
+              measure.evidence === undefined || row[measure.evidence] !== undefined ? row[measure.field] : undefined,
+            ),
+          ),
       );
     return {
       field: measure.field,

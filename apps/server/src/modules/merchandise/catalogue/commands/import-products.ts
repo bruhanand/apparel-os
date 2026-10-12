@@ -1,5 +1,6 @@
 import {
   IMPORT_BATCH_APPROVAL,
+  IMPORT_BATCH_TYPE,
   PRODUCT_PROPOSAL_TYPE,
   productProposalDraftSchema,
   skuPurposeSchema,
@@ -313,7 +314,9 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
     // when it publishes, so it needs an independent approval of the batch version in `access` before Publish
     // (PRD-ACS-006, PRD-ACS-007; product owner, 11 Oct 2026).
     review: (kind) =>
-      kind === 'update' ? { kind: 'approval', actionType: IMPORT_BATCH_APPROVAL } : { kind: 'submission' },
+      kind === 'update'
+        ? { kind: 'approval', actionType: IMPORT_BATCH_APPROVAL, recordType: IMPORT_BATCH_TYPE }
+        : { kind: 'submission' },
     async suggestions(context, field, value) {
       switch (field) {
         case 'brandCode':

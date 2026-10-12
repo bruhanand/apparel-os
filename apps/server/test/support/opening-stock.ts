@@ -1,7 +1,8 @@
 import {
   businessDateSchema,
-  IMPORT_BATCH_APPROVAL,
   IMPORT_BATCH_TYPE,
+  OPENING_STOCK_APPROVAL,
+  OPENING_STOCK_TYPE,
   type DocumentPreview,
 } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../src/kernel/index.js';
@@ -42,9 +43,11 @@ import { syntheticIdentifier } from '../fixtures/synthetic.js';
 //   which is a value entered as `Unknown` (its entry keeps who, when and why; PRD-LIF-006). A file's own `Unknown` is
 //   a source word, not a person's choice, and is Blocking;
 // - valuation: a cost per unit with the evidence it rests on, or Unknown; never zero, never Blocking (POL-14.03; a
-//   counted row without evidence is held as excess at the switch, T03). What counts as evidence is GC6-9, RR-132;
-// - the original receipt date only with the source document that backs it, else Unknown (PRD-LIF-030); a date with no
-//   evidence is Blocking;
+//   counted row without evidence is held as excess at the switch, T03). A cost given without evidence is Unknown too:
+//   the measure stands on the evidence, so it is never summed as known (10.2). What counts as evidence is GC6-9,
+//   RR-132, and until Accounts and the CA answer no value in a KDPS file is evidence;
+// - the original receipt date only with the source document that backs it, else Unknown (PRD-LIF-030): a date with no
+//   evidence is no issue, and the row's original age is Unknown (product owner's review fix, 12 Oct 2026);
 // - billed-retained items as their own section, each with its earlier-POS bill reference; they are not opening stock
 //   and are not compared with the count or the SOH (PRD-LIF-028, POL-14.04, DEC-090). Piece IDs are never imported.
 //
@@ -192,13 +195,11 @@ async function issuesOf(
       const word = knownValue(season);
       if (word === undefined || !seasons.has(word)) issues.push({ code: CODE('season-not-chosen'), ...at('season') });
     }
+    // A receipt date is read only with its evidence; without it the original age is Unknown, never Blocking
+    // (PRD-LIF-030), and a date that is no date is still refused.
     const receiptDate = value('receiptDate');
-    if (receiptDate !== undefined) {
-      if (!businessDateSchema.safeParse(receiptDate).success) {
-        issues.push({ code: CODE('receipt-date-not-accepted'), ...at('receiptDate') });
-      } else if (value('receiptEvidence') === undefined) {
-        issues.push({ code: CODE('receipt-date-without-evidence'), ...at('receiptEvidence') });
-      }
+    if (receiptDate !== undefined && !businessDateSchema.safeParse(receiptDate).success) {
+      issues.push({ code: CODE('receipt-date-not-accepted'), ...at('receiptDate') });
     }
     const skuId = await skuOf(context, dependencies.catalogue, row, date);
     if (skuId === undefined) {
@@ -229,16 +230,18 @@ export function openingStockHandler(dependencies: OpeningStockDependencies): Imp
     fields: FIELDS,
     measures: [
       { field: 'quantity', kind: 'quantity' },
-      { field: 'unitCost', kind: 'value' },
+      // A cost stands only on its valuation evidence (10.2; POL-14.03).
+      { field: 'unitCost', kind: 'value', evidence: 'valuationEvidence' },
     ],
     // An opening's source identity is the unit and the opening kind (7.1), with the manifest reference.
-    sourceScope: (document) => `${OPENING_STOCK_TARGET}:stock:${document.place.businessUnitId ?? 'unit-unknown'}`,
+    sourceScope: (document) => JSON.stringify([OPENING_STOCK_TARGET, 'stock', document.place.businessUnitId ?? null]),
     revisions: 'none',
     publishNeeds: (_context, document) =>
       Promise.resolve({ action: 'edit', recordType: IMPORT_BATCH_TYPE, facts: document.place }),
     lockTargets: () => Promise.resolve([]),
-    // An approved opening batch is the unit's opening plan (DEC-117): an independent approval of the batch version.
-    review: () => ({ kind: 'approval', actionType: IMPORT_BATCH_APPROVAL }),
+    // An approved opening batch is the unit's opening plan (DEC-117): an independent approval of the batch version,
+    // Operations' verification of opening stock (POL-14.02; product owner, 12 Oct 2026).
+    review: () => ({ kind: 'approval', actionType: OPENING_STOCK_APPROVAL, recordType: OPENING_STOCK_TYPE }),
     suggestions(_context, field, value) {
       switch (field) {
         case 'section':

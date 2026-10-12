@@ -8,6 +8,7 @@ import {
   importBatchReadSchema,
   importFileStoredSchema,
   unitReadinessSchema,
+  type AssignmentScope,
   type ComparisonRunRead,
   type ImportBatchRead,
 } from '@apparel-os/schemas';
@@ -90,6 +91,10 @@ const next = (label: string) => syntheticCode(`${label}-${String(++counter)}`);
 let preparer: SyntheticUser;
 let approver: SyntheticUser;
 let operations: SyntheticUser;
+/** Accounts: verifies opening dues, advances and deposits, never opening stock (POL-14.03). */
+let accounts: SyntheticUser;
+/** A reader scoped to Store S1 alone, which an SOH names and the manifest of S1's unit does not (PRD-SEC-005). */
+let storeReader: SyntheticUser;
 
 /** The codes of the places and records the files name. */
 let codes: {
@@ -105,22 +110,40 @@ let codes: {
 let layouts: Record<'manifest' | 'soh' | 'sales', { layoutVersionId: string; mappingVersionId: string }>;
 
 const ALL_CLASSES = fieldClassSchema.options;
+const DECIDER: SyntheticAuthority[] = [
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+];
 const PREPARER: SyntheticAuthority[] = [
   { recordType: 'files_imports.stored_file', action: 'create' },
   { recordType: 'files_imports.import_batch', action: 'view' },
   { recordType: 'files_imports.import_batch', action: 'create' },
   { recordType: 'files_imports.import_batch', action: 'edit' },
+  // The preparer holds approve too, so the refusal of their own batch is independence's (PRD-ACS-006).
+  { recordType: 'files_imports.import_batch', action: 'approve' },
+  ...DECIDER,
   { recordType: 'files_imports.comparison_run', action: 'view' },
   { recordType: 'files_imports.comparison_run', action: 'create' },
   { recordType: 'ebo_imports.reference_document', action: 'view' },
   { recordType: 'ebo_imports.reference_document', action: 'create' },
   { recordType: 'stock.balance', action: 'view' },
 ];
+/** Operations: reviews historical reference and verifies opening stock (PRD-IMP-005, POL-14.02). */
 const APPROVER: SyntheticAuthority[] = [
   { recordType: 'files_imports.import_batch', action: 'view' },
   { recordType: 'files_imports.import_batch', action: 'approve' },
-  { recordType: 'access.approval_request', action: 'view' },
-  { recordType: 'access.approval_reason', action: 'view' },
+  { recordType: 'files_imports.opening_stock', action: 'approve' },
+  ...DECIDER,
+];
+const ACCOUNTS: SyntheticAuthority[] = [
+  { recordType: 'files_imports.import_batch', action: 'view' },
+  { recordType: 'files_imports.opening_balances', action: 'approve' },
+  ...DECIDER,
+];
+const STORE_READER: SyntheticAuthority[] = [
+  { recordType: 'files_imports.import_batch', action: 'view' },
+  { recordType: 'files_imports.comparison_run', action: 'view' },
+  { recordType: 'files_imports.comparison_run', action: 'create' },
 ];
 const OPERATIONS: SyntheticAuthority[] = [
   { recordType: 'site_lifecycle.readiness_record', action: 'view' },
@@ -133,7 +156,11 @@ interface Answer {
   readonly body: Record<string, unknown>;
 }
 
-async function enrolled(label: string, authorities: readonly SyntheticAuthority[]): Promise<SyntheticUser> {
+async function enrolled(
+  label: string,
+  authorities: readonly SyntheticAuthority[],
+  scope?: AssignmentScope,
+): Promise<SyntheticUser> {
   const organisation = harness.world.organisations[0];
   const user = await writeSyntheticUser(organisation.database, organisation.code, harness.keys(), {
     label: `${label}${String(randomInt(1_000_000))}`,
@@ -141,6 +168,7 @@ async function enrolled(label: string, authorities: readonly SyntheticAuthority[
   });
   await grantSynthetic(organisation.database, { kind: 'user', id: user.id }, authorities, {
     fieldClasses: ALL_CLASSES.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+    ...(scope === undefined ? {} : { scope }),
   });
   clock.advance(30);
   const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
@@ -176,6 +204,19 @@ async function ok(user: SyntheticUser, method: 'GET' | 'POST', path: string, bod
   expect(answer.status, `${path}: ${JSON.stringify(answer.body)}`).toBe(200);
   return answer;
 }
+
+/** A decision on an approval request, with a fresh authenticator code (access-and-approvals 9.3). */
+async function decide(user: SyntheticUser, requestId: string, versionId: string): Promise<Answer> {
+  clock.advance(30);
+  return call(user, 'POST', `/api/access/approval-requests/${requestId}/decision`, {
+    versionId,
+    outcome: 'approve',
+    reason: { kind: 'listed', reasonId: approveReason },
+    totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0), 0, clock.now()),
+  });
+}
+
+const codeOf = (answer: Answer) => errorEnvelopeSchema.parse(answer.body).error.code;
 
 const readBatch = async (batchId: string): Promise<ImportBatchRead> =>
   importBatchReadSchema.parse((await ok(preparer, 'GET', `/api/files-imports/batches/${batchId}`)).body);
@@ -342,6 +383,13 @@ beforeAll(async () => {
   preparer = await enrolled('OPENING-PREPARER', PREPARER);
   approver = await enrolled('OPENING-APPROVER', APPROVER);
   operations = await enrolled('OPENING-OPS', OPERATIONS);
+  accounts = await enrolled('OPENING-ACCOUNTS', ACCOUNTS);
+  storeReader = await enrolled('OPENING-STORE-READER', STORE_READER, {
+    kind: 'dimensions',
+    legalEntity: { kind: 'all' },
+    place: { kind: 'selected', members: [{ type: 'store', id: storeId }] },
+    brand: { kind: 'all' },
+  });
   const confirmer = setup.approver.id;
   layouts = {
     manifest: await writeSyntheticLayout(
@@ -425,7 +473,7 @@ let sohBatchId: string;
 let manifestBatchId: string;
 
 describe('SOH and daily sales as historical reference (4.1, 4.2; PRD-LIF-013, PRD-LIF-014, PRD-LIF-016)', () => {
-  it('GC-6 17 test 18 PRD-LIF-014 PRD-LIF-016 PRD-IMP-010: after a historical-reference load of synthetic daily sales and SOH, every stock quantity and value is unchanged', async () => {
+  it('GC-6 17 test 18 PRD-LIF-014 PRD-LIF-016 PRD-IMP-010 PRD-IMP-005: after a historical-reference load of synthetic daily sales and SOH, kept only once a second person reviewed it, every stock quantity and value is unchanged', async () => {
     const before = await stockSnapshot();
     const scope = { siteId: fixtures.s1.siteId, storeId: codes.storeId };
     // The SOH lists positive rows only: SKU X, SKU Y and a barcode no SKU has (I-1).
@@ -466,9 +514,20 @@ describe('SOH and daily sales as historical reference (4.1, 4.2; PRD-LIF-013, PR
       { kind: 'historical-reference', target: 'ebo-imports.daily-sales', layout: 'sales', scope },
     );
     for (const batchId of [sohBatchId, salesBatchId]) {
-      const { read } = await validatedAndSubmitted(batchId);
+      const { read, requestId } = await validatedAndSubmitted(batchId);
+      const versionId = read.batch.versionId;
+      // PRD-IMP-005: kept only after a second person's review, an approval of the batch version.
+      expect(read.batch.review).toMatchObject({ kind: 'approval', recordType: 'files_imports.import_batch' });
+      if (requestId === undefined) throw new Error('no review request');
+      const unreviewed = await call(preparer, 'POST', `/api/files-imports/batches/${batchId}/publish`, { versionId });
+      expect(codeOf(unreviewed)).toBe('files-imports.review-missing');
+      // The preparer may not review their own batch, though they hold approve (PRD-ACS-006).
+      expect(codeOf(await decide(preparer, requestId, versionId))).toBe('access.self-preparation');
+      const reviewed = await decide(approver, requestId, versionId);
+      expect(reviewed.body).toMatchObject({ outcome: 'Approved' });
       const published = await ok(preparer, 'POST', `/api/files-imports/batches/${batchId}/publish`, {
-        versionId: read.batch.versionId,
+        versionId,
+        approvalDecisionId: reviewed.body.decisionId,
       });
       expect(published.body).toMatchObject({ result: 'published', state: 'Published' });
     }
@@ -484,6 +543,20 @@ describe('SOH and daily sales as historical reference (4.1, 4.2; PRD-LIF-013, PR
     expect(references).toEqual([
       { report_kind: 'daily-sales', reference: SOH_DATE, lines: 2 },
       { report_kind: 'stock-on-hand', reference: SOH_DATE, lines: 3 },
+    ]);
+    // PRD-MOD-014: a daily-sales amount is kept in integer paise, not as the file's words. A return line's negative
+    // amount stays Unknown, never zero: the `paise` transform takes no sign (6.2; RR-528).
+    const amounts = await asVerifier(harness.database, async (client) => {
+      const rows = await client.query<{ amount_paise: string | null; amount: string | null }>(
+        `select l.amount_paise, l."values" ->> 'amount' as amount from ebo_imports.reference_line l
+           join ebo_imports.reference_document d on d.id = l.reference_document_id
+         where d.report_kind = 'daily-sales' order by l.row_number`,
+      );
+      return rows.rows;
+    });
+    expect(amounts).toEqual([
+      { amount_paise: '49900', amount: null },
+      { amount_paise: null, amount: null },
     ]);
     expect(await stockSnapshot()).toEqual(before);
   }, 600_000);
@@ -536,14 +609,20 @@ describe('SOH and daily sales as historical reference (4.1, 4.2; PRD-LIF-013, PR
 });
 
 describe('the opening-stock manifest (10.2; PRD-LIF-004, PRD-LIF-005)', () => {
-  it('PRD-LIF-005 PRD-MOD-015 PRD-MER-011 PRD-LIF-006: no valuation evidence stays Unknown, a missing batch or expiry is Blocking, an explicit Unknown season shows who chose it and when', async () => {
+  it('PRD-LIF-005 PRD-MOD-015 PRD-MER-011 PRD-LIF-006 PRD-LIF-030: no valuation evidence stays Unknown, a receipt date without evidence leaves the age Unknown, a missing batch or expiry is Blocking, an explicit Unknown season shows who chose it and when', async () => {
     manifestBatchId = await started(
       {
         sheet: MANIFEST_SHEET,
         header: Object.values(MANIFEST_FIELDS),
         rows: [
-          // SKU X, two counted where the SOH lists three; no valuation evidence and no season chosen yet.
-          manifestRow('SYN-M-1', { barcode: codes.barcodeX, quantity: '2', styleWord: 'SYN STYLE' }),
+          // SKU X, two counted where the SOH lists three; no valuation evidence and no season chosen yet; a receipt
+          // date no evidence backs, so its original age is Unknown, never Blocking (PRD-LIF-030).
+          manifestRow('SYN-M-1', {
+            barcode: codes.barcodeX,
+            quantity: '2',
+            styleWord: 'SYN STYLE',
+            receiptDate: SOH_DATE,
+          }),
           // A billed-retained item: its own section with its earlier-POS bill reference, never opening stock.
           manifestRow('SYN-M-1', {
             section: 'billed-retained',
@@ -582,7 +661,7 @@ describe('the opening-stock manifest (10.2; PRD-LIF-004, PRD-LIF-005)', () => {
       document?.preview?.kind === 'issues'
         ? document.preview.issues.map((each) => `${each.code}@${String(each.rowNumber ?? '')}`)
         : [];
-    // No valuation evidence is no issue; the season not chosen is.
+    // No valuation evidence is no issue, nor a receipt date without its evidence; the season not chosen is.
     expect(issues(m1)).toEqual([`${OPENING_STOCK_TARGET}.season-not-chosen@2`]);
     expect(issues(m2).sort()).toEqual(
       [
@@ -760,6 +839,82 @@ describe('comparison runs (10.3; PRD-LIF-027, POL-14.07)', () => {
       'count-against-manifest',
       'manifest-against-soh',
     ]);
+    expect(list.next).toBeNull();
+    expect(list.runs[0]?.right).toMatchObject({ kind: 'batch', batchCode: before.soh.batch.code });
+  });
+
+  it('code-house-rules 9 PRD-MOD-009: an SOH whose report date is no date resolves no barcode, never on the server’s date', async () => {
+    const undated = await started(
+      {
+        sheet: SOH_SHEET,
+        header: Object.values(SOH_FIELDS),
+        rows: [cellsOf(SOH_FIELDS, { reportDate: 'SYN-NOT-A-DATE', barcode: codes.barcodeX, quantity: '3' })],
+      },
+      {
+        kind: 'historical-reference',
+        target: 'ebo-imports.stock-on-hand',
+        layout: 'soh',
+        scope: { siteId: fixtures.s1.siteId, storeId: codes.storeId },
+      },
+    );
+    const run = await ran({ run: 'count-against-soh', count: count(), stockOnHand: { batchId: undated } });
+    // Today the barcode names SKU X, which the count holds; with no report date it resolves to none, so the two are
+    // not matched: the count's SKU X and the SOH's barcode each listed by one side only.
+    expect(lines(run).map((line) => [line.keyedBy, line.skuId ?? null, line.barcode ?? null, line.result])).toEqual([
+      ['sku', fixtures.sku.skuId, null, 'not-listed-right'],
+      ['barcode', null, codes.barcodeX, 'not-listed-left'],
+    ]);
+  });
+
+  it('PRD-SEC-005 section 11: a run is refused where the sides name different places, or a side the reader may not see', async () => {
+    // An SOH of warehouse W1's Site against the manifest of Store S1's unit: two places, not compared.
+    const elsewhere = await started(
+      {
+        sheet: SOH_SHEET,
+        header: Object.values(SOH_FIELDS),
+        rows: [cellsOf(SOH_FIELDS, { reportDate: SOH_DATE, barcode: codes.barcodeX, quantity: '1' })],
+      },
+      {
+        kind: 'historical-reference',
+        target: 'ebo-imports.stock-on-hand',
+        layout: 'soh',
+        scope: { siteId: fixtures.w1.siteId },
+      },
+    );
+    const differ = await call(preparer, 'POST', '/api/files-imports/comparison-runs', {
+      run: 'manifest-against-soh',
+      manifest: { batchId: manifestBatchId },
+      stockOnHand: { batchId: elsewhere },
+    });
+    expect(differ.status).toBe(422);
+    expect(codeOf(differ)).toBe('files-imports.comparison-places-differ');
+    // A reader scoped to Store S1 sees the SOH, which names the Store, but not the manifest of S1's unit, which names
+    // none: the run is refused, as though the manifest were not there.
+    const soh = await call(storeReader, 'GET', `/api/files-imports/batches/${sohBatchId}`);
+    expect(soh.status).toBe(200);
+    const oneSide = await call(storeReader, 'POST', '/api/files-imports/comparison-runs', {
+      run: 'manifest-against-soh',
+      manifest: { batchId: manifestBatchId },
+      stockOnHand: { batchId: sohBatchId },
+    });
+    expect(oneSide.status).toBe(404);
+    expect(codeOf(oneSide)).toBe('files-imports.comparison-set-not-found');
+    // A run the reader may see that names a batch they may not see shows that side as not visible, with no code (14).
+    const listed = comparisonRunListSchema.parse(
+      (await ok(storeReader, 'GET', '/api/files-imports/comparison-runs')).body,
+    );
+    const withManifest = listed.runs.find((each) => each.run === 'manifest-against-soh');
+    expect(withManifest?.left).toEqual({
+      kind: 'batch',
+      set: 'manifest',
+      batchId: manifestBatchId,
+      batchVersionId: expect.any(String) as string,
+    });
+    expect(withManifest?.right).toMatchObject({
+      kind: 'batch',
+      set: 'stock-on-hand',
+      batchCode: expect.any(String) as string,
+    });
   });
 
   it('PRD-SEC-005: a comparison of a batch of the wrong set is refused, and a reader without the run type sees no run', async () => {
@@ -769,7 +924,7 @@ describe('comparison runs (10.3; PRD-LIF-027, POL-14.07)', () => {
       stockOnHand: { batchId: sohBatchId },
     });
     expect(wrong.status).toBe(422);
-    expect(errorEnvelopeSchema.parse(wrong.body).error.code).toBe('files-imports.comparison-set-wrong');
+    expect(codeOf(wrong)).toBe('files-imports.comparison-set-wrong');
     const outsider = await call(approver, 'GET', '/api/files-imports/comparison-runs');
     expect(outsider.status).toBe(403);
   });
@@ -807,13 +962,18 @@ describe('an approved, unpublished opening batch is the unit’s opening plan (m
     // Submitted but not yet approved: no plan.
     expect(await stockPlan(fixtures.s1.businessUnitId)).toBe('failed');
     if (submitted.requestId === undefined) throw new Error('no approval request');
-    clock.advance(30);
-    const decision = await ok(approver, 'POST', `/api/access/approval-requests/${submitted.requestId}/decision`, {
-      versionId: read.batch.versionId,
-      outcome: 'approve',
-      reason: { kind: 'listed', reasonId: approveReason },
-      totpCode: codeFor(approver.factorSecret ?? Buffer.alloc(0), 0, clock.now()),
+    // Operations verifies opening stock (POL-14.02): the verification of opening balances, Accounts', does not decide
+    // it, and neither does approve on import batches (product owner, 12 Oct 2026).
+    expect(read.batch.review).toMatchObject({
+      kind: 'approval',
+      actionType: 'files_imports.opening_stock.verify',
+      recordType: 'files_imports.opening_stock',
     });
+    const byAccounts = await decide(accounts, submitted.requestId, read.batch.versionId);
+    expect(byAccounts.status).toBe(403);
+    expect(codeOf(byAccounts)).toBe('access.not-eligible');
+    expect(await stockPlan(fixtures.s1.businessUnitId)).toBe('failed');
+    const decision = await decide(approver, submitted.requestId, read.batch.versionId);
     expect(decision.body).toMatchObject({ outcome: 'Approved' });
     expect((await readBatch(manifestBatchId)).batch.state).toBe('Validated');
     expect(await stockPlan(fixtures.s1.businessUnitId)).toBe('passed');

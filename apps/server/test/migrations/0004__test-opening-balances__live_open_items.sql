@@ -20,5 +20,7 @@ create table test_opening_balances.live_open_item (
 );
 create trigger refuse_row_change before update or delete on test_opening_balances.live_open_item
   for each row execute function kernel.refuse_change();
+create trigger refuse_truncate before truncate on test_opening_balances.live_open_item
+  for each statement execute function kernel.refuse_change();
 
 grant select on test_opening_balances.live_open_item to aos_runtime;
