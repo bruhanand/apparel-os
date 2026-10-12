@@ -388,7 +388,12 @@ describe('an exception needs its series and its routing (access-and-approvals 12
     const decided = await decide(approver, set);
     expect(decided.status, JSON.stringify(decided.body)).toBe(200);
     const listed = routingListSchema.parse((await get('/api/exceptions/routing', await cookieOf(admin))).body);
-    expect(listed.types.map((type) => type.code)).toEqual([unfinishedOperation.code, syntheticMismatch.code]);
+    // Its own types, the restore's recovery gaps among them (backup-and-restore 4.5), then the registered ones.
+    expect(listed.types.map((type) => type.code)).toEqual([
+      unfinishedOperation.code,
+      'exceptions.recovery-gap',
+      syntheticMismatch.code,
+    ]);
     expect(listed.routings).toMatchObject([
       {
         typeCode: syntheticMismatch.code,

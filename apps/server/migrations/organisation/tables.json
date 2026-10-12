@@ -212,7 +212,7 @@
       "table": "kernel.recovery_hold",
       "class": "unscoped",
       "marks": ["projection", "locked"],
-      "runtime": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "runtime": ["DELETE", "SELECT", "UPDATE"],
       "design": "backup-and-restore 4.3, section 11",
       "why": "Read by the command runner at the start of every command, of every actor and of none, before Authorise (code-house-rules 6.3): at most one row, holding no scope fact; placed by the restore command, lifted by the reopen command"
     },

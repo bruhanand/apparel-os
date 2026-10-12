@@ -288,8 +288,12 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       { code: 'outbox', permissions: 'kernel.outbox_event edit' },
       // pos's consumer of mapping changes, which defines a billing device's series (S1-F12-T02).
       { code: 'pos', permissions: 'pos.billing_device edit' },
-      // The restore's internal identity, with what its after-restore steps declare (backup-and-restore 4.2; S1-F14-T03).
-      { code: 'restore', permissions: 'access.session edit,numbering.series edit' },
+      // The restore's internal identity, with what its after-restore steps declare (backup-and-restore 4.2, 4.5;
+      // S1-F14-T03; product owner, 12 Oct 2026).
+      {
+        code: 'restore',
+        permissions: 'access.session edit,exceptions.exception create,numbering.series edit',
+      },
       // The setup step is the platform's own operation: no role assignment authorises it (9.11).
       { code: 'setup', permissions: null },
     ]);

@@ -142,7 +142,7 @@ Every rule of part A is a **Design choice** unless an ID sets it; part B and the
 | --- | --- |
 | `append-only` | `SELECT`, `INSERT`; and `UPDATE (id)` when it is `locked`, the guard of 7.1 refusing the update itself |
 | `versions` | `SELECT`, `INSERT`, `UPDATE`; the trigger of 7.3 limits what an update may change |
-| `projection` and other changeable tables | `SELECT`, `INSERT`, `UPDATE`; `DELETE` only where the table's design allows a delete |
+| `projection` and other changeable tables | `SELECT`, `INSERT`, `UPDATE`; `DELETE` only where the table's design allows a delete; no `INSERT` where the design says only an operator command writes its rows as the migration role, as `kernel.recovery_hold` ([backup-and-restore.md](backup-and-restore.md) section 11; `S1-F14` review, 12 Oct 2026) |
 
 - PostgreSQL takes a row lock, `FOR UPDATE` or `FOR SHARE` alike, only for a role holding `UPDATE` on at least one column of the table. So every `locked` table grants it, and an append-only one grants `UPDATE (id)` only.
 

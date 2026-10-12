@@ -71846,7 +71846,7 @@
         }
       }
     },
-    "/api/exceptions/exceptions/{exceptionId}/recovery-settlement": {
+    "/api/exceptions/exceptions/{exceptionId}/gap-settlement": {
       "post": {
         "operationId": "settleRecoveryGap",
         "x-access": {

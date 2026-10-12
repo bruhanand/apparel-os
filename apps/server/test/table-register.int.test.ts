@@ -470,9 +470,15 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
   });
 
   it('code-house-rules 5.2 a projection is rebuildable: never append-only, and the runtime role reads and writes it', () => {
+    // A projection whose rows only an operator command writes, as the migration role, gives the runtime role no INSERT
+    // (5.2): the recovery hold, placed by the restore command alone (backup-and-restore section 11).
+    const operatorWritten = new Set(['kernel.recovery_hold']);
     for (const entry of register(set).filter((each) => each.marks.includes('projection'))) {
       expect(entry.marks, entry.table).not.toContain('append-only');
-      expect(entry.runtime, entry.table).toEqual(expect.arrayContaining(['INSERT', 'SELECT']));
+      expect(entry.runtime, entry.table).toEqual(
+        expect.arrayContaining(operatorWritten.has(entry.table) ? ['SELECT', 'UPDATE'] : ['INSERT', 'SELECT']),
+      );
+      if (operatorWritten.has(entry.table)) expect(entry.runtime, entry.table).not.toContain('INSERT');
     }
   });
 

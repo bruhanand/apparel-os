@@ -3005,7 +3005,7 @@ export const routes = {
   // after (backup-and-restore 4.3, 4.5; product owner, 12 Oct 2026).
   settleRecoveryGap: defineRoute({
     method: 'POST',
-    path: '/api/exceptions/exceptions/{exceptionId}/recovery-settlement',
+    path: '/api/exceptions/exceptions/{exceptionId}/gap-settlement',
     params: exceptionParamsSchema,
     access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
     command: true,
