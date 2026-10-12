@@ -303,7 +303,13 @@ async function checkBeforeWriting(options: RestoreOptions, workDirectory: string
     const needed = new Set(part.keyVersions.flatMap((use) => (use.identifier === null ? [] : [use.identifier])));
     // A value written before key versions were recorded was sealed by the first version, the only one before rotation
     // (10.4): whichever version the custodian gave stands for it, and the checks that open the data prove it.
-    if (needed.size === 0 && part.keyVersions.length > 0) for (const version of given) needed.add(version);
+    const unrecorded = part.keyVersions.some((use) => use.identifier === null && use.uses > 0);
+    if (unrecorded && given.size === 0) {
+      throw new RestoreRefused(
+        `Organisation ${part.organisationCode}'s data holds values sealed before key versions were recorded, and no kept copy of its first key version was given (2.4)`,
+      );
+    }
+    if (needed.size === 0 && unrecorded) for (const version of given) needed.add(version);
     const missing = [...needed].filter((version) => !given.has(version)).sort();
     if (missing.length > 0) {
       throw new RestoreRefused(

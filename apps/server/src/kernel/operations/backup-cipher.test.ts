@@ -78,6 +78,30 @@ describe('the backup key (backup-and-restore 2.3, 2.4)', () => {
     expect(BackupPrivateKey.versionOf(bytes)).toBe(publicKey.version);
   });
 
+  it('S1-F14-T03 the restore opens a sealed dump as a stream, in chunks of any size, and fails at its end when it was changed', async () => {
+    const pair = syntheticPair();
+    const sealer = BackupSealer.start(
+      backupPublicKeyFromEnvironment({ [BACKUP_PUBLIC_KEY_VARIABLE]: pair.publicText }),
+      'syn-backup-5',
+    );
+    const plain = Buffer.concat(Array.from({ length: 50 }, () => PLAINTEXT));
+    const bytes = await sealed(sealer, 'syn-backup-5/org.dump', plain);
+    const privateKey = BackupPrivateKey.fromText(pair.privateText);
+    const chunks = (from: Buffer) =>
+      Array.from({ length: Math.ceil(from.length / 7) }, (_, i) => from.subarray(i * 7, i * 7 + 7));
+    expect(await buffer(Readable.from(chunks(bytes)).pipe(privateKey.openStream('syn-backup-5/org.dump')))).toEqual(
+      plain,
+    );
+    const changed = Buffer.from(bytes);
+    changed[changed.length - 3] = (changed[changed.length - 3] ?? 0) ^ 1;
+    await expect(
+      buffer(Readable.from(chunks(changed)).pipe(privateKey.openStream('syn-backup-5/org.dump'))),
+    ).rejects.toThrow('does not open');
+    await expect(
+      buffer(Readable.from([bytes]).pipe(BackupPrivateKey.fromText(syntheticPair().privateText).openStream('n'))),
+    ).rejects.toThrow('does not open');
+  });
+
   it('PRD-SEC-014 refuses a missing or wrong public key naming the variable, never a value, and prints no key', () => {
     expect(() => backupPublicKeyFromEnvironment({})).toThrow(`${BACKUP_PUBLIC_KEY_VARIABLE} is not set`);
     const pair = syntheticPair();
