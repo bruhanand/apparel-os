@@ -15,6 +15,15 @@ Local runs on branch `s1/f10-t07`, 11 Oct 2026, on a development laptop whose Do
 | `pnpm lint`, `pnpm typecheck`, `pnpm check:modules`, `pnpm check:links`, `pnpm format:check` | passed |
 | `pnpm test:e2e` | 25 browser journeys passed |
 
+After the review fixes, on `s1/f10-fixes`, 12 Oct 2026, the same shared laptop:
+
+| Check | Result |
+| --- | --- |
+| Integration suite (`vitest` with the integration configuration, in `apps/server`) | 76 files, 1,112 tests passed (258 s). A first run had one failure, `stock-ledger-anchor.int.test.ts` reaching the 5 s statement limit while another worktree's suite ran on the same Docker (that worktree's run failed the same test); the file passed alone, and the full run then passed |
+| `pnpm test` | all packages passed (server: 46 files, 359 tests) |
+| `pnpm lint`, `pnpm typecheck`, `pnpm check:modules`, `pnpm check:links`, `pnpm format:check` | passed |
+| `pnpm test:e2e` | 25 browser journeys passed |
+
 ## 2. Stage 1 exit check 3: the story under both formulas and both pool modes
 
 `PRD-LED-014`, `PRD-LED-015`, `PRD-ACP-018`; books-and-posting 15 test 1. Built in `S1-F10-T04`.
