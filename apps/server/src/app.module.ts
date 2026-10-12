@@ -16,7 +16,7 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
-import { numberedKinds } from './numbered-kinds.js';
+import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import {
   COUNT_SETS,
   decisionEvidence,
@@ -44,7 +44,7 @@ import {
   type ConfigurationInterface,
 } from './modules/configuration/index.js';
 import { SiteLifecycleModule, siteLifecycleApprovals } from './modules/site-lifecycle/index.js';
-import { PosModule } from './modules/pos/index.js';
+import { PosModule, posApprovals } from './modules/pos/index.js';
 import { EboImportsModule } from './modules/ebo-imports/index.js';
 import {
   CatalogueModule,
@@ -151,6 +151,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           }),
           // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
           booksApprovals(audit, bookHeldStock),
+          // The financial years and the bill-number format, whose approval defines every Active billing device's
+          // missing series, through `numbering` built with every declared kind, the origin rechecked by `configuration`
+          // (offline-counter 4.3b; DEC-117; code-house-rules 12.14; S1-F12-T03).
+          posApprovals({ audit, numbering: composedNumbering(), origins: configuration }),
           // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
           filesImportsApprovals(audit, importHandlers),
         ),

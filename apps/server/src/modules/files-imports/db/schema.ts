@@ -18,7 +18,7 @@ import type { OutcomeControlTotal, OutcomeCounts, OutcomeDocument, OutcomeMeasur
 import type { SheetSummary, StagedRowDraft, StagedValue } from '../domain/staging.js';
 
 // Drizzle definitions of the files-imports module's tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0024, 0061, 0063, 0065, 0070) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0024, 0061, 0063, 0065, 0072, 0074) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const filesImports = pgSchema('files_imports');
@@ -307,7 +307,7 @@ export const importOutcome = filesImports.table('import_outcome', {
   ...scopeColumns(),
 });
 
-/** A comparison run (imports-and-opening-data 2, 10.3, 15.1; 0070; S1-F13-T01): append-only, never changing a side. */
+/** A comparison run (imports-and-opening-data 2, 10.3, 15.1; 0072; S1-F13-T01): append-only, never changing a side. */
 export const comparisonRun = filesImports.table('comparison_run', {
   id: uuid('id').primaryKey(),
   runKind: text('run_kind').$type<ComparisonRunKind>().notNull(),
@@ -329,7 +329,7 @@ export const comparisonRun = filesImports.table('comparison_run', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** One line of a comparison run (10.3; 0070). */
+/** One line of a comparison run (10.3; 0072). */
 export const comparisonLine = filesImports.table('comparison_line', {
   id: uuid('id').primaryKey(),
   runId: uuid('run_id').notNull(),
@@ -349,7 +349,7 @@ export const comparisonLine = filesImports.table('comparison_line', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** One line of a run of opening balances against the closed books (10.4; 0072; S1-F13-T02): totals in paise. */
+/** One line of a run of opening balances against the closed books (10.4; 0074; S1-F13-T02): totals in paise. */
 export const comparisonBalanceLine = filesImports.table('comparison_balance_line', {
   id: uuid('id').primaryKey(),
   runId: uuid('run_id').notNull(),

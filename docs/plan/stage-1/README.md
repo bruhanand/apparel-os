@@ -171,7 +171,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | --- | --- | --- |
 | [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | done | — |
 | [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | — (acceptance evidence, RR-350) |
-| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | in-progress | F01-T15 (done) |
+| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | done | F01-T15 (done) |
 | [F06-T05 Stored files and evidence attachments](s1-f06-file-intake/tickets/T05-stored-files-and-evidence-attachments.md) | blocked | F01-T07, F01-T11 |
 | [F10-T01 Stock tables, constraints and row security](s1-f10-stock-ledger/tickets/T01-ledger-tables-and-constraints.md) | blocked | F01-T11 |
 | [F10-T02 Quantity operations](s1-f10-stock-ledger/tickets/T02-ledger-operations-of-the-story.md) | blocked | F01-T13, F10-T01 |
@@ -203,7 +203,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | done | F06-T03 |
 | [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | done | F01-T09, F11-T10, F02-T02, F08-T01 |
 | [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | done | F04-T02, F12-T01 |
-| [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | ready-for-agent | F12-T01, F12-T02, F01-T13, F02-T01 |
+| [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | done | F12-T01, F12-T02, F01-T13, F02-T01 |
 | [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | done | — |
 | [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | blocked | F06-T01, F06-T05, F08-T01 |
 | [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | blocked | F14-T02 |

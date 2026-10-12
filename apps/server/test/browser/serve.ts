@@ -681,7 +681,8 @@ await approved(structureFixture, (c, p) =>
 // The devices journey (billing-devices.spec.ts; S1-F12-T01): a SYNTHETIC Site with two Stores, the first with a
 // whole-store unit and a brand counter, the second with a whole-store unit, each mapped to the readiness journey's
 // registration, so the Admin registers a device for the first Store and sees a unit of the second refused. No bill
-// format or financial year is set: a device's series come with its enrolment in the counter app (offline-counter 4.1).
+// format or financial year is set here: the bill numbering journey (S1-F12-T03) sets both through their approvals,
+// while the other devices journeys run, so none of them relies on a device having or lacking series.
 const devicesSite = await approved(structureFixture, (c, p) =>
   structureFixture.organisation.prepareSite(c, p, {
     code: syntheticCode('JOURNEY-DEVICES-SITE'),
@@ -2140,6 +2141,28 @@ const devicesLifecycleAdmin = await provisionUser('BROWSER-DEVICES-LIFECYCLE', '
   { recordType: 'organisation.store', action: 'view' },
   { recordType: 'organisation.business_unit', action: 'view' },
 ]);
+// The bill numbering journey (S1-F12-T03): an Admin who registers and enrols a device and prepares the financial year
+// and the bill-number format, and a different person who approves both from My work. SYNTHETIC grants: who prepares
+// and who approves them is KDPS's (V-01; GC5-1, V-40).
+const numberingAdmin = await provisionUser('BROWSER-NUMBERING-ADMIN', 'P-ADM', [
+  { recordType: 'pos.billing_device', action: 'view' },
+  { recordType: 'pos.billing_device', action: 'create' },
+  { recordType: 'pos.billing_device', action: 'edit' },
+  { recordType: 'organisation.store', action: 'view' },
+  { recordType: 'organisation.business_unit', action: 'view' },
+  { recordType: 'pos.financial_year_change', action: 'view' },
+  { recordType: 'pos.financial_year_change', action: 'create' },
+  { recordType: 'pos.bill_format_change', action: 'view' },
+  { recordType: 'pos.bill_format_change', action: 'create' },
+]);
+const numberingApprover = await provisionUser('BROWSER-NUMBERING-APPROVER', 'P-OWN', [
+  { recordType: 'pos.financial_year_change', action: 'view' },
+  { recordType: 'pos.financial_year_change', action: 'approve' },
+  { recordType: 'pos.bill_format_change', action: 'view' },
+  { recordType: 'pos.bill_format_change', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
 const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
   { recordType: 'site_lifecycle.readiness_record', action: 'view' },
   { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
@@ -2451,6 +2474,9 @@ writeFileSync(
       organisationCode: settingsCode,
       admin: credentialsOf(devicesAdmin),
       lifecycleAdmin: credentialsOf(devicesLifecycleAdmin),
+      // S1-F12-T03: the bill numbering journey's Admin and approver.
+      numberingAdmin: credentialsOf(numberingAdmin),
+      numberingApprover: credentialsOf(numberingApprover),
       storeOption: `${devicesStore.code} · ${devicesStore.name}`,
       otherStoreOption: `${devicesOtherStore.code} · ${devicesOtherStore.name}`,
       units: devicesUnits.map((unit) => ({ code: unit.code, name: unit.name, store: unit.store })),

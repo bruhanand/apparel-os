@@ -1,7 +1,7 @@
 import { bigint, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the ebo-imports module's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0071) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0073) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const eboImports = pgSchema('ebo_imports');

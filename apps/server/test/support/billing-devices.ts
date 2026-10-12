@@ -29,6 +29,7 @@ import { capturingLogger } from './jobs.js';
 import { approvedGeography, structureSetup, type StructureSetup } from './organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './organisations.js';
 import { syntheticDeviceKey, syntheticStores, type SyntheticStores } from './pos.js';
+import { localOrigins } from './origins.js';
 import { connect } from './postgres.js';
 
 // The harness of the billing-device tests (S1-F12; offline-counter 3, 4, 11, 14.1), shared by the enrolment, lifecycle
@@ -134,6 +135,7 @@ export class DevicesWorld {
       access: this.setup.access,
       organisation: this.setup.organisation,
       numbering: this.numbering,
+      origins: localOrigins,
     });
     const admin = await this.enrolled('DEVICE-ADMIN', DEVICE_AUTHORITY);
     this.admin = admin.user;
@@ -182,7 +184,8 @@ export class DevicesWorld {
     };
   }
 
-  private async enrolled(
+  /** An enrolled SYNTHETIC user holding the authorities given through one role assignment, signed in. */
+  async enrolled(
     label: string,
     authorities: readonly SyntheticAuthority[],
   ): Promise<{ user: SyntheticUser; assignmentId?: string }> {

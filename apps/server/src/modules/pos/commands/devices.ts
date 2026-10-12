@@ -16,12 +16,14 @@ import {
 } from '../../../kernel/index.js';
 import {
   deviceLockTarget,
+  devicesById,
   freshCodeRefusal,
   takeFreshCode,
   type AccessInterface,
   type RecordFacts,
 } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import { businessUnitHeads, businessUnitInForce, type OrganisationInterface } from '../../organisation/index.js';
 import { billingDevice, billingDeviceUnit } from '../db/schema.js';
@@ -47,9 +49,15 @@ export interface PosDependencies {
     | 'endDevice'
     | 'devices'
     | 'checkFreshCode'
+    | 'requestApproval'
+    | 'approvalRequestsOf'
+    | 'requestLockTargets'
+    | 'withdrawRequest'
   >;
   readonly organisation: Pick<OrganisationInterface, 'placeFacts' | 'placeFactsOf'>;
   readonly numbering: NumberingInterface;
+  /** Which origins of a setting's value this environment accepts (code-house-rules 12.14; S1-F12-T03). */
+  readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 
 /**
@@ -288,11 +296,12 @@ export async function missingSeriesLockTargets(context: TransactionContext): Pro
  */
 export async function defineMissingSeries(
   context: TransactionContext,
-  dependencies: PosDependencies,
+  numbering: NumberingInterface,
   date: string,
 ): Promise<Outcome<{ readonly definedSeriesIds: string[] }>> {
   const rows = await context.tx.select({ id: billingDevice.id }).from(billingDevice).orderBy(asc(billingDevice.id));
-  const devices = await dependencies.access.devices(
+  // `access`'s read with no instance, so the decision effect of S1-F12-T03, built before `access`, can call it.
+  const devices = await devicesById(
     context,
     rows.map((row) => row.id),
   );
@@ -300,7 +309,7 @@ export async function defineMissingSeries(
   for (const row of rows) {
     const device = devices.get(row.id);
     if (device?.state !== 'Active') continue;
-    const series = await defineDeviceSeries(context, dependencies.numbering, device, date);
+    const series = await defineDeviceSeries(context, numbering, device, date);
     if (series.kind === 'refusal') return series;
     definedSeriesIds.push(...series.answer.definedSeriesIds);
   }

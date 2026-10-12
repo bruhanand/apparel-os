@@ -951,6 +951,13 @@ export const financeTaxRulesCodes = declareCodes({
  * - `pos.unit-change-scheduled`: the device already has a unit listed from that date or later; a later change starts
  *   after it (offline-counter 3.6).
  * - `pos.units-unchanged`: the list is the one in force on that date.
+ * - `pos.bill-format-without-device`: a bill-number format carries no part taken from the device, so two devices of
+ *   one registration and year could give the same number (numbering-and-audit 3.5; S1-F12-T03).
+ * - `pos.format-code-taken`: the format code names a format other than the bill-number format in force, such as
+ *   another kind's; a new bill format takes a new code (offline-counter 4.3b).
+ * - `pos.change-not-found`: no financial-year or bill-format change has that identifier.
+ * - `pos.change-not-awaiting`: the change no longer awaits its decision, being decided or withdrawn already, so it
+ *   cannot be withdrawn (offline-counter 4.3b; RR-489).
  */
 export const deviceCodes = declareCodes({
   'access.device-code-taken': 'refused',
@@ -965,6 +972,10 @@ export const deviceCodes = declareCodes({
   'pos.starts-in-past': 'refused',
   'pos.unit-change-scheduled': 'refused',
   'pos.units-unchanged': 'refused',
+  'pos.bill-format-without-device': 'refused',
+  'pos.format-code-taken': 'refused',
+  'pos.change-not-found': 'not-found',
+  'pos.change-not-awaiting': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

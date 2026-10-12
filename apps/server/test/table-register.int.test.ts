@@ -67,7 +67,7 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0065; S1-F06-T04).
     'files_imports.file_in_open_batch',
     // module-map 4.16; DEC-117: a unit's opening-stock batches submitted at their version, SECURITY DEFINER (migration
-    // 0070; S1-F13-T01).
+    // 0072; S1-F13-T01).
     'files_imports.opening_plan_versions',
     'files_imports.published_document',
     'files_imports.record_admitted',

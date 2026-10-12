@@ -2,6 +2,10 @@ import {
   ACTIVITY_APPROVAL,
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
+  BILL_FORMAT_CHANGE_APPROVAL,
+  BILL_FORMAT_CHANGE_TYPE,
+  FINANCIAL_YEAR_CHANGE_APPROVAL,
+  FINANCIAL_YEAR_CHANGE_TYPE,
   LAYOUT_CONFIRMATION,
   MAPPING_CONFIRMATION,
   MAPPING_RULE_CONFIRMATION,
@@ -19,6 +23,7 @@ import { isMessageId, t, type MessageId } from '../messages/catalogue';
 import { PersonaChip } from '../shell/AppShell';
 import { useSession, useTimeZone } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
+import { formatText } from '../setup/format-parts';
 import { formatDate } from '../setup/format';
 import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
@@ -387,6 +392,43 @@ function ReopeningFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A financial year as it is to be defined: its label, dates and origin, which the approval binds to (offline-counter
+ * 4.3b; numbering-and-audit 3.3; PRD-ACS-007; S1-F12-T03).
+ */
+function FinancialYearFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'listFinancialYears', {}),
+    enabled: useViewable(FINANCIAL_YEAR_CHANGE_TYPE),
+  });
+  const change = query.data?.changes.find((each) => each.changeId === view.document.recordId);
+  if (change === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="numbering.year.label">{change.label}</Fact>
+      <Fact label="numbering.year.first">{formatDate(change.firstDay)}</Fact>
+      <Fact label="numbering.year.last">{formatDate(change.lastDay)}</Fact>
+      <Fact label="numbering.origin">{t(`security.origin.${change.origin}`)}</Fact>
+    </Facts>
+  );
+}
+
+/** A bill-number format as it is to be set: its code, parts and origin (offline-counter 4.3b; 3.5; S1-F12-T03). */
+function BillFormatFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({ ...readQuery(api, 'readBillFormat', {}), enabled: useViewable(BILL_FORMAT_CHANGE_TYPE) });
+  const change = query.data?.changes.find((each) => each.changeId === view.document.recordId);
+  if (change === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="numbering.format.code">{change.formatCode}</Fact>
+      <Fact label="numbering.format.parts">
+        <span className="font-mono">{formatText(change.parts)}</span>
+      </Fact>
+      <Fact label="numbering.origin">{t(`security.origin.${change.origin}`)}</Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -417,6 +459,10 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <ReadinessFacts view={view} />;
     case PERIOD_REOPENING_APPROVAL:
       return <ReopeningFacts view={view} />;
+    case FINANCIAL_YEAR_CHANGE_APPROVAL:
+      return <FinancialYearFacts view={view} />;
+    case BILL_FORMAT_CHANGE_APPROVAL:
+      return <BillFormatFacts view={view} />;
     // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
     case LAYOUT_CONFIRMATION:
     case MAPPING_CONFIRMATION:

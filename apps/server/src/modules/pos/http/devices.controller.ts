@@ -4,11 +4,8 @@ import {
   ApiRefusal,
   ApiRoute,
   COMMAND_RUNNER,
-  commandAnswer,
   IDEMPOTENCY_HELPER,
-  requestContentOf,
   RouteInput,
-  type CommandOutcome,
   type CommandRefusal,
   type CommandRunner,
   type IdempotencyHelper,
@@ -28,6 +25,7 @@ import {
 import type { Actor, Outcome } from '../commands/devices.js';
 import type { PosInterface } from '../pos.js';
 import { POS } from '../tokens.js';
+import { PosRoutes } from './pos-routes.js';
 
 /** Finds the facts of the record a route acts on, on the date, in its transaction; undefined when it does not exist. */
 type FactsOf = (context: TransactionContext, date: string) => Promise<RecordFacts | undefined>;
@@ -56,42 +54,38 @@ function deviceNotFound(deviceId: string): CommandRefusal {
  */
 @Controller()
 export class DevicesController {
+  private readonly routes: PosRoutes;
+
   constructor(
-    @Inject(IDEMPOTENCY_HELPER) private readonly helper: IdempotencyHelper,
-    @Inject(COMMAND_RUNNER) private readonly runner: CommandRunner,
+    @Inject(IDEMPOTENCY_HELPER) helper: IdempotencyHelper,
+    @Inject(COMMAND_RUNNER) runner: CommandRunner,
     @Inject(ACCESS) private readonly access: AccessInterface,
     @Inject(POS) private readonly pos: PosInterface,
-  ) {}
+  ) {
+    this.routes = new PosRoutes(helper, runner, access);
+  }
 
   @ApiRoute(routes.listBillingDevices)
   async listBillingDevices(@SignedIn() user: SignedInUser) {
-    const answer = await this.runner.read(
-      {
-        commandName: 'pos.list-billing-devices',
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      async (context) => {
-        const date = await context.businessDate();
-        if (date.kind === 'not-set') return { refused: BUSINESS_DATE_NOT_SET };
-        let refusal: CommandRefusal | undefined;
-        const devices = await this.pos.billingDevices(context, date.date, async (facts) => {
-          const checked = await this.access.authoriseEach(
-            context,
-            { actorId: user.userId, action: 'view', recordType: routes.listBillingDevices.access.recordType },
-            facts,
-          );
-          if (checked.kind === 'refused') {
-            refusal = checked.refusal;
-            return undefined;
-          }
-          return checked.each.map((each) => each.kind === 'allowed');
-        });
-        if (devices === undefined) return { refused: refusal ?? BUSINESS_DATE_NOT_SET };
-        return { asOf: context.startedAt.toISOString(), devices };
-      },
-    );
+    const answer = await this.routes.read(user, 'pos.list-billing-devices', async (context) => {
+      const date = await context.businessDate();
+      if (date.kind === 'not-set') return { refused: BUSINESS_DATE_NOT_SET };
+      let refusal: CommandRefusal | undefined;
+      const devices = await this.pos.billingDevices(context, date.date, async (facts) => {
+        const checked = await this.access.authoriseEach(
+          context,
+          { actorId: user.userId, action: 'view', recordType: routes.listBillingDevices.access.recordType },
+          facts,
+        );
+        if (checked.kind === 'refused') {
+          refusal = checked.refusal;
+          return undefined;
+        }
+        return checked.each.map((each) => each.kind === 'allowed');
+      });
+      if (devices === undefined) return { refused: refusal ?? BUSINESS_DATE_NOT_SET };
+      return { asOf: context.startedAt.toISOString(), devices };
+    });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
     return answer;
   }
@@ -249,7 +243,7 @@ export class DevicesController {
     return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts, date: date.date, further: held };
   }
 
-  private async command<R extends CommandRoute & { access: { kind: 'action' } }>(
+  private command<R extends CommandRoute & { access: { kind: 'action' } }>(
     route: R,
     commandName: string,
     user: SignedInUser,
@@ -273,46 +267,28 @@ export class DevicesController {
         refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
       };
     };
-    const answer = await this.helper.run(
-      {
-        commandName,
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      {
-        key: input.idempotencyKey,
-        content: requestContentOf(route, input),
-        authoriseReplay,
-        work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          // Authorise with the Store's facts, before any lock (7.1 step 3).
-          const authorised = await this.authoriseIn(context, user, route, factsOf, notFound, further);
-          if (authorised.kind === 'refused') {
-            return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
-          }
-          // Step 0: the actor and every assignment relied on, rechecked under the locks with the same facts (8.2; 7.1
-          // step 4).
-          const { action, recordType } = route.access;
-          const held = await this.access.holdAuthority(
-            context,
-            { kind: 'user', id: user.userId },
-            authorised.roleAssignmentId,
-            { action, recordType, facts: authorised.facts },
-            [],
-            authorised.further,
-          );
-          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-          const outcome = await work(
-            context,
-            { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId, networkAddress: user.networkAddress },
-            authorised.facts,
-            authorised.date,
-          );
-          if (outcome.kind === 'success') return { kind: 'success', answer: outcome.answer, shows: 'nothing' };
-          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: outcome.causedBySecret ?? false };
-        },
-      },
-    );
-    return commandAnswer(answer);
+    return this.routes.run(route, commandName, user, input, authoriseReplay, async (context) => {
+      // Authorise with the Store's facts, before any lock (7.1 step 3).
+      const authorised = await this.authoriseIn(context, user, route, factsOf, notFound, further);
+      if (authorised.kind === 'refused') return { kind: 'refusal', refusal: authorised.refusal };
+      // Step 0: the actor and every assignment relied on, rechecked under the locks with the same facts (8.2; 7.1
+      // step 4).
+      const { action, recordType } = route.access;
+      const held = await this.access.holdAuthority(
+        context,
+        { kind: 'user', id: user.userId },
+        authorised.roleAssignmentId,
+        { action, recordType, facts: authorised.facts },
+        [],
+        authorised.further,
+      );
+      if (held !== undefined) return { kind: 'refusal', refusal: held };
+      return work(
+        context,
+        { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId, networkAddress: user.networkAddress },
+        authorised.facts,
+        authorised.date,
+      );
+    });
   }
 }

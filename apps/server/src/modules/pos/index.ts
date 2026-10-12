@@ -9,3 +9,6 @@ export { deviceEnded, deviceEnrolled, deviceRegistered } from './events.js';
 // The devices readiness check, a read with no instance, for `site-lifecycle` (offline-counter 11; S1-F12-T02).
 export { unitDevicesCheck } from './queries/devices-check.js';
 export { POS_IDENTITY, posConsumers } from './jobs/consumers.js';
+// The approval rules and decision effects of the financial-year and bill-format changes, for the composition root
+// (access-and-approvals 9.8b; offline-counter 4.3b; S1-F12-T03).
+export { posApprovals } from './commands/numbering-changes.js';

@@ -1566,6 +1566,7 @@
               "merchandise.proposal-not-found",
               "merchandise.record-not-found",
               "organisation.record-not-found",
+              "pos.change-not-found",
               "site-lifecycle.record-not-found",
               "site-lifecycle.unit-not-found"
             ]
@@ -1611,6 +1612,7 @@
               "access.starts-in-past",
               "access.user-not-approved",
               "access.version-overlaps",
+              "configuration.origin-not-allowed",
               "files-imports.proposal-not-open",
               "files-imports.rule-conflict",
               "files-imports.rule-target-refused",
@@ -1632,6 +1634,12 @@
               "merchandise.starts-in-past",
               "merchandise.value-not-in-vocabulary",
               "merchandise.version-overlaps",
+              "numbering.financial-year-invalid",
+              "numbering.financial-year-label-taken",
+              "numbering.financial-year-overlaps",
+              "numbering.format-could-repeat",
+              "numbering.format-invalid",
+              "numbering.live-series-exists",
               "organisation.location-holds-stock",
               "organisation.location-unit-at-another-site",
               "organisation.mapping-legal-entity-mismatch",
@@ -1644,6 +1652,7 @@
               "organisation.unit-without-mapping",
               "organisation.version-overlaps",
               "organisation.whole-store-unit-exists",
+              "pos.format-code-taken",
               "site-lifecycle.activity-already-granted",
               "site-lifecycle.check-failed",
               "site-lifecycle.site-already-ready"
@@ -17850,6 +17859,232 @@
               }
             },
             "x-error-codes": [
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/pos/financial-years": {
+      "get": {
+        "operationId": "listFinancialYears",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "pos.financial_year_change"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "years": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "financialYearId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "firstDay": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "lastDay": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "kdps",
+                              "test-setup",
+                              "synthetic"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "financialYearId",
+                          "label",
+                          "firstDay",
+                          "lastDay",
+                          "origin"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "changes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "changeId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "kdps",
+                              "test-setup",
+                              "synthetic"
+                            ]
+                          },
+                          "preparedByUserId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "preparedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "requestId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "Awaiting approval",
+                              "Approved",
+                              "Rejected",
+                              "Superseded",
+                              "Withdrawn"
+                            ]
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "firstDay": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "lastDay": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          }
+                        },
+                        "required": [
+                          "changeId",
+                          "origin",
+                          "preparedByUserId",
+                          "preparedAt",
+                          "requestId",
+                          "state",
+                          "label",
+                          "firstDay",
+                          "lastDay"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "years",
+                    "changes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
               "access.not-authorised"
             ]
           },
@@ -36025,6 +36260,258 @@
         }
       }
     },
+    "/api/pos/bill-format-changes": {
+      "post": {
+        "operationId": "prepareBillFormatChange",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "pos.bill_format_change"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "changeId",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "configuration.origin-not-allowed",
+              "numbering.format-invalid",
+              "pos.bill-format-without-device",
+              "pos.format-code-taken"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "formatCode": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "parts": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "text"
+                            },
+                            "text": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "scope"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "year"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "sequence"
+                            },
+                            "width": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "width"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  }
+                },
+                "required": [
+                  "formatCode",
+                  "parts",
+                  "origin"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/merchandise/brands/{recordId}/versions": {
       "post": {
         "operationId": "prepareBrandVersion",
@@ -38212,6 +38699,198 @@
                 "required": [
                   "name",
                   "validFrom"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pos/financial-year-changes": {
+      "post": {
+        "operationId": "prepareFinancialYearChange",
+        "x-access": {
+          "kind": "action",
+          "action": "create",
+          "recordType": "pos.financial_year_change"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "changeId",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "configuration.origin-not-allowed",
+              "numbering.financial-year-invalid",
+              "numbering.financial-year-label-taken",
+              "numbering.financial-year-overlaps"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "firstDay": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "lastDay": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  }
+                },
+                "required": [
+                  "label",
+                  "firstDay",
+                  "lastDay",
+                  "origin"
                 ],
                 "additionalProperties": false
               }
@@ -49682,6 +50361,363 @@
             },
             "x-error-codes": [
               "merchandise.record-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/pos/bill-format": {
+      "get": {
+        "operationId": "readBillFormat",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "pos.bill_format_change"
+        },
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "format": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "set"
+                            },
+                            "formatCode": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "parts": {
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "text"
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "scope"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "year"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "sequence"
+                                      },
+                                      "width": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "width"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
+                            "origin": {
+                              "type": "string",
+                              "enum": [
+                                "kdps",
+                                "test-setup",
+                                "synthetic"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "formatCode",
+                            "parts",
+                            "origin"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "not-set"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "changes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "changeId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "kdps",
+                              "test-setup",
+                              "synthetic"
+                            ]
+                          },
+                          "preparedByUserId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "preparedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "requestId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "Awaiting approval",
+                              "Approved",
+                              "Rejected",
+                              "Superseded",
+                              "Withdrawn"
+                            ]
+                          },
+                          "formatCode": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "parts": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "text"
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "scope"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "year"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string",
+                                      "const": "sequence"
+                                    },
+                                    "width": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "width"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "changeId",
+                          "origin",
+                          "preparedByUserId",
+                          "preparedAt",
+                          "requestId",
+                          "state",
+                          "formatCode",
+                          "parts"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "format",
+                    "changes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
             ]
           },
           "500": {
@@ -74727,6 +75763,356 @@
                 "required": [
                   "evidence"
                 ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pos/bill-format-changes/{changeId}/withdraw": {
+      "post": {
+        "operationId": "withdrawBillFormatChange",
+        "x-access": {
+          "kind": "own"
+        },
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "changeId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "pos.change-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "pos.change-not-awaiting"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pos/financial-year-changes/{changeId}/withdraw": {
+      "post": {
+        "operationId": "withdrawFinancialYearChange",
+        "x-access": {
+          "kind": "own"
+        },
+        "parameters": [
+          {
+            "name": "changeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changeId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "changeId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "pos.change-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "pos.change-not-awaiting"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
                 "additionalProperties": false
               }
             }

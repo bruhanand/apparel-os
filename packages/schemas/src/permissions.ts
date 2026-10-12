@@ -367,7 +367,16 @@ const financeRecordTypes = [
  * does not hold it (access-and-approvals 9.11). A device carries its Store's place, so an assignment's place scope
  * decides where (5.3). Who holds them is KDPS's.
  */
-const posRecordTypes = [declare('pos.billing_device', ['view', 'create', 'edit'], PLACE)] as const;
+const posRecordTypes = [
+  declare('pos.billing_device', ['view', 'create', 'edit'], PLACE),
+  // The financial years and the bill-number format (offline-counter 4.3b; S1-F12-T03): create prepares a change, which
+  // a different authorised person decides (approve; PRD-ACS-006; product owner, 10 Oct 2026). Its preparer withdraws
+  // their own pending change with no permission; anyone else needs cancel (RR-489; product owner, 12 Oct 2026). They
+  // belong to the Organisation as a whole, so they carry no scope fact. Who holds them is KDPS's (V-01): Accounts and
+  // the CA for the dates (GC5-1), the CA for the format (V-40, POL-10.07).
+  declare('pos.financial_year_change', ['view', 'create', 'approve', 'cancel'], NONE),
+  declare('pos.bill_format_change', ['view', 'create', 'approve', 'cancel'], NONE),
+] as const;
 
 /**
  * `ebo-imports` (module-map section 5, 11.1; imports-and-opening-data 4.1, 12; DEC-116; S1-F13-T01): in stage 1 only the
