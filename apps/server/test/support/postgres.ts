@@ -10,6 +10,8 @@ export interface PostgresServer {
   readonly superuserUrl: string;
   readonly migrationPassword: string;
   readonly runtimePassword: string;
+  /** The read-only test role's password, `syn_verify` (stock-ledger 15.4). */
+  readonly verifyPassword: string;
   /** The migrated template database of each kind, closed to connections (global-setup.ts). */
   readonly templates: Readonly<Record<MigrationSetName, string>>;
 }
@@ -20,7 +22,7 @@ declare module 'vitest' {
   }
 }
 
-export type TestRole = 'superuser' | 'migration' | 'runtime';
+export type TestRole = 'superuser' | 'migration' | 'runtime' | 'verify';
 
 let outsideVitest: PostgresServer | undefined;
 
@@ -45,7 +47,11 @@ export function databaseUrl(database: string, role: TestRole): string {
     return url.toString();
   }
   const [user, password] =
-    role === 'migration' ? ['aos_migration', server.migrationPassword] : ['aos_runtime', server.runtimePassword];
+    role === 'migration'
+      ? ['aos_migration', server.migrationPassword]
+      : role === 'verify'
+        ? ['syn_verify', server.verifyPassword]
+        : ['aos_runtime', server.runtimePassword];
   return `postgres://${user}:${password}@${server.host}:${String(server.port)}/${database}`;
 }
 
@@ -114,6 +120,19 @@ export async function createTestDatabase(set: MigrationSetName, label: string): 
     throw error;
   }
   return name;
+}
+
+/**
+ * Gives the read-only test role `syn_verify` CONNECT on one test database copy, for the raw invariant queries of the
+ * stock harness (stock-ledger 15.4; code-house-rules 4.3, 11.3). Only copies whose tests read as it get it.
+ */
+export async function allowVerifier(database: string): Promise<void> {
+  const owner = await connect(database, 'migration');
+  try {
+    await owner.query(`grant connect on database ${owner.escapeIdentifier(database)} to syn_verify`);
+  } finally {
+    await owner.end();
+  }
 }
 
 /**

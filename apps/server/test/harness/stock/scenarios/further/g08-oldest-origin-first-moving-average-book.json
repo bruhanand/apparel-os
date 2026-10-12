@@ -1,0 +1,92 @@
+{
+  "id": "G8-MA-BOOK",
+  "title": "G8: a quantity-tracked SKU with two receipt origins at one place, sold by SKU barcode: the older goes first",
+  "synthetic": true,
+  "covers": ["PRD-STK-013", "PRD-STK-004", "DEC-032"],
+  "sources": ["stock-ledger 4, 8.3, 11.8 G8"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": false },
+  "steps": [
+    {
+      "step": "receipts",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "quantity": 5, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 50000
+            }
+          ]
+        },
+        { "command": "receipt", "receipt": "R2", "at": "S1", "quantity": 5, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R2" },
+        { "command": "pt-coverage", "receipt": "R2" },
+        {
+          "command": "pt-approval",
+          "receipt": "R2",
+          "pRatePaise": 13000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 65000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 10, "valuePaise": 115000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 5 },
+          { "origin": "R2", "at": "S1", "quantity": 5 }
+        ]
+      }
+    },
+    {
+      "step": "sale by SKU barcode",
+      "commands": [
+        {
+          "command": "sale",
+          "sale": "B1",
+          "at": "S1",
+          "quantity": 3,
+          "movements": ["sale-issue"],
+          "journals": [
+            {
+              "eventKind": "stock.sale-issue",
+              "component": "cost",
+              "debit": "COGS",
+              "credit": "INV",
+              "amountPaise": 34500
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 7, "valuePaise": 80500 }],
+        "transitPaise": 0,
+        "cogsPaise": 34500,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 2 },
+          { "origin": "R2", "at": "S1", "quantity": 5 }
+        ]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 80500, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -115000, "COGS": 34500, "LOSS": 0, "VAR": 0 }
+}

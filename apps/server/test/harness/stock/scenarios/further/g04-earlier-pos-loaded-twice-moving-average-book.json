@@ -1,0 +1,67 @@
+{
+  "id": "G4-MA-BOOK",
+  "title": "G4: the earlier POS's sales report and SOH loaded twice move no stock and no value",
+  "synthetic": true,
+  "covers": ["PRD-LIF-014", "PRD-IMP-010", "PRD-IMP-011", "PRD-INT-002"],
+  "sources": ["stock-ledger 9, 11.8 G4, 13.2"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "stock at S1",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "pieces": 2, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 20000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 2 }]
+      }
+    },
+    {
+      "step": "the earlier POS's report loaded, then loaded again",
+      "commands": [
+        {
+          "command": "earlier-pos-load",
+          "load": "E1",
+          "at": "S1",
+          "pieces": "R1:0",
+          "refused": "stock.historical-reference-source"
+        },
+        {
+          "command": "earlier-pos-load",
+          "load": "E2",
+          "at": "S1",
+          "pieces": "R1:0",
+          "refused": "stock.historical-reference-source"
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 2 }],
+        "pieces": { "R1:0-1": true }
+      }
+    }
+  ],
+  "trialBalance": { "INV": 20000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -20000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

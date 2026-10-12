@@ -2,7 +2,7 @@ import type { FormatPartView, SettingOrigin } from '@apparel-os/schemas';
 import { customType, date, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the pos module's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0058, 0060, 0066) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0058, 0060, 0070) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const pos = pgSchema('pos');
@@ -36,7 +36,7 @@ export const billingDeviceUnit = pos.table('billing_device_unit', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A change that defines a financial year, frozen as prepared (offline-counter 4.3b; migration 0066). Locked. */
+/** A change that defines a financial year, frozen as prepared (offline-counter 4.3b; migration 0070). Locked. */
 export const financialYearChange = pos.table('financial_year_change', {
   id: uuid('id').primaryKey(),
   label: text('label').notNull(),
@@ -49,7 +49,7 @@ export const financialYearChange = pos.table('financial_year_change', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A change that sets the bill-number format, frozen as prepared (offline-counter 4.3b; migration 0066). Locked. */
+/** A change that sets the bill-number format, frozen as prepared (offline-counter 4.3b; migration 0070). Locked. */
 export const billFormatChange = pos.table('bill_format_change', {
   id: uuid('id').primaryKey(),
   formatCode: text('format_code').notNull(),

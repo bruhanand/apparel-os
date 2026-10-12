@@ -60,7 +60,13 @@ import {
   type LocationInUse,
 } from './modules/organisation/index.js';
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
-import { BookStockHistory, LocationStock, SkuStockPresence, StockLedgerModule } from './modules/stock/ledger/index.js';
+import {
+  BookStockHistory,
+  LocationStock,
+  SkuStockPresence,
+  STOCK_POSTING_EVENT_KINDS,
+  StockLedgerModule,
+} from './modules/stock/ledger/index.js';
 import {
   BOOK_HELD_STOCK,
   BooksModule,
@@ -157,9 +163,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: NUMBERED_KINDS,
       useValue: numberedKinds,
     },
-    // The posting event kinds the posting modules declare (books-and-posting 7.1): none yet; `stock` · ledger declares
-    // its kinds of 7.2 with S1-F10.
-    { provide: POSTING_EVENT_KINDS, useFactory: () => checkEventKinds([] satisfies readonly PostingEventKind[]) },
+    // The posting event kinds the posting modules declare (books-and-posting 7.1): `stock` · ledger's kinds of 7.2 and
+    // their reversal kinds (S1-F10-T03).
+    {
+      provide: POSTING_EVENT_KINDS,
+      useFactory: () => checkEventKinds(STOCK_POSTING_EVENT_KINDS satisfies readonly PostingEventKind[]),
+    },
     // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
     { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).

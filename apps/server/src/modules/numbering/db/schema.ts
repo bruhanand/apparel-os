@@ -2,7 +2,7 @@ import type { SettingOrigin } from '@apparel-os/schemas';
 import { bigint, boolean, customType, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the numbering module's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0033, 0057, 0067) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0033, 0057, 0071) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the module's index.ts (code-house-rules 2).
 
 const numbering = pgSchema('numbering');
@@ -97,7 +97,7 @@ export const kindFormat = numbering.table('kind_format', {
 
 /**
  * The one row a change of the Organisation's numbering settings locks exclusively at step 1, so two such changes
- * serialise (code-house-rules 8.1, 8.2; migration 0067; S1-F12-T03 review). It holds no value.
+ * serialise (code-house-rules 8.1, 8.2; migration 0071; S1-F12-T03 review). It holds no value.
  */
 export const settingsLock = numbering.table('settings_lock', {
   id: uuid('id').primaryKey(),

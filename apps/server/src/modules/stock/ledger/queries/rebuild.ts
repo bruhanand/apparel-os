@@ -154,6 +154,59 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
       where (l.business_unit_id, l.location_id, l.condition)
         is distinct from (p.business_unit_id, p.location_id, p.condition)`,
   },
+  // Value (S1-F10-T03): each pool and transit value from its valuations, in posting order (7.10), and each FIFO pool
+  // and its transit values from their layers (11.7 "Each FIFO pool's quantity and value equal the sum of its layers").
+  ...(['quantity', 'value_paise'] as const).flatMap((column) => {
+    const delta = sql.raw(column === 'quantity' ? 'quantity_delta' : 'value_delta_paise');
+    const left = sql.raw(column === 'quantity' ? 'quantity_left' : 'value_left_paise');
+    const held = sql.raw(column === 'quantity' ? 'quantity' : 'value_paise');
+    const stored = sql.raw(`t.${column}`);
+    return [
+      {
+        table: 'cost_pool',
+        column,
+        query: sql`
+          select t.id, ${stored}::bigint as stored,
+                 coalesce((select sum(v.${delta}) from stock.valuation v where v.cost_pool_id = t.id), 0)::bigint
+                   as rebuilt
+          from stock.cost_pool t
+          where ${stored} <> coalesce((select sum(v.${delta}) from stock.valuation v where v.cost_pool_id = t.id), 0)`,
+      },
+      {
+        table: 'cost_pool',
+        column: `${column} (layers)`,
+        query: sql`
+          select t.id, ${stored}::bigint as stored,
+                 coalesce((select sum(l.${left}) from stock.cost_layer l where l.cost_pool_id = t.id), 0)::bigint
+                   as rebuilt
+          from stock.cost_pool t
+          where t.formula = 'fifo'
+            and ${stored} <> coalesce((select sum(l.${left}) from stock.cost_layer l where l.cost_pool_id = t.id), 0)`,
+      },
+      {
+        table: 'transit_value',
+        column,
+        query: sql`
+          select t.id, ${stored}::bigint as stored,
+                 coalesce((select sum(v.${delta}) from stock.valuation v where v.transit_value_id = t.id), 0)::bigint
+                   as rebuilt
+          from stock.transit_value t
+          where ${stored} <>
+            coalesce((select sum(v.${delta}) from stock.valuation v where v.transit_value_id = t.id), 0)`,
+      },
+      {
+        table: 'transit_value',
+        column: `${column} (layers)`,
+        query: sql`
+          select t.id, ${stored}::bigint as stored,
+                 (select sum(l.${held}) from stock.transit_value_layer l where l.transit_value_id = t.id)::bigint
+                   as rebuilt
+          from stock.transit_value t
+          where exists (select 1 from stock.transit_value_layer l where l.transit_value_id = t.id)
+            and ${stored} <> (select sum(l.${held}) from stock.transit_value_layer l where l.transit_value_id = t.id)`,
+      },
+    ];
+  }),
 ];
 
 /**
@@ -161,7 +214,8 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
  * and compares both ways, changing nothing. Each SKU balance and balance is rebuilt from the movement legs, and a leg's
  * key with no projection row is a difference too; each balance's accepted quantity from the acceptance records and the
  * legs; each piece's place from its last movement; each origin's covered quantity from the coverage records, with
- * coverage of an origin that has no state row; and each claim from what it claimed less its releases and events. It
+ * coverage of an origin that has no state row; each claim from what it claimed less its releases and events; and each
+ * pool and transit value from its valuations, a FIFO pool and its transit values from their layers too (S1-F10-T03). It
  * runs under its reader's actor and says when rows the reader cannot see were left out, through
  * `stock.rebuild_partial`, which answers only that (13.6; DEC-117). Run by tests and, later, a scheduled job.
  */

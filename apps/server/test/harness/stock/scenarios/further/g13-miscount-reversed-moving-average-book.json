@@ -1,0 +1,101 @@
+{
+  "id": "G13-MA-BOOK",
+  "title": "G13 and P2: step 1 miscounted, found after step 2 and reversed, under moving average with a book pool",
+  "synthetic": true,
+  "covers": ["PRD-LED-018", "PRD-MOD-011", "PRD-ACS-014", "DEC-034", "books-and-posting 16.4 P2"],
+  "sources": ["stock-ledger 7.5, 11.8 G13", "books-and-posting 16.1, 16.4 P2"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "1",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "W1", "pieces": 10, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 100000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 10, "valuePaise": 100000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "2",
+      "commands": [
+        { "command": "receipt", "receipt": "R2", "at": "S1", "pieces": 6, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R2" },
+        { "command": "pt-coverage", "receipt": "R2" },
+        {
+          "command": "pt-approval",
+          "receipt": "R2",
+          "pRatePaise": 13000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 78000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 16, "valuePaise": 178000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "reversal",
+      "commands": [
+        {
+          "command": "reversal",
+          "reversal": "V1",
+          "receipt": "R1",
+          "at": "W1",
+          "pieces": "R1:6-9",
+          "approvedPaise": 40000,
+          "movements": ["reversal"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established-reversal",
+              "component": "to-pool",
+              "debit": "PUR",
+              "credit": "INV",
+              "amountPaise": 40000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 12, "valuePaise": 138000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "W1", "quantity": 6 },
+          { "origin": "R2", "at": "S1", "quantity": 6 }
+        ],
+        "pieces": { "R1:0-5": true, "R1:6-9": false }
+      }
+    }
+  ],
+  "trialBalance": { "INV": 138000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -138000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

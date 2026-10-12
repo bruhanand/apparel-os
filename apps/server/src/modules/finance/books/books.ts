@@ -186,7 +186,10 @@ export class Books extends BooksMaintenance {
   // Posting (8, 9).
 
   /** Check postable (9.1): each item's book, period and state, map version and journal series, or its refusal. */
-  checkPostable(context: TransactionContext, request: Pick<PostRequest, 'sourceModule' | 'items'>) {
+  checkPostable(
+    context: TransactionContext,
+    request: Pick<PostRequest, 'sourceModule' | 'items'> & { readonly document?: PostRequest['document'] },
+  ) {
     return checkPostable(context, this.posting, request);
   }
 

@@ -1,0 +1,124 @@
+{
+  "id": "G3-MA-BOOK",
+  "title": "G3: a count with a shortage and a surplus; the surplus, of no known origin, is held excess, then linked to the loss",
+  "synthetic": true,
+  "covers": [
+    "PRD-STK-008",
+    "PRD-STK-009",
+    "PRD-STK-012",
+    "PRD-STK-014",
+    "PRD-LED-017",
+    "DEC-008",
+    "DEC-019",
+    "DEC-032"
+  ],
+  "sources": ["stock-ledger 6.1, 8.1 to 8.4, 11.8 G3", "books-and-posting 7.2"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": false },
+  "steps": [
+    {
+      "step": "receipt",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "quantity": 10, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 100000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 10, "valuePaise": 100000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 10 }]
+      }
+    },
+    {
+      "step": "count frozen and counted: nothing posts before approval",
+      "commands": [{ "command": "count-freeze", "count": "C1", "at": "S1", "locations": ["S1", "S1B"] }],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 10, "valuePaise": 100000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 10 }]
+      }
+    },
+    {
+      "step": "count approved: a shortage of 2 and a surplus of 1 with no known origin",
+      "commands": [
+        {
+          "command": "count-approval",
+          "count": "C1",
+          "differences": [
+            { "difference": "loss", "at": "S1", "quantity": 2 },
+            { "difference": "gain", "at": "S1B", "quantity": 1 }
+          ],
+          "approvedPaise": null,
+          "movements": ["count-difference", "count-difference"],
+          "journals": [
+            {
+              "eventKind": "stock.count-loss",
+              "component": "cost",
+              "debit": "LOSS",
+              "credit": "INV",
+              "amountPaise": 20000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 8, "valuePaise": 80000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 8 },
+          { "origin": "C1:gain", "at": "S1B", "quantity": 1 }
+        ]
+      }
+    },
+    {
+      "step": "the surplus linked to the recorded loss",
+      "commands": [
+        {
+          "command": "loss-link",
+          "link": "L1",
+          "count": "C1",
+          "quantity": 1,
+          "approvedPaise": 10000,
+          "movements": ["reversal"],
+          "journals": [
+            {
+              "eventKind": "stock.count-loss-reversal",
+              "component": "cost",
+              "debit": "INV",
+              "credit": "LOSS",
+              "amountPaise": 10000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 9, "valuePaise": 90000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 8 },
+          { "origin": "R1", "at": "S1B", "quantity": 1 }
+        ]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 90000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -100000, "COGS": 0, "LOSS": 10000, "VAR": 0 }
+}

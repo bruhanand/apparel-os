@@ -31,7 +31,7 @@ import { answered, refused, type NumberedKind, type NumberingResult } from '../d
 const SETTINGS_LOCK = lockTable('numbering', 'settings_lock');
 
 /**
- * The row a change of these settings holds exclusively at step 1 (code-house-rules 8.1, 8.2; migration 0067; S1-F12-T03
+ * The row a change of these settings holds exclusively at step 1 (code-house-rules 8.1, 8.2; migration 0071; S1-F12-T03
  * review): approving a financial year or a kind's format rechecks rows that are only ever added, so none of them can be
  * locked; holding this one row makes a second approval wait for the first and recheck what it wrote. One row for both
  * settings, since a year's approval reads the format in force and a format's approval reads the years.
@@ -40,7 +40,7 @@ export async function settingsLockTargets(context: TransactionContext): Promise<
   const rows = await context.tx.select({ id: settingsLock.id }).from(settingsLock);
   const [row] = rows;
   if (row === undefined || rows.length !== 1) {
-    throw new CommandDefect('numbering.settings_lock holds exactly one row (migration 0067)');
+    throw new CommandDefect('numbering.settings_lock holds exactly one row (migration 0071)');
   }
   return [{ table: SETTINGS_LOCK, id: row.id, mode: 'exclusive' }];
 }

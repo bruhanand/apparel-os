@@ -1,10 +1,13 @@
-import { uuidv7 } from '@apparel-os/domain';
-import { eq } from 'drizzle-orm';
-import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { known, paise, uuidv7 } from '@apparel-os/domain';
+import { eq, sql } from 'drizzle-orm';
+import { CommandDefect, insertInParts, partsOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditSource } from '../../audit/index.js';
+import type { PostItem, PostResult } from '../../finance/books/index.js';
 import {
   acceptance,
   balance,
+  costLayer,
+  costPool,
   coverage,
   hold,
   holdClaim,
@@ -20,7 +23,14 @@ import {
   reservationClaim,
   reservationEvent,
   skuBalance,
+  transitValue,
+  transitValueLayer,
+  valuation,
+  valuationLayer,
 } from './db/schema.js';
+import { postedRecordType, refusalOf, StockRefused } from './domain/request.js';
+import type { PostShare } from './domain/valuing.js';
+import type { LedgerBooks } from './ports.js';
 import type { ClaimState, ExpectedQuantity } from './domain/working.js';
 import { countFreezeChanged, holdChanged, movementsPosted, reservationChanged } from './events.js';
 import type { CheckedRequest } from './recheck.js';
@@ -38,6 +48,15 @@ export interface Written {
   readonly acceptanceIds: string[];
   /** A count freeze's expected quantities: the balances in its scope under its locks (8.1). */
   readonly expected: ExpectedQuantity[];
+  /** The valuations written (7.10). */
+  readonly valuationIds: string[];
+  /** What Post answered for the valued movements, or none when nothing was valued (books-and-posting 9.2). */
+  readonly posting: PostResult | null;
+}
+
+/** The item key of a share: the movement, with its business unit where it is not the movement's own (8.1). */
+function itemKeyOf(share: PostShare, movementUnit: string): string {
+  return share.businessUnitId === movementUnit ? share.movementId : `${share.movementId}:${share.businessUnitId}`;
 }
 
 /**
@@ -48,13 +67,14 @@ export interface Written {
  */
 export async function writeRequest(
   context: TransactionContext,
-  audit: AuditInterface,
+  dependencies: { readonly audit: AuditInterface; readonly books: LedgerBooks },
   checked: CheckedRequest,
   source: AuditSource = { kind: 'screen' },
 ): Promise<Written> {
   const { plan, working } = checked;
   const { request } = plan;
   const { entries } = working;
+  const posting = await postValues(context, dependencies.books, checked);
   const lines = new Map(request.items.map((item) => [item.lineId, item]));
   const sourceColumns = (lineId: string) => ({
     sourceModule: request.source.module,
@@ -72,23 +92,23 @@ export async function writeRequest(
     roleAssignmentId: actor.roleAssignmentId,
   };
   const times = { businessDate: plan.businessDate, occurredAt: plan.occurredAt };
-  if (
-    !entries.origins.every((origin) =>
-      lines.has(entries.movements.find((m) => m.id === origin.lastStateMovementId)?.lineId ?? ''),
-    )
-  ) {
+  // Movements by identifier, so a large document's origins find theirs at once (10.6).
+  const movementById = new Map(entries.movements.map((each) => [each.id, each]));
+  if (!entries.origins.every((origin) => lines.has(movementById.get(origin.lastStateMovementId ?? '')?.lineId ?? ''))) {
     throw new CommandDefect('An origin without its receipt movement');
   }
 
   if (entries.origins.length > 0) {
-    await context.tx.insert(receiptOrigin).values(
+    await insertInParts(
+      context,
+      receiptOrigin,
       entries.origins.map((origin) => {
         const unit = working.unit(origin.scope.siteId, origin.scope.businessUnitId);
         const sku = working.sku(origin.skuId ?? '');
-        const movementOf = entries.movements.find((each) => each.id === origin.lastStateMovementId);
+        const movementOf = movementById.get(origin.lastStateMovementId ?? '');
         return {
           id: origin.id,
-          originKind: 'receipt',
+          originKind: origin.originKind ?? 'receipt',
           parentOriginId: null,
           ...sourceColumns(movementOf?.lineId ?? ''),
           skuId: origin.skuId,
@@ -109,15 +129,18 @@ export async function writeRequest(
     );
   }
   if (entries.movements.length > 0) {
-    await context.tx.insert(movement).values(
+    await insertInParts(
+      context,
+      movement,
       entries.movements.map((each) => ({
         id: each.id,
         kind: each.kind,
         ...sourceColumns(each.lineId),
         ...actorColumns,
         approvalUseId: request.approval?.useId ?? null,
-        reversesMovementId: null,
-        correctionOfMovementId: null,
+        reversesMovementId: each.reversesMovementId ?? null,
+        returnsMovementId: each.returnsMovementId ?? null,
+        correctionOfMovementId: each.correctionOfMovementId ?? null,
         ...times,
         ...each.scope,
         brandIds: each.brandIds as string[],
@@ -134,21 +157,21 @@ export async function writeRequest(
         acceptedQuantity: leg.accepted,
         locationId: leg.locationId,
         condition: leg.condition,
-        heldAs: 'custody',
-        transitKind: null,
-        transitRef: null,
+        heldAs: leg.heldAs,
+        transitKind: leg.transitKind,
+        transitRef: leg.transitRef,
         batchCode: leg.batchCode,
         expiryDate: leg.expiryDate,
         bookId: leg.bookId,
         ...leg.scope,
       })),
     );
-    if (legs.length > 0) await context.tx.insert(movementLeg).values(legs);
+    if (legs.length > 0) await insertInParts(context, movementLeg, legs);
   }
   // Origin states: new ones with their owner (PRD-ORG-014, PRD-ORG-019); changed ones in place, under the origin's
   // exclusive lock (14.3).
   const newStates = entries.origins.map((origin) => {
-    const owner = entries.movements.find((each) => each.id === origin.lastStateMovementId)?.owner ?? {
+    const owner = movementById.get(origin.lastStateMovementId ?? '')?.owner ?? {
       kind: 'unknown' as const,
     };
     return {
@@ -169,13 +192,25 @@ export async function writeRequest(
       ...origin.scope,
     };
   });
-  if (newStates.length > 0) await context.tx.insert(receiptOriginState).values(newStates);
-  for (const origin of working.origins.values()) {
-    if (origin.isNew || !origin.stateChanged) continue;
-    await context.tx
-      .update(receiptOriginState)
-      .set({ ptRevisionId: origin.ptRevisionId, coveredQuantity: origin.coveredQuantity })
-      .where(eq(receiptOriginState.id, origin.stateId));
+  if (newStates.length > 0) await insertInParts(context, receiptOriginState, newStates);
+  // Changed states in place, set-based in parts of a bounded size, so a large document's (a 10,000-line PT approval,
+  // 10.6) are a few statements, not one per origin (S1-F10-T07). Each keeps its last movement unless one is named.
+  const changedStates = [...working.origins.values()].filter((origin) => !origin.isNew && origin.stateChanged);
+  for (const part of partsOf(changedStates, 7)) {
+    const rows = part.map(
+      (origin) =>
+        sql`(${origin.stateId}::uuid, ${origin.ptRevisionId}::uuid, ${origin.coveredQuantity}::integer,
+          ${origin.valueKnown}::boolean, ${origin.pRatePaise}::bigint, ${origin.establishedValuePaise}::bigint,
+          ${origin.lastStateMovementId}::uuid)`,
+    );
+    await context.tx.execute(sql`
+      update stock.receipt_origin_state s set pt_revision_id = v.pt_revision_id,
+        covered_quantity = v.covered_quantity, value_known = v.value_known, p_rate_paise = v.p_rate_paise,
+        established_value_paise = v.established_value_paise,
+        last_state_movement_id = coalesce(v.last_state_movement_id, s.last_state_movement_id)
+      from (values ${sql.join(rows, sql`, `)}) as v (id, pt_revision_id, covered_quantity, value_known, p_rate_paise,
+        established_value_paise, last_state_movement_id)
+      where s.id = v.id`);
   }
   for (const total of working.skuBalances.values()) {
     if (total.changed)
@@ -184,7 +219,9 @@ export async function writeRequest(
   const balances = [...working.balances.values()];
   const newBalances = balances.filter((row) => row.isNew);
   if (newBalances.length > 0) {
-    await context.tx.insert(balance).values(
+    await insertInParts(
+      context,
+      balance,
       newBalances.map((row) => ({
         id: row.id,
         skuBalanceId: row.skuBalanceId,
@@ -192,9 +229,9 @@ export async function writeRequest(
         businessUnitId: row.businessUnitId,
         locationId: row.locationId,
         condition: row.condition,
-        heldAs: 'custody',
-        transitKind: null,
-        transitRef: null,
+        heldAs: row.heldAs,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
         skuId: row.skuId,
         batchCode: row.batchCode,
         expiryDate: row.expiryDate,
@@ -218,7 +255,9 @@ export async function writeRequest(
   const pieces = [...working.pieces.values()];
   const newPieces = pieces.filter((row) => row.isNew);
   if (newPieces.length > 0) {
-    await context.tx.insert(piece).values(
+    await insertInParts(
+      context,
+      piece,
       newPieces.map((row) => ({
         id: row.id,
         code: row.code,
@@ -227,8 +266,8 @@ export async function writeRequest(
         locationId: row.locationId,
         condition: row.condition,
         heldAs: row.heldAs,
-        transitKind: null,
-        transitRef: null,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
         inCustody: row.inCustody,
         ptRevisionId: row.ptRevisionId,
         acceptedSiteId: row.acceptedSiteId,
@@ -248,6 +287,11 @@ export async function writeRequest(
       .set({
         locationId: row.locationId,
         condition: row.condition,
+        heldAs: row.heldAs,
+        transitKind: row.transitKind,
+        transitRef: row.transitRef,
+        siteId: row.siteId,
+        legalEntityId: row.legalEntityId,
         inCustody: row.inCustody,
         ptRevisionId: row.ptRevisionId,
         acceptedSiteId: row.acceptedSiteId,
@@ -273,10 +317,12 @@ export async function writeRequest(
       };
     }),
   );
-  if (movedPieces.length > 0) await context.tx.insert(movementPiece).values(movedPieces);
+  if (movedPieces.length > 0) await insertInParts(context, movementPiece, movedPieces);
   const status = { ...actorColumns, ...times };
   if (entries.coverage.length > 0) {
-    await context.tx.insert(coverage).values(
+    await insertInParts(
+      context,
+      coverage,
       entries.coverage.map((row) => ({
         id: row.id,
         ptRevisionId: row.ptRevisionId,
@@ -293,7 +339,9 @@ export async function writeRequest(
     );
   }
   if (entries.acceptances.length > 0) {
-    await context.tx.insert(acceptance).values(
+    await insertInParts(
+      context,
+      acceptance,
       entries.acceptances.map((row) => ({
         id: row.id,
         receiptOriginId: row.receiptOriginId,
@@ -308,7 +356,9 @@ export async function writeRequest(
     );
   }
   if (entries.reservations.length > 0) {
-    await context.tx.insert(reservation).values(
+    await insertInParts(
+      context,
+      reservation,
       entries.reservations.map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -320,7 +370,9 @@ export async function writeRequest(
     );
   }
   if (entries.holds.length > 0) {
-    await context.tx.insert(hold).values(
+    await insertInParts(
+      context,
+      hold,
       entries.holds.map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -345,7 +397,7 @@ export async function writeRequest(
         brandIds: row.brandIds as string[],
       })),
     );
-    if (scopes.length > 0) await context.tx.insert(holdScope).values(scopes);
+    if (scopes.length > 0) await insertInParts(context, holdScope, scopes);
   }
   const newClaims = working.claims.filter((claim) => claim.isNew);
   const claimRow = (claim: ClaimState) => ({
@@ -358,15 +410,19 @@ export async function writeRequest(
   });
   const newHoldClaims = newClaims.filter((claim) => claim.owner === 'hold');
   if (newHoldClaims.length > 0) {
-    await context.tx
-      .insert(holdClaim)
-      .values(newHoldClaims.map((claim) => ({ ...claimRow(claim), holdId: claim.headerId })));
+    await insertInParts(
+      context,
+      holdClaim,
+      newHoldClaims.map((claim) => ({ ...claimRow(claim), holdId: claim.headerId })),
+    );
   }
   const newReservationClaims = newClaims.filter((claim) => claim.owner === 'reservation');
   if (newReservationClaims.length > 0) {
-    await context.tx
-      .insert(reservationClaim)
-      .values(newReservationClaims.map((claim) => ({ ...claimRow(claim), reservationId: claim.headerId })));
+    await insertInParts(
+      context,
+      reservationClaim,
+      newReservationClaims.map((claim) => ({ ...claimRow(claim), reservationId: claim.headerId })),
+    );
   }
   for (const claim of working.claims) {
     if (claim.isNew || !claim.changed) continue;
@@ -374,7 +430,9 @@ export async function writeRequest(
     await context.tx.update(table).set({ quantity: claim.quantity }).where(eq(table.id, claim.id));
   }
   if (entries.holdReleases.length > 0) {
-    await context.tx.insert(holdRelease).values(
+    await insertInParts(
+      context,
+      holdRelease,
       entries.holdReleases.map((row) => ({
         id: row.id,
         holdId: row.holdId,
@@ -389,8 +447,25 @@ export async function writeRequest(
       })),
     );
   }
+  // The reservations the movements consumed (13.5 "End reservation"; 14.2 `reservation_event` `consumed`).
+  for (const each of working.consumed) {
+    entries.reservationEvents.push({
+      id: uuidv7(),
+      lineId: each.lineId,
+      reservationId: each.reservationId,
+      reservationKind: each.kind,
+      claimId: each.claimId,
+      event: 'consumed',
+      quantity: each.quantity,
+      pieceId: each.pieceId,
+      movementId: each.movementId ?? null,
+      scope: each.scope,
+    });
+  }
   if (entries.reservationEvents.length > 0) {
-    await context.tx.insert(reservationEvent).values(
+    await insertInParts(
+      context,
+      reservationEvent,
       entries.reservationEvents.map((row) => ({
         id: row.id,
         reservationId: row.reservationId,
@@ -407,6 +482,8 @@ export async function writeRequest(
     );
   }
 
+  await writeValues(context, checked);
+
   const written: Written = {
     movementIds: entries.movements.map((row) => row.id),
     receiptOriginIds: entries.origins.map((row) => row.id),
@@ -420,8 +497,10 @@ export async function writeRequest(
     coverageIds: entries.coverage.map((row) => row.id),
     acceptanceIds: entries.acceptances.map((row) => row.id),
     expected: working.expected,
+    valuationIds: working.valuations.map((row) => row.id),
+    posting,
   };
-  await recordAudit(context, audit, checked, written, source);
+  await recordAudit(context, dependencies.audit, checked, written, source);
   await publish(context, checked, written);
   return written;
 }
@@ -483,6 +562,13 @@ async function recordAudit(
       { kind: 'value', field: 'reservations', before: null, after: written.reservationIds },
       { kind: 'value', field: 'coverage', before: null, after: written.coverageIds },
       { kind: 'value', field: 'acceptances', before: null, after: written.acceptanceIds },
+      { kind: 'value', field: 'valuations', before: null, after: written.valuationIds },
+      {
+        kind: 'value',
+        field: 'journals',
+        before: null,
+        after: written.posting?.kind === 'posted' ? written.posting.journals.map((each) => each.journalId) : [],
+      },
     ],
     source,
     ...(request.approval === undefined ? {} : { approval: { ...request.approval } }),
@@ -527,5 +613,186 @@ async function publish(context: TransactionContext, checked: CheckedRequest, wri
       subject: subject('stock.hold', freezeId),
       payload: { holdIds: [...freezes] },
     });
+  }
+}
+
+/**
+ * The hand-off to the books (7.11; books-and-posting 8.1 to 8.3; PRD-MOD-013, DEC-087): `finance` Post, once for the
+ * request, with one item per valued movement and business unit, keyed by the movement (8.1), carrying each component's
+ * signed amount in paise. Post rechecks under the caller's locks and writes the journals in this transaction; a
+ * refusal is `posting-refused` and the command rolls back (SL-23 Outcome A; DEC-105). Nothing valued, nothing posted.
+ */
+async function postValues(
+  context: TransactionContext,
+  books: LedgerBooks,
+  checked: CheckedRequest,
+): Promise<PostResult | null> {
+  const { plan, working } = checked;
+  const { request } = plan;
+  if (working.shares.length === 0) return null;
+  const movements = new Map(working.entries.movements.map((each) => [each.id, each]));
+  const items = new Map<string, { item: Omit<PostItem, 'components'>; amounts: Map<string, number>; lineId: string }>();
+  for (const each of working.shares) {
+    const movement = movements.get(each.movementId);
+    if (movement === undefined) throw new CommandDefect('A share of a movement the request did not write');
+    const itemKey = itemKeyOf(each, movement.scope.businessUnitId);
+    const found = items.get(itemKey) ?? {
+      item: {
+        itemKey,
+        eventKind: each.eventKind,
+        businessUnitId: each.businessUnitId,
+        brandId: each.brandId,
+        businessDate: plan.businessDate,
+      },
+      amounts: new Map<string, number>(),
+      lineId: movement.lineId,
+    };
+    found.amounts.set(each.component, (found.amounts.get(each.component) ?? 0) + each.amount);
+    items.set(itemKey, found);
+  }
+  const actor = request.actor;
+  const result = await books.post(context, {
+    sourceModule: request.source.module,
+    document: {
+      recordType: postedRecordType(request.source),
+      recordId: request.source.recordId,
+      versionId: request.source.versionId,
+    },
+    actor:
+      actor.kind === 'user' ? { kind: 'user', id: actor.userId } : { kind: 'service', id: actor.serviceIdentityId },
+    ...(actor.kind === 'service-identity' && actor.onBehalfOfUserId !== undefined
+      ? { onBehalfOfUserId: actor.onBehalfOfUserId }
+      : {}),
+    items: [...items.values()].map(({ item, amounts }) => ({
+      ...item,
+      components: [...amounts].map(([component, amount]) => ({ component, amount: known(paise(amount)) })),
+    })),
+  });
+  if (result.kind === 'refused') {
+    // Post refuses naming each refused item (books-and-posting 9.2); a refusal naming none is a defect.
+    const [first] = result.items;
+    if (first === undefined) throw new CommandDefect('Post refused a request without naming a refused item');
+    throw new StockRefused(
+      refusalOf('posting-refused', items.get(first.itemKey)?.lineId, [
+        { kind: 'posting', code: first.refusal.code },
+        ...first.refusal.missing,
+      ]),
+    );
+  }
+  return result;
+}
+
+/** The pools, layers, transit values and valuations the request changed (7; 14.2), under the step 6 locks. */
+async function writeValues(context: TransactionContext, checked: CheckedRequest): Promise<void> {
+  const { working, plan } = checked;
+  const times = { businessDate: plan.businessDate, accountingDate: plan.businessDate };
+  if (working.valuations.length > 0) {
+    await insertInParts(
+      context,
+      valuation,
+      working.valuations.map((row) => ({
+        id: row.id,
+        movementId: row.movementId,
+        receiptOriginId: row.receiptOriginId,
+        costPoolId: row.poolId,
+        transitValueId: row.transitId,
+        formula: row.formula,
+        sequence: row.sequence,
+        quantityDelta: row.quantityDelta,
+        valueDeltaPaise: row.valueDelta,
+        quantityBefore: row.quantityBefore,
+        quantityAfter: row.quantityBefore + row.quantityDelta,
+        valueBeforePaise: row.valueBefore,
+        valueAfterPaise: paise(row.valueBefore + row.valueDelta),
+        eventKind: row.eventKind,
+        component: row.component,
+        ...times,
+        ...row.scope,
+      })),
+    );
+  }
+  for (const pool of working.pools.values()) {
+    if (pool.changed) {
+      await context.tx
+        .update(costPool)
+        .set({ quantity: pool.quantity, valuePaise: pool.value, lastSequence: pool.lastSequence })
+        .where(eq(costPool.id, pool.id));
+    }
+    const scope = { siteId: pool.siteId, legalEntityId: pool.legalEntityId, brandId: pool.brandId };
+    const added = pool.layers.filter((layer) => layer.isNew);
+    if (added.length > 0) {
+      await insertInParts(
+        context,
+        costLayer,
+        added.map((layer) => ({
+          id: layer.id,
+          costPoolId: pool.id,
+          poolFormula: pool.formula,
+          enteredSequence: layer.enteredSequence,
+          enteredAt: layer.enteredAt,
+          quantityIn: layer.quantityIn,
+          quantityLeft: layer.quantityLeft,
+          valueInPaise: layer.valueIn,
+          valueLeftPaise: layer.valueLeft,
+          fromLayerId: layer.fromLayerId,
+          receiptOriginId: layer.receiptOriginId,
+          fromValuationId: layer.fromValuationId,
+          ...scope,
+        })),
+      );
+    }
+    for (const layer of pool.layers) {
+      if (layer.isNew || !layer.changed) continue;
+      await context.tx
+        .update(costLayer)
+        .set({ quantityLeft: layer.quantityLeft, valueLeftPaise: layer.valueLeft })
+        .where(eq(costLayer.id, layer.id));
+    }
+  }
+  const valuationLayers = working.valuations.flatMap((row) =>
+    row.layers.map((layer) => ({
+      id: uuidv7(),
+      valuationId: row.id,
+      costLayerId: layer.layerId,
+      pieceId: layer.pieceId,
+      quantity: layer.quantity,
+      valuePaise: layer.value,
+      ...row.scope,
+    })),
+  );
+  if (valuationLayers.length > 0) await insertInParts(context, valuationLayer, valuationLayers);
+  for (const transit of working.transits.values()) {
+    if (transit.changed) {
+      await context.tx
+        .update(transitValue)
+        .set({ quantity: transit.quantity, valuePaise: transit.value })
+        .where(eq(transitValue.id, transit.id));
+    }
+    const added = transit.layers.filter((layer) => layer.isNew);
+    if (added.length > 0) {
+      await insertInParts(
+        context,
+        transitValueLayer,
+        added.map((layer) => ({
+          id: layer.id,
+          transitValueId: transit.id,
+          sourceLayerId: layer.sourceLayerId,
+          quantity: layer.quantity,
+          valuePaise: layer.value,
+          siteId: transit.scope.siteId,
+          storeId: transit.scope.storeId,
+          businessUnitId: transit.scope.businessUnitId,
+          legalEntityId: transit.scope.legalEntityId,
+          brandId: transit.scope.brandId,
+        })),
+      );
+    }
+    for (const layer of transit.layers) {
+      if (layer.isNew || !layer.changed) continue;
+      await context.tx
+        .update(transitValueLayer)
+        .set({ quantity: layer.quantity, valuePaise: layer.value })
+        .where(eq(transitValueLayer.id, layer.id));
+    }
   }
 }

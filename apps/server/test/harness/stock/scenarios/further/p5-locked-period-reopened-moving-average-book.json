@@ -1,0 +1,101 @@
+{
+  "id": "P5-MA-BOOK",
+  "title": "P5: a sale dated in a Locked period is refused; with a reopening that names the bill it posts; the period is Locked again",
+  "synthetic": true,
+  "covers": [
+    "PRD-LED-009",
+    "PRD-LED-019",
+    "PRD-LED-020",
+    "PRD-INT-004",
+    "DEC-106",
+    "DEC-107",
+    "books-and-posting 16.4 P5"
+  ],
+  "sources": ["books-and-posting 4.2, 4.3, 10, 16.4 P5"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "stock at S1",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "pieces": 2, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 20000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "periods": ["Open"]
+      }
+    },
+    {
+      "step": "the period locked; the sale dated in it is refused",
+      "commands": [
+        { "command": "lock-period" },
+        { "command": "sale", "sale": "B1", "at": "S1", "pieces": "R1:0", "refused": "stock.posting-refused" }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "periods": ["Locked"],
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 2 }]
+      }
+    },
+    {
+      "step": "a reopening that names the bill",
+      "commands": [{ "command": "reopen-period", "sale": "B1" }],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "periods": ["Reopened"]
+      }
+    },
+    {
+      "step": "the bill posts; the period shows Locked again",
+      "commands": [
+        {
+          "command": "sale",
+          "sale": "B1",
+          "at": "S1",
+          "pieces": "R1:0",
+          "retry": true,
+          "movements": ["sale-issue"],
+          "journals": [
+            {
+              "eventKind": "stock.sale-issue",
+              "component": "cost",
+              "debit": "COGS",
+              "credit": "INV",
+              "amountPaise": 10000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 1, "valuePaise": 10000 }],
+        "transitPaise": 0,
+        "cogsPaise": 10000,
+        "periods": ["Locked"]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 10000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -20000, "COGS": 10000, "LOSS": 0, "VAR": 0 }
+}
