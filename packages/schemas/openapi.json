@@ -60634,7 +60634,7 @@
         }
       }
     },
-    "/api/access/recovery": {
+    "/api/access/hold": {
       "get": {
         "operationId": "readRecoveryStatus",
         "x-access": {
@@ -67633,7 +67633,7 @@
         }
       }
     },
-    "/api/access/recovery/series/{seriesId}/reconcile": {
+    "/api/access/hold/series/{seriesId}/reconcile": {
       "post": {
         "operationId": "reconcileSeriesAfterRestore",
         "x-access": {
@@ -68552,7 +68552,7 @@
         }
       }
     },
-    "/api/access/recovery/validations": {
+    "/api/access/hold/validations": {
       "post": {
         "operationId": "recordRecoveryValidation",
         "x-access": {
@@ -69018,7 +69018,7 @@
         }
       }
     },
-    "/api/access/recovery/reopen": {
+    "/api/access/hold/lift": {
       "post": {
         "operationId": "reopenAfterRestore",
         "x-access": {

@@ -1659,7 +1659,7 @@ export const routes = {
   // `kernel.recovery_event`; each command runs while the hold is on, under Authorise, with its audit record.
   readRecoveryStatus: defineRoute({
     method: 'GET',
-    path: '/api/access/recovery',
+    path: '/api/access/hold',
     access: { kind: 'action', action: 'view', recordType: 'kernel.recovery_event' },
     command: false,
     response: recoveryStatusSchema,
@@ -1667,7 +1667,7 @@ export const routes = {
   }),
   reconcileSeriesAfterRestore: defineRoute({
     method: 'POST',
-    path: '/api/access/recovery/series/{seriesId}/reconcile',
+    path: '/api/access/hold/series/{seriesId}/reconcile',
     params: seriesParamSchema,
     access: { kind: 'action', action: 'create', recordType: 'configuration.series_reconciliation' },
     command: true,
@@ -1680,7 +1680,7 @@ export const routes = {
   }),
   recordRecoveryValidation: defineRoute({
     method: 'POST',
-    path: '/api/access/recovery/validations',
+    path: '/api/access/hold/validations',
     access: { kind: 'action', action: 'create', recordType: 'configuration.recovery_validation' },
     command: true,
     body: recoveryValidationDraftSchema,
@@ -1692,7 +1692,7 @@ export const routes = {
   }),
   reopenAfterRestore: defineRoute({
     method: 'POST',
-    path: '/api/access/recovery/reopen',
+    path: '/api/access/hold/lift',
     access: { kind: 'action', action: 'create', recordType: 'configuration.reopening' },
     command: true,
     body: recoveryReopeningDraftSchema,
