@@ -94,6 +94,34 @@ describe('a period locked against stock postings (books-and-posting 4.5; 15 test
   }, 600_000);
 });
 
+describe('a map made invalid between Plan and the locks (books-and-posting 6.2, 10 step 2; 15 test 8)', () => {
+  it('POL-09.12 PRD-INT-004 an account retired by a same-day version after Plan refuses the sale under the locks, and nothing commits', async () => {
+    const { harness, fixtures, run } = await stocked();
+    // A day on, so a version of the account can start on the sale's own date (no version starts in the past, 6.3).
+    harness.advanceDays(1);
+    const before = await counts(harness, fixtures.bookId);
+    const planned = gate();
+    const goOn = gate();
+    const sending = run.send(await run.prepared({ command: 'sale', sale: 'B1', at: 'S1', pieces: 'R1:0' }), {
+      afterPlan: async () => {
+        planned.open();
+        await goOn.wait;
+      },
+    });
+    // Check postable at Plan found the sale's map valid; then COGS, an account on its lines, is retired from today
+    // (6.2 condition 3), so the map is no longer valid when Post checks again under the locks (10 step 2).
+    await planned.wait;
+    await harness.retireAccount(fixtures.accounts.COGS);
+    goOn.open();
+    const sent = await sending;
+    expect(refusalOf(sent)?.code).toBe('stock.posting-refused');
+    expect(JSON.stringify(refusalOf(sent))).toContain('finance.map-account-not-in-force');
+    expect(await counts(harness, fixtures.bookId)).toEqual(before);
+    await rebuilds(harness, harness.preparer.user.id);
+    await invariantsHold(harness.database);
+  }, 600_000);
+});
+
 describe('a document changed after its approval (access-and-approvals 9.6, 9.7; PRD-ACS-007; stock-ledger 11.9)', () => {
   it('PRD-ACS-007 DEC-097 posting a version the decision did not approve is refused, nothing commits and the decision stays unused', async () => {
     const harness = new StockHarness();

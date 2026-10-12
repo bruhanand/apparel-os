@@ -251,6 +251,35 @@ export class ValuedWorld extends StockWorld {
     decided(await this.setup.decide(change.requestId ?? '', change.versionId));
   }
 
+  /** Moves the world's clocks on, as days pass: the setup's and the ledger commands' (SYNTHETIC time). */
+  advanceDays(days: number): void {
+    this.setup.advanceDays(days);
+    this.offsetMs += days * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * Retires an account by a version in force from today, prepared by Accounts and approved by a different person with
+   * the CA's evidence (books-and-posting 3.1, 6.3), so a map naming it is no longer valid (6.2 condition 3).
+   */
+  async retireAccount(accountId: string): Promise<void> {
+    const read = await this.setup.run(this.setup.preparer.id, (c) =>
+      this.setup.books.readAccount(c, accountId, this.setup.today()),
+    );
+    if (read === undefined) throw new Error(`No account ${accountId}`);
+    const change = recorded(
+      await this.setup.asPreparerDo((c, p) =>
+        this.setup.books.prepareAccountVersion(c, p, accountId, {
+          name: read.versions.at(-1)?.name ?? '',
+          retired: true,
+          origin: 'synthetic',
+          validFrom: this.setup.today(),
+          ...(read.versionToken === undefined ? {} : { versionToken: read.versionToken }),
+        }),
+      ),
+    );
+    await this.inForce(change, ACCOUNT_TYPE);
+  }
+
   /** A SYNTHETIC map for an event kind in a book, in force from today (6.1, 6.3). */
   async map(bookId: string, accounts: Record<SyntheticAccount, string>, eventKind: string): Promise<void> {
     const lines = SYNTHETIC_MAPS.filter(([kind]) => kind === eventKind).flatMap(([, component, debit, credit]) => [
