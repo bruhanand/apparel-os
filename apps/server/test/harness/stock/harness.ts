@@ -598,17 +598,12 @@ export class StockHarness extends ValuedWorld {
     ]);
     const signed = ok(
       await this.run(signer.id, async (context) =>
-        configuration.recordSignature(
-          context,
-          { userId: signer.id, roleAssignmentId: signerGrant.assignmentId },
-          9,
-          {
-            signatory: syntheticName('policy 9 signatory'),
-            signedOn: this.setup.today(),
-            origin: 'synthetic',
-            evidence: [await writeSyntheticStoredFile(this.database, signer.id)],
-          },
-        ),
+        configuration.recordSignature(context, { userId: signer.id, roleAssignmentId: signerGrant.assignmentId }, 9, {
+          signatory: syntheticName('policy 9 signatory'),
+          signedOn: this.setup.today(),
+          origin: 'synthetic',
+          evidence: [await writeSyntheticStoredFile(this.database, signer.id)],
+        }),
       ),
     );
     const validated = ok(
