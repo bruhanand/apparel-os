@@ -46,11 +46,12 @@ Separate connections; the first transaction is held under its locks, the second 
 
 | Failure | Where | Outcome |
 | --- | --- | --- |
-| No valid posting map | Scenario P4; `stock-posting-job.int.test.ts` | Nothing commits; the exception survives; a replay raises no second one; after the map is approved the document posts once. For a queued posting, the decision stays unused and a retry with it posts once |
+| No valid posting map | Scenario P4 (at Plan); `stock-harness-failures.int.test.ts` (under the locks: an account retired by a same-day version between Plan and the locks; S1-F10 review); `stock-posting-job.int.test.ts` | Nothing commits; the exception survives; a replay raises no second one; after the map is approved the document posts once. For a queued posting, the decision stays unused and a retry with it posts once |
 | A queued posting job that fails | `stock-posting-job.int.test.ts` | Nothing posts; its decision stays unused (`DEC-097`) |
 | A period locked while a posting waits | `stock-harness-failures.int.test.ts` | The lock waits for the sale in flight; a sale after it, or one planned before it, is refused and commits nothing |
 | The same key with changed content | `stock-harness-concurrency.int.test.ts` | Refused and kept |
 | A document changed after approval | `stock-harness-failures.int.test.ts`, `stock-posting-job.int.test.ts` | Refused; renewed approval of the new version posts |
+| A transfer above its approver's cost limit, or approved on an Unknown value | `stock-harness-failures.int.test.ts` (S1-F10 review) | The ledger values the reservation at its pool's cost of the units (product owner, 11 Oct 2026): above the approver's limit the approver cannot decide it; approved on Unknown it is refused under the lock; within the limit it is written |
 
 ## 6. Books-and-posting 15 tests owed by S1-F10
 
@@ -58,7 +59,7 @@ Separate connections; the first transaction is held under its locks, the second 
 | --- | --- |
 | 1 (exit check) | `stock-harness-story.int.test.ts` |
 | 4, 5, 7 | `stock-ledger-valuation.int.test.ts` (`S1-F10-T03`) |
-| 8 | Scenario P4; `stock-posting-job.int.test.ts` |
+| 8 | Scenario P4; `stock-harness-failures.int.test.ts` (under the locks); `stock-posting-job.int.test.ts` |
 | 9 | `stock-harness-failures.int.test.ts` (with a stock posting); `period-close.int.test.ts` (`S1-F09-T03`) |
 | 16 | `stock-posting-large.int.test.ts`: one journal for the book, kind and date, 10,000 posting-source rows, 10,000 movements, the decision used once |
 | 17 | `stock-posting-job.int.test.ts` |
@@ -76,17 +77,21 @@ Recorded, not judged: no target is set here. The binding measurement is the coun
 - **The job:** 15.6 s from the click to its end. Plan 8.6 s (no stock lock held), Lock 0.25 s, Hold periods and the series 0.02 s, Recheck 1.3 s, Write 4.3 s: about 6 s under the pool and series locks. Before the changes of `S1-F10-T07` (stock-ledger 13.12) it took 94 s, about 48 s under the locks.
 - **The bills overlapping the job:** same SKUs median 91 ms, 95th percentile 1,021 ms, slowest 1,403 ms; the other SKU median 90 ms, 95th percentile 199 ms, slowest 1,278 ms. Outside the job the same tills ran at median 60 ms.
 - **Timeouts:** 25 of 548 bills reached the runtime role's 1 s lock limit and rolled back. Same-SKU bills wait on the pools; other-SKU bills wait on the book's journal series, which the job holds from step 8 until it commits (GC4-4). Any posting job whose locked part lasts more than 1 s times out the postings of its book that arrive meanwhile.
-- **Rebuild and compare** over the whole database at this volume reached the 5 s statement limit (8.7 s); the large test checks the 8.3 reconciliation and the raw invariants instead.
+- **Rebuild and compare** over the whole database at this volume reached the 5 s statement limit (8.7 s); the large test checks the 8.3 reconciliation and the raw invariants instead (RR-512).
+- **Accepted for stage 1** by the product owner, 11 Oct 2026, with this measurement recorded, and with it T07's "Done when" on blocking. The fix (SL-11 chunked posting, a shorter locked part, or the journal-series hold, GC4-4) is decided before live counter sales in stage 4, measured on the real counter (RR-189, RR-504). Plan's 8.6 s is RR-513.
 
 ## 9. Isolation
 
-- A seller scoped to one Store sells at it under a book pool and under a Site pool, and afterwards reads no pool, layer or valuation row and no other place's stock; a sale at W1 by that seller is refused and commits nothing (`stock-harness-isolation.int.test.ts`; stock-ledger 14.3 "Pool admission").
+- Pool admission (stock-ledger 14.3) approved by the product owner, 11 Oct 2026, as designed. A seller scoped to one Store sells at it under a book pool and under a Site pool, and afterwards reads no pool, layer or valuation row and no other place's stock; a sale at W1 by that seller is refused and commits nothing (`stock-harness-isolation.int.test.ts`; stock-ledger 14.3 "Pool admission").
 - A reader scoped to S1 reads only S1's journal lines, and the trial balance says partial (books-and-posting 15 test 18).
 - The second synthetic Organisation's database holds none of the first's movements, journals or pools.
 
-## 10. For the product owner to look at
+## 10. The product owner's answers (11 Oct 2026)
 
-1. Section 8: whether bills timing out behind a large posting's locked part is acceptable for now, given RR-189 and RR-200, or needs SL-11 or a change to the lock limit, the journal series (GC4-4) or the job's locked work. T07's "Done when" says the job finishes "without blocking the concurrent sales of the test"; it finishes, but some bills during its locked part time out.
-2. Pool admission (stock-ledger 14.3): the design's write rule that lets a seller scoped to one Store or unit post against a pool it cannot read, while still not reading it.
-3. The posting queue (code-house-rules 12.9): one at a time per book through pg-boss's singleton key and its group.
-4. A CI run of the branch, browser journeys included, before acceptance.
+1. Section 8: stage 1 accepted with the measurement recorded; the fix is decided before live counter sales in stage 4 (RR-504).
+2. Pool admission (stock-ledger 14.3): approved as designed.
+3. The pass-through at an agreed cost, with a supplier-owned PT approved at P RATE × units: kept as a labelled working assumption until the CA validates SL-4 (RR-182, RR-505); no live caller sends an agreed cost before then (stock-ledger 13.11 "Pass-through").
+4. Disposal: only goods under a quarantine, expiry or write-off hold, and the disposal's approval releases that hold (stock-ledger 13.11).
+5. A reservation is valued at its pool's cost for its approval, so cost limits route a transfer or a supplier return (stock-ledger 13.10 "Value for approval"; built in the S1-F10 review).
+
+The posting queue (code-house-rules 12.9) and a CI run of the branch before merging remain the product owner's to look at.
