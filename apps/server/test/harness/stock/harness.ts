@@ -21,7 +21,11 @@ import {
   type TransactionContext,
 } from '../../../src/kernel/index.js';
 import type { ApprovalRule } from '../../../src/modules/access/index.js';
+import { Audit } from '../../../src/modules/audit/index.js';
+import { Configuration } from '../../../src/modules/configuration/index.js';
 import type { ExceptionTypeRegistration } from '../../../src/modules/exceptions/index.js';
+import { postingConfigurationCheck } from '../../../src/modules/finance/books/index.js';
+import { policyEvidence } from '../../../src/modules/files-imports/index.js';
 import {
   catalogueSkus,
   organisationPlaces,
@@ -42,6 +46,7 @@ import { syntheticCode, syntheticName } from '../../fixtures/synthetic.js';
 import { syntheticTimezone, writeSyntheticUser, type SyntheticUser } from '../../support/access.js';
 import { grantSynthetic } from '../../support/grants.js';
 import { recorded } from '../../support/books.js';
+import { writeSyntheticStoredFile } from '../../support/tax-rules.js';
 import { approved, decided } from '../../support/organisation.js';
 import { allowVerifier, connect } from '../../support/postgres.js';
 import {
@@ -221,6 +226,8 @@ export interface HarnessFixtures extends SyntheticCombination {
   readonly s1b: At;
   /** A second Store S2 in the same book, where asked for (S1-F10-T07: sales at two Stores under one pool). */
   readonly s2?: At;
+  /** Policy 9 recorded Signed and its values validated, as labelled synthetic status (spec 3.3; DM-6). */
+  readonly policyNine: { readonly signatureId: string; readonly validationId: string };
 }
 
 type Outcome<A> = { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } };
@@ -558,11 +565,66 @@ export class StockHarness extends ValuedWorld {
     };
     await this.routePostingRefused(combination.w1.siteId, HARNESS_POSTING_REFUSED.code);
     await this.routePostingRefused(combination.s1.siteId, HARNESS_POSTING_REFUSED.code);
-    if (options.secondStore !== true) return { ...combination, sku, s1b };
+    const policyNine = await this.policyNineSigned();
+    if (options.secondStore !== true) return { ...combination, sku, s1b, policyNine };
     const site = await this.site('retail-site');
     const s2 = await this.unit(combination, site, 'whole-store', await this.store(site));
     await this.routePostingRefused(site, HARNESS_POSTING_REFUSED.code);
-    return { ...combination, sku, s1b, s2 };
+    return { ...combination, sku, s1b, s2, policyNine };
+  }
+
+  /**
+   * Policy 9 recorded Signed, with its values validated by a different person, as labelled synthetic status (S1-F10
+   * spec 3.3; domain-model DM-6; code-house-rules 12.14; DEC-092), through the real configuration interface with the
+   * finance books' policy 9 check registered: Accounts, who entered the books' accounts, maps and settings, records the
+   * signature; the approver, who entered none of them, validates them. The evidence is a SYNTHETIC stored file written
+   * as a fixture (code-house-rules 11.2). Nothing is SYNTHETIC-signed outside tests (configuration.origin-not-allowed).
+   */
+  private async policyNineSigned(): Promise<{ signatureId: string; validationId: string }> {
+    const audit = new Audit(this.log.logger);
+    const configuration = new Configuration({
+      audit,
+      environment: { name: 'local' },
+      evidence: policyEvidence(audit),
+    });
+    configuration.registerCheck(postingConfigurationCheck);
+    const signer = this.setup.preparer;
+    const validator = this.setup.approver;
+    const signerGrant = await grantSynthetic(this.database, { kind: 'user', id: signer.id }, [
+      { recordType: 'configuration.policy_status', action: 'create' },
+    ]);
+    const validatorGrant = await grantSynthetic(this.database, { kind: 'user', id: validator.id }, [
+      { recordType: 'configuration.policy_validation', action: 'create' },
+    ]);
+    const signed = ok(
+      await this.run(signer.id, async (context) =>
+        configuration.recordSignature(
+          context,
+          { userId: signer.id, roleAssignmentId: signerGrant.assignmentId },
+          9,
+          {
+            signatory: syntheticName('policy 9 signatory'),
+            signedOn: this.setup.today(),
+            origin: 'synthetic',
+            evidence: [await writeSyntheticStoredFile(this.database, signer.id)],
+          },
+        ),
+      ),
+    );
+    const validated = ok(
+      await this.run(validator.id, async (context) =>
+        configuration.recordValidation(
+          context,
+          { userId: validator.id, roleAssignmentId: validatorGrant.assignmentId },
+          9,
+          { origin: 'synthetic', evidence: [await writeSyntheticStoredFile(this.database, validator.id)] },
+        ),
+      ),
+    );
+    // Signed and validated: policy 9 itself lacks nothing (DEC-092; PRD-SEC-017).
+    const missing = await this.run(signer.id, (context) => configuration.policyMissing(context, 9));
+    if (missing.length > 0) throw new Error(`policy 9 still lacks ${JSON.stringify(missing)}`);
+    return { signatureId: signed.signatureId, validationId: validated.validationId };
   }
 
   protected override exceptionTypes(): ExceptionTypeRegistration[] {
