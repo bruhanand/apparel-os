@@ -1856,7 +1856,19 @@ const liveDocument = await fixtureCommand((context) => writeTestDocument(context
 // handed one event, so its job exhausts its SYNTHETIC retries under the worker below.
 const operationsViewer = await provisionUser('BROWSER-OPERATIONS', 'P-ADM', [
   { recordType: 'kernel.job', action: 'view' },
+  // And backup status (S1-F14-T02): one SYNTHETIC complete backup recorded as the backup command records it, written
+  // as the migration role, as a fixture (code-house-rules 11.2); no backup is taken here.
+  { recordType: 'kernel.backup_record', action: 'view' },
 ]);
+const backupFixture = await connect(settingsDatabase, 'migration');
+const syntheticBackupId = uuidv7();
+await backupFixture.query(
+  `insert into kernel.backup_record (id, backup_id, environment, code_commit, snapshot_at, backup_key_version,
+     manifest_sha256, result, failures, finished_at)
+   values ($1, $2, 'local', null, now() - interval '1 minute', $3, $4, 'complete', '{}', now())`,
+  [uuidv7(), syntheticBackupId, '5e'.repeat(16), '5e'.repeat(32)],
+);
+await backupFixture.end();
 await writeSyntheticServiceIdentity(settingsDatabase, SYNTHETIC_FAILING_IDENTITY, [syntheticAlwaysFails.authorises]);
 // The failing consumer's one event: the worker above has registered it (code-house-rules 12.8).
 const settingsForWorker = await router.resolveForSignIn(settingsCode);
@@ -2397,6 +2409,7 @@ writeFileSync(
     operationsView: {
       organisationCode: settingsCode,
       viewer: credentialsOf(operationsViewer),
+      backupId: syntheticBackupId,
       jobKind: syntheticAlwaysFails.name,
     },
     // S1-F05-T01: the Admin who prepares a limit for the booking approver's role, the person who approves it, and the

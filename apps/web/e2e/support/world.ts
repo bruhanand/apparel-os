@@ -77,11 +77,15 @@ export interface SyntheticWorld {
     readonly typeCode: string;
     readonly link: { readonly module: string; readonly recordType: string; readonly recordId: string };
   };
-  /** The operations view journey (S1-F08-T04): a person holding view on `kernel.job`, and the failing job's kind. */
+  /**
+   * The operations view journey (S1-F08-T04, S1-F14-T02): a person holding view on `kernel.job` and
+   * `kernel.backup_record`, the failing job's kind, and the SYNTHETIC complete backup recorded for the Organisation.
+   */
   readonly operationsView: {
     readonly organisationCode: string;
     readonly viewer: EnrolledUser;
     readonly jobKind: string;
+    readonly backupId: string;
   };
   /**
    * The evidence journey (S1-F08-T03): an Operations user who owns one SYNTHETIC exception, by its code, and an

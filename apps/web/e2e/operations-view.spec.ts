@@ -3,7 +3,8 @@ import { Authenticator } from './support/authenticator';
 import { signIn } from './support/journey';
 import { readWorld } from './support/world';
 
-// S1-F08-T04: the operations view (code-house-rules 12.9; module-map 4.1; PRD-SEC-013). A person holding view on
+// S1-F08-T04, S1-F14-T02: the operations view (code-house-rules 12.9; module-map 4.1; backup-and-restore 10.2;
+// PRD-SEC-013). A person holding view on
 // `kernel.job` through a SYNTHETIC role opens Setup › Operations view and sees the failed SYNTHETIC job, which the
 // worker failed for good once it exhausted its SYNTHETIC retries; the list refreshes live when it fails. Every value is
 // SYNTHETIC.
@@ -35,4 +36,9 @@ test('PRD-SEC-013 an authorised operator opens the operations view and sees a fa
   await expect(row.getByText('Failed each time it was tried')).toBeVisible();
   await expect(row.getByText('CommandTimedOut')).toBeVisible();
   await expect(row.getByText('kernel.synthetic-work-requested')).toBeVisible();
+  // S1-F14-T02: backup status, for a person who also holds view on `kernel.backup_record` (PRD-SEC-013).
+  await expect(page.getByRole('heading', { level: 2, name: 'Backups', exact: true })).toBeVisible();
+  await expect(page.getByText(/^Last complete backup taken from the data as it was at/)).toBeVisible();
+  const backup = page.getByRole('row').filter({ hasText: world.backupId });
+  await expect(backup.getByText('Completed', { exact: true })).toBeVisible();
 });
