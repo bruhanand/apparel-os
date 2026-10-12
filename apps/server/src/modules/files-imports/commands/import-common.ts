@@ -22,6 +22,7 @@ import {
 } from '../../../kernel/index.js';
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import type { CountSets } from '../contracts/count-sets.js';
 import type { HandlerDocument, ImportHandler, ImportHandlers, ImportReview } from '../contracts/import-handlers.js';
@@ -58,6 +59,8 @@ export interface ImportDependencies {
   readonly caps: IntakeCaps;
   /** The count side of a comparison run (10.3; S1-F13-T01), from the composition root. */
   readonly counts: CountSets;
+  /** The policy gate: Available for publishing an opening batch (4.2, 10.1; module-map 4.4; S1-F13-T03). */
+  readonly configuration: ConfigurationInterface;
 }
 
 /** The person a route found: who, in which Organisation, under which request. */

@@ -560,6 +560,17 @@ export const inboxCodes = declareCodes({
  *   customer contact (section 11; DEC-052); `missing` names them. Upload it again without them.
  * - `files-imports.layout-needed-on-test-setup`: on the test setup, a sheet of the file that holds cells fits no
  *   Confirmed layout version, so its columns cannot be known to hold no customer contact; `missing` names it.
+ * Opening batches and queued publishing (imports-and-opening-data 4.2, 10.1, 10.6; S1-F13-T03):
+ *
+ * - `files-imports.cutover-complete`: the unit's switch has completed its day-close cutover, so no opening batch is
+ *   started or published for it; a later correction is a live correction (PRD-LIF-011). `missing` names the switch.
+ * - `files-imports.publish-queued`: a request to post the batch already waits for its job; `missing` names it.
+ * - `files-imports.nothing-to-publish`: every document of the batch is published or excluded.
+ * - `files-imports.several-books`: a queued publish posts in one book's queue, and the documents post into several;
+ *   `missing` names the books.
+ * - `files-imports.publish-request-not-found`, `files-imports.publish-request-answered`,
+ *   `files-imports.publish-request-superseded`: a queued publish's job finds its request gone, answered already, or
+ *   followed by a later one.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -624,6 +635,14 @@ export const filesImportsCodes = declareCodes({
   'files-imports.comparison-set-wrong': 'refused',
   'files-imports.comparison-side-masked': 'not-authorised',
   'files-imports.comparison-places-differ': 'refused',
+  // Opening batches and queued publishing (imports-and-opening-data 4.2, 10.1, 10.6; S1-F13-T03).
+  'files-imports.cutover-complete': 'refused',
+  'files-imports.publish-queued': 'refused',
+  'files-imports.nothing-to-publish': 'refused',
+  'files-imports.several-books': 'refused',
+  'files-imports.publish-request-not-found': 'not-found',
+  'files-imports.publish-request-answered': 'refused',
+  'files-imports.publish-request-superseded': 'refused',
 });
 
 /**

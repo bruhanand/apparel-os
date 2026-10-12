@@ -1,5 +1,13 @@
 // Public interface of the files-imports module (module-map 4.7). Other code imports only from here.
-export { FILES_IMPORTS, FILES_IMPORTS_ENVIRONMENT, FilesImportsModule } from './files-imports.module.js';
+export {
+  FILES_IMPORTS,
+  FILES_IMPORTS_ENVIRONMENT,
+  FilesImportsModule,
+  QUEUED_PUBLISHING,
+} from './files-imports.module.js';
+// The queued publish a posting consumer calls, and the opening-publishing operation (10.6, 4.2; S1-F13-T03).
+export type { QueuedAnswer, QueuedPublisher, QueuedPublishingInterface } from './commands/publish-queued.js';
+export { OPENING_PUBLISHING } from './domain/opening-gate.js';
 export type { FilesImportsInterface } from './files-imports.js';
 export { decisionEvidence, policyEvidence } from './files-imports.js';
 export { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
@@ -31,6 +39,8 @@ export type {
   ImportComparison,
   ImportHandler,
   OpeningKind,
+  OpeningSwitch,
+  QueuedPosting,
   StockComparison,
   ImportMeasure,
   ImportPlace,
@@ -45,7 +55,7 @@ export type { EffectiveValue } from './domain/report.js';
 // The approval rules and decision effects of layout, mapping and mapping rule versions (imports-and-opening-data 6.4;
 // S1-F06-T03), and the event a confirmation emits (13.3).
 export { filesImportsApprovals } from './commands/effects.js';
-export { importFailed, importPublished, mappingConfirmed } from './events.js';
+export { importFailed, importPublished, mappingConfirmed, publishRequested } from './events.js';
 export { IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY } from './domain/batch-code.js';
 export { filesImportsRestoreParticipant } from './restore-participant.js';
 // Its after-restore check of every stored file and attachment, and the objects with no record (backup-and-restore 5.1;

@@ -689,6 +689,13 @@
       "design": "imports-and-opening-data 7.4, 14, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
     },
     {
+      "table": "files_imports.publish_request",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 3.2, 10.6, 15.1; access-and-approvals 7.2, 9.8; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "files_imports.comparison_run",
       "class": "scoped",
       "marks": ["append-only"],

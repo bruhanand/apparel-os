@@ -8,6 +8,8 @@ import { syntheticIdentifier } from './synthetic.js';
 export const SYNTHETIC_MODULE = syntheticIdentifier('stock-ledger');
 /** The record type the synthetic caller posts from (13.2). */
 export const SYNTHETIC_RECORD_TYPE = 'document';
+/** The record type the synthetic caller posts opening counts from, with the import kind opening balance (S1-F13-T03). */
+export const SYNTHETIC_OPENING_RECORD_TYPE = 'opening';
 /** The synthetic document's record type in the permission registry: no scope fact, like the harness's (15.2). */
 export const SYNTHETIC_DOCUMENT_TYPE = `${SYNTHETIC_MODULE}.document`;
 /** A synthetic approval action type with no value basis (15.3). */

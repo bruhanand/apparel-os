@@ -1,4 +1,4 @@
-import { Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Module, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import {
   COMMAND_RUNNER,
   CommandRunnerModule,
@@ -19,8 +19,11 @@ import {
   type OrganisationKeys,
 } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ImportDependencies } from './commands/import-common.js';
+import { QueuedPublishing } from './commands/publish-queued.js';
+import { OPENING_PUBLISHING } from './domain/opening-gate.js';
 import { COUNT_SETS, type CountSets } from './contracts/count-sets.js';
 import { IMPORT_HANDLERS, type ImportHandlers } from './contracts/import-handlers.js';
 import { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
@@ -40,6 +43,11 @@ export const FILES_IMPORTS = 'files-imports.FilesImports';
 export const FILES_IMPORTS_ENVIRONMENT = 'files-imports.Environment';
 /** The token of the caps at intake, read at start from the same variables (9.3; code-house-rules 12.14; S1-F06-T02). */
 const INTAKE_CAPS = 'files-imports.IntakeCaps';
+/**
+ * The token of the queued publish (imports-and-opening-data 10.6; S1-F13-T03), which a posting consumer calls in its
+ * step's transaction; in stage 1 only the tests' consumer does.
+ */
+export const QUEUED_PUBLISHING = 'files-imports.QueuedPublishing';
 
 /**
  * The files-imports module (module-map 4.7): tier 1, uses `access`, `audit`, `numbering` and `kernel`. It holds the
@@ -77,6 +85,7 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         env: Readonly<Record<string, string | undefined>>,
         caps: IntakeCaps,
         counts: CountSets,
+        configuration: ConfigurationInterface,
       ): ImportDependencies => ({
         runner,
         helper,
@@ -90,6 +99,7 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         environment: deploymentEnvironmentFromEnvironment(env),
         caps,
         counts,
+        configuration,
       }),
       inject: [
         COMMAND_RUNNER,
@@ -105,7 +115,14 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         INTAKE_CAPS,
         // The count side of a comparison run, which `stock` · ledger answers, from the composition root (S1-F13-T01).
         COUNT_SETS,
+        // The policy gate, global: Available for publishing an opening batch (S1-F13-T03).
+        CONFIGURATION,
       ],
+    },
+    {
+      provide: QUEUED_PUBLISHING,
+      useFactory: (deps: ImportDependencies) => new QueuedPublishing(deps),
+      inject: [IMPORT_DEPENDENCIES],
     },
     { provide: FILE_STORE_ENVIRONMENT, useValue: process.env },
     {
@@ -179,10 +196,18 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
       ],
     },
   ],
-  exports: [FILES_IMPORTS, ATTACHED_RECORD_READERS],
+  exports: [FILES_IMPORTS, ATTACHED_RECORD_READERS, QUEUED_PUBLISHING],
 })
-export class FilesImportsModule implements OnApplicationShutdown {
-  constructor(@Inject(FILE_STORE) private readonly fileStore: FileStoreHandle) {}
+export class FilesImportsModule implements OnModuleInit, OnApplicationShutdown {
+  constructor(
+    @Inject(FILE_STORE) private readonly fileStore: FileStoreHandle,
+    @Inject(CONFIGURATION) private readonly configuration: ConfigurationInterface,
+  ) {}
+
+  /** Declares opening-data publishing, governed by policy 14, with the policy gate (module-map 4.4; S1-F13-T03). */
+  onModuleInit(): void {
+    this.configuration.registerOperation(OPENING_PUBLISHING);
+  }
 
   onApplicationShutdown(): void {
     if (this.fileStore.kind === 'configured' && this.fileStore.store instanceof S3FileStore) {

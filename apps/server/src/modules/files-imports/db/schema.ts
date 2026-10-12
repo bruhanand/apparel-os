@@ -309,6 +309,25 @@ export const importOutcome = filesImports.table('import_outcome', {
   /** The control totals as reported, summed and accepted (7.4; 0065). */
   controlTotals: jsonb('control_totals').$type<OutcomeControlTotal[]>().notNull(),
   ...scopeColumns(),
+  /** The request to post a queued publish its job answered (10.6; 0082; S1-F13-T03); null for any other attempt. */
+  publishRequestId: uuid('publish_request_id'),
+});
+
+/**
+ * A request to post a batch through a queued job (imports-and-opening-data 3.2, 10.6; access-and-approvals 9.8; 0082;
+ * S1-F13-T03): the batch version and the decision it names, the book whose queue it waits in, who asked and when.
+ * Append-only; its job's attempt is an outcome naming it.
+ */
+export const publishRequest = filesImports.table('publish_request', {
+  id: uuid('id').primaryKey(),
+  batchId: uuid('batch_id').notNull(),
+  batchVersionId: uuid('batch_version_id').notNull(),
+  approvalDecisionId: uuid('approval_decision_id'),
+  accountingBookId: uuid('accounting_book_id').notNull(),
+  requestedByUserId: uuid('requested_by_user_id').notNull(),
+  requestedAt: at('requested_at').notNull(),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
 /** A comparison run (imports-and-opening-data 2, 10.3, 15.1; 0072; S1-F13-T01): append-only, never changing a side. */

@@ -1929,6 +1929,8 @@ export const routes = {
       'files-imports.no-import-batch-series',
       'files-imports.import-batch-series-paused',
       'files-imports.file-store-not-configured',
+      // An opening batch for a unit whose cutover is complete (imports-and-opening-data 10.1; PRD-LIF-011; S1-F13-T03).
+      'files-imports.cutover-complete',
     ],
   }),
   readImportBatch: defineRoute({
@@ -2083,6 +2085,12 @@ export const routes = {
       'access.approval-used',
       'access.approval-version-changed',
       'access.self-preparation',
+      // An opening batch's gate (4.2, 10.1; PRD-SEC-017, PRD-LIF-011) and a queued publish (10.6; S1-F13-T03).
+      'configuration.operation-unavailable',
+      'files-imports.cutover-complete',
+      'files-imports.publish-queued',
+      'files-imports.nothing-to-publish',
+      'files-imports.several-books',
     ],
   }),
   // Withdraw a batch, which becomes Failed (3.2, 13.1; S1-F06-T04).

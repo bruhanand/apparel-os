@@ -5,6 +5,7 @@ import {
   OPENING_STOCK_TYPE,
   type DocumentPreview,
 } from '@apparel-os/schemas';
+import { sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../src/kernel/index.js';
 import {
   knownValue,
@@ -15,9 +16,22 @@ import {
   type HandlerRow,
   type ImportField,
   type ImportHandler,
+  type ImportPlace,
+  type ImportPublisher,
+  type ImportSource,
+  type HandlerPublished,
+  type OpeningSwitch,
 } from '../../src/modules/files-imports/index.js';
 import type { CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
 import type { OrganisationInterface } from '../../src/modules/organisation/index.js';
+import {
+  organisationPlaces,
+  type CallerRegistration,
+  type LedgerItem,
+  type LedgerRequest,
+  type Owner,
+  type StockLedgerInterface,
+} from '../../src/modules/stock/ledger/index.js';
 import { syntheticIdentifier } from '../fixtures/synthetic.js';
 
 // S1-F13-T01: the opening-balance test handler, its validating half (imports-and-opening-data 10.2, 12, 13.2; GC-6
@@ -103,7 +117,34 @@ export interface OpeningStockDependencies {
   readonly catalogue: Pick<CatalogueInterface, 'resolveCode' | 'skuOn' | 'vocabularyOn'>;
   /** The season attribute the test configured (an Organisation's own attribute, GC2-9), SYNTHETIC. */
   readonly seasonAttributeId: string;
+  /**
+   * The stock ledger it posts opening counts through, composed with its synthetic registration (OPENING_STOCK_CALLER;
+   * stock-ledger 13.2; S1-F13-T03). Without it the handler validates only, as in S1-F13-T01.
+   */
+  readonly ledger?: StockLedgerInterface;
+  /** Where the posting's phases add their milliseconds, for the measurement (10.6; RR-189). */
+  readonly timings?: Record<string, number>;
 }
+
+/** The module the test handler posts as, a synthetic caller of the stock ledger (stock-ledger 13.2; H2, H5). */
+export const OPENING_STOCK_MODULE = syntheticIdentifier('opening-stock-handler');
+/** The record type its opening counts come from: one manifest document of an opening batch. */
+export const OPENING_STOCK_RECORD_TYPE = 'opening-manifest';
+
+/**
+ * The handler's registration with the stock ledger (stock-ledger 13.2): synthetic, so only a test composition accepts
+ * it; opening counts only, from an opening batch only (S1-F13-T03).
+ */
+export const OPENING_STOCK_CALLER: CallerRegistration = {
+  module: OPENING_STOCK_MODULE,
+  synthetic: true,
+  recordTypes: [
+    { recordType: OPENING_STOCK_RECORD_TYPE, itemKinds: ['opening-count'], importKinds: ['opening-balance'] },
+  ],
+};
+
+/** Why a counted row without valuation evidence is held (stock-ledger 9 step 3; PRD-STK-014; POL-14.03). */
+export const NO_VALUATION_EVIDENCE = 'Counted at the opening without valuation evidence (POL-14.03)';
 
 async function today(context: TransactionContext): Promise<string> {
   const date = await context.businessDate();
@@ -219,7 +260,136 @@ async function issuesOf(
   return issues;
 }
 
-/** The test-only opening-stock handler (validating half). Publishing is S1-F13-T03's. */
+/**
+ * The synthetic switch of a unit and its cutover, from the test-only stand-in `test_opening_stock` (migration 0005 of
+ * the test set): the latest approved switch of the unit, its cutover complete once recorded (10.1; S1-F13-T03).
+ */
+async function switchOf(context: TransactionContext, place: ImportPlace): Promise<OpeningSwitch> {
+  if (place.businessUnitId === undefined || place.siteId === undefined) return { kind: 'none' };
+  const [row] = (
+    await context.tx.execute<{ id: string; complete: boolean }>(sql`
+      select s.id, exists (select 1 from test_opening_stock.cutover c where c.switch_id = s.id) as complete
+        from test_opening_stock.switch s
+       where s.business_unit_id = ${place.businessUnitId} and s.site_id = ${place.siteId}
+       order by s.id desc limit 1`)
+  ).rows;
+  if (row === undefined) return { kind: 'none' };
+  return { kind: 'approved', switchId: row.id, cutover: row.complete ? 'complete' : 'open' };
+}
+
+/**
+ * The posting half (10.5, 10.6; stock-ledger 9, 13.4; S1-F13-T03): each opening-stock row of the manifest becomes an
+ * opening count at its location, through the ledger's four operations in the job's transaction, after files-imports
+ * recorded the decision's use, which every movement keeps (13.3). A row with valuation evidence is opening stock owned
+ * by the legal entity Operations verified (POL-14.02); one without is held as excess, owner Unknown (PRD-STK-014).
+ * Values stay Unknown until an opening PT is approved, so nothing posts to the books: no journal (PRD-LIF-008).
+ * Billed-retained items are not opening stock and are not counted here: their recognition rule is OPEN (stock-ledger 9
+ * step 4; V-35, SL-17). Piece IDs are labelled at the switch count, never imported (PRD-LIF-025), so a piece-tracked
+ * row is refused here: labelling is the stage 4 switch count's.
+ */
+async function postOpening(
+  context: TransactionContext,
+  dependencies: OpeningStockDependencies,
+  publisher: ImportPublisher,
+  document: HandlerDocument,
+  source: ImportSource,
+): Promise<HandlerPublished> {
+  const refused = (reason: string, rowNumber?: number): HandlerPublished => ({
+    kind: 'refused',
+    refusal: {
+      kind: 'refused',
+      code: CODE(reason),
+      missing: rowNumber === undefined ? [] : [{ kind: 'row', row: String(rowNumber) }],
+    },
+  });
+  const { ledger } = dependencies;
+  if (ledger === undefined || publisher.serviceIdentityId === undefined) return refused('posts-through-its-job');
+  const { siteId, businessUnitId } = document.place;
+  if (siteId === undefined || businessUnitId === undefined) return refused('unit-not-named');
+  const date = await today(context);
+  const structure = await dependencies.organisation.structureOn(context, date);
+  const items: LedgerItem[] = [];
+  for (const row of document.rows) {
+    const value = (field: string) => knownValue(row.values[field]);
+    if (value('section') === 'billed-retained') continue;
+    const skuId = await skuOf(context, dependencies.catalogue, row, date);
+    const locationId = structure.locations.find((each) => each.code === value('locationCode'))?.id;
+    const legalEntityId = structure.legalEntities.find((each) => each.code === value('ownerCode'))?.id;
+    if (skuId === undefined || locationId === undefined || legalEntityId === undefined) {
+      return refused('row-not-resolved', row.rowNumber);
+    }
+    const read = await dependencies.catalogue.skuOn(context, skuId, siteId, date);
+    if ('refusal' in read) return refused('row-not-resolved', row.rowNumber);
+    if (read.sku.tracking?.pieceTracked === true) return refused('pieces-labelled-at-the-count', row.rowNumber);
+    const batchCode = value('batchCode');
+    const expiryDate = value('expiryDate');
+    const evidence = value('valuationEvidence') !== undefined;
+    const owner: Owner = evidence ? { kind: 'organisation', legalEntityId } : { kind: 'unknown' };
+    items.push({
+      kind: 'opening-count',
+      lineId: row.stagedRowId,
+      skuId,
+      quantity: Number(value('quantity')),
+      to: { siteId, businessUnitId, locationId },
+      condition: value('condition') as 'good' | 'damaged' | 'wrong' | 'unidentified',
+      owner,
+      ...(read.sku.tracking?.batchExpiryRequired === true && batchCode !== undefined && expiryDate !== undefined
+        ? { batch: { code: batchCode, expiryDate } }
+        : {}),
+      ...(evidence ? {} : { withoutValuationEvidence: { reason: NO_VALUATION_EVIDENCE } }),
+    });
+  }
+  const request: LedgerRequest = {
+    source: {
+      module: OPENING_STOCK_MODULE,
+      recordType: OPENING_STOCK_RECORD_TYPE,
+      recordId: source.documentId,
+      versionId: source.batchVersionId,
+      importKind: 'opening-balance',
+    },
+    actor: {
+      kind: 'service-identity',
+      serviceIdentityId: publisher.serviceIdentityId,
+      onBehalfOfUserId: publisher.userId,
+      roleAssignmentId: publisher.roleAssignmentId,
+    },
+    ...(publisher.approval === undefined ? {} : { approval: publisher.approval }),
+    items,
+  };
+  const timings = dependencies.timings;
+  const mark = phaseTimer(timings);
+  const planned = await ledger.plan(context, request);
+  mark('plan');
+  if (planned.kind === 'refused') return planned;
+  const locked = await ledger.lock(context, planned.value);
+  mark('lock');
+  const periods = await ledger.holdPeriods(context, planned.value);
+  if (periods.kind === 'refused') return periods;
+  // Opening counts have no value, so they hold no period or journal series (stock-ledger 13.4).
+  if (periods.value.length > 0) return refused('values-an-opening-count');
+  const checked = await ledger.recheck(context, locked);
+  mark('recheck');
+  if (checked.kind === 'refused') return checked;
+  const written = await ledger.write(context, checked.value, { kind: 'import', reference: source.batchCode });
+  mark('write');
+  if (written.kind === 'refused') return written;
+  return {
+    kind: 'published',
+    records: written.value.movementIds.map((recordId) => ({ recordType: 'stock.movement', recordId })),
+  };
+}
+
+/** Records into `timings`, if given, the milliseconds since the last mark under each name (stock-ledger 10.6). */
+function phaseTimer(timings: Record<string, number> | undefined): (name: string) => void {
+  let last = performance.now();
+  return (name) => {
+    const now = performance.now();
+    if (timings !== undefined) timings[name] = (timings[name] ?? 0) + now - last;
+    last = now;
+  };
+}
+
+/** The test-only opening-stock handler: the validating half (S1-F13-T01) and the posting half (S1-F13-T03). */
 export function openingStockHandler(dependencies: OpeningStockDependencies): ImportHandler {
   return {
     target: OPENING_STOCK_TARGET,
@@ -272,9 +442,19 @@ export function openingStockHandler(dependencies: OpeningStockDependencies): Imp
       if (issues.length > 0) return { kind: 'issues', issues };
       return { kind: 'would-create', records: [{ recordType: CODE('opening-row'), codes: [document.reference] }] };
     },
-    publish() {
-      throw new Error('Publishing an opening batch is S1-F13-T03');
+    // The unit's switch, from the test-only stand-in (10.1); a large opening posts through a queued job, one at a time
+    // per book (10.6): the book of the unit's mapping in force today.
+    switchOf,
+    queued: {
+      async postingBook(context, document) {
+        const { siteId, businessUnitId } = document.place;
+        if (siteId === undefined || businessUnitId === undefined) throw new Error('An opening names no unit');
+        const unit = await organisationPlaces.unitAt(context, { siteId, businessUnitId }, await today(context));
+        if (unit === undefined) throw new Error('The opening unit has no mapping in force');
+        return unit.bookId;
+      },
     },
+    publish: (context, publisher, document, source) => postOpening(context, dependencies, publisher, document, source),
     comparison: {
       set: 'manifest',
       fields: ['section', 'barcode', 'supplierCode', 'locationCode', 'quantity'],

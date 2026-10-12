@@ -48,6 +48,22 @@
       "runtime": ["SELECT"],
       "design": "imports-and-opening-data 10.4; code-house-rules 11.4",
       "why": "A test-only stand-in for the live open items of stage 5; every row is synthetic (imports-and-opening-data 10.4)"
+    },
+    {
+      "table": "test_opening_stock.switch",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 10.1, 12; code-house-rules 11.4",
+      "why": "A test-only stand-in for the switch of the stage 4 design; every row is synthetic (imports-and-opening-data 12)"
+    },
+    {
+      "table": "test_opening_stock.cutover",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 10.1, 12; code-house-rules 11.4",
+      "why": "A test-only stand-in for the cutover of the stage 4 design; every row is synthetic (imports-and-opening-data 12)"
     }
   ]
 }

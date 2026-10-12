@@ -157,7 +157,16 @@ function intakeText(item: MissingItem): string | undefined {
 }
 
 /** The kinds of missing item a policy or setting gate names (design-language 10.17). */
-const gateKinds: ReadonlySet<string> = new Set(['policy', 'setting', 'capability', 'activity', 'origin']);
+const gateKinds: ReadonlySet<string> = new Set([
+  'policy',
+  'setting',
+  'capability',
+  'activity',
+  'origin',
+  // An opening batch's own gate: the hosting and the unit's switch (imports-and-opening-data 4.2, 10.1; S1-F13-T03).
+  'hosting',
+  'opening-switch',
+]);
 
 /** Where the banner points: the first policy it names on Setup › Policy readiness, or the screen itself. */
 export function policyReadinessHref(missing: readonly MissingItem[]): string {

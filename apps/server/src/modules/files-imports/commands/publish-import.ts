@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import { IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
   CommandDefect,
   LOCK_STEP,
@@ -16,9 +16,10 @@ import {
   type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { ImportHandler } from '../contracts/import-handlers.js';
-import { importBatch, importDocument, importOutcome } from '../db/schema.js';
-import { importFailed, importPublished } from '../events.js';
+import type { AuditActor, AuditSource } from '../../audit/index.js';
+import type { ImportHandler, ImportPublisher } from '../contracts/import-handlers.js';
+import { importBatch, importDocument, importOutcome, publishRequest } from '../db/schema.js';
+import { importFailed, importPublished, publishRequested } from '../events.js';
 import type { DocumentResult, OutcomeDocument } from '../domain/outcome.js';
 import {
   BATCH_NOT_FOUND,
@@ -37,6 +38,7 @@ import {
   type ImportDependencies,
   type LoadedDocument,
 } from './import-common.js';
+import { gateRefusal, openingGateOf } from './opening-gate.js';
 import { batchOutcome, countsRefusal, projectedResult } from './outcomes.js';
 import { BATCH_LOCK, batchReplayAuthorisation } from './validate-import.js';
 
@@ -101,13 +103,13 @@ export function documentKey(key: string, documentId: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-const refused = (refusal: CommandRefusal): CommandOutcome<JsonValue> => ({
+export const refused = (refusal: CommandRefusal): CommandOutcome<JsonValue> => ({
   kind: 'refusal',
   refusal,
   causedBySecret: false,
 });
 
-interface Held {
+export interface Held {
   readonly batch: BatchRow;
   readonly handler: ImportHandler;
   readonly roleAssignmentId: string;
@@ -117,7 +119,7 @@ interface Held {
 }
 
 /** The documents a publish chooses: those still Staged and not excluded (3.1 step 9). */
-const toPublish = (documents: readonly LoadedDocument[]) =>
+export const toPublish = (documents: readonly LoadedDocument[]) =>
   documents.filter((document) => document.state === 'Staged' && !document.excluded);
 
 /**
@@ -253,6 +255,11 @@ async function held(
   // The counts close (7.4): every row the reader read is staged.
   const counts = await countsRefusal(context, batch);
   if (counts !== undefined) return { kind: 'refused', refusal: counts };
+  // An opening batch publishes only where its gate allows it (4.2, 10.1; PRD-SEC-017; S1-F13-T03).
+  if (batch.kind === 'opening-balance') {
+    const refusal = gateRefusal(await openingGateOf(deps, context, handler, factsOfBatch(batch)));
+    if (refusal !== undefined) return { kind: 'refused', refusal };
+  }
   let approvalCheck: Held['approvalCheck'];
   const review = reviewOf(handler, batch);
   if (review.kind === 'approval') {
@@ -341,6 +348,48 @@ async function publishDocument(
   });
   if (start.kind === 'refused') return refused(start.refusal);
   const { batch, handler } = start.held;
+  const handlerAssignment = start.held.handlerAssignments.get(documentId);
+  if (handlerAssignment === undefined) throw new CommandDefect('A document was published without its authority');
+  // The document is published on the handler's own permission at its place (13.2), so its audit record cites the
+  // assignment that granted it, as the handler's own records do (numbering-and-audit 4.1).
+  return publishOne(deps, context, {
+    batch,
+    handler,
+    documentId,
+    revisable,
+    publisher: { userId: input.actor.userId, roleAssignmentId: handlerAssignment },
+    actor: { kind: 'user', id: input.actor.userId },
+    source: { kind: 'screen' },
+    // The key of the command that wrote it, the document's own (numbering-and-audit 4.1 "Request"; code-house-rules
+    // 12.4), so the audit record leads to the run that published the document.
+    idempotencyKey: documentKey(input.key, documentId),
+  });
+}
+
+/** Who publishes one document, and how its audit record names them (numbering-and-audit 4.1). */
+export interface DocumentPublishing {
+  readonly batch: BatchRow;
+  readonly handler: ImportHandler;
+  readonly documentId: string;
+  /** The published document a revision of it replaces, locked with the batch (7.3). */
+  readonly revisable: string | undefined;
+  readonly publisher: ImportPublisher;
+  readonly actor: AuditActor;
+  readonly source: AuditSource;
+  readonly idempotencyKey: string;
+}
+
+/**
+ * One document published under the locks its caller holds (3.3; 7.2, 7.3; PRD-IMP-012): read again under them, one
+ * published or excluded meanwhile is skipped; a duplicate has no effect; a conflict is refused; otherwise it is marked
+ * published, its handler writes its records, and its audit record and event follow.
+ */
+export async function publishOne(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  publishing: DocumentPublishing,
+): Promise<CommandOutcome<JsonValue>> {
+  const { batch, handler, documentId, revisable } = publishing;
   // The document, read again under the lock: one published or excluded meanwhile is not published again.
   const document = (await documentsOf(context, batch)).find((each) => each.documentId === documentId);
   if (document === undefined) {
@@ -400,22 +449,14 @@ async function publishDocument(
     // The winner, else the document a revision meant to replace, which another revision replaced first.
     return conflict(documentId, winner?.documentId ?? revises ?? undefined);
   }
-  const handlerAssignment = start.held.handlerAssignments.get(documentId);
-  if (handlerAssignment === undefined) throw new CommandDefect('A document was published without its authority');
-  // The document is published on the handler's own permission at its place (13.2), so its audit record cites the
-  // assignment that granted it, as the handler's own records do (numbering-and-audit 4.1).
-  const published = await handler.publish(
-    context,
-    { userId: input.actor.userId, roleAssignmentId: handlerAssignment },
-    document,
-    {
-      batchId: batch.id,
-      batchCode: batch.code,
-      documentId,
-      stagedRowIds: document.rows.map((row) => row.stagedRowId),
-      firstRowNumber: document.rows[0]?.rowNumber ?? 1,
-    },
-  );
+  const published = await handler.publish(context, publishing.publisher, document, {
+    batchId: batch.id,
+    batchVersionId: batch.versionId,
+    batchCode: batch.code,
+    documentId,
+    stagedRowIds: document.rows.map((row) => row.stagedRowId),
+    firstRowNumber: document.rows[0]?.rowNumber ?? 1,
+  });
   if (published.kind === 'refused') {
     // Everything the document's run wrote rolls back; the batch's run keeps its outcome (7.4; PRD-IMP-012).
     return refused({
@@ -426,8 +467,8 @@ async function publishDocument(
   }
   const facts = factsOfBatch(batch);
   await deps.audit.record(context, {
-    actor: { kind: 'user', id: input.actor.userId },
-    roleAssignmentId: handlerAssignment,
+    actor: publishing.actor,
+    roleAssignmentId: publishing.publisher.roleAssignmentId,
     scope: facts,
     record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
     operation: 'publish-import-document',
@@ -439,10 +480,8 @@ async function publishDocument(
         : [{ kind: 'value' as const, field: 'revisesDocumentId', before: null, after: revises }]),
       { kind: 'value', field: 'records', before: null, after: published.records.map((record) => record.recordId) },
     ],
-    source: { kind: 'screen' },
-    // The key of the command that wrote it, the document's own (numbering-and-audit 4.1 "Request"; code-house-rules
-    // 12.4), so the audit record leads to the run that published the document.
-    idempotencyKey: documentKey(input.key, documentId),
+    source: publishing.source,
+    idempotencyKey: publishing.idempotencyKey,
   });
   await context.publish(importPublished, {
     subject: { module: 'files-imports', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId },
@@ -488,15 +527,31 @@ function attemptOf(
 }
 
 /**
+ * Who an attempt is written for (7.4; numbering-and-audit 4.1): the person it is attempted by, the actor and assignment
+ * its audit record names, the key and source of the command; for a queued publish's job, the request it answers, the
+ * refusal it came to, and that the approval's use is recorded already, before the documents (DEC-097; S1-F13-T03).
+ */
+export interface Attempting {
+  readonly attemptedByUserId: string;
+  readonly actor: AuditActor;
+  readonly roleAssignmentId: string;
+  readonly key: string;
+  readonly source: AuditSource;
+  readonly useRecorded: boolean;
+  readonly publishRequestId?: string;
+  readonly refusalCode?: string;
+}
+
+/**
  * The batch's run (7.4; 3.2): the outcome of the attempt, for the batch and each document, written whatever became of
  * it; the batch Published when every document chosen has posted or is a duplicate, its approval's use recorded then;
  * otherwise it stays Validated, so it can be corrected.
  */
-async function writeOutcome(
+export async function writeOutcome(
   deps: ImportDependencies,
   context: TransactionContext,
-  input: PublishInput,
-  start: Held,
+  attempting: Attempting,
+  start: Pick<Held, 'batch' | 'handler' | 'approvalCheck'>,
   attempts: ReadonlyMap<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>,
 ): Promise<CommandOutcome<JsonValue>> {
   const { batch, handler } = start;
@@ -526,12 +581,12 @@ async function writeOutcome(
   const chosenResults = outcome.documents.filter((document) => document.result !== 'excluded');
   const allDone = chosenResults.length > 0 && chosenResults.every((document) => done.includes(document.result));
   const failing = outcome.documents.find((document) => !done.includes(document.result));
-  const actorId = input.actor.userId;
-  if (allDone && start.approvalCheck !== undefined) {
+  const actorId = attempting.attemptedByUserId;
+  if (allDone && start.approvalCheck !== undefined && !attempting.useRecorded) {
     const used = await deps.access.recordUse(context, {
       ...start.approvalCheck,
       useId: uuidv7(),
-      actor: { kind: 'user', id: actorId },
+      actor: attempting.actor,
     });
     if (used !== undefined) return refused(used);
   }
@@ -546,9 +601,8 @@ async function writeOutcome(
     result,
     refusalCode: allDone
       ? null
-      : failing?.result === 'conflict'
-        ? 'files-imports.document-conflict'
-        : 'files-imports.document-refused',
+      : (attempting.refusalCode ??
+        (failing?.result === 'conflict' ? 'files-imports.document-conflict' : 'files-imports.document-refused')),
     counts: outcome.counts,
     documents: outcome.documents,
     measures: outcome.measures,
@@ -556,11 +610,12 @@ async function writeOutcome(
     attemptedByUserId: actorId,
     attemptedAt: context.startedAt,
     ...scopeColumnsOf(batch),
+    publishRequestId: attempting.publishRequestId ?? null,
   });
   const facts = factsOfBatch(batch);
   await deps.audit.record(context, {
-    actor: { kind: 'user', id: actorId },
-    roleAssignmentId: start.roleAssignmentId,
+    actor: attempting.actor,
+    roleAssignmentId: attempting.roleAssignmentId,
     scope: facts,
     record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
     operation: 'publish-import',
@@ -568,9 +623,12 @@ async function writeOutcome(
       { kind: 'value', field: 'state', before: 'Validated', after: state },
       { kind: 'value', field: 'outcomeId', before: null, after: outcomeId },
       { kind: 'value', field: 'result', before: null, after: result },
+      ...(attempting.publishRequestId === undefined
+        ? []
+        : [{ kind: 'value' as const, field: 'publishRequestId', before: null, after: attempting.publishRequestId }]),
     ],
-    source: { kind: 'screen' },
-    idempotencyKey: input.key,
+    source: attempting.source,
+    idempotencyKey: attempting.key,
   });
   const subject = {
     module: 'files-imports',
@@ -600,6 +658,116 @@ async function writeOutcome(
   };
 }
 
+/** The request to post a batch that no attempt has answered yet, the latest one first (10.6; S1-F13-T03). */
+export async function pendingRequest(
+  context: TransactionContext,
+  batchId: string,
+): Promise<{ readonly id: string; readonly requestedAt: Date } | undefined> {
+  const [row] = await context.tx
+    .select({ id: publishRequest.id, requestedAt: publishRequest.requestedAt })
+    .from(publishRequest)
+    .where(
+      and(
+        eq(publishRequest.batchId, batchId),
+        sql`not exists (select 1 from ${importOutcome} where ${importOutcome.publishRequestId} = ${publishRequest.id})`,
+      ),
+    )
+    .orderBy(desc(publishRequest.id))
+    .limit(1);
+  return row;
+}
+
+/**
+ * Publish of a batch whose handler's documents post through a queued job (10.6; stock-ledger 10.6; access-and-approvals
+ * 9.8 step 1; S1-F13-T03): the batch held and rechecked as for any Publish, its gate and its approval verified under
+ * the locks, then a request to post naming the batch version and the decision, the outbox row for the job, and the
+ * audit record, with no stock or money effect; the batch stays Validated with the job's state beside it (3.2). One
+ * request at a time: another is refused while one waits. The job publishes every document chosen in one transaction,
+ * whole or not at all, and records the decision's use there (DEC-097).
+ */
+async function requestPublish(deps: ImportDependencies, input: PublishInput): Promise<IdempotentAnswer<JsonValue>> {
+  return deps.helper.run(
+    {
+      commandName: COMMAND,
+      organisation: input.actor.organisation,
+      correlationId: input.actor.correlationId,
+      actor: { kind: 'actor', actorId: input.actor.userId },
+    },
+    {
+      key: input.key,
+      content: input.content,
+      authoriseReplay: batchReplayAuthorisation(deps, input),
+      work: async (context): Promise<CommandOutcome<JsonValue>> => {
+        const start = await held(deps, context, input, async (batch) => toPublish(await documentsOf(context, batch)));
+        if (start.kind === 'refused') return refused(start.refusal);
+        const { batch, handler } = start.held;
+        const waiting = await pendingRequest(context, batch.id);
+        if (waiting !== undefined) {
+          return refused({
+            kind: 'refused',
+            code: 'files-imports.publish-queued',
+            missing: [{ kind: 'publish-request', publishRequestId: waiting.id }],
+          });
+        }
+        const documents = toPublish(await documentsOf(context, batch));
+        if (documents.length === 0) {
+          return refused({ kind: 'refused', code: 'files-imports.nothing-to-publish', missing: [] });
+        }
+        const queued = handler.queued;
+        if (queued === undefined) throw new CommandDefect('A queued publish was asked of a handler that posts none');
+        const books = new Set<string>();
+        for (const document of documents) books.add(await queued.postingBook(context, document));
+        const [bookId] = books;
+        if (bookId === undefined || books.size > 1) {
+          // One job posts the batch in one transaction, in the queue of one book (stock-ledger 10.6).
+          return refused({
+            kind: 'refused',
+            code: 'files-imports.several-books',
+            missing: [...books].map((each) => ({ kind: 'accounting-book', bookId: each })),
+          });
+        }
+        const publishRequestId = uuidv7();
+        await context.tx.insert(publishRequest).values({
+          id: publishRequestId,
+          batchId: batch.id,
+          batchVersionId: batch.versionId,
+          approvalDecisionId: input.approvalDecisionId ?? null,
+          accountingBookId: bookId,
+          requestedByUserId: input.actor.userId,
+          requestedAt: context.startedAt,
+          ...scopeColumnsOf(batch),
+        });
+        const facts = factsOfBatch(batch);
+        await deps.audit.record(context, {
+          actor: { kind: 'user', id: input.actor.userId },
+          roleAssignmentId: start.held.roleAssignmentId,
+          scope: facts,
+          record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
+          operation: 'request-publish',
+          changes: [{ kind: 'value', field: 'publishRequestId', before: null, after: publishRequestId }],
+          source: { kind: 'screen' },
+          idempotencyKey: input.key,
+        });
+        await context.publish(publishRequested, {
+          subject: {
+            module: 'files-imports',
+            recordType: IMPORT_BATCH_TYPE,
+            recordId: batch.id,
+            versionId: batch.versionId,
+          },
+          scope: facts,
+          payload: { publishRequestId, batchId: batch.id, bookId },
+        });
+        return {
+          kind: 'success',
+          answer: { batchId: batch.id, state: 'Validated', result: 'queued', publishRequestId, documents: [] },
+          shows: 'nothing',
+        };
+      },
+    },
+  );
+}
+
 export async function publishImport(
   deps: ImportDependencies,
   input: PublishInput,
@@ -610,6 +778,12 @@ export async function publishImport(
     correlationId: input.actor.correlationId,
     actor: { kind: 'actor' as const, actorId: input.actor.userId },
   });
+  // A handler whose documents post through a queued job: Publish records the request to post (10.6; S1-F13-T03).
+  const queued = await deps.runner.read(header(COMMAND), async (context) => {
+    const batch = await visibleBatch(context, input.batchId);
+    return batch !== undefined && handlerOf(deps.handlers, batch).queued !== undefined;
+  });
+  if (queued) return requestPublish(deps, input);
   // The documents to publish, read before any transaction that writes; each run reads its own again under its lock.
   // When the handler's permission does not cover every one of them at its own place, none is run: the batch's run
   // answers the refusal, naming the document, and nothing is published (product owner, 10 Oct 2026).
@@ -647,7 +821,20 @@ export async function publishImport(
       // The handler's permission on every document still to publish, at its own place, as the documents' runs held it.
       const start = await held(deps, context, input, async (batch) => toPublish(await documentsOf(context, batch)));
       if (start.kind === 'refused') return refused(start.refusal);
-      return writeOutcome(deps, context, input, start.held, attempts);
+      return writeOutcome(
+        deps,
+        context,
+        {
+          attemptedByUserId: input.actor.userId,
+          actor: { kind: 'user', id: input.actor.userId },
+          roleAssignmentId: start.held.roleAssignmentId,
+          key: input.key,
+          source: { kind: 'screen' },
+          useRecorded: false,
+        },
+        start.held,
+        attempts,
+      );
     },
   });
 }

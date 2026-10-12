@@ -48,6 +48,7 @@ import {
   type ImportActor,
   type ImportDependencies,
 } from './import-common.js';
+import { cutoverRefusal } from './opening-gate.js';
 import { rulesInForce } from './proposals.js';
 
 // Start an import, with Map and stage (imports-and-opening-data 3.1 steps 3 to 5, 13.1, 15.1; PRD-IMP-003,
@@ -179,6 +180,10 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
           missing: [{ kind: 'import-handler', target: body.target, importKind: body.kind }],
         });
       }
+      // A new opening batch for a unit whose cutover is complete is refused: a later correction is a live correction
+      // in the owning module (10.1, 10.5; PRD-LIF-011; S1-F13-T03).
+      const cutover = await cutoverRefusal(context, handler, body.kind, scopeFactsOf(body.scope ?? {}));
+      if (cutover !== undefined) refuse(cutover);
       const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
       if (repeated !== undefined) refuse(repeated);
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');

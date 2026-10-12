@@ -43,7 +43,10 @@ import {
   visibleBatch,
   type ImportDependencies,
 } from '../commands/import-common.js';
+import { openingGateOf } from '../commands/opening-gate.js';
+import { pendingRequest } from '../commands/publish-import.js';
 import { currentIssues } from '../commands/review.js';
+import type { OpeningGate } from '../domain/opening-gate.js';
 import {
   maskedColumn,
   maskIssueMissing,
@@ -86,7 +89,7 @@ function rowView(row: StagedRowRecord, values: Record<string, StagedValueView>):
  * (13.2), shown only where nothing in it is masked.
  */
 export async function readBatch(
-  deps: Pick<ImportDependencies, 'access' | 'handlers'>,
+  deps: Pick<ImportDependencies, 'access' | 'handlers' | 'configuration' | 'environment'>,
   context: TransactionContext,
   actorId: string,
   batchId: string,
@@ -194,6 +197,14 @@ export async function readBatch(
       ...(document.revisesDocumentId === null ? {} : { revisesDocumentId: document.revisesDocumentId }),
     });
   }
+  // An opening batch says whether Publish is available, naming what is missing (4.2, 10.1; PRD-UXP-003; S1-F13-T03),
+  // and a request to post that no attempt answered yet shows beside the state (3.2; 10.6).
+  const open = batch.state === 'Staged' || batch.state === 'Validated';
+  const gate =
+    batch.kind === 'opening-balance' && open
+      ? await openingGateOf(deps, context, handler, factsOfBatch(batch))
+      : undefined;
+  const waiting = open ? await pendingRequest(context, batch.id) : undefined;
   return {
     asOf: context.startedAt.toISOString(),
     batch: {
@@ -217,6 +228,16 @@ export async function readBatch(
       startedAt: batch.startedAt.toISOString(),
       sheets: batch.sheets.map((sheet) => ({ ...sheet })),
       readerNotes: batch.readerNotes.map((note) => ({ ...note })),
+      ...(gate === undefined ? {} : { publishing: publishingOf(gate) }),
+      ...(waiting === undefined
+        ? {}
+        : {
+            posting: {
+              publishRequestId: waiting.id,
+              requestedAt: waiting.requestedAt.toISOString(),
+              state: 'queued' as const,
+            },
+          }),
     },
     documents: documentViews,
     ignoredRows: rows
@@ -225,6 +246,21 @@ export async function readBatch(
     ...(await reportView(context, batch, plan)),
     outcomes: outcomes.map((outcome) => maskOutcome(outcomeView(outcome), plan)),
   };
+}
+
+/** Whether Publish of an opening batch is available, and what is missing where it is not (4.2, 10.1). */
+function publishingOf(gate: OpeningGate): NonNullable<ImportBatchRead['batch']['publishing']> {
+  switch (gate.kind) {
+    case 'available':
+      return { state: 'available', missing: [] };
+    case 'unavailable':
+      return { state: 'unavailable', missing: [...gate.missing] };
+    case 'cutover-complete':
+      return {
+        state: 'unavailable',
+        missing: [{ kind: 'opening-switch', switchId: gate.switchId, cutover: 'complete' }],
+      };
+  }
 }
 
 /** An outcome as kept (7.4), before it is masked for its reader (`maskOutcome`; section 11). */
@@ -236,6 +272,7 @@ export function outcomeView(outcome: typeof importOutcome.$inferSelect): ImportO
     attemptedAt: outcome.attemptedAt.toISOString(),
     attemptedByUserId: outcome.attemptedByUserId,
     ...(outcome.batchVersionId === null ? {} : { batchVersionId: outcome.batchVersionId }),
+    ...(outcome.publishRequestId === null ? {} : { publishRequestId: outcome.publishRequestId }),
     counts: outcome.counts,
     measures: outcome.measures.map((measure) => ({ ...measure })),
     controlTotals: outcome.controlTotals.map((total) => ({ ...total })),

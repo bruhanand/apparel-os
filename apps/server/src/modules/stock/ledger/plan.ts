@@ -391,7 +391,18 @@ export async function planRequest(
 
   const planItem = async (item: LedgerItem) => {
     switch (item.kind) {
-      case 'receipt-count': {
+      case 'receipt-count':
+      case 'opening-count': {
+        // An opening count comes from an opening batch only (13.4; S1-F13-T03).
+        if (item.kind === 'opening-count' && request.source.importKind !== 'opening-balance')
+          throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'import-kind' }]));
+        if (item.kind === 'opening-count' && item.withoutValuationEvidence !== undefined) {
+          // Held as excess, owner Unknown (9 step 3; PRD-STK-014), for a stated reason.
+          if (item.owner.kind !== 'unknown')
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'owner' }]));
+          if (item.withoutValuationEvidence.reason.trim() === '')
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'reason' }]));
+        }
         const unit = await place(item.lineId, item.to.siteId, item.to.businessUnitId, item.to.locationId);
         const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
         if (!Number.isInteger(item.quantity) || item.quantity <= 0)

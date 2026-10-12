@@ -700,6 +700,8 @@ export const importOutcomeSchema = z.strictObject({
   attemptedByUserId: idSchema,
   /** The batch version attempted; absent for an attempt kept before S1-F06-T04. */
   batchVersionId: idSchema.optional(),
+  /** The request to post a queued publish answered, where the attempt was its job's (10.6; S1-F13-T03). */
+  publishRequestId: idSchema.optional(),
   counts: outcomeCountsSchema,
   measures: z.array(outcomeMeasureSchema),
   controlTotals: z.array(outcomeControlTotalSchema),
@@ -782,6 +784,18 @@ export const importBatchReadSchema = z.strictObject({
     sheets: z.array(importSheetSchema),
     /** What the reader noted it could not read (9.1, A-11). */
     readerNotes: z.array(z.strictObject({ sheet: z.string(), ref: z.string().optional(), note: z.string() })),
+    /**
+     * For an opening-balance batch: whether Publish is available, and every thing missing where it is not (4.2, 10.1;
+     * PRD-SEC-017, PRD-UXP-003; S1-F13-T03).
+     */
+    publishing: z
+      .strictObject({ state: z.enum(['available', 'unavailable']), missing: z.array(missingItemSchema) })
+      .optional(),
+    /**
+     * A request to post the batch through a queued job that no attempt has answered yet: the batch shows Validated
+     * with the job's state beside it (3.2; 10.6; S1-F13-T03).
+     */
+    posting: z.strictObject({ publishRequestId: idSchema, requestedAt: asOf, state: z.literal('queued') }).optional(),
   }),
   documents: z.array(
     z.strictObject({
@@ -873,13 +887,17 @@ export const publishImportRequestSchema = z.strictObject({
 /**
  * Publish's answer (3.2, 7.4; S1-F06-T04): the outcome it wrote, published when every document chosen posted or is a
  * duplicate, and the batch Published; failed when a document was refused or conflicts, the others published and the
- * batch still Validated; and what became of each document.
+ * batch still Validated; and what became of each document. For a handler whose documents post through a queued job
+ * (10.6; S1-F13-T03): queued, with the request to post, the batch still Validated until the job writes its outcome.
  */
 export const importPublishedSchema = z.strictObject({
   batchId: idSchema,
   state: importBatchStateSchema,
-  outcomeId: idSchema,
-  result: z.enum(['published', 'failed']),
+  /** The outcome written; none for a publish queued, whose job writes it (10.6; S1-F13-T03). */
+  outcomeId: idSchema.optional(),
+  result: z.enum(['published', 'failed', 'queued']),
+  /** The request to post a queued publish (10.6; S1-F13-T03). */
+  publishRequestId: idSchema.optional(),
   documents: z.array(
     z.strictObject({ documentId: idSchema, result: documentResultSchema, refusalCode: z.string().optional() }),
   ),

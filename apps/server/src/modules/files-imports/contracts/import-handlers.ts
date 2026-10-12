@@ -118,6 +118,8 @@ export interface ImportMeasure {
 /** Where a published record came from: the batch, its code, the document and its staged rows (section 5). */
 export interface ImportSource {
   readonly batchId: string;
+  /** The batch version published, which a record posting stock names as its source's version (S1-F13-T03). */
+  readonly batchVersionId: string;
   readonly batchCode: string;
   readonly documentId: string;
   readonly stagedRowIds: readonly string[];
@@ -127,10 +129,36 @@ export interface ImportSource {
 /** The permission a document's publish needs: the action, the record type, and its facts where a place scopes it. */
 export type ImportNeed = Pick<AuthoriseRequest, 'action' | 'recordType' | 'facts' | 'movesTo'>;
 
-/** The person publishing, with the assignment Authorise found for the handler's own permission on the document. */
+/**
+ * The person publishing, with the assignment Authorise found for the handler's own permission on the document. A
+ * queued publish's job publishes as its internal service identity on behalf of the person who asked (`userId`), with
+ * the approval decision the request named and the identifier of its use, recorded first in the same transaction, so
+ * each record the handler writes keeps its approval evidence (10.6; access-and-approvals 9.8; DEC-097; S1-F13-T03).
+ */
 export interface ImportPublisher {
   readonly userId: string;
   readonly roleAssignmentId: string;
+  readonly serviceIdentityId?: string;
+  readonly approval?: { readonly decisionId: string; readonly useId: string };
+}
+
+/**
+ * The Store's approved switch a unit's opening belongs to, and its day-close cutover (10.1; POL-14.07, PRD-LIF-026,
+ * PRD-LIF-011), as the module that keeps switches answers it: none approved; or approved, its cutover open or
+ * complete. An opening batch publishes only at an approved switch whose cutover is open, and none is started for a
+ * unit whose cutover is complete (S1-F13-T03).
+ */
+export type OpeningSwitch =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'approved'; readonly switchId: string; readonly cutover: 'open' | 'complete' };
+
+/**
+ * How a handler's documents post when they are large (10.6; stock-ledger 10.6; S1-F13-T03): Publish records a request
+ * to post naming the batch version and the approval decision, and a queued job, one at a time per accounting book,
+ * publishes them in one transaction. The book is the one its records post into.
+ */
+export interface QueuedPosting {
+  postingBook(context: TransactionContext, document: HandlerDocument): Promise<string>;
 }
 
 export type HandlerPublished =
@@ -159,6 +187,13 @@ export interface ImportHandler {
    * received, whose handler's effect is money. None otherwise.
    */
   readonly openingKind?: OpeningKind;
+  /**
+   * For an opening-balance handler: the switch the batch's unit opens at (10.1; S1-F13-T03). A handler with none
+   * answers no switch, so its batches never publish.
+   */
+  switchOf?(context: TransactionContext, place: ImportPlace): Promise<OpeningSwitch>;
+  /** Whether its documents are large and post through a queued job (10.6; 13.2 "whether a document is large"). */
+  readonly queued?: QueuedPosting;
   /** What its batches are as a set of a comparison run (10.3), where they are one. */
   readonly comparison?: ImportComparison;
   /** The fields of its staged row. */

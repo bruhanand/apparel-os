@@ -34,3 +34,15 @@ export const importFailed = defineEvent({
   version: 1,
   payload: z.strictObject({ batchId: z.uuid(), outcomeId: z.uuid().optional() }),
 });
+
+/**
+ * A publish whose documents post through a queued job was asked for (10.6; stock-ledger 10.6; access-and-approvals 9.8
+ * step 1; S1-F13-T03): the request to post, its batch, and the accounting book whose queue it waits in, one job at a
+ * time per book (code-house-rules 12.9). Its consumer is the posting consumer of the stage that brings a queued
+ * handler; in stage 1 only the tests' (DEC-116).
+ */
+export const publishRequested = defineEvent({
+  type: 'files-imports.publish-requested',
+  version: 1,
+  payload: z.strictObject({ publishRequestId: z.uuid(), batchId: z.uuid(), bookId: z.uuid() }),
+});

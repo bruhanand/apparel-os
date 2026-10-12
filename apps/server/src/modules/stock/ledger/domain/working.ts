@@ -98,8 +98,11 @@ export interface PieceState {
 export interface OriginState {
   readonly id: string;
   readonly isNew: boolean;
-  /** How a new origin came to be (14.2 `origin_kind`): counted at a receipt, or a count surplus (8.4); receipt if absent. */
-  readonly originKind?: 'receipt' | 'surplus';
+  /**
+   * How a new origin came to be (14.2 `origin_kind`): counted at a receipt, at an opening (stock-ledger 9; S1-F13-T03),
+   * or a count surplus (8.4); receipt if absent.
+   */
+  readonly originKind?: 'receipt' | 'opening' | 'surplus';
   readonly skuId: string | null;
   readonly pieceTracked: boolean;
   readonly batchCode: string | null;
@@ -190,6 +193,7 @@ export interface MovementEntry {
 /** The movement kinds of stock-ledger 2.3 this ledger writes so far. */
 export type MovementKind =
   | 'receipt-count'
+  | 'opening-count'
   | 'location-move'
   | 'condition-change'
   | 'cost-established'
@@ -432,6 +436,8 @@ export class Working {
     switch (item.kind) {
       case 'receipt-count':
         return this.receiptCount(item);
+      case 'opening-count':
+        return this.openingCount(item);
       case 'location-move':
         return this.locationMove(item);
       case 'condition-change':
@@ -478,6 +484,7 @@ export class Working {
     const brands = (skuIds: readonly string[]) => skuIds.map((skuId) => this.sku(skuId).brandId);
     switch (item.kind) {
       case 'receipt-count':
+      case 'opening-count':
         return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
       case 'location-move': {
         const skuIds = [item.goods.skuId];
@@ -926,13 +933,66 @@ export class Working {
   }
 
   /**
+   * Opening count (stock-ledger 9, 13.4; PRD-LIF-004, PRD-LIF-027, POL-14.02; S1-F13-T03): a new opening receipt origin,
+   * its custody and pieces, as a receipt count's, with no value until its opening PT is approved. A row without
+   * valuation evidence (PRD-LIF-005) is not opening stock: its custody is held as excess, owner, coverage and cost
+   * Unknown, until the evidence and an opening PT arrive (9 step 3; PRD-STK-014), as a count surplus is (8.4).
+   */
+  protected openingCount(item: ItemOf<'opening-count'>): ItemValue {
+    const movement = this.newMovement('opening-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
+      item.skuId,
+    ]);
+    movement.owner = item.owner;
+    const counted = this.countedOrigin(item.lineId, movement, 'opening', item.to, item.condition, {
+      skuId: item.skuId,
+      quantity: item.quantity,
+      ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
+      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+      ...(item.batch === undefined ? {} : { batch: item.batch }),
+    });
+    if (item.withoutValuationEvidence === undefined) return { kind: 'unknown' };
+    const hold: HoldEntry = {
+      id: this.newId(),
+      lineId: item.lineId,
+      kind: 'excess',
+      reason: item.withoutValuationEvidence.reason,
+      evidenceFileId: null,
+      withinReservationId: null,
+      scope: this.headerScopeAt(item.to.siteId, item.to.businessUnitId),
+      brandIds: [this.brandOf(item.skuId)],
+      freezeScope: [],
+      claims: [],
+    };
+    const claimed =
+      counted.pieces.length > 0
+        ? counted.pieces.map((piece) => ({ balanceId: null, pieceId: piece.id, quantity: 1 }))
+        : [{ balanceId: counted.balance.id, pieceId: null, quantity: item.quantity }];
+    for (const each of claimed) {
+      hold.claims.push(
+        this.newClaim(
+          'hold',
+          hold.id,
+          'excess',
+          null,
+          each.balanceId,
+          each.pieceId,
+          each.quantity,
+          counted.balance.scope,
+        ),
+      );
+    }
+    this.entries.holds.push(hold);
+    return { kind: 'unknown' };
+  }
+
+  /**
    * A new receipt origin made by a count (section 4; 8.4): a receipt count's, or a count surplus with no known origin.
    * Its custody at the place, and a new piece for each new code (PRD-MER-015): a code already used is `invalid-item`.
    */
   protected countedOrigin(
     lineId: string,
     movement: MovementEntry,
-    originKind: 'receipt' | 'surplus',
+    originKind: 'receipt' | 'opening' | 'surplus',
     to: Place,
     condition: Condition,
     counted: {

@@ -86,6 +86,24 @@ export type LedgerItem =
       readonly batch?: { readonly code: string; readonly expiryDate: string };
     }
   | {
+      /**
+       * Opening count (stock-ledger 9, 13.4; S1-F13-T03): a receipt count from an opening batch, its source's import
+       * kind opening balance; it creates opening receipt origins, whose value stays Unknown until an opening PT is
+       * approved (PRD-LIF-004, PRD-LIF-027, POL-14.02). A counted row without the valuation evidence PRD-LIF-005 needs
+       * is not opening stock: it is held as excess, its owner, coverage and cost Unknown (9 step 3; PRD-STK-014).
+       */
+      readonly kind: 'opening-count';
+      readonly lineId: string;
+      readonly skuId: string;
+      readonly quantity: number;
+      readonly to: Place;
+      readonly condition: Condition;
+      readonly owner: Owner;
+      readonly pieceCodes?: readonly string[];
+      readonly batch?: { readonly code: string; readonly expiryDate: string };
+      readonly withoutValuationEvidence?: { readonly reason: string };
+    }
+  | {
       readonly kind: 'location-move';
       readonly lineId: string;
       readonly from: Place;
@@ -326,6 +344,7 @@ export type FreezeScope = { readonly locationId: string } | { readonly brandId: 
 /** Every item kind this ledger takes so far (13.4, 13.5). */
 export const ITEM_KINDS: readonly LedgerItemKind[] = [
   'receipt-count',
+  'opening-count',
   'location-move',
   'condition-change',
   'record-coverage',

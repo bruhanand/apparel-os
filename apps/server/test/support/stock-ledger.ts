@@ -40,6 +40,7 @@ import {
   APPROVE_ON_COST,
   SYNTHETIC_DOCUMENT_TYPE,
   SYNTHETIC_MODULE,
+  SYNTHETIC_OPENING_RECORD_TYPE,
   SYNTHETIC_RECORD_TYPE,
 } from '../fixtures/stock-ledger.js';
 import { TEST_COMPOSITION } from './composition.js';
@@ -133,6 +134,8 @@ export const syntheticCaller: CallerRegistration = {
       ],
       importKinds: ['none'],
     },
+    // S1-F13-T03: opening counts, from an opening batch only (stock-ledger 13.2, 13.4).
+    { recordType: SYNTHETIC_OPENING_RECORD_TYPE, itemKinds: ['opening-count'], importKinds: ['opening-balance'] },
   ],
 };
 

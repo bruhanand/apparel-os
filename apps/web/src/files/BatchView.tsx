@@ -16,7 +16,7 @@ import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { codeText } from '../components/StandardStates';
 import { FamilyBadge, StatusBadge } from '../components/StatusBadge';
-import { missingText } from '../components/UnavailableState';
+import { missingText, UnavailableState } from '../components/UnavailableState';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
@@ -367,7 +367,7 @@ export function Batch({ read }: { read: ImportBatchRead }) {
   const publish = useSubmission('publishImport', BATCH_READS);
   const withdraw = useSubmission('withdrawImport', BATCH_READS);
   const exclude = useSubmission('excludeImportDocument', BATCH_READS);
-  const [published, setPublished] = useState<'published' | 'failed' | undefined>();
+  const [published, setPublished] = useState<'published' | 'failed' | 'queued' | undefined>();
   const [entering, setEntering] = useState<{ row: StagedRow; field: string } | null>(null);
   const { batch } = read;
   const open = batch.state === 'Staged' || batch.state === 'Validated';
@@ -375,6 +375,9 @@ export function Batch({ read }: { read: ImportBatchRead }) {
     ...new Set(read.documents.flatMap((document) => document.rows.flatMap((row) => Object.keys(row.values)))),
   ];
   const submitted = batch.submittedVersionId === batch.versionId;
+  // An opening batch publishes only where its gate allows it; otherwise Publish stays visible and disabled, and the
+  // banner names what is missing (imports-and-opening-data 4.2, 10.1; PRD-UXP-003; S1-F13-T03).
+  const unavailable = open && batch.publishing?.state === 'unavailable' ? batch.publishing.missing : undefined;
   return (
     <section aria-label={t('intake.batch', { code: batch.code })} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -405,9 +408,22 @@ export function Batch({ read }: { read: ImportBatchRead }) {
       )}
       <SubmissionBanner state={validate.state} done="intake.validate.done" />
       <SubmissionBanner state={submit.state} done="intake.submit.done" />
+      {unavailable !== undefined && <UnavailableState missing={unavailable} />}
+      {batch.posting !== undefined && (
+        // A request to post waits for its job: the batch stays Validated with the job's state beside it (3.2; 10.6).
+        <Banner tone="info" role="status" message="intake.posting.queued">
+          {t('intake.posting.since', { at: formatDateTime(batch.posting.requestedAt, timeZone) })}
+        </Banner>
+      )}
       <SubmissionBanner
         state={publish.state}
-        done={published === 'failed' ? 'intake.publish.partly' : 'intake.publish.done'}
+        done={
+          published === 'failed'
+            ? 'intake.publish.partly'
+            : published === 'queued'
+              ? 'intake.publish.queued'
+              : 'intake.publish.done'
+        }
       />
       <SubmissionBanner state={withdraw.state} done="intake.withdraw.done" />
       <SubmissionBanner state={exclude.state} done="intake.exclude.done" />
@@ -433,7 +449,16 @@ export function Batch({ read }: { read: ImportBatchRead }) {
             }}
           />
         )}
-        {batch.state === 'Validated' && submitted && (
+        {unavailable !== undefined && (
+          <Button
+            label="intake.publish"
+            variant="primary"
+            disabled
+            reason="intake.publish.unavailable"
+            onClick={() => undefined}
+          />
+        )}
+        {batch.state === 'Validated' && submitted && unavailable === undefined && batch.posting === undefined && (
           <GrantedButton
             label="intake.publish"
             recordType={IMPORT_BATCH_TYPE}
