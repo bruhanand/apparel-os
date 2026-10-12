@@ -11,7 +11,6 @@ export type {
   FinancialYearRead,
   KindFormatDetail,
   KindFormatRead,
-  SettingOrigin as NumberingSettingOrigin,
 } from './commands/settings.js';
 export type { SeriesDefinition } from './commands/define-series.js';
 export type { FormatPart } from './domain/format.js';

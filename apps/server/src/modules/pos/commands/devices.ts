@@ -51,6 +51,8 @@ export interface PosDependencies {
     | 'checkFreshCode'
     | 'requestApproval'
     | 'approvalRequestsOf'
+    | 'requestLockTargets'
+    | 'withdrawRequest'
   >;
   readonly organisation: Pick<OrganisationInterface, 'placeFacts' | 'placeFactsOf'>;
   readonly numbering: NumberingInterface;

@@ -1,4 +1,10 @@
-import type { FormatPartView, SettingOrigin } from '@apparel-os/schemas';
+import {
+  BILL_FORMAT_CHANGE_TYPE,
+  FINANCIAL_YEAR_CHANGE_TYPE,
+  type FinancialYearList,
+  type FormatPartView,
+  type SettingOrigin,
+} from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
@@ -8,7 +14,9 @@ import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { t } from '../messages/catalogue';
 import { formatDate } from './format';
+import { useSession } from '../shell/session';
 import { formatText } from './format-parts';
+import { OriginOptions } from './origin';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, useGranted } from './parts';
 import { stateIdOf } from './states';
 
@@ -16,7 +24,8 @@ import { stateIdOf } from './states';
 // numbering-and-audit 3.3, 3.5; PRD-POS-020, PRD-ACS-006, PRD-UXP-003, POL-10.07; DEC-116, DEC-117; S1-F12-T03). Each
 // shows what is in force and every change prepared with the state of its approval; a change is prepared here and
 // decided by a different authorised person from My work with the approval panel, and its approval gives every Active
-// device its missing bill series. Nothing is chosen on the person's behalf: the label, the dates, the format's code and
+// device its missing bill series. A pending change is withdrawn by its preparer, or by a person holding cancel
+// (access-and-approvals 9.1a; RR-489; product owner, 12 Oct 2026). Nothing is chosen on the person's behalf: the label, the dates, the format's code and
 // parts and the origin are all stated (V-40, GC5-1; code-house-rules 12.14).
 
 const YEAR_READS = ['listFinancialYears', 'listBillingDevices', 'listMyWork'] as const;
@@ -42,12 +51,44 @@ function OriginField({
           onChange(event.target.value as SettingOrigin | '');
         }}
       >
-        <option value="">{t('numbering.choose')}</option>
-        <option value="kdps">{t('security.origin.kdps')}</option>
-        <option value="test-setup">{t('security.origin.test-setup')}</option>
-        <option value="synthetic">{t('security.origin.synthetic')}</option>
+        <OriginOptions choose="numbering.choose" />
       </select>
     </label>
+  );
+}
+
+/**
+ * Withdraws a change still awaiting its decision: its preparer may, and anyone else holding cancel (RR-489; product
+ * owner, 12 Oct 2026). Shown only while the change awaits its decision.
+ */
+function WithdrawChange({
+  change,
+  route,
+  recordType,
+  reads,
+}: {
+  change: { changeId: string; preparedByUserId: string; state: FinancialYearList['changes'][number]['state'] };
+  route: 'withdrawFinancialYearChange' | 'withdrawBillFormatChange';
+  recordType: typeof FINANCIAL_YEAR_CHANGE_TYPE | typeof BILL_FORMAT_CHANGE_TYPE;
+  reads: readonly ('listFinancialYears' | 'readBillFormat' | 'listBillingDevices' | 'listMyWork')[];
+}) {
+  const withdrawal = useSubmission(route, reads);
+  const { session } = useSession();
+  const userId = session.state === 'signed-out' ? undefined : session.user.userId;
+  if (change.state !== 'Awaiting approval' && withdrawal.state.kind !== 'done') return null;
+  const withdraw = () => {
+    void withdrawal.submit({ params: { changeId: change.changeId }, body: {} });
+  };
+  return (
+    <>
+      <SubmissionBanner state={withdrawal.state} done="numbering.withdrawn" />
+      {change.state === 'Awaiting approval' &&
+        (change.preparedByUserId === userId ? (
+          <Button size="small" variant="ghost" label="numbering.withdraw" onClick={withdraw} />
+        ) : (
+          <GrantedButton label="numbering.withdraw" recordType={recordType} action="cancel" onClick={withdraw} />
+        ))}
+    </>
   );
 }
 
@@ -159,6 +200,12 @@ function FinancialYears() {
                         last: formatDate(change.lastDay),
                       })}
                       <StatusBadge state={stateIdOf(change.state)} />
+                      <WithdrawChange
+                        change={change}
+                        route="withdrawFinancialYearChange"
+                        recordType={FINANCIAL_YEAR_CHANGE_TYPE}
+                        reads={YEAR_READS}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -350,6 +397,12 @@ function BillFormat() {
                       <span>{change.formatCode}</span>
                       <span className="font-mono">{formatText(change.parts)}</span>
                       <StatusBadge state={stateIdOf(change.state)} />
+                      <WithdrawChange
+                        change={change}
+                        route="withdrawBillFormatChange"
+                        recordType={BILL_FORMAT_CHANGE_TYPE}
+                        reads={FORMAT_READS}
+                      />
                     </li>
                   ))}
                 </ul>

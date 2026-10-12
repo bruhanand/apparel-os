@@ -30,6 +30,7 @@ import {
   financialYearDraftSchema,
   financialYearListSchema,
   numberingChangePreparedSchema,
+  numberingChangeWithdrawnSchema,
   deviceChallengeRequestSchema,
   deviceChallengeSchema,
   deviceEnrolledSchema,
@@ -1506,8 +1507,11 @@ export const routes = {
       'site-lifecycle.site-already-ready',
       // The financial years and the bill-number format, and the missing series their approval defines
       // (offline-counter 4.3b; S1-F12-T03).
+      // Each code the effect can answer: the origin, the code and the year rechecked under the locks, numbering's
+      // refusal of the format version, and the series refusals a device's missing series can meet (12.3).
       'pos.change-not-found',
       'pos.format-code-taken',
+      'configuration.origin-not-allowed',
       'numbering.financial-year-invalid',
       'numbering.financial-year-label-taken',
       'numbering.financial-year-overlaps',
@@ -4347,6 +4351,34 @@ export const routes = {
       'pos.bill-format-without-device',
       'pos.format-code-taken',
     ],
+  }),
+  // The preparer withdraws their own pending change with no permission; anyone else needs cancel, which the command
+  // Authorises (offline-counter 4.3b; access-and-approvals 9.1a; RR-489; product owner, 12 Oct 2026).
+  withdrawFinancialYearChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/financial-year-changes/{changeId}/withdraw',
+    params: z.strictObject({ changeId: idSchema }),
+    access: { kind: 'own' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangeWithdrawnSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
+  }),
+  withdrawBillFormatChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/bill-format-changes/{changeId}/withdraw',
+    params: z.strictObject({ changeId: idSchema }),
+    access: { kind: 'own' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangeWithdrawnSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

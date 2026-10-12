@@ -1864,6 +1864,14 @@
       "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; only numbering code reads it, inside the owning module's authorised command"
     },
     {
+      "table": "numbering.settings_lock",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["SELECT", "UPDATE (id)"],
+      "design": "numbering-and-audit 3.3, 3.5, 6.1; offline-counter 4.3b; code-house-rules 7.1, 8.1, 8.2",
+      "why": "numbering is named by the owning module's opaque scope key and calls no other module (module-map 4.6), so its rows hold no scope fact a policy could check; its one row holds no value, only the identifier a change of the Organisation's numbering settings locks"
+    },
+    {
       "table": "pos.billing_device",
       "class": "unscoped",
       "marks": ["append-only", "locked"],

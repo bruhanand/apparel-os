@@ -1,3 +1,4 @@
+import type { FormatPartView, SettingOrigin } from '@apparel-os/schemas';
 import { customType, date, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of the pos module's tables (code-house-rules 3.4). They mirror the reviewed migration
@@ -35,16 +36,6 @@ export const billingDeviceUnit = pos.table('billing_device_unit', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** Where a setting's value came from (code-house-rules 12.14). */
-type SettingOrigin = 'kdps' | 'test-setup' | 'synthetic';
-
-/** One part of a number format as a change keeps it (numbering-and-audit 3.5). */
-export type StoredFormatPart =
-  | { readonly kind: 'text'; readonly text: string }
-  | { readonly kind: 'scope' }
-  | { readonly kind: 'year' }
-  | { readonly kind: 'sequence'; readonly width: number };
-
 /** A change that defines a financial year, frozen as prepared (offline-counter 4.3b; migration 0066). Locked. */
 export const financialYearChange = pos.table('financial_year_change', {
   id: uuid('id').primaryKey(),
@@ -62,7 +53,7 @@ export const financialYearChange = pos.table('financial_year_change', {
 export const billFormatChange = pos.table('bill_format_change', {
   id: uuid('id').primaryKey(),
   formatCode: text('format_code').notNull(),
-  parts: jsonb('parts').$type<StoredFormatPart[]>().notNull(),
+  parts: jsonb('parts').$type<FormatPartView[]>().notNull(),
   origin: text('origin').$type<SettingOrigin>().notNull(),
   preparedByUserId: uuid('prepared_by_user_id').notNull(),
   roleAssignmentId: uuid('role_assignment_id').notNull(),

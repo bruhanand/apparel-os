@@ -26,9 +26,12 @@ import {
 import { changeBillingDeviceUnits, endBillingDevice, replaceBillingDevice } from './commands/lifecycle.js';
 import {
   billFormatRead,
+  changePreparer,
   financialYearList,
   prepareBillFormatChange,
   prepareFinancialYearChange,
+  withdrawNumberingChange,
+  type Withdrawer,
 } from './commands/numbering-changes.js';
 import { seriesOfDevice } from './commands/series.js';
 import { unitDevicesCheck } from './queries/devices-check.js';
@@ -120,6 +123,24 @@ export class Pos {
   /** Prepare the change that sets the bill-number format, for a different person to decide (4.3b; S1-F12-T03). */
   prepareBillFormatChange(context: TransactionContext, preparer: Preparer, draft: BillFormatDraftInput) {
     return prepareBillFormatChange(context, this.dependencies, preparer, draft);
+  }
+
+  /** Who prepared a financial-year or bill-format change, or undefined when none has the identifier (4.3b). */
+  changePreparer(context: TransactionContext, kind: 'financial-year' | 'bill-format', changeId: string) {
+    return changePreparer(context, kind, changeId);
+  }
+
+  /**
+   * Withdraw a financial-year or bill-format change awaiting its decision: by its preparer, or by a person holding
+   * cancel (4.3b; access-and-approvals 9.1a; RR-489; product owner, 12 Oct 2026).
+   */
+  withdrawNumberingChange(
+    context: TransactionContext,
+    by: Withdrawer,
+    kind: 'financial-year' | 'bill-format',
+    changeId: string,
+  ) {
+    return withdrawNumberingChange(context, this.dependencies, by, kind, changeId);
   }
 
   /** The financial years defined and every change prepared (4.3b). */

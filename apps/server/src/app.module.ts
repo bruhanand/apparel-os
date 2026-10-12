@@ -136,9 +136,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
           booksApprovals(audit, bookHeldStock),
           // The financial years and the bill-number format, whose approval defines every Active billing device's
-          // missing series, through `numbering` built with every declared kind (offline-counter 4.3b; DEC-117;
-          // S1-F12-T03).
-          posApprovals({ audit, numbering: composedNumbering() }),
+          // missing series, through `numbering` built with every declared kind, the origin rechecked by `configuration`
+          // (offline-counter 4.3b; DEC-117; code-house-rules 12.14; S1-F12-T03).
+          posApprovals({ audit, numbering: composedNumbering(), origins: configuration }),
           // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
           filesImportsApprovals(audit, importHandlers),
         ),

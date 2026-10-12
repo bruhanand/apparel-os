@@ -16,6 +16,7 @@ import { t, type MessageId } from '../messages/catalogue';
 import { useTimeZone } from '../shell/session';
 import { businessDayAfter, useBusinessToday } from './business-date';
 import { formatDate } from './format';
+import { OriginOptions } from './origin';
 import { Card, GrantedButton, HistoryTab, inputClass, ListRead, SubmissionBanner, Toolbar } from './parts';
 import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
@@ -128,10 +129,7 @@ function ChangeForm({ view }: { view: SettingView }) {
           {...describedBy(id('origin'), { invalid: errors.origin !== undefined, help: false })}
           {...form.register('origin' as Path<never>)}
         >
-          <option value="">{t('security.choose')}</option>
-          <option value="kdps">{t('security.origin.kdps')}</option>
-          <option value="test-setup">{t('security.origin.test-setup')}</option>
-          <option value="synthetic">{t('security.origin.synthetic')}</option>
+          <OriginOptions choose="security.choose" />
         </select>
       </FormField>
       <FormField

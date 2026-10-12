@@ -3,8 +3,9 @@ import { billFormatReadSchema, deviceEnrolledSchema, financialYearListSchema } f
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { unitDevicesCheck } from '../src/modules/pos/index.js';
 import { syntheticCode } from './fixtures/synthetic.js';
-import { writeSyntheticReason, type SyntheticUser } from './support/access.js';
+import type { SyntheticUser } from './support/access.js';
 import { BILL_FORMAT, DevicesWorld, done, errorOf, NO_DEVICE_FORMAT, type Call } from './support/billing-devices.js';
+import { APPROVE, formatCode, NumberingChanges, PREPARE, yearLabel } from './support/numbering-changes.js';
 import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F12-T03: the financial years and the bill-number format, each prepared by one person and taking effect only when
@@ -15,27 +16,14 @@ import { backendPid, gate, waitUntilAnyWaitingForLock } from './support/transact
 // here is SYNTHETIC.
 
 const w = new DevicesWorld('posnumbering');
-
-const PREPARE = [
-  { recordType: 'pos.financial_year_change', action: 'view' },
-  { recordType: 'pos.financial_year_change', action: 'create' },
-  { recordType: 'pos.bill_format_change', action: 'view' },
-  { recordType: 'pos.bill_format_change', action: 'create' },
-] as const;
-const APPROVE = [
-  { recordType: 'pos.financial_year_change', action: 'view' },
-  { recordType: 'pos.financial_year_change', action: 'approve' },
-  { recordType: 'pos.bill_format_change', action: 'view' },
-  { recordType: 'pos.bill_format_change', action: 'approve' },
-] as const;
+const changes = new NumberingChanges(w);
 
 let preparer: SyntheticUser;
 let approver: SyntheticUser;
-let approveReason: string;
-let rejectReason: string;
 
 beforeAll(async () => {
   await w.start();
+  await changes.start();
   // The preparer holds approve too, so only independence keeps them from deciding their own change (PRD-ACS-006).
   preparer = (
     await w.enrolled('NUMBERING-PREPARER', [
@@ -45,43 +33,18 @@ beforeAll(async () => {
     ])
   ).user;
   approver = (await w.enrolled('NUMBERING-APPROVER', [...APPROVE])).user;
-  approveReason = await writeSyntheticReason(w.database, 'approve');
-  rejectReason = await writeSyntheticReason(w.database, 'reject');
 });
 afterAll(() => w.close());
 
-const label = () => syntheticCode(`FY-${String(randomInt(1_000_000))}`);
-const formatCode = () => syntheticCode(`BILL-${String(randomInt(1_000_000))}`);
-
-function prepareYear(body: Record<string, unknown>, by: SyntheticUser = preparer): Promise<Call> {
-  return w.post(by, '/api/pos/financial-year-changes', body);
-}
-
-function prepareFormat(body: Record<string, unknown>, by: SyntheticUser = preparer): Promise<Call> {
-  return w.post(by, '/api/pos/bill-format-changes', body);
-}
-
+const label = yearLabel;
+const prepareYear = (body: Record<string, unknown>, by: SyntheticUser = preparer): Promise<Call> =>
+  changes.prepareYear(by, body);
+const prepareFormat = (body: Record<string, unknown>, by: SyntheticUser = preparer): Promise<Call> =>
+  changes.prepareFormat(by, body);
 /** A SYNTHETIC year from `first` to `last` days from today, prepared by the preparer. */
-async function preparedYear(first: number, last: number): Promise<Call & { label: string }> {
-  const year = label();
-  const call = await prepareYear({
-    label: year,
-    firstDay: w.setup.day(first),
-    lastDay: w.setup.day(last),
-    origin: 'synthetic',
-  });
-  expect(call.status).toBe(200);
-  return { ...call, label: year };
-}
-
-function decide(prepared: Call, outcome: 'approve' | 'reject' = 'approve', by: SyntheticUser = approver) {
-  return w.post(by, `/api/access/approval-requests/${prepared.body.requestId as string}/decision`, {
-    versionId: prepared.body.changeId,
-    outcome,
-    reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
-    totpCode: w.freshCode(by),
-  });
-}
+const preparedYear = (first: number, last: number) => changes.preparedYear(preparer, first, last);
+const decide = (prepared: Call, outcome: 'approve' | 'reject' = 'approve', by: SyntheticUser = approver) =>
+  changes.decide(prepared, by, outcome);
 
 async function seriesOf(deviceId: string) {
   return (await w.listed(w.admin)).find((each) => each.deviceId === deviceId)?.series ?? [];

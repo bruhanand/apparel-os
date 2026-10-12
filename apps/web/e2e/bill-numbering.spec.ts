@@ -8,6 +8,7 @@ import { readWorld, type EnrolledUser } from './support/world';
 // Admin enrols a device in the counter app while neither is set, so it has no series; prepares a financial year and,
 // after a format without the device code is refused with its reason, a bill-number format; a different person approves
 // both from My work, reading what each sets on the approval panel; the device then shows its Open series for the year.
+// Last, the Admin withdraws a year of their own still awaiting its decision (RR-489; product owner, 12 Oct 2026).
 // Every year, format and person is SYNTHETIC.
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
@@ -151,6 +152,22 @@ test('PRD-ACS-006 DEC-117 the Admin prepares a financial year and a bill-number 
       await expect(row).toContainText('Open');
       await expect(admin.getByRole('list', { name: 'Financial years' })).toContainText(year);
       await expect(admin.getByText(`In force: ${format}`)).toBeVisible();
+    });
+
+    await test.step('RR-489 the Admin withdraws a financial year of their own still awaiting its decision; it shows Withdrawn', async () => {
+      const withdrawn = `SYN-FY-W-${stamp}`;
+      const form = admin.getByRole('group', { name: 'Define a financial year' });
+      await form.getByLabel('Year label').fill(withdrawn);
+      await form.getByLabel('First day').fill(day(400));
+      await form.getByLabel('Last day').fill(day(700));
+      await form.getByRole('button', { name: 'Request approval' }).click();
+      await expect(form.getByRole('status')).toContainText('Sent for approval');
+      await admin.getByText('Changes', { exact: true }).first().click();
+      const change = admin.getByRole('listitem', { name: withdrawn });
+      await change.getByRole('button', { name: 'Withdraw' }).click();
+      await expect(change.getByRole('status')).toContainText('The change is withdrawn');
+      await expect(change).toContainText('Withdrawn');
+      await expect(admin.getByRole('list', { name: 'Financial years' })).not.toContainText(withdrawn);
     });
   } finally {
     await adminContext.close();

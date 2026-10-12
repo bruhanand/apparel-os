@@ -2084,6 +2084,8 @@ export const englishIndia = {
   'numbering.choose': 'Choose…',
   'numbering.request': 'Request approval',
   'numbering.changes': 'Changes',
+  'numbering.withdraw': 'Withdraw',
+  'numbering.withdrawn': 'The change is withdrawn. It can no longer be decided.',
   'numbering.format.title': 'Bill-number format',
   'numbering.format.intro':
     'How each bill number is written. It must show the device code, so two devices never give the same number. A new format applies only to bill series defined after it is approved.',
@@ -2112,13 +2114,16 @@ export const englishIndia = {
   'history.operation.prepare-financial-year-change': 'Prepared a financial year',
   'history.operation.approve-financial-year-change': 'Approved a financial year',
   'history.operation.reject-financial-year-change': 'Rejected a financial year',
+  'history.operation.withdraw-financial-year-change': 'Withdrew a financial year',
   'history.operation.prepare-bill-format-change': 'Prepared a bill-number format',
   'history.operation.approve-bill-format-change': 'Approved a bill-number format',
   'history.operation.reject-bill-format-change': 'Rejected a bill-number format',
+  'history.operation.withdraw-bill-format-change': 'Withdrew a bill-number format',
   'error.pos.bill-format-without-device':
     'A bill-number format must show the device code, so two devices never give the same number.',
   'error.pos.format-code-taken': 'Another number format already has this code. Give the new format a new code.',
   'error.pos.change-not-found': 'This financial year or bill-number format change was not found.',
+  'error.pos.change-not-awaiting': 'This change no longer awaits its decision: it was decided or withdrawn already.',
   // The devices readiness check (offline-counter section 11; S1-F12-T02).
   'readiness.check.devices': 'Devices',
   'missing.billing-device':

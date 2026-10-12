@@ -1,12 +1,23 @@
 import { uuidv7 } from '@apparel-os/domain';
+import type { SettingOrigin } from '@apparel-os/schemas';
 import { asc, desc, eq, sql } from 'drizzle-orm';
 import {
+  CommandDefect,
   EXCLUSION_VIOLATION,
+  lockTable,
   UNIQUE_VIOLATION,
   withSavepoint,
+  type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { financialYear, kindFormat, numberFormat, numberFormatPart, numberFormatVersion } from '../db/schema.js';
+import {
+  financialYear,
+  kindFormat,
+  numberFormat,
+  numberFormatPart,
+  numberFormatVersion,
+  settingsLock,
+} from '../db/schema.js';
 import type { FormatPart } from '../domain/format.js';
 import { answered, refused, type NumberedKind, type NumberingResult } from '../domain/kinds.js';
 
@@ -17,8 +28,22 @@ import { answered, refused, type NumberedKind, type NumberingResult } from '../d
 // found by an explicit business date (PRD-MOD-009); years never overlap, and a series keeps the format version and
 // the year it was defined with (PRD-MOD-010).
 
-/** Where a setting's value came from (code-house-rules 12.14). */
-export type SettingOrigin = 'kdps' | 'test-setup' | 'synthetic';
+const SETTINGS_LOCK = lockTable('numbering', 'settings_lock');
+
+/**
+ * The row a change of these settings holds exclusively at step 1 (code-house-rules 8.1, 8.2; migration 0067; S1-F12-T03
+ * review): approving a financial year or a kind's format rechecks rows that are only ever added, so none of them can be
+ * locked; holding this one row makes a second approval wait for the first and recheck what it wrote. One row for both
+ * settings, since a year's approval reads the format in force and a format's approval reads the years.
+ */
+export async function settingsLockTargets(context: TransactionContext): Promise<LockTarget[]> {
+  const rows = await context.tx.select({ id: settingsLock.id }).from(settingsLock);
+  const [row] = rows;
+  if (row === undefined || rows.length !== 1) {
+    throw new CommandDefect('numbering.settings_lock holds exactly one row (migration 0067)');
+  }
+  return [{ table: SETTINGS_LOCK, id: row.id, mode: 'exclusive' }];
+}
 
 /** A financial year as defined: its label and its first and last day, as `YYYY-MM-DD` (3.3). */
 export interface FinancialYearDraft {
@@ -169,24 +194,31 @@ export async function kindFormatDetail(context: TransactionContext, kind: string
     .where(eq(numberFormatVersion.numberFormatId, row.formatId))
     .orderBy(desc(numberFormatVersion.version))
     .limit(1);
-  const parts =
-    version === undefined
-      ? []
-      : await context.tx
-          .select({ kind: numberFormatPart.kind, text: numberFormatPart.text, width: numberFormatPart.width })
-          .from(numberFormatPart)
-          .where(eq(numberFormatPart.numberFormatVersionId, version.id))
-          .orderBy(asc(numberFormatPart.position));
-  return {
-    kind: 'set',
-    formatCode: row.code,
-    origin: row.origin,
-    parts: parts.map((part): FormatPart => {
-      if (part.kind === 'text') return { kind: 'text', text: part.text ?? '' };
-      if (part.kind === 'sequence') return { kind: 'sequence', width: part.width ?? 0 };
-      return { kind: part.kind === 'scope' ? 'scope' : 'year' };
-    }),
-  };
+  // A format is written with its first version and its parts in one transaction (define-format), so a format in force
+  // with no version, or a part missing what its kind needs, is corrupt: a defect, never a guess (code-house-rules 12.14).
+  if (version === undefined) throw new CommandDefect(`Format ${row.code} in force has no version`);
+  const parts = await context.tx
+    .select({ kind: numberFormatPart.kind, text: numberFormatPart.text, width: numberFormatPart.width })
+    .from(numberFormatPart)
+    .where(eq(numberFormatPart.numberFormatVersionId, version.id))
+    .orderBy(asc(numberFormatPart.position));
+  return { kind: 'set', formatCode: row.code, origin: row.origin, parts: parts.map(storedPart) };
+}
+
+/** A stored part as the format part it was written from; anything else is a defect (code-house-rules 12.14). */
+function storedPart(part: { kind: string; text: string | null; width: number | null }): FormatPart {
+  switch (part.kind) {
+    case 'text':
+      if (part.text !== null) return { kind: 'text', text: part.text };
+      break;
+    case 'sequence':
+      if (part.width !== null) return { kind: 'sequence', width: part.width };
+      break;
+    case 'scope':
+    case 'year':
+      return { kind: part.kind };
+  }
+  throw new CommandDefect(`A stored format part of kind ${part.kind} is not one numbering writes`);
 }
 
 /** Whether a format of the code exists, for any kind (3.5; S1-F12-T03). */

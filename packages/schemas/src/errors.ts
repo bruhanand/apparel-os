@@ -931,6 +931,8 @@ export const financeTaxRulesCodes = declareCodes({
  * - `pos.format-code-taken`: the format code names a format other than the bill-number format in force, such as
  *   another kind's; a new bill format takes a new code (offline-counter 4.3b).
  * - `pos.change-not-found`: no financial-year or bill-format change has that identifier.
+ * - `pos.change-not-awaiting`: the change no longer awaits its decision, being decided or withdrawn already, so it
+ *   cannot be withdrawn (offline-counter 4.3b; RR-489).
  */
 export const deviceCodes = declareCodes({
   'access.device-code-taken': 'refused',
@@ -948,6 +950,7 @@ export const deviceCodes = declareCodes({
   'pos.bill-format-without-device': 'refused',
   'pos.format-code-taken': 'refused',
   'pos.change-not-found': 'not-found',
+  'pos.change-not-awaiting': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

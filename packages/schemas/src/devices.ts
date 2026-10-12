@@ -245,6 +245,9 @@ export type BillFormatDraftInput = z.input<typeof billFormatDraftSchema>;
 /** A change prepared: the change, and the approval request a different person decides (access-and-approvals 9.1). */
 export const numberingChangePreparedSchema = z.strictObject({ changeId: idSchema, requestId: idSchema });
 
+/** A change withdrawn by its preparer, or by a person holding cancel (access-and-approvals 9.1a; RR-489). */
+export const numberingChangeWithdrawnSchema = z.strictObject({ changeId: idSchema });
+
 /** Who prepared a change and when, and the state of its approval request (access-and-approvals 9.1, 9.6). */
 const changeHeadSchema = {
   changeId: idSchema,
