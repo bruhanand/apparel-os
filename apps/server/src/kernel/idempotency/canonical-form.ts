@@ -314,6 +314,8 @@ export interface EncryptedLeaf {
   readonly fieldClass: FieldClass;
   readonly scheme: string;
   readonly ciphertext: string;
+  /** The key version that encrypted it (backup-and-restore 2.3), where the cipher names one. */
+  readonly keyVersion?: string;
 }
 
 /**
@@ -329,7 +331,13 @@ export function formWithEncryptedLeaves(prepared: PreparedRequest, encrypted: re
     const value = encrypted[index];
     if (value === undefined) throw new CommandDefect('Every restricted value of a kept request is encrypted');
     body = replaceAt(body, leaf.path, {
-      encrypted: { fieldClass: value.fieldClass, scheme: value.scheme, ciphertext: value.ciphertext },
+      encrypted: {
+        fieldClass: value.fieldClass,
+        scheme: value.scheme,
+        ciphertext: value.ciphertext,
+        // The key version that encrypted it, where the cipher names one (backup-and-restore 2.3; S1-F14-T02).
+        ...(value.keyVersion === undefined ? {} : { keyVersion: value.keyVersion }),
+      },
     });
   });
   return { ...prepared.form, body };

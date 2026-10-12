@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import * as kernelTables from '../db/schema.js';
 import { JOB_RECORD_TYPE } from '../jobs/job-failed.js';
 import { tablesOf, type RestoreParticipant } from './restore-contract.js';
@@ -17,6 +18,17 @@ export const kernelRestoreParticipant: RestoreParticipant = {
     'pgboss.job',
   ].sort(),
   records: [{ recordType: JOB_RECORD_TYPE, table: 'pgboss.job' }],
+  // The restricted values kept encrypted in refused requests name their key version; those kept before key versions
+  // were recorded name none, and are the first version's (backup-and-restore 2.3, 10.4).
+  async keyVersions(context) {
+    const rows = await context.tx.execute<{ identifier: string | null; uses: string }>(
+      sql`select v ->> 'keyVersion' as identifier, count(*)::text as uses
+            from kernel.idempotency_conflict c,
+                 pg_catalog.jsonb_path_query(c.request_form, 'lax $.**.encrypted') v
+           group by 1`,
+    );
+    return rows.rows.map((row) => ({ identifier: row.identifier, uses: Number(row.uses) }));
+  },
   notReferences: {
     'kernel.idempotency_key.actor_id': 'a user or a service identity; the key is checked with its result',
     'kernel.outbox_event.actor_id': 'a user or a service identity',

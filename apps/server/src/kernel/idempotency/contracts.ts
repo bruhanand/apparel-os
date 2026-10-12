@@ -85,6 +85,8 @@ export const secretCheckNotImplemented: ReplaySecretCheck = {
 export interface EncryptedValue {
   readonly scheme: string;
   readonly ciphertext: string;
+  /** The identifier of the key version that encrypted it (backup-and-restore 2.3, 2.4), kept beside it. */
+  readonly keyVersion?: string;
 }
 
 /**

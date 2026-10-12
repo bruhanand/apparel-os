@@ -1,7 +1,7 @@
 import { Secret } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { CommandDefect } from '../command-runner/command-errors.js';
-import { canonicalJson, prepareRequest, type RequestContent } from './canonical-form.js';
+import { canonicalJson, formWithEncryptedLeaves, prepareRequest, type RequestContent } from './canonical-form.js';
 
 // S1-F01-T04: the canonical form of a request and its hash (code-house-rules 12.4 "What is hashed", 12.5).
 
@@ -95,5 +95,32 @@ describe('prepareRequest (code-house-rules 12.4, 12.5)', () => {
         content({ lines: { cost: 1 } }, { restrictedFields: [{ path: ['lines', '*', 'cost'], fieldClass: 'cost' }] }),
       ),
     ).toThrow(CommandDefect);
+  });
+});
+
+describe('a kept refused request (code-house-rules 12.4 "Changed content")', () => {
+  it('POL-18.02 keeps each restricted value encrypted with the key version that encrypted it (backup-and-restore 2.3)', () => {
+    const prepared = prepareRequest(
+      'kernel.synthetic',
+      content({ cost: 100 }, { restrictedFields: [{ path: ['cost'], fieldClass: 'cost' }] }),
+    );
+    const kept = formWithEncryptedLeaves(prepared, [
+      {
+        fieldClass: 'cost',
+        scheme: 'SYNTHETIC-scheme',
+        ciphertext: 'SYNTHETIC-ciphertext',
+        keyVersion: '5e'.repeat(16),
+      },
+    ]);
+    expect(kept.body).toEqual({
+      cost: {
+        encrypted: {
+          fieldClass: 'cost',
+          scheme: 'SYNTHETIC-scheme',
+          ciphertext: 'SYNTHETIC-ciphertext',
+          keyVersion: '5e'.repeat(16),
+        },
+      },
+    });
   });
 });
