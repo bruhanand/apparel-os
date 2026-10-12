@@ -75,7 +75,7 @@ What happens when a copy of a key is lost or damaged (`POL-18.02`). **Design cho
 - **A kept copy lost or damaged**, with the environment's copy sound: the custodian makes a new kept copy from the environment's at once, checked by its identifier, and the operator records it with the same command. The backup key's private part (GC9-17) has no copy in the environment, so a lost kept copy is a lost key (below) unless the custodian holds a second copy; how many copies the custodian keeps, and where, is the custodian's under policy 18 (RR-236, RR-237).
 - **A suspected leak** is not a loss: the key stays usable, and replacing it is rotation, designed with production hosting (GC9-11). Until then a suspected leak on test hosting is reported to the product owner, who decides what follows.
 - **What the drill checks** (section 6). The restore uses the custodian's kept copies, never the environment's: every key version the manifest lists is taken from its kept copy and must match its identifier, and the drill record says so for each. A drill that had to use an environment copy fails that check.
-- **As built** (`S1-F14-T02`, 12 Oct 2026): identifiers, the start check and the first version recorded at start are in 10.4. The operator command that records a key recovery is not built yet; no `S1-F14` ticket names it (10.4).
+- **As built** (`S1-F14-T02`, 12 Oct 2026): identifiers, the start check and the first version recorded at start are in 10.4. The operator command that records a key recovery is not built yet; no `S1-F14` ticket names it (10.4). The restore takes every key from its kept copy at its prompt and names each version used in the drill record (`S1-F14-T03`; 10.5); the operator command that records a key recovery is still not built (10.5, proposed open items).
 - **What is lost if every copy is lost.**
   - *An Organisation's data key version:* every value and file it encrypted, in the live database, the file store and every backup: bank details, identity documents, salary and payroll data, authenticator secrets, restricted values kept in refused requests, receipt names and references, and every stored file's content. Records that are not encrypted are untouched, and each stored file keeps its content hash, which proves what was held. Recovery is by people: every user enrols the authenticator again (the operator's recovery of the first users, then the Admin's resets; access-and-approvals 3.2), and encrypted master values are entered again with their independent approvals. Each loss is raised as an exception with its evidence (`PRD-EXC-001`). A new key version is made for new data.
   - *The backup key version:* every backup it encrypted can no longer be opened. The live data is untouched. A new backup key version is made and a new application backup taken at once; the old backups are recorded as unopenable and are never offered for restore.
@@ -144,6 +144,8 @@ The restore command is an operator command, like the backup command (3.2). It wr
 8. **Report.** The drill record lists each check with its result, and the operations view shows the Organisation as restored and held (`PRD-SEC-013`).
 
 Steps 1 to 8 run without people. What follows needs authorised people (4.3): reconciling series and other recovery gaps, validating, and reopening.
+
+- **As built** (`S1-F14-T03`): `pnpm --filter @apparel-os/server restore`; the hold is placed before the directory names the restored database, and the control totals are compared before anything is written to it. The details settled while building it are in 10.5.
 
 ### 4.3 Recovery hold and reopening
 
@@ -392,11 +394,11 @@ Every table has a UUIDv7 primary key and an entry in its set's table register (c
 | Schema | Table | Class | Constraints |
 | --- | --- | --- | --- |
 | `kernel` (Organisation set) | `backup_record` | `unscoped`: technical rows only `kernel` reads; this section is the reason | append-only: backup identifier, snapshot time, result, manifest hash; as built (migration 0066) also the environment, the code commit, the backup key version, the failure kinds of a failed backup and when it finished |
-| `kernel` (Organisation set) | `recovery_event` | `unscoped`, as above | append-only: restored from which backup and recovery point; hold placed; each participant's result; hold lifted |
-| `kernel` (Organisation set) | `recovery_hold` | `unscoped`, as above | projection of `recovery_event`; at most one row |
-| `configuration` | `retention_schedule` + versions | `unscoped`: Organisation-wide settings, guarded by Authorise | one in force per record class; no row until KDPS sets a period |
+| `kernel` (Organisation set) | `recovery_event` | `unscoped`, as above | append-only: restored from which backup and recovery point; hold placed; each participant's result; hold lifted; as built (migration 0070) also each recovery gap with its subject and time, and who lifted the hold through which assignment |
+| `kernel` (Organisation set) | `recovery_hold` | `unscoped`, as above | projection of `recovery_event`; at most one row; as built (migration 0070) `locked`, so the reopen command locks it before it rechecks and lifts it |
+| `configuration` | `retention_schedule` + versions | `unscoped`: Organisation-wide settings, guarded by Authorise | one in force per record class; no row until KDPS sets a period; as built (migration 0072) with no command that writes one |
 | `configuration` | `legal_hold`, `legal_hold_release` | `unscoped`, as above | append-only; a release names its hold, once |
-| `configuration` | `recovery_validation` | `unscoped`, as above | append-only: Operations or Accounts, what was compared, evidence, the restore it validates |
+| `configuration` | `recovery_validation` | `unscoped`, as above | append-only: Operations or Accounts, what was compared, evidence, the restore it validates; as built (migration 0072) the evidence is text, since no file is stored while held |
 | `access` | `key_version` | `unscoped`: technical rows; no key, only its identifier | append-only: identifier, purpose, first used; unique identifier (2.4) |
 | `files_imports` | `stored_file_deletion` | `unscoped`: holds no scope fact, name or reference | append-only: stored file identifier, content hash, object key, schedule versions, hold check, job; the object's outcome kept as a projection (8.5). Not built in `S1-F14` |
 

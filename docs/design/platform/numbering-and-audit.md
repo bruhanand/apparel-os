@@ -182,7 +182,7 @@ Every table has a UUIDv7 primary key. Each module owns one PostgreSQL schema ([s
 | `number_format` + versions | code | a statutory kind's format records the CA's confirmation |
 | `series` | kind, scope key and year, for an open or paused series | format fixed for life; closed is final |
 | `allocation` | series and sequence number; document; formatted text within its display scope | append-only |
-| `series_event` | — | append-only: defined, paused, released, closed, reconciled after a restore |
+| `series_event` | — | append-only: defined, paused, released, closed, reconciled after a restore; as built (migration 0071; `S1-F14-T03`) the events `paused-after-restore`, written for every live series, Open or Paused, and `reconciled-after-restore`, each naming its restore, the second with the evidence, the highest number it shows, the highest restored allocation, the next number before and after, and the reason ([backup-and-restore.md](backup-and-restore.md) 10.5) |
 
 As built (`S1-F08-T01`, migration 0033), details this section left open; none is a business value:
 
