@@ -6,7 +6,7 @@ Updated 13 Oct 2026.
 
 - **Stage 0 (preparation): done.** Tools, house rules, database roles and test data are in place.
 - **Stage 1 (shared foundation): started.** Details in [stage-1/README.md](plan/stage-1/README.md); the whole stage in one [spec](plan/stage-1/spec.md).
-  - **79 of 91 tickets done; 12 left** (2 blocked, 10 merged into another ticket). The count of 30 open given on 7 Oct 2026 was wrong and is corrected here.
+  - **80 of 91 tickets done; 11 left** (1 blocked, 10 merged into another ticket). The count of 30 open given on 7 Oct 2026 was wrong and is corrected here.
   - **Sign-in and access control (`S1-F01`): done and accepted (7 Oct 2026).** It is on the branch `s1/f01-first-access`, with both rounds of review fixes merged in; it was merged into `main` and deployed to `dev` on 7 Oct 2026, on your go-ahead. Setup, sign-in with an authenticator code, sessions and the lock screen, roles and assignments, approvals by a second person from My work, the access screens and history all work on synthetic data. Every check passes locally (build, lint, typecheck, unit, integration, module, link and format checks), and so do the six browser journeys (sign-in, no access, lock, approval, security settings, one address). The hands-on test ([test-report.md](plan/stage-1/s1-f01-first-access/test-report.md)) passed all 32 cases; its seven findings were fixed as `S1-F01-T29` to `T35`, merged into `main` and deployed to `dev`. You watched Demo 1 on `dev` and accepted `S1-F01` on 7 Oct 2026.
   - **T22 to T25 are built and reviewed**, from your answers of 7 Oct 2026 (`DEC-118`): disabling a user or locking a role takes effect the same moment (T22); the no-access page, the company's time zone on screens, the enrolment QR code and the fonts (T23); worker retries, history upkeep and the two test companies set up properly (T24); and changing the security settings after setup, prepared by one person and approved by another (T25).
   - **T26 and T27 are built and reviewed.** From your answers (`DEC-120`): the starting Admin can now prepare a security settings change and the starting approver can approve it, never both (T26); and the dates on a role assignment are checked at every request, so an expired one stops working at once, without waiting for a background job (T26). The server now serves the screens and the API at one address, as the `dev` setup needs (T27); the counter's address waits for the counter app.
@@ -42,8 +42,7 @@ Updated 13 Oct 2026.
 
 ## What's next
 
-1. Merge `s1/f13-publish-fixes` (`S1-F13-T03`, done) into `main` on your go-ahead, which closes `S1-F13`.
-2. Then the restore drill on `dev` (`S1-F14-T04`, which needs your Railway go-ahead and the custodian's backup keys).
+1. The restore drill on `dev` (`S1-F14-T04`): the last open stage 1 ticket. It needs your Railway go-ahead (a backup bucket, a backup service, a separate target PostgreSQL server) and the custodian's backup and signing key pairs.
 
 ## Waiting on you
 
