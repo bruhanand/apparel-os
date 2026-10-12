@@ -39,8 +39,8 @@ Updated 12 Oct 2026.
 
 ## What's next
 
-1. Stock ledger part 2 (`S1-F10` T03, T04, T06, T07) is done and accepted; it waits for your go-ahead to merge into `main`.
-2. Then the rest, in the order of the [stage spec](plan/stage-1/spec.md).
+1. Backup and restore (`S1-F14` T02, T03): built and reviewed; review fixes in progress, then merged into `main`.
+2. Then the opening publish gate (`S1-F13-T03`) and the restore drill on `dev` (`S1-F14-T04`, which needs your Railway go-ahead and the backup keys).
 
 ## Waiting on you
 
