@@ -1,6 +1,7 @@
 import {
   BACKUP_STORE_VARIABLES,
   backupPublicKeyFromEnvironment,
+  BackupSigningKey,
   bucketSettingsFrom,
   connectionToDatabase,
   deploymentEnvironmentFromEnvironment,
@@ -24,6 +25,9 @@ import { restoreRegistry } from './restore-participants.js';
 // AOS_ENVIRONMENT: the environment the backup is of; a restore refuses a backup of another (4.1).
 // AOS_BACKUP_PUBLIC_KEY: the backup key's public part, base64 of its SPKI DER form. The private part is never an
 //   environment secret (2.3; GC9-17).
+// AOS_BACKUP_SIGNING_KEY: the backup signing key, base64 of an Ed25519 key's PKCS #8 DER form, held only by the backup
+//   runner, never by `app` or `worker`; a restore refuses a backup it did not sign (product owner, 12 Oct 2026). Never
+//   logged.
 // AOS_BACKUP_STORE_ENDPOINT, _REGION, _BUCKET, _ACCESS_KEY_ID, _SECRET_ACCESS_KEY, _ADDRESSING: the backup store,
 //   a bucket apart from the file store (GC9-A4).
 // AOS_FILE_STORE_*: the file store, read to copy each Organisation's objects (3.3), as `app` has them. With none set,
@@ -66,6 +70,7 @@ export async function runBackupCommand(input: BackupCommandInput): Promise<Backu
     settings = {
       environment: deploymentEnvironmentFromEnvironment(input.env).name,
       publicKey: backupPublicKeyFromEnvironment(input.env),
+      signingKey: BackupSigningKey.fromEnvironment(input.env),
       backupStore: bucketSettingsFrom(input.env, BACKUP_STORE_VARIABLES),
       fileStore: Object.values(FILE_STORE_VARIABLES).some((name) => (input.env[name] ?? '') !== '')
         ? bucketSettingsFrom(input.env, FILE_STORE_VARIABLES)
@@ -85,6 +90,7 @@ export async function runBackupCommand(input: BackupCommandInput): Promise<Backu
       environment: settings.environment,
       codeCommit: nonEmpty(input.env.RAILWAY_GIT_COMMIT_SHA),
       publicKey: settings.publicKey,
+      signingKey: settings.signingKey,
       newBackupKeyVersion: input.args.includes(NEW_KEY_VERSION),
       backupStore,
       copyFiles: (organisationId) =>

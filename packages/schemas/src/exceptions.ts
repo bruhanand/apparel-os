@@ -191,6 +191,17 @@ export const commentRequestSchema = z.strictObject({ comment: z.string().trim().
 export const reassignRequestSchema = z.strictObject({ to: exceptionPartySchema });
 export const noBodySchema = z.strictObject({});
 export const exceptionChangedSchema = z.strictObject({ exceptionId: idSchema, state: exceptionStateSchema });
+
+/**
+ * Settle the exception raised for a recovery gap or a failed check of a restore (backup-and-restore 4.3, 4.5; product
+ * owner, 12 Oct 2026): resolved, the lost work entered again or the gap explained, or accepted, the gap accepted as it
+ * is, with the reason. Reopening the restored Organisation waits until every such exception is settled.
+ */
+export const recoveryGapSettlementSchema = z.strictObject({
+  settlement: z.enum(['resolved', 'accepted']),
+  reason: z.string().trim().min(1).max(2000),
+});
+export type RecoveryGapSettlement = z.infer<typeof recoveryGapSettlementSchema>;
 /** Evidence added to an open exception (12.3; POL-03.05; S1-F08-T03): stored files, each stored first. */
 export const exceptionEvidenceRequestSchema = z.strictObject({ evidence: evidenceListSchema });
 /** What adding evidence answers: the attachment of each file, in the order given. */

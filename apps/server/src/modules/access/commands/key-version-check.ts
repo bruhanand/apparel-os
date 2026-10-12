@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { Inject, Injectable, type OnApplicationBootstrap } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import {
   COMMAND_RUNNER,
   LOGGER,
@@ -10,7 +10,8 @@ import {
   type OrganisationRouter,
   type StructuredLogger,
 } from '../../../kernel/index.js';
-import { keyVersion } from '../db/schema.js';
+import { keyVersion, secondFactor } from '../db/schema.js';
+import { openFactorSecret } from '../domain/factor-secret.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { ORGANISATION_KEYS } from '../tokens.js';
 
@@ -22,8 +23,19 @@ import { ORGANISATION_KEYS } from '../tokens.js';
 //
 // An Organisation whose database lists no version yet, one set up before key versions were recorded or since the last
 // start, has its environment key recorded as its first version, the time it was first used (backup-and-restore 2.4
-// "As built"): until then nothing names a version to compare with. An Organisation the directory lists and the
-// environment holds no key for is left as before: the key refuses when it is first needed (deployment.md section 9).
+// "As built"): until then nothing names a version to compare with. Before it is recorded, the key is proved against the
+// data already there (product owner, 12 Oct 2026): a sample of the Organisation's encrypted authenticator secrets,
+// `access`'s own encrypted values, must each open with it; a key that cannot open them is refused, naming the
+// Organisation, the key's identifier and the rows' identifiers, never a key or a value. An Organisation with no such
+// value yet has nothing to prove the key against, and its first version is the key every value will be sealed with.
+// An Organisation the directory lists and the environment holds no key for is left as before: the key refuses when it
+// is first needed (deployment.md section 9).
+
+/**
+ * How many encrypted values the start check opens before it records a first key version: a technical limit, enough to
+ * show a swapped key without reading every row at each start; not a KDPS value.
+ */
+export const FIRST_VERSION_SAMPLE = 20;
 
 /** The key in the environment is not a version the Organisation's database lists. Names identifiers, never a key. */
 export class KeyVersionNotListed extends Error {
@@ -40,6 +52,21 @@ export class KeyVersionNotListed extends Error {
   }
 }
 
+/** The key in the environment does not open the Organisation's data, so it is never recorded as its first version. */
+export class KeyDoesNotOpenData extends Error {
+  constructor(readonly failures: readonly { code: string; environment: string; rows: readonly string[] }[]) {
+    super(
+      `The server refuses to start: ${failures
+        .map(
+          (each) =>
+            `Organisation ${each.code}'s key in the environment, version ${each.environment}, does not open its encrypted values (access.second_factor ${each.rows.join(', ')}), so it is not recorded as its first key version`,
+        )
+        .join('; ')}. Put back the kept copy of the key that sealed them (backup-and-restore 2.4)`,
+    );
+    this.name = 'KeyDoesNotOpenData';
+  }
+}
+
 /** Compares, and where none is listed records, each Organisation's key version. Throws on a difference. */
 export async function checkKeyVersions(
   router: OrganisationRouter,
@@ -49,6 +76,7 @@ export async function checkKeyVersions(
 ): Promise<void> {
   const versions = keys.versions();
   const mismatches: { code: string; environment: string; listed: string[] }[] = [];
+  const unopened: { code: string; environment: string; rows: string[] }[] = [];
   for (const organisation of await router.listOrganisations()) {
     const environment = versions.get(organisation.organisationCode);
     if (environment === undefined) continue;
@@ -66,6 +94,23 @@ export async function checkKeyVersions(
           .where(eq(keyVersion.purpose, 'organisation-data'))
           .orderBy(keyVersion.firstUsedAt);
         if (rows.length > 0) return rows.map((row) => row.identifier);
+        const sample = await context.tx
+          .select({ id: secondFactor.id, scheme: secondFactor.secretScheme, ciphertext: secondFactor.secretCiphertext })
+          .from(secondFactor)
+          .orderBy(asc(secondFactor.id))
+          .limit(FIRST_VERSION_SAMPLE);
+        const failing = sample.flatMap((factor) => {
+          try {
+            openFactorSecret(keys, organisation.organisationCode, factor);
+            return [];
+          } catch {
+            return [factor.id];
+          }
+        });
+        if (failing.length > 0) {
+          unopened.push({ code: organisation.organisationCode, environment, rows: failing });
+          return [];
+        }
         await context.tx
           .insert(keyVersion)
           .values({
@@ -84,10 +129,11 @@ export async function checkKeyVersions(
         return [environment];
       },
     );
-    if (!listed.includes(environment)) {
+    if (listed.length > 0 && !listed.includes(environment)) {
       mismatches.push({ code: organisation.organisationCode, environment, listed });
     }
   }
+  if (unopened.length > 0) throw new KeyDoesNotOpenData(unopened);
   if (mismatches.length > 0) throw new KeyVersionNotListed(mismatches);
 }
 

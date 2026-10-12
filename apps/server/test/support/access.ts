@@ -297,6 +297,11 @@ export async function startAccessApp(
     readonly locationInUse?: LocationInUse;
     /** SYNTHETIC posting event kinds, declared in the test composition (books-and-posting 7.1; S1-F09-T02). */
     readonly postingEventKinds?: readonly PostingEventKind[];
+    /**
+     * The directory database as the runtime role, on another server than the run's, such as a restore's target
+     * (backup-and-restore 4.1); the world's directory on the run's server unless given.
+     */
+    readonly directoryRuntimeUrl?: string;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -359,7 +364,10 @@ export async function startAccessApp(
     .overrideProvider(LOGGER)
     .useValue(logger)
     .overrideProvider(ROUTING_ENVIRONMENT)
-    .useValue({ AOS_RUNTIME_DATABASE_URL: databaseUrl(world.directory, 'runtime'), AOS_DATABASE_POOL_MAX: '4' })
+    .useValue({
+      AOS_RUNTIME_DATABASE_URL: options.directoryRuntimeUrl ?? databaseUrl(world.directory, 'runtime'),
+      AOS_DATABASE_POOL_MAX: '4',
+    })
     .overrideProvider(HTTP_ENVIRONMENT)
     .useValue({ AOS_PUBLIC_ORIGIN: options.origin ?? SYNTHETIC_ORIGIN, AOS_TRUSTED_PROXY_HOPS: '1' })
     .overrideProvider(ACCESS_ENVIRONMENT)

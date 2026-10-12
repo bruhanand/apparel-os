@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, hkdfSync, randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { ORGANISATION_KEYS_VARIABLE, OrganisationKeys } from './organisation-keys.js';
 
@@ -75,5 +75,35 @@ describe('the Organisation keys (access-and-approvals 6)', () => {
         [CODE_B, keys().version(CODE_B)],
       ]),
     );
+  });
+
+  it('backup-and-restore 2.4 takes the identifier from a subkey of its own, never the raw key (domain separation)', () => {
+    const raw = Buffer.from(keyA, 'base64url');
+    const underRaw = createHmac('sha256', raw).update('apparel-os/key-version', 'utf8').digest().subarray(0, 16);
+    expect(keys().version(CODE_A)).not.toBe(underRaw.toString('hex'));
+    const subkey = Buffer.from(hkdfSync('sha256', raw, Buffer.alloc(0), 'apparel-os/key-version-identifier', 32));
+    const underSubkey = createHmac('sha256', subkey).update('apparel-os/key-version', 'utf8').digest().subarray(0, 16);
+    expect(keys().version(CODE_A)).toBe(underSubkey.toString('hex'));
+  });
+
+  it('backup-and-restore 2.4 opens each value with the kept copy of the version it names, several versions kept', () => {
+    const older = randomBytes(32).toString('base64url');
+    const olderKeys = OrganisationKeys.fromEnvironment({
+      [ORGANISATION_KEYS_VARIABLE]: JSON.stringify({ [CODE_A]: older }),
+    });
+    const sealedOld = olderKeys.encrypt(CODE_A, 'stored-file', Buffer.from('syn-old'), 'ctx');
+    const sealedNew = keys().encrypt(CODE_A, 'stored-file', Buffer.from('syn-new'), 'ctx');
+    const kept = OrganisationKeys.fromKeptCopies(JSON.stringify({ [CODE_A]: [keyA, older], [CODE_B]: keyB }));
+    expect(kept.heldVersions().get(CODE_A)).toEqual(new Set([keys().version(CODE_A), olderKeys.version(CODE_A)]));
+    expect(kept.decrypt(CODE_A, 'stored-file', sealedOld, 'ctx').toString()).toBe('syn-old');
+    expect(kept.decrypt(CODE_A, 'stored-file', sealedNew, 'ctx').toString()).toBe('syn-new');
+    // A value written before key versions were recorded names none: whichever kept version opens it does.
+    const unnamed = { scheme: sealedOld.scheme, ciphertext: sealedOld.ciphertext };
+    expect(kept.decrypt(CODE_A, 'stored-file', unnamed, 'ctx').toString()).toBe('syn-old');
+    // A version not kept does not open.
+    const onlyNew = OrganisationKeys.fromKeptCopies(JSON.stringify({ [CODE_A]: keyA }));
+    expect(() => onlyNew.decrypt(CODE_A, 'stored-file', sealedOld, 'ctx')).toThrow(/not held/);
+    expect(() => OrganisationKeys.fromKeptCopies('{"SYN": ["short"]}')).toThrow(/kept copies/);
+    expect(() => OrganisationKeys.fromKeptCopies(`{"SYN": ["${older}"]`)).not.toThrow(new RegExp(older));
   });
 });

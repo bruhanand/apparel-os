@@ -45,6 +45,22 @@ export interface DrillCheck {
   readonly checked: number;
   readonly failed: number;
   readonly subject?: string;
+  /** The check run: 1 for the restore, one more for each run of the checks again (`restore --recheck`). */
+  readonly run?: number;
+}
+
+/**
+ * A recovery item (4.3, 4.5, 5.1): a gap after the recovery point or a failed step or check, with the exception raised
+ * for it and how that was settled, where it was (product owner, 12 Oct 2026).
+ */
+export interface DrillRecoveryItem {
+  readonly eventId: string;
+  readonly kind: 'gap' | 'failure';
+  readonly unit: string;
+  readonly name: string;
+  readonly subject: string | null;
+  readonly exceptionId: string | null;
+  readonly settlement: 'resolved' | 'accepted' | null;
 }
 
 export interface DrillGap {
@@ -82,8 +98,8 @@ export interface DrillOrganisation {
   readonly databaseTo: string;
   readonly checks: readonly DrillCheck[];
   readonly gaps: readonly DrillGap[];
-  /** How the gaps were settled, once reopened: the reopening confirms it (4.3, 4.5). */
-  readonly gapsSettled: string | null;
+  /** Every gap and failure to settle before reopening, as last read, with its exception (4.3, 4.5). */
+  readonly recoveryItems: readonly DrillRecoveryItem[];
   readonly seriesToReconcile: number;
   readonly seriesReconciled: readonly DrillReconciliation[];
   readonly validations: readonly DrillValidation[];
@@ -186,7 +202,7 @@ export function drillRecordText(record: DrillRecord): string {
     add('  Checks');
     for (const check of organisation.checks) {
       add(
-        `    ${check.passed ? 'passed' : 'FAILED'}  ${check.unit}: ${check.check}${check.subject === undefined ? '' : ` [${check.subject}]`} (${String(check.checked)} checked, ${String(check.failed)} failed)`,
+        `    ${check.passed ? 'passed' : 'FAILED'}  ${check.unit}: ${check.check}${check.subject === undefined ? '' : ` [${check.subject}]`} (${String(check.checked)} checked, ${String(check.failed)} failed${(check.run ?? 1) > 1 ? `; check run ${String(check.run)}` : ''})`,
       );
     }
     add(`  Recovery gaps: ${organisation.gaps.length === 0 ? 'none' : ''}`);
@@ -195,7 +211,12 @@ export function drillRecordText(record: DrillRecord): string {
         `    ${gap.unit}: ${gap.name} ${gap.subject}, stored ${gap.subjectAt ?? 'at a time not known'}${gap.afterRecoveryPoint ? ', after the recovery point' : ''}`,
       );
     }
-    if (organisation.gapsSettled !== null) add(`    Settled: ${organisation.gapsSettled}`);
+    add(`  To settle before reopening: ${organisation.recoveryItems.length === 0 ? 'nothing' : ''}`);
+    for (const item of organisation.recoveryItems) {
+      add(
+        `    ${item.kind} ${item.unit}: ${item.name}${item.subject === null ? '' : ` [${item.subject}]`}: ${item.exceptionId === null ? 'no exception raised yet' : `exception ${item.exceptionId}, ${item.settlement ?? 'not settled yet'}`}`,
+      );
+    }
     add(
       `  Series reconciled: ${String(organisation.seriesReconciled.length)} of ${String(organisation.seriesToReconcile + organisation.seriesReconciled.length)}`,
     );

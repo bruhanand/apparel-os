@@ -57,6 +57,14 @@ export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<
   }
 }
 
+/** The connection is not the migration role on a database it owns: its message names roles and a database only. */
+export class NotConnectedAsOwner extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotConnectedAsOwner';
+  }
+}
+
 /**
  * Refuses to run unless the session is the migration role itself, as a non-superuser, on a database that role owns
  * (code-house-rules 5.1). A superuser or any other role would leave objects under the wrong owner, and the runtime
@@ -77,7 +85,11 @@ export async function checkConnectedAsOwner(client: Client, refused = 'Migration
     from pg_catalog.pg_roles r, pg_catalog.pg_database d
     where r.rolname = current_user and d.datname = current_database()`);
   const session = result.rows[0];
-  if (session === undefined) throw new Error('Could not read the role and database of the migration connection');
+  if (session === undefined) {
+    throw new NotConnectedAsOwner(
+      `${refused}, nothing changed: the role and database of the connection were not found`,
+    );
+  }
   const problems: string[] = [];
   if (session.superuser) problems.push(`${session.current_user} is a superuser`);
   if (session.bypasses_rls) problems.push(`${session.current_user} bypasses row-level security`);
@@ -88,7 +100,7 @@ export async function checkConnectedAsOwner(client: Client, refused = 'Migration
     problems.push(`database ${session.database} is owned by ${session.database_owner}, not ${MIGRATION_ROLE}`);
   }
   if (problems.length > 0) {
-    throw new Error(`${refused}, nothing changed: ${problems.join('; ')}`);
+    throw new NotConnectedAsOwner(`${refused}, nothing changed: ${problems.join('; ')}`);
   }
 }
 

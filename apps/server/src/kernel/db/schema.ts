@@ -156,6 +156,8 @@ export const recoveryEvent = kernel.table('recovery_event', {
   subjectAt: timestamp('subject_at', { withTimezone: true }),
   actorId: uuid('actor_id'),
   roleAssignmentId: uuid('role_assignment_id'),
+  checkRun: integer('check_run'),
+  aboutEventId: uuid('about_event_id'),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
 });

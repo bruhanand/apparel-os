@@ -53,14 +53,13 @@ export type RecoveryValidationDraft = z.infer<typeof recoveryValidationDraftSche
 export const recoveryValidationRecordedSchema = z.strictObject({ validationId: idSchema });
 
 /**
- * Reopen a restored Organisation (4.3, 4.4, 4.5, 8.4): the person confirms that every revocation and every legal hold
- * known from outside evidence after the recovery point was placed again, and that every recovery gap listed was
- * examined and, where it is evidence of lost work, raised as an exception. Each must be confirmed.
+ * Reopen a restored Organisation (4.3, 4.4, 8.4): the person confirms that every revocation and every legal hold known
+ * from outside evidence after the recovery point was placed again. Each must be confirmed. The recovery gaps need no
+ * confirmation: each is raised as an exception that must be settled first (4.5; product owner, 12 Oct 2026).
  */
 export const recoveryReopeningDraftSchema = z.strictObject({
   revocationsPlacedAgain: z.literal(true),
   legalHoldsPlacedAgain: z.literal(true),
-  gapsSettled: z.literal(true),
 });
 export type RecoveryReopeningDraft = z.infer<typeof recoveryReopeningDraftSchema>;
 
@@ -86,6 +85,20 @@ export const recoveryGapSchema = z.strictObject({
   subject: z.string().min(1),
   subjectAt: z.iso.datetime({ offset: true }).nullable(),
   afterRecoveryPoint: z.boolean(),
+});
+
+/**
+ * A gap after the recovery point, or a failed step or check still standing, which must be raised as an exception and
+ * settled before reopening (4.3, 4.5, 5.1; product owner, 12 Oct 2026).
+ */
+export const recoveryItemSchema = z.strictObject({
+  eventId: idSchema,
+  kind: z.enum(['gap', 'failure']),
+  unit: z.string().min(1),
+  name: z.string().min(1),
+  subject: z.string().min(1).nullable(),
+  exceptionId: idSchema.nullable(),
+  settlement: z.enum(['resolved', 'accepted']).nullable(),
 });
 
 /** A series the restore paused that waits for its reconciliation (5.3). */
@@ -123,6 +136,8 @@ export const recoveryStatusSchema = z.strictObject({
       reopenedAt: z.iso.datetime({ offset: true }).nullable(),
       checks: z.array(recoveryCheckSchema),
       gaps: z.array(recoveryGapSchema),
+      /** What must be raised as an exception and settled before reopening. */
+      items: z.array(recoveryItemSchema),
       seriesToReconcile: z.array(seriesAwaitingReconciliationSchema),
       validations: z.array(recoveryValidationSchema),
       /** What blocks reopening now; empty when it may reopen, or once it has. */

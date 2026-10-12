@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
 import { OrganisationKeys } from '../src/modules/access/domain/organisation-keys.js';
-import { startAccessApp, syntheticKeysEnvironment } from './support/access.js';
+import { startAccessApp, syntheticKeysEnvironment, writeSyntheticUser } from './support/access.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, sqlState } from './support/postgres.js';
 
@@ -10,6 +10,7 @@ import { connect, sqlState } from './support/postgres.js';
 // of GC-9 12 test 19 (the key-recovered access record is the recovery command's). Every key here is SYNTHETIC.
 
 let world: SyntheticWorld;
+let fresh: SyntheticWorld;
 let keysEnvironment: Record<string, string>;
 
 async function listed(database: string): Promise<{ identifier: string; purpose: string }[]> {
@@ -27,11 +28,13 @@ async function listed(database: string): Promise<{ identifier: string; purpose: 
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('key_versions');
+  fresh = await createSyntheticOrganisations('key_versions_first');
   keysEnvironment = syntheticKeysEnvironment(world);
 });
 
 afterAll(async () => {
   await (world as SyntheticWorld | undefined)?.reset();
+  await (fresh as SyntheticWorld | undefined)?.reset();
 });
 
 describe('the start check of key versions (backup-and-restore 2.4)', () => {
@@ -86,5 +89,50 @@ describe('the start check of key versions (backup-and-restore 2.4)', () => {
     } finally {
       await client.end();
     }
+  });
+
+  it('product owner 12 Oct 2026 proves the first key version against the data before recording it, refusing a key that cannot open it', async () => {
+    // An Organisation set up before key versions were recorded: its data sealed by its key, and no version listed.
+    const freshKeys = syntheticKeysEnvironment(fresh);
+    const organisation = fresh.organisations[0];
+    const user = await writeSyntheticUser(organisation.database, organisation.code, freshKeys, {
+      label: 'FIRSTVERSION',
+      enrolled: true,
+    });
+    const client = await connect(organisation.database, 'migration');
+    let factorIds: string[];
+    try {
+      factorIds = (
+        await client.query<{ id: string }>('select id::text from access.second_factor where app_user_id = $1', [
+          user.id,
+        ])
+      ).rows.map((row) => row.id);
+    } finally {
+      await client.end();
+    }
+    expect(factorIds.length).toBeGreaterThan(0);
+    // A swapped key cannot open it: refused, naming the Organisation, the key's identifier and the rows, never a key.
+    const keys = JSON.parse(freshKeys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
+    const swapped = randomBytes(32).toString('base64url');
+    const wrong = { [ORGANISATION_KEYS_VARIABLE]: JSON.stringify({ ...keys, [organisation.code]: swapped }) };
+    let message = '';
+    try {
+      await (await startAccessApp(fresh, wrong)).close();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain(`Organisation ${organisation.code}`);
+    expect(message).toContain(OrganisationKeys.fromEnvironment(wrong).version(organisation.code));
+    for (const id of factorIds) expect(message).toContain(id);
+    expect(message).not.toContain(swapped);
+    expect(await listed(organisation.database)).toEqual([]);
+    // The key that sealed it is recorded as the first version.
+    await (await startAccessApp(fresh, freshKeys)).close();
+    expect(await listed(organisation.database)).toEqual([
+      {
+        identifier: OrganisationKeys.fromEnvironment(freshKeys).version(organisation.code),
+        purpose: 'organisation-data',
+      },
+    ]);
   });
 });

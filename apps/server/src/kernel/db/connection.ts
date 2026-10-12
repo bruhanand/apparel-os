@@ -26,4 +26,5 @@ export function connectionToDatabase(connectionString: string): ((databaseName: 
   };
 }
 
-const DATABASE_NAME = /^[A-Za-z0-9_]{1,63}$/;
+/** A database name the commands create or reach: letters, digits and `_`, at most 63 bytes (PostgreSQL's limit). */
+export const DATABASE_NAME = /^[A-Za-z0-9_]{1,63}$/;

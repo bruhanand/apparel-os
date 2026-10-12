@@ -1,7 +1,7 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
 import type { ExceptionParty } from '@apparel-os/schemas';
 import { and, asc, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
-import { LOCK_STEP, type TransactionContext } from '../../../kernel/index.js';
+import { LOCK_STEP, recordGapSettled, recoveryEventOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditActor, AuditChange } from '../../audit/index.js';
 import { exception, exceptionEvent, exceptionLink, exceptionRoutingVersion, exceptionType } from '../db/schema.js';
 import { EXCEPTION_RECORD_TYPE } from '../domain/types.js';
@@ -173,6 +173,62 @@ export async function recordCorrection(
   ]);
   await context.publish(exceptionResolved, subject(row, eventId));
   await dependencies.inbox.updateState(context, 'exceptions', row.id, 'Resolved');
+  return done({ exceptionId, state: 'Resolved' });
+}
+
+/**
+ * Settle the exception raised for a recovery gap or a failed check of a restore (backup-and-restore 4.3, 4.5; product
+ * owner, 12 Oct 2026): resolved, the lost work entered again or the gap explained, or accepted as it is, with the
+ * reason kept as a comment. The exception is Resolved, and kernel records the settlement of the recovery item it links
+ * to, which reopening waits for. It runs while the Organisation is held. Only an open exception of the recovery-gap
+ * type is settled this way; it is closed as usual afterwards, its resolution check verifying the settlement.
+ */
+export async function settleRecoveryGap(
+  context: TransactionContext,
+  dependencies: RaiseDependencies,
+  acting: Acting,
+  exceptionId: string,
+  settlement: { readonly settlement: 'resolved' | 'accepted'; readonly reason: string },
+  recoveryGapType: string,
+): Promise<Outcome<Changed>> {
+  const found = await locked(context, exceptionId);
+  if (found.kind === 'refused') return found;
+  const row = found.value;
+  const typeRow = (await context.tx.select().from(exceptionType).where(eq(exceptionType.id, row.exceptionTypeId)))[0];
+  if (typeRow?.code !== recoveryGapType) return refused('refused', 'exceptions.not-a-recovery-gap');
+  if (!isOpen(row.state)) return refused('refused', 'exceptions.not-open');
+  const links = await context.tx.select().from(exceptionLink).where(eq(exceptionLink.exceptionId, row.id));
+  const events = [];
+  for (const link of links) {
+    const event = await recoveryEventOf(context, link.recordId);
+    if (event === undefined) return refused('refused', 'exceptions.not-a-recovery-gap');
+    events.push(event);
+  }
+  await recordEvent(context, row, { kind: 'comment', actorId: acting.actor.id, comment: settlement.reason });
+  const resolved = row.state !== 'Resolved';
+  if (resolved) await context.tx.update(exception).set({ state: 'Resolved' }).where(eq(exception.id, row.id));
+  const eventId = resolved
+    ? await recordEvent(context, row, { kind: 'resolved', actorId: acting.actor.id })
+    : undefined;
+  for (const event of events) {
+    await recordGapSettled(context, {
+      restoreId: event.restoreId,
+      aboutEventId: event.id,
+      exceptionId: row.id,
+      settlement: settlement.settlement,
+      byUserId: acting.actor.id,
+      roleAssignmentId: acting.roleAssignmentId ?? null,
+    });
+  }
+  await audited(context, dependencies, acting, row, 'settle-recovery-gap', [
+    { kind: 'value', field: 'state', before: row.state, after: 'Resolved' },
+    { kind: 'value', field: 'settlement', before: null, after: settlement.settlement },
+    { kind: 'value', field: 'reason', before: null, after: settlement.reason },
+  ]);
+  if (eventId !== undefined) {
+    await context.publish(exceptionResolved, subject(row, eventId));
+    await dependencies.inbox.updateState(context, 'exceptions', row.id, 'Resolved');
+  }
   return done({ exceptionId, state: 'Resolved' });
 }
 

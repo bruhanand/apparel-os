@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { measuredTimes } from './drill-record.js';
-import { runsWhileHeld } from './recovery-hold.js';
+import { runsWhileHeld, WHILE_HELD } from './recovery-hold.js';
 import { storedAfterRecoveryPoint } from './restore-contract.js';
 
 // S1-F14-T03: what runs while a restored Organisation is held, when an object counts as stored after the recovery
@@ -12,9 +12,13 @@ describe('the recovery hold (backup-and-restore 4.3)', () => {
       'access.sign-in',
       'access.revoke-user-sessions',
       'access.decide-approval',
+      'access.check-key-version',
       'configuration.reconcile-series-after-restore',
       'configuration.record-recovery-validation',
       'configuration.reopen-after-restore',
+      'exceptions.settle-recovery-gap',
+      'exceptions.raise-recovery-gap',
+      'access.decide-in-bulk.item-01900000-0000-7000-8000-000000000001',
       'numbering.pause-series-after-restore',
       'audit.record-restore',
     ]) {
@@ -27,9 +31,14 @@ describe('the recovery hold (backup-and-restore 4.3)', () => {
       'kernel.dispatch-event',
       'audit.seal-block',
       'accessx.anything',
+      // A command is named one by one: a new access command never runs while held by its prefix alone.
+      'access.some-new-command',
+      'access.decide-in-bulk.item-anything',
+      'exceptions.close',
     ]) {
       expect(runsWhileHeld(refused), refused).toBe(false);
     }
+    for (const name of WHILE_HELD) expect(name).toMatch(/^(access|configuration|exceptions|numbering|audit)\.[a-z-]+$/);
   });
 });
 
@@ -53,7 +62,7 @@ describe('the drill record’s measured times (backup-and-restore section 6)', (
     databaseTo: 'syn_b',
     checks: [],
     gaps: [],
-    gapsSettled: null,
+    recoveryItems: [],
     seriesToReconcile: 0,
     seriesReconciled: [],
     validations: [],

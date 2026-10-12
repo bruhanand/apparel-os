@@ -509,8 +509,10 @@ export {
   routingListSchema,
   routingVersionDraftSchema,
   routingVersionPreparedSchema,
+  recoveryGapSettlementSchema,
 } from './exceptions.js';
 export type {
+  RecoveryGapSettlement,
   DueRule,
   ExceptionCategory,
   ExceptionExposure,

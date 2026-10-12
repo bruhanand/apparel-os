@@ -11,8 +11,8 @@ import {
   type DecipherGCM,
   type KeyObject,
 } from 'node:crypto';
-import type { Readable } from 'node:stream';
-import { Transform } from 'node:stream';
+import { Transform, Writable, type Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 // The backup key (backup-and-restore 2.3, 2.4; GC9-17, GC9-18; POL-18.02, PRD-SEC-006). It is a key pair, never an
 // Organisation key: the environment holds only the public part, with which the backup command encrypts each dump and
@@ -64,6 +64,60 @@ function contentKeyOf(shared: Buffer, ephemeralPoint: Buffer, recipientPoint: Bu
 
 function hidden(): string {
   return '[backup key]';
+}
+
+/** The header of a sealed object (above): it names the key version by its identifier, never the key. */
+function headerOf(versionBytes: Buffer, ephemeralPoint: Buffer, nonce: Buffer): Buffer {
+  return Buffer.concat([MAGIC, Buffer.from([FORMAT]), versionBytes, ephemeralPoint, nonce]);
+}
+
+/** The associated data of a sealed object: its header and its name, so a renamed or moved object does not open. */
+function associatedDataOf(header: Buffer, name: string): Buffer {
+  return Buffer.concat([header, Buffer.from(name, 'utf8')]);
+}
+
+/**
+ * A stream that opens a sealed object as it passes through: it reads the header, asks `decipherFor` for the decipher
+ * that header names (which throws for a header it refuses), passes on the plaintext of the body and checks the tag at
+ * the end. Shared by the backup's own check (3.2 step 7) and the restore (4.2 step 2). Plaintext leaves before the tag
+ * is checked; each caller says why that is safe where it uses it.
+ */
+function gcmOpening(decipherFor: (header: Buffer) => DecipherGCM, failure: () => Error): Transform {
+  let decipher: DecipherGCM | undefined;
+  let pending = Buffer.alloc(0);
+  return new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      try {
+        pending = Buffer.concat([pending, chunk]);
+        if (decipher === undefined) {
+          if (pending.length < HEADER_BYTES) {
+            done();
+            return;
+          }
+          decipher = decipherFor(pending.subarray(0, HEADER_BYTES));
+          pending = pending.subarray(HEADER_BYTES);
+        }
+        if (pending.length > TAG_BYTES) {
+          const body = pending.subarray(0, pending.length - TAG_BYTES);
+          pending = pending.subarray(pending.length - TAG_BYTES);
+          done(null, decipher.update(body));
+          return;
+        }
+        done();
+      } catch {
+        done(failure());
+      }
+    },
+    flush(done) {
+      try {
+        if (decipher === undefined || pending.length !== TAG_BYTES) throw new Error('incomplete');
+        decipher.setAuthTag(pending);
+        done(null, decipher.final());
+      } catch {
+        done(failure());
+      }
+    },
+  });
 }
 
 /** The backup key's public part, as the environment holds it. Never prints a key. */
@@ -159,9 +213,9 @@ export class BackupSealer {
   /** A stream that seals what passes through it as the object `name` of the backup store. */
   sealStream(name: string): Transform {
     const nonce = randomBytes(NONCE_BYTES);
-    const header = Buffer.concat([MAGIC, Buffer.from([FORMAT]), this.#versionBytes, this.#ephemeralPoint, nonce]);
+    const header = headerOf(this.#versionBytes, this.#ephemeralPoint, nonce);
     const cipher = createCipheriv('aes-256-gcm', this.#contentKey, nonce);
-    cipher.setAAD(Buffer.concat([header, Buffer.from(name, 'utf8')]));
+    cipher.setAAD(associatedDataOf(header, name));
     const stream = new Transform({
       transform(chunk: Buffer, _encoding, done) {
         done(null, cipher.update(chunk));
@@ -178,9 +232,9 @@ export class BackupSealer {
   /** Seals a whole value, such as the manifest. */
   seal(name: string, plaintext: Buffer): Buffer {
     const nonce = randomBytes(NONCE_BYTES);
-    const header = Buffer.concat([MAGIC, Buffer.from([FORMAT]), this.#versionBytes, this.#ephemeralPoint, nonce]);
+    const header = headerOf(this.#versionBytes, this.#ephemeralPoint, nonce);
     const cipher = createCipheriv('aes-256-gcm', this.#contentKey, nonce);
-    cipher.setAAD(Buffer.concat([header, Buffer.from(name, 'utf8')]));
+    cipher.setAAD(associatedDataOf(header, name));
     return Buffer.concat([header, cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
   }
 
@@ -189,36 +243,32 @@ export class BackupSealer {
    * content key (3.2 step 7). Reads it as a stream and keeps nothing it decrypts.
    */
   async check(name: string, object: Readable): Promise<SealCheck> {
-    let header: Buffer | undefined;
-    let pending = Buffer.alloc(0);
-    let decipher: DecipherGCM | undefined;
+    const found = { foreign: false };
     let plaintextBytes = 0;
+    const opening = gcmOpening(
+      (header) => {
+        const parsed = parseHeader(header);
+        if (!parsed.ephemeralPoint.equals(this.#ephemeralPoint) || !parsed.versionBytes.equals(this.#versionBytes)) {
+          found.foreign = true;
+          throw new Error('not sealed by this backup');
+        }
+        const decipher = createDecipheriv('aes-256-gcm', this.#contentKey, parsed.nonce);
+        decipher.setAAD(associatedDataOf(header, name));
+        return decipher;
+      },
+      () => new Error('does not decrypt'),
+    );
+    const counting = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        plaintextBytes += chunk.length;
+        done();
+      },
+    });
     try {
-      for await (const chunk of object as AsyncIterable<Buffer>) {
-        pending = Buffer.concat([pending, chunk]);
-        if (header === undefined) {
-          if (pending.length < HEADER_BYTES) continue;
-          header = pending.subarray(0, HEADER_BYTES);
-          pending = pending.subarray(HEADER_BYTES);
-          const found = parseHeader(header);
-          if (!found.ephemeralPoint.equals(this.#ephemeralPoint) || !found.versionBytes.equals(this.#versionBytes)) {
-            return { ok: false, reason: 'not sealed by this backup' };
-          }
-          decipher = createDecipheriv('aes-256-gcm', this.#contentKey, found.nonce);
-          decipher.setAAD(Buffer.concat([header, Buffer.from(name, 'utf8')]));
-        }
-        if (decipher !== undefined && pending.length > TAG_BYTES) {
-          const body = pending.subarray(0, pending.length - TAG_BYTES);
-          plaintextBytes += decipher.update(body).length;
-          pending = pending.subarray(pending.length - TAG_BYTES);
-        }
-      }
-      if (decipher === undefined || pending.length !== TAG_BYTES) return { ok: false, reason: 'incomplete' };
-      decipher.setAuthTag(pending);
-      plaintextBytes += decipher.final().length;
+      await pipeline(object, opening, counting);
       return { ok: true, plaintextBytes };
     } catch {
-      return { ok: false, reason: 'does not decrypt' };
+      return { ok: false, reason: found.foreign ? 'not sealed by this backup' : 'does not decrypt' };
     }
   }
 
@@ -287,7 +337,7 @@ export class BackupPrivateKey {
   /** Opens a whole sealed object stored under `name`. Throws when it was changed, renamed or sealed for another key. */
   open(name: string, object: Buffer): Buffer {
     if (object.length < HEADER_BYTES + TAG_BYTES) throw new Error('The sealed object is incomplete');
-    const decipher = this.decipherOf(name, object.subarray(0, HEADER_BYTES));
+    const decipher = this.decipherFor(name, object.subarray(0, HEADER_BYTES));
     decipher.setAuthTag(object.subarray(object.length - TAG_BYTES));
     return Buffer.concat([decipher.update(object.subarray(HEADER_BYTES, object.length - TAG_BYTES)), decipher.final()]);
   }
@@ -295,51 +345,18 @@ export class BackupPrivateKey {
   /**
    * A stream that opens a sealed object stored under `name` as it passes through, such as a dump on its way to
    * PostgreSQL's restore tool (backup-and-restore 4.2 step 2). It fails at its end when the object was changed, renamed
-   * or sealed for another key; the restore checks the object's hash against the manifest before it reads it, so only
-   * an object already proved whole is opened this way.
+   * or sealed for another key. Plaintext leaves it before the tag is checked; the restore makes that safe (restore.ts,
+   * `loadFrom`): every dump's SHA-256 is compared with the signed manifest's before any is opened, and the restore tool
+   * loads in one transaction that rolls back when this stream fails, so no unchecked byte is ever committed.
    */
   openStream(name: string): Transform {
-    let header: Buffer | undefined;
-    let pending = Buffer.alloc(0);
-    let decipher: DecipherGCM | undefined;
-    const open = (headerBytes: Buffer): DecipherGCM => this.decipherOf(name, headerBytes);
-    return new Transform({
-      transform(chunk: Buffer, _encoding, done) {
-        try {
-          pending = Buffer.concat([pending, chunk]);
-          if (header === undefined) {
-            if (pending.length < HEADER_BYTES) {
-              done();
-              return;
-            }
-            header = pending.subarray(0, HEADER_BYTES);
-            pending = pending.subarray(HEADER_BYTES);
-            decipher = open(header);
-          }
-          if (decipher !== undefined && pending.length > TAG_BYTES) {
-            const body = pending.subarray(0, pending.length - TAG_BYTES);
-            pending = pending.subarray(pending.length - TAG_BYTES);
-            done(null, decipher.update(body));
-            return;
-          }
-          done();
-        } catch {
-          done(new Error('The sealed object does not open with the backup key given'));
-        }
-      },
-      flush(done) {
-        try {
-          if (decipher === undefined || pending.length !== TAG_BYTES) throw new Error('incomplete');
-          decipher.setAuthTag(pending);
-          done(null, decipher.final());
-        } catch {
-          done(new Error('The sealed object does not open with the backup key given'));
-        }
-      },
-    });
+    return gcmOpening(
+      (header) => this.decipherFor(name, header),
+      () => new Error('The sealed object does not open with the backup key given'),
+    );
   }
 
-  private decipherOf(name: string, header: Buffer): DecipherGCM {
+  private decipherFor(name: string, header: Buffer): DecipherGCM {
     const found = parseHeader(header);
     if (found.versionBytes.toString('hex') !== this.version) {
       throw new Error('The object was sealed under another backup key version');
@@ -356,7 +373,7 @@ export class BackupPrivateKey {
       contentKeyOf(shared, found.ephemeralPoint, this.#point),
       found.nonce,
     );
-    decipher.setAAD(Buffer.concat([header, Buffer.from(name, 'utf8')]));
+    decipher.setAAD(associatedDataOf(header, name));
     return decipher;
   }
 

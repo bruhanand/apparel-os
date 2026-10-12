@@ -40,17 +40,26 @@ export function sealFile(
   return { scheme: sealed.scheme, bytes: Buffer.from(sealed.ciphertext, 'base64url'), keyVersion: sealed.keyVersion };
 }
 
+/**
+ * Opens a stored file with the key version it names, or, where its record names none (stored before key versions were
+ * recorded, backup-and-restore 10.4), with whichever version held opens it.
+ */
 export function openFile(
   keys: OrganisationKeys,
   organisationCode: string,
   contentHash: string,
   scheme: string,
   sealed: Buffer,
+  keyVersion?: string | null,
 ): Buffer {
   return keys.decrypt(
     organisationCode,
     'stored-file',
-    { scheme, ciphertext: sealed.toString('base64url') },
+    {
+      scheme,
+      ciphertext: sealed.toString('base64url'),
+      ...(keyVersion === undefined || keyVersion === null ? {} : { keyVersion }),
+    },
     contextOf(contentHash),
   );
 }

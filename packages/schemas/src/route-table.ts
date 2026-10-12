@@ -108,6 +108,7 @@ import {
   raisedSchema,
   raiseRequestSchema,
   reassignRequestSchema,
+  recoveryGapSettlementSchema,
   routingListSchema,
   routingVersionDraftSchema,
   routingVersionPreparedSchema,
@@ -1704,6 +1705,7 @@ export const routes = {
       ...PREPARE_CODES,
       'configuration.not-held',
       'configuration.restore-check-failed',
+      'configuration.recovery-gaps-unsettled',
       'configuration.validations-missing',
       'configuration.series-not-reconciled',
     ],
@@ -2998,6 +3000,21 @@ export const routes = {
     shows: 'nothing',
     response: exceptionChangedSchema,
     codes: EXCEPTION_ACTION_CODES,
+  }),
+  // Settle the exception raised for a recovery gap or a failed check of a restore, while the Organisation is held and
+  // after (backup-and-restore 4.3, 4.5; product owner, 12 Oct 2026).
+  settleRecoveryGap: defineRoute({
+    method: 'POST',
+    path: '/api/exceptions/exceptions/{exceptionId}/recovery-settlement',
+    params: exceptionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: 'exceptions.exception', authorisedIn: 'command' },
+    command: true,
+    body: recoveryGapSettlementSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: exceptionChangedSchema,
+    codes: [...EXCEPTION_ACTION_CODES, 'exceptions.not-a-recovery-gap'],
   }),
   reopenException: defineRoute({
     method: 'POST',

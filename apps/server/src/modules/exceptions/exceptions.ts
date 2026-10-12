@@ -20,9 +20,11 @@ import {
   reassign,
   recordCorrection,
   reopen,
+  settleRecoveryGap,
   type Acting,
   type Changed,
 } from './commands/lifecycle.js';
+import { RECOVERY_GAP_TYPE, recoveryGapType } from './recovery-gaps.js';
 import { codeSeriesTarget, raise, raiseInOwnCommand, type Raised, type RaiseInput } from './commands/raise.js';
 import { listRouting, prepareRouting } from './commands/routing.js';
 import { checkTypes, missingRouting, type ExceptionTypeRegistration } from './domain/types.js';
@@ -100,6 +102,13 @@ export interface ExceptionsInterface {
   /** The owning module records the correction: Resolved (12.3). */
   recordCorrection(context: TransactionContext, acting: Acting, exceptionId: string): Promise<Outcome<Changed>>;
   close(context: TransactionContext, acting: Acting, exceptionId: string): Promise<Outcome<Changed>>;
+  /** Settles the exception raised for a recovery gap of a restore: resolved or accepted (backup-and-restore 4.5). */
+  settleRecoveryGap(
+    context: TransactionContext,
+    acting: Acting,
+    exceptionId: string,
+    settlement: { readonly settlement: 'resolved' | 'accepted'; readonly reason: string },
+  ): Promise<Outcome<Changed>>;
   reopen(context: TransactionContext, acting: Acting, exceptionId: string, text: string): Promise<Outcome<Changed>>;
   escalateOverdue(context: TransactionContext, acting: Acting): Promise<number>;
   prepareRouting(
@@ -121,7 +130,7 @@ export class Exceptions implements ExceptionsInterface {
   readonly types: ReadonlyMap<string, ExceptionTypeRegistration>;
 
   constructor(private readonly dependencies: ExceptionsDependencies) {
-    this.types = checkTypes([unfinishedOperation, ...dependencies.types]);
+    this.types = checkTypes([unfinishedOperation, recoveryGapType, ...dependencies.types]);
   }
 
   private get raising() {
@@ -173,6 +182,15 @@ export class Exceptions implements ExceptionsInterface {
 
   close(context: TransactionContext, acting: Acting, exceptionId: string) {
     return close(context, this.raising, acting, exceptionId);
+  }
+
+  settleRecoveryGap(
+    context: TransactionContext,
+    acting: Acting,
+    exceptionId: string,
+    settlement: { readonly settlement: 'resolved' | 'accepted'; readonly reason: string },
+  ) {
+    return settleRecoveryGap(context, this.raising, acting, exceptionId, settlement, RECOVERY_GAP_TYPE);
   }
 
   reopen(context: TransactionContext, acting: Acting, exceptionId: string, text: string) {

@@ -1,11 +1,17 @@
-import { createCipheriv, randomBytes, randomInt } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { createCipheriv, createHash, randomBytes, randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { recoveryStatusSchema, routes } from '@apparel-os/schemas';
+import { recoveryStatusSchema, routes, type RecoveryStatus } from '@apparel-os/schemas';
 import { CreateBucketCommand, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { runBackupCommand } from '../src/backup.js';
 import {
+  BackupSealer,
+  BackupSigningKey,
+  backupPublicKeyFromEnvironment,
   CommandRunner,
   defineConsumer,
   defineEvent,
@@ -18,6 +24,7 @@ import {
   restrictedValueCipherNotConfigured,
   RESTORE_IDENTITY,
   secretCheckNotImplemented,
+  signatureName,
   Worker,
   type BackupManifest,
   type BackupOutcome,
@@ -27,14 +34,17 @@ import {
   type RoutedOrganisation,
   type TransactionContext,
 } from '../src/kernel/index.js';
-import { jobIdentities, ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
+import { jobIdentities, OrganisationKeys, ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
 import { Audit } from '../src/modules/audit/index.js';
+import { Exceptions, RECOVERY_GAP_TYPE } from '../src/modules/exceptions/index.js';
 import { FILE_STORE_VARIABLES, IMPORT_BATCH_KIND, IMPORT_BATCH_SCOPE_KEY } from '../src/modules/files-imports/index.js';
+import { contentHashOf, objectKeyOf, sealFile } from '../src/modules/files-imports/domain/file-seal.js';
+import { Inbox } from '../src/modules/inbox/index.js';
 import { Numbering } from '../src/modules/numbering/index.js';
 import { numberedKinds } from '../src/numbered-kinds.js';
 import { restoreRegistry } from '../src/restore-participants.js';
 import { runRestoreCommand, type RestoreAnswers, type RestoreCommandOutcome } from '../src/restore.js';
-import { restoreIdentityGrant } from '../src/restore-steps.js';
+import { RESTORE_IDENTITY_AUTHORITIES } from '../src/restore-steps.js';
 import {
   codeFor,
   startAccessApp,
@@ -50,22 +60,30 @@ import {
   containerDumpTool,
   containerRestoreTool,
   createBackupBucket,
+  loadDump,
   objectOf,
+  startTargetServer,
   syntheticBackupKey,
+  syntheticSigningKey,
+  type TargetServer,
 } from './support/backup.js';
+import { defineSyntheticCodeSeries } from './support/exceptions.js';
 import { grantSynthetic } from './support/grants.js';
 import { defineSyntheticImportBatchSeries } from './support/imports.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
-import { connect, createEmptyDatabase, databaseUrl, dropDatabase } from './support/postgres.js';
+import { connect, databaseUrl, dropDatabase, testServer } from './support/postgres.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 
 // S1-F14-T03: the restore into a fresh target, against real PostgreSQL and MinIO with the two synthetic Organisations
 // (backup-and-restore 4.1 to 4.5, 5.1 to 5.4, section 6, 8.2, 10.1 to 10.3, section 11, section 12 tests 2 to 6, 8 to
-// 18; imports-and-opening-data 17 test 23; numbering-and-audit 7 tests 7, 10 and 14; POL-18.02 to POL-18.05,
+// 18 and 20; imports-and-opening-data 17 test 23; numbering-and-audit 7 tests 7, 10 and 14; POL-18.02 to POL-18.05,
 // PRD-ACP-019, PRD-SEC-005 to PRD-SEC-008, PRD-SEC-012 to PRD-SEC-014, PRD-SEC-018, PRD-INT-006, PRD-INT-008,
-// PRD-MOD-001, PRD-ACS-020). Every key, file, user, setting and value here is SYNTHETIC.
+// PRD-MOD-001, PRD-ACS-020), with the product owner's decisions of 12 Oct 2026: every backup signed; the target a
+// server holding no Apparel OS database; gaps and failed checks raised as exceptions and settled, or checks run again.
+// The target is a PostgreSQL container of its own: the run's server holds every test's databases, so it is never
+// fresh. Every key, file, user, setting and value here is SYNTHETIC.
 
 const MARKER = 'SYNTHETIC-RESTORE-PLAINTEXT-MARKER-4c1a';
 const SYNTHETIC_POOL_MAX = 4;
@@ -128,17 +146,23 @@ interface Source {
   validator: Person;
   plain: Person;
   batchSeriesId: string;
+  exceptionSeriesId: string;
 }
 
 let world: SyntheticWorld;
 let minio: TestFileStore;
+let target: TargetServer;
 let sourceApi: AccessTestApp;
 let keysEnvironment: Record<string, string>;
 let backupEnvironment: Record<string, string>;
 let backupBucket: string;
 const backupKey = syntheticBackupKey();
+const signingKey = syntheticSigningKey();
+/** Organisation B's second key version, as a rotation would make one (2.4): SYNTHETIC. */
+const secondKeyB = randomBytes(32).toString('base64url');
+let secondVersionB: string;
 const sources: Source[] = [];
-const created: string[] = [];
+const scratch: string[] = [];
 const logLines: string[] = [];
 const captured = capturingLogger();
 const numbering = new Numbering({ kinds: numberedKinds });
@@ -149,6 +173,13 @@ let lostBatchCode: number;
 
 function pdf(label: string): Buffer {
   return Buffer.from(`%PDF-1.4\n% ${MARKER} ${label}\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n`, 'latin1');
+}
+
+/** The custodian's kept copies (2.4): each Organisation's key, and Organisation B's two versions. */
+function keptCopies(overrides: Record<string, string | string[]> = {}): string {
+  const keys = JSON.parse(keysEnvironment[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
+  const codeB = sources[1]?.code ?? '';
+  return JSON.stringify({ ...keys, [codeB]: [keys[codeB] ?? '', secondKeyB], ...overrides });
 }
 
 async function signIn(
@@ -208,14 +239,14 @@ async function send(
 }
 
 async function storeFile(base: string, cookie: string, label: string) {
-  const answer = await send(base, cookie, 'POST', '/api/files-imports/files', {
+  return send(base, cookie, 'POST', '/api/files-imports/files', {
     sourceSystem: 'manual-upload',
     originalName: `${MARKER}-${label}.pdf`,
     contentBase64: pdf(`${label}-${String(randomInt(1_000_000_000))}`).toString('base64'),
   });
-  return answer;
 }
 
+/** Reads the run's server as the migration role. */
 async function query<T extends Record<string, unknown>>(
   database: string,
   text: string,
@@ -348,23 +379,36 @@ async function takeBackup(dumpTool: DumpTool = containerDumpTool): Promise<strin
   return outcome.backupId;
 }
 
-/** A fresh target: an empty directory database owned by the migration role and an empty bucket. */
-async function freshTarget(label: string): Promise<{ directory: string; env: Record<string, string>; bucket: string }> {
-  const directory = await createEmptyDatabase(label);
-  created.push(directory);
+interface Target {
+  readonly directory: string;
+  readonly env: Record<string, string>;
+  readonly bucket: string;
+}
+
+/** A fresh target: the target server cleared, an empty directory database on it, and an empty bucket (4.1). */
+async function freshTarget(label: string): Promise<Target> {
+  await target.clear();
+  const directory = await target.createDirectory(label);
   const bucket = `syn-target-${randomBytes(4).toString('hex')}`;
   await minio.client.send(new CreateBucketCommand({ Bucket: bucket }));
+  const withoutSigningKey = without(backupEnvironment, 'AOS_BACKUP_SIGNING_KEY');
   return {
     directory,
     bucket,
     env: {
-      ...backupEnvironment,
+      ...withoutSigningKey,
+      ...signingKey.restoreRunner,
       ...minio.environment,
       [FILE_STORE_VARIABLES.bucket]: bucket,
-      AOS_MIGRATION_DATABASE_URL: databaseUrl(directory, 'migration'),
-      AOS_RUNTIME_DATABASE_URL: databaseUrl(directory, 'runtime'),
+      AOS_MIGRATION_DATABASE_URL: target.url(directory, 'migration'),
+      AOS_RUNTIME_DATABASE_URL: target.url(directory, 'runtime'),
     },
   };
+}
+
+/** The variables without one, as a runner that does not hold it has them. */
+function without(env: Record<string, string>, name: string): Record<string, string> {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => key !== name));
 }
 
 const answers =
@@ -374,7 +418,7 @@ const answers =
       purpose: { kind: 'drill', note: 'SYNTHETIC drill of the restore tests' },
       conductedBy: 'SYNTHETIC operator, platform',
       privateKeyText: backupKey.privateText,
-      organisationKeysText: keysEnvironment[ORGANISATION_KEYS_VARIABLE] ?? '',
+      organisationKeysText: keptCopies(),
       ...overrides,
     });
 
@@ -387,7 +431,7 @@ async function restore(
     env,
     args,
     answers: answers(overrides),
-    restoreTool: containerRestoreTool,
+    restoreTool: containerRestoreTool(target.containerId),
     timezones: syntheticTimezone,
     logger: captured.logger,
     log: (message) => logLines.push(message),
@@ -423,9 +467,189 @@ async function drillRecordOf(name: string): Promise<{ record: DrillRecord; text:
   return { record: JSON.parse(json) as DrillRecord, text };
 }
 
+async function put(bucket: string, key: string, body: Buffer): Promise<void> {
+  await minio.client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
+}
+
+/** Writes a backup as the backup command would, from a manifest and dumps a test gives, sealed and signed (2.3). */
+async function writeBackup(
+  manifest: BackupManifest,
+  dumps: ReadonlyMap<string, Buffer>,
+  options: { readonly sign: boolean } = { sign: true },
+): Promise<void> {
+  const sealer = BackupSealer.start(
+    backupPublicKeyFromEnvironment({ AOS_BACKUP_PUBLIC_KEY: backupKey.publicText }),
+    manifest.backupId,
+  );
+  for (const [object, plaintext] of dumps) await put(backupBucket, object, sealer.seal(object, plaintext));
+  const name = `backups/${manifest.backupId}/manifest`;
+  const sealed = sealer.seal(name, Buffer.from(JSON.stringify(manifest), 'utf8'));
+  await put(backupBucket, name, sealed);
+  if (!options.sign) return;
+  const signature = BackupSigningKey.fromEnvironment(signingKey.backupRunner).sign({
+    backupId: manifest.backupId,
+    manifestObject: name,
+    manifestSha256: createHash('sha256').update(sealed).digest('hex'),
+    result: 'complete',
+    failures: [],
+  });
+  await put(backupBucket, signatureName(manifest.backupId), signature);
+}
+
+/** Dumps a database of the run's server whole, in custom format, with `pg_dump` in its container. */
+function dumpWhole(database: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'docker',
+      [
+        'exec',
+        testServer().containerId,
+        'pg_dump',
+        '--host=/var/run/postgresql',
+        '--username=aos_migration',
+        `--dbname=${database}`,
+        '--format=custom',
+        '--no-password',
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve(Buffer.concat(chunks));
+      else reject(new Error(`pg_dump exited ${String(code)}`));
+    });
+  });
+}
+
+/**
+ * A copy of a backup altered after it was taken, as GC-9 12 tests 5 and 8 describe (5.4, 5.1): one Organisation's
+ * dump opened, loaded, changed by `sql`, dumped again and written as a new backup holding the same manifest facts,
+ * sealed and signed with the run's keys, as a copy altered before its signature would be. The checks that do not rest
+ * on the dump's hash must find the change.
+ */
+async function alteredCopy(backupId: string, code: string, sql: string): Promise<string> {
+  const manifest = await manifestOf(backupId);
+  const part = manifest.organisations.find((each) => each.organisationCode === code);
+  if (part === undefined) throw new Error('No part');
+  const dump = backupKey.privateKey.open(part.object, await objectOf(minio.client, backupBucket, part.object));
+  const loaded = await loadDump(dump, 'rt_altered');
+  scratch.push(loaded);
+  await query(loaded, sql);
+  const altered = await dumpWhole(loaded);
+  const copyId = uuidv7();
+  const object = `backups/${copyId}/organisations/${part.organisationId}.dump`;
+  const sealer = BackupSealer.start(
+    backupPublicKeyFromEnvironment({ AOS_BACKUP_PUBLIC_KEY: backupKey.publicText }),
+    copyId,
+  );
+  const sealed = sealer.seal(object, altered);
+  await put(backupBucket, object, sealed);
+  await writeBackup(
+    {
+      ...manifest,
+      backupId: copyId,
+      organisations: [
+        {
+          ...part,
+          object,
+          sha256: createHash('sha256').update(sealed).digest('hex'),
+          bytes: sealed.length,
+        },
+      ],
+    },
+    new Map(),
+  );
+  return copyId;
+}
+
+/** Recovery status as the person who restores reads it, through the restored application. */
+async function statusOf(base: string, source: Source): Promise<NonNullable<RecoveryStatus['restore']>> {
+  const operator = await on(base, source, source.recovery);
+  const status = recoveryStatusSchema.parse(
+    (await send(base, operator.cookie, 'GET', routes.readRecoveryStatus.path)).json,
+  );
+  if (status.restore === null) throw new Error('No restore');
+  return status.restore;
+}
+
+/** Reconciles every series the restore paused, as the person who restores, with a statement that none left (5.3). */
+async function reconcileAll(base: string, source: Source, only?: string): Promise<void> {
+  const operator = await on(base, source, source.recovery);
+  for (const series of (await statusOf(base, source)).seriesToReconcile) {
+    if (only !== undefined && series.seriesId !== only) continue;
+    const answer = await send(
+      base,
+      operator.cookie,
+      'POST',
+      routes.reconcileSeriesAfterRestore.path.replace('{seriesId}', series.seriesId),
+      { evidence: 'SYNTHETIC: no document left the system', evidenceHighest: null, reason: 'SYNTHETIC drill' },
+    );
+    expect(answer.status).toBe(200);
+  }
+}
+
+/** Settles every exception raised for a recovery item, as its owner, accepted with a reason (4.5). */
+async function settleAll(base: string, source: Source): Promise<number> {
+  const operator = await on(base, source, source.recovery);
+  let settled = 0;
+  for (const item of (await statusOf(base, source)).items) {
+    if (item.exceptionId === null || item.settlement !== null) continue;
+    const answer = await send(
+      base,
+      operator.cookie,
+      'POST',
+      routes.settleRecoveryGap.path.replace('{exceptionId}', item.exceptionId),
+      { settlement: 'accepted', reason: 'SYNTHETIC drill: examined and accepted' },
+    );
+    expect(answer.status, JSON.stringify(answer.json)).toBe(200);
+    settled += 1;
+  }
+  return settled;
+}
+
+/** Records both validations, by two people (4.3; GC9-6 stays OPEN). */
+async function validate(base: string, source: Source): Promise<void> {
+  const operator = await on(base, source, source.recovery);
+  const validator = await on(base, source, source.validator);
+  for (const [cookie, body] of [
+    [operator.cookie, { validates: 'operations', compared: ['stock', 'bills'] }],
+    [validator.cookie, { validates: 'accounts', compared: ['financial-totals'] }],
+  ] as const) {
+    const answer = await send(base, cookie, 'POST', routes.recordRecoveryValidation.path, {
+      ...body,
+      comparedAgainst: 'SYNTHETIC: the source totals before the drill',
+      evidence: 'SYNTHETIC: the drill notes',
+    });
+    expect(answer.status).toBe(200);
+  }
+}
+
+async function reopen(base: string, source: Source): Promise<{ status: number; json: unknown }> {
+  const operator = await on(base, source, source.recovery);
+  return send(base, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
+    revocationsPlacedAgain: true,
+    legalHoldsPlacedAgain: true,
+  });
+}
+
+/** The restored world on the target server, as the application sees it. */
+function restoredWorld(t: Target, databases: ReadonlyMap<string, string>): SyntheticWorld {
+  return {
+    directory: t.directory,
+    organisations: world.organisations.map((organisation) => ({
+      ...organisation,
+      database: databases.get(organisation.code) ?? organisation.database,
+    })) as unknown as SyntheticWorld['organisations'],
+    reset: () => Promise.resolve(),
+  };
+}
+
 beforeAll(async () => {
   world = await createSyntheticOrganisations('restore');
   minio = await startTestFileStore();
+  target = await startTargetServer();
   keysEnvironment = syntheticKeysEnvironment(world);
   backupBucket = `syn-backups-${uuidv7().slice(-8)}`;
   const backupStoreEnvironment = await createBackupBucket(minio.client, minio.environment, backupBucket);
@@ -440,13 +664,19 @@ beforeAll(async () => {
       absoluteSeconds: 28800,
     });
     // The restore's internal service identity, holding what its steps declare, as the setup step writes it.
-    await writeSyntheticServiceIdentity(organisation.database, RESTORE_IDENTITY, restoreIdentityGrant().authorities);
+    await writeSyntheticServiceIdentity(organisation.database, RESTORE_IDENTITY, RESTORE_IDENTITY_AUTHORITIES);
   }
   sourceApi = await startAccessApp(world, keysEnvironment, { fileStoreEnvironment: minio.environment });
   sourceRouter = new OrganisationRouter(
     { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: SYNTHETIC_POOL_MAX },
     captured.logger,
   );
+  const exceptions = new Exceptions({
+    numbering,
+    inbox: new Inbox(),
+    audit: new Audit(captured.logger),
+    types: [],
+  });
   for (const [index, organisation] of world.organisations.entries()) {
     const label = `R${String(index)}`;
     const reader = await person(organisation, `${label}READER`);
@@ -457,9 +687,11 @@ beforeAll(async () => {
     );
     const site = await writeSite(organisation.database, reader.user.id);
     const otherSite = await writeSite(organisation.database, reader.user.id);
-    await grantSynthetic(organisation.database, { kind: 'user', id: reader.user.id }, [
-      { recordType: 'files_imports.stored_file', action: 'create' },
-    ]);
+    const { assignmentId: readerAssignment } = await grantSynthetic(
+      organisation.database,
+      { kind: 'user', id: reader.user.id },
+      [{ recordType: 'files_imports.stored_file', action: 'create' }],
+    );
     await grantSynthetic(
       organisation.database,
       { kind: 'user', id: reader.user.id },
@@ -510,7 +742,8 @@ beforeAll(async () => {
       site,
       reader.user.id,
     );
-    // The import batch code series with two codes given (GC9-9), and one audit block sealed (5.4).
+    // The import batch code series with two codes given (GC9-9), the exception-code series and the SYNTHETIC routing
+    // of recovery gaps to the restore operator (4.5), and one audit block sealed (5.4).
     const routed = await routedIn(sourceRouter, organisation.code);
     await command(routed, reader.user.id, 'files-imports.synthetic-define-batch-series', (context) =>
       defineSyntheticImportBatchSeries(context, numbering, `RESTORE-BATCH-${String(index)}`),
@@ -523,6 +756,30 @@ beforeAll(async () => {
       const given = await allocateBatchCode(routed, reader.user.id, series.seriesId);
       expect(given.kind).toBe('done');
     }
+    const exceptionSeries = await command(routed, reader.user.id, 'exceptions.synthetic-define-series', (context) =>
+      defineSyntheticCodeSeries(context, numbering),
+    );
+    const routing = await command(routed, reader.user.id, 'exceptions.synthetic-prepare-routing', (context) =>
+      exceptions.prepareRouting(
+        context,
+        { userId: reader.user.id, roleAssignmentId: readerAssignment },
+        {
+          typeCode: RECOVERY_GAP_TYPE,
+          siteId: null,
+          owner: { kind: 'user', userId: recovery.user.id },
+          dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+          escalation: { kind: 'user', userId: recovery.user.id },
+          validFrom: new Date().toISOString().slice(0, 10),
+          origin: 'synthetic',
+        },
+      ),
+    );
+    if (routing.kind !== 'done') throw new Error(routing.refusal.code);
+    await query(
+      organisation.database,
+      "update exceptions.exception_routing_version set decision = 'Approved' where id = $1",
+      [routing.value.versionId],
+    );
     await command(routed, reader.user.id, 'audit.synthetic-seal', (context) =>
       new Audit(captured.logger).sealClosedBlock(context),
     );
@@ -540,8 +797,32 @@ beforeAll(async () => {
       validator,
       plain,
       batchSeriesId: series.seriesId,
+      exceptionSeriesId: (exceptionSeries as { seriesId: string }).seriesId,
     });
   }
+  // Organisation B's second key version (2.4): listed as a rotation would list it, and one stored file sealed by it,
+  // so a restore needs both kept copies.
+  const b = sources[1];
+  if (b === undefined) throw new Error('No source');
+  const second = OrganisationKeys.fromKeptCopies(JSON.stringify({ [b.code]: secondKeyB }));
+  secondVersionB = second.version(b.code);
+  await query(
+    b.database,
+    "insert into access.key_version (id, identifier, purpose, first_used_at) values ($1, $2, 'organisation-data', now())",
+    [uuidv7(), secondVersionB],
+  );
+  const plaintext = pdf(`second-key-${String(randomInt(1_000_000_000))}`);
+  const hash = contentHashOf(plaintext);
+  const sealed = sealFile(second, b.code, hash, plaintext);
+  await put(minio.bucket, objectKeyOf(b.organisationId, hash), sealed.bytes);
+  await query(
+    b.database,
+    `insert into files_imports.stored_file (id, content_hash, size_bytes, format, object_key, encryption_scheme,
+       key_version, restricted_classes)
+     values ($1, $2, $3, 'pdf', $4, $5, $6, null)`,
+    [uuidv7(), hash, plaintext.length, objectKeyOf(b.organisationId, hash), sealed.scheme, secondVersionB],
+  );
+
   // GC-9 test 14: the outbox processor and the consumers registered in Organisation A, then an event recorded.
   const first = sources[0];
   if (first === undefined) throw new Error('No source');
@@ -565,14 +846,15 @@ beforeAll(async () => {
     AOS_MIGRATION_DATABASE_URL: databaseUrl(world.directory, 'migration'),
     AOS_ENVIRONMENT: 'local',
     AOS_BACKUP_PUBLIC_KEY: backupKey.publicText,
+    ...signingKey.backupRunner,
     ...backupStoreEnvironment,
     ...minio.environment,
   };
   // The backup: after Organisation A's snapshot, a file is stored and a batch code given there, both lost by the
   // restore: the file's object is copied with no record (3.3), and the code is not in the restored database (GC9-9).
   backup = await takeBackup({
-    async dump(target, into) {
-      const database = new URL(target.connectionString).pathname.slice(1);
+    async dump(t, into) {
+      const database = new URL(t.connectionString).pathname.slice(1);
       if (database === first.database) {
         expect((await storeFile(sourceApi.baseUrl, first.cookie, 'after-the-snapshot')).status).toBe(200);
         const lost = await allocateBatchCode(
@@ -583,7 +865,7 @@ beforeAll(async () => {
         if (lost.kind !== 'done') throw new Error('No code was given');
         lostBatchCode = lost.value.sequenceNumber;
       }
-      return containerDumpTool.dump(target, into);
+      return containerDumpTool.dump(t, into);
     },
   });
 }, 600_000);
@@ -591,82 +873,121 @@ beforeAll(async () => {
 afterAll(async () => {
   await (sourceApi as AccessTestApp | undefined)?.close();
   await (sourceRouter as OrganisationRouter | undefined)?.close();
-  for (const database of created) await dropDatabase(database);
+  for (const database of scratch) await dropDatabase(database);
+  await (target as TargetServer | undefined)?.stop();
   await (minio as TestFileStore | undefined)?.stop();
   await (world as SyntheticWorld | undefined)?.reset();
 });
 
-/** The databases a target holds after a restore, to drop at the end. */
-async function keepTargetDatabases(directory: string): Promise<void> {
-  const rows = await query<{ datname: string }>(
-    directory,
-    "select datname::text from pg_catalog.pg_database where datname like $1 || '\\_%'",
-    [directory],
-  );
-  for (const row of rows) if (!created.includes(row.datname)) created.unshift(row.datname);
-}
+const reasonOf = (outcome: RestoreCommandOutcome) => (outcome.outcome === 'refused' ? outcome.reason : '');
 
 describe('the restore refuses before writing anything (GC-9 12 test 11; PRD-ACP-019)', () => {
-  it('GC-9 12 test 11 refuses a target that is not fresh, the source, another environment, missing key versions and a newer backup', async () => {
-    const target = await freshTarget('rt_refused');
-    const nothingWritten = async () => {
-      expect(
-        await query(target.directory, "select 1 from pg_catalog.pg_class where relnamespace = 'public'::regnamespace"),
-      ).toEqual([]);
-      expect(
-        await query(target.directory, "select datname from pg_catalog.pg_database where datname like $1 || '\\_%'", [
-          target.directory,
-        ]),
-      ).toEqual([]);
-      expect(await bucketKeys(target.bucket)).toEqual([]);
-    };
-    const reasonOf = (outcome: RestoreCommandOutcome) => (outcome.outcome === 'refused' ? outcome.reason : '');
+  let t: Target;
+  const nothingWritten = async () => {
+    expect(
+      await target.query(t.directory, "select 1 from pg_catalog.pg_class where relnamespace = 'public'::regnamespace"),
+    ).toEqual([]);
+    expect(
+      await target.query(t.directory, "select datname from pg_catalog.pg_database where datname like $1 || '\\_%'", [
+        t.directory,
+      ]),
+    ).toEqual([]);
+    expect(await bucketKeys(t.bucket)).toEqual([]);
+  };
 
-    // Another environment (4.1).
-    const otherEnvironment = await restore({ ...target.env, AOS_ENVIRONMENT: 'dev' }, [backup]);
-    expect(reasonOf(otherEnvironment)).toContain('environment local');
+  beforeAll(async () => {
+    t = await freshTarget('rt_refused');
+  });
+
+  it('product owner 12 Oct 2026 refuses an unsigned or badly signed backup, such as one planted with the public backup key, before reading anything else', async () => {
+    const manifest = await manifestOf(backup);
+    // Planted: sealed with the backup key's public part, which is no secret, and not signed.
+    const planted = { ...manifest, backupId: uuidv7() };
+    await writeBackup(planted, new Map(), { sign: false });
+    expect(reasonOf(await restore(t.env, [planted.backupId]))).toContain('is not signed');
+    // Signed with a key that is not the backup runner's.
+    const forged = { ...manifest, backupId: uuidv7() };
+    await writeBackup(forged, new Map(), { sign: false });
+    const other = syntheticSigningKey();
+    await put(
+      backupBucket,
+      signatureName(forged.backupId),
+      BackupSigningKey.fromEnvironment(other.backupRunner).sign({
+        backupId: forged.backupId,
+        manifestObject: `backups/${forged.backupId}/manifest`,
+        manifestSha256: '0'.repeat(64),
+        result: 'complete',
+        failures: [],
+      }),
+    );
+    expect(reasonOf(await restore(t.env, [forged.backupId]))).toContain('signature does not verify');
+    // A real signature beside a manifest that is not the one it signs.
+    const swapped = uuidv7();
+    await put(backupBucket, signatureName(swapped), await objectOf(minio.client, backupBucket, signatureName(backup)));
+    expect(reasonOf(await restore(t.env, [swapped]))).toContain('of another backup');
+    // The restore runner without the signing key's public part is refused too.
+    const withoutPublic = without(t.env, 'AOS_BACKUP_SIGNING_PUBLIC_KEY');
+    expect(reasonOf(await restore(withoutPublic, [backup]))).toContain('AOS_BACKUP_SIGNING_PUBLIC_KEY is not set');
     await nothingWritten();
+  });
 
-    // A key version not given from its kept copy (2.3, 2.4): Organisation B's key left out, or another key given.
-    const keys = JSON.parse(keysEnvironment[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
+  it('GC-9 12 tests 11 and 20 refuses another environment, missing key versions and a key that is not the backup key’s', async () => {
+    const otherEnvironment = await restore({ ...t.env, AOS_ENVIRONMENT: 'dev' }, [backup]);
+    expect(reasonOf(otherEnvironment)).toContain('environment local');
+    // A key version not given from its kept copy (2.3, 2.4): Organisation B's second version left out, or another key.
     const [codeA, codeB] = [sources[0]?.code ?? '', sources[1]?.code ?? ''];
-    const missing = await restore(target.env, [backup], {
-      organisationKeysText: JSON.stringify({ [codeA]: keys[codeA] }),
+    const keys = JSON.parse(keysEnvironment[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>;
+    const onlyFirst = await restore(t.env, [backup], {
+      organisationKeysText: keptCopies({ [codeB]: keys[codeB] ?? '' }),
     });
+    expect(reasonOf(onlyFirst)).toContain(`Organisation ${codeB}'s data needs key version ${secondVersionB}`);
+    const missing = await restore(t.env, [backup], { organisationKeysText: JSON.stringify({ [codeA]: keys[codeA] }) });
     expect(reasonOf(missing)).toContain(`Organisation ${codeB}'s data needs key version`);
-    const wrong = await restore(target.env, [backup], {
-      organisationKeysText: JSON.stringify({ ...keys, [codeB]: randomBytes(32).toString('base64url') }),
+    const wrong = await restore(t.env, [backup], {
+      organisationKeysText: keptCopies({ [codeB]: [randomBytes(32).toString('base64url'), secondKeyB] }),
     });
     expect(reasonOf(wrong)).toContain('no kept copy of it was given');
-    // A private part that is not the backup key's: the manifest does not open.
     const otherKey = syntheticBackupKey();
-    expect(reasonOf(await restore(target.env, [backup], { privateKeyText: otherKey.privateText }))).toContain(
+    expect(reasonOf(await restore(t.env, [backup], { privateKeyText: otherKey.privateText }))).toContain(
       'does not open with the backup key given',
     );
     await nothingWritten();
+  });
 
-    // The source itself, and a target that is not fresh.
+  it('GC-9 12 test 11 product owner 12 Oct 2026 refuses the source’s server and any server that holds an Apparel OS database', async () => {
+    // The source itself: its server is the one backed up, by PostgreSQL's system identifier (4.1).
+    const sourceTarget = {
+      ...t.env,
+      AOS_MIGRATION_DATABASE_URL: databaseUrl(world.directory, 'migration'),
+      AOS_RUNTIME_DATABASE_URL: databaseUrl(world.directory, 'runtime'),
+    };
+    expect(reasonOf(await restore(sourceTarget, [backup]))).toContain('the target is the source');
+    // Another database on the target's server holds an Apparel OS schema.
+    const other = await target.createDirectory('rt_other_apparel');
+    await target.query(other, 'create schema kernel authorization aos_migration');
+    await target.query(other, 'create table kernel.migration (id int)');
+    expect(reasonOf(await restore(t.env, [backup]))).toContain(`already holds an Apparel OS database, ${other}`);
+    await target.query('postgres', `drop database ${other} with (force)`);
+    // A database the migration role cannot look into.
+    const closed = await target.createDirectory('rt_closed');
+    await target.query('postgres', `alter database ${closed} with allow_connections false`);
+    expect(reasonOf(await restore(t.env, [backup]))).toContain(`database ${closed} cannot be looked into`);
+    await target.query('postgres', `drop database ${closed}`);
+    // The directory database already holds a table, or the bucket an object.
+    await target.query(t.directory, 'create table public.synthetic_left_over (id int)');
+    expect(reasonOf(await restore(t.env, [backup]))).toContain('its directory database already holds tables');
+    await target.query(t.directory, 'drop table public.synthetic_left_over');
+    await put(t.bucket, 'synthetic-left-over', Buffer.from('x'));
+    expect(reasonOf(await restore(t.env, [backup]))).toContain('file store holds objects');
+    await minio.client.send(new DeleteObjectCommand({ Bucket: t.bucket, Key: 'synthetic-left-over' }));
+    // The runtime connection is not the runtime role.
     expect(
-      reasonOf(
-        await restore(
-          {
-            ...target.env,
-            AOS_MIGRATION_DATABASE_URL: databaseUrl(world.directory, 'migration'),
-            AOS_RUNTIME_DATABASE_URL: databaseUrl(world.directory, 'runtime'),
-          },
-          [backup],
-        ),
-      ),
-    ).toContain('the target is the source');
-    await query(target.directory, 'create table public.synthetic_left_over (id int)');
-    expect(reasonOf(await restore(target.env, [backup]))).toContain('the target is not fresh');
-    await query(target.directory, 'drop table public.synthetic_left_over');
-    await minio.client.send(new PutObjectCommand({ Bucket: target.bucket, Key: 'synthetic-left-over', Body: 'x' }));
-    expect(reasonOf(await restore(target.env, [backup]))).toContain('file store holds objects');
-    await minio.client.send(new DeleteObjectCommand({ Bucket: target.bucket, Key: 'synthetic-left-over' }));
+      reasonOf(await restore({ ...t.env, AOS_RUNTIME_DATABASE_URL: target.url(t.directory, 'migration') }, [backup])),
+    ).toContain('AOS_RUNTIME_DATABASE_URL must connect as aos_runtime');
     await nothingWritten();
+  });
 
-    // A backup taken by newer code: Organisation B's database records a migration this code does not hold.
+  it('GC-9 12 test 11 refuses a backup taken by newer code', async () => {
     const future = '9999__kernel__synthetic_from_newer_code.sql';
     const databaseB = sources[1]?.database ?? '';
     await query(
@@ -680,53 +1001,46 @@ describe('the restore refuses before writing anything (GC-9 12 test 11; PRD-ACP-
     } finally {
       await query(databaseB, 'delete from kernel.migration where file_name = $1', [future]);
     }
-    expect(reasonOf(await restore(target.env, [newer]))).toContain('taken by newer code');
+    expect(reasonOf(await restore(t.env, [newer]))).toContain('taken by newer code');
     await nothingWritten();
   });
 
   it('GC-9 12 test 15 PRD-SEC-018 cannot be reached through the API, and the runtime role cannot run it', async () => {
     for (const route of Object.values(routes)) expect(route.path).not.toContain('restore');
-    const target = await freshTarget('rt_runtime');
-    const refused = await restore(
-      { ...target.env, AOS_MIGRATION_DATABASE_URL: databaseUrl(target.directory, 'runtime') },
-      [backup],
-    );
+    const refused = await restore({ ...t.env, AOS_MIGRATION_DATABASE_URL: target.url(t.directory, 'runtime') }, [
+      backup,
+    ]);
     expect(refused.outcome).toBe('refused');
-    expect(refused.outcome === 'refused' ? refused.reason : '').toContain('not as aos_migration');
-    expect(await bucketKeys(target.bucket)).toEqual([]);
+    expect(reasonOf(refused)).toContain('not as aos_migration');
+    await nothingWritten();
   });
 });
 
 describe('a whole environment restored into a fresh target (backup-and-restore 4.2)', () => {
-  let target: { directory: string; env: Record<string, string>; bucket: string };
+  let t: Target;
   let outcome: RestoreCommandOutcome;
   let api: AccessTestApp;
   let router: OrganisationRouter;
   const targetDatabase = new Map<string, string>();
+  const restored = (code: string) => targetDatabase.get(code) ?? '';
+  const onTarget = <T extends Record<string, unknown>>(database: string, text: string, values: unknown[] = []) =>
+    target.query<T>(database, text, values);
 
   beforeAll(async () => {
-    target = await freshTarget('rt_whole');
-    outcome = await restore(target.env, [backup]);
-    await keepTargetDatabases(target.directory);
-    for (const row of await query<{ organisation_code: string; database_name: string }>(
-      target.directory,
+    t = await freshTarget('rt_whole');
+    outcome = await restore(t.env, [backup]);
+    for (const row of await onTarget<{ organisation_code: string; database_name: string }>(
+      t.directory,
       'select organisation_code, database_name from kernel.directory_entry',
     )) {
       targetDatabase.set(row.organisation_code, row.database_name);
     }
-    const targetWorld = {
-      directory: target.directory,
-      organisations: world.organisations.map((organisation) => ({
-        ...organisation,
-        database: targetDatabase.get(organisation.code) ?? '',
-      })) as unknown as SyntheticWorld['organisations'],
-      reset: () => Promise.resolve(),
-    };
-    api = await startAccessApp(targetWorld, keysEnvironment, {
-      fileStoreEnvironment: { ...minio.environment, [FILE_STORE_VARIABLES.bucket]: target.bucket },
+    api = await startAccessApp(restoredWorld(t, targetDatabase), keysEnvironment, {
+      fileStoreEnvironment: { ...minio.environment, [FILE_STORE_VARIABLES.bucket]: t.bucket },
+      directoryRuntimeUrl: target.url(t.directory, 'runtime'),
     });
     router = new OrganisationRouter(
-      { directoryConnectionString: databaseUrl(target.directory, 'runtime'), poolMax: SYNTHETIC_POOL_MAX },
+      { directoryConnectionString: target.url(t.directory, 'runtime'), poolMax: SYNTHETIC_POOL_MAX },
       captured.logger,
     );
   });
@@ -736,33 +1050,35 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     await (router as OrganisationRouter | undefined)?.close();
   });
 
-  const restored = (code: string) => targetDatabase.get(code) ?? '';
-
   it('PRD-ACP-019 holds each Organisation with every check passed, and points the target directory at it', async () => {
     expect(outcome.outcome).toBe('held');
     for (const source of sources) {
-      expect(restored(source.code)).toBe(`${target.directory}_${source.code.toLowerCase().replace(/-/g, '_')}`);
-      expect(await query(restored(source.code), 'select restore_id from kernel.recovery_hold')).toHaveLength(1);
-      const failed = await query(
+      expect(restored(source.code)).toBe(`${t.directory}_${source.code.toLowerCase().replace(/-/g, '_')}`);
+      expect(await onTarget(restored(source.code), 'select restore_id from kernel.recovery_hold')).toHaveLength(1);
+      const failed = await onTarget(
         restored(source.code),
         "select unit, name, subject from kernel.recovery_event where kind in ('step', 'check') and not passed",
       );
       expect(failed).toEqual([]);
     }
     // The identifiers kept: an object key starts with the Organisation's identifier (GC9-10).
-    const entries = await query<{ id: string; organisation_code: string }>(
-      target.directory,
-      'select id::text, organisation_code from kernel.directory_entry order by organisation_code',
-    );
+    const entries = await onTarget<{ id: string }>(t.directory, 'select id::text from kernel.directory_entry');
     expect(entries.map((entry) => entry.id).sort()).toEqual(sources.map((source) => source.organisationId).sort());
   });
 
   it('GC-9 12 test 1 PRD-ACP-019 every control total equals the backup’s, and every module’s checks ran', async () => {
     for (const source of sources) {
-      const checks = await query<{ unit: string; name: string; passed: boolean; checked: string }>(
+      const checks = await onTarget<{
+        unit: string;
+        name: string;
+        passed: boolean;
+        checked: string;
+        check_run: number;
+      }>(
         restored(source.code),
-        "select unit, name, passed, checked::text from kernel.recovery_event where kind in ('step', 'check')",
+        "select unit, name, passed, checked::text, check_run from kernel.recovery_event where kind in ('step', 'check')",
       );
+      expect(checks.every((check) => check.check_run === 1)).toBe(true);
       const totals = checks.filter((check) => check.name === 'control totals equal the backup');
       expect(totals.map((check) => check.unit).sort()).toEqual(
         restoreRegistry.participants.map((participant) => participant.unit).sort(),
@@ -780,7 +1096,7 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
 
   it('GC-9 12 test 2 imports-and-opening-data 17 test 23 every stored file matches its hash and every attachment opens from its record for an authorised reader, and is refused to one outside its scope', async () => {
     for (const source of sources) {
-      const checks = await query<{ name: string; passed: boolean; checked: string }>(
+      const checks = await onTarget<{ name: string; passed: boolean; checked: string }>(
         restored(source.code),
         "select name, passed, checked::text from kernel.recovery_event where unit = 'files-imports'",
       );
@@ -797,7 +1113,6 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
       });
       // Through the restored application: the authorised reader signs in again and reads it; the outsider is refused.
       const reader = await on(api.baseUrl, source, source.reader);
-      expect(reader.status).toBe(200);
       const read = await send(
         api.baseUrl,
         reader.cookie,
@@ -809,7 +1124,6 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
         Buffer.from((read.json as { contentBase64: string }).contentBase64, 'base64').toString('latin1'),
       ).toContain(MARKER);
       const outsider = await on(api.baseUrl, source, source.outsider);
-      expect(outsider.status).toBe(200);
       const refused = await send(
         api.baseUrl,
         outsider.cookie,
@@ -820,9 +1134,25 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     }
   });
 
+  it('GC-9 12 test 20 2.4 Organisation B’s data opens with both of its key versions, each from its kept copy, named in the drill record', async () => {
+    const b = sources[1];
+    if (b === undefined || outcome.outcome !== 'held') throw new Error('Not held');
+    const files = await onTarget<{ passed: boolean; checked: string }>(
+      restored(b.code),
+      "select passed, checked::text from kernel.recovery_event where name like 'every stored file%'",
+    );
+    expect(files).toEqual([{ passed: true, checked: '2' }]);
+    const { record } = await drillRecordOf(outcome.drillRecord?.json ?? '');
+    const versions = record.keyVersions.filter((key) => key.organisationCode === b.code);
+    expect(versions.map((key) => key.identifier).sort()).toEqual(
+      [OrganisationKeys.fromEnvironment(keysEnvironment).version(b.code), secondVersionB].sort(),
+    );
+    expect(versions.every((key) => key.fromKeptCopy && key.matchedIdentifier)).toBe(true);
+  });
+
   it('GC-9 12 test 10 PRD-SEC-008 every session that existed in the backup is ended', async () => {
     for (const source of sources) {
-      const sessions = await query<{ state: string }>(
+      const sessions = await onTarget<{ state: string }>(
         restored(source.code),
         "select state from access.session where state in ('In force', 'Locked') and started_at < (select min(occurred_at) from kernel.recovery_event)",
       );
@@ -848,22 +1178,25 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
         }),
       ),
     ).rejects.toBeInstanceOf(RecoveryHoldRefused);
-    // Reading works: the operator reads recovery status and backup status.
+    // Reading works: the operator reads recovery status.
+    const status = await statusOf(api.baseUrl, source);
+    expect(status.backupId).toBe(backup);
+    expect(status.seriesToReconcile.length).toBe(2);
+    // The file stored after the recovery point is a gap to raise and settle (4.5): reopening is refused for it first.
+    expect(status.items).toEqual([
+      expect.objectContaining({ kind: 'gap', unit: 'files-imports', name: 'object with no record', exceptionId: null }),
+    ]);
+    const early = await reopen(api.baseUrl, source);
+    expect(early.status).toBe(422);
+    expect(early.json).toMatchObject({ error: { code: 'configuration.recovery-gaps-unsettled' } });
+    // The third confirmation is gone: a gap is settled through its exception, never attested (4.5).
     const operator = await on(api.baseUrl, source, source.recovery);
-    const status = await send(api.baseUrl, operator.cookie, 'GET', routes.readRecoveryStatus.path);
-    expect(status.status).toBe(200);
-    const parsed = recoveryStatusSchema.parse(status.json);
-    expect(parsed.held).toBe(true);
-    expect(parsed.restore?.backupId).toBe(backup);
-    expect(parsed.restore?.seriesToReconcile.length).toBeGreaterThan(0);
-    // Reopening is refused while the validations are not recorded and a series waits.
-    const early = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
+    const attested = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
       revocationsPlacedAgain: true,
       legalHoldsPlacedAgain: true,
       gapsSettled: true,
     });
-    expect(early.status).toBe(422);
-    expect(early.json).toMatchObject({ error: { code: 'configuration.validations-missing' } });
+    expect(attested.status).toBe(400);
   });
 
   it('GC-9 12 test 16 PRD-SEC-013 PRD-SEC-005 recovery status shows to an authorised operator and to nobody else', async () => {
@@ -871,12 +1204,8 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
       const plain = await on(api.baseUrl, source, source.plain);
       const refused = await send(api.baseUrl, plain.cookie, 'GET', routes.readRecoveryStatus.path);
       expect(refused.status).toBe(403);
-      const operator = await on(api.baseUrl, source, source.recovery);
-      const status = recoveryStatusSchema.parse(
-        (await send(api.baseUrl, operator.cookie, 'GET', routes.readRecoveryStatus.path)).json,
-      );
       // Each sees its own Organisation's restore only (PRD-MOD-001).
-      expect(status.restore?.recoveryPoint).toBe(
+      expect((await statusOf(api.baseUrl, source)).recoveryPoint).toBe(
         (await manifestOf(backup)).organisations.find((part) => part.organisationCode === source.code)?.snapshotAt,
       );
     }
@@ -946,7 +1275,7 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     const manifest = await manifestOf(backup);
     for (const source of sources) {
       expect(manifest.organisations.find((part) => part.organisationCode === source.code)?.latestSeal).not.toBeNull();
-      const checks = await query<{ name: string; passed: boolean }>(
+      const checks = await onTarget<{ name: string; passed: boolean }>(
         restored(source.code),
         "select name, passed from kernel.recovery_event where unit = 'audit' and kind = 'check'",
       );
@@ -957,12 +1286,12 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
         ]),
       );
       // Every step and check is an audit record under the restore's internal service identity.
-      const recorded = await query<{ n: string }>(
+      const recorded = await onTarget<{ n: string }>(
         restored(source.code),
         `select count(*)::text as n from audit.audit_record a join access.service_identity s on s.id = a.actor_id
           where s.code = 'restore' and a.record_type = 'recovery_event'`,
       );
-      const events = await query<{ n: string }>(
+      const events = await onTarget<{ n: string }>(
         restored(source.code),
         "select count(*)::text as n from kernel.recovery_event where kind in ('step', 'check') and name <> 'every step and check recorded as an audit record'",
       );
@@ -970,78 +1299,84 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     }
   });
 
+  it('product owner 12 Oct 2026 4.5 a gap is raised as an exception once the exception series is reconciled, and reopening waits until it is settled; any paused series blocks it', async () => {
+    const source = sources[0];
+    if (source === undefined || outcome.outcome !== 'held') throw new Error('Not held');
+    // Before the exception-code series is reconciled the gap cannot be raised, and the refusal names the series.
+    const early = await restore(t.env, ['--raise-gaps', outcome.restoreId]);
+    expect(early).toMatchObject({
+      outcome: 'raised',
+      organisations: expect.arrayContaining([
+        { organisationCode: source.code, count: 0, refusals: ['exceptions.exception-code-series-paused'] },
+      ]) as unknown,
+    });
+    await reconcileAll(api.baseUrl, source, source.exceptionSeriesId);
+    const raised = await restore(t.env, ['--raise-gaps', outcome.restoreId]);
+    expect(raised).toMatchObject({
+      outcome: 'raised',
+      organisations: expect.arrayContaining([{ organisationCode: source.code, count: 1, refusals: [] }]) as unknown,
+    });
+    // Raised once: a second run raises nothing more.
+    expect(await restore(t.env, ['--raise-gaps', outcome.restoreId])).toMatchObject({
+      organisations: expect.arrayContaining([{ organisationCode: source.code, count: 0, refusals: [] }]) as unknown,
+    });
+    const [item] = (await statusOf(api.baseUrl, source)).items;
+    expect(item).toMatchObject({ kind: 'gap', settlement: null });
+    expect(item?.exceptionId).not.toBeNull();
+    const exception = await onTarget<{ code: string; state: string; type: string }>(
+      restored(source.code),
+      `select e.code, e.state, t.code as type from exceptions.exception e
+         join exceptions.exception_type t on t.id = e.exception_type_id where e.id = $1`,
+      [item?.exceptionId],
+    );
+    expect(exception).toEqual([
+      { code: expect.stringMatching(/^SYN-EX-/) as string, state: 'Unresolved', type: RECOVERY_GAP_TYPE },
+    ]);
+    await validate(api.baseUrl, source);
+    const unsettled = await reopen(api.baseUrl, source);
+    expect(unsettled.json).toMatchObject({
+      error: {
+        code: 'configuration.recovery-gaps-unsettled',
+        missing: [{ kind: 'recovery-gap', exceptionId: item?.exceptionId }],
+      },
+    });
+    // The owner settles it, accepted with a reason.
+    expect(await settleAll(api.baseUrl, source)).toBe(1);
+    expect((await statusOf(api.baseUrl, source)).items).toEqual([expect.objectContaining({ settlement: 'accepted' })]);
+    // Any series still paused blocks reopening (4.3): Organisation B, validated and with no gap, waits for its
+    // exception-code series.
+    const other = sources[1];
+    if (other === undefined) throw new Error('No source');
+    await validate(api.baseUrl, other);
+    const waiting = await reopen(api.baseUrl, other);
+    expect(waiting.json).toMatchObject({
+      error: {
+        code: 'configuration.series-not-reconciled',
+        missing: [{ kind: 'series', seriesId: other.exceptionSeriesId }],
+      },
+    });
+  });
+
   it('GC-9 12 test 14 PRD-INT-006 PRD-INT-008 no outbox row is delivered while held; after reopening the inside consumer gets it once and the outside one never', async () => {
     const source = sources[0];
     const other = sources[1];
-    if (source === undefined || other === undefined) throw new Error('No source');
+    if (source === undefined || other === undefined || outcome.outcome !== 'held') throw new Error('No source');
     const target0 = restored(source.code);
     const held = worker(router);
     await held.open();
     await held.dispatchAll();
-    expect(await query(target0, 'select 1 from kernel.outbox_dispatch where outbox_event_id = $1', [event])).toEqual(
+    expect(await onTarget(target0, 'select 1 from kernel.outbox_dispatch where outbox_event_id = $1', [event])).toEqual(
       [],
     );
     await held.stop();
 
-    // Reopen both: the validations by two people, every series reconciled (B's above), then reopen (4.3).
+    // Reopen both: every series reconciled, every gap raised and settled, the two validations (4.3).
+    await reconcileAll(api.baseUrl, source);
+    await reconcileAll(api.baseUrl, other);
     for (const each of [source, other]) {
-      const operator = await on(api.baseUrl, each, each.recovery);
-      const validator = await on(api.baseUrl, each, each.validator);
-      const status = recoveryStatusSchema.parse(
-        (await send(api.baseUrl, operator.cookie, 'GET', routes.readRecoveryStatus.path)).json,
-      );
-      for (const series of status.restore?.seriesToReconcile ?? []) {
-        expect(
-          (
-            await send(
-              api.baseUrl,
-              operator.cookie,
-              'POST',
-              routes.reconcileSeriesAfterRestore.path.replace('{seriesId}', series.seriesId),
-              { evidence: 'SYNTHETIC: no document left the system', evidenceHighest: null, reason: 'SYNTHETIC drill' },
-            )
-          ).status,
-        ).toBe(200);
-      }
-      const operations = await send(api.baseUrl, operator.cookie, 'POST', routes.recordRecoveryValidation.path, {
-        validates: 'operations',
-        compared: ['stock', 'bills'],
-        comparedAgainst: 'SYNTHETIC: the source totals before the drill',
-        evidence: 'SYNTHETIC: the drill notes',
-      });
-      expect(operations.status).toBe(200);
-      const notYet = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
-        revocationsPlacedAgain: true,
-        legalHoldsPlacedAgain: true,
-        gapsSettled: true,
-      });
-      expect(notYet.json).toMatchObject({
-        error: {
-          code: 'configuration.validations-missing',
-          missing: [{ kind: 'recovery-validation', validates: 'accounts' }],
-        },
-      });
-      const accounts = await send(api.baseUrl, validator.cookie, 'POST', routes.recordRecoveryValidation.path, {
-        validates: 'accounts',
-        compared: ['financial-totals'],
-        comparedAgainst: 'SYNTHETIC: the trial balance before the drill',
-        evidence: 'SYNTHETIC: the drill notes',
-      });
-      expect(accounts.status).toBe(200);
-      // Every confirmation is asked for.
-      const unconfirmed = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
-        revocationsPlacedAgain: true,
-        legalHoldsPlacedAgain: false,
-        gapsSettled: true,
-      });
-      expect(unconfirmed.status).toBe(400);
-      const reopened = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
-        revocationsPlacedAgain: true,
-        legalHoldsPlacedAgain: true,
-        gapsSettled: true,
-      });
-      expect(reopened.status).toBe(200);
-      expect(await query(restored(each.code), 'select 1 from kernel.recovery_hold')).toEqual([]);
+      const reopened = await reopen(api.baseUrl, each);
+      expect(reopened.status, JSON.stringify(reopened.json)).toBe(200);
+      expect(await onTarget(restored(each.code), 'select 1 from kernel.recovery_hold')).toEqual([]);
       // A business command runs again.
       expect((await storeFile(api.baseUrl, (await on(api.baseUrl, each, each.reader)).cookie, 'reopened')).status).toBe(
         200,
@@ -1052,7 +1387,7 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     try {
       await open.open();
       await open.dispatchAll();
-      const dispatched = await query<{ consumer: string; job_id: string }>(
+      const dispatched = await onTarget<{ consumer: string; job_id: string }>(
         target0,
         `select c.name as consumer, d.job_id::text as job_id from kernel.outbox_dispatch d
            join kernel.outbox_consumer c on c.id = d.outbox_consumer_id where d.outbox_event_id = $1`,
@@ -1069,12 +1404,13 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
         status: 'completed',
         output: { outcome: 'done', replayed: true },
       });
-      const echoes = await query(
+      const echoes = await onTarget(
         target0,
         "select 1 from kernel.outbox_event where event_type = 'kernel.synthetic-record-echoed'",
       );
       expect(echoes).toHaveLength(1);
-      // The outside consumer never had it handed over, nor delivers it if a restored job asks (4.5).
+      // The outside consumer never had it handed over, nor delivers it if a restored job asks (4.5). How its outcome
+      // is reconciled with the outside system arrives with the first such consumer (RR-532).
       expect(await open.deliver(source.code, { eventId: event, consumer: outside.name }, uuidv7())).toMatchObject({
         status: 'completed',
         output: { outcome: 'refused', code: 'kernel.outside-outcome-unreconciled' },
@@ -1089,11 +1425,11 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     for (const source of sources) {
       const part = manifest.organisations.find((each) => each.organisationCode === source.code);
       if (part === undefined) throw new Error('No part');
-      const client = await connect(restored(source.code), 'migration');
+      const client = new Client({ connectionString: target.url(restored(source.code), 'migration') });
+      await client.connect();
       let now;
       try {
         await client.query('begin isolation level repeatable read read only');
-        const { drizzle } = await import('drizzle-orm/node-postgres');
         now = await restoreRegistry.controlTotals({ organisationCode: source.code, tx: drizzle({ client }) });
         await client.query('rollback');
       } finally {
@@ -1108,14 +1444,16 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
       const backedUp = (await bucketKeys(backupBucket, `files/${source.organisationId}/`)).map((key) =>
         key.slice('files/'.length),
       );
-      const kept = await bucketKeys(target.bucket, `${source.organisationId}/`);
+      const kept = await bucketKeys(t.bucket, `${source.organisationId}/`);
       for (const key of backedUp) expect(kept).toContain(key);
     }
     // The retention schedules hold no row: no period is set, so nothing is deleted (8.2).
-    expect(await query(restored(sources[0]?.code ?? ''), 'select 1 from configuration.retention_schedule')).toEqual([]);
+    expect(await onTarget(restored(sources[0]?.code ?? ''), 'select 1 from configuration.retention_schedule')).toEqual(
+      [],
+    );
   });
 
-  it('section 6 the drill record holds the steps, checks, gaps, key versions, and after the update the reconciliations, validations and reopening', async () => {
+  it('section 6 the drill record holds the steps, checks, gaps, key versions, and after the update the reconciliations, validations, gap exceptions and reopening', async () => {
     if (outcome.outcome !== 'held') throw new Error('Not held');
     const first = await drillRecordOf(outcome.drillRecord?.json ?? '');
     expect(first.record).toMatchObject({
@@ -1153,7 +1491,7 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     expect(a?.gaps).toEqual([expect.objectContaining({ name: 'object with no record', afterRecoveryPoint: true })]);
     expect(first.text).toContain('Restore drill record, version 1');
 
-    const refreshed = await restore(target.env, ['--drill-record', outcome.restoreId]);
+    const refreshed = await restore(t.env, ['--drill-record', outcome.restoreId]);
     expect(refreshed).toMatchObject({ outcome: 'written', result: 'reopened' });
     const second = await drillRecordOf(refreshed.outcome === 'written' ? refreshed.json : '');
     expect(second.record.version).toBe(2);
@@ -1161,34 +1499,42 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     for (const organisation of second.record.organisations) {
       expect(organisation.reopened).not.toBeNull();
       expect(organisation.validations.map((each) => each.validates).sort()).toEqual(['accounts', 'operations']);
-      expect(organisation.seriesReconciled.length).toBeGreaterThan(0);
+      expect(organisation.seriesReconciled.length).toBe(2);
       expect(organisation.seriesToReconcile).toBe(0);
     }
-    const reconciledA = second.record.organisations
-      .find((each) => each.organisationCode === sources[0]?.code)
-      ?.seriesReconciled.find((each) => each.seriesId === sources[0]?.batchSeriesId);
-    expect(reconciledA).toMatchObject({
+    const secondA = second.record.organisations.find((each) => each.organisationCode === sources[0]?.code);
+    expect(secondA?.recoveryItems).toEqual([
+      expect.objectContaining({ kind: 'gap', settlement: 'accepted', exceptionId: expect.any(String) as string }),
+    ]);
+    expect(secondA?.seriesReconciled.find((each) => each.seriesId === sources[0]?.batchSeriesId)).toMatchObject({
       evidenceHighest: lostBatchCode,
       skipped: { from: lostBatchCode, to: lostBatchCode },
     });
+    expect(second.text).toContain('accepted');
   });
 });
 
-describe('one Organisation restored alone, from a backup with damaged objects and altered rows', () => {
-  let target: { directory: string; env: Record<string, string>; bucket: string };
+describe('one Organisation restored alone, from a backup copy with damaged objects and altered rows', () => {
+  let t: Target;
   let outcome: RestoreCommandOutcome;
-  const damaged: Record<'missing' | 'altered' | 'otherKey', string> = { missing: '', altered: '', otherKey: '' };
+  let api: AccessTestApp;
+  const damaged: Record<'missing' | 'altered' | 'otherKey' | 'otherContent', string> = {
+    missing: '',
+    altered: '',
+    otherKey: '',
+    otherContent: '',
+  };
   let sourceA: { tables: string; objects: string[] };
+  let database: string;
 
   beforeAll(async () => {
     const source = sources[1];
     const otherSource = sources[0];
     if (source === undefined || otherSource === undefined) throw new Error('No source');
-    // Three more files in Organisation B, attached to its Site.
-    const signed = { cookie: source.cookie };
+    // Four more files in Organisation B, attached to its Site.
     const keys: string[] = [];
-    for (const label of ['missing', 'altered', 'other-key']) {
-      const stored = (await storeFile(sourceApi.baseUrl, signed.cookie, label)).json as {
+    for (const label of ['missing', 'altered', 'other-key', 'other-content']) {
+      const stored = (await storeFile(sourceApi.baseUrl, source.cookie, label)).json as {
         storedFileId: string;
         receiptId: string;
       };
@@ -1200,10 +1546,22 @@ describe('one Organisation restored alone, from a backup with damaged objects an
       );
       keys.push(row[0]?.object_key ?? '');
     }
-    [damaged.missing, damaged.altered, damaged.otherKey] = keys as [string, string, string];
-    // GC-9 tests 5 and 8: a sealed audit row altered, and a reference across modules that no longer resolves.
-    await query(
-      source.database,
+    [damaged.missing, damaged.altered, damaged.otherKey, damaged.otherContent] = keys as [
+      string,
+      string,
+      string,
+      string,
+    ];
+    sourceA = {
+      tables: JSON.stringify(await query(otherSource.database, 'select count(*)::text as n from audit.audit_record')),
+      objects: await bucketKeys(minio.bucket, `${otherSource.organisationId}/`),
+    };
+    const taken = await takeBackup();
+    // GC-9 tests 5 and 8, as written: in a copy of the backup, a sealed audit row altered and a reference across
+    // modules that no longer resolves.
+    const altered = await alteredCopy(
+      taken,
+      source.code,
       `do $$
        declare
          target record;
@@ -1219,37 +1577,40 @@ describe('one Organisation restored alone, from a backup with damaged objects an
        update files_imports.attachment set site_id = '${uuidv7()}' where id = '${source.attachmentId}';
        alter table files_imports.attachment enable trigger refuse_row_change;`,
     );
-    sourceA = {
-      tables: JSON.stringify(await query(otherSource.database, 'select count(*)::text as n from audit.audit_record')),
-      objects: await bucketKeys(minio.bucket, `${otherSource.organisationId}/`),
-    };
-    const damagedBackup = await takeBackup();
-    // The copies in the backup store damaged: one removed, one changed, one sealed under another Organisation key.
+    // GC-9 test 3: the copies of objects in the backup store damaged: one removed, one changed, one sealed under another
+    // key, and one sealed under the right key version but holding other bytes.
     await minio.client.send(new DeleteObjectCommand({ Bucket: backupBucket, Key: `files/${damaged.missing}` }));
-    const altered = await objectOf(minio.client, backupBucket, `files/${damaged.altered}`);
-    altered[altered.length - 5] = (altered[altered.length - 5] ?? 0) ^ 0xff;
-    await minio.client.send(new DeleteObjectCommand({ Bucket: backupBucket, Key: `files/${damaged.altered}` }));
-    await minio.client.send(
-      new PutObjectCommand({ Bucket: backupBucket, Key: `files/${damaged.altered}`, Body: altered }),
-    );
+    const changed = await objectOf(minio.client, backupBucket, `files/${damaged.altered}`);
+    changed[changed.length - 5] = (changed[changed.length - 5] ?? 0) ^ 0xff;
+    await put(backupBucket, `files/${damaged.altered}`, changed);
     const nonce = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', randomBytes(32), nonce);
     const body = Buffer.concat([cipher.update(pdf('another-key')), cipher.final()]);
-    await minio.client.send(new DeleteObjectCommand({ Bucket: backupBucket, Key: `files/${damaged.otherKey}` }));
-    await minio.client.send(
-      new PutObjectCommand({
-        Bucket: backupBucket,
-        Key: `files/${damaged.otherKey}`,
-        Body: Buffer.concat([nonce, cipher.getAuthTag(), body]),
-      }),
+    await put(backupBucket, `files/${damaged.otherKey}`, Buffer.concat([nonce, cipher.getAuthTag(), body]));
+    const hash = damaged.otherContent.slice(damaged.otherContent.lastIndexOf('/') + 1);
+    const otherBytes = sealFile(
+      OrganisationKeys.fromEnvironment(keysEnvironment),
+      source.code,
+      hash,
+      pdf('other-bytes'),
     );
-    target = await freshTarget('rt_one');
-    outcome = await restore(target.env, [damagedBackup, '--organisation', source.code]);
-    await keepTargetDatabases(target.directory);
+    await put(backupBucket, `files/${damaged.otherContent}`, otherBytes.bytes);
+
+    t = await freshTarget('rt_one');
+    outcome = await restore(t.env, [altered, '--organisation', source.code]);
+    if (outcome.outcome !== 'held-with-failed-checks') throw new Error(`Not held: ${JSON.stringify(outcome)}`);
+    database = outcome.organisations[0]?.databaseName ?? '';
+    api = await startAccessApp(restoredWorld(t, new Map([[source.code, database]])), keysEnvironment, {
+      fileStoreEnvironment: { ...minio.environment, [FILE_STORE_VARIABLES.bucket]: t.bucket },
+      directoryRuntimeUrl: target.url(t.directory, 'runtime'),
+    });
   });
 
-  it('GC-9 12 test 3 PRD-ACP-019 a restored object missing, altered or encrypted with another key fails the file check, is named in the drill record, and the Organisation stays held', async () => {
-    expect(outcome.outcome).toBe('held-with-failed-checks');
+  afterAll(async () => {
+    await (api as AccessTestApp | undefined)?.close();
+  });
+
+  it('GC-9 12 test 3 PRD-ACP-019 a restored object missing, altered, encrypted with another key or holding other bytes fails the file check, is named in the drill record, and the Organisation stays held', async () => {
     if (outcome.outcome !== 'held-with-failed-checks') throw new Error('Not held');
     const { record, text } = await drillRecordOf(outcome.drillRecord?.json ?? '');
     const checks = record.organisations[0]?.checks ?? [];
@@ -1257,15 +1618,15 @@ describe('one Organisation restored alone, from a backup with damaged objects an
     expect(named(damaged.missing)?.check).toBe('stored file missing from the file store');
     expect(named(damaged.altered)?.check).toBe('stored file does not open with the key version it names');
     expect(named(damaged.otherKey)?.check).toBe('stored file does not open with the key version it names');
+    expect(named(damaged.otherContent)?.check).toBe('stored file does not match its content hash');
     for (const key of Object.values(damaged)) expect(text).toContain(key);
-    const database = outcome.organisations[0]?.databaseName ?? '';
-    expect(await query(database, 'select 1 from kernel.recovery_hold')).toHaveLength(1);
+    expect(await target.query(database, 'select 1 from kernel.recovery_hold')).toHaveLength(1);
   });
 
-  it('GC-9 12 tests 5 and 8 a sealed row altered in the backup is reported, and so is a dangling reference across modules; reopening is refused', async () => {
-    if (outcome.outcome !== 'held-with-failed-checks') throw new Error('Not held');
-    const database = outcome.organisations[0]?.databaseName ?? '';
-    const failed = await query<{ unit: string; name: string }>(
+  it('GC-9 12 tests 5 and 8 a sealed row altered in the backup copy is reported, and so is a dangling reference across modules made there; reopening is refused', async () => {
+    const source = sources[1];
+    if (source === undefined) throw new Error('No source');
+    const failed = await target.query<{ unit: string; name: string }>(
       database,
       "select unit, name from kernel.recovery_event where kind in ('step', 'check') and not passed order by unit, name",
     );
@@ -1275,48 +1636,80 @@ describe('one Organisation restored alone, from a backup with damaged objects an
         { unit: 'files-imports', name: 'files_imports.attachment.site_id -> organisation.site' },
       ]),
     );
-    const source = sources[1];
-    if (source === undefined) throw new Error('No source');
-    const targetWorld = {
-      directory: target.directory,
-      organisations: [
-        { ...world.organisations[1], database },
-        { ...world.organisations[0], database },
-      ] as unknown as SyntheticWorld['organisations'],
-      reset: () => Promise.resolve(),
-    };
-    const api = await startAccessApp(targetWorld, keysEnvironment, {
-      fileStoreEnvironment: { ...minio.environment, [FILE_STORE_VARIABLES.bucket]: target.bucket },
-    });
-    try {
-      const operator = await on(api.baseUrl, source, source.recovery);
-      const reopen = await send(api.baseUrl, operator.cookie, 'POST', routes.reopenAfterRestore.path, {
-        revocationsPlacedAgain: true,
-        legalHoldsPlacedAgain: true,
-        gapsSettled: true,
-      });
-      expect(reopen.json).toMatchObject({ error: { code: 'configuration.restore-check-failed' } });
-    } finally {
-      await api.close();
-    }
+    const refused = await reopen(api.baseUrl, source);
+    expect(refused.json).toMatchObject({ error: { code: 'configuration.restore-check-failed' } });
   });
 
-  it('GC-9 12 test 13 PRD-MOD-001 PRD-ACS-020 restoring one Organisation writes nothing into the other’s databases or objects', async () => {
+  it('product owner 12 Oct 2026 5.1 a failed check never blocks for good: put right and checked again it passes; what still fails is raised and settled; then it reopens', async () => {
+    const source = sources[1];
+    if (source === undefined || outcome.outcome !== 'held-with-failed-checks') throw new Error('Not held');
+    // The objects put right in the target's file store from the source's own copies, then the checks run again.
+    for (const key of Object.values(damaged)) await put(t.bucket, key, await objectOf(minio.client, minio.bucket, key));
+    const rechecked = await restore(t.env, ['--recheck', outcome.restoreId]);
+    expect(rechecked).toMatchObject({ outcome: 'rechecked', organisations: [{ organisationCode: source.code }] });
+    const latest = await target.query<{ name: string; passed: boolean }>(
+      database,
+      "select name, passed from kernel.recovery_event where kind = 'check' and check_run = 2",
+    );
+    expect(latest).toContainEqual({
+      name: 'every stored file is in the file store, opens with its key version and matches its hash',
+      passed: true,
+    });
+    expect(latest.some((check) => check.name.startsWith('stored file ') && !check.passed)).toBe(false);
+    // What still fails, the altered seal chain and the dangling reference, is what blocks now.
+    const items = (await statusOf(api.baseUrl, source)).items;
+    expect(items.every((item) => item.kind === 'failure')).toBe(true);
+    expect(items.map((item) => item.name)).toEqual(
+      expect.arrayContaining(['audit seal chain verifies', 'files_imports.attachment.site_id -> organisation.site']),
+    );
+    expect(items.some((item) => item.name.startsWith('stored file '))).toBe(false);
+    // Raised once the exception series is reconciled, settled by their owner, then the Organisation reopens.
+    await reconcileAll(api.baseUrl, source, source.exceptionSeriesId);
+    const raised = await restore(t.env, ['--raise-gaps', outcome.restoreId]);
+    expect(raised).toMatchObject({
+      organisations: [{ organisationCode: source.code, count: items.length, refusals: [] }],
+    });
+    expect(await settleAll(api.baseUrl, source)).toBe(items.length);
+    await reconcileAll(api.baseUrl, source);
+    await validate(api.baseUrl, source);
+    const reopened = await reopen(api.baseUrl, source);
+    expect(reopened.status, JSON.stringify(reopened.json)).toBe(200);
+    // The checks run again and the exceptions are in the drill record.
+    const refreshed = await restore(t.env, ['--drill-record', outcome.restoreId]);
+    if (refreshed.outcome !== 'written') throw new Error('Not written');
+    const { record } = await drillRecordOf(refreshed.json);
+    expect(record.organisations[0]?.checks.some((check) => check.run === 2)).toBe(true);
+    expect(record.organisations[0]?.recoveryItems.every((item) => item.settlement === 'accepted')).toBe(true);
+  });
+
+  it('GC-9 12 test 13 PRD-MOD-001 PRD-ACS-020 restoring one Organisation writes nothing into the other’s databases or objects, and each sees only its own records afterwards', async () => {
     const source = sources[1];
     const otherSource = sources[0];
     if (source === undefined || otherSource === undefined) throw new Error('No source');
     expect(
-      await query<{ organisation_code: string }>(
-        target.directory,
+      await target.query<{ organisation_code: string }>(
+        t.directory,
         'select organisation_code from kernel.directory_entry',
       ),
     ).toEqual([{ organisation_code: source.code }]);
-    expect(await bucketKeys(target.bucket, `${otherSource.organisationId}/`)).toEqual([]);
-    expect((await bucketKeys(target.bucket)).every((key) => key.startsWith(`${source.organisationId}/`))).toBe(true);
+    expect(await bucketKeys(t.bucket, `${otherSource.organisationId}/`)).toEqual([]);
+    expect((await bucketKeys(t.bucket)).every((key) => key.startsWith(`${source.organisationId}/`))).toBe(true);
     expect(
       JSON.stringify(await query(otherSource.database, 'select count(*)::text as n from audit.audit_record')),
     ).toBe(sourceA.tables);
     expect(await bucketKeys(minio.bucket, `${otherSource.organisationId}/`)).toEqual(sourceA.objects);
+    // Afterwards, through the restored application: B's people see B's records; A is not there to sign in to, and
+    // A's attachment is not found from B.
+    expect((await signIn(api.baseUrl, otherSource.code, otherSource.plain.user)).status).not.toBe(200);
+    const reader = await on(api.baseUrl, source, source.reader);
+    expect((await send(api.baseUrl, reader.cookie, 'GET', routes.session.path)).status).toBe(200);
+    const others = await send(
+      api.baseUrl,
+      reader.cookie,
+      'GET',
+      `/api/files-imports/attachments/${otherSource.attachmentId}/file`,
+    );
+    expect([403, 404]).toContain(others.status);
   });
 });
 
@@ -1328,6 +1721,8 @@ describe('what a restore leaves behind (GC-9 12 tests 12 and 17; PRD-SEC-006, PR
     const forbidden = [
       backupKey.privateText,
       backupKey.publicText,
+      ...Object.values(signingKey.backupRunner),
+      secondKeyB,
       ...keys,
       MARKER,
       databaseUrl(world.directory, 'migration'),

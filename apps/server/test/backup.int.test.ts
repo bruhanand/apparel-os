@@ -5,7 +5,15 @@ import { ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runBackupCommand } from '../src/backup.js';
-import type { BackupManifest, BackupOutcome, BackupStore, DumpTool, ParticipantTotals } from '../src/kernel/index.js';
+import {
+  BackupVerifyKey,
+  signatureName,
+  type BackupManifest,
+  type BackupOutcome,
+  type BackupStore,
+  type DumpTool,
+  type ParticipantTotals,
+} from '../src/kernel/index.js';
 import { ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
 import { restoreRegistry } from '../src/restore-participants.js';
 import {
@@ -18,7 +26,14 @@ import {
   type AccessTestApp,
   type SyntheticUser,
 } from './support/access.js';
-import { containerDumpTool, createBackupBucket, loadDump, objectOf, syntheticBackupKey } from './support/backup.js';
+import {
+  containerDumpTool,
+  createBackupBucket,
+  loadDump,
+  objectOf,
+  syntheticBackupKey,
+  syntheticSigningKey,
+} from './support/backup.js';
 import { grantSynthetic } from './support/grants.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -39,6 +54,7 @@ let keysEnvironment: Record<string, string>;
 let backupEnvironment: Record<string, string>;
 let backupBucket: string;
 const backupKey = syntheticBackupKey();
+const signingKey = syntheticSigningKey();
 const users: SyntheticUser[] = [];
 const cookies: string[] = [];
 const loaded: string[] = [];
@@ -233,6 +249,7 @@ beforeAll(async () => {
     AOS_MIGRATION_DATABASE_URL: databaseUrl(world.directory, 'migration'),
     AOS_ENVIRONMENT: 'local',
     AOS_BACKUP_PUBLIC_KEY: backupKey.publicText,
+    ...signingKey.backupRunner,
     ...backupStoreEnvironment,
     ...minio.environment,
   };
@@ -390,17 +407,45 @@ describe('the application backup (backup-and-restore 3.2; PRD-SEC-012)', () => {
       ...organisationKeys.flatMap((key) => [Buffer.from(key), Buffer.from(key, 'base64url')]),
       Buffer.from(backupKey.privateText),
       Buffer.from(backupKey.privateText, 'base64'),
+      ...Object.values(signingKey.backupRunner).flatMap((key) => [Buffer.from(key), Buffer.from(key, 'base64')]),
     ];
     for (const key of await backupKeys()) {
       const bytes = await objectOf(minio.client, backupBucket, key);
       for (const value of forbidden) expect(bytes.includes(value), key).toBe(false);
-      if (key.startsWith('backups/')) expect(bytes.subarray(0, 4).toString('ascii'), key).toBe('AOSB');
+      // Every object of a backup is sealed but its signature, which holds hashes and a result only.
+      if (key.startsWith('backups/') && !key.endsWith('.signature')) {
+        expect(bytes.subarray(0, 4).toString('ascii'), key).toBe('AOSB');
+      }
     }
     // The manifest, opened, holds no record data and no key either.
     const manifest = JSON.stringify(await manifestOf(first.backupId));
     for (const value of [MARKER, ...users.map((user) => user.login), ...organisationKeys, backupKey.privateText]) {
       expect(manifest).not.toContain(value);
     }
+  });
+
+  it('product owner 12 Oct 2026: signs each backup’s final result after its manifest is read back, and refuses without the signing key', async () => {
+    const verifyKey = BackupVerifyKey.fromEnvironment(signingKey.restoreRunner);
+    const statement = verifyKey.verify(
+      await objectOf(minio.client, backupBucket, signatureName(first.backupId)),
+      first.backupId,
+    );
+    expect(statement).toMatchObject({
+      backupId: first.backupId,
+      manifestObject: `backups/${first.backupId}/manifest`,
+      manifestSha256: first.manifestSha256,
+      result: 'complete',
+      failures: [],
+    });
+    // Another backup's signature does not stand for this one.
+    expect(() =>
+      verifyKey.verify(Buffer.from(JSON.stringify({ statement: 'e30=', signature: 'AA==' })), first.backupId),
+    ).toThrow(/does not verify/);
+    const before = await backupKeys();
+    const refused = await backup({ env: { AOS_BACKUP_SIGNING_KEY: '' } });
+    expect(refused).toMatchObject({ outcome: 'refused' });
+    expect(refused.outcome === 'refused' ? refused.reason : '').toContain('AOS_BACKUP_SIGNING_KEY is not set');
+    expect(await backupKeys()).toEqual(before);
   });
 
   it('GC-9 12 test 15 PRD-SEC-018 cannot be reached through the API, and the runtime role cannot run it', async () => {
@@ -461,6 +506,13 @@ describe('the application backup (backup-and-restore 3.2; PRD-SEC-012)', () => {
       );
       const manifest = await manifestOf(failed.backupId);
       expect(manifest.result).toBe('failed');
+      // The signed statement says failed too, so a restore never takes it.
+      expect(
+        BackupVerifyKey.fromEnvironment(signingKey.restoreRunner).verify(
+          await objectOf(minio.client, backupBucket, signatureName(failed.backupId)),
+          failed.backupId,
+        ).result,
+      ).toBe('failed');
       for (const organisation of world.organisations) {
         expect((await backupRecords(organisation.database)).at(-1)).toEqual({
           backup_id: failed.backupId,
@@ -523,6 +575,7 @@ describe('the application backup (backup-and-restore 3.2; PRD-SEC-012)', () => {
       backupEnvironment.AOS_FILE_STORE_SECRET_ACCESS_KEY ?? '',
       backupKey.publicText,
       backupKey.privateText,
+      ...Object.values(signingKey.backupRunner),
       MARKER,
       ...users.map((user) => user.login),
       ...organisationKeys,

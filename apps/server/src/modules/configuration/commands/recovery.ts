@@ -14,6 +14,7 @@ import {
   recoveryEventsOf,
   recoveryHoldLockTarget,
   recoveryHoldOf,
+  recoveryItemsOf,
   storedAfterRecoveryPoint,
   type TransactionContext,
 } from '../../../kernel/index.js';
@@ -125,23 +126,33 @@ export async function recordRecoveryValidation(
   return { kind: 'success', answer: { validationId } };
 }
 
-/** What blocks reopening the held Organisation now, as identifiers and codes (4.3, 4.5, 5.1). */
+/**
+ * What blocks reopening the held Organisation now, as identifiers and codes (4.3, 4.5, 5.1; product owner, 12 Oct
+ * 2026): a failed step or check that has neither passed since, when the checks ran again, nor had the exception raised
+ * for it settled; a gap after the recovery point whose exception is not settled; a validation not recorded; a series
+ * the restore paused that is not reconciled. A failed check never blocks for good.
+ */
 async function blocking(
   context: TransactionContext,
   restoreId: string,
 ): Promise<{ code: string; missing: MissingItem[] }[]> {
   const found: { code: string; missing: MissingItem[] }[] = [];
-  const failed = (await recoveryEventsOf(context, restoreId)).filter(
-    (event) => (event.kind === 'step' || event.kind === 'check') && event.passed === false,
-  );
-  if (failed.length > 0) {
+  const unsettled = (await recoveryItemsOf(context, restoreId)).filter((item) => item.settlement === null);
+  for (const [kind, code] of [
+    ['failure', 'configuration.restore-check-failed'],
+    ['gap', 'configuration.recovery-gaps-unsettled'],
+  ] as const) {
+    const items = unsettled.filter((item) => item.kind === kind);
+    if (items.length === 0) continue;
     found.push({
-      code: 'configuration.restore-check-failed',
-      missing: failed.map((event) => ({
-        kind: 'restore-check',
-        unit: event.unit ?? '',
-        check: event.name ?? '',
-        ...(event.subject === null ? {} : { subject: event.subject }),
+      code,
+      missing: items.map((item) => ({
+        kind: kind === 'failure' ? 'restore-check' : 'recovery-gap',
+        eventId: item.eventId,
+        unit: item.unit,
+        check: item.name,
+        ...(item.subject === null ? {} : { subject: item.subject }),
+        ...(item.exceptionId === null ? {} : { exceptionId: item.exceptionId }),
       })),
     });
   }
@@ -164,10 +175,10 @@ async function blocking(
 }
 
 /**
- * Reopen the held Organisation (4.3): locks the hold, then refuses while a check of the restore failed (5.1), either
- * validation is not recorded, or a series the restore paused is not reconciled (5.3); the person has confirmed that
- * revocations and legal holds known from outside evidence were placed again and every gap listed was settled (4.4,
- * 4.5, 8.4). Lifts the hold through `kernel`, writing the `hold-lifted` event that ends the measured recovery time
+ * Reopen the held Organisation (4.3): locks the hold, then refuses while a failed step or check, or a gap after the
+ * recovery point, is not settled (4.5, 5.1), either validation is not recorded, or a series the restore paused is not
+ * reconciled (5.3); the person has confirmed that revocations and legal holds known from outside evidence were placed
+ * again (4.4, 8.4). Lifts the hold through `kernel`, writing the `hold-lifted` event that ends the measured recovery time
  * (section 6). Policy gates answer as before: reopening switches on nothing (PRD-SEC-017).
  */
 export async function reopenAfterRestore(
@@ -195,7 +206,6 @@ export async function reopenAfterRestore(
       { kind: 'value', field: 'held', before: true, after: false },
       { kind: 'value', field: 'revocationsPlacedAgain', before: null, after: draft.revocationsPlacedAgain },
       { kind: 'value', field: 'legalHoldsPlacedAgain', before: null, after: draft.legalHoldsPlacedAgain },
-      { kind: 'value', field: 'gapsSettled', before: null, after: draft.gapsSettled },
     ],
     source: { kind: 'screen' },
   });
@@ -283,6 +293,15 @@ export async function recoveryStatus(context: TransactionContext): Promise<
           subjectAt: event.subjectAt === null ? null : event.subjectAt.toISOString(),
           afterRecoveryPoint: storedAfterRecoveryPoint(event.subjectAt, recoveryPoint),
         })),
+      items: (await recoveryItemsOf(context, latest.restoreId)).map((item) => ({
+        eventId: item.eventId,
+        kind: item.kind,
+        unit: item.unit,
+        name: item.name,
+        subject: item.subject,
+        exceptionId: item.exceptionId,
+        settlement: item.settlement,
+      })),
       seriesToReconcile: (await seriesAwaitingReconciliation(context, latest.restoreId)).map((series) => ({
         seriesId: series.seriesId,
         kind: series.kind,

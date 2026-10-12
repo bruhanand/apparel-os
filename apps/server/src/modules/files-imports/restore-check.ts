@@ -50,23 +50,15 @@ export function filesImportsRestoreChecks(dependencies: FilesRestoreCheckDepende
                   from files_imports.stored_file order by object_key collate "C"`,
           )
         ).rows;
-        let keyVersion: string | undefined;
-        try {
-          keyVersion = dependencies.keys.version(code);
-        } catch {
-          keyVersion = undefined;
-        }
         const opened = new Set<string>();
         for (const file of files) {
+          // Each with the kept copy of the key version it names (2.4), or, written before key versions were recorded,
+          // with whichever kept copy opens it.
           const failure = await openStoredFile(
             file,
             (key) => run.objects.get(key),
-            (sealed) => {
-              if (file.key_version !== null && file.key_version !== keyVersion) {
-                throw new Error('another key version');
-              }
-              return openFile(dependencies.keys, code, file.content_hash, file.encryption_scheme, sealed);
-            },
+            (sealed) =>
+              openFile(dependencies.keys, code, file.content_hash, file.encryption_scheme, sealed, file.key_version),
           );
           if (failure === undefined) {
             opened.add(file.id);
@@ -93,8 +85,9 @@ export function filesImportsRestoreChecks(dependencies: FilesRestoreCheckDepende
             original_name_sealed: string;
             claimed_reference_sealed: string | null;
             encryption_scheme: string;
+            key_version: string | null;
           }>(
-            sql`select id::text, original_name_sealed, claimed_reference_sealed, encryption_scheme
+            sql`select id::text, original_name_sealed, claimed_reference_sealed, encryption_scheme, key_version
                   from files_imports.file_receipt order by id`,
           )
         ).rows;
@@ -102,14 +95,17 @@ export function filesImportsRestoreChecks(dependencies: FilesRestoreCheckDepende
         for (const receipt of receipts) {
           try {
             const scheme = receipt.encryption_scheme;
+            const version = receipt.key_version === null ? {} : { keyVersion: receipt.key_version };
             openReceiptText(dependencies.keys, code, receipt.id, 'original-name', {
               scheme,
               ciphertext: receipt.original_name_sealed,
+              ...version,
             });
             if (receipt.claimed_reference_sealed !== null) {
               openReceiptText(dependencies.keys, code, receipt.id, 'claimed-reference', {
                 scheme,
                 ciphertext: receipt.claimed_reference_sealed,
+                ...version,
               });
             }
           } catch {

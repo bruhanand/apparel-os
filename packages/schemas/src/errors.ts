@@ -308,14 +308,18 @@ export const configurationCodes = declareCodes({
   'configuration.no-values-to-validate': 'refused',
   // The recovery commands of a restored Organisation (backup-and-restore 4.3, 5.3; GC9-8; S1-F14-T03):
   // - `configuration.not-held`: the Organisation is not held after a restore, so there is nothing to validate or reopen.
-  // - `configuration.restore-check-failed`: a check of the restore failed; the Organisation stays held (5.1), and
-  //   `missing` names each failed check.
+  // - `configuration.restore-check-failed`: a step or check of the restore failed, and neither has it passed since when
+  //   the checks ran again nor has the exception raised for it been settled (5.1; product owner, 12 Oct 2026);
+  //   `missing` names each.
+  // - `configuration.recovery-gaps-unsettled`: a recovery gap after the recovery point waits for the exception raised
+  //   for it to be settled, resolved or accepted (4.5; product owner, 12 Oct 2026); `missing` names each.
   // - `configuration.validations-missing`: reopening needs the Operations and the Accounts validations of this restore;
   //   `missing` names each one not recorded.
   // - `configuration.series-not-reconciled`: reopening needs every series the restore paused reconciled; `missing`
   //   names each one waiting.
   'configuration.not-held': 'refused',
   'configuration.restore-check-failed': 'refused',
+  'configuration.recovery-gaps-unsettled': 'refused',
   'configuration.validations-missing': 'refused',
   'configuration.series-not-reconciled': 'refused',
 });
@@ -789,6 +793,8 @@ export const numberingCodes = declareCodes({
  * - `exceptions.party-not-found`: the owner or the escalation names a user or a role that does not exist.
  * - `exceptions.site-not-found`: the routing names a Site that does not exist in `organisation`, or is in force on no
  *   day from the version's first; `missing` names it (12.2; RR-451).
+ * - `exceptions.not-a-recovery-gap`: only an exception raised for a recovery gap or a failed check of a restore is
+ *   settled this way (backup-and-restore 4.5).
  */
 export const exceptionsCodes = declareCodes({
   'exceptions.no-exception-code-series': 'unavailable',
@@ -806,6 +812,7 @@ export const exceptionsCodes = declareCodes({
   'exceptions.version-overlaps': 'refused',
   'exceptions.party-not-found': 'refused',
   'exceptions.site-not-found': 'refused',
+  'exceptions.not-a-recovery-gap': 'refused',
 });
 
 /**

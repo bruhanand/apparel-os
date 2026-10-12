@@ -7,12 +7,15 @@ import { PassThrough, Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { uuidv7 } from '@apparel-os/domain';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Client } from 'pg';
-import { checkConnectedAsOwner } from '../db/migration-runner.js';
+import type { Client } from 'pg';
+import { DATABASE_NAME } from '../db/connection.js';
 import type { DeploymentEnvironmentName } from '../environment/deployment-environment.js';
+import { systemClock, type Clock } from '../time/clock.js';
 import { BackupSealer, type BackupPublicKey } from './backup-cipher.js';
+import { signatureName, type BackupSigningKey } from './backup-signature.js';
 import type { BackupStore } from './backup-store.js';
 import type { DumpTool } from './dump-tool.js';
+import { asOwner, OperatorRefused, withConnection } from './operator-connection.js';
 import type { KeyVersionUse, ParticipantTotals, RestoreRegistry, SealFact } from './restore-contract.js';
 
 // The application backup (backup-and-restore 3.2, 3.3, 10.3; PRD-SEC-012, POL-18.02; S1-F14-T02). An operator
@@ -29,10 +32,14 @@ import type { KeyVersionUse, ParticipantTotals, RestoreRegistry, SealFact } from
 //   4. The backup is checked: every stored-file key a snapshot references is in the backup store's own listing, and
 //      every dump read back matches its hash and decrypts whole under the backup's content key, which the command
 //      holds in memory for its run since it never holds the private part (step 7; GC9-17).
-//   5. The manifest, sealed too, says what the backup holds and whether it is complete; a failed backup is kept with
-//      its failures and is never offered for restore (steps 6 and 7).
-//   6. Each Organisation database backed up gains its `kernel.backup_record` row; the directory gets none (step 8;
-//      DEC-093).
+//   5. The manifest, sealed too, says what the backup holds and what the checks of 4 found; it is read back, and then
+//      the signed statement says the backup's final result, the manifest's read-back included (backup-signature.ts;
+//      product owner, 12 Oct 2026). A failed backup is kept with its failures and is never offered for restore (steps
+//      6 and 7).
+//   6. Each Organisation database backed up gains its `kernel.backup_record` row with the final result; the directory
+//      gets none (step 8; DEC-093).
+//
+// The directory is read once, in its snapshot: the Organisations checked before writing are the ones backed up.
 
 export const MANIFEST_FORMAT = 'backup-manifest/1';
 
@@ -87,6 +94,15 @@ export interface BackupManifest {
   readonly finishedAt: string;
   /** The identifier of the backup key version that sealed it (2.4). */
   readonly backupKeyVersion: string;
+  /**
+   * PostgreSQL's system identifier of the server backed up, where the server lets the migration role read it, so a
+   * restore can tell its source's server apart from a fresh one (4.1).
+   */
+  readonly sourceSystemIdentifier: string | null;
+  /**
+   * The result of the checks of the dumps and objects (3.2 step 7). The manifest's own read-back comes after it is
+   * written: the signed statement holds the final result (backup-signature.ts).
+   */
   readonly result: 'complete' | 'failed';
   readonly failures: readonly BackupFailure[];
   readonly directory: DumpPart | null;
@@ -102,6 +118,8 @@ export interface BackupOptions {
   /** The commit of the code that takes the backup, where the environment names it. */
   readonly codeCommit: string | null;
   readonly publicKey: BackupPublicKey;
+  /** The signing key, held by the backup runner only (product owner, 12 Oct 2026). */
+  readonly signingKey: BackupSigningKey;
   /**
    * The operator states that a new backup key version starts (2.4): without it, a backup key whose identifier differs
    * from the last complete backup's is refused.
@@ -114,7 +132,7 @@ export interface BackupOptions {
   readonly dumpTool: DumpTool;
   /** Told each step in plain words, with no secret, connection string or record data (PRD-SEC-014). */
   readonly log: (message: string) => void;
-  readonly now?: () => Date;
+  readonly clock?: Clock;
 }
 
 export type BackupOutcome =
@@ -128,12 +146,14 @@ export type BackupOutcome =
   | { readonly outcome: 'refused'; readonly reason: string };
 
 /** The backup was refused before anything was written. */
-export class BackupRefused extends Error {
+export class BackupRefused extends OperatorRefused {
   constructor(reason: string) {
     super(reason);
     this.name = 'BackupRefused';
   }
 }
+
+const REFUSED = 'Backup refused';
 
 interface DirectoryRow extends Record<string, unknown> {
   id: string;
@@ -141,58 +161,50 @@ interface DirectoryRow extends Record<string, unknown> {
   database_name: string;
 }
 
-/** A database part as the backup takes it, before the check. */
-interface Taken<Part> {
-  readonly part: Part | null;
-  readonly failed: boolean;
-}
-
 /** Takes one application backup of the environment. */
 export async function takeBackup(options: BackupOptions): Promise<BackupOutcome> {
-  const now = options.now ?? (() => new Date());
-  const startedAt = now();
-  try {
-    await checkBeforeWriting(options);
-  } catch (error) {
-    if (error instanceof BackupRefused) return { outcome: 'refused', reason: error.message };
-    throw error;
-  }
+  const clock = options.clock ?? systemClock;
+  const startedAt = clock.now();
   const backupId = uuidv7();
   const sealer = BackupSealer.start(options.publicKey, backupId);
   const workDirectory = await mkdtemp(join(tmpdir(), 'aos-backup-'));
   const failures: BackupFailure[] = [];
   try {
-    options.log(`Backup ${backupId} started, sealed with backup key version ${sealer.version}`);
-    const directory = new Client({ connectionString: options.directoryConnectionString });
-    await directory.connect();
-    let directoryTaken: Taken<DumpPart>;
-    let entries: DirectoryRow[];
+    let taken: { directory: DumpPart | null; entries: DirectoryRow[]; systemIdentifier: string | null };
     try {
-      await directory.query('begin isolation level repeatable read read only');
-      entries = (
-        await directory.query<DirectoryRow>(
-          'select id::text as id, organisation_code, database_name from kernel.directory_entry order by organisation_code collate "C"',
-        )
-      ).rows;
-      directoryTaken = await dumpDatabase(options, sealer, workDirectory, directory, {
-        object: `backups/${backupId}/directory.dump`,
-        connectionString: options.directoryConnectionString,
+      taken = await asOwner(options.directoryConnectionString, REFUSED, async (directory) => {
+        await directory.query('begin isolation level repeatable read read only');
+        // The snapshot is taken by the first statement: the entries read here are the ones checked and backed up.
+        const snapshot = await exportSnapshot(directory);
+        const entries = (
+          await directory.query<DirectoryRow>(
+            'select id::text as id, organisation_code, database_name from kernel.directory_entry order by organisation_code collate "C"',
+          )
+        ).rows;
+        await checkOrganisations(options, entries);
+        options.log(`Backup ${backupId} started, sealed with backup key version ${sealer.version}`);
+        const part = await dumpAndStore(options, sealer, workDirectory, snapshot, {
+          object: `backups/${backupId}/directory.dump`,
+          connectionString: options.directoryConnectionString,
+        });
+        await directory.query('rollback');
+        return { directory: part, entries, systemIdentifier: await systemIdentifierOf(directory) };
       });
-      await directory.query('rollback');
-    } finally {
-      await directory.end();
+    } catch (error) {
+      if (error instanceof OperatorRefused) return { outcome: 'refused', reason: error.message };
+      throw error;
     }
-    if (directoryTaken.failed) failures.push({ kind: 'dump-tool-failed', part: 'directory', count: 1 });
+    if (taken.directory === null) failures.push({ kind: 'dump-tool-failed', part: 'directory', count: 1 });
 
     const organisations: OrganisationPart[] = [];
-    for (const entry of entries) {
-      const taken = await snapshotOrganisation(options, sealer, workDirectory, backupId, entry);
-      if (taken.failed) failures.push({ kind: 'dump-tool-failed', part: entry.organisation_code, count: 1 });
-      if (taken.part !== null) organisations.push(taken.part);
+    for (const entry of taken.entries) {
+      const part = await snapshotOrganisation(options, sealer, workDirectory, backupId, entry);
+      if (part === null) failures.push({ kind: 'dump-tool-failed', part: entry.organisation_code, count: 1 });
+      else organisations.push(part);
     }
 
     // The file store after every snapshot (3.3).
-    for (const entry of entries) {
+    for (const entry of taken.entries) {
       try {
         await options.copyFiles(entry.id);
       } catch {
@@ -200,21 +212,7 @@ export async function takeBackup(options: BackupOptions): Promise<BackupOutcome>
       }
     }
 
-    // The check (3.2 step 7).
-    const present = new Set(await options.backupStore.list('files/'));
-    for (const organisation of organisations) {
-      const missing = organisation.objectKeys.filter((key) => !present.has(`files/${key}`)).length;
-      if (missing > 0) failures.push({ kind: 'object-missing', part: organisation.organisationCode, count: missing });
-    }
-    const parts: { label: string; part: DumpPart }[] = [
-      ...(directoryTaken.part === null ? [] : [{ label: 'directory', part: directoryTaken.part }]),
-      ...organisations.map((part) => ({ label: part.organisationCode, part })),
-    ];
-    for (const { label, part } of parts) {
-      const found = await readBack(options.backupStore, sealer, part.object);
-      if (found.sha256 !== part.sha256) failures.push({ kind: 'dump-hash-differs', part: label, count: 1 });
-      if (!found.decrypts) failures.push({ kind: 'dump-does-not-decrypt', part: label, count: 1 });
-    }
+    failures.push(...(await checkBackup(options, sealer, taken.directory, organisations)));
 
     const manifest: BackupManifest = {
       format: MANIFEST_FORMAT,
@@ -222,11 +220,12 @@ export async function takeBackup(options: BackupOptions): Promise<BackupOutcome>
       environment: options.environment,
       codeCommit: options.codeCommit,
       startedAt: startedAt.toISOString(),
-      finishedAt: now().toISOString(),
+      finishedAt: clock.now().toISOString(),
       backupKeyVersion: sealer.version,
+      sourceSystemIdentifier: taken.systemIdentifier,
       result: failures.length === 0 ? 'complete' : 'failed',
       failures: [...failures],
-      directory: directoryTaken.part,
+      directory: taken.directory,
       organisations,
     };
     const manifestName = `backups/${backupId}/manifest`;
@@ -238,9 +237,18 @@ export async function takeBackup(options: BackupOptions): Promise<BackupOutcome>
       failures.push({ kind: 'manifest-does-not-decrypt', part: 'manifest', count: 1 });
     }
     const result = failures.length === 0 ? 'complete' : 'failed';
+    // The final result, after the manifest's own read-back, signed (product owner, 12 Oct 2026).
+    const signature = options.signingKey.sign({
+      backupId,
+      manifestObject: manifestName,
+      manifestSha256,
+      result,
+      failures: [...new Set(failures.map((failure) => failure.kind))].sort(),
+    });
+    await options.backupStore.putOnce(signatureName(backupId), signature, signature.length);
 
     // The record of the backup in each Organisation database it covered (3.2 step 8).
-    const finishedAt = now();
+    const finishedAt = clock.now();
     for (const organisation of organisations) {
       await recordBackup(options, organisation, {
         backupId,
@@ -267,110 +275,121 @@ export async function takeBackup(options: BackupOptions): Promise<BackupOutcome>
 }
 
 /**
- * Refusals before anything is written: a connection that is not the migration role on a database it owns, and a
- * backup key whose version differs from the last complete backup's, unless the operator states that a new version
- * starts (2.4; GC9-18).
+ * Refusals before anything is written, for the Organisations the directory's snapshot lists: each database name one
+ * the tools can be given; each connection the migration role on a database it owns; and the backup key's version the
+ * last complete backup's, unless the operator states that a new version starts (2.4; GC9-18).
  */
-async function checkBeforeWriting(options: BackupOptions): Promise<void> {
-  const directory = new Client({ connectionString: options.directoryConnectionString });
-  await directory.connect();
-  let entries: DirectoryRow[];
-  try {
-    await ownerOnly(directory);
-    entries = (
-      await directory.query<DirectoryRow>(
-        'select id::text as id, organisation_code, database_name from kernel.directory_entry order by organisation_code collate "C"',
-      )
-    ).rows;
-  } finally {
-    await directory.end();
-  }
+async function checkOrganisations(options: BackupOptions, entries: readonly DirectoryRow[]): Promise<void> {
   for (const entry of entries) {
-    const client = new Client({ connectionString: options.organisationConnectionString(entry.database_name) });
-    await client.connect();
-    try {
-      await ownerOnly(client);
-      const last = await client.query<{ backup_key_version: string }>(
-        `select backup_key_version from kernel.backup_record where result = 'complete'
-          order by finished_at desc, id desc limit 1`,
+    if (!DATABASE_NAME.test(entry.database_name)) {
+      throw new BackupRefused(
+        `${REFUSED}, nothing written: Organisation ${entry.organisation_code}'s database name is not letters, digits and _ of at most 63 characters`,
       );
-      const version = last.rows[0]?.backup_key_version;
-      if (version !== undefined && version !== options.publicKey.version && !options.newBackupKeyVersion) {
-        throw new BackupRefused(
-          `Backup refused, nothing written: Organisation ${entry.organisation_code}'s last complete backup was sealed with backup key version ${version}, and the key given is version ${options.publicKey.version}. If a new backup key version starts, say so (2.4)`,
-        );
-      }
-    } finally {
-      await client.end();
+    }
+    const version = await asOwner(
+      options.organisationConnectionString(entry.database_name),
+      REFUSED,
+      async (client) =>
+        (
+          await client.query<{ backup_key_version: string }>(
+            `select backup_key_version from kernel.backup_record where result = 'complete'
+              order by finished_at desc, id desc limit 1`,
+          )
+        ).rows[0]?.backup_key_version,
+    );
+    if (version !== undefined && version !== options.publicKey.version && !options.newBackupKeyVersion) {
+      throw new BackupRefused(
+        `${REFUSED}, nothing written: Organisation ${entry.organisation_code}'s last complete backup was sealed with backup key version ${version}, and the key given is version ${options.publicKey.version}. If a new backup key version starts, say so (2.4)`,
+      );
     }
   }
 }
 
-async function ownerOnly(client: Client): Promise<void> {
+/** PostgreSQL's system identifier of the server, or null where the role may not read it. */
+async function systemIdentifierOf(client: Client): Promise<string | null> {
   try {
-    await checkConnectedAsOwner(client, 'Backup refused');
-  } catch (error) {
-    throw new BackupRefused(error instanceof Error ? error.message : 'Backup refused, nothing written');
+    const found = await client.query<{ id: string }>(
+      'select system_identifier::text as id from pg_catalog.pg_control_system()',
+    );
+    return found.rows[0]?.id ?? null;
+  } catch {
+    return null;
   }
 }
 
+/** The check of 3.2 step 7: every object a snapshot names is in the backup store; every dump reads back whole. */
+async function checkBackup(
+  options: BackupOptions,
+  sealer: BackupSealer,
+  directory: DumpPart | null,
+  organisations: readonly OrganisationPart[],
+): Promise<BackupFailure[]> {
+  const failures: BackupFailure[] = [];
+  const present = new Set(await options.backupStore.list('files/'));
+  for (const organisation of organisations) {
+    const missing = organisation.objectKeys.filter((key) => !present.has(`files/${key}`)).length;
+    if (missing > 0) failures.push({ kind: 'object-missing', part: organisation.organisationCode, count: missing });
+  }
+  const parts: { label: string; part: DumpPart }[] = [
+    ...(directory === null ? [] : [{ label: 'directory', part: directory }]),
+    ...organisations.map((part) => ({ label: part.organisationCode, part })),
+  ];
+  for (const { label, part } of parts) {
+    const found = await readBack(options.backupStore, sealer, part.object);
+    if (found.sha256 !== part.sha256) failures.push({ kind: 'dump-hash-differs', part: label, count: 1 });
+    if (!found.decrypts) failures.push({ kind: 'dump-does-not-decrypt', part: label, count: 1 });
+  }
+  return failures;
+}
+
+/**
+ * One Organisation's snapshot (3.2 steps 1 to 3): in one repeatable-read, read-only transaction, the snapshot is
+ * exported, every participant's control totals, the latest audit seal, the object keys and the key versions are read,
+ * and the database is dumped on that snapshot, so all of them see the same committed state. Null when the dump failed.
+ */
 async function snapshotOrganisation(
   options: BackupOptions,
   sealer: BackupSealer,
   workDirectory: string,
   backupId: string,
   entry: DirectoryRow,
-): Promise<Taken<OrganisationPart>> {
+): Promise<OrganisationPart | null> {
   const connectionString = options.organisationConnectionString(entry.database_name);
-  const client = new Client({ connectionString });
-  await client.connect();
-  try {
+  return withConnection(connectionString, async (client) => {
     await client.query('begin isolation level repeatable read read only');
-    // The snapshot is taken by the transaction's first statement; every read below sees the same committed state as
-    // the dump (3.2 steps 1 to 3).
+    const snapshot = await exportSnapshot(client);
     const context = { organisationCode: entry.organisation_code, tx: drizzle({ client }) };
-    const dumped = await dumpDatabase(options, sealer, workDirectory, client, {
+    const controlTotals = await options.registry.controlTotals(context);
+    const latestSeal = await options.registry.latestSeal(context);
+    const objectKeys = await options.registry.objectKeys(context);
+    const keyVersions = await options.registry.keyVersions(context);
+    const dumped = await dumpAndStore(options, sealer, workDirectory, snapshot, {
       object: `backups/${backupId}/organisations/${entry.id}.dump`,
       connectionString,
-      before: async () => ({
-        controlTotals: await options.registry.controlTotals(context),
-        latestSeal: await options.registry.latestSeal(context),
-        objectKeys: await options.registry.objectKeys(context),
-        keyVersions: await options.registry.keyVersions(context),
-      }),
     });
     await client.query('rollback');
-    if (dumped.part === null) return { part: null, failed: true };
-    const { extra, ...part } = dumped.part;
+    if (dumped === null) return null;
     return {
-      part: {
-        ...part,
-        organisationId: entry.id,
-        organisationCode: entry.organisation_code,
-        ...(extra as Pick<OrganisationPart, 'controlTotals' | 'latestSeal' | 'objectKeys' | 'keyVersions'>),
-      },
-      failed: dumped.failed,
+      ...dumped,
+      organisationId: entry.id,
+      organisationCode: entry.organisation_code,
+      controlTotals,
+      latestSeal,
+      objectKeys,
+      keyVersions,
     };
-  } finally {
-    await client.end();
-  }
+  });
 }
 
-/**
- * Exports the open transaction's snapshot, reads what `before` reads in it, dumps the database on it, seals the dump
- * and stores it.
- */
-async function dumpDatabase(
-  options: BackupOptions,
-  sealer: BackupSealer,
-  workDirectory: string,
-  client: Client,
-  target: {
-    readonly object: string;
-    readonly connectionString: string;
-    readonly before?: () => Promise<unknown>;
-  },
-): Promise<Taken<DumpPart & { readonly extra?: unknown }>> {
+/** The open transaction's snapshot, exported for the dump tool, with its time, database and last migration. */
+interface ExportedSnapshot {
+  readonly snapshot: string;
+  readonly at: Date;
+  readonly database: string;
+  readonly lastMigration: string | null;
+}
+
+async function exportSnapshot(client: Client): Promise<ExportedSnapshot> {
   const snapshot = await client.query<{ snapshot: string; at: Date; database: string }>(
     'select pg_catalog.pg_export_snapshot() as snapshot, pg_catalog.clock_timestamp() as at, pg_catalog.current_database()::text as database',
   );
@@ -379,7 +398,17 @@ async function dumpDatabase(
   const migration = await client.query<{ file_name: string }>(
     'select file_name from kernel.migration order by file_name collate "C" desc limit 1',
   );
-  const extra = await target.before?.();
+  return { ...exported, lastMigration: migration.rows[0]?.file_name ?? null };
+}
+
+/** Dumps the database on an exported snapshot, seals the dump and stores it: its part, or null when the dump failed. */
+async function dumpAndStore(
+  options: BackupOptions,
+  sealer: BackupSealer,
+  workDirectory: string,
+  exported: ExportedSnapshot,
+  target: { readonly object: string; readonly connectionString: string },
+): Promise<DumpPart | null> {
   const file = join(workDirectory, `${uuidv7()}.sealed`);
   const hash = createHash('sha256');
   let bytes = 0;
@@ -392,31 +421,23 @@ async function dumpDatabase(
     },
   });
   const written = pipeline(seal, count, createWriteStream(file));
-  let failed = false;
   try {
     await options.dumpTool.dump({ connectionString: target.connectionString, snapshot: exported.snapshot }, seal);
     await written;
   } catch {
-    failed = true;
     await written.catch(() => undefined);
-  }
-  if (failed) {
     options.log(`The dump of database ${exported.database} failed; the backup is failed`);
-    return { part: null, failed: true };
+    return null;
   }
   await options.backupStore.putOnce(target.object, createReadStream(file), bytes);
   await rm(file, { force: true });
   return {
-    part: {
-      object: target.object,
-      databaseName: exported.database,
-      snapshotAt: new Date(exported.at).toISOString(),
-      lastMigration: migration.rows[0]?.file_name ?? null,
-      sha256: hash.digest('hex'),
-      bytes,
-      extra,
-    },
-    failed: false,
+    object: target.object,
+    databaseName: exported.database,
+    snapshotAt: new Date(exported.at).toISOString(),
+    lastMigration: exported.lastMigration,
+    sha256: hash.digest('hex'),
+    bytes,
   };
 }
 
@@ -453,9 +474,7 @@ async function recordBackup(
     readonly backupKeyVersion: string;
   },
 ): Promise<void> {
-  const client = new Client({ connectionString: options.organisationConnectionString(organisation.databaseName) });
-  await client.connect();
-  try {
+  await withConnection(options.organisationConnectionString(organisation.databaseName), async (client) => {
     await client.query(
       `insert into kernel.backup_record (id, backup_id, environment, code_commit, snapshot_at, backup_key_version,
          manifest_sha256, result, failures, finished_at)
@@ -473,7 +492,5 @@ async function recordBackup(
         record.finishedAt,
       ],
     );
-  } finally {
-    await client.end();
-  }
+  });
 }

@@ -13,3 +13,4 @@ export { EXCEPTIONS_IDENTITY, exceptionsConsumers, exceptionsJobKinds } from './
 export { ROUTING_ACTION_TYPE, routingApprovals } from './commands/routing.js';
 export { exceptionAssigned, exceptionRaised, exceptionReopened, exceptionResolved } from './events.js';
 export { exceptionsRestoreParticipant } from './restore-participant.js';
+export { exceptionsRestoreSteps, RECOVERY_GAP_TYPE, recoveryGapType } from './recovery-gaps.js';

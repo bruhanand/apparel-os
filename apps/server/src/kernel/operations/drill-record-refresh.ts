@@ -5,7 +5,7 @@ import type { TransactionContext } from '../command-runner/transaction-context.j
 import { createDb } from '../db/create-db.js';
 import type { JobIdentities } from '../jobs/contracts.js';
 import type { StructuredLogger } from '../logging/pino-logger.service.js';
-import type { Clock } from '../time/clock.js';
+import { systemClock, type Clock } from '../time/clock.js';
 import type { OrganisationTimezoneSource } from '../time/organisation-timezone.js';
 import {
   DRILL_RECORD_FORMAT,
@@ -15,7 +15,7 @@ import {
   type DrillRecord,
   type DrillValidation,
 } from './drill-record.js';
-import { recoveryEventsOf, recoveryHoldOf } from './recovery.js';
+import { recoveryEventsOf, recoveryHoldOf, recoveryItemsOf } from './recovery.js';
 import { RESTORE_IDENTITY } from './restore-contract.js';
 import { keepDrillRecord, type RestoreBackupStore } from './restore.js';
 
@@ -54,7 +54,7 @@ export type DrillRecordRefreshOutcome =
 
 /** Writes the next version of a restore's drill record from the restored databases. */
 export async function refreshDrillRecord(options: DrillRecordRefreshOptions): Promise<DrillRecordRefreshOutcome> {
-  const clock = options.clock ?? { now: () => new Date() };
+  const clock = options.clock ?? systemClock;
   const marker = `/restores/${options.restoreId}/drill-record-`;
   const versions = (await options.backupStore.list('backups/'))
     .filter((name) => name.includes(marker) && name.endsWith('.json'))
@@ -89,7 +89,9 @@ export async function refreshDrillRecord(options: DrillRecordRefreshOptions): Pr
         ? 'failed'
         : reopened
           ? 'reopened'
-          : organisations.some((organisation) => organisation.checks.some((check) => !check.passed))
+          : organisations.some((organisation) =>
+                organisation.recoveryItems.some((item) => item.kind === 'failure' && item.settlement === null),
+              )
             ? 'held-with-failed-checks'
             : 'held',
     measured: measuredTimes(base),
@@ -135,17 +137,35 @@ async function refreshed(
         const lifted = events.find((event) => event.kind === 'hold-lifted');
         const hold = await recoveryHoldOf(context);
         const facts = await options.organisationFacts(context, options.restoreId);
+        const rechecks = events
+          .filter((event) => (event.kind === 'check' || event.kind === 'step') && (event.checkRun ?? 1) > 1)
+          .map((event) => ({
+            unit: event.unit ?? '',
+            check: event.name ?? '',
+            passed: event.passed === true,
+            checked: event.checked ?? 0,
+            failed: event.failed ?? 0,
+            ...(event.subject === null ? {} : { subject: event.subject }),
+            run: event.checkRun ?? 1,
+          }));
+        const items = await recoveryItemsOf(context, options.restoreId);
         return {
           ...organisation,
+          checks: [...organisation.checks.filter((check) => (check.run ?? 1) === 1), ...rechecks],
+          recoveryItems: items.map((item) => ({
+            eventId: item.eventId,
+            kind: item.kind,
+            unit: item.unit,
+            name: item.name,
+            subject: item.subject,
+            exceptionId: item.exceptionId,
+            settlement: item.settlement,
+          })),
           seriesToReconcile: facts.seriesToReconcile,
           seriesReconciled: facts.seriesReconciled,
           validations: facts.validations,
           reopened:
             lifted === undefined ? null : { at: lifted.occurredAt.toISOString(), byUserId: lifted.actorId ?? '' },
-          gapsSettled:
-            lifted === undefined
-              ? null
-              : 'confirmed at reopening: every gap examined and, where it is evidence of lost work, raised as an exception',
           held: hold?.restoreId === options.restoreId,
         };
       },

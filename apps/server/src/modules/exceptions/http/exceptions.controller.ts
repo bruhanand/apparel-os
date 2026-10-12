@@ -291,6 +291,17 @@ export class ExceptionsController {
     );
   }
 
+  @ApiRoute(routes.settleRecoveryGap)
+  async settleRecoveryGap(
+    @SignedIn() user: SignedInUser,
+    @RouteInput() input: RouteInputOf<typeof routes.settleRecoveryGap>,
+  ) {
+    // Runs while the Organisation is held after a restore (backup-and-restore 4.3, 4.5; recovery-hold.ts).
+    return this.lifecycle(routes.settleRecoveryGap, 'exceptions.settle-recovery-gap', user, input, (context, acting) =>
+      this.exceptions.settleRecoveryGap(context, acting, input.params.exceptionId, input.body),
+    );
+  }
+
   @ApiRoute(routes.reopenException)
   async reopenException(
     @SignedIn() user: SignedInUser,

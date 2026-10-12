@@ -1,6 +1,7 @@
 import { is, sql, type SQL } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import type { Transaction, TransactionContext } from '../command-runner/transaction-context.js';
+import type { CommandRefusal } from '../idempotency/contracts.js';
 import type { JobAuthority } from '../jobs/contracts.js';
 
 // The restore contract (backup-and-restore 10.1; module-map section 3, rule 6). `kernel` sits at tier 0 and calls no
@@ -68,12 +69,19 @@ export interface RecoveryGap {
 }
 
 /**
+ * The resolution of a store time: an object's time is its `Last-Modified`, an HTTP date, which names whole seconds
+ * (RFC 9110 5.6.7). A technical limit of S3-compatible stores, not a tolerance: no value is chosen here.
+ */
+const STORE_TIME_RESOLUTION_MS = 1000;
+
+/**
  * Whether an object was stored after the recovery point, so it may be evidence of work the restore lost (3.3, 4.5):
- * when the time it was stored is not known, or is not before the recovery point to the second, since a file store
- * keeps an object's time to the second. Errs towards listing an object as possible lost work.
+ * when the time it was stored is not known, or the whole second its store time names did not end before the recovery
+ * point. The comparison is exact at the store's resolution: an object stored within that second may have been stored
+ * after the recovery point, so it is listed as possible lost work.
  */
 export function storedAfterRecoveryPoint(storedAt: Date | null, recoveryPoint: Date): boolean {
-  return storedAt === null || storedAt.getTime() > recoveryPoint.getTime() - 1000;
+  return storedAt === null || storedAt.getTime() + STORE_TIME_RESOLUTION_MS > recoveryPoint.getTime();
 }
 
 /** An object of the restored file store, as a check lists it: its key and when it was first stored, where known. */
@@ -138,7 +146,40 @@ export interface RestoreCheckStep {
   ): Promise<{ readonly results: Omit<CheckResult, 'unit'>[]; readonly gaps: Omit<RecoveryGap, 'unit'>[] }>;
 }
 
-export type RestoreStep = RestoreCommandStep | RestoreCheckStep;
+/** A recovery item to raise as an exception (4.5, 5.1): a gap after the recovery point, or a failed step or check. */
+export interface RaisableItem {
+  readonly restoreId: string;
+  readonly eventId: string;
+  readonly kind: 'gap' | 'failure';
+  readonly unit: string;
+  readonly name: string;
+  readonly subject: string | null;
+  readonly subjectAt: Date | null;
+}
+
+/**
+ * The step that raises each recovery item as an exception once its exception-code series is reconciled (4.5; product
+ * owner, 12 Oct 2026): a command in the restored database, as the runtime role, under the restore's internal service
+ * identity, run by `restore --raise-gaps`. It raises one exception for the item, records the exception raised through
+ * kernel's interface (recovery.ts) in the same transaction, and answers its identifier; or the refusal that stops it,
+ * such as the exception-code series still paused.
+ */
+export interface RestoreRaiseStep {
+  readonly kind: 'raise';
+  readonly unit: string;
+  readonly tier: number;
+  readonly commandName: string;
+  readonly authorises: JobAuthority;
+  run(
+    context: TransactionContext,
+    item: RaisableItem,
+  ): Promise<
+    | { readonly kind: 'raised'; readonly exceptionId: string }
+    | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+  >;
+}
+
+export type RestoreStep = RestoreCommandStep | RestoreCheckStep | RestoreRaiseStep;
 
 /**
  * The code of the restore's internal service identity (access-and-approvals 2.3, 9.11; backup-and-restore 4.2 step
@@ -146,11 +187,11 @@ export type RestoreStep = RestoreCommandStep | RestoreCheckStep;
  */
 export const RESTORE_IDENTITY = 'restore';
 
-/** The authorities the restore's internal service identity holds: what its command steps declare, once each. */
+/** The authorities the restore's command and raise steps declare, once each: what its identity must hold. */
 export function restoreIdentityAuthorities(steps: readonly RestoreStep[]): JobAuthority[] {
   const found: JobAuthority[] = [];
   for (const step of steps) {
-    if (step.kind !== 'command' || step.authorises === undefined) continue;
+    if (step.kind === 'check' || step.authorises === undefined) continue;
     const need = step.authorises;
     if (!found.some((each) => each.action === need.action && each.recordType === need.recordType)) found.push(need);
   }
