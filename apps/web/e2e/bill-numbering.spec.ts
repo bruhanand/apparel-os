@@ -156,10 +156,13 @@ test('PRD-ACS-006 DEC-117 the Admin prepares a financial year and a bill-number 
 
     await test.step('RR-489 the Admin withdraws a financial year of their own still awaiting its decision; it shows Withdrawn', async () => {
       const withdrawn = `SYN-FY-W-${stamp}`;
+      // The step before reloaded the page, so the form opens again.
+      await admin.getByRole('button', { name: 'Define a financial year' }).click();
       const form = admin.getByRole('group', { name: 'Define a financial year' });
       await form.getByLabel('Year label').fill(withdrawn);
       await form.getByLabel('First day').fill(day(400));
       await form.getByLabel('Last day').fill(day(700));
+      await form.getByLabel('Where the values come from').selectOption({ label: 'Synthetic' });
       await form.getByRole('button', { name: 'Request approval' }).click();
       await expect(form.getByRole('status')).toContainText('Sent for approval');
       await admin.getByText('Changes', { exact: true }).first().click();
