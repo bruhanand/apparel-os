@@ -555,10 +555,10 @@ export type DocumentPreview = z.infer<typeof documentPreviewSchema>;
  * report and the database's check of `files_imports.row_issue`, which a test compares with it.
  */
 export const IMPORT_ISSUE_CLASSES = [
+  'handler',
   'required',
   'rule',
   'calculation',
-  'handler',
   'duplicate',
   'conflict',
   'revision',

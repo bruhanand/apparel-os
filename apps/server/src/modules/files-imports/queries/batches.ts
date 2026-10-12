@@ -43,7 +43,15 @@ import {
   type ImportDependencies,
 } from '../commands/import-common.js';
 import { currentIssues } from '../commands/review.js';
-import { maskedColumn, maskIssueOriginal, maskOutcome, maskPlan, maskRow, type MaskPlan } from '../domain/masking.js';
+import {
+  maskedColumn,
+  maskIssueMissing,
+  maskIssueOriginal,
+  maskOutcome,
+  maskPlan,
+  maskRow,
+  type MaskPlan,
+} from '../domain/masking.js';
 import type { EffectiveValue } from '../domain/report.js';
 
 // Reads of imports (imports-and-opening-data 5, 8, 11, 13.1, 14; PRD-IMP-005, PRD-IMP-006, PRD-SEC-005, PRD-ACS-008;
@@ -289,12 +297,7 @@ async function reportView(
           ...(issue.field === null ? {} : { field: issue.field }),
           ...(original === undefined ? {} : { original }),
           // A value worked out from a masked column is masked with it (section 11; PRD-ACS-008).
-          missing:
-            original?.kind === 'masked'
-              ? issue.missing.map((item) =>
-                  item.kind === 'calculated' ? { kind: 'calculated', masked: original.fieldClass } : item,
-                )
-              : issue.missing,
+          missing: maskIssueMissing(issue.missing, issue.restrictedClass, plan),
           ...(issue.seenByUserId === null || issue.seenAt === null
             ? {}
             : { seen: { byUserId: issue.seenByUserId, at: issue.seenAt.toISOString() } }),

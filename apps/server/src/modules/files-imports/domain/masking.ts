@@ -5,6 +5,7 @@ import {
   type ImportOutcome,
   type LayoutStructure,
   type MappingFields,
+  type MissingItem,
   type RowIssue,
   type StagedRow,
 } from '@apparel-os/schemas';
@@ -117,11 +118,41 @@ export function maskIssueOriginal(
   plan: MaskPlan,
 ): RowIssue['original'] {
   if (original === null) return undefined;
-  if (plan.kind === 'all') return { kind: 'masked', fieldClass: plan.fieldClass };
+  const masked = maskedIssueClass(fieldClass, plan);
+  return masked === undefined ? { kind: 'value', text: original } : { kind: 'masked', fieldClass: masked };
+}
+
+/**
+ * The class a row issue is masked under for its reader: that of the column its values come from, where the reader
+ * lacks it, and any class while the layout version is not Confirmed (section 11).
+ */
+export function maskedIssueClass(fieldClass: FieldClass | null, plan: MaskPlan): FieldClass | undefined {
+  if (plan.kind === 'all') return plan.fieldClass;
   if (plan.kind === 'columns' && fieldClass !== null && [...plan.names.values()].includes(fieldClass)) {
-    return { kind: 'masked', fieldClass };
+    return fieldClass;
   }
-  return { kind: 'value', text: original };
+  return undefined;
+}
+
+/** The values an issue names that are worked out from its column: a calculated value, a control total's sums. */
+const VALUE_ITEMS: readonly string[] = ['calculated', 'control-total'];
+
+/**
+ * What a row issue names, as its reader is served it: a value worked out from a masked column is masked with it, so
+ * a calculated value or a control total's sums never show what the cells hide (8.1, section 11; PRD-ACS-008).
+ */
+export function maskIssueMissing(
+  missing: readonly MissingItem[],
+  fieldClass: FieldClass | null,
+  plan: MaskPlan,
+): MissingItem[] {
+  const masked = maskedIssueClass(fieldClass, plan);
+  if (masked === undefined) return [...missing];
+  return missing.map((item) =>
+    VALUE_ITEMS.includes(item.kind)
+      ? { kind: item.kind, ...(item.column === undefined ? {} : { column: item.column }), masked }
+      : item,
+  );
 }
 
 /**

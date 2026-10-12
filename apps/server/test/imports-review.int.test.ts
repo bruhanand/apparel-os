@@ -3,6 +3,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import {
   errorEnvelopeSchema,
   fieldClassSchema,
+  IMPORT_ISSUE_CLASSES,
   IMPORT_BATCH_TYPE,
   importBatchReadSchema,
   importFileStoredSchema,
@@ -361,6 +362,7 @@ const IMPORTER: SyntheticAuthority[] = [
   { recordType: 'files_imports.mapping_rule', action: 'create' },
   // The proposer may hold approve too: their own confirmation is still refused (POL-02.07).
   { recordType: 'files_imports.layout', action: 'approve' },
+  { recordType: 'files_imports.mapping', action: 'approve' },
   { recordType: 'files_imports.mapping_rule', action: 'approve' },
   { recordType: 'merchandise.product_proposal', action: 'view' },
   { recordType: 'merchandise.product_proposal', action: 'create' },
@@ -1070,6 +1072,28 @@ describe('origins, entries and the validation report (imports-and-opening-data 5
         column: 'H',
       }),
     );
+  });
+});
+
+describe('one list of classes (imports-and-opening-data 8.2, 8.3, section 11)', () => {
+  it("8.2: the database's checks of row issues and batches take the classes the shared schemas name", async () => {
+    const checks = await rows<{ name: string; definition: string }>(
+      `select conname as name, pg_catalog.pg_get_constraintdef(oid) as definition from pg_catalog.pg_constraint
+        where conname in ('row_issue_class', 'row_issue_class_held', 'import_batch_classes')`,
+    );
+    const definition = (name: string) => checks.find((each) => each.name === name)?.definition ?? '';
+    // The issue classes: the problem classes of 8.3, then the import classes, in the shared constant's order.
+    expect(definition('row_issue_class')).toContain(`'^([A-L]-[0-9]+|${IMPORT_ISSUE_CLASSES.join('|')})$'`);
+    // The restricted classes: those of access-and-approvals 6, as `fieldClassSchema` lists them.
+    for (const name of ['row_issue_class_held', 'import_batch_classes']) {
+      const listed = [...definition(name).matchAll(/'([a-z-]+)'::text/g)].map((match) => match[1]);
+      expect(new Set(listed), name).toEqual(new Set(ALL_CLASSES));
+    }
+  });
+
+  it('8.2: a row issue is never removed, a TRUNCATE included, as its sibling tables are guarded', async () => {
+    await expect(rows('truncate files_imports.row_issue')).rejects.toThrow(/never removed/);
+    await expect(rows('delete from files_imports.row_issue')).rejects.toThrow(/marked seen/);
   });
 });
 

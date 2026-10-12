@@ -290,6 +290,9 @@ create function files_imports.guard_issue_change() returns trigger
   set search_path = pg_catalog
 as $$
 begin
+  if tg_op = 'TRUNCATE' then
+    raise exception 'a row issue is never removed' using errcode = 'AO003';
+  end if;
   if tg_op = 'UPDATE' and new.seen_by_user_id is not null
      and new.seen_by_user_id is distinct from old.seen_by_user_id
      and (pg_catalog.to_jsonb(new) - 'seen_by_user_id' - 'seen_at')
@@ -302,8 +305,10 @@ $$;
 revoke execute on function files_imports.guard_issue_change() from public;
 create trigger guard_issue_change before update or delete on files_imports.row_issue
   for each row execute function files_imports.guard_issue_change();
-create trigger refuse_truncate before truncate on files_imports.row_issue
-  for each statement execute function kernel.refuse_change();
+-- Nor is any issue ever removed: a TRUNCATE is refused as an UPDATE of any other column or a DELETE is, by the same
+-- guard, since the table is not append-only (a Warning's mark changes) and so carries no refuse_change trigger.
+create trigger guard_issue_truncate before truncate on files_imports.row_issue
+  for each statement execute function files_imports.guard_issue_change();
 alter table files_imports.row_issue enable row level security;
 create policy row_scope on files_imports.row_issue for all to aos_runtime
   using (access.row_visible('files_imports.import_batch', site_id, store_id, business_unit_id, legal_entity_id, null, null))

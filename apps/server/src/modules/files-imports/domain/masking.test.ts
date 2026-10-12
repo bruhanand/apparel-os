@@ -1,6 +1,6 @@
 import type { ImportOutcome, LayoutStructure, MappingFields, StagedRow } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
-import { maskIssueOriginal, maskOutcome, maskPlan, maskRow } from './masking.js';
+import { maskIssueMissing, maskIssueOriginal, maskOutcome, maskPlan, maskRow } from './masking.js';
 
 // S1-F06-T03: masking a batch for its reader (imports-and-opening-data 11; access-and-approvals 6; PRD-ACS-008,
 // PRD-SEC-005). Every value is SYNTHETIC.
@@ -106,6 +106,21 @@ describe('masking what is worked out from a masked column (imports-and-opening-d
     expect(maskIssueOriginal('SYN-ST', null, all)).toEqual({ kind: 'masked', fieldClass: 'cost' });
     const none = maskPlan({ layoutConfirmed: true, masked: [], layout, mapping, header });
     expect(maskIssueOriginal('12.5', 'cost', none)).toEqual({ kind: 'value', text: '12.5' });
+  });
+
+  it('PRD-ACS-008 masks the calculated value and the control total sums an issue of a masked column names', () => {
+    const plan = maskPlan({ layoutConfirmed: true, masked: ['cost'], layout, mapping, header });
+    const missing = [
+      { kind: 'control-total', column: 'Cost', reported: '99.5', summed: '12.5' },
+      { kind: 'calculated', value: '1250' },
+      { kind: 'import-document', documentId: 'SYN-DOC' },
+    ];
+    expect(maskIssueMissing(missing, 'cost', plan)).toEqual([
+      { kind: 'control-total', column: 'Cost', masked: 'cost' },
+      { kind: 'calculated', masked: 'cost' },
+      { kind: 'import-document', documentId: 'SYN-DOC' },
+    ]);
+    expect(maskIssueMissing(missing, null, plan)).toEqual(missing);
   });
 
   const outcome: ImportOutcome = {

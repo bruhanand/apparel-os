@@ -353,6 +353,10 @@ function controlTotals(input: ReportInput): { totals: ControlTotalDraft[]; issue
         ? sumDecimals(lineTexts)
         : null;
       totals.push({ sheet: row.sheet, rowNumber: row.rowNumber, column: rule.column, reported, summed });
+      // The class of the totalled column, so the issue's values are masked as its cells are (section 11).
+      const restrictedClass = input.layout.columns.find(
+        (each) => normalisedName(each.name) === normalisedName(rule.column),
+      )?.restrictedClass;
       if (reported === null || summed === null || !same(reported, summed)) {
         issues.push({
           class: 'K-1',
@@ -364,6 +368,7 @@ function controlTotals(input: ReportInput): { totals: ControlTotalDraft[]; issue
           sheet: row.sheet,
           rowNumber: row.rowNumber,
           ...(reportedText === undefined ? {} : { original: reportedText }),
+          ...(restrictedClass === undefined ? {} : { restrictedClass }),
           missing: [
             {
               kind: 'control-total',

@@ -5,6 +5,7 @@ import {
   fieldClassSchema,
   importBatchReadSchema,
   importFileStoredSchema,
+  importOutcomesSchema,
   type FieldClass,
 } from '@apparel-os/schemas';
 import ExcelJS from 'exceljs';
@@ -191,6 +192,7 @@ const rowsFile = (rows: number) =>
 let preparer: { user: SyntheticUser; cookie: string };
 let productLayout: SyntheticProductLayout;
 const CONTACT_SHEET = 'SYNTHETIC Sales';
+const COST_TOTAL_LABEL = 'SYNTHETIC total cost';
 
 beforeAll(async () => {
   world = await createSyntheticOrganisations('intake');
@@ -246,6 +248,8 @@ beforeAll(async () => {
           ...SYNTHETIC_PRODUCT_LAYOUT.columns,
           { name: 'Cost', required: false, type: 'money', restrictedClass: 'cost' },
         ],
+        // The file reports a total of its costs, so the report holds a control total of a restricted column (6.6).
+        controlTotals: [{ column: 'Cost', labelColumn: 'SKU code', label: COST_TOTAL_LABEL }],
       },
       fields: SYNTHETIC_PRODUCT_MAPPING,
     },
@@ -460,6 +464,53 @@ describe('GC-6 17 test 28: the caps at intake (imports-and-opening-data 9.3; DEC
   });
 });
 
+// The documented SYNTHETIC caps of local work, tests and `dev` (9.3), proved with representative files just over each
+// of uploaded size, expanded size and rows. The parser-memory and processing-time caps are proved above with tight
+// SYNTHETIC caps: a file that takes a gibibyte of heap or a minute to read is not practical in a test run
+// (S1-F06-T02 Notes).
+describe('GC-6 17 test 28 at the documented caps (imports-and-opening-data 9.3; DEC-112 GC6-5)', () => {
+  const caps = {
+    upload: Number(SYNTHETIC_INTAKE_CAPS_ENVIRONMENT.AOS_INTAKE_MAX_UPLOAD_BYTES),
+    expanded: Number(SYNTHETIC_INTAKE_CAPS_ENVIRONMENT.AOS_INTAKE_MAX_EXPANDED_BYTES),
+    rows: Number(SYNTHETIC_INTAKE_CAPS_ENVIRONMENT.AOS_INTAKE_MAX_ROWS),
+  };
+
+  it('refuses a workbook just over 10 MiB, naming the cap, and stores nothing', async () => {
+    // Incompressible SYNTHETIC text in few rows, so the file is large while its rows and expansion stay within caps.
+    const big = await syntheticWorkbook({
+      sheet: 'SYNTHETIC Big',
+      header: ['Code'],
+      rows: Array.from({ length: 480 }, () => [randomBytes(22_500).toString('base64')]),
+      marker: next('BIG'),
+    });
+    expect(big.length).toBeGreaterThan(caps.upload);
+    expect(big.length).toBeLessThan(caps.upload * 1.2);
+    expect(await refused(api, preparer.cookie, big)).toMatchObject({
+      code: 'files-imports.over-intake-cap',
+      missing: [{ kind: 'intake-cap', cap: 'uploaded-size', limit: String(caps.upload) }],
+    });
+  }, 120_000);
+
+  it('refuses a small workbook that expands just past 100 MiB, naming the cap', async () => {
+    const bomb = withParts(await rowsFile(2), {
+      'xl/sharedStrings.xml': (old) => old.replace('<t>Code</t>', `<t>${'S'.repeat(caps.expanded)}</t>`),
+    });
+    expect(bomb.length).toBeLessThan(caps.upload);
+    expect(await refused(api, preparer.cookie, bomb)).toMatchObject({
+      code: 'files-imports.over-intake-cap',
+      missing: [{ kind: 'intake-cap', cap: 'expanded-size', limit: String(caps.expanded) }],
+    });
+  }, 120_000);
+
+  it('accepts a workbook of exactly 150,000 rows and refuses one row more, never truncated', async () => {
+    expect((await upload(api, preparer.cookie, await rowsFile(caps.rows))).status).toBe(200);
+    expect(await refused(api, preparer.cookie, await rowsFile(caps.rows + 1))).toMatchObject({
+      code: 'files-imports.over-intake-cap',
+      missing: [{ kind: 'intake-cap', cap: 'rows', limit: String(caps.rows) }],
+    });
+  }, 300_000);
+});
+
 describe('GC-6 17 test 25: restricted columns (imports-and-opening-data 11; PRD-ACS-008, PRD-SEC-014; DEC-052)', () => {
   const salesFile = (header: string[], row: (string | number)[]) =>
     syntheticWorkbook({ sheet: CONTACT_SHEET, header, rows: [row], marker: next('SALES') });
@@ -514,8 +565,13 @@ describe('GC-6 17 test 25: restricted columns (imports-and-opening-data 11; PRD-
       ALL_CLASSES.filter((each) => each !== 'cost'),
     );
     const cost = `${String(randomInt(100_000, 999_999))}.37`;
+    // The file's total disagrees with its one line, so the report holds a K-1 issue naming the cost column's values.
+    const total = `${String(randomInt(100_000, 999_999))}.21`;
     const withCost = await productFile(
-      [[...productRow(next('STYLE')), Number(cost)]],
+      [
+        [...productRow(next('STYLE')), Number(cost)],
+        [null, COST_TOTAL_LABEL, null, null, null, null, null, Number(total)],
+      ],
       [...SYNTHETIC_PRODUCT_COLUMNS, 'Cost'],
     );
     const stored = await upload(api, reader.cookie, withCost);
@@ -528,10 +584,84 @@ describe('GC-6 17 test 25: restricted columns (imports-and-opening-data 11; PRD-
     );
     expect(read.batch.maskedClasses).toEqual(['cost']);
     expect(read.documents[0]?.rows[0]?.cells.find((cell) => cell.ref === 'H2')).toMatchObject({ masked: 'cost' });
+    expect(read.ignoredRows.flatMap((row) => row.cells).find((cell) => cell.ref === 'H3')).toMatchObject({
+      masked: 'cost',
+    });
     const validated = await call(api, 'POST', `/api/files-imports/batches/${batchId}/validate`, reader.cookie);
     expect(JSON.stringify(validated.body)).not.toContain(cost);
-    const report = await call(api, 'GET', `/api/files-imports/batches/${batchId}`, reader.cookie);
-    expect(JSON.stringify(report.body)).not.toContain(cost);
+    const report = importBatchReadSchema.parse(
+      (await call(api, 'GET', `/api/files-imports/batches/${batchId}`, reader.cookie)).body,
+    );
+    // The control total of the cost column, and its issue's original value and sums, are masked (8.1, section 11).
+    expect(report.report?.controlTotals).toEqual([
+      expect.objectContaining({ column: 'Cost', reported: null, summed: null, agrees: null, masked: 'cost' }),
+    ]);
+    expect(report.report?.issues).toContainEqual(
+      expect.objectContaining({
+        class: 'K-1',
+        original: { kind: 'masked', fieldClass: 'cost' },
+        missing: [{ kind: 'control-total', column: 'Cost', masked: 'cost' }],
+      }),
+    );
+    // A reader granted the class sees the same values: the masking bites only for the class the reader lacks.
+    const seeing = importBatchReadSchema.parse(
+      (await call(api, 'GET', `/api/files-imports/batches/${batchId}`, preparer.cookie)).body,
+    );
+    expect(seeing.report?.controlTotals).toEqual([
+      expect.objectContaining({ column: 'Cost', reported: total, summed: cost }),
+    ]);
+    const reportText = JSON.stringify(report);
+    expect(reportText).not.toContain(cost);
+    expect(reportText).not.toContain(total);
+
+    // The import outcomes report masks the cost column's control total too (7.4, 14). A SYNTHETIC outcome, as a
+    // publish attempt keeps it, written directly: the masking under test is the report's read.
+    const owner = await connect(world.organisations[0].database, 'superuser');
+    try {
+      await owner.query(
+        `insert into files_imports.import_outcome (id, batch_id, batch_version_id, result, refusal_code, counts,
+           documents, measures, control_totals, attempted_by_user_id, attempted_at)
+         values ($1, $2, $3, 'failed', 'files-imports.document-refused', $4, '[]', '[]', $5, $6, now())`,
+        [
+          uuidv7(),
+          batchId,
+          read.batch.versionId,
+          JSON.stringify({
+            rowsRead: 3,
+            rowsIgnored: 2,
+            rowsAccepted: 0,
+            rowsRejected: 1,
+            rowsPending: 0,
+            rowsDuplicate: 0,
+          }),
+          JSON.stringify([
+            {
+              sheet: SYNTHETIC_PRODUCT_SHEET,
+              rowNumber: 3,
+              column: 'Cost',
+              reported: total,
+              summed: cost,
+              accepted: null,
+            },
+          ]),
+          reader.user.id,
+        ],
+      );
+    } finally {
+      await owner.end();
+    }
+    const outcomes = await call(api, 'GET', '/api/files-imports/outcomes', reader.cookie);
+    expect(outcomes.status).toBe(200);
+    const listed = importOutcomesSchema.parse(outcomes.body).batches.find((batch) => batch.batchId === batchId);
+    expect(listed?.lastOutcome?.controlTotals).toEqual([
+      expect.objectContaining({ column: 'Cost', reported: null, summed: null, accepted: null, masked: 'cost' }),
+    ]);
+    expect(JSON.stringify(outcomes.body)).not.toContain(cost);
+    const batchOutcomes = JSON.stringify(
+      (await call(api, 'GET', `/api/files-imports/batches/${batchId}`, reader.cookie)).body,
+    );
+    expect(batchOutcomes).not.toContain(cost);
+    expect(batchOutcomes).not.toContain(total);
     expect(api.logText()).not.toContain(cost);
   });
 });
