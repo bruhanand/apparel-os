@@ -638,7 +638,7 @@ export const englishIndia = {
   'operations.recovery.reopened': 'Reopened at {at}.',
   'operations.recovery.checks-passed': 'Every check passed ({count}).',
   'operations.recovery.checks-failed':
-    '{failed} of {count} checks failed. The Organisation stays held: restore again from another backup, or find out why.',
+    '{failed} of {count} checks failed. The Organisation stays held until each passes when the checks run again, or is raised as an exception and settled.',
   'operations.recovery.check.unit': 'Part',
   'operations.recovery.check.name': 'Check',
   'operations.recovery.check.counts': 'Found',
@@ -646,6 +646,8 @@ export const englishIndia = {
   'operations.recovery.check.failed-of': '{failed} of {checked} failed',
   'operations.recovery.gaps':
     'Recovery gaps: {count} stored file(s) no record names, {after} of them stored after the recovery point.',
+  'operations.recovery.items':
+    'To settle before reopening: {count} gap(s) and failed check(s), {raised} raised as exceptions, {settled} settled.',
   'operations.recovery.series': 'Number series waiting to be reconciled: {count}.',
   'operations.recovery.validations': 'Validations recorded: {recorded}.',
   'operations.recovery.validates.operations': 'Operations',
@@ -1303,6 +1305,9 @@ export const englishIndia = {
   'error.exceptions.version-overlaps': 'An approved version of this rule already starts on or after that date.',
   'error.exceptions.party-not-found': 'The owner or the escalation names a person or a role that does not exist.',
   'error.exceptions.site-not-found': 'That Site does not exist, or is not in force from the first day given.',
+  'error.exceptions.not-a-recovery-gap':
+    'Only an exception raised for a recovery gap or a failed check of a restore is settled this way.',
+  'missing.recovery-gap': 'The exception of a recovery gap, settled.',
   'missing.number-series': 'An open number series for exception codes.',
   'missing.exception-routing': 'An exception rule in force for this type and Site.',
   'missing.exception-type': 'The exception type.',
@@ -1912,7 +1917,9 @@ export const englishIndia = {
   'error.configuration.not-held':
     'The Organisation is not held after a restore, so there is nothing to validate or reopen.',
   'error.configuration.restore-check-failed':
-    'A check of the restore failed, so the Organisation stays held. Restore again from another backup, or find out why.',
+    'A check of the restore failed and is not settled: put its cause right and run the checks again, or settle the exception raised for it.',
+  'error.configuration.recovery-gaps-unsettled':
+    'A recovery gap after the recovery point waits: settle the exception raised for it, resolved or accepted, first.',
   'error.configuration.validations-missing':
     'Reopening needs both validations of this restore: one by Operations and one by Accounts.',
   'error.configuration.series-not-reconciled':
@@ -2134,6 +2141,7 @@ export const englishIndia = {
   'history.operation.reconcile-series-after-restore': 'Reconciled a number series after a restore',
   'history.operation.record-recovery-validation': 'Validated a restored Organisation',
   'history.operation.reopen-after-restore': 'Reopened a restored Organisation',
+  'history.operation.settle-recovery-gap': 'Settled a recovery gap',
   'error.access.device-ended': 'This device is revoked or retired already, which is final.',
   'error.pos.device-not-active': 'A device’s units change only while it is Active.',
   'error.pos.starts-in-past': 'The change cannot start before today.',

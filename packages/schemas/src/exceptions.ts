@@ -199,6 +199,7 @@ export const exceptionChangedSchema = z.strictObject({ exceptionId: idSchema, st
  */
 export const recoveryGapSettlementSchema = z.strictObject({
   settlement: z.enum(['resolved', 'accepted']),
+  // The technical limit of recovery.ts's statements, not a KDPS value.
   reason: z.string().trim().min(1).max(2000),
 });
 export type RecoveryGapSettlement = z.infer<typeof recoveryGapSettlementSchema>;

@@ -7,8 +7,13 @@ import { missingItemSchema } from './errors.js';
 // POL-18.04, PRD-SEC-013; S1-F14-T03). Who holds the commands, and whether one person may record both validations, is
 // KDPS's (GC9-6, V-01); nothing here is a default.
 
-/** Free text a person gives as evidence or a reason: never empty, and within a size a screen shows. */
-const statementSchema = z.string().trim().min(1).max(2000);
+/**
+ * Free text a person gives as evidence or a reason: never empty, and at most 2000 characters, a technical limit the
+ * builders set so the text fits a screen and an audit record (backup-and-restore 10.5), not a KDPS value. Evidence is
+ * text: no file is stored while the Organisation is held (product owner, 12 Oct 2026).
+ */
+export const STATEMENT_LIMIT = 2000;
+const statementSchema = z.string().trim().min(1).max(STATEMENT_LIMIT);
 
 /**
  * Reconcile a series after a restore (5.3): the evidence of the highest number issued, such as printed or uploaded

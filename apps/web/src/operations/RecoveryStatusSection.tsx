@@ -132,6 +132,13 @@ function Restore({
         })}
       </p>
       <p className="m-0 text-body">
+        {t('operations.recovery.items', {
+          count: String(restore.items.length),
+          raised: String(restore.items.filter((item) => item.exceptionId !== null).length),
+          settled: String(restore.items.filter((item) => item.settlement !== null).length),
+        })}
+      </p>
+      <p className="m-0 text-body">
         {t('operations.recovery.series', { count: String(restore.seriesToReconcile.length) })}
       </p>
       <p className="m-0 text-body">

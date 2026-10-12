@@ -430,6 +430,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 
 - An exception settles nothing. Closing it changes no stock, money or saleability (`PRD-EXC-003`, `POL-03.05`). The correction, return, reversal or reconciliation happens in the owning module.
 - When a business transaction rolls back, the exception about it is raised in a new transaction, so it is not lost with the rollback. **Design choice.**
+- After a restore, `exceptions`' restore participant raises each recovery gap and each failed check still standing as an exception of `exceptions.recovery-gap`, reading them through `kernel`'s interface, and its owner settles it, resolved or accepted, while the Organisation is held; `kernel` keeps each raise and settlement, which `configuration`'s reopen reads ([backup-and-restore.md](../platform/backup-and-restore.md) 4.3, 4.5, 10.5; product owner, 12 Oct 2026).
 - Raise takes the exception's code from a `numbering` series. With no open exception-code series, an operation that would raise a numbered exception is unavailable, and the Available check names the missing series. Failed-job records and their diagnostic evidence are still kept in the operations view (4.1), so nothing is lost (product owner, 6 Oct 2026; DEC-116).
 - **Events:** `exceptions.raised`, `exceptions.assigned`, `exceptions.resolved`, `exceptions.reopened`.
 - **Read model:** open exceptions by Store, brand and type (`PRD-EXC-004`).

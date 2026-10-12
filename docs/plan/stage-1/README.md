@@ -205,8 +205,8 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | done | F04-T02, F12-T01 |
 | [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | ready-for-agent | F12-T01, F12-T02, F01-T13, F02-T01 |
 | [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | done | — |
-| [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | blocked | F06-T01, F06-T05, F08-T01 |
-| [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | blocked | F14-T02 |
+| [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | done | F06-T01, F06-T05, F08-T01 |
+| [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | done | F14-T02 |
 | [F14-T04 Restore drill on dev](s1-f14-backup-and-restore/tickets/T04-restore-drill-on-dev.md) | blocked | F14-T03 + gate |
 | [F13-T01 Opening-stock manifest and comparison runs](s1-f13-opening-data/tickets/T01-opening-stock-manifest-and-comparison-runs.md) | blocked | F06-T03, F10-T03, F04-T02 + gate |
 | [F13-T02 Dues, advances and deposits](s1-f13-opening-data/tickets/T02-dues-advances-and-deposits.md) | blocked | F13-T01 |
