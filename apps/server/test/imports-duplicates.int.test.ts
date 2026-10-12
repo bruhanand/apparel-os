@@ -13,7 +13,7 @@ import {
   type LayoutStructure,
   type MappingFields,
 } from '@apparel-os/schemas';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   COMMAND_RUNNER,
   ORGANISATION_ROUTER,
@@ -752,14 +752,18 @@ describe('publishing one document per transaction (imports-and-opening-data 3.2,
   }
 
   it('PRD-IMP-012: documents keep the order of the file, though UUIDv7 does not order ids made in one millisecond', async () => {
-    // Many documents are staged within one millisecond, where their UUIDv7 ids are random (PRD-MOD-008).
-    const codes = Array.from({ length: 40 }, () => next('ORDER'));
-    const batchId = await start(
-      await counted(codes.map((code) => [code, 1] as const)),
-      {},
-      countedVersions,
-      FAILING_TARGET,
-    );
+    // Documents staged in one Start may share a millisecond, where their UUIDv7 ids are random (PRD-MOD-008): the
+    // clock is held still while it runs, so they all do. The file's order is the reverse of the references', so
+    // neither does the reference order them.
+    const codes = Array.from({ length: 40 }, () => next('ORDER')).reverse();
+    const stored = await counted(codes.map((code) => [code, 1] as const));
+    const still = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    let batchId: string;
+    try {
+      batchId = await start(stored, {}, countedVersions, FAILING_TARGET);
+    } finally {
+      still.mockRestore();
+    }
     const staged = await read(batchId);
     expect(staged.documents.map((document) => document.reference)).toEqual(codes);
     const inFileOrder = staged.documents.map((document) => document.documentId);
