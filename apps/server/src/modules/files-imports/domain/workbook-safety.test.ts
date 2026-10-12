@@ -225,6 +225,42 @@ describe('inspectWorkbook', () => {
     });
   });
 
+  it('PRD-SEC-011 knows a Power Query part by its element, never by the word in a value or a comment', async () => {
+    const workbook = await syntheticWorkbook();
+    const mentions =
+      '<?xml version="1.0" encoding="UTF-8"?><properties><!-- DataMashup --><note value="DataMashup">' +
+      'SYNTHETIC DataMashup text</note></properties>';
+    expect(inspectWorkbook(withParts(workbook, { 'customXml/item1.xml': mentions }), LOOSE)).toEqual({ kind: 'safe' });
+    const prefixed =
+      '<?xml version="1.0" encoding="UTF-8"?><dm:DataMashup xmlns:dm="http://schemas.microsoft.com/DataMashup">' +
+      'U1lO</dm:DataMashup>';
+    expect(inspectWorkbook(withParts(workbook, { 'customXml/item1.xml': prefixed }), LOOSE)).toMatchObject({
+      code: 'files-imports.workbook-unapproved-link',
+      missing: [{ found: 'data-connection' }],
+    });
+  });
+
+  it('A-1 refuses a container holding two entries of one name, whatever its case, as unreadable', async () => {
+    // Two parts whose names differ only in one letter, then the second renamed to the first in both its headers: a
+    // reader would keep one of the two, so the part checked need not be the part read (S1-F06 review).
+    for (const twin of ['xl/SYNTHETIC-a.xml', 'XL/synthetic-A.XML']) {
+      const workbook = withParts(await syntheticWorkbook(), {
+        'xl/SYNTHETIC-a.xml': '<a/>',
+        'xl/SYNTHETIC-b.xml': '<b/>',
+      });
+      const renamed = Buffer.from(workbook);
+      const from = Buffer.from('xl/SYNTHETIC-b.xml');
+      for (let at = renamed.indexOf(from); at >= 0; at = renamed.indexOf(from, at + 1)) {
+        Buffer.from(twin).copy(renamed, at);
+      }
+      expect(inspectWorkbook(renamed, LOOSE)).toEqual({
+        kind: 'refused',
+        code: 'files-imports.file-unreadable',
+        missing: [{ kind: 'reader-error', error: 'entry-name-twice' }],
+      });
+    }
+  });
+
   it('PRD-SEC-011 checks the content types part whatever the case of its name, and its encoded values', async () => {
     const workbook = await syntheticWorkbook();
     const types = partsOf(workbook).get('[Content_Types].xml')?.toString('utf8') ?? '';

@@ -28,10 +28,13 @@ export function readWorkbook(bytes: Buffer, caps: IntakeCaps): Promise<WorkbookR
     let settled = false;
     const worker = new Worker(WORKER_FILE, {
       resourceLimits: { maxOldGenerationSizeMb: caps.maxParserMemoryMb },
-      stdout: false,
+      stdout: true,
       stderr: true,
     });
-    // The worker's own warnings (such as Node's note that it strips types from sources in tests) are not logged.
+    // Nothing the worker writes reaches the server's own streams, which go to the log (code-house-rules 12.11;
+    // PRD-SEC-014): a reader that printed a cell would print the file's content. Both streams are drained and dropped,
+    // such as Node's note that it strips types from sources in tests.
+    worker.stdout.resume();
     worker.stderr.resume();
     const settle = (answer: WorkbookRead) => {
       if (settled) return;

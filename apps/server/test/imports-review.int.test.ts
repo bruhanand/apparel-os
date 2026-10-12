@@ -329,6 +329,12 @@ async function read(batchId: string, by: SyntheticUser = preparer): Promise<Impo
 const step = (batchId: string, name: string, body: unknown = {}) =>
   call(preparer, 'POST', `/api/files-imports/batches/${batchId}/${name}`, body);
 
+/** A batch step with the batch version the screen read (code-house-rules 12.7). */
+async function versioned(batchId: string, name: string, body: Record<string, unknown> = {}, by = preparer) {
+  const versionId = (await read(batchId, by)).batch.versionId;
+  return call(by, 'POST', `/api/files-imports/batches/${batchId}/${name}`, { versionId, ...body });
+}
+
 /**
  * Withdraw a batch, so its file may start a new batch for the same target and layout (7.2; S1-F06-T04): the earlier
  * batch is kept, Failed.
@@ -404,7 +410,7 @@ beforeAll(async () => {
     revisions: 'none',
     publishNeeds: () => Promise.resolve({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
     lockTargets: () => Promise.resolve([]),
-    review: { kind: 'approval', actionType: REVIEW_ACTION },
+    review: () => ({ kind: 'approval', actionType: REVIEW_ACTION }),
     suggestions: () => Promise.resolve([]),
     checkRuleTarget: () => Promise.resolve(undefined),
     preview: (_context, document) =>
@@ -558,12 +564,22 @@ describe('layouts and mappings proposed, detected and confirmed (imports-and-ope
         [versions.layoutVersionId],
       ),
     ).rejects.toThrow(/layout_version_independent/);
+    // A mapping version confirmed by its proposer is refused the same way, by access and by its table (6.4).
+    const ownMapping = await decide(preparer, versions.mappingRequestId, versions.mappingVersionId);
+    expect(errorOf(ownMapping)).toMatchObject({ code: 'access.self-preparation' });
+    await expect(
+      rows(
+        `update files_imports.mapping_version set state = 'Confirmed', decided_by_user_id = proposed_by_user_id,
+           decided_at = now() where id = $1`,
+        [versions.mappingVersionId],
+      ),
+    ).rejects.toThrow(/mapping_version_independent/);
 
     // A Proposed version stages and previews a batch, never publishes it (6.4).
     const batchId = await start(stored, versions);
     expect((await read(batchId)).batch).toMatchObject({ layoutState: 'Proposed', mappingState: 'Proposed' });
     expect(ok(await step(batchId, 'validate'))).toMatchObject({ state: 'Validated' });
-    expect(ok(await step(batchId, 'submit'))).toMatchObject({ state: 'Validated' });
+    expect(ok(await versioned(batchId, 'submit'))).toMatchObject({ state: 'Validated' });
     const early = await publish(batchId);
     expect(errorOf(early)).toMatchObject({
       kind: 'refused',
@@ -917,7 +933,7 @@ describe('origins, entries and the validation report (imports-and-opening-data 5
 
     // AI suggestions are unavailable while the AI gateway's capability is off (DEC-105, PRD-SEC-017).
     const stagedRowId = row?.stagedRowId ?? '';
-    const ai = await call(preparer, 'POST', `/api/files-imports/batches/${batchId}/rows/${stagedRowId}/entries`, {
+    const ai = await versioned(batchId, `rows/${stagedRowId}/entries`, {
       field: 'stockUnit',
       value: 'piece',
       reason: 'SYNTHETIC from an AI draft',
@@ -941,8 +957,20 @@ describe('origins, entries and the validation report (imports-and-opening-data 5
     expect(suggestions.suggestions).toEqual([]);
 
     // Entered by a person, with who, when, the reason; the value staged from the file stays.
+    // An entry made on a stale screen is refused, naming the current version (code-house-rules 12.7).
+    const stale = await step(batchId, `rows/${stagedRowId}/entries`, {
+      versionId: uuidv7(),
+      field: 'stockUnit',
+      value: 'piece',
+      reason: 'SYNTHETIC from a stale screen',
+    });
+    expect(errorOf(stale)).toMatchObject({
+      kind: 'conflict',
+      code: 'kernel.stale-version',
+      missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batchId }],
+    });
     const entered = ok(
-      await call(preparer, 'POST', `/api/files-imports/batches/${batchId}/rows/${stagedRowId}/entries`, {
+      await versioned(batchId, `rows/${stagedRowId}/entries`, {
         field: 'stockUnit',
         value: 'piece',
         reason: 'SYNTHETIC checked against the packing note',
@@ -991,15 +1019,32 @@ describe('origins, entries and the validation report (imports-and-opening-data 5
       ['A-7', 'Warning', 3],
     ]);
     expect(report?.counts).toEqual({ blocking: 0, warnings: 1, warningsNotSeen: 1, notes: 0 });
-    expect(errorOf(await step(batchId, 'submit'))).toMatchObject({
+    expect(errorOf(await versioned(batchId, 'submit'))).toMatchObject({
       code: 'files-imports.warnings-not-seen',
       missing: [{ kind: 'issues', warningsNotSeen: '1' }],
     });
-    expect(ok(await step(batchId, 'issues/seen', { class: 'A-7' }))).toMatchObject({ marked: 1 });
+    // Marked on a stale screen: refused (code-house-rules 12.7).
+    expect(errorOf(await step(batchId, 'issues/seen', { versionId: uuidv7(), class: 'A-7' }))).toMatchObject({
+      code: 'kernel.stale-version',
+    });
+    // Marked by another person with edit, it is not seen by the one who submits (8.2; product owner, 11 Oct 2026).
+    const editor = await enrolled('EDITOR', IMPORTER);
+    expect(ok(await versioned(batchId, 'issues/seen', { class: 'A-7' }, editor))).toMatchObject({ marked: 1 });
+    expect((await read(batchId)).report?.issues[0]?.seen).toMatchObject({ byUserId: editor.id });
+    expect(errorOf(await versioned(batchId, 'submit'))).toMatchObject({
+      code: 'files-imports.warnings-not-seen',
+      missing: [{ kind: 'issues', warningsNotSeen: '1' }],
+    });
+    // The submitter marks it, which replaces the other mark, and then submits.
+    expect(ok(await versioned(batchId, 'issues/seen', { class: 'A-7' }))).toMatchObject({ marked: 1 });
     const seen = (await read(batchId)).report;
     expect(seen?.issues[0]?.seen).toMatchObject({ byUserId: preparer.id });
-    expect(ok(await step(batchId, 'submit'))).toMatchObject({
+    expect(ok(await versioned(batchId, 'submit'))).toMatchObject({
       submittedVersionId: (await read(batchId)).batch.versionId,
+    });
+    // A submitted version is reviewed: nothing more is marked on it.
+    expect(errorOf(await versioned(batchId, 'issues/seen', { class: 'A-7' }, editor))).toMatchObject({
+      code: 'files-imports.already-submitted',
     });
     expect(ok(await publish(batchId))).toMatchObject({ state: 'Published' });
   });
@@ -1068,7 +1113,7 @@ describe('a change to a Validated batch (imports-and-opening-data 3.2; PRD-ACS-0
     );
     const batchId = await start(stored, versions, {}, REVIEWED_TARGET);
     ok(await step(batchId, 'validate'));
-    const submitted = ok(await step(batchId, 'submit'));
+    const submitted = ok(await versioned(batchId, 'submit'));
     const requestId = String(submitted.requestId);
     const firstVersion = String(submitted.submittedVersionId);
     expect(await rows('select state from access.approval_request where id = $1', [requestId])).toEqual([
@@ -1076,7 +1121,9 @@ describe('a change to a Validated batch (imports-and-opening-data 3.2; PRD-ACS-0
     ]);
     const batch = await read(batchId);
     const document = batch.documents[1];
-    const excluded = ok(await step(batchId, `documents/${document?.documentId ?? ''}/exclusion`, { excluded: true }));
+    const excluded = ok(
+      await versioned(batchId, `documents/${document?.documentId ?? ''}/exclusion`, { excluded: true }),
+    );
     expect(excluded).toMatchObject({ state: 'Staged' });
     expect(excluded.versionId).not.toBe(firstVersion);
     expect(await rows('select state from access.approval_request where id = $1', [requestId])).toEqual([
@@ -1087,12 +1134,18 @@ describe('a change to a Validated batch (imports-and-opening-data 3.2; PRD-ACS-0
     expect(late.status).not.toBe(200);
     // Validated again, the excluded document is not checked; submitted again, a new request binds the new version.
     expect(ok(await step(batchId, 'validate'))).toMatchObject({ state: 'Validated' });
-    const again = ok(await step(batchId, 'submit'));
+    // PRD-ACS-007: Submit of a version the screen did not show, the one read before the exclusion, is refused.
+    expect(errorOf(await step(batchId, 'submit', { versionId: firstVersion }))).toMatchObject({
+      kind: 'conflict',
+      code: 'kernel.stale-version',
+      missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batchId, versionId: excluded.versionId }],
+    });
+    const again = ok(await versioned(batchId, 'submit'));
     expect(again.requestId).not.toBe(requestId);
     // An entry on the Validated batch returns it to Staged too, superseding the new request.
     const row = (await read(batchId)).documents[0]?.rows[0];
     ok(
-      await call(preparer, 'POST', `/api/files-imports/batches/${batchId}/rows/${row?.stagedRowId ?? ''}/entries`, {
+      await versioned(batchId, `rows/${row?.stagedRowId ?? ''}/entries`, {
         field: 'code',
         value: 'SYN-A2',
         reason: 'SYNTHETIC corrected code',
@@ -1205,7 +1258,7 @@ describe('the organisation create handler (structure-and-masters 7; imports-and-
       records: [{ recordType: 'organisation.store', codes: [storeCode] }],
     });
     ok(await step(batchId, 'validate'));
-    ok(await step(batchId, 'submit'));
+    ok(await versioned(batchId, 'submit'));
     expect(ok(await publish(batchId))).toMatchObject({ state: 'Published' });
     const stores = await rows<{ decision: string }>(
       `select v.decision from organisation.store s join organisation.store_version v on v.store_id = s.id
@@ -1289,7 +1342,11 @@ describe('publishing each document at its own place (imports-and-opening-data 13
       );
       const batchId = String(started.batchId);
       ok(await as(`/api/files-imports/batches/${batchId}/validate`, {}));
-      ok(await as(`/api/files-imports/batches/${batchId}/submit`, {}));
+      ok(
+        await as(`/api/files-imports/batches/${batchId}/submit`, {
+          versionId: (await read(batchId, storePreparer)).batch.versionId,
+        }),
+      );
       return batchId;
     };
     const publishAs = async (batchId: string) =>

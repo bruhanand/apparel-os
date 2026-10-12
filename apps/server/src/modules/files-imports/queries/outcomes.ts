@@ -1,7 +1,7 @@
 import {
   IMPORT_BATCH_TYPE,
   layoutStructureSchema,
-  normalisedName,
+  mappingFieldsSchema,
   type ImportOutcomes,
   type ImportOutcomesQuery,
 } from '@apparel-os/schemas';
@@ -19,6 +19,7 @@ import {
 } from '../db/schema.js';
 import { factsOfBatch, parsedOrDefect, type ImportDependencies } from '../commands/import-common.js';
 import { rowsReadOf } from '../commands/outcomes.js';
+import { maskedColumn, maskOutcome, maskPlan } from '../domain/masking.js';
 import { outcomeView } from './batches.js';
 
 // The import outcomes report (imports-and-opening-data 7.4, 14; phases.md stage 1; PRD-IMP-013, PRD-MOD-003,
@@ -26,8 +27,8 @@ import { outcomeView } from './batches.js';
 // kind, target, layout and mapping versions, who started it and when, state, and its last attempt's counts, quantities,
 // values and control totals; filtered by Store, kind, state and the date started; read at one as-of time. Row-level
 // security shows only the batches, documents and outcomes inside the reader's scope, and Authorise checks view on each
-// batch with its facts under the reader's own assignment. A document reference of a class the reader is not granted is
-// masked, and every reference while the batch's layout version is not Confirmed (section 11). The rows, issues and
+// batch with its facts under the reader's own assignment. A document reference, a control total or a measure of a class
+// the reader is not granted is masked, and every one while the batch's layout version is not Confirmed (section 11). The rows, issues and
 // stored file are read through the batch (13.1 "Reads").
 
 function notAuthorised(code: string, missing: readonly { readonly kind: string }[]): never {
@@ -67,6 +68,7 @@ export async function importOutcomes(
       layoutVersion: layoutVersion.version,
       layoutState: layoutVersion.state,
       structure: layoutVersion.structure,
+      fields: mappingVersion.fields,
       mappingCode: mapping.code,
       mappingVersion: mappingVersion.version,
     })
@@ -92,17 +94,18 @@ export async function importOutcomes(
       { roleAssignmentId: authorised.roleAssignmentId, actorId, fieldClasses: batch.restrictedClasses },
       'view',
     );
-    // The reference column's class, once the layout version is Confirmed; every class held while it is not.
+    // What the reader may not see, as the batch's read masks it (section 11): the reference column's class, the
+    // control totals of a masked column and the measures of a masked field once the layout version is Confirmed;
+    // every one while it is not.
     const structure = parsedOrDefect(layoutStructureSchema, row.structure, 'layout version');
-    const referenceClass = structure.columns.find(
-      (column) => normalisedName(column.name) === normalisedName(structure.documentReference),
-    )?.restrictedClass;
-    const masked =
-      row.layoutState !== 'Confirmed'
-        ? restricted.masked[0]
-        : referenceClass !== undefined && restricted.masked.includes(referenceClass)
-          ? referenceClass
-          : undefined;
+    const plan = maskPlan({
+      layoutConfirmed: row.layoutState === 'Confirmed',
+      masked: restricted.masked,
+      layout: structure,
+      mapping: parsedOrDefect(mappingFieldsSchema, row.fields, 'mapping version'),
+      header: [],
+    });
+    const masked = maskedColumn(plan, structure.documentReference);
     const documents = await context.tx
       .select()
       .from(importDocument)
@@ -135,7 +138,7 @@ export async function importOutcomes(
       startedAt: batch.startedAt.toISOString(),
       rowsRead: rowsReadOf(batch),
       attempts: outcomes.length,
-      ...(last === undefined ? {} : { lastOutcome: outcomeView(last) }),
+      ...(last === undefined ? {} : { lastOutcome: maskOutcome(outcomeView(last), plan) }),
       documents: documents.map((document) => ({
         documentId: document.id,
         reference: masked === undefined ? document.reference : '',

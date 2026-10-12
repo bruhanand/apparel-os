@@ -113,6 +113,7 @@ import {
   importPublishedSchema,
   importStartedSchema,
   importSubmittedSchema,
+  submitImportRequestSchema,
   importValidatedSchema,
   issuesSeenRequestSchema,
   issuesSeenSchema,
@@ -1456,6 +1457,7 @@ export const routes = {
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
       'files-imports.rule-conflict',
+      'files-imports.starts-in-past',
       'files-imports.rule-target-refused',
       // An activity's approval (module-map 4.16; S1-F04-T02).
       'site-lifecycle.record-not-found',
@@ -1745,6 +1747,7 @@ export const routes = {
       'files-imports.rule-attribute-unknown',
       'files-imports.rule-target-refused',
       'files-imports.rule-scope-not-found',
+      'files-imports.starts-in-past',
     ],
   }),
   // Detection by structure (6.5; PRD-IMP-004): the compatible versions of a file this person handed in.
@@ -1818,6 +1821,7 @@ export const routes = {
       'files-imports.document-not-staged',
       'files-imports.field-unknown',
       'files-imports.ai-suggestions-unavailable',
+      'kernel.stale-version',
     ],
   }),
   stagedValueSuggestions: defineRoute({
@@ -1852,6 +1856,7 @@ export const routes = {
       'files-imports.batch-not-open',
       'files-imports.document-not-found',
       'files-imports.document-not-staged',
+      'kernel.stale-version',
     ],
   }),
   validateImport: defineRoute({
@@ -1885,6 +1890,8 @@ export const routes = {
       'files-imports.batch-not-validated',
       'files-imports.issue-not-found',
       'files-imports.not-a-warning',
+      'files-imports.already-submitted',
+      'kernel.stale-version',
     ],
   }),
   submitImport: defineRoute({
@@ -1893,7 +1900,7 @@ export const routes = {
     params: z.strictObject({ batchId: idSchema }),
     access: { kind: 'action', action: 'edit', recordType: IMPORT_BATCH_TYPE, authorisedIn: 'command' },
     command: true,
-    body: z.strictObject({}),
+    body: submitImportRequestSchema,
     secretFields: [],
     restrictedFields: [],
     shows: 'nothing',
@@ -1907,6 +1914,7 @@ export const routes = {
       'files-imports.warnings-not-seen',
       'files-imports.already-submitted',
       'files-imports.counts-do-not-close',
+      'kernel.stale-version',
     ],
   }),
   publishImport: defineRoute({

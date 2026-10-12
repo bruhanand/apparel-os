@@ -122,8 +122,12 @@ export interface ImportHandler {
    * (code-house-rules 8.2 "Rows of other modules"); its Maintain operation then finds them held.
    */
   lockTargets(context: TransactionContext, document: HandlerDocument): Promise<LockTarget[]>;
-  /** The review it requires (3.1 step 8). */
-  readonly review: ImportReview;
+  /**
+   * The review it requires for a batch of the kind (3.1 step 8): the preparer's submission where the records it creates
+   * have their own approvals, or an independent approval in `access` where publishing takes effect on its own, such
+   * as a governed revision of a master (7.3; product owner, 11 Oct 2026).
+   */
+  review(kind: ImportKind): ImportReview;
   /**
    * Exact or close matches for a field's value from its own records, for a person to accept (section 5; PRD-IMP-009):
    * codes through Resolve a code, words by trigram search. None where the field has none.

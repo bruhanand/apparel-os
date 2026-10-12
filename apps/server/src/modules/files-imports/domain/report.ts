@@ -3,6 +3,7 @@ import {
   normalisedName,
   type DocumentPreview,
   type FieldClass,
+  type IssueClass,
   type IssueSeverity,
   type LayoutStructure,
   type MappingFields,
@@ -56,7 +57,8 @@ export interface ReportInput {
 }
 
 export interface IssueDraft {
-  readonly class: string;
+  /** A problem class of 8.3 or an import class, from the one list the request schema and the database share. */
+  readonly class: IssueClass;
   readonly severity: IssueSeverity;
   readonly code: string;
   readonly correction: string;
@@ -102,14 +104,18 @@ function cellAt(row: ReportRow, column: number | undefined): GridCell | undefine
 
 const shown = (cell: GridCell | undefined) => (cell === undefined ? undefined : cell.text);
 
-/** The column a field is read from, and the class it holds: the first input of a calculation that holds one. */
+/**
+ * The column a field is read from, and the class it holds: the first of its inputs that holds one, a calculation kept
+ * beside a supplied value counting as an input, since its value is worked out from those columns (section 11).
+ */
 function sourceOf(
   input: ReportInput,
   field: string,
 ): { readonly column?: string; readonly restrictedClass?: FieldClass } {
   const source = input.mapping.fields[field];
   if (source === undefined) return {};
-  const names = 'calculation' in source ? source.calculation.columns : [source.column];
+  const names =
+    'calculation' in source ? source.calculation.columns : [source.column, ...(source.alsoCalculated?.columns ?? [])];
   const columns = names.map((name) =>
     input.layout.columns.find((each) => normalisedName(each.name) === normalisedName(name)),
   );

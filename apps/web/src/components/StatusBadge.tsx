@@ -18,7 +18,14 @@ export const familyClasses: Readonly<Record<Family, string>> = {
  * 10.2). It hugs its text wherever it sits, even in a column that stretches its children.
  */
 export function StatusBadge({ state }: { state: StateId }) {
-  const family = stateFamilies[state];
+  return <FamilyBadge family={stateFamilies[state]} label={t(`state.${state}`)} />;
+}
+
+/**
+ * The badge of a family with its own word, for a mark that is no record's state but takes a family's glyph and
+ * colours, such as a row issue's severity (design-language 7).
+ */
+export function FamilyBadge({ family, label }: { family: Family; label: string }) {
   return (
     <span
       className={cn(
@@ -29,7 +36,7 @@ export function StatusBadge({ state }: { state: StateId }) {
       <span aria-hidden="true" className="text-[11px]">
         {familyGlyphs[family]}
       </span>
-      <span>{t(`state.${state}`)}</span>
+      <span>{label}</span>
     </span>
   );
 }

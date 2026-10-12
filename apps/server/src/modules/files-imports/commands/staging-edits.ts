@@ -14,18 +14,20 @@ import { importBatch, importDocument, stagedRow, stagedValueEntry } from '../db/
 import {
   factsOfBatch,
   handlerOf,
+  reviewOf,
   scopeColumnsOf,
   type BatchRow,
   type ImportActor,
   type ImportDependencies,
 } from './import-common.js';
-import { batchReplayAuthorisation, heldBatch } from './validate-import.js';
+import { batchReplayAuthorisation, heldBatch, staleBatchVersion } from './validate-import.js';
 
 // Staging edits (imports-and-opening-data 3.2, 5, 13.1 "Map and stage"; PRD-IMP-006, PRD-IMP-009, PRD-ACS-007;
 // S1-F06-T03): a value entered by a person in a staged row, with who, when, the reason and the suggestion it came
 // from, the original cell never overwritten; and a document excluded from publishing or put back. Each makes a new
 // batch version and returns a Validated batch to Staged, so validation runs again; an open approval request on the old
-// version ends as Superseded (access-and-approvals 9.6). A Published or Failed batch is never edited.
+// version ends as Superseded (access-and-approvals 9.6). A Published or Failed batch is never edited. Each carries the
+// batch version the screen read, refused as `kernel.stale-version` when another (code-house-rules 12.7; PRD-ACS-007).
 
 const refusal = (
   kind: CommandRefusal['kind'],
@@ -49,14 +51,14 @@ export async function submittedRequestLocks(
   context: TransactionContext,
   batch: BatchRow,
 ): Promise<(LockTarget & { mode: 'exclusive' })[]> {
-  const handler = handlerOf(deps.handlers, batch);
-  if (handler.review.kind !== 'approval' || batch.submittedVersionId === null) return [];
+  const review = reviewOf(handlerOf(deps.handlers, batch), batch);
+  if (review.kind !== 'approval' || batch.submittedVersionId === null) return [];
   const targets = await deps.access.requestLockTargets(context, {
     module: 'files-imports',
     recordType: IMPORT_BATCH_TYPE,
     recordId: batch.id,
     versionId: batch.submittedVersionId,
-    actionType: handler.review.actionType,
+    actionType: review.actionType,
   });
   return targets.map((target) => ({ ...target, mode: 'exclusive' as const }));
 }
@@ -76,8 +78,8 @@ export async function newBatchVersion(
     .update(importBatch)
     .set({ state: 'Staged', versionId, submittedVersionId: null })
     .where(eq(importBatch.id, batch.id));
-  const handler = handlerOf(deps.handlers, batch);
-  if (handler.review.kind === 'approval' && batch.submittedVersionId !== null) {
+  const review = reviewOf(handlerOf(deps.handlers, batch), batch);
+  if (review.kind === 'approval' && batch.submittedVersionId !== null) {
     await deps.access.supersedeRequest(
       context,
       {
@@ -85,7 +87,7 @@ export async function newBatchVersion(
         recordType: IMPORT_BATCH_TYPE,
         recordId: batch.id,
         versionId: batch.submittedVersionId,
-        actionType: handler.review.actionType,
+        actionType: review.actionType,
       },
       by,
     );
@@ -102,6 +104,8 @@ export interface EnterValueInput {
   readonly key: string;
   readonly content: RequestContent;
   readonly body: {
+    /** The batch version the screen read (code-house-rules 12.7). */
+    readonly versionId: string;
     readonly field: string;
     readonly value: string;
     readonly reason: string;
@@ -140,6 +144,8 @@ export async function enterStagedValue(
         if (held.kind === 'refusal') return held.outcome;
         const { batch } = held;
         if (!OPEN_STATES.includes(batch.state)) return refusal('refused', 'files-imports.batch-not-open');
+        const stale = staleBatchVersion(batch, body.versionId);
+        if (stale !== undefined) return stale;
         const [row] = await context.tx
           .select()
           .from(stagedRow)
@@ -211,6 +217,8 @@ export interface ExclusionInput {
   readonly documentId: string;
   readonly key: string;
   readonly content: RequestContent;
+  /** The batch version the screen read (code-house-rules 12.7). */
+  readonly versionId: string;
   readonly excluded: boolean;
 }
 
@@ -235,6 +243,8 @@ export async function excludeImportDocument(
         if (held.kind === 'refusal') return held.outcome;
         const { batch } = held;
         if (!OPEN_STATES.includes(batch.state)) return refusal('refused', 'files-imports.batch-not-open');
+        const stale = staleBatchVersion(batch, input.versionId);
+        if (stale !== undefined) return stale;
         const [document] = await context.tx
           .select()
           .from(importDocument)

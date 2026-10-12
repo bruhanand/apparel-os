@@ -166,8 +166,9 @@ export function storeImportHandler(organisation: Organisation): ImportHandler {
     },
     // Preparing a Store or its version takes no lock of its own: its approval checks it under its locks (2.3).
     lockTargets: () => Promise.resolve([]),
-    // Each Store's first version waits for a different authorised person (2.3), so the submission is the review.
-    review: { kind: 'submission' },
+    // Each Store's first version, and each next version an update prepares, waits for a different authorised person
+    // (2.3), so the submission is the review for both kinds.
+    review: () => ({ kind: 'submission' }),
     async suggestions(context, field, value) {
       switch (field) {
         case 'format':

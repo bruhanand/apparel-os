@@ -410,7 +410,9 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     expect(validated.status).toBe(200);
     expect(validated.body).toMatchObject({ batchId, state: 'Validated' });
     // The preparer's submission is the merchandise handler's review (13.1, 13.2; S1-F06-T03).
-    const submitted = await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie);
+    const submitted = await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie, {
+      versionId: read.batch.versionId,
+    });
     expect(submitted.status).toBe(200);
     // The batch version the screen read travels with Publish (code-house-rules 12.7; S1-F06-T04).
     const published = await call('POST', `/api/files-imports/batches/${batchId}/publish`, preparer.cookie, {
@@ -573,7 +575,10 @@ describe('the tracer (imports-and-opening-data 3.1; structure-and-masters 7; PRD
     const path = `/api/files-imports/batches/${batchId}/publish`;
     const unreviewed = await call('POST', path, limitedUser.cookie, { versionId: read.batch.versionId }, limitedApi);
     expect(errorOf(unreviewed)).toMatchObject({ kind: 'refused', code: 'files-imports.review-missing' });
-    expect((await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie)).status).toBe(200);
+    const submit = { versionId: read.batch.versionId };
+    expect((await call('POST', `/api/files-imports/batches/${batchId}/submit`, preparer.cookie, submit)).status).toBe(
+      200,
+    );
     const answer = await call('POST', path, limitedUser.cookie, { versionId: read.batch.versionId }, limitedApi);
     expect(answer.status).toBe(200);
     expect(answer.body).toMatchObject({ batchId, state: 'Published', result: 'published' });

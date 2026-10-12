@@ -445,14 +445,17 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
         `select (select count(*) from pg_catalog.pg_constraint c
                  where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
                    and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
-                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3).
+                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3); for
+                   -- a proposal's versions, whose states are Proposed, Confirmed and Rejected (DM-4), Confirmed ones.
                    and (pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%'
                         or pg_catalog.pg_get_constraintdef(c.oid)
-                          like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'))::text
+                          like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'
+                        or pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((state = ''Confirmed''::text))%'))::text
                   as exclusion,
                 (select count(*) from pg_catalog.pg_trigger t
                  where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'
-                   -- The module's own guard: access.guard_version_change, configuration.guard_version_change.
+                   -- The module's own guard: access.guard_version_change, configuration.guard_version_change,
+                   -- files_imports.guard_version_change.
                    and t.tgfoid::regproc::text = split_part('${entry.table}', '.', 1) || '.guard_version_change')::text
                   as guard`,
       );

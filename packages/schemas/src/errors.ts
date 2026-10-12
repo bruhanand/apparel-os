@@ -485,8 +485,10 @@ export const inboxCodes = declareCodes({
  * - `files-imports.rule-attribute-unknown`: no handler of the attribute's target has that field.
  * - `files-imports.rule-target-refused`: the handler that owns the target does not accept it (6.3); `missing` says why.
  * - `files-imports.rule-scope-not-found`: the layout a layout-scope rule names does not exist.
- * - `files-imports.rule-conflict`: a Confirmed version of the same rule, in force on overlapping dates, has another
- *   target (6.3, 15.1); `missing` names it.
+ * - `files-imports.rule-conflict`: the version would overlap a Confirmed version of the same rule that it cannot end:
+ *   one starting on or after its own start (6.3, 15.1; code-house-rules 7.3); `missing` names it.
+ * - `files-imports.starts-in-past`: a mapping rule version never starts on a past date, proposed or confirmed (GC2-7,
+ *   DEC-105; code-house-rules 7.3).
  * - `files-imports.proposal-not-found` / `files-imports.proposal-not-open`: the version decided does not exist, or is
  *   no longer Proposed.
  * - `files-imports.layout-version-rejected`: a batch never starts with a Rejected layout or mapping version (6.4).
@@ -511,7 +513,8 @@ export const inboxCodes = declareCodes({
  * - `files-imports.file-already-imported`: the same file is read by a batch for the same target and layout that has
  *   not Failed (7.2); `missing` names the earlier batches the person may see. Withdraw them first.
  * - `files-imports.document-already-published`: the document reference claimed at the hand-in is already published
- *   for the target, and the batch is no governed revision of it (7.2, 7.3); `missing` names the published document.
+ *   for the target, and the batch is no governed revision of it (7.2, 7.3); `missing` names the published document
+ *   only where the person may view its batch.
  * - `files-imports.document-conflict`: at publishing, a document's source identity is published with other content
  *   (7.2); `missing` names the document and the published one. The other documents publish.
  * - `files-imports.counts-do-not-close`: the rows staged differ from the rows the reader read, so the counts cannot
@@ -589,6 +592,7 @@ export const filesImportsCodes = declareCodes({
   'files-imports.document-already-published': 'refused',
   'files-imports.document-conflict': 'refused',
   'files-imports.counts-do-not-close': 'refused',
+  'files-imports.starts-in-past': 'refused',
 });
 
 /**

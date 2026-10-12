@@ -523,10 +523,10 @@
     {
       "table": "files_imports.stored_file",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "imports-and-opening-data 3.1, 11, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3",
-      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does"
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "imports-and-opening-data 3.1, 11, 13.1, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3, 8.2",
+      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does. Start an import locks it at step 1, so two Starts of one file queue (RR-503)"
     },
     {
       "table": "files_imports.file_receipt",
@@ -607,10 +607,10 @@
     {
       "table": "files_imports.mapping_rule_version",
       "class": "unscoped",
-      "marks": [],
+      "marks": ["versions"],
       "runtime": ["INSERT", "SELECT", "UPDATE"],
-      "design": "imports-and-opening-data 6.3, 6.4, 15.1",
-      "why": "A mapping rule's versions, the Organisation's as the rule is; changed only by their decision, once; only files-imports code reads it"
+      "design": "imports-and-opening-data 6.3, 6.4, 15.1; code-house-rules 7.3",
+      "why": "A mapping rule's versions, the Organisation's as the rule is; changed only by their decision, once, and by an end moved earlier when a later version follows (7.3); only files-imports code reads it"
     },
     {
       "table": "files_imports.staged_value_entry",

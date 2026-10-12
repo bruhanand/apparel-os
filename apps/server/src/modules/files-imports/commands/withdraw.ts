@@ -4,7 +4,7 @@ import type { CommandOutcome, IdempotentAnswer, JsonValue, RequestContent } from
 import { importBatch } from '../db/schema.js';
 import { importFailed } from '../events.js';
 import { factsOfBatch, type ImportActor, type ImportDependencies } from './import-common.js';
-import { batchReplayAuthorisation, heldBatch } from './validate-import.js';
+import { batchReplayAuthorisation, heldBatch, staleBatchVersion } from './validate-import.js';
 
 // Withdraw (imports-and-opening-data 3.2, 13.1; PRD-IMP-012; S1-F06-T04): the preparer withdraws a Staged or Validated
 // batch, for example when every document is excluded, a duplicate or a conflict, and it becomes Failed. Its staged
@@ -46,19 +46,8 @@ export async function withdrawImport(
             causedBySecret: false,
           };
         }
-        if (batch.versionId !== input.versionId) {
-          return {
-            kind: 'refusal',
-            refusal: {
-              kind: 'conflict',
-              code: 'kernel.stale-version',
-              missing: [
-                { kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId },
-              ],
-            },
-            causedBySecret: false,
-          };
-        }
+        const stale = staleBatchVersion(batch, input.versionId);
+        if (stale !== undefined) return stale;
         await context.tx.update(importBatch).set({ state: 'Failed' }).where(eq(importBatch.id, batch.id));
         const facts = factsOfBatch(batch);
         await deps.audit.record(context, {

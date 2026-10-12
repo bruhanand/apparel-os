@@ -1,4 +1,5 @@
 import {
+  IMPORT_BATCH_APPROVAL,
   PRODUCT_PROPOSAL_TYPE,
   productProposalDraftSchema,
   skuPurposeSchema,
@@ -40,8 +41,9 @@ import { proposeProduct } from './products.js';
 // The handler has no attribute value field yet, so no vocabulary word is searched or mapped (structure-and-masters 4.1).
 // With S1-F06-T04 it takes the update kind too: a document of an update batch is a style's SKUs, each SKU's next version
 // with the row's stock unit and purpose, starting today, through Prepare a SKU version; and a governed revision of the
-// document that published the style (imports-and-opening-data 4.1, 7.1, 7.3). Its source identity is the style record
-// type and the style's code.
+// document that published the style (imports-and-opening-data 4.1, 7.1, 7.3), reviewed by an independent approval of
+// the batch version before Publish, since a SKU version takes effect when recorded (product owner, 11 Oct 2026). Its
+// source identity is the style record type and the style's code.
 
 /** The fields of the handler's staged row. Size is optional: absent, it is Unknown (4.1). */
 /** The record types an update versions, and a product's source identity names (imports-and-opening-data 7.1). */
@@ -306,8 +308,12 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
         mode: 'exclusive' as const,
       }));
     },
-    // Each proposal is confirmed by a different person, so the preparer's submission is the review (13.2).
-    review: { kind: 'submission' },
+    // The review (3.1 step 8, 13.2): a create batch's products arrive as proposals each confirmed by a different person,
+    // so the preparer's submission is the review. An update batch is a governed revision whose SKU versions take effect
+    // when it publishes, so it needs an independent approval of the batch version in `access` before Publish
+    // (PRD-ACS-006, PRD-ACS-007; product owner, 11 Oct 2026).
+    review: (kind) =>
+      kind === 'update' ? { kind: 'approval', actionType: IMPORT_BATCH_APPROVAL } : { kind: 'submission' },
     async suggestions(context, field, value) {
       switch (field) {
         case 'brandCode':
@@ -384,8 +390,10 @@ export function productImportHandler(dependencies: ProductImportDependencies): I
       if (document.kind === 'update') {
         const updated = await updatesOf(context, document);
         if ('issues' in updated) return refusedFor(updated.issues);
-        // Prepare a SKU version, the catalogue's own Maintain operation, for each SKU (module-map section 3, rule 8):
-        // each waits Awaiting approval for a different authorised person (structure-and-masters 2.3).
+        // Prepare a SKU version, the catalogue's own Maintain operation, for each SKU (module-map section 3, rule 8). A
+        // SKU version takes effect when it is recorded (structure-and-masters 2.3), so the batch's own independent
+        // approval, verified under the lock before this runs, is what a different person decided (product owner,
+        // 11 Oct 2026).
         for (const each of updated.updates.skus) {
           const prepared = await dependencies.catalogue.prepareSkuVersion(context, publisher, each.skuId, each.draft);
           if (prepared.kind !== 'success') return { kind: 'refused', refusal: prepared.refusal };

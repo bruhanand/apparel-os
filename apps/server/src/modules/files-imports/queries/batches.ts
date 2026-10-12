@@ -3,13 +3,11 @@ import {
   IMPORT_LAYOUT_TYPE,
   layoutStructureSchema,
   mappingFieldsSchema,
-  type FieldClass,
   type ImportBatchRead,
   type ImportLayoutList,
   type ImportOutcome,
   type MappingRuleList,
   type MissingItem,
-  type RowIssue,
   type StagedRow,
   type StagedValueView,
 } from '@apparel-os/schemas';
@@ -39,12 +37,13 @@ import {
   latestEntries,
   parsedOrDefect,
   previewOf,
+  reviewOf,
   versionsOf,
   visibleBatch,
   type ImportDependencies,
 } from '../commands/import-common.js';
 import { currentIssues } from '../commands/review.js';
-import { maskedColumn, maskPlan, maskRow, type MaskPlan } from '../domain/masking.js';
+import { maskedColumn, maskIssueOriginal, maskOutcome, maskPlan, maskRow, type MaskPlan } from '../domain/masking.js';
 import type { EffectiveValue } from '../domain/report.js';
 
 // Reads of imports (imports-and-opening-data 5, 8, 11, 13.1, 14; PRD-IMP-005, PRD-IMP-006, PRD-SEC-005, PRD-ACS-008;
@@ -195,7 +194,7 @@ export async function readBatch(
       state: batch.state,
       versionId: batch.versionId,
       ...(batch.submittedVersionId === null ? {} : { submittedVersionId: batch.submittedVersionId }),
-      review: handler.review,
+      review: reviewOf(handler, batch),
       storedFileId: batch.storedFileId,
       attachmentId: linked.id,
       layoutVersionId: batch.layoutVersionId,
@@ -214,11 +213,11 @@ export async function readBatch(
       .filter((row) => row.documentId === null)
       .map((row) => (row.role === 'header' ? rowView(row, {}) : maskRow(rowView(row, {}), plan))),
     ...(await reportView(context, batch, plan)),
-    outcomes: outcomes.map(outcomeView),
+    outcomes: outcomes.map((outcome) => maskOutcome(outcomeView(outcome), plan)),
   };
 }
 
-/** An outcome as its reader is served it (7.4). */
+/** An outcome as kept (7.4), before it is masked for its reader (`maskOutcome`; section 11). */
 export function outcomeView(outcome: typeof importOutcome.$inferSelect): ImportOutcome {
   return {
     outcomeId: outcome.id,
@@ -240,16 +239,6 @@ export function outcomeView(outcome: typeof importOutcome.$inferSelect): ImportO
       ...(document.rows === undefined ? {} : { rows: document.rows }),
     })),
   };
-}
-
-/** The original value of an issue, masked where its column's class is masked for the reader (8.1, section 11). */
-function originalOf(original: string | null, fieldClass: FieldClass | null, plan: MaskPlan): RowIssue['original'] {
-  if (original === null) return undefined;
-  if (plan.kind === 'all') return { kind: 'masked', fieldClass: plan.fieldClass };
-  if (plan.kind === 'columns' && fieldClass !== null && [...plan.names.values()].includes(fieldClass)) {
-    return { kind: 'masked', fieldClass };
-  }
-  return { kind: 'value', text: original };
 }
 
 /** The validation report of the batch's current version (8.1, 8.2), from its last validation run. */
@@ -284,7 +273,7 @@ async function reportView(
       runAt: runAt.toISOString(),
       batchVersionId: batch.versionId,
       issues: issues.map((issue) => {
-        const original = originalOf(issue.original, issue.restrictedClass, plan);
+        const original = maskIssueOriginal(issue.original, issue.restrictedClass, plan);
         return {
           issueId: issue.id,
           class: issue.class,
@@ -299,21 +288,31 @@ async function reportView(
           ...(issue.columnLetters === null ? {} : { column: issue.columnLetters }),
           ...(issue.field === null ? {} : { field: issue.field }),
           ...(original === undefined ? {} : { original }),
-          missing: issue.missing,
+          // A value worked out from a masked column is masked with it (section 11; PRD-ACS-008).
+          missing:
+            original?.kind === 'masked'
+              ? issue.missing.map((item) =>
+                  item.kind === 'calculated' ? { kind: 'calculated', masked: original.fieldClass } : item,
+                )
+              : issue.missing,
           ...(issue.seenByUserId === null || issue.seenAt === null
             ? {}
             : { seen: { byUserId: issue.seenByUserId, at: issue.seenAt.toISOString() } }),
         };
       }),
       controlTotals: totals.map((total) => {
-        const masked = plan.kind === 'all' || maskedColumn(plan, total.columnName) !== undefined;
+        const masked = maskedColumn(plan, total.columnName);
         return {
           sheet: total.sheet,
           rowNumber: total.rowNumber,
           column: total.columnName,
-          reported: masked ? null : total.reported,
-          summed: masked ? null : total.summed,
-          agrees: masked || total.reported === null || total.summed === null ? null : total.reported === total.summed,
+          reported: masked === undefined ? total.reported : null,
+          summed: masked === undefined ? total.summed : null,
+          agrees:
+            masked !== undefined || total.reported === null || total.summed === null
+              ? null
+              : total.reported === total.summed,
+          ...(masked === undefined ? {} : { masked }),
         };
       }),
       counts: {

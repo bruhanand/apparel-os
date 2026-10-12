@@ -23,7 +23,7 @@ import {
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
-import type { HandlerDocument, ImportHandler, ImportHandlers } from '../contracts/import-handlers.js';
+import type { HandlerDocument, ImportHandler, ImportHandlers, ImportReview } from '../contracts/import-handlers.js';
 import {
   importBatch,
   importDocument,
@@ -273,6 +273,11 @@ export function handlerOf(handlers: ImportHandlers, batch: BatchRow): ImportHand
   const handler = handlers.for(batch.target, batch.kind);
   if (handler === undefined) throw new CommandDefect(`No import handler is registered for ${batch.target}`);
   return handler;
+}
+
+/** The review a batch's handler requires for its kind (3.1 step 8, 13.2). */
+export function reviewOf(handler: ImportHandler, batch: Pick<BatchRow, 'kind'>): ImportReview {
+  return handler.review(batch.kind);
 }
 
 /** The published document of a source identity, whatever the actor's scope sees (7.2; migration 0059). */

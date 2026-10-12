@@ -302,15 +302,20 @@ async function read(batchId: string, by: SyntheticUser = preparer): Promise<Impo
 const step = (batchId: string, name: string, body: unknown = {}, key?: string) =>
   call(preparer, 'POST', `/api/files-imports/batches/${batchId}/${name}`, body, key);
 
+/** Submit for review, with the batch version the screen read (code-house-rules 12.7). */
+async function submit(batchId: string): Promise<Answer> {
+  return step(batchId, 'submit', { versionId: (await read(batchId)).batch.versionId });
+}
+
 /** Validate and submit for review; the batch must come out Validated. */
 async function ready(batchId: string): Promise<string> {
   expect(ok(await step(batchId, 'validate'))).toMatchObject({ state: 'Validated' });
-  ok(await step(batchId, 'submit'));
+  ok(await submit(batchId));
   return (await read(batchId)).batch.versionId;
 }
 
-async function publish(batchId: string, key?: string): Promise<Answer> {
-  return step(batchId, 'publish', { versionId: (await read(batchId)).batch.versionId }, key);
+async function publish(batchId: string, key?: string, extra: Record<string, unknown> = {}): Promise<Answer> {
+  return step(batchId, 'publish', { versionId: (await read(batchId)).batch.versionId, ...extra }, key);
 }
 
 /** The product proposals for a style code: the effect a published product document has (structure-and-masters 4.2). */
@@ -321,6 +326,8 @@ async function proposalsFor(style: string): Promise<{ id: string }[]> {
 const IMPORTER: SyntheticAuthority[] = [
   { recordType: 'files_imports.stored_file', action: 'create' },
   { recordType: 'files_imports.import_batch', action: 'view' },
+  // The preparer may hold approve too: their own approval of a batch they prepared is still refused (PRD-ACS-006).
+  { recordType: 'files_imports.import_batch', action: 'approve' },
   { recordType: 'files_imports.import_batch', action: 'create' },
   { recordType: 'files_imports.import_batch', action: 'edit' },
   { recordType: 'files_imports.layout', action: 'view' },
@@ -334,6 +341,8 @@ const IMPORTER: SyntheticAuthority[] = [
 ];
 
 const CONFIRMER: SyntheticAuthority[] = [
+  { recordType: 'files_imports.import_batch', action: 'view' },
+  { recordType: 'files_imports.import_batch', action: 'approve' },
   { recordType: 'files_imports.layout', action: 'view' },
   { recordType: 'files_imports.layout', action: 'approve' },
   { recordType: 'files_imports.mapping', action: 'view' },
@@ -370,7 +379,7 @@ beforeAll(async () => {
     revisions: 'none',
     publishNeeds: () => Promise.resolve({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
     lockTargets: () => Promise.resolve([]),
-    review: { kind: 'submission' },
+    review: () => ({ kind: 'submission' }),
     suggestions: () => Promise.resolve([]),
     checkRuleTarget: () => Promise.resolve(undefined),
     preview: (_context, document) =>
@@ -489,7 +498,7 @@ describe('duplicates, conflicts and governed revisions (imports-and-opening-data
     expect(report.documents[0]?.identity).toMatchObject({ kind: 'duplicate' });
     // A duplicate is not previewed: it never publishes.
     expect(report.documents[0]?.preview).toBeUndefined();
-    ok(await step(second, 'submit'));
+    ok(await submit(second));
     const published = ok(await publish(second));
     expect(published).toMatchObject({ state: 'Published', result: 'published' });
     expect(published.documents).toEqual([
@@ -548,6 +557,58 @@ describe('duplicates, conflicts and governed revisions (imports-and-opening-data
     ).toMatchObject({ state: 'Staged' });
   });
 
+  it('PRD-SEC-005 7.2: the refusal of a reference already published names the document only to whoever may view it', async () => {
+    const style = next('STYLE');
+    const first = await start(await upload(preparer, [product(style, next('SKU'))]), {
+      scope: { siteId: SITE, storeId: STORE_A },
+    });
+    await ready(first);
+    ok(await publish(first));
+    // A preparer of Store B only: the published document of Store A is outside their scope.
+    const storeB = await enrolled('STOREB', IMPORTER, {
+      scope: {
+        kind: 'dimensions',
+        legalEntity: { kind: 'all' },
+        place: { kind: 'selected', members: [{ type: 'store', id: STORE_B }] },
+        brand: { kind: 'all' },
+      },
+      fieldClasses: ALL_CLASSES.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+    });
+    const claimed = await upload(storeB, [product(style, next('SKU'))], { claimedReference: style });
+    const refused = await call(
+      storeB,
+      'POST',
+      '/api/files-imports/batches',
+      startBody(claimed, { scope: { siteId: SITE, storeId: STORE_B } }),
+    );
+    expect(errorOf(refused)).toMatchObject({ code: 'files-imports.document-already-published', missing: [] });
+    expect(JSON.stringify(refused.body)).not.toContain((await read(first)).documents[0]?.documentId ?? '');
+  });
+
+  it('code-house-rules 8.1: Start an import authorises before it reads the file or checks what is published', async () => {
+    const style = next('STYLE');
+    const first = await start(await upload(preparer, [product(style, next('SKU'))]));
+    await ready(first);
+    ok(await publish(first));
+    const claimed = await upload(preparer, [product(style, next('SKU'))], { claimedReference: style });
+    // Store A only, starting a batch at Store B: refused as not authorised, never as a published reference.
+    const elsewhere = await enrolled('ELSEWHERE', IMPORTER, {
+      scope: {
+        kind: 'dimensions',
+        legalEntity: { kind: 'all' },
+        place: { kind: 'selected', members: [{ type: 'store', id: STORE_A }] },
+        brand: { kind: 'all' },
+      },
+    });
+    const refused = await call(
+      elsewhere,
+      'POST',
+      '/api/files-imports/batches',
+      startBody(claimed, { scope: { siteId: SITE, storeId: STORE_B } }),
+    );
+    expect(errorOf(refused)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+  });
+
   it('GC-6 17 test 14 PRD-ACP-012: a governed revision publishes once, as the next version, and keeps the original', async () => {
     const style = next('STYLE');
     const sku = next('SKU');
@@ -575,20 +636,36 @@ describe('duplicates, conflicts and governed revisions (imports-and-opening-data
         missing: [{ kind: 'import-document', documentId: original?.documentId }],
       }),
     );
-    ok(await step(revision, 'submit'));
+    // An update batch takes effect when it publishes, so it needs an independent approval of the batch version first
+    // (product owner, 11 Oct 2026): Submit requests it, bound to the version submitted.
+    const submitted = ok(await submit(revision));
+    const requestId = String(submitted.requestId);
+    const versionId = String(submitted.submittedVersionId);
+    expect(errorOf(await publish(revision))).toMatchObject({
+      code: 'files-imports.review-missing',
+      missing: [{ kind: 'review', review: 'approval' }],
+    });
+    // The preparer may not approve it, though they hold approve (PRD-ACS-006).
+    expect(errorOf(await decide(preparer, requestId, versionId))).toMatchObject({ code: 'access.self-preparation' });
+    const purposes = () =>
+      rows<{ purpose: string }>(
+        `select v.purpose from merchandise.sku_version v join merchandise.sku s on s.id = v.sku_id where s.code = $1
+          order by v.valid_during`,
+        [sku],
+      );
+    // Nothing has taken effect on the preparer's own submission.
+    expect(await purposes()).toEqual([{ purpose: 'merchandise' }]);
+    // A different person approves it; only then does Publish make the SKU's next version.
+    const decision = ok(await decide(confirmer, requestId, versionId));
+    const approval = { approvalDecisionId: String(decision.decisionId) };
     const key = uuidv7();
-    const published = await publish(revision, key);
+    const published = await publish(revision, key, approval);
     expect(ok(published)).toMatchObject({ state: 'Published', result: 'published' });
     // Sent again under its key, Publish is answered once, with the same answer (PRD-INT-002).
-    const again = await publish(revision, key);
+    const again = await publish(revision, key, approval);
     expect(again.replayed).toBe(true);
     expect(again.body).toEqual(published.body);
-    const versions = await rows<{ purpose: string }>(
-      `select v.purpose from merchandise.sku_version v join merchandise.sku s on s.id = v.sku_id where s.code = $1
-        order by v.valid_during`,
-      [sku],
-    );
-    expect(versions).toEqual([{ purpose: 'merchandise' }, { purpose: 'promotional' }]);
+    expect(await purposes()).toEqual([{ purpose: 'merchandise' }, { purpose: 'promotional' }]);
     // The original document, its rows and outcome stay; it names the revision that replaced it (7.3).
     const revised = (await read(revision)).documents[0];
     expect(revised).toMatchObject({ state: 'Published', revisesDocumentId: original?.documentId });
@@ -629,6 +706,24 @@ describe('two publishes at once (imports-and-opening-data 7.2, 15.1; stage 1 REA
             and replaced_by_document_id is null`,
           [style],
         ),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('RR-503 7.2: two Starts of one file at once, on separate connections, stage one batch', async () => {
+    for (let round = 0; round < 3; round += 1) {
+      const stored = await upload(preparer, [product(next('STYLE'), next('SKU'))]);
+      const answers = await Promise.all([
+        call(preparer, 'POST', '/api/files-imports/batches', startBody(stored)),
+        call(preparer, 'POST', '/api/files-imports/batches', startBody(stored)),
+      ]);
+      const statuses = answers.map((answer) => answer.status).sort();
+      expect(statuses).toEqual([200, 422]);
+      const refused = answers.find((answer) => answer.status !== 200);
+      if (refused === undefined) throw new Error('both Starts were answered');
+      expect(errorOf(refused)).toMatchObject({ code: 'files-imports.file-already-imported' });
+      expect(
+        await rows(`select id from files_imports.import_batch where stored_file_id = $1`, [stored.storedFileId]),
       ).toHaveLength(1);
     }
   });
@@ -702,6 +797,7 @@ describe('publishing one document per transaction (imports-and-opening-data 3.2,
     const badRow = after.documents[1]?.rows[0]?.stagedRowId ?? '';
     ok(
       await step(batchId, `rows/${badRow}/entries`, {
+        versionId: after.batch.versionId,
         field: 'code',
         value: next('FIXED'),
         reason: syntheticName('Corrected from the evidence'),
@@ -736,10 +832,42 @@ describe('publishing one document per transaction (imports-and-opening-data 3.2,
     } finally {
       await rows(`alter table files_imports.import_batch enable trigger guard_batch_change`);
     }
-    expect(errorOf(await step(batchId, 'submit'))).toMatchObject({
+    expect(errorOf(await submit(batchId))).toMatchObject({
       code: 'files-imports.counts-do-not-close',
       missing: [{ kind: 'import-counts', rowsRead: '4', rowsStaged: '3' }],
     });
+  });
+
+  it('GC-6 17 test 17 PRD-IMP-013: Publish refuses a submitted batch whose counts no longer close, and writes nothing', async () => {
+    const batchId = await start(
+      await counted([
+        [next('ONE'), 1],
+        [next('TWO'), 1],
+      ]),
+      {},
+      countedVersions,
+      FAILING_TARGET,
+    );
+    // Submitted while its counts closed; a row is lost before Publish (SYNTHETIC tamper of the reader's count).
+    await ready(batchId);
+    await rows(`alter table files_imports.import_batch disable trigger guard_batch_change`);
+    try {
+      await rows(
+        `update files_imports.import_batch set sheets = jsonb_set(sheets, '{0,rows}', to_jsonb((sheets -> 0 ->> 'rows')::int + 1))
+          where id = $1`,
+        [batchId],
+      );
+    } finally {
+      await rows(`alter table files_imports.import_batch enable trigger guard_batch_change`);
+    }
+    expect(errorOf(await publish(batchId))).toMatchObject({
+      code: 'files-imports.counts-do-not-close',
+      missing: [{ kind: 'import-counts', rowsRead: '4', rowsStaged: '3' }],
+    });
+    const after = await read(batchId);
+    expect(after.batch.state).toBe('Validated');
+    expect(after.outcomes).toEqual([]);
+    expect(after.documents.every((document) => document.state === 'Staged')).toBe(true);
   });
 
   it('code-house-rules 12.7: Publish on a stale batch version is refused, naming the current one', async () => {

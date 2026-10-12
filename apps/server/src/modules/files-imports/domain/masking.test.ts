@@ -1,6 +1,6 @@
-import type { LayoutStructure, MappingFields, StagedRow } from '@apparel-os/schemas';
+import type { ImportOutcome, LayoutStructure, MappingFields, StagedRow } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
-import { maskPlan, maskRow } from './masking.js';
+import { maskIssueOriginal, maskOutcome, maskPlan, maskRow } from './masking.js';
 
 // S1-F06-T03: masking a batch for its reader (imports-and-opening-data 11; access-and-approvals 6; PRD-ACS-008,
 // PRD-SEC-005). Every value is SYNTHETIC.
@@ -69,5 +69,100 @@ describe('masking (imports-and-opening-data 11)', () => {
 
   it('PRD-ACS-008 masks nothing for a reader granted every class the file holds', () => {
     expect(maskRow(row, maskPlan({ layoutConfirmed: false, masked: [], layout, mapping, header }))).toBe(row);
+  });
+});
+
+describe('masking what is worked out from a masked column (imports-and-opening-data 7.4, 8.1, 11)', () => {
+  const withMargin: LayoutStructure = {
+    ...layout,
+    columns: [...layout.columns, { name: 'Price', required: false, type: 'money' }],
+  };
+  // The price is supplied, and calculated beside it from the cost: the calculation reads a masked column.
+  const calculated: MappingFields = {
+    shape: 'mapping-version/1',
+    fields: {
+      styleCode: { column: 'Style', transform: 'text' },
+      price: {
+        column: 'Price',
+        transform: 'paise',
+        alsoCalculated: { name: 'sum', columns: ['Cost', 'Price'], as: 'paise' },
+      },
+    },
+  };
+
+  it('PRD-ACS-008 masks a value calculated beside a supplied one when the calculation reads a masked column', () => {
+    const plan = maskPlan({ layoutConfirmed: true, masked: ['cost'], layout: withMargin, mapping: calculated, header });
+    expect(plan.kind === 'columns' ? plan.fields.get('price') : undefined).toBe('cost');
+    expect(plan.kind === 'columns' ? plan.fields.get('styleCode') : undefined).toBeUndefined();
+  });
+
+  it("PRD-ACS-008 masks an issue's original value by its column's class, and every one while nothing is Confirmed", () => {
+    const plan = maskPlan({ layoutConfirmed: true, masked: ['cost'], layout, mapping, header });
+    expect(maskIssueOriginal('12.5', 'cost', plan)).toEqual({ kind: 'masked', fieldClass: 'cost' });
+    expect(maskIssueOriginal('SYN-ST', null, plan)).toEqual({ kind: 'value', text: 'SYN-ST' });
+    expect(maskIssueOriginal('12.5', 'margin', plan)).toEqual({ kind: 'value', text: '12.5' });
+    expect(maskIssueOriginal(null, 'cost', plan)).toBeUndefined();
+    const all = maskPlan({ layoutConfirmed: false, masked: ['cost'], layout, mapping, header });
+    expect(maskIssueOriginal('SYN-ST', null, all)).toEqual({ kind: 'masked', fieldClass: 'cost' });
+    const none = maskPlan({ layoutConfirmed: true, masked: [], layout, mapping, header });
+    expect(maskIssueOriginal('12.5', 'cost', none)).toEqual({ kind: 'value', text: '12.5' });
+  });
+
+  const outcome: ImportOutcome = {
+    outcomeId: '01900000-0000-7000-8000-00000000f101',
+    result: 'published',
+    attemptedAt: '2026-10-11T10:00:00.000Z',
+    attemptedByUserId: '01900000-0000-7000-8000-00000000f102',
+    counts: { rowsRead: 2, rowsIgnored: 1, rowsAccepted: 1, rowsRejected: 0, rowsPending: 0, rowsDuplicate: 0 },
+    measures: [
+      { field: 'cost', kind: 'value', accepted: '1250', rejected: null, pending: null, duplicate: null },
+      { field: 'styleCode', kind: 'quantity', accepted: '1', rejected: null, pending: null, duplicate: null },
+    ],
+    controlTotals: [
+      { sheet: 'SYNTHETIC Products', rowNumber: 3, column: 'Cost', reported: '12.5', summed: '12.5', accepted: '12.5' },
+      { sheet: 'SYNTHETIC Products', rowNumber: 3, column: 'Style', reported: '1', summed: '1', accepted: '1' },
+    ],
+    documents: [],
+  };
+
+  it('PRD-ACS-008 masks the control totals of a masked column and the measures of a masked field in an outcome', () => {
+    const plan = maskPlan({ layoutConfirmed: true, masked: ['cost'], layout, mapping, header: [] });
+    const masked = maskOutcome(outcome, plan);
+    expect(masked.controlTotals).toEqual([
+      {
+        sheet: 'SYNTHETIC Products',
+        rowNumber: 3,
+        column: 'Cost',
+        reported: null,
+        summed: null,
+        accepted: null,
+        masked: 'cost',
+      },
+      outcome.controlTotals[1],
+    ]);
+    expect(masked.measures).toEqual([
+      {
+        field: 'cost',
+        kind: 'value',
+        accepted: null,
+        rejected: null,
+        pending: null,
+        duplicate: null,
+        masked: 'cost',
+      },
+      outcome.measures[1],
+    ]);
+    expect(JSON.stringify(masked)).not.toContain('1250');
+    expect(maskOutcome(outcome, maskPlan({ layoutConfirmed: true, masked: [], layout, mapping, header }))).toBe(
+      outcome,
+    );
+  });
+
+  it('PRD-SEC-005 masks every control total and measure while the layout is not Confirmed', () => {
+    const plan = maskPlan({ layoutConfirmed: false, masked: ['cost'], layout, mapping, header: [] });
+    const masked = maskOutcome(outcome, plan);
+    expect(masked.controlTotals.every((total) => total.reported === null && total.accepted === null)).toBe(true);
+    expect(masked.measures.every((measure) => measure.accepted === null)).toBe(true);
+    expect(masked.counts).toEqual(outcome.counts);
   });
 });

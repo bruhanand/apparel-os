@@ -285,12 +285,11 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
   const names = allNames.map(lower);
   // Every part kept is read by the tokenizer, its name matched whatever its case, as `keptForChecks` keeps it: a part
   // that is not well formed is refused rather than read in part (S1-F06 review).
-  const read: { readonly name: string; readonly text: string; readonly elements: readonly XmlElement[] }[] = [];
+  const read: { readonly name: string; readonly elements: readonly XmlElement[] }[] = [];
   for (const [name, content] of parts) {
-    const text = textOf(content);
-    const elements = elementsOf(text);
+    const elements = elementsOf(textOf(content));
     if (elements === undefined) return unreadable('part-not-well-formed');
-    read.push({ name: lower(name), text, elements });
+    read.push({ name: lower(name), elements });
   }
   const partsWhere = (test: (name: string) => boolean) => read.filter((part) => test(part.name));
   // The content types part's values, each attribute resolved, so an encoded word is read as itself.
@@ -321,8 +320,10 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
   }
   const external = relationships.find((each) => each.external && lower(typeName(each.type)) !== 'hyperlink');
   if (external !== undefined) return unapprovedLink(typeName(external.type));
+  // A Power Query part: a custom XML part whose element is `DataMashup`, by the tokenizer's elements, so a word in a
+  // value or a comment is never mistaken for one (S1-F06 review).
   const dataMashup = partsWhere((name) => name.startsWith('customxml/')).some((part) =>
-    part.text.includes('DataMashup'),
+    part.elements.some((element) => element.name === 'DataMashup'),
   );
   if (names.includes('xl/connections.xml') || names.some((name) => name.startsWith('xl/querytables/')) || dataMashup) {
     return unapprovedLink('data-connection');
@@ -337,6 +338,13 @@ function checkParts(allNames: readonly string[], parts: ReadonlyMap<string, Buff
 export function inspectWorkbook(bytes: Buffer, caps: { readonly maxExpandedBytes: number }): WorkbookSafety {
   const entries = entriesOf(bytes);
   if (typeof entries === 'string') return unreadable(entries);
+  // Two entries of one name, whatever its case (part names are compared so, ECMA-376 part 2, 6.2.2.3): a reader keeps
+  // one of them, so the parts checked could differ from those read. Refused rather than guessed (S1-F06 review).
+  const names = new Set<string>();
+  for (const entry of entries) {
+    if (names.has(lower(entry.name))) return unreadable('entry-name-twice');
+    names.add(lower(entry.name));
+  }
   let declared = 0;
   for (const entry of entries) {
     if ((entry.flags & ENCRYPTED_FLAG) !== 0) return unreadable('entry-encrypted');

@@ -319,6 +319,15 @@ export async function proposeMappingRule(
   proposer: Preparer,
   proposal: MappingRuleProposal,
 ): Promise<Outcome<{ ruleId: string; ruleVersionId: string; requestId: string }>> {
+  // A version never starts on a past date (code-house-rules 7.3; GC2-7, DEC-105), checked against today under the
+  // Organisation's timezone; its confirmation checks it again.
+  const date = await context.businessDate();
+  if (date.kind !== 'set') {
+    return refused('unavailable', 'access.business-date-not-set', [
+      { kind: 'setting', setting: 'configuration.timezone' },
+    ]);
+  }
+  if (proposal.validFrom < date.date) return refused('refused', 'files-imports.starts-in-past');
   const targetRefusal = await ruleTargetRefusal(context, dependencies.handlers, proposal.attribute, proposal.target);
   if (targetRefusal !== undefined) return { kind: 'refusal', refusal: targetRefusal };
   const scopeId = proposal.scope.kind === 'organisation' ? null : proposal.scope.id;

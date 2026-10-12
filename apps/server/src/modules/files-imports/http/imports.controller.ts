@@ -196,6 +196,7 @@ export class ImportsController {
       documentId: input.params.documentId,
       key: input.idempotencyKey,
       content: requestContentOf(routes.excludeImportDocument, input),
+      versionId: input.body.versionId,
       excluded: input.body.excluded,
     });
     return commandAnswer(answer);
@@ -237,6 +238,7 @@ export class ImportsController {
       batchId: input.params.batchId,
       key: input.idempotencyKey,
       content: requestContentOf(routes.submitImport, input),
+      versionId: input.body.versionId,
     });
     return commandAnswer(answer);
   }

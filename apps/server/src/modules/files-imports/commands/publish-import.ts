@@ -28,6 +28,7 @@ import {
   handlerOf,
   identityOf,
   publishedDocument,
+  reviewOf,
   scopeColumnsOf,
   versionsOf,
   visibleBatch,
@@ -253,7 +254,8 @@ async function held(
   const counts = await countsRefusal(context, batch);
   if (counts !== undefined) return { kind: 'refused', refusal: counts };
   let approvalCheck: Held['approvalCheck'];
-  if (handler.review.kind === 'approval') {
+  const review = reviewOf(handler, batch);
+  if (review.kind === 'approval') {
     if (input.approvalDecisionId === undefined) {
       return {
         kind: 'refused',
@@ -266,7 +268,7 @@ async function held(
     }
     approvalCheck = {
       decisionId: input.approvalDecisionId,
-      actionType: handler.review.actionType,
+      actionType: review.actionType,
       document: {
         module: 'files-imports',
         recordType: IMPORT_BATCH_TYPE,
@@ -300,11 +302,19 @@ interface DocumentAnswer {
   readonly revisesDocumentId?: string;
 }
 
-const conflict = (documentId: string, publishedDocumentId: string): CommandOutcome<JsonValue> =>
+/**
+ * A conflict of one document with the published document of its identity (7.2), naming the published one where it is
+ * known; never the document itself.
+ */
+const conflict = (documentId: string, publishedDocumentId: string | undefined): CommandOutcome<JsonValue> =>
   refused({
     kind: 'refused',
     code: 'files-imports.document-conflict',
-    missing: [{ kind: 'import-document', documentId, conflictsWith: publishedDocumentId }],
+    missing: [
+      publishedDocumentId === undefined || publishedDocumentId === documentId
+        ? { kind: 'import-document', documentId }
+        : { kind: 'import-document', documentId, conflictsWith: publishedDocumentId },
+    ],
   });
 
 /** One document published in its own transaction (3.3; 7.2, 7.3; PRD-IMP-012). */
@@ -387,10 +397,13 @@ async function publishDocument(
       const answer: DocumentAnswer = { ...skipped, result: 'duplicate', publishedDocumentId: winner.documentId };
       return { kind: 'success', answer: { ...answer }, shows: 'nothing' };
     }
-    return conflict(documentId, winner?.documentId ?? revises ?? documentId);
+    // The winner, else the document a revision meant to replace, which another revision replaced first.
+    return conflict(documentId, winner?.documentId ?? revises ?? undefined);
   }
   const handlerAssignment = start.held.handlerAssignments.get(documentId);
   if (handlerAssignment === undefined) throw new CommandDefect('A document was published without its authority');
+  // The document is published on the handler's own permission at its place (13.2), so its audit record cites the
+  // assignment that granted it, as the handler's own records do (numbering-and-audit 4.1).
   const published = await handler.publish(
     context,
     { userId: input.actor.userId, roleAssignmentId: handlerAssignment },
@@ -414,7 +427,7 @@ async function publishDocument(
   const facts = factsOfBatch(batch);
   await deps.audit.record(context, {
     actor: { kind: 'user', id: input.actor.userId },
-    roleAssignmentId: start.held.roleAssignmentId,
+    roleAssignmentId: handlerAssignment,
     scope: facts,
     record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batch.id, versionId: batch.versionId },
     operation: 'publish-import-document',

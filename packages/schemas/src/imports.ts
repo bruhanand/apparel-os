@@ -25,6 +25,12 @@ export const MAPPING_RULE_TYPE = 'files_imports.mapping_rule';
 export const LAYOUT_CONFIRMATION = 'files_imports.layout.confirm';
 export const MAPPING_CONFIRMATION = 'files_imports.mapping.confirm';
 export const MAPPING_RULE_CONFIRMATION = 'files_imports.mapping_rule.confirm';
+/**
+ * The approval rule of an import batch whose handler requires an independent approval before Publish (3.1 step 8,
+ * 7.2, 7.3, 13.2; PRD-ACS-006): an update batch of product masters, a governed revision that takes effect on Publish
+ * itself, is approved by a different authorised person from its preparers (product owner, 11 Oct 2026).
+ */
+export const IMPORT_BATCH_APPROVAL = 'files_imports.import_batch.approve';
 
 /**
  * The classes encrypted in the application before they reach PostgreSQL (access-and-approvals 6): bank details,
@@ -543,6 +549,27 @@ export const documentPreviewSchema = z.discriminatedUnion('kind', [
 ]);
 export type DocumentPreview = z.infer<typeof documentPreviewSchema>;
 
+/**
+ * The classes of a row issue (8.2, 8.3): the 60 problem classes of 8.3, `A-1` to `L-n`, and the import classes that
+ * stand beside them (8 "As built"; 7.4 "As built"). One list for the request that marks a class seen, the validation
+ * report and the database's check of `files_imports.row_issue`, which a test compares with it.
+ */
+export const IMPORT_ISSUE_CLASSES = [
+  'required',
+  'rule',
+  'calculation',
+  'handler',
+  'duplicate',
+  'conflict',
+  'revision',
+] as const;
+export type ImportIssueClass = (typeof IMPORT_ISSUE_CLASSES)[number];
+/** A problem class of 8.3, `A-1` to `L-n`, or an import class. */
+export const ISSUE_CLASS_PATTERN = `^(?:[A-L]-[0-9]+|${IMPORT_ISSUE_CLASSES.join('|')})$`;
+export const issueClassSchema = z.string().regex(new RegExp(ISSUE_CLASS_PATTERN));
+export type IssueClass =
+  `${'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L'}-${number}` | ImportIssueClass;
+
 /** A row issue's severity (8.2). */
 export const issueSeveritySchema = z.enum(['Blocking', 'Warning', 'Note']);
 export type IssueSeverity = z.infer<typeof issueSeveritySchema>;
@@ -583,6 +610,8 @@ export const controlTotalSchema = z.strictObject({
   reported: z.string().nullable(),
   summed: z.string().nullable(),
   agrees: z.boolean().nullable(),
+  /** The class it is masked under for this reader, its values then null (section 11). */
+  masked: fieldClassSchema.optional(),
 });
 
 /**
@@ -635,6 +664,8 @@ export const outcomeMeasureSchema = z.strictObject({
   rejected: z.string().nullable(),
   pending: z.string().nullable(),
   duplicate: z.string().nullable(),
+  /** The class it is masked under for this reader, its sums then null (section 11; PRD-ACS-008). */
+  masked: fieldClassSchema.optional(),
 });
 
 /** A control total as reported, summed and accepted (7.4; PRD-EBO-004); null is Unknown. */
@@ -645,6 +676,8 @@ export const outcomeControlTotalSchema = z.strictObject({
   reported: z.string().nullable(),
   summed: z.string().nullable(),
   accepted: z.string().nullable(),
+  /** The class it is masked under for this reader, its values then null (section 11; PRD-ACS-008). */
+  masked: fieldClassSchema.optional(),
 });
 
 /** What one publish attempt did, for the batch and each document, kept for a failure too (7.4). */
@@ -772,6 +805,8 @@ export const importBatchChangedSchema = z.strictObject({
  * (DEC-105).
  */
 export const stagedValueEntryRequestSchema = z.strictObject({
+  /** The batch version the screen read (code-house-rules 12.7). */
+  versionId: idSchema,
   field: z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,59}$/),
   value: z.string().regex(/\S/).max(500),
   reason: z.string().regex(/\S/).max(500),
@@ -785,15 +820,21 @@ export const stagedValueEnteredSchema = importBatchChangedSchema.extend({ entryI
 export const valueSuggestionsQuerySchema = z.strictObject({ field: z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,59}$/) });
 export const valueSuggestionsSchema = z.strictObject({ asOf, suggestions: z.array(valueSuggestionSchema) });
 
-/** Exclude a document from publishing, or put it back (3.2). */
-export const documentExclusionRequestSchema = z.strictObject({ excluded: z.boolean() });
+/** Exclude a document from publishing, or put it back (3.2), with the batch version the screen read (12.7). */
+export const documentExclusionRequestSchema = z.strictObject({ versionId: idSchema, excluded: z.boolean() });
 
-/** Mark Warnings seen (8.2): those named, or every Warning of one class, of the batch's current report. */
+/**
+ * Mark Warnings seen (8.2): those named, or every Warning of one class, of the batch's current report, with the batch
+ * version the screen read (code-house-rules 12.7).
+ */
 export const issuesSeenRequestSchema = z.union([
-  z.strictObject({ issueIds: z.array(idSchema).min(1).max(500) }),
-  z.strictObject({ class: z.string().regex(/^(?:[A-L]-[0-9]+|handler|required|rule|calculation)$/) }),
+  z.strictObject({ versionId: idSchema, issueIds: z.array(idSchema).min(1).max(500) }),
+  z.strictObject({ versionId: idSchema, class: issueClassSchema }),
 ]);
 export const issuesSeenSchema = z.strictObject({ batchId: idSchema, marked: z.number().int().nonnegative() });
+
+/** Submit for review: the batch version the screen read, the one submitted (13.1; code-house-rules 12.7). */
+export const submitImportRequestSchema = z.strictObject({ versionId: idSchema });
 
 /** Submit for review's answer (13.1): the version submitted, and the approval request where one is required. */
 export const importSubmittedSchema = z.strictObject({

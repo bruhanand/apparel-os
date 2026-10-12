@@ -136,3 +136,8 @@ create policy row_scope on files_imports.import_outcome for all to aos_runtime
   using (access.row_visible('files_imports.import_batch', site_id, store_id, business_unit_id, legal_entity_id, null, null))
   with check (access.row_visible('files_imports.import_batch', site_id, store_id, business_unit_id, legal_entity_id, null, null));
 create index import_batch_started_at on files_imports.import_batch (started_at);
+
+-- Start an import locks the stored file it starts a batch on, at step 1, so two Starts of the same file queue and the
+-- second sees the first's batch under the lock (7.2, 13.1; code-house-rules 8.2; RR-503). The row stays append-only:
+-- the runtime role gets UPDATE on its identifier only, which taking a row lock needs (code-house-rules 5.2, 7.1).
+grant update (id) on files_imports.stored_file to aos_runtime;

@@ -16,7 +16,8 @@ grant insert, update on files_imports.mapping_version to aos_runtime;
 -- A mapping rule: one source word of one attribute, in one scope, with whether case matters (6.3). The identity is
 -- fixed; its target lives in versions. The attribute names the target's field, `<target>.<field>`. The scope is the
 -- layout, a supplier, a brand or the Organisation as a whole; a scope other than the Organisation names its record.
--- The word is kept as given and normalised (trimmed, spaces collapsed, and lower-cased where case does not matter).
+-- The word is kept trimmed with its spaces collapsed and its case as given, and normalised for matching (lower-cased
+-- too where case does not matter).
 create table files_imports.mapping_rule (
   id uuid primary key,
   attribute text not null,
@@ -38,10 +39,11 @@ create trigger refuse_row_change before update or delete on files_imports.mappin
 create trigger refuse_truncate before truncate on files_imports.mapping_rule
   for each statement execute function kernel.refuse_change();
 
--- A mapping rule's versions: one target for its validity dates, Proposed, Confirmed or Rejected; confirmed by a
--- different person from its proposer (PRD-IMP-008, POL-02.07). Two Confirmed versions of one rule whose dates overlap
--- with different targets are refused by the exclusion constraint (15.1). The target is the value the attribute's field
--- takes in the target module, which checks it through its handler (6.3, 13.2).
+-- A mapping rule's versions, effective-dated as code-house-rules 7.3 says: one target for its validity dates, Proposed,
+-- Confirmed or Rejected (the states of a proposal, DM-4), confirmed by a different person from its proposer
+-- (PRD-IMP-008, POL-02.07). Confirmed versions of one rule never overlap, whatever their targets, by the exclusion
+-- constraint (15.1): a version confirmed from a date ends the one in force before it on that date. The target is the
+-- value the attribute's field takes in the target module, which checks it through its handler (6.3, 13.2).
 create table files_imports.mapping_rule_version (
   id uuid primary key,
   mapping_rule_id uuid not null references files_imports.mapping_rule (id),
@@ -59,12 +61,42 @@ create table files_imports.mapping_rule_version (
     check ((state = 'Proposed') = (decided_by_user_id is null) and (decided_by_user_id is null) = (decided_at is null)),
   -- The confirmer, or the person rejecting it, is never its proposer (PRD-IMP-008; 15.1).
   constraint mapping_rule_version_independent check (decided_by_user_id is distinct from proposed_by_user_id),
-  constraint mapping_rule_version_one_target exclude using gist (
-    mapping_rule_id with =, valid_during with &&, target with <>) where (state = 'Confirmed')
+  constraint mapping_rule_version_no_overlap exclude using gist (
+    mapping_rule_id with =, valid_during with &&) where (state = 'Confirmed')
 );
 create index mapping_rule_version_rule on files_imports.mapping_rule_version (mapping_rule_id);
-create trigger guard_version_decision before update on files_imports.mapping_rule_version
-  for each row execute function files_imports.guard_version_decision();
+
+-- The guard of a rule version (code-house-rules 7.3, as for a version frozen when prepared): a Proposed version
+-- changes only by its decision, once, which may give it an end where a Confirmed version of the rule starts after it;
+-- a Confirmed version changes only by its end moving earlier, never to or before its start, when a version confirmed
+-- after it follows it on its own start date. A Rejected version never changes. The command checks that the end moves
+-- to today or later (section 9).
+create function files_imports.guard_version_change() returns trigger
+  language plpgsql
+  set search_path = pg_catalog
+as $$
+declare
+  old_rest jsonb := pg_catalog.to_jsonb(old) - 'valid_during';
+  new_rest jsonb := pg_catalog.to_jsonb(new) - 'valid_during';
+  same_start boolean := pg_catalog.lower(new.valid_during) = pg_catalog.lower(old.valid_during);
+  end_earlier boolean := pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during)
+    and (pg_catalog.upper_inf(old.valid_during) or pg_catalog.upper(new.valid_during) < pg_catalog.upper(old.valid_during));
+begin
+  if old.state = 'Proposed' and new.state in ('Confirmed', 'Rejected') and same_start
+     and (new.valid_during = old.valid_during or (new.state = 'Confirmed' and end_earlier))
+     and (new_rest - 'state' - 'decided_by_user_id' - 'decided_at')
+       = (old_rest - 'state' - 'decided_by_user_id' - 'decided_at') then
+    return new;
+  end if;
+  if old.state = 'Confirmed' and new_rest = old_rest and same_start and end_earlier then
+    return new;
+  end if;
+  raise exception 'a mapping rule version changes only as code-house-rules 7.3 allows' using errcode = 'AO003';
+end;
+$$;
+revoke execute on function files_imports.guard_version_change() from public;
+create trigger guard_version_change before update on files_imports.mapping_rule_version
+  for each row execute function files_imports.guard_version_change();
 
 grant select, insert on files_imports.mapping_rule to aos_runtime;
 -- Its identity row is locked when a version of it is confirmed, so two confirmations of one rule queue (8.2).
@@ -212,7 +244,8 @@ create policy row_scope on files_imports.staged_value_entry for all to aos_runti
 
 -- A row issue of the validation report (8.2; PRD-IMP-007): its class, severity, place, original value, what is wrong,
 -- the correction needed and the rule applied, found by one validation run of one batch version. A Warning is marked
--- seen once, by the person who submits or approves the batch; nothing else of it changes.
+-- seen by the person who submits the batch; a later mark by another person replaces an earlier one, and each mark is
+-- audited (product owner, 11 Oct 2026). Nothing else of it changes.
 create table files_imports.row_issue (
   id uuid primary key,
   batch_id uuid not null references files_imports.import_batch (id),
@@ -251,23 +284,26 @@ create table files_imports.row_issue (
 );
 create index row_issue_batch on files_imports.row_issue (batch_id, batch_version_id);
 
--- A Warning is marked seen once; nothing else of an issue ever changes.
+-- A Warning is marked seen, by a person who has not marked it before; nothing else of an issue ever changes.
 create function files_imports.guard_issue_change() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
 begin
-  if tg_op = 'UPDATE' and old.seen_by_user_id is null and new.seen_by_user_id is not null
+  if tg_op = 'UPDATE' and new.seen_by_user_id is not null
+     and new.seen_by_user_id is distinct from old.seen_by_user_id
      and (pg_catalog.to_jsonb(new) - 'seen_by_user_id' - 'seen_at')
        = (pg_catalog.to_jsonb(old) - 'seen_by_user_id' - 'seen_at') then
     return new;
   end if;
-  raise exception 'a row issue changes only by a Warning being marked seen, once' using errcode = 'AO003';
+  raise exception 'a row issue changes only by a Warning being marked seen' using errcode = 'AO003';
 end;
 $$;
 revoke execute on function files_imports.guard_issue_change() from public;
 create trigger guard_issue_change before update or delete on files_imports.row_issue
   for each row execute function files_imports.guard_issue_change();
+create trigger refuse_truncate before truncate on files_imports.row_issue
+  for each statement execute function kernel.refuse_change();
 alter table files_imports.row_issue enable row level security;
 create policy row_scope on files_imports.row_issue for all to aos_runtime
   using (access.row_visible('files_imports.import_batch', site_id, store_id, business_unit_id, legal_entity_id, null, null))

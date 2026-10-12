@@ -2,8 +2,10 @@ import {
   fieldClassSchema,
   normalisedName,
   type FieldClass,
+  type ImportOutcome,
   type LayoutStructure,
   type MappingFields,
+  type RowIssue,
   type StagedRow,
 } from '@apparel-os/schemas';
 
@@ -57,11 +59,23 @@ export function maskPlan(input: {
   }
   const fields = new Map<string, FieldClass>();
   for (const [field, source] of Object.entries(input.mapping.fields)) {
-    const read = 'calculation' in source ? source.calculation.columns : [source.column];
+    // Every column the field is read from: its own, the columns of its calculation, and those of a calculation kept
+    // beside a supplied value, so a value worked out from a masked column is masked too (section 5; PRD-ACS-008).
+    const read =
+      'calculation' in source ? source.calculation.columns : [source.column, ...(source.alsoCalculated?.columns ?? [])];
     const fieldClass = read.map((name) => names.get(normalisedName(name))).find((each) => each !== undefined);
     if (fieldClass !== undefined) fields.set(field, fieldClass);
   }
   return { kind: 'columns', columns, fields, names };
+}
+
+/**
+ * The masked class of a field, from the columns it is read from, or undefined when the reader may see it (section 11).
+ */
+export function maskedField(plan: MaskPlan, field: string): FieldClass | undefined {
+  if (plan.kind === 'none') return undefined;
+  if (plan.kind === 'all') return plan.fieldClass;
+  return plan.fields.get(field);
 }
 
 /** The class a column's value is masked under, by its name, or undefined when the reader may see it. */
@@ -90,5 +104,44 @@ export function maskRow(row: StagedRow, plan: MaskPlan): StagedRow {
         return [field, fieldClass === undefined ? value : { kind: 'masked' as const, fieldClass }];
       }),
     ),
+  };
+}
+
+/**
+ * The original value of a row issue as its reader is served it (8.1, section 11): masked where the class of the column
+ * it comes from is masked for the reader, and every one while the layout version is not Confirmed.
+ */
+export function maskIssueOriginal(
+  original: string | null,
+  fieldClass: FieldClass | null,
+  plan: MaskPlan,
+): RowIssue['original'] {
+  if (original === null) return undefined;
+  if (plan.kind === 'all') return { kind: 'masked', fieldClass: plan.fieldClass };
+  if (plan.kind === 'columns' && fieldClass !== null && [...plan.names.values()].includes(fieldClass)) {
+    return { kind: 'masked', fieldClass };
+  }
+  return { kind: 'value', text: original };
+}
+
+/**
+ * An outcome as its reader is served it (7.4, 14, section 11; PRD-ACS-008): the control totals of a masked column and
+ * the measures of a masked field left out, each naming the class it is masked under, and every one while the layout
+ * version is not Confirmed. The counts of rows hold no value of a class and are kept.
+ */
+export function maskOutcome(outcome: ImportOutcome, plan: MaskPlan): ImportOutcome {
+  if (plan.kind === 'none') return outcome;
+  return {
+    ...outcome,
+    controlTotals: outcome.controlTotals.map((total) => {
+      const masked = maskedColumn(plan, total.column);
+      return masked === undefined ? total : { ...total, reported: null, summed: null, accepted: null, masked };
+    }),
+    measures: outcome.measures.map((measure) => {
+      const masked = maskedField(plan, measure.field);
+      return masked === undefined
+        ? measure
+        : { ...measure, accepted: null, rejected: null, pending: null, duplicate: null, masked };
+    }),
   };
 }

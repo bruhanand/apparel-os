@@ -7,7 +7,6 @@ import {
   type StagedRow,
   type ValueSuggestion,
 } from '@apparel-os/schemas';
-import { cn } from '@apparel-os/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
@@ -16,13 +15,13 @@ import { readQuery } from '../api/query';
 import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
 import { codeText } from '../components/StandardStates';
-import { StatusBadge } from '../components/StatusBadge';
-import { familyClasses } from '../components/StatusBadge';
+import { FamilyBadge, StatusBadge } from '../components/StatusBadge';
 import { missingText } from '../components/UnavailableState';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
-import { useTimeZone } from '../shell/session';
+import { useSession, useTimeZone } from '../shell/session';
+import type { Family } from '../components/states';
 import { recordTypeName } from '../setup/describe';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
@@ -40,22 +39,15 @@ import { className, correctionText, countsText, fieldName, issueText, placeText,
 
 const BATCH_READS = ['readImportBatch'] as const;
 
-const SEVERITY: Readonly<Record<RowIssue['severity'], { glyph: string; classes: string }>> = {
-  Blocking: { glyph: '✕', classes: familyClasses.stopped },
-  Warning: { glyph: '!', classes: familyClasses.attention },
-  Note: { glyph: 'i', classes: familyClasses.pending },
+/** Each severity in the family of its state (design-language 7): the one badge, its glyph and colours. */
+const SEVERITY: Readonly<Record<RowIssue['severity'], Family>> = {
+  Blocking: 'stopped',
+  Warning: 'attention',
+  Note: 'pending',
 };
 
 function Severity({ severity }: { severity: RowIssue['severity'] }) {
-  const { glyph, classes } = SEVERITY[severity];
-  return (
-    <span
-      className={cn('inline-flex h-[22px] items-center gap-1 rounded-full px-[9px] text-[12px] font-semibold', classes)}
-    >
-      <span aria-hidden="true">{glyph}</span>
-      {t(`intake.severity.${severity}`)}
-    </span>
-  );
+  return <FamilyBadge family={SEVERITY[severity]} label={t(`intake.severity.${severity}`)} />;
 }
 
 /** What the handler works out a document would create, or the issues that stop it (13.2). */
@@ -92,11 +84,14 @@ function Preview({ preview }: { preview: DocumentPreview }) {
 /** Enter a value for one field of a staged row, with the suggestions to accept (section 5; PRD-IMP-009). */
 function EntryForm({
   batchId,
+  versionId,
   row,
   field,
   onDone,
 }: {
   batchId: string;
+  /** The batch version the screen read (code-house-rules 12.7). */
+  versionId: string;
   row: StagedRow;
   field: string;
   onDone: () => void;
@@ -119,7 +114,7 @@ function EntryForm({
         void (async () => {
           const done = await enter.submit({
             params: { batchId, stagedRowId: row.stagedRowId },
-            body: { field, value, reason, ...(accepted?.value === value ? { suggestion: accepted } : {}) },
+            body: { versionId, field, value, reason, ...(accepted?.value === value ? { suggestion: accepted } : {}) },
           });
           if (done !== undefined) onDone();
         })();
@@ -233,6 +228,8 @@ function Report({ read }: { read: ImportBatchRead }) {
   const report = read.report;
   const seen = useSubmission('markImportIssuesSeen', BATCH_READS);
   const timeZone = useTimeZone();
+  const { session } = useSession();
+  const me = session.state === 'signed-out' ? undefined : session.user.userId;
   if (report === undefined) {
     return (
       <Card title="intake.report">
@@ -240,13 +237,15 @@ function Report({ read }: { read: ImportBatchRead }) {
       </Card>
     );
   }
+  // The person who submits marks each Warning seen themselves; a mark by someone else does not count (8.2).
   const unseenClasses = [
     ...new Set(
       report.issues
-        .filter((issue) => issue.severity === 'Warning' && issue.seen === undefined)
+        .filter((issue) => issue.severity === 'Warning' && issue.seen?.byUserId !== me)
         .map((issue) => issue.class),
     ),
   ];
+  const submitted = read.batch.submittedVersionId === read.batch.versionId;
   return (
     <Card title="intake.report">
       <p className="m-0 text-body-sm text-text-2">
@@ -259,7 +258,7 @@ function Report({ read }: { read: ImportBatchRead }) {
         })}
       </p>
       <SubmissionBanner state={seen.state} done="intake.report.seen.done" />
-      {read.batch.state === 'Validated' && unseenClasses.length > 0 && (
+      {read.batch.state === 'Validated' && !submitted && unseenClasses.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {unseenClasses.map((issueClass) => (
             <GrantedButton
@@ -269,7 +268,10 @@ function Report({ read }: { read: ImportBatchRead }) {
               recordType={IMPORT_BATCH_TYPE}
               action="edit"
               onClick={() => {
-                void seen.submit({ params: { batchId: read.batch.batchId }, body: { class: issueClass } });
+                void seen.submit({
+                  params: { batchId: read.batch.batchId },
+                  body: { versionId: read.batch.versionId, class: issueClass },
+                });
               }}
             />
           ))}
@@ -423,7 +425,7 @@ export function Batch({ read }: { read: ImportBatchRead }) {
             action="edit"
             variant="primary"
             onClick={() => {
-              void submit.submit({ params: { batchId: batch.batchId }, body: {} });
+              void submit.submit({ params: { batchId: batch.batchId }, body: { versionId: batch.versionId } });
             }}
           />
         )}
@@ -484,7 +486,7 @@ export function Batch({ read }: { read: ImportBatchRead }) {
                   onClick={() => {
                     void exclude.submit({
                       params: { batchId: batch.batchId, documentId: document.documentId },
-                      body: { excluded: !document.excluded },
+                      body: { versionId: batch.versionId, excluded: !document.excluded },
                     });
                   }}
                 />
@@ -568,6 +570,7 @@ export function Batch({ read }: { read: ImportBatchRead }) {
           details={
             <EntryForm
               batchId={batch.batchId}
+              versionId={batch.versionId}
               row={entering.row}
               field={entering.field}
               onDone={() => {

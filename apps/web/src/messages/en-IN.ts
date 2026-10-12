@@ -2504,6 +2504,7 @@ export const englishIndia = {
   'approval.action.files_imports.layout.confirm': 'Layout version confirmation',
   'approval.action.files_imports.mapping.confirm': 'Mapping version confirmation',
   'approval.action.files_imports.mapping_rule.confirm': 'Mapping rule confirmation',
+  'approval.action.files_imports.import_batch.approve': 'Import batch approval',
   'record-type.files_imports.layout': 'Layout',
   'record-type.files_imports.mapping': 'Mapping',
   'record-type.files_imports.mapping_rule': 'Mapping rule',
@@ -2526,7 +2527,8 @@ export const englishIndia = {
   'error.files-imports.rule-target-refused': 'The approved value is not one the target accepts.',
   'error.files-imports.rule-scope-not-found': 'The layout this rule names was not found.',
   'error.files-imports.rule-conflict':
-    'A confirmed version of this rule maps the word to another value on these dates.',
+    'A confirmed version of this rule starts on or after this one, so their dates would overlap.',
+  'error.files-imports.starts-in-past': 'A rule version cannot start on a past date. Propose it from today or later.',
   'error.files-imports.proposal-not-found': 'This proposal was not found.',
   'error.files-imports.proposal-not-open': 'This proposal is already decided.',
   'error.files-imports.layout-version-rejected':

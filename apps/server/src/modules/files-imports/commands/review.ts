@@ -1,5 +1,5 @@
 import { IMPORT_BATCH_TYPE, type MissingItem } from '@apparel-os/schemas';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type {
   CommandOutcome,
   CommandRefusal,
@@ -13,18 +13,23 @@ import {
   batchPreparers,
   factsOfBatch,
   handlerOf,
+  reviewOf,
   type BatchRow,
   type ImportActor,
   type ImportDependencies,
 } from './import-common.js';
 import { countsRefusal } from './outcomes.js';
-import { batchReplayAuthorisation, heldBatch } from './validate-import.js';
+import { batchReplayAuthorisation, heldBatch, staleBatchVersion } from './validate-import.js';
 
 // The review of a batch (imports-and-opening-data 3.1 step 8, 8.2, 13.1, 13.2; PRD-IMP-005, PRD-IMP-007, PRD-ACS-007;
-// S1-F06-T03): a Warning of the validation report is marked seen by the person who submits or approves the batch, one
-// by one or every Warning of one class in one action; Submit for review refuses a batch that is not Validated, still
-// has Blocking issues, has a Warning nobody marked seen, or whose counts do not close (7.4; S1-F06-T04); it records the version
-// submitted, and where the handler requires an approval in `access`, requests it bound to that exact version.
+// S1-F06-T03): a Warning of the validation report is marked seen by the person who submits the batch, one by one or
+// every Warning of one class in one action. A mark names who made it, and a later mark by another person replaces it,
+// each audited; Submit counts a Warning seen only when the submitter marked it, so a mark by anyone else with edit does
+// not count (8.2; product owner, 11 Oct 2026). Submit for review refuses a batch that is not Validated, still has
+// Blocking issues, has a Warning the submitter has not marked seen, or whose counts do not close (7.4; S1-F06-T04); it
+// records the version submitted, and where the handler requires an approval in `access`, requests it bound to that
+// exact version. Both carry the batch version the screen read (code-house-rules 12.7): Submit binds what was reviewed
+// on screen to the version submitted (PRD-ACS-007).
 
 const refusal = (
   kind: CommandRefusal['kind'],
@@ -59,7 +64,9 @@ export interface SeenInput {
   readonly batchId: string;
   readonly key: string;
   readonly content: RequestContent;
-  readonly body: { readonly issueIds: readonly string[] } | { readonly class: string };
+  readonly body:
+    | { readonly versionId: string; readonly issueIds: readonly string[] }
+    | { readonly versionId: string; readonly class: string };
 }
 
 /** Mark Warnings seen (8.2): those named, or every Warning of one class of the current report. */
@@ -80,6 +87,10 @@ export async function markIssuesSeen(deps: ImportDependencies, input: SeenInput)
         if (held.kind === 'refusal') return held.outcome;
         const { batch } = held;
         if (batch.state !== 'Validated') return refusal('refused', 'files-imports.batch-not-validated');
+        const stale = staleBatchVersion(batch, input.body.versionId);
+        if (stale !== undefined) return stale;
+        // Marked before submission, by the person who will submit it (8.2): a submitted version is already reviewed.
+        if (batch.submittedVersionId !== null) return refusal('refused', 'files-imports.already-submitted');
         const issues = await currentIssues(context, batch);
         let chosen: typeof issues;
         if ('issueIds' in input.body) {
@@ -100,12 +111,15 @@ export async function markIssuesSeen(deps: ImportDependencies, input: SeenInput)
           const wantedClass = input.body.class;
           chosen = issues.filter((issue) => issue.class === wantedClass && issue.severity === 'Warning');
         }
-        const unseen = chosen.filter((issue) => issue.seenByUserId === null).map((issue) => issue.id);
+        // Not yet seen by this person: unmarked, or marked by someone else, whose mark this one replaces (8.2).
+        const unseen = chosen.filter((issue) => issue.seenByUserId !== input.actor.userId).map((issue) => issue.id);
         if (unseen.length > 0) {
           await context.tx
             .update(rowIssue)
             .set({ seenByUserId: input.actor.userId, seenAt: context.startedAt })
-            .where(and(inArray(rowIssue.id, unseen), isNull(rowIssue.seenByUserId)));
+            .where(
+              and(inArray(rowIssue.id, unseen), sql`${rowIssue.seenByUserId} is distinct from ${input.actor.userId}`),
+            );
           await deps.audit.record(context, {
             actor: { kind: 'user', id: input.actor.userId },
             roleAssignmentId: held.roleAssignmentId,
@@ -128,6 +142,8 @@ export interface SubmitInput {
   readonly batchId: string;
   readonly key: string;
   readonly content: RequestContent;
+  /** The batch version the screen read, the one submitted (code-house-rules 12.7; PRD-ACS-007). */
+  readonly versionId: string;
 }
 
 /** Submit for review (13.1). */
@@ -148,6 +164,8 @@ export async function submitImport(deps: ImportDependencies, input: SubmitInput)
         if (held.kind === 'refusal') return held.outcome;
         const { batch } = held;
         if (batch.state !== 'Validated') return refusal('refused', 'files-imports.batch-not-validated');
+        const stale = staleBatchVersion(batch, input.versionId);
+        if (stale !== undefined) return stale;
         if (batch.submittedVersionId !== null) return refusal('refused', 'files-imports.already-submitted');
         // A Validated batch was validated at its current version, since any change makes a new version Staged (3.2).
         const issues = await currentIssues(context, batch);
@@ -157,7 +175,10 @@ export async function submitImport(deps: ImportDependencies, input: SubmitInput)
             { kind: 'issues', blocking: String(blocking) },
           ]);
         }
-        const unseen = issues.filter((issue) => issue.severity === 'Warning' && issue.seenByUserId === null).length;
+        // Seen by the submitter themselves (8.2; product owner, 11 Oct 2026).
+        const unseen = issues.filter(
+          (issue) => issue.severity === 'Warning' && issue.seenByUserId !== input.actor.userId,
+        ).length;
         if (unseen > 0) {
           return refusal('refused', 'files-imports.warnings-not-seen', [
             { kind: 'issues', warningsNotSeen: String(unseen) },
@@ -170,11 +191,11 @@ export async function submitImport(deps: ImportDependencies, input: SubmitInput)
           .update(importBatch)
           .set({ submittedVersionId: batch.versionId })
           .where(eq(importBatch.id, batch.id));
-        const handler = handlerOf(deps.handlers, batch);
+        const review = reviewOf(handlerOf(deps.handlers, batch), batch);
         let requestId: string | undefined;
-        if (handler.review.kind === 'approval') {
+        if (review.kind === 'approval') {
           requestId = await deps.access.requestApproval(context, {
-            actionType: handler.review.actionType,
+            actionType: review.actionType,
             document: {
               module: 'files-imports',
               recordType: IMPORT_BATCH_TYPE,

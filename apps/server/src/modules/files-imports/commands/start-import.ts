@@ -5,6 +5,7 @@ import {
   ApiRefusal,
   CommandDefect,
   LOCK_STEP,
+  lockTable,
   scopeFactsOf,
   type CommandOutcome,
   type CommandRefusal,
@@ -37,6 +38,7 @@ import { fileStoreNotConfigured } from '../file-store/file-store.js';
 import { readWorkbook } from '../readers/workbook-read.js';
 import {
   classesHeld,
+  factsOfBatch,
   layoutStructureSchema,
   mappingFieldsSchema,
   parsedOrDefect,
@@ -51,13 +53,17 @@ import { rulesInForce } from './proposals.js';
 // Start an import, with Map and stage (imports-and-opening-data 3.1 steps 3 to 5, 13.1, 15.1; PRD-IMP-003,
 // PRD-IMP-006, PRD-IMP-010; GC9-9; S1-F06-T01).
 //
-// In this order, so no outside call runs inside a transaction (code-house-rules 8.3): a read of the stored file, its
-// receipt, the layout and mapping versions and the target's handler; the object fetched, decrypted and checked
-// against its hash; the workbook read into the grid and staged in memory, with the Confirmed mapping rules in force
-// today in the batch's scopes (6.3); then one transaction that holds the authority, takes the batch code series,
-// allocates the code, writes the batch, its documents and staged rows with its scope facts, links the file to the
-// batch, and records the audit record. A Proposed layout or mapping version may stage and preview a batch; a Rejected
-// one never (6.4). The work runs in the request; a large file staged as a job on the worker (3.3) comes later.
+// In this order, so the person is authorised before any slow work (code-house-rules 8.1; module-map 6.1) and no outside
+// call runs inside a transaction (code-house-rules 8.3): Authorise, create on the batch with its scope facts; a read
+// of the stored file, its receipt, the layout and mapping versions, the target's handler and the duplicate checks; the
+// object fetched, decrypted and checked against its hash; the workbook read into the grid and staged in memory, with
+// the Confirmed mapping rules in force today in the batch's scopes (6.3); then one transaction that holds the authority
+// at step 0, locks the stored file and the layout and mapping versions at step 1 and checks again under those locks
+// that the file is in no open batch for the target and layout and that neither version is Rejected (RR-503), takes the
+// batch code series at step 8, allocates the code, writes the batch, its documents and staged rows with its scope
+// facts, links the file to the batch, and records the audit record. A Proposed layout or mapping version may stage and
+// preview a batch; a Rejected one never (6.4). The work runs in the request; a large file staged as a job on the worker
+// (3.3) comes later.
 
 export interface StartImportInput {
   readonly actor: ImportActor;
@@ -112,7 +118,7 @@ interface Planned {
   readonly contentHash: string;
   readonly scheme: string;
   readonly layoutState: string;
-  readonly classes: FieldClass[];
+  readonly classes: readonly FieldClass[];
   readonly layout: ReturnType<typeof layoutStructureSchema.parse>;
   readonly mapping: ReturnType<typeof mappingFieldsSchema.parse>;
   readonly layoutId: string;
@@ -130,6 +136,16 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       actor: { kind: 'actor', actorId: input.actor.userId },
     },
     async (context) => {
+      // Authorise first, before any other read or slow work (code-house-rules 8.1; module-map 6.1): a person who may
+      // not start a batch at this place learns nothing of the file, its layout or what is published.
+      const authorised = await deps.access.authorise(context, { actorId: input.actor.userId, ...needOf(input) });
+      if (authorised.kind === 'refused') {
+        throw new ApiRefusal({
+          kind: 'not-authorised',
+          code: authorised.refusal.code,
+          missing: [...authorised.refusal.missing],
+        });
+      }
       const file = await handedInFile(context, input.actor.userId, body.storedFileId, body.fileReceiptId);
       const [versions] = await context.tx
         .select({
@@ -163,7 +179,8 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
           missing: [{ kind: 'import-handler', target: body.target, importKind: body.kind }],
         });
       }
-      await refuseRepeat(deps, context, input, handler, versions.layoutId);
+      const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
+      if (repeated !== undefined) refuse(repeated);
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
       const date = await context.businessDate();
       if (date.kind !== 'set') {
@@ -188,55 +205,75 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
   );
 }
 
+/** The permission Start an import needs: create on the batch, with the scope facts the person names (13.1). */
+function needOf(input: StartImportInput) {
+  return { action: 'create' as const, recordType: IMPORT_BATCH_TYPE, facts: input.body.scope ?? {} };
+}
+
+/**
+ * The same file in a batch for the target and layout that has not Failed (7.2; S1-F06-T04): the refusal, naming the
+ * earlier batches the person may see; undefined when there is none. Read through a narrowly authorised function that
+ * sees every scope, since a file's batches are one across the Organisation.
+ */
+async function openBatchRefusal(
+  context: TransactionContext,
+  body: StartImportRequest,
+  layoutId: string,
+): Promise<CommandRefusal | undefined> {
+  const open = await context.tx.execute<{ open: boolean }>(
+    sql`select files_imports.file_in_open_batch(${body.storedFileId}, ${body.target}, ${layoutId}) as open`,
+  );
+  if (open.rows[0]?.open !== true) return undefined;
+  const earlier = await context.tx
+    .select({ batchId: importBatch.id, code: importBatch.code, state: importBatch.state })
+    .from(importBatch)
+    .innerJoin(layoutVersion, eq(layoutVersion.id, importBatch.layoutVersionId))
+    .where(
+      and(
+        eq(importBatch.storedFileId, body.storedFileId),
+        eq(importBatch.target, body.target),
+        eq(layoutVersion.layoutId, layoutId),
+        ne(importBatch.state, 'Failed'),
+      ),
+    )
+    .orderBy(asc(importBatch.code));
+  return {
+    kind: 'refused',
+    code: 'files-imports.file-already-imported',
+    missing: earlier.map((batch) => ({
+      kind: 'import-batch',
+      batchId: batch.batchId,
+      code: batch.code,
+      state: batch.state,
+    })),
+  };
+}
+
 /**
  * Duplicate control at the start (7.2, 13.1; PRD-IMP-011; S1-F06-T04). The same file starts a new batch for the same
  * target and layout only if every earlier such batch Failed; the refusal names the earlier batches the person may see.
  * And a document reference the uploader claimed at the hand-in, already published for the target, is refused, unless
- * the batch is a governed revision of it (7.3). Both are checked whatever the person's scope sees, since a source
- * identity is one across the Organisation; validation checks each document the file holds, and publishing checks again
- * under the lock, behind which the unique index is the last guard.
+ * the batch is a governed revision of it (7.3); the refusal names the published document only where the person may
+ * view its batch, since the published document is found whatever their scope sees (section 11; PRD-SEC-005). Both are
+ * checked whatever the person's scope sees, since a source identity is one across the Organisation; validation checks
+ * each document the file holds, and publishing checks again under the lock, behind which the unique index is the last
+ * guard. The open-batch check runs again under the stored file's lock in the start transaction (RR-503).
  */
-async function refuseRepeat(
+async function repeatRefusal(
   deps: ImportDependencies,
   context: TransactionContext,
   input: StartImportInput,
   handler: ImportHandler,
   layoutId: string,
-): Promise<void> {
+): Promise<CommandRefusal | undefined> {
   const { body } = input;
-  const open = await context.tx.execute<{ open: boolean }>(
-    sql`select files_imports.file_in_open_batch(${body.storedFileId}, ${body.target}, ${layoutId}) as open`,
-  );
-  if (open.rows[0]?.open === true) {
-    const earlier = await context.tx
-      .select({ batchId: importBatch.id, code: importBatch.code, state: importBatch.state })
-      .from(importBatch)
-      .innerJoin(layoutVersion, eq(layoutVersion.id, importBatch.layoutVersionId))
-      .where(
-        and(
-          eq(importBatch.storedFileId, body.storedFileId),
-          eq(importBatch.target, body.target),
-          eq(layoutVersion.layoutId, layoutId),
-          ne(importBatch.state, 'Failed'),
-        ),
-      )
-      .orderBy(asc(importBatch.code));
-    refuse({
-      kind: 'refused',
-      code: 'files-imports.file-already-imported',
-      missing: earlier.map((batch) => ({
-        kind: 'import-batch',
-        batchId: batch.batchId,
-        code: batch.code,
-        state: batch.state,
-      })),
-    });
-  }
+  const open = await openBatchRefusal(context, body, layoutId);
+  if (open !== undefined) return open;
   const [receipt] = await context.tx
     .select({ sealed: fileReceipt.claimedReferenceSealed, scheme: fileReceipt.encryptionScheme })
     .from(fileReceipt)
     .where(eq(fileReceipt.id, body.fileReceiptId));
-  if (receipt?.sealed === null || receipt === undefined) return;
+  if (receipt?.sealed === null || receipt === undefined) return undefined;
   const reference = openReceiptText(
     deps.keys,
     input.actor.organisation.organisationCode,
@@ -252,13 +289,38 @@ async function refuseRepeat(
     scopeKey: handler.sourceScope({ reference, rows: [] }),
     reference,
   });
-  if (published !== undefined && !revisesPublished(handler, { kind: body.kind })) {
-    refuse({
-      kind: 'refused',
-      code: 'files-imports.document-already-published',
-      missing: [{ kind: 'import-document', documentId: published.documentId }],
-    });
-  }
+  if (published === undefined || revisesPublished(handler, { kind: body.kind })) return undefined;
+  const shown = await mayViewDocument(deps, context, input.actor.userId, published.documentId);
+  return {
+    kind: 'refused',
+    code: 'files-imports.document-already-published',
+    missing: shown ? [{ kind: 'import-document', documentId: published.documentId }] : [],
+  };
+}
+
+/**
+ * Whether the person may view a document's batch: row-level security shows the document within their scope, and
+ * Authorise allows view on its batch with the batch's facts (section 11; PRD-SEC-005).
+ */
+async function mayViewDocument(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  actorId: string,
+  documentId: string,
+): Promise<boolean> {
+  const [visible] = await context.tx
+    .select({ batch: importBatch })
+    .from(importDocument)
+    .innerJoin(importBatch, eq(importBatch.id, importDocument.batchId))
+    .where(eq(importDocument.id, documentId));
+  if (visible === undefined) return false;
+  const authorised = await deps.access.authorise(context, {
+    actorId,
+    action: 'view',
+    recordType: IMPORT_BATCH_TYPE,
+    facts: factsOfBatch(visible.batch),
+  });
+  return authorised.kind === 'allowed';
 }
 
 interface StagedFile {
@@ -305,8 +367,7 @@ export async function startImport(
 ): Promise<IdempotentAnswer<JsonValue>> {
   const planned = await plan(deps, input);
   const file = await staged(deps, input, planned);
-  const scope = input.body.scope ?? {};
-  const need = { action: 'create' as const, recordType: IMPORT_BATCH_TYPE, facts: scope };
+  const need = needOf(input);
   const authoriseReplay: ReplayAuthorisation = async (context) => {
     const authorised = await deps.access.authorise(context, { actorId: input.actor.userId, ...need });
     if (authorised.kind === 'allowed') return { kind: 'allowed' };
@@ -339,10 +400,54 @@ export async function startImport(
           need,
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-        return record(deps, context, input, planned, file, authorised.roleAssignmentId);
+        const rechecked = await underLocks(context, input, planned);
+        if ('code' in rechecked) return { kind: 'refusal', refusal: rechecked, causedBySecret: false };
+        const now = { ...planned, classes: rechecked.classes };
+        return record(deps, context, input, now, file, authorised.roleAssignmentId);
       },
     },
   );
+}
+
+const STORED_FILE_LOCK = lockTable('files_imports', 'stored_file');
+const LAYOUT_VERSION_LOCK = lockTable('files_imports', 'layout_version');
+const MAPPING_VERSION_LOCK = lockTable('files_imports', 'mapping_version');
+
+/**
+ * The rechecks under the locks (code-house-rules 8.1, 8.2; RR-503): the stored file exclusively, so two Starts of the
+ * same file queue and the second sees the first's batch; the layout and mapping versions shared, so a decision on
+ * either waits or is seen. Then, read after the locks are held: the file is in no open batch for the target and layout
+ * (7.2), neither version is Rejected (6.4), and the classes the file is held to carry follow the layout version's
+ * state now (section 11).
+ */
+async function underLocks(
+  context: TransactionContext,
+  input: StartImportInput,
+  planned: Planned,
+): Promise<CommandRefusal | { readonly classes: readonly FieldClass[] }> {
+  const { body } = input;
+  await context.lock(LOCK_STEP.document, [
+    { table: STORED_FILE_LOCK, id: body.storedFileId, mode: 'exclusive' },
+    { table: LAYOUT_VERSION_LOCK, id: body.layoutVersionId, mode: 'shared' },
+    { table: MAPPING_VERSION_LOCK, id: body.mappingVersionId, mode: 'shared' },
+  ]);
+  const open = await openBatchRefusal(context, body, planned.layoutId);
+  if (open !== undefined) return open;
+  const [layoutNow] = await context.tx
+    .select({ state: layoutVersion.state })
+    .from(layoutVersion)
+    .where(eq(layoutVersion.id, body.layoutVersionId));
+  const [mappingNow] = await context.tx
+    .select({ state: mappingVersion.state })
+    .from(mappingVersion)
+    .where(eq(mappingVersion.id, body.mappingVersionId));
+  if (layoutNow === undefined || mappingNow === undefined) {
+    throw new CommandDefect('A layout or mapping version read before the locks is not there');
+  }
+  if (layoutNow.state === 'Rejected' || mappingNow.state === 'Rejected') {
+    return { kind: 'refused', code: 'files-imports.layout-version-rejected', missing: [] };
+  }
+  return { classes: classesHeld(layoutNow.state, planned.layout) };
 }
 
 /** Takes the batch code series at step 8, or the refusal while none is Open: unavailable, naming it (GC9-9). */
@@ -429,7 +534,7 @@ async function record(
     fileReceiptId: body.fileReceiptId,
     layoutVersionId: body.layoutVersionId,
     mappingVersionId: body.mappingVersionId,
-    restrictedClasses: planned.classes,
+    restrictedClasses: [...planned.classes],
     readerNotes: [...file.notes],
     startedByUserId: input.actor.userId,
     startedAt: context.startedAt,
@@ -481,7 +586,7 @@ async function record(
     storedFileId: body.storedFileId,
     fileReceiptId: body.fileReceiptId,
     record: { module: 'files-imports', type: IMPORT_BATCH_TYPE, id: batchId },
-    evidence: { kind: 'import-original', restrictedClasses: planned.classes },
+    evidence: { kind: 'import-original', restrictedClasses: [...planned.classes] },
     scope: facts,
     attachedBy: { kind: 'user', id: input.actor.userId },
     roleAssignmentId,

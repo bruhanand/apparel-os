@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchRule, normalisedWord, type RuleInForce } from './rules.js';
+import { dateRangeOf, followOn, matchRule, normalisedWord, type RuleInForce } from './rules.js';
 
 // S1-F06-T03: matching a source word against the Confirmed mapping rules in force (imports-and-opening-data 6.3;
 // PRD-IMP-003, PRD-IMP-008). Every word, target and identifier is SYNTHETIC.
@@ -63,5 +63,57 @@ describe('matchRule (imports-and-opening-data 6.3)', () => {
       { ...rule('2', { kind: 'organisation' }, 'SYN-NAVY'), attribute: 'merchandise.size' },
     ];
     expect(matchRule(rules, 'merchandise.colour', 'syn navy', scopes)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('a rule version confirmed after another (imports-and-opening-data 6.3, 15.1; code-house-rules 7.3)', () => {
+  const A = '01900000-0000-7000-8000-000000000301';
+  const B = '01900000-0000-7000-8000-000000000302';
+
+  it('reads a date range as Postgres writes it, an open end as none', () => {
+    expect(dateRangeOf('[2026-10-12,)')).toEqual({ from: '2026-10-12' });
+    expect(dateRangeOf('[2026-10-12,2026-11-01)')).toEqual({ from: '2026-10-12', to: '2026-11-01' });
+    expect(() => dateRangeOf('(2026-10-12,)')).toThrow();
+  });
+
+  it('ends the version in force before it on its own start date', () => {
+    expect(followOn({ from: '2026-10-15' }, [{ id: A, range: { from: '2026-10-11' } }])).toEqual({
+      kind: 'follows',
+      ends: [{ id: A, range: { from: '2026-10-11', to: '2026-10-15' } }],
+    });
+    expect(
+      followOn({ from: '2026-10-15' }, [{ id: A, range: { from: '2026-10-11', to: '2026-10-20' } }]),
+    ).toMatchObject({ kind: 'follows', ends: [{ id: A, range: { to: '2026-10-15' } }] });
+  });
+
+  it('leaves a version that ends before it as it is', () => {
+    expect(followOn({ from: '2026-10-15' }, [{ id: A, range: { from: '2026-10-11', to: '2026-10-15' } }])).toEqual({
+      kind: 'follows',
+      ends: [],
+    });
+  });
+
+  it('refuses one starting on its own start date, or a bounded one that runs into a later version', () => {
+    expect(followOn({ from: '2026-10-15' }, [{ id: A, range: { from: '2026-10-15' } }])).toEqual({
+      kind: 'conflict',
+      with: A,
+    });
+    expect(followOn({ from: '2026-10-15', to: '2026-10-30' }, [{ id: B, range: { from: '2026-10-20' } }])).toEqual({
+      kind: 'conflict',
+      with: B,
+    });
+  });
+
+  it('gives an open-ended version its end where a later version starts', () => {
+    expect(
+      followOn({ from: '2026-10-15' }, [
+        { id: A, range: { from: '2026-10-11' } },
+        { id: B, range: { from: '2026-10-20' } },
+      ]),
+    ).toEqual({
+      kind: 'follows',
+      ends: [{ id: A, range: { from: '2026-10-11', to: '2026-10-15' } }],
+      ownEnd: '2026-10-20',
+    });
   });
 });

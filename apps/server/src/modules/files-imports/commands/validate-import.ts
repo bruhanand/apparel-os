@@ -112,6 +112,23 @@ export async function heldBatch(
   return { kind: 'held', batch, roleAssignmentId: authorised.roleAssignmentId };
 }
 
+/**
+ * The version token (code-house-rules 12.7; PRD-ACS-007): a step made on a stale screen is refused under the batch's
+ * lock, naming the current version and never the batch's content.
+ */
+export function staleBatchVersion(batch: BatchRow, versionId: string): CommandOutcome<JsonValue> | undefined {
+  if (batch.versionId === versionId) return undefined;
+  return {
+    kind: 'refusal',
+    refusal: {
+      kind: 'conflict',
+      code: 'kernel.stale-version',
+      missing: [{ kind: 'version', recordType: IMPORT_BATCH_TYPE, recordId: batch.id, versionId: batch.versionId }],
+    },
+    causedBySecret: false,
+  };
+}
+
 const NOTHING: DocumentPreview = { kind: 'would-create', records: [] };
 
 /** The validation report of a batch's current version, worked out without writing (8). */
