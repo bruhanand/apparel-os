@@ -235,6 +235,14 @@ export interface SyntheticWorld {
       readonly cleanFilePath: string;
     };
     /**
+     * The opening publish journey (S1-F13-T03): a preparer of opening batches, and the code of an opening batch of a
+     * unit with no approved switch, in an Organisation where policy 14 is not signed.
+     */
+    readonly opening: {
+      readonly preparer: EnrolledUser;
+      readonly batchCode: string;
+    };
+    /**
      * The masked cost journey (S1-F06-T02): a Booking user not granted the class cost, a SYNTHETIC file of the
      * Confirmed costed layout, how the screen names that layout, the file's style code and its cost value.
      */

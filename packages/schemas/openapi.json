@@ -4849,6 +4849,11 @@
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                               },
+                              "publishRequestId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
                               "counts": {
                                 "type": "object",
                                 "properties": {
@@ -46668,8 +46673,14 @@
                       "type": "string",
                       "enum": [
                         "published",
-                        "failed"
+                        "failed",
+                        "queued"
                       ]
+                    },
+                    "publishRequestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                     },
                     "documents": {
                       "type": "array",
@@ -46707,7 +46718,6 @@
                   "required": [
                     "batchId",
                     "state",
-                    "outcomeId",
                     "result",
                     "documents"
                   ],
@@ -46758,6 +46768,7 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
+              "configuration.operation-unavailable",
               "kernel.recovery-hold"
             ]
           },
@@ -46808,7 +46819,11 @@
               "access.starts-in-past",
               "files-imports.batch-not-validated",
               "files-imports.counts-do-not-close",
+              "files-imports.cutover-complete",
+              "files-imports.nothing-to-publish",
+              "files-imports.publish-queued",
               "files-imports.review-missing",
+              "files-imports.several-books",
               "files-imports.version-not-confirmed"
             ]
           },
@@ -55647,6 +55662,66 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "publishing": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "available",
+                                "unavailable"
+                              ]
+                            },
+                            "missing": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "missing"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "posting": {
+                          "type": "object",
+                          "properties": {
+                            "publishRequestId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "requestedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "state": {
+                              "type": "string",
+                              "const": "queued"
+                            }
+                          },
+                          "required": [
+                            "publishRequestId",
+                            "requestedAt",
+                            "state"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -58303,6 +58378,11 @@
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                           },
                           "batchVersionId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "publishRequestId": {
                             "type": "string",
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
@@ -75627,6 +75707,7 @@
             },
             "x-error-codes": [
               "access.starts-in-past",
+              "files-imports.cutover-complete",
               "files-imports.document-already-published",
               "files-imports.file-already-imported",
               "files-imports.file-unreadable",

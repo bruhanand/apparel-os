@@ -255,7 +255,14 @@ describe('the stage 1 exit check (access-and-approvals 15 test 1; PRD-SEC-017, P
     expect(policies.map((each) => each.policy)).toEqual([...Array(19).keys()].map((index) => index + 1));
     expect(policies.every((each) => each.state === 'Open' && each.signature === null)).toBe(true);
     const fourteen = policies.find((each) => each.policy === POLICY);
+    // Opening-data publishing, which files-imports declares (imports-and-opening-data 4.2; S1-F13-T03), and the test's.
     expect(fourteen?.operations).toEqual([
+      expect.objectContaining({
+        operation: 'files-imports.publish-opening',
+        capability: 'files-imports.opening-publishing',
+        capabilityOn: false,
+        state: 'unavailable',
+      }),
       expect.objectContaining({ operation: EFFECT, capabilityOn: false, state: 'unavailable' }),
     ]);
     expect(fourteen?.values).toEqual([

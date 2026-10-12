@@ -152,8 +152,41 @@ async function today(context: TransactionContext): Promise<string> {
   return date.date;
 }
 
+/**
+ * The reads of one transaction, each code and SKU asked once: an opening of tens of thousands of rows names a few
+ * thousand SKUs (imports-and-opening-data 10.6; S1-F13-T03). A read answers the same within one transaction.
+ */
+const asked = new WeakMap<TransactionContext, Map<string, Promise<unknown>>>();
+
+function once<T>(context: TransactionContext, key: string, read: () => Promise<T>): Promise<T> {
+  let reads = asked.get(context);
+  if (reads === undefined) {
+    reads = new Map();
+    asked.set(context, reads);
+  }
+  let answer = reads.get(key) as Promise<T> | undefined;
+  if (answer === undefined) {
+    answer = read();
+    reads.set(key, answer);
+  }
+  return answer;
+}
+
+/** Read a SKU at a Site on a date (structure-and-masters 4.4), once per transaction. */
+function skuRead(
+  context: TransactionContext,
+  catalogue: OpeningStockDependencies['catalogue'],
+  skuId: string,
+  siteId: string,
+  date: string,
+): ReturnType<OpeningStockDependencies['catalogue']['skuOn']> {
+  return once(context, JSON.stringify(['sku', skuId, siteId, date]), () =>
+    catalogue.skuOn(context, skuId, siteId, date),
+  );
+}
+
 /** The SKU a barcode or supplier code names today, or undefined (Resolve a code; structure-and-masters 4.7). */
-async function skuOf(
+function skuOf(
   context: TransactionContext,
   catalogue: OpeningStockDependencies['catalogue'],
   row: HandlerRow,
@@ -161,6 +194,18 @@ async function skuOf(
 ): Promise<string | undefined> {
   const barcode = knownValue(row.values.barcode);
   const supplierCode = knownValue(row.values.supplierCode);
+  return once(context, JSON.stringify(['code', barcode ?? null, supplierCode ?? null, date]), () =>
+    resolvedSku(context, catalogue, barcode, supplierCode, date),
+  );
+}
+
+async function resolvedSku(
+  context: TransactionContext,
+  catalogue: OpeningStockDependencies['catalogue'],
+  barcode: string | undefined,
+  supplierCode: string | undefined,
+  date: string,
+): Promise<string | undefined> {
   const tries = [
     ...(barcode === undefined
       ? []
@@ -247,7 +292,7 @@ async function issuesOf(
       issues.push({ code: CODE('identity-not-resolved'), ...at('barcode') });
       continue;
     }
-    const read = await dependencies.catalogue.skuOn(context, skuId, document.place.siteId, date);
+    const read = await skuRead(context, dependencies.catalogue, skuId, document.place.siteId, date);
     if ('refusal' in read) {
       issues.push({ code: read.refusal.code, ...at('barcode') });
       continue;
@@ -318,7 +363,7 @@ async function postOpening(
     if (skuId === undefined || locationId === undefined || legalEntityId === undefined) {
       return refused('row-not-resolved', row.rowNumber);
     }
-    const read = await dependencies.catalogue.skuOn(context, skuId, siteId, date);
+    const read = await skuRead(context, dependencies.catalogue, skuId, siteId, date);
     if ('refusal' in read) return refused('row-not-resolved', row.rowNumber);
     if (read.sku.tracking?.pieceTracked === true) return refused('pieces-labelled-at-the-count', row.rowNumber);
     const batchCode = value('batchCode');

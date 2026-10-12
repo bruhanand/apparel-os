@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,18 @@ import type { GatedOperation, ValidityCheck } from '../../src/modules/configurat
 import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
-import { IMPORT_BATCH_KIND } from '../../src/modules/files-imports/index.js';
+import { IMPORT_BATCH_KIND, IMPORT_HANDLERS, type ImportHandlers } from '../../src/modules/files-imports/index.js';
+import { CATALOGUE, type CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
+import { ORGANISATION, type OrganisationInterface } from '../../src/modules/organisation/index.js';
+import {
+  cellsOf,
+  MANIFEST_FIELDS,
+  MANIFEST_LAYOUT,
+  MANIFEST_MAPPING,
+  MANIFEST_SHEET,
+  OPENING_LAYOUT_CODES,
+} from '../fixtures/opening-data.js';
+import { OPENING_STOCK_TARGET, openingStockHandler } from '../support/opening-stock.js';
 import {
   SYNTHETIC_PRODUCT_COLUMNS,
   SYNTHETIC_PRODUCT_LAYOUT,
@@ -1654,6 +1665,70 @@ await grantSynthetic(
   },
 );
 
+// The opening publish journey (opening-publish.spec.ts; S1-F13-T03; imports-and-opening-data 4.2, 10.1, 17 test 22;
+// stage 1 exit check 5): in this Organisation, where policy 14 is not signed, the opening manifest layout Confirmed by
+// a different person from its proposer, and a preparer of opening batches who starts one through the API once the
+// server listens, at the posting journey's Store unit, which has no approved switch. Publish shows unavailable, naming
+// what is missing. The handler is the test-only one, composed into this test server only (GC6-18; DEC-116). Every
+// value is SYNTHETIC.
+const openingLayout = await writeSyntheticLayout(
+  postingDatabase,
+  {
+    layoutCode: OPENING_LAYOUT_CODES.manifest.layout,
+    mappingCode: OPENING_LAYOUT_CODES.manifest.mapping,
+    structure: MANIFEST_LAYOUT,
+    fields: MANIFEST_MAPPING,
+    target: OPENING_STOCK_TARGET,
+    kinds: ['opening-balance'],
+    documentType: 'opening-stock',
+  },
+  postingFixture.preparer.id,
+  postingFixture.approver.id,
+);
+// The test handler answers the unit's switch from the test-only stand-in of the test migration set (code-house-rules
+// 11.4), applied here to this Organisation's database only, as the migration role; this file runs from
+// dist-browser/test/browser, beside no copy of the set, so it reads the source's.
+{
+  const owner = await connect(postingDatabase, 'migration');
+  try {
+    await owner.query(
+      readFileSync(
+        fileURLToPath(new URL('../../../test/migrations/0005__test-opening-stock__switch.sql', import.meta.url)),
+        'utf8',
+      ),
+    );
+  } finally {
+    await owner.end();
+  }
+}
+// The preparer the journey signs in as, and a seeder of its own who starts the batch, so the journey's authenticator
+// code is never one the seeding used (access-and-approvals 3.3).
+const openingPreparer = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-OPENING-PREPARER',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const openingSeeder = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-OPENING-SEEDER',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+for (const user of [openingPreparer, openingSeeder]) {
+  await grantSynthetic(
+    postingDatabase,
+    { kind: 'user', id: user.id },
+    [
+      { recordType: 'files_imports.stored_file', action: 'create' },
+      { recordType: 'files_imports.import_batch', action: 'view' },
+      { recordType: 'files_imports.import_batch', action: 'create' },
+      { recordType: 'files_imports.import_batch', action: 'edit' },
+      { recordType: 'files_imports.layout', action: 'view' },
+      { recordType: 'files_imports.mapping', action: 'view' },
+    ],
+    { fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })) },
+  );
+}
+
 // The bank details journey's people (S1-F03-T03): a person who prepares a supplier's bank-detail change, holding the
 // class bank-details to write it, and a different person who approves it from My work and shows the details with the
 // class to read them. Who holds which is KDPS's (V-01, RR-064).
@@ -2321,6 +2396,74 @@ const outcomesBatchCodes: string[] = [];
   }
 }
 
+// The opening publish journey's batch (S1-F13-T03): the test-only opening-stock handler composed into this server,
+// with no ledger, since nothing posts here; then a SYNTHETIC manifest of one row, started by its preparer through the
+// API at the posting journey's Store unit.
+app.app.get<ImportHandlers>(IMPORT_HANDLERS).register(
+  openingStockHandler({
+    organisation: app.app.get<OrganisationInterface>(ORGANISATION),
+    catalogue: app.app.get<CatalogueInterface>(CATALOGUE),
+    // No season is chosen in the journey; its attribute is SYNTHETIC and names nothing.
+    seasonAttributeId: uuidv7(),
+  }),
+);
+let openingBatchCode: string;
+{
+  const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.51' };
+  const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: at,
+    body: JSON.stringify({
+      organisationCode: postingCode,
+      login: openingSeeder.login,
+      password: openingSeeder.password,
+      totpCode: codeFor(openingSeeder.factorSecret ?? Buffer.alloc(0)),
+    }),
+  });
+  if (signedIn.status !== 200) throw new Error(`The opening seeder was not signed in: ${String(signedIn.status)}`);
+  const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  const bytes = await syntheticWorkbook({
+    sheet: MANIFEST_SHEET,
+    header: Object.values(MANIFEST_FIELDS),
+    rows: [
+      cellsOf(MANIFEST_FIELDS, {
+        manifestReference: 'SYN-JOURNEY-M-1',
+        section: 'opening-stock',
+        quantity: '1',
+        condition: 'good',
+        barcode: 'SYN-JOURNEY-BC-1',
+      }),
+    ],
+    marker: `opening-${duplicateSuffix}`,
+  });
+  const stored = await fetch(`${app.baseUrl}/api/files-imports/import-files`, {
+    method: 'POST',
+    headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({
+      sourceSystem: 'manual-upload',
+      originalName: syntheticProductFileName('journey-opening'),
+      contentBase64: bytes.toString('base64'),
+    }),
+  });
+  if (stored.status !== 200) throw new Error(`The opening file was refused: ${await stored.text()}`);
+  const file = (await stored.json()) as { storedFileId: string; receiptId: string };
+  const started = await fetch(`${app.baseUrl}/api/files-imports/batches`, {
+    method: 'POST',
+    headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({
+      storedFileId: file.storedFileId,
+      fileReceiptId: file.receiptId,
+      kind: 'opening-balance',
+      target: OPENING_STOCK_TARGET,
+      layoutVersionId: openingLayout.layoutVersionId,
+      mappingVersionId: openingLayout.mappingVersionId,
+      scope: { siteId: postingSite.recordId, businessUnitId: postingStoreUnit.recordId },
+    }),
+  });
+  if (started.status !== 200) throw new Error(`The opening batch was refused: ${await started.text()}`);
+  openingBatchCode = ((await started.json()) as { code: string }).code;
+}
+
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
   worldFile,
@@ -2405,6 +2548,10 @@ writeFileSync(
         booking: credentialsOf(refusalBooking),
         macroFilePath: refusalMacroFile,
         cleanFilePath: refusalCleanFile,
+      },
+      opening: {
+        preparer: credentialsOf(openingPreparer),
+        batchCode: openingBatchCode,
       },
       cost: {
         reader: credentialsOf(costReader),
