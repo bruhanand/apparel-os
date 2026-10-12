@@ -8,7 +8,7 @@ import { Button } from '../components/Button';
 import { ErrorState, LoadingState } from '../components/StandardStates';
 import { UnavailableState } from '../components/UnavailableState';
 import { ActorHistory, RecordHistory } from '../history/HistoryReads';
-import { t, type MessageId } from '../messages/catalogue';
+import { t, type MessageId, type MessageParams } from '../messages/catalogue';
 import { useSession } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { recordTypeName } from './describe';
@@ -28,12 +28,14 @@ export function useGranted(recordType: string, action: PermissionAction): boolea
  */
 export function GrantedButton({
   label,
+  labelParams,
   recordType,
   action,
   variant = 'secondary',
   onClick,
 }: {
   label: MessageId;
+  labelParams?: MessageParams;
   recordType: string;
   action: PermissionAction;
   variant?: 'primary' | 'secondary';
@@ -44,6 +46,7 @@ export function GrantedButton({
     <span className="inline-flex flex-wrap items-center gap-2">
       <Button
         label={label}
+        {...(labelParams === undefined ? {} : { labelParams })}
         variant={variant}
         disabled={!granted}
         {...(granted ? {} : { reason: 'setup.needs-permission' as const })}

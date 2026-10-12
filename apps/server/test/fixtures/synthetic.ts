@@ -43,8 +43,8 @@ export function syntheticName(name: string): string {
 
 /**
  * A generated file's name: `opening-stock`, `xlsx` becomes `SYNTHETIC-opening-stock.xlsx`. The file also says
- * SYNTHETIC in a document property (imports-and-opening-data 17); the first file generator sets it, with its format
- * library, when it arrives.
+ * SYNTHETIC in a document property (imports-and-opening-data 17), which the generator sets with its format library, as
+ * `imports.ts` does for the SYNTHETIC product workbook (S1-F06-T01).
  */
 export function syntheticFileName(stem: string, extension: string): string {
   if (!FILE_STEM.test(stem)) throw new Error(`File name stem ${stem} must be letters, digits, - and _`);

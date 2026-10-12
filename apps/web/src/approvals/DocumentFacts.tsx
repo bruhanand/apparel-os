@@ -6,6 +6,9 @@ import {
   BILL_FORMAT_CHANGE_TYPE,
   FINANCIAL_YEAR_CHANGE_APPROVAL,
   FINANCIAL_YEAR_CHANGE_TYPE,
+  LAYOUT_CONFIRMATION,
+  MAPPING_CONFIRMATION,
+  MAPPING_RULE_CONFIRMATION,
   PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
   SITE_READINESS_APPROVAL,
@@ -26,6 +29,7 @@ import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
+import { ImportFacts } from './ImportFacts';
 import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
@@ -459,6 +463,11 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <FinancialYearFacts view={view} />;
     case BILL_FORMAT_CHANGE_APPROVAL:
       return <BillFormatFacts view={view} />;
+    // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
+    case LAYOUT_CONFIRMATION:
+    case MAPPING_CONFIRMATION:
+    case MAPPING_RULE_CONFIRMATION:
+      return <ImportFacts view={view} />;
     default:
       // A master of the organisation structure (S1-F02-T01), or nothing.
       return <MasterFacts view={view} />;

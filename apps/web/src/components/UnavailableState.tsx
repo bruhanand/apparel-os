@@ -36,7 +36,7 @@ export function missingText(item: MissingItem): string {
   // A setting not set, by its name where the catalogue has one (code-house-rules 12.14; PRD-UXP-003).
   const setting = `setting.name.${item.setting ?? ''}`;
   if (item.kind === 'setting' && isMessageId(setting)) return t('missing.setting.named', { setting: t(setting) });
-  const gate = gateText(item) ?? readinessText(item);
+  const gate = gateText(item) ?? readinessText(item) ?? importText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
@@ -111,6 +111,47 @@ function readinessText(item: MissingItem): string | undefined {
   }
   if (item.kind === 'approval-people' && item.actionType !== undefined) {
     return t('missing.approval-people.named', { actionType: named('approval.action', item.actionType) });
+  }
+  return undefined;
+}
+
+/**
+ * The text of an import's item (imports-and-opening-data 13.1; S1-F06-T01): the number series of a kind named by its
+ * kind, a publishing control still missing, the layout's sheet or column a file lacks. Undefined for any other item.
+ */
+function importText(item: MissingItem): string | undefined {
+  const series = `missing.number-series.${item.numberedKind ?? ''}`;
+  if (item.kind === 'number-series' && isMessageId(series)) return t(series);
+  if (item.kind === 'layout-sheet' && item.sheet !== undefined)
+    return t('missing.layout-sheet.named', { sheet: item.sheet });
+  if (item.kind === 'layout-column' && item.column !== undefined) {
+    return t('missing.layout-column.named', { column: item.column });
+  }
+  // An earlier batch of the same file, by its code and state (imports-and-opening-data 7.2; S1-F06-T04).
+  if (item.kind === 'import-batch' && item.code !== undefined && item.state !== undefined) {
+    return t('missing.import-batch.named', { code: item.code, state: item.state });
+  }
+  return intakeText(item);
+}
+
+/** What an intake refusal names (imports-and-opening-data 9.3, 11; PRD-UXP-003; S1-F06-T02). */
+function intakeText(item: MissingItem): string | undefined {
+  const named = `missing.${item.kind}.${item.found ?? item.cap ?? ''}`;
+  if ((item.kind === 'active-content' || item.kind === 'unapproved-link') && isMessageId(named)) return t(named);
+  if (item.kind === 'unapproved-link' && item.found !== undefined) {
+    return t('missing.unapproved-link.named', { found: item.found });
+  }
+  if (item.kind === 'intake-cap' && isMessageId(named) && item.limit !== undefined) {
+    return t(named, { limit: item.limit });
+  }
+  if (item.kind === 'reader-error' && item.error !== undefined) {
+    return t('missing.reader-error.named', { error: item.error });
+  }
+  if (item.kind === 'customer-contact-column' && item.column !== undefined && item.sheet !== undefined) {
+    return t('missing.customer-contact-column.named', { column: item.column, sheet: item.sheet });
+  }
+  if (item.kind === 'unrecognised-sheet' && item.sheet !== undefined) {
+    return t('missing.unrecognised-sheet.named', { sheet: item.sheet });
   }
   return undefined;
 }

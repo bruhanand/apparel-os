@@ -451,6 +451,90 @@ export const inboxCodes = declareCodes({
  *   the reader's scope answers the same as one that does not exist.
  * - `files-imports.restricted-file-is-an-export`: the attachment carries a restricted class, so reading it is an
  *   export: use the download command, which writes an access record (numbering-and-audit 5.1).
+ *
+ * Imports (S1-F06-T01; imports-and-opening-data 3.1, 3.2, 13.1, 13.2):
+ *
+ * - `files-imports.type-not-allowed` also refuses an import upload that is not XLSX (9.2); PDF, JPEG and PNG are kept
+ *   only as evidence.
+ * - `files-imports.import-file-not-found`: the stored file or receipt named is not an XLSX file this person handed in.
+ * - `files-imports.file-unreadable`: the reader could not open the stored workbook.
+ * - `files-imports.layout-not-found`: the layout or mapping version named does not exist, or the mapping is not of
+ *   that layout version or that target.
+ * - `files-imports.layout-not-matched`: the file lacks the layout's sheet or a required column; `missing` names them.
+ * - `files-imports.no-import-handler`: no handler of the target accepts the kind (4.2).
+ * - `files-imports.no-import-batch-series` / `files-imports.import-batch-series-paused`: no Open series gives batch
+ *   codes, so starting an import is unavailable, naming the series (GC9-9; numbering-and-audit 3.5).
+ * - `files-imports.batch-not-found`: no batch with that identifier is visible to the reader.
+ * - `files-imports.batch-not-staged` / `files-imports.batch-not-validated`: the batch is not in the state the step
+ *   needs (3.2).
+ * - `files-imports.document-refused`: the target's handler refused a document at publishing; `missing` names the
+ *   document and the handler's reason. From S1-F06-T04 it is the refusal of that document's own transaction, and
+ *   the reason a failed outcome keeps; the other documents publish.
+ *
+ * Layouts, mappings, mapping rules and the validation report (S1-F06-T03; imports-and-opening-data 3.2, 5, 6, 8,
+ * 13.1, 13.2):
+ *
+ * - `files-imports.layout-code-taken` / `files-imports.mapping-code-taken`: another layout or mapping has the code.
+ * - `files-imports.mapping-not-found`: the mapping named does not exist.
+ * - `files-imports.mapping-field-unknown`: the mapping fills a field the target's handler does not have; `missing`
+ *   names it.
+ * - `files-imports.mapping-column-unknown`: the mapping reads a column its layout version does not name, or one it
+ *   ignores; `missing` names it.
+ * - `files-imports.mapping-encrypted-column`: the mapping fills a field from a column of an encrypted class that the
+ *   field does not hold (section 11); `missing` names the column and class.
+ * - `files-imports.rule-attribute-unknown`: no handler of the attribute's target has that field.
+ * - `files-imports.rule-target-refused`: the handler that owns the target does not accept it (6.3); `missing` says why.
+ * - `files-imports.rule-scope-not-found`: the layout a layout-scope rule names does not exist.
+ * - `files-imports.rule-conflict`: the version would overlap a Confirmed version of the same rule that it cannot end:
+ *   one starting on or after its own start (6.3, 15.1; code-house-rules 7.3); `missing` names it.
+ * - `files-imports.starts-in-past`: a mapping rule version never starts on a past date, proposed or confirmed (GC2-7,
+ *   DEC-105; code-house-rules 7.3).
+ * - `files-imports.proposal-not-found` / `files-imports.proposal-not-open`: the version decided does not exist, or is
+ *   no longer Proposed.
+ * - `files-imports.layout-version-rejected`: a batch never starts with a Rejected layout or mapping version (6.4).
+ * - `files-imports.batch-not-open`: the batch is Published or Failed, and is never edited (3.2).
+ * - `files-imports.staged-row-not-found` / `files-imports.document-not-found` / `files-imports.issue-not-found`: not
+ *   of this batch, or not visible to the reader.
+ * - `files-imports.field-unknown`: the target's handler has no such field.
+ * - `files-imports.document-not-staged`: the document is published, so it is neither excluded nor put back.
+ * - `files-imports.ai-suggestions-unavailable`: AI drafts arrive with the AI gateway, switched off by default as a
+ *   capability control (section 5; DEC-105, PRD-SEC-017); `missing` names the capability.
+ * - `files-imports.not-validated-at-this-version`: the batch's report is not of its current version; validate again.
+ * - `files-imports.blocking-issues-remain` / `files-imports.warnings-not-seen`: Submit for review refuses a batch with
+ *   Blocking issues, or with Warnings nobody marked seen (8.2, 13.1); `missing` counts them.
+ * - `files-imports.already-submitted`: the batch version is already submitted.
+ * - `files-imports.review-missing`: Publish needs the batch version submitted, and where its handler requires one,
+ *   an approval decision of that version (3.1 step 8, 13.1).
+ * - `files-imports.version-not-confirmed`: Publish needs the batch's layout and mapping versions Confirmed (6.4).
+ * - `files-imports.not-a-warning`: only a Warning is marked seen (8.2).
+ *
+ * Duplicate control, publishing per document and outcomes (S1-F06-T04; imports-and-opening-data 3.2, 7, 13.1):
+ *
+ * - `files-imports.file-already-imported`: the same file is read by a batch for the same target and layout that has
+ *   not Failed (7.2); `missing` names the earlier batches the person may see. Withdraw them first.
+ * - `files-imports.document-already-published`: the document reference claimed at the hand-in is already published
+ *   for the target, and the batch is no governed revision of it (7.2, 7.3); `missing` names the published document
+ *   only where the person may view its batch.
+ * - `files-imports.document-conflict`: at publishing, a document's source identity is published with other content
+ *   (7.2); `missing` names the document and the published one. The other documents publish.
+ * - `files-imports.counts-do-not-close`: the rows staged differ from the rows the reader read, so the counts cannot
+ *   close; Submit and Publish refuse the batch (7.4). `missing` names both counts.
+ * Intake refusals and caps (S1-F06-T02; imports-and-opening-data 9.3, 11; PRD-SEC-011; DEC-112 GC6-3, GC6-5,
+ * GC6-6). Each is answered before anything is stored; a stored file read again later answers the same:
+ *
+ * - `files-imports.file-unreadable` also refuses a damaged workbook at intake; `missing` names the reader's error as a
+ *   word (`reader-error`), never its message, which may quote the file.
+ * - `files-imports.workbook-active-content`: macros, active controls or embedded objects; `missing` names which.
+ * - `files-imports.workbook-depends-on-another`: the workbook depends on data in another workbook; `missing` asks
+ *   for a self-contained copy (A-9). Nothing is stripped and no linked value is trusted.
+ * - `files-imports.workbook-unapproved-link`: a link that fetches something, such as an external image or object, or
+ *   a data connection; an ordinary hyperlink is not one (GC6-17). `missing` names it.
+ * - `files-imports.over-intake-cap`: over a cap at intake (uploaded size, expanded size, rows, parser memory,
+ *   processing time); `missing` names the cap and its limit. Nothing is truncated.
+ * - `files-imports.customer-contact-columns`: on the test setup, the file has columns its Confirmed layout marks as
+ *   customer contact (section 11; DEC-052); `missing` names them. Upload it again without them.
+ * - `files-imports.layout-needed-on-test-setup`: on the test setup, a sheet of the file that holds cells fits no
+ *   Confirmed layout version, so its columns cannot be known to hold no customer contact; `missing` names it.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -460,6 +544,55 @@ export const filesImportsCodes = declareCodes({
   'files-imports.file-store-not-configured': 'unavailable',
   'files-imports.attachment-not-found': 'not-found',
   'files-imports.restricted-file-is-an-export': 'refused',
+  'files-imports.import-file-not-found': 'not-found',
+  'files-imports.file-unreadable': 'refused',
+  'files-imports.layout-not-found': 'not-found',
+  'files-imports.layout-not-matched': 'refused',
+  'files-imports.no-import-handler': 'refused',
+  'files-imports.no-import-batch-series': 'unavailable',
+  'files-imports.import-batch-series-paused': 'unavailable',
+  'files-imports.batch-not-found': 'not-found',
+  'files-imports.batch-not-staged': 'refused',
+  'files-imports.batch-not-validated': 'refused',
+  'files-imports.document-refused': 'refused',
+  'files-imports.workbook-active-content': 'refused',
+  'files-imports.workbook-depends-on-another': 'refused',
+  'files-imports.workbook-unapproved-link': 'refused',
+  'files-imports.over-intake-cap': 'refused',
+  'files-imports.customer-contact-columns': 'refused',
+  'files-imports.layout-needed-on-test-setup': 'refused',
+  'files-imports.layout-code-taken': 'refused',
+  'files-imports.mapping-code-taken': 'refused',
+  'files-imports.mapping-not-found': 'not-found',
+  'files-imports.mapping-field-unknown': 'refused',
+  'files-imports.mapping-column-unknown': 'refused',
+  'files-imports.mapping-encrypted-column': 'refused',
+  'files-imports.rule-attribute-unknown': 'refused',
+  'files-imports.rule-target-refused': 'refused',
+  'files-imports.rule-scope-not-found': 'not-found',
+  'files-imports.rule-conflict': 'refused',
+  'files-imports.proposal-not-found': 'not-found',
+  'files-imports.proposal-not-open': 'refused',
+  'files-imports.layout-version-rejected': 'refused',
+  'files-imports.batch-not-open': 'refused',
+  'files-imports.staged-row-not-found': 'not-found',
+  'files-imports.document-not-found': 'not-found',
+  'files-imports.issue-not-found': 'not-found',
+  'files-imports.field-unknown': 'refused',
+  'files-imports.document-not-staged': 'refused',
+  'files-imports.ai-suggestions-unavailable': 'unavailable',
+  'files-imports.not-validated-at-this-version': 'refused',
+  'files-imports.blocking-issues-remain': 'refused',
+  'files-imports.warnings-not-seen': 'refused',
+  'files-imports.already-submitted': 'refused',
+  'files-imports.review-missing': 'refused',
+  'files-imports.version-not-confirmed': 'refused',
+  'files-imports.not-a-warning': 'refused',
+  'files-imports.file-already-imported': 'refused',
+  'files-imports.document-already-published': 'refused',
+  'files-imports.document-conflict': 'refused',
+  'files-imports.counts-do-not-close': 'refused',
+  'files-imports.starts-in-past': 'refused',
 });
 
 /**

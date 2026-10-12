@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
+  fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
   type PersonaId,
@@ -55,6 +56,23 @@ import type { GatedOperation, ValidityCheck } from '../../src/modules/configurat
 import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
+import { IMPORT_BATCH_KIND } from '../../src/modules/files-imports/index.js';
+import {
+  SYNTHETIC_PRODUCT_COLUMNS,
+  SYNTHETIC_PRODUCT_LAYOUT,
+  SYNTHETIC_PRODUCT_LAYOUT_CODE,
+  SYNTHETIC_PRODUCT_MAPPING,
+  SYNTHETIC_PRODUCT_MAPPING_CODE,
+  syntheticProductFileName,
+  syntheticProductWorkbook,
+  syntheticWorkbook,
+} from '../fixtures/imports.js';
+import { withParts } from '../fixtures/workbook-parts.js';
+import {
+  defineSyntheticImportBatchSeries,
+  writeSyntheticLayout,
+  writeSyntheticProductLayout,
+} from '../support/imports.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
@@ -72,7 +90,7 @@ import {
 import { assignSyntheticRole, grantSynthetic, writeSyntheticRole } from '../support/grants.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
-import { approved, approvedGeography, structureSetup } from '../support/organisation.js';
+import { approved, approvedGeography, structureSetup, writeSyntheticSites } from '../support/organisation.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
 import {
   createTestExceptionsSchema,
@@ -744,6 +762,38 @@ const postingFixture = await structureSetup({
   // The journey's SYNTHETIC event kinds, declared in the test composition only (books-and-posting 7.1; DEC-112 H2).
   eventKinds: POSTING_JOURNEY_KINDS,
 });
+// The file intake journey's catalogue, saved layout and batch code series (S1-F06-T01; its person and file are below),
+// in this Organisation, so the product proposal it publishes reaches no other journey's My work: a SYNTHETIC brand and
+// a category with no size set, the one SYNTHETIC layout and mapping, proposed by the fixture person, and an Open series
+// of the import-batch kind with a SYNTHETIC format (numbering-and-audit 3.5).
+const intakeBrand = { code: syntheticCode('JOURNEY-INTAKE-BRAND'), name: syntheticName('Journey Intake Brand') };
+const intakeCategory = { code: syntheticCode('JOURNEY-INTAKE-CAT'), name: syntheticName('Journey Intake Category') };
+const intakeRecorded = (outcome: { kind: 'success' } | { kind: 'refusal'; refusal: { code: string } }) => {
+  if (outcome.kind !== 'success') throw new Error(`The synthetic catalogue was refused: ${outcome.refusal.code}`);
+};
+intakeRecorded(
+  await postingFixture.asPreparerDo((c, p) =>
+    postingFixture.catalogue.prepareBrand(c, p, { ...intakeBrand, aliases: [], validFrom: postingFixture.today() }),
+  ),
+);
+intakeRecorded(
+  await postingFixture.asPreparerDo((c, p) =>
+    postingFixture.catalogue.prepareCategory(c, p, {
+      ...intakeCategory,
+      identityAttributeIds: [],
+      validFrom: postingFixture.today(),
+    }),
+  ),
+);
+// Confirmed by a different person from its proposer, so the journey's batch may publish (6.4; S1-F06-T03).
+const intakeLayout = await writeSyntheticProductLayout(
+  postingDatabase,
+  postingFixture.preparer.id,
+  postingFixture.approver.id,
+);
+await postingFixture.run(postingFixture.preparer.id, (c) =>
+  defineSyntheticImportBatchSeries(c, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
+);
 const postingGeography = await approvedGeography(postingFixture, 'POSTING');
 const postingEntity = await approved(postingFixture, (c, p) =>
   postingFixture.organisation.prepareLegalEntity(c, p, {
@@ -1150,9 +1200,16 @@ const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 // The harness the journey asks to post the correction (code-house-rules 11.4: test code, composed only here), on a
-// local port of its own beside the server of the journeys.
+// local port of its own beside the server of the journeys. It also answers `GET /ready` once the world file is
+// written, which Playwright waits for: the API answers before the seeding done through it ends, so its health alone
+// would let the journeys read a world file that is missing or left by an earlier run.
 const harnessPort = port + 11;
+let worldWritten = false;
 const harness = createServer((request, response) => {
+  if (request.method === 'GET' && request.url === '/ready') {
+    response.writeHead(worldWritten ? 200 : 503).end();
+    return;
+  }
   if (request.method !== 'POST' || request.url !== '/post-period-correction') {
     response.writeHead(404).end();
     return;
@@ -1305,6 +1362,293 @@ const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-B
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
+
+// The file intake journey (file-intake.spec.ts; S1-F06-T01), in the posting maps journey's Organisation, where its
+// catalogue, layout and series are recorded above: a Booking user who uploads the SYNTHETIC product file, stages it
+// with the one SYNTHETIC saved layout and mapping, validates and publishes it. Its SYNTHETIC category has no size set,
+// so the file's one SKU has an Unknown size. The importer holds every
+// restricted class, since a file whose layout is not confirmed counts as holding them all (imports-and-opening-data
+// 11). Every value is SYNTHETIC.
+const intakeBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-INTAKE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(
+  postingDatabase,
+  { kind: 'user', id: intakeBooking.id },
+  [
+    { recordType: 'files_imports.stored_file', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    ...productViews,
+    { recordType: 'merchandise.product_proposal', action: 'create' },
+    { recordType: 'access.approval_request', action: 'view' },
+    // Layouts, mappings and mapping rules, proposed by the Booking user (S1-F06-T03).
+    { recordType: 'files_imports.layout', action: 'view' },
+    { recordType: 'files_imports.layout', action: 'create' },
+    { recordType: 'files_imports.mapping', action: 'view' },
+    { recordType: 'files_imports.mapping', action: 'create' },
+    { recordType: 'files_imports.mapping_rule', action: 'view' },
+    { recordType: 'files_imports.mapping_rule', action: 'create' },
+  ],
+  { fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })) },
+);
+// The mapping rule journey's own Booking user, so the two journeys never share an authenticator (S1-F06-T03).
+const ruleBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-RULE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: ruleBooking.id }, [
+  { recordType: 'files_imports.import_batch', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'create' },
+  // Approve too, so the panel refuses their own proposal as their own, not for a missing permission (POL-02.07).
+  { recordType: 'files_imports.mapping_rule', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+// A different person who confirms them from My work (6.4; POL-02.07; S1-F06-T03). Who confirms is KDPS's (RR-197).
+const intakeConfirmer = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-INTAKE-CONFIRMER',
+  enrolled: true,
+  personas: ['P-ADM'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: intakeConfirmer.id }, [
+  { recordType: 'files_imports.layout', action: 'view' },
+  { recordType: 'files_imports.layout', action: 'approve' },
+  { recordType: 'files_imports.mapping', action: 'view' },
+  { recordType: 'files_imports.mapping', action: 'approve' },
+  { recordType: 'files_imports.mapping_rule', action: 'view' },
+  { recordType: 'files_imports.mapping_rule', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const intakeSuffix = randomBytes(3).toString('hex').toUpperCase();
+const intakeStyle = syntheticCode(`JOURNEY-INTAKE-STYLE-${intakeSuffix}`);
+const intakeSku = syntheticCode(`JOURNEY-INTAKE-SKU-${intakeSuffix}`);
+const intakeFile = join(dirname(worldFile), syntheticProductFileName('journey-products'));
+mkdirSync(dirname(worldFile), { recursive: true });
+writeFileSync(
+  intakeFile,
+  await syntheticProductWorkbook(
+    [
+      {
+        'Style code': intakeStyle,
+        'SKU code': intakeSku,
+        'Brand code': intakeBrand.code,
+        'Category code': intakeCategory.code,
+        Size: undefined,
+        'Stock unit': 'piece',
+        Purpose: 'merchandise',
+      },
+    ],
+    intakeSuffix,
+  ),
+);
+
+// The intake refusal journeys (S1-F06-T02; imports-and-opening-data 9.3, 11): a Booking user of their own whose
+// workbook holding a macro project is refused before it is stored, then stores a clean copy; and a Booking user who
+// is not granted the class cost, who stages a file of a Confirmed layout with a cost column and sees cost masked.
+// The costed layout reads a sheet of its own, so the intake journey's file still matches one saved layout. Every
+// value is SYNTHETIC.
+const intakeGrants = [
+  { recordType: 'files_imports.stored_file', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'view' as const },
+  { recordType: 'files_imports.import_batch', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'edit' as const },
+  { recordType: 'files_imports.layout', action: 'view' as const },
+  { recordType: 'files_imports.mapping', action: 'view' as const },
+  ...productViews,
+];
+const refusalBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-REFUSAL-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: refusalBooking.id }, intakeGrants, {
+  fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const refusalClean = await syntheticProductWorkbook(
+  [
+    {
+      'Style code': syntheticCode(`JOURNEY-REFUSAL-STYLE-${intakeSuffix}`),
+      'SKU code': syntheticCode(`JOURNEY-REFUSAL-SKU-${intakeSuffix}`),
+      'Brand code': intakeBrand.code,
+      'Category code': intakeCategory.code,
+      Size: undefined,
+      'Stock unit': 'piece',
+      Purpose: 'merchandise',
+    },
+  ],
+  `REFUSAL-${intakeSuffix}`,
+);
+const refusalMacroFile = join(dirname(worldFile), syntheticProductFileName('journey-macro'));
+writeFileSync(
+  refusalMacroFile,
+  withParts(refusalClean, { 'xl/vbaProject.bin': Buffer.from('SYNTHETIC macro project') }),
+);
+const refusalCleanFile = join(dirname(worldFile), syntheticProductFileName('journey-clean'));
+writeFileSync(refusalCleanFile, refusalClean);
+
+const costReader = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-COST-READER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: costReader.id }, intakeGrants, {
+  fieldClasses: fieldClassSchema.options
+    .filter((fieldClass) => fieldClass !== 'cost')
+    .map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const costedSheet = 'SYNTHETIC Costed Products';
+const costedLayoutCode = syntheticCode('JOURNEY-COSTED-LAYOUT');
+const costedMappingCode = syntheticCode('JOURNEY-COSTED-MAPPING');
+await writeSyntheticLayout(
+  postingDatabase,
+  {
+    layoutCode: costedLayoutCode,
+    mappingCode: costedMappingCode,
+    structure: {
+      ...SYNTHETIC_PRODUCT_LAYOUT,
+      sheet: costedSheet,
+      columns: [
+        ...SYNTHETIC_PRODUCT_LAYOUT.columns,
+        { name: 'Cost', required: false, type: 'money', restrictedClass: 'cost' },
+      ],
+    },
+    fields: SYNTHETIC_PRODUCT_MAPPING,
+  },
+  postingFixture.preparer.id,
+  postingFixture.approver.id,
+);
+const costStyle = syntheticCode(`JOURNEY-COST-STYLE-${intakeSuffix}`);
+const costValue = `${String(100_000 + randomBytes(2).readUInt16BE(0))}.37`;
+const costFile = join(dirname(worldFile), syntheticProductFileName('journey-costed'));
+writeFileSync(
+  costFile,
+  await syntheticWorkbook({
+    sheet: costedSheet,
+    header: [...SYNTHETIC_PRODUCT_COLUMNS, 'Cost'],
+    rows: [
+      [
+        costStyle,
+        syntheticCode(`JOURNEY-COST-SKU-${intakeSuffix}`),
+        intakeBrand.code,
+        intakeCategory.code,
+        null,
+        'piece',
+        'merchandise',
+        Number(costValue),
+      ],
+    ],
+    marker: `COSTED-${intakeSuffix}`,
+  }),
+);
+
+// The duplicate journey (import-duplicates.spec.ts; S1-F06-T04), in the same Organisation: its own Booking user, so no
+// two journeys share an authenticator, and two SYNTHETIC product files: the first with one style, the second with
+// that style again, unchanged, and a new one. After the first is published, the second's repeat is a duplicate
+// (imports-and-opening-data 7.2). Every value is SYNTHETIC.
+const duplicateBooking = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-DUPLICATE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+const importerGrants = [
+  { recordType: 'files_imports.stored_file', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'view' as const },
+  { recordType: 'files_imports.import_batch', action: 'create' as const },
+  { recordType: 'files_imports.import_batch', action: 'edit' as const },
+  ...productViews,
+  { recordType: 'merchandise.product_proposal', action: 'create' as const },
+  { recordType: 'files_imports.layout', action: 'view' as const },
+  { recordType: 'files_imports.mapping', action: 'view' as const },
+];
+await grantSynthetic(postingDatabase, { kind: 'user', id: duplicateBooking.id }, importerGrants, {
+  fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const duplicateSuffix = randomBytes(3).toString('hex').toUpperCase();
+const duplicateRow = (style: string, sku: string) => ({
+  'Style code': style,
+  'SKU code': sku,
+  'Brand code': intakeBrand.code,
+  'Category code': intakeCategory.code,
+  Size: undefined,
+  'Stock unit': 'piece',
+  Purpose: 'merchandise',
+});
+const duplicateStyle = syntheticCode(`JOURNEY-DUP-STYLE-${duplicateSuffix}`);
+const duplicateNewStyle = syntheticCode(`JOURNEY-DUP-NEW-${duplicateSuffix}`);
+const duplicateFirstFile = join(dirname(worldFile), syntheticProductFileName('journey-duplicate-first'));
+const duplicateSecondFile = join(dirname(worldFile), syntheticProductFileName('journey-duplicate-second'));
+const duplicateSku = syntheticCode(`JOURNEY-DUP-SKU-${duplicateSuffix}`);
+writeFileSync(
+  duplicateFirstFile,
+  await syntheticProductWorkbook([duplicateRow(duplicateStyle, duplicateSku)], `${duplicateSuffix}A`),
+);
+writeFileSync(
+  duplicateSecondFile,
+  await syntheticProductWorkbook(
+    [
+      duplicateRow(duplicateStyle, duplicateSku),
+      duplicateRow(duplicateNewStyle, syntheticCode(`JOURNEY-DUP-SKU2-${duplicateSuffix}`)),
+    ],
+    `${duplicateSuffix}B`,
+  ),
+);
+// The import outcomes report journey (import-duplicates.spec.ts; S1-F06-T04): two SYNTHETIC Stores at a SYNTHETIC
+// Site, a batch for each, started through the API once the server listens by a seeding importer, and a reader whose
+// assignment covers only the first Store, who sees only its batch (imports-and-opening-data 14; PRD-SEC-005).
+const outcomesSite = uuidv7();
+const outcomesStores = [uuidv7(), uuidv7()] as const;
+await writeSyntheticSites(postingDatabase, [outcomesSite]);
+{
+  const owner = await connect(postingDatabase, 'migration');
+  try {
+    for (const [index, store] of outcomesStores.entries()) {
+      await owner.query('insert into organisation.store (id, code) values ($1, $2)', [
+        store,
+        syntheticCode(`JOURNEY-OUTCOMES-STORE-${String(index + 1)}-${duplicateSuffix}`),
+      ]);
+      await owner.query(
+        `insert into organisation.store_version (id, store_id, name, format, operating_model, site_id, status,
+           valid_during, decision, prepared_by_user_id)
+         values ($1, $2, $3, 'mbo', 'company-owned', $4, 'Active', '[2000-01-01,)', 'Approved', $5)`,
+        [uuidv7(), store, syntheticName(`Journey Outcomes Store ${String(index + 1)}`), outcomesSite, uuidv7()],
+      );
+    }
+  } finally {
+    await owner.end();
+  }
+}
+const outcomesSeeder = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-OUTCOMES-SEEDER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(postingDatabase, { kind: 'user', id: outcomesSeeder.id }, importerGrants, {
+  fieldClasses: fieldClassSchema.options.map((fieldClass) => ({ fieldClass, access: 'view' as const })),
+});
+const outcomesReader = await writeSyntheticUser(postingDatabase, postingCode, keys, {
+  label: 'BROWSER-OUTCOMES-READER',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(
+  postingDatabase,
+  { kind: 'user', id: outcomesReader.id },
+  [{ recordType: 'files_imports.import_batch', action: 'view' }],
+  {
+    scope: {
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'selected', members: [{ type: 'store', id: outcomesStores[0] }] },
+      brand: { kind: 'all' },
+    },
+  },
+);
 
 // The bank details journey's people (S1-F03-T03): a person who prepares a supplier's bank-detail change, holding the
 // class bank-details to write it, and a different person who approves it from My work and shows the details with the
@@ -1889,6 +2233,63 @@ const app = await startAccessApp(
   if (prepared.status !== 200) throw new Error(`The evidence rule change was refused: ${await prepared.text()}`);
 }
 
+// The import outcomes report journey's two batches, one in each Store, started through the API by the seeding
+// importer once the server listens (imports-and-opening-data 13.1; S1-F06-T04). Every value is SYNTHETIC.
+const outcomesBatchCodes: string[] = [];
+{
+  const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.41' };
+  const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: at,
+    body: JSON.stringify({
+      organisationCode: postingCode,
+      login: outcomesSeeder.login,
+      password: outcomesSeeder.password,
+      totpCode: codeFor(outcomesSeeder.factorSecret ?? Buffer.alloc(0)),
+    }),
+  });
+  if (signedIn.status !== 200) throw new Error(`The outcomes seeder was not signed in: ${String(signedIn.status)}`);
+  const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  for (const [index, store] of outcomesStores.entries()) {
+    const marker = `${duplicateSuffix}S${String(index + 1)}`;
+    const bytes = await syntheticProductWorkbook(
+      [
+        duplicateRow(
+          syntheticCode(`JOURNEY-OUTCOMES-STYLE-${marker}`),
+          syntheticCode(`JOURNEY-OUTCOMES-SKU-${marker}`),
+        ),
+      ],
+      marker,
+    );
+    const stored = await fetch(`${app.baseUrl}/api/files-imports/import-files`, {
+      method: 'POST',
+      headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify({
+        sourceSystem: 'manual-upload',
+        originalName: syntheticProductFileName(`journey-outcomes-${String(index + 1)}`),
+        contentBase64: bytes.toString('base64'),
+      }),
+    });
+    if (stored.status !== 200) throw new Error(`The outcomes file was refused: ${await stored.text()}`);
+    const file = (await stored.json()) as { storedFileId: string; receiptId: string };
+    const started = await fetch(`${app.baseUrl}/api/files-imports/batches`, {
+      method: 'POST',
+      headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify({
+        storedFileId: file.storedFileId,
+        fileReceiptId: file.receiptId,
+        kind: 'create',
+        target: 'merchandise',
+        layoutVersionId: intakeLayout.layoutVersionId,
+        mappingVersionId: intakeLayout.mappingVersionId,
+        scope: { siteId: outcomesSite, storeId: store },
+      }),
+    });
+    if (started.status !== 200) throw new Error(`The outcomes batch was refused: ${await started.text()}`);
+    outcomesBatchCodes.push(((await started.json()) as { code: string }).code);
+  }
+}
+
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
   worldFile,
@@ -1944,6 +2345,43 @@ writeFileSync(
       seasonName: productsSeason.name,
       seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
       fitName: productsFit.name,
+    },
+    fileIntake: {
+      organisationCode: postingCode,
+      booking: credentialsOf(intakeBooking),
+      filePath: intakeFile,
+      // How the screen names the saved layout and mapping (intake.layout.option).
+      layoutOption: `${SYNTHETIC_PRODUCT_LAYOUT_CODE}-CONFIRMED version 1 · ${SYNTHETIC_PRODUCT_MAPPING_CODE}-CONFIRMED version 1 (Confirmed)`,
+      styleCode: intakeStyle,
+      skuCode: intakeSku,
+      ruleBooking: credentialsOf(ruleBooking),
+      confirmer: credentialsOf(intakeConfirmer),
+      brandCode: intakeBrand.code,
+      today: postingFixture.today(),
+      duplicate: {
+        booking: credentialsOf(duplicateBooking),
+        firstFile: duplicateFirstFile,
+        secondFile: duplicateSecondFile,
+        style: duplicateStyle,
+        newStyle: duplicateNewStyle,
+      },
+      outcomes: {
+        reader: credentialsOf(outcomesReader),
+        storeBatchCode: outcomesBatchCodes[0] ?? '',
+        otherBatchCode: outcomesBatchCodes[1] ?? '',
+      },
+      refusal: {
+        booking: credentialsOf(refusalBooking),
+        macroFilePath: refusalMacroFile,
+        cleanFilePath: refusalCleanFile,
+      },
+      cost: {
+        reader: credentialsOf(costReader),
+        filePath: costFile,
+        layoutOption: `${costedLayoutCode} version 1 · ${costedMappingCode} version 1 (Confirmed)`,
+        styleCode: costStyle,
+        costValue,
+      },
     },
     bankDetails: {
       organisationCode: settingsCode,
@@ -2079,6 +2517,7 @@ writeFileSync(
     },
   }),
 );
+worldWritten = true;
 process.stdout.write(`Browser journey server listening on port ${String(port)} for ${origin}\n`);
 
 let stopping = false;

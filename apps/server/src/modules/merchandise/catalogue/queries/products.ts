@@ -40,6 +40,15 @@ async function proposalViews(
       ...(row.decidedAt === null ? {} : { decidedAt: row.decidedAt.toISOString() }),
       skuIds,
       ...(request === undefined ? {} : { request: { id: request.id, state: request.state } }),
+      ...(row.importBatchId === null || row.importDocumentId === null || row.importStagedRowIds === null
+        ? {}
+        : {
+            importSource: {
+              batchId: row.importBatchId,
+              documentId: row.importDocumentId,
+              stagedRowIds: row.importStagedRowIds,
+            },
+          }),
     };
   });
 }

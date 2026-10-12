@@ -61,6 +61,10 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     // imports-and-opening-data 11: the record an attachment belongs to, SECURITY DEFINER, and whether the transaction
     // names a record its owning module admitted the actor to (migration 0039; RR-452).
     'files_imports.attached_record',
+    // imports-and-opening-data 7.2: a source identity's published document and whether a file is in a batch that has
+    // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0065; S1-F06-T04).
+    'files_imports.file_in_open_batch',
+    'files_imports.published_document',
     'files_imports.record_admitted',
     // books-and-posting 12: whether a book's lines include any the reader cannot see, SECURITY DEFINER (S1-F09-T02).
     'finance.lines_hidden',
@@ -442,11 +446,13 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
         `select (select count(*) from pg_catalog.pg_constraint c
                  where c.conrelid = '${entry.table}'::regclass and c.contype = 'x'
                    and pg_catalog.pg_get_constraintdef(c.oid) like '%valid_during WITH &&%'
-                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3); every
-                   -- row of a dated table whose rows need no decision, such as pos.billing_device_unit.
+                   -- Approved versions, or, where a withdrawal column exists, Approved and not withdrawn (7.3); for
+                   -- a proposal's versions, whose states are Proposed, Confirmed and Rejected (DM-4), Confirmed ones;
+                   -- every row of a dated table whose rows need no decision, such as pos.billing_device_unit.
                    and (pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((decision = ''Approved''::text))%'
                         or pg_catalog.pg_get_constraintdef(c.oid)
                           like '%WHERE (((decision = ''Approved''::text) AND (withdrawal_id IS NULL)))%'
+                        or pg_catalog.pg_get_constraintdef(c.oid) like '%WHERE ((state = ''Confirmed''::text))%'
                         or (pg_catalog.pg_get_constraintdef(c.oid) not like '%WHERE%'
                             and not exists (select 1 from pg_catalog.pg_attribute a
                                             where a.attrelid = c.conrelid and a.attname = 'decision'
@@ -454,7 +460,8 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
                   as exclusion,
                 (select count(*) from pg_catalog.pg_trigger t
                  where t.tgrelid = '${entry.table}'::regclass and t.tgenabled <> 'D'
-                   -- The module's own guard: access.guard_version_change, configuration.guard_version_change.
+                   -- The module's own guard: access.guard_version_change, configuration.guard_version_change,
+                   -- files_imports.guard_version_change.
                    and t.tgfoid::regproc::text = split_part('${entry.table}', '.', 1) || '.guard_version_change')::text
                   as guard`,
       );

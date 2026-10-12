@@ -24,7 +24,7 @@ Updated 7 Oct 2026.
 | `S1-F11` Shared calculations | Done, accepted 8 Oct 2026: 38 golden cases pass on the server and in Chromium on the counter build (`apps/counter`), the counter bundle excludes costing, CI green (run 37679034974). Left in later stages: the live values (RR-136 to RR-145) and RR-042 |
 | `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) built and reviewed on 8 Oct 2026, merged into `main` and deployed to `dev`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC-9 approved and Current on 10 Oct 2026 (`S1-F14-T01`, RR-010) |
-| `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026, merged into `main` and deployed to `dev`; `S1-F06-T06` (protected download, encrypted receipt names; RR-432, RR-433) done 8 Oct 2026. T01 to T04 wait on `S1-F02`, `S1-F03`, `S1-F04` and `S1-F08` |
+| `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026, merged into `main` and deployed to `dev`; `S1-F06-T06` (protected download, encrypted receipt names; RR-432, RR-433) done 8 Oct 2026. T01 to T04 (the synthetic XLSX tracer, intake refusals and caps, layouts, mappings and the validation report, duplicates, publishing per document and the outcomes report) done 10 Oct 2026 on `s1/f06-file-intake-2`, reviewed twice with `/code-review` and their fixes made, and merged into `main` on 12 Oct 2026. Open: RR-036 (the caps of `kdps-test`), RR-497 to RR-503 |
 | `S1-F08` Number series and exceptions | Done 9 Oct 2026: gapless number series (T01), exceptions in My work (T02), evidence files on exceptions and approval decisions (T03), live updates and the failed-jobs view (T04). Open: RR-449 (no screen defines number formats or series yet), RR-453, RR-454, RR-455, RR-456 |
 | The other features | Not started; their tickets are written (section 8) and the whole stage is in one [spec](spec.md). `S1-F07` moved to stage 2 as `S2-F13` (`DEC-115`) |
 
@@ -197,10 +197,10 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F10-T04 Harness and the story under four combinations](s1-f10-stock-ledger/tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | F10-T03, F02-T03, F08-T01, F08-T02, F05-T01, F03-T02, F09-T03 |
 | [F10-T06 Scenarios G2 to G13 with G10a](s1-f10-stock-ledger/tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked | F10-T04, F08-T02 |
 | [F10-T07 Failure, concurrency, large posting and acceptance](s1-f10-stock-ledger/tickets/T07-failure-and-concurrency-suites.md) | blocked | F10-T06, F08-T02, F09-T03 |
-| [F06-T01 Synthetic XLSX tracer](s1-f06-file-intake/tickets/T01-synthetic-xlsx-tracer.md) | blocked | F06-T05, F08-T01, F03-T02 |
-| [F06-T02 Intake refusals and caps](s1-f06-file-intake/tickets/T02-intake-refusals-and-caps.md) | blocked | F06-T01, F06-T03 + gate |
-| [F06-T03 Layouts, mappings and the validation report](s1-f06-file-intake/tickets/T03-layouts-mappings-and-the-validation-report.md) | blocked | F06-T01, F02-T02, F02-T03, F04-T01 |
-| [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | blocked | F06-T03 |
+| [F06-T01 Synthetic XLSX tracer](s1-f06-file-intake/tickets/T01-synthetic-xlsx-tracer.md) | done | F06-T05, F08-T01, F03-T02 |
+| [F06-T02 Intake refusals and caps](s1-f06-file-intake/tickets/T02-intake-refusals-and-caps.md) | done | F06-T01, F06-T03 + gate |
+| [F06-T03 Layouts, mappings and the validation report](s1-f06-file-intake/tickets/T03-layouts-mappings-and-the-validation-report.md) | done | F06-T01, F02-T02, F02-T03, F04-T01 |
+| [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | done | F06-T03 |
 | [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | done | F01-T09, F11-T10, F02-T02, F08-T01 |
 | [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | done | F04-T02, F12-T01 |
 | [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | ready-for-agent | F12-T01, F12-T02, F01-T13, F02-T01 |

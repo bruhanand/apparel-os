@@ -22,6 +22,7 @@ import { SuppliersScreen } from './merchandise/SuppliersScreen';
 import { AgreementScreen } from './merchandise/AgreementScreen';
 import { MyWorkCount, MyWorkScreen } from './inbox/MyWorkScreen';
 import { ExceptionRulesScreen } from './exceptions/ExceptionRulesScreen';
+import { FileIntakeScreen } from './files/FileIntakeScreen';
 import { FailedJobsScreen } from './operations/FailedJobsScreen';
 import { ApprovalLimitsScreen } from './setup/ApprovalLimitsScreen';
 import { AssignmentsScreen } from './setup/AssignmentsScreen';
@@ -124,6 +125,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <SuppliersScreen />;
     case 'setup.agreement':
       return <AgreementScreen />;
+    case 'setup.file-intake':
+      return <FileIntakeScreen />;
     case 'setup.exception-rules':
       return <ExceptionRulesScreen />;
     case 'setup.operations':

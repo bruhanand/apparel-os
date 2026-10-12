@@ -17,7 +17,14 @@ import {
 } from './modules/access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { composedNumbering, numberedKinds } from './numbered-kinds.js';
-import { decisionEvidence, FilesImportsModule, policyEvidence } from './modules/files-imports/index.js';
+import {
+  decisionEvidence,
+  filesImportsApprovals,
+  FilesImportsModule,
+  IMPORT_HANDLERS,
+  ImportHandlers,
+  policyEvidence,
+} from './modules/files-imports/index.js';
 import {
   EXCEPTION_TYPES,
   ExceptionsModule,
@@ -86,6 +93,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
   imports: [AuditModule],
   providers: [
     { provide: LOCATION_IN_USE, useFactory: (): LocationInUse => new LocationStock() },
+    // The import handler contract of `files-imports`, which `merchandise` and `organisation` implement and register
+    // with at start (imports-and-opening-data 13.2; module-map 4.7). Provided here because `files-imports`' own
+    // decision effects check a mapping rule's target through the handler that owns it (6.3; S1-F06-T03).
+    { provide: IMPORT_HANDLERS, useFactory: () => new ImportHandlers() },
     // The catalogue's contracts (structure-and-masters 4.3, 4.4, 4.6; S1-F03-T02): stock presence, which `stock` ·
     // ledger answers, and supplier roles, which the parties part answers.
     { provide: STOCK_PRESENCE, useFactory: (): StockPresence => new SkuStockPresence() },
@@ -100,6 +111,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         locationInUse: LocationInUse,
         configuration: ConfigurationInterface,
         bookHeldStock: BookHeldStock,
+        importHandlers: ImportHandlers,
       ) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
@@ -127,8 +139,10 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           // missing series, through `numbering` built with every declared kind (offline-counter 4.3b; DEC-117;
           // S1-F12-T03).
           posApprovals({ audit, numbering: composedNumbering() }),
+          // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
+          filesImportsApprovals(audit, importHandlers),
         ),
-      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
@@ -137,7 +151,8 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       useValue: [organisationScopeMembers, catalogueScopeMembers] satisfies readonly ScopeMembers[],
     },
     // The kinds the owning modules number: the exception code (S1-F08-T02), the journal (books-and-posting 5.4;
-    // S1-F09-T02) and the bill, per billing device and tax registration (offline-counter 4.1; S1-F12-T01).
+    // S1-F09-T02), the bill, per billing device and tax registration (offline-counter 4.1; S1-F12-T01), and the import
+    // batch code (imports-and-opening-data 15.1; GC9-9; S1-F06-T01): `numbered-kinds.ts`.
     {
       provide: NUMBERED_KINDS,
       useValue: numberedKinds,
@@ -155,6 +170,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
   ],
   exports: [
     MODULE_APPROVALS,
+    IMPORT_HANDLERS,
     LOCATION_IN_USE,
     BOOK_HELD_STOCK,
     STOCK_PRESENCE,

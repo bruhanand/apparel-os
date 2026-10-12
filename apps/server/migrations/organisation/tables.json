@@ -523,10 +523,10 @@
     {
       "table": "files_imports.stored_file",
       "class": "unscoped",
-      "marks": ["append-only"],
-      "runtime": ["INSERT", "SELECT"],
-      "design": "imports-and-opening-data 3.1, 11, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3",
-      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does"
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "imports-and-opening-data 3.1, 11, 13.1, 15.1; backup-and-restore 2.1, 3.3; code-house-rules 6.3, 8.2",
+      "why": "One row for each distinct content, found by its hash before any scope is known (storing precedes attaching). It holds no content: the bytes are in the file store, encrypted, and are served only through an attachment, whose scope and restricted classes the reader must satisfy (section 11). The row itself, with its hash, size and format, is readable by any session of the runtime role, but no route reads it; only the files-imports module's own code does. Start an import locks it at step 1, so two Starts of one file queue (RR-503)"
     },
     {
       "table": "files_imports.file_receipt",
@@ -542,6 +542,103 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "imports-and-opening-data 11, 13.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
+    },
+    {
+      "table": "files_imports.layout",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 6.1, 6.4, 15.1",
+      "why": "A recognised file structure of the Organisation as a whole: it holds no data and no scope fact, so a batch of any scope may use it; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.layout_version",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 6.1, 6.4, 15.1",
+      "why": "A layout's versions, the structure only and never data (6.1), the Organisation's as the layout is; proposed by the runtime role and changed only by their decision, once, under its lock; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.mapping",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 6.2, 6.4, 15.1",
+      "why": "How a layout version fills one target's fields, the Organisation's as the layout is, holding no data and no scope fact; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.mapping_version",
+      "class": "unscoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 6.2, 6.4, 15.1",
+      "why": "A mapping's versions, the Organisation's as the mapping is; proposed by the runtime role and changed only by their decision, once, under its lock; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.import_batch",
+      "class": "scoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 3.2, 11, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 8.2"
+    },
+    {
+      "table": "files_imports.import_document",
+      "class": "scoped",
+      "marks": ["locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 2, 3.2, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 8.2"
+    },
+    {
+      "table": "files_imports.staged_row",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 5, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "files_imports.mapping_rule",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "imports-and-opening-data 6.3, 6.4, 15.1; code-house-rules 7.1, 8.2",
+      "why": "A rule that turns one source word into an approved value, the Organisation's as a layout is, holding no data and no scope fact; its identity row is locked when a version is confirmed; only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.mapping_rule_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 6.3, 6.4, 15.1; code-house-rules 7.3",
+      "why": "A mapping rule's versions, the Organisation's as the rule is; changed only by their decision, once, and by an end moved earlier when a later version follows (7.3); only files-imports code reads it"
+    },
+    {
+      "table": "files_imports.staged_value_entry",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 5, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "files_imports.row_issue",
+      "class": "scoped",
+      "marks": [],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "imports-and-opening-data 8.2, 15.1; access-and-approvals 7.2; code-house-rules 6.2"
+    },
+    {
+      "table": "files_imports.control_total",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 6.6, 8.1, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "files_imports.import_outcome",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 7.4, 14, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
     },
     {
       "table": "stock.unit_anchor",

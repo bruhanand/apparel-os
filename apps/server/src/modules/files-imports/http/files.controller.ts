@@ -38,6 +38,7 @@ export class FilesController {
       key: input.idempotencyKey,
       content: requestContentOf(routes.storeFile, input),
       body: input.body,
+      purpose: 'evidence',
     });
     return commandAnswer(answer);
   }

@@ -37,7 +37,8 @@ import {
 import { TEST_COMPOSITION } from './composition.js';
 import { AUDIT, type AuditInterface } from '../../src/modules/audit/index.js';
 import { EXCEPTION_TYPES, type ExceptionTypeRegistration } from '../../src/modules/exceptions/index.js';
-import { FILE_STORE_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import { SYNTHETIC_INTAKE_CAPS_ENVIRONMENT } from '../fixtures/intake-caps.js';
 import { LOCATION_IN_USE, type LocationInUse } from '../../src/modules/organisation/index.js';
 import { checkEventKinds, POSTING_EVENT_KINDS, type PostingEventKind } from '../../src/modules/finance/books/index.js';
 import {
@@ -260,6 +261,8 @@ export async function startAccessApp(
     readonly counterApp?: string;
     /** The file store variables (files-imports); none by default, so file storage is not configured. */
     readonly fileStoreEnvironment?: Record<string, string>;
+    /** The caps at intake (files-imports; S1-F06-T02): those documented for tests unless a test gives its own. */
+    readonly intakeCaps?: Readonly<Record<string, string>>;
     /** Record types beside the declared ones, for a test-only record type (code-house-rules 11.4). */
     readonly extraRecordTypes?: readonly RecordTypeDeclaration[];
     /**
@@ -354,6 +357,12 @@ export async function startAccessApp(
     .useValue(options.timezone ?? syntheticTimezone)
     .overrideProvider(CONFIGURATION_ENVIRONMENT)
     .useValue({ AOS_ENVIRONMENT: options.environment ?? 'local' })
+    // The same name for the publishing limit of imports (S1-F06-T01), and the caps at intake (S1-F06-T02).
+    .overrideProvider(FILES_IMPORTS_ENVIRONMENT)
+    .useValue({
+      AOS_ENVIRONMENT: options.environment ?? 'local',
+      ...(options.intakeCaps ?? SYNTHETIC_INTAKE_CAPS_ENVIRONMENT),
+    })
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);

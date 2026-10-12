@@ -54,7 +54,12 @@ import {
   type ApprovalUseRecord,
 } from './commands/approval-use.js';
 import { requestModuleApproval, type ModuleApprovalRequest } from './commands/request-approval.js';
-import { requestLockTargets, withdrawRequest, type WithdrawnDocument } from './commands/withdraw-request.js';
+import {
+  requestLockTargets,
+  supersedeRequest,
+  withdrawRequest,
+  type WithdrawnDocument,
+} from './commands/withdraw-request.js';
 import { approvalRulesOf, effectsOf, type ApprovalRule, type DocumentEffect } from './domain/approval-rules.js';
 import { latestRequests, type LatestRequest } from './queries/access-records.js';
 import { holdAuthority, type AuthorityActor, type HeldNeed } from './commands/authority.js';
@@ -334,6 +339,16 @@ export interface AccessInterface {
     document: WithdrawnDocument,
     by: { readonly userId: string; readonly roleAssignmentId?: string },
   ): Promise<'withdrawn' | 'not-open'>;
+  /**
+   * Supersede a request on behalf of the owning module (access-and-approvals 9.6; S1-F06-T03): the open request on the
+   * document version becomes Superseded, under the lock taken through requestLockTargets, when the owning module has
+   * changed the document so that version can no longer be decided. Answers `not-open` when none awaits a decision.
+   */
+  supersedeRequest(
+    context: TransactionContext,
+    document: WithdrawnDocument,
+    by: { readonly userId: string; readonly roleAssignmentId?: string },
+  ): Promise<'superseded' | 'not-open'>;
   /** The rows a posting locks with its document at step 1: the decision's request (stock-ledger 10.3; 9.7). */
   approvalLockTargets(context: TransactionContext, decisionId: string): Promise<LockTarget[]>;
   /**
@@ -724,6 +739,18 @@ export class Access implements AccessInterface {
       throw new CommandDefect(`No approval rule of ${document.module} for action type ${document.actionType}`);
     }
     return withdrawRequest(context, this.dependencies.audit, document, by);
+  }
+
+  supersedeRequest(
+    context: TransactionContext,
+    document: WithdrawnDocument,
+    by: { readonly userId: string; readonly roleAssignmentId?: string },
+  ) {
+    const rule = this.rules.get(document.actionType);
+    if (rule === undefined || rule.module === 'access' || rule.module !== document.module) {
+      throw new CommandDefect(`No approval rule of ${document.module} for action type ${document.actionType}`);
+    }
+    return supersedeRequest(context, this.dependencies.audit, document, by);
   }
 
   approvalLockTargets(context: TransactionContext, decisionId: string) {
