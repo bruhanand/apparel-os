@@ -18,8 +18,8 @@ create table files_imports.comparison_run (
   left_business_unit_id uuid,
   left_as_of timestamptz,
   right_set text not null,
-  right_batch_id uuid references files_imports.import_batch (id),
-  right_batch_version_id uuid,
+  right_batch_id uuid not null references files_imports.import_batch (id),
+  right_batch_version_id uuid not null,
   counts jsonb not null,
   run_by_user_id uuid not null,
   role_assignment_id uuid not null,
@@ -42,7 +42,6 @@ create table files_imports.comparison_run (
       and left_business_unit_id is not null and left_as_of is not null
     else left_batch_id is not null and left_batch_version_id is not null and left_site_id is null
       and left_business_unit_id is null and left_as_of is null end),
-  constraint comparison_run_right check (right_batch_id is not null and right_batch_version_id is not null),
   constraint comparison_run_counts check (jsonb_typeof(counts) = 'object')
 );
 create index comparison_run_run_at on files_imports.comparison_run (run_at, id);

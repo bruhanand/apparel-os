@@ -22,6 +22,7 @@ import * as siteLifecycleTables from '../src/modules/site-lifecycle/db/schema.js
 import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
 import * as booksTables from '../src/modules/finance/books/db/schema.js';
 import * as posTables from '../src/modules/pos/db/schema.js';
+import * as eboImportsTables from '../src/modules/ebo-imports/db/schema.js';
 import { HARNESS_MIGRATIONS } from './harness/stock/harness.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
@@ -65,6 +66,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     // imports-and-opening-data 7.2: a source identity's published document and whether a file is in a batch that has
     // not Failed, whatever the actor's scope sees, SECURITY DEFINER (migration 0065; S1-F06-T04).
     'files_imports.file_in_open_batch',
+    // module-map 4.16; DEC-117: a unit's opening-stock batches submitted at their version, SECURITY DEFINER (migration
+    // 0070; S1-F13-T01).
+    'files_imports.opening_plan_versions',
     'files_imports.published_document',
     'files_imports.record_admitted',
     // books-and-posting 12: whether a book's lines include any the reader cannot see, SECURITY DEFINER (S1-F09-T02).
@@ -653,6 +657,15 @@ describe('the Drizzle definitions of finance · books (code-house-rules 3.4, 10.
 
 describe('the Drizzle definitions of site-lifecycle (code-house-rules 3.4, 10.4; S1-F04-T02)', () => {
   it.each(Object.entries(siteLifecycleTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
+});
+
+describe('the Drizzle definitions of ebo-imports (code-house-rules 3.4, 10.4; S1-F13-T01)', () => {
+  it.each(Object.entries(eboImportsTables))(
     'code-house-rules 3.4 %s matches its migrated table',
     async (_name, table) => {
       await expectDefinitionMatches(world.organisations[0].database, table);
