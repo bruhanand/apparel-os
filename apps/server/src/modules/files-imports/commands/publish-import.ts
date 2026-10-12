@@ -271,7 +271,7 @@ async function held(
       actionType: review.actionType,
       document: {
         module: 'files-imports',
-        recordType: IMPORT_BATCH_TYPE,
+        recordType: review.recordType,
         recordId: batch.id,
         versionId: batch.versionId,
       },

@@ -12,6 +12,7 @@ import { AsOf } from '../history/AsOf';
 import { t } from '../messages/catalogue';
 import { useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
+import { BillNumbering } from './BillNumbering';
 import { useBusinessToday } from './business-date';
 import { Card, GrantedButton, inputClass, ListRead, Toolbar, useGranted } from './parts';
 
@@ -22,7 +23,9 @@ import { Card, GrantedButton, inputClass, ListRead, Toolbar, useGranted } from '
 // series, one per tax registration and financial year. Nothing is chosen on the person's behalf: code, label, Store and
 // units are all stated. A device leaves use by being revoked (lost) or retired, each final and confirmed first; a
 // replacement does either and registers a new device for the same Store and units; an Active device's units change from
-// a date, today or later (offline-counter 3.5, 12.1; S1-F12-T02).
+// a date, today or later (offline-counter 3.5, 12.1; S1-F12-T02). Above them, the financial years and the bill-number
+// format, each changed by one person and approved by another, whose approval gives every Active device its missing
+// series (offline-counter 4.3b; DEC-117; S1-F12-T03).
 
 const READS = ['listBillingDevices'] as const;
 
@@ -411,6 +414,7 @@ export function DevicesScreen() {
   const devices = useQuery(readQuery(api, 'listBillingDevices', {}));
   return (
     <div className="flex flex-col gap-4">
+      <BillNumbering />
       <RegisterForm />
       <ListRead query={devices} what="devices.what">
         {(read) => (

@@ -3,6 +3,7 @@ import { CommandRunnerModule } from '../../kernel/index.js';
 import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
+import { IMPORT_HANDLERS, openingPlansOf, type ImportHandlers } from '../files-imports/index.js';
 import { LOCATION_IN_USE, type LocationInUse } from '../organisation/index.js';
 import { ReadinessController } from './http/readiness.controller.js';
 import { SiteLifecycle } from './site-lifecycle.js';
@@ -25,9 +26,11 @@ import { SITE_LIFECYCLE } from './tokens.js';
         access: AccessInterface,
         configuration: ConfigurationInterface,
         locationInUse: LocationInUse,
-      ) => new SiteLifecycle({ audit, access, configuration, locationInUse }),
-      // The location-in-use contract `stock` implements, from the composition root (structure-and-masters 3.5).
-      inject: [AUDIT, ACCESS, CONFIGURATION, LOCATION_IN_USE],
+        handlers: ImportHandlers,
+      ) => new SiteLifecycle({ audit, access, configuration, locationInUse, openingPlans: openingPlansOf(handlers) }),
+      // The location-in-use contract `stock` implements, from the composition root (structure-and-masters 3.5); the
+      // import handlers, whose opening-stock batches the opening plan read finds (files-imports; DEC-117; S1-F13-T01).
+      inject: [AUDIT, ACCESS, CONFIGURATION, LOCATION_IN_USE, IMPORT_HANDLERS],
     },
   ],
   exports: [SITE_LIFECYCLE],

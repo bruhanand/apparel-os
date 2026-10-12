@@ -1,0 +1,93 @@
+{
+  "id": "G5-MA-BOOK",
+  "title": "G5: a damage report on reserved stock blocks dispatch, is rejected, and the transfer is then cancelled",
+  "synthetic": true,
+  "covers": ["PRD-ACP-005", "PRD-DMG-001", "PRD-DMG-003", "PRD-TRF-007", "PRD-TRF-022", "PRD-INT-005"],
+  "sources": ["stock-ledger 6.1, 6.2, 11.8 G5"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "stock at W1, reserved for a transfer",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "W1", "pieces": 4, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 40000
+            }
+          ]
+        },
+        {
+          "command": "transfer-approval",
+          "transfer": "T1",
+          "approvedPaise": 40000,
+          "from": "W1",
+          "to": "S1",
+          "pieces": "R1:0-3"
+        }
+      ],
+      "after": { "pools": [{ "pool": "book", "quantity": 4, "valuePaise": 40000 }], "transitPaise": 0, "cogsPaise": 0 }
+    },
+    {
+      "step": "a damage report on a reserved piece blocks the dispatch at once",
+      "commands": [
+        { "command": "damage-report", "damage": "D1", "at": "W1", "pieces": "R1:0" },
+        { "command": "dispatch", "transfer": "T1", "refused": "stock.held" }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 4, "valuePaise": 40000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 4 }]
+      }
+    },
+    {
+      "step": "the rejection clears only the damage hold",
+      "commands": [
+        { "command": "damage-reject", "damage": "D1" },
+        {
+          "command": "transfer-approval",
+          "transfer": "T2",
+          "approvedPaise": 10000,
+          "from": "W1",
+          "to": "S1",
+          "pieces": "R1:0",
+          "refused": "stock.reservation-overlap"
+        }
+      ],
+      "after": { "pools": [{ "pool": "book", "quantity": 4, "valuePaise": 40000 }], "transitPaise": 0, "cogsPaise": 0 }
+    },
+    {
+      "step": "the cancellation clears only its reservation",
+      "commands": [
+        { "command": "transfer-cancel", "transfer": "T1" },
+        {
+          "command": "transfer-approval",
+          "transfer": "T3",
+          "approvedPaise": 40000,
+          "from": "W1",
+          "to": "S1",
+          "pieces": "R1:0-3"
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 4, "valuePaise": 40000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 4 }]
+      }
+    }
+  ],
+  "trialBalance": { "INV": 40000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -40000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

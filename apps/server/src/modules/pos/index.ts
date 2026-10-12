@@ -10,3 +10,6 @@ export { deviceEnded, deviceEnrolled, deviceRegistered } from './events.js';
 export { unitDevicesCheck } from './queries/devices-check.js';
 export { POS_IDENTITY, posConsumers } from './jobs/consumers.js';
 export { posRestoreParticipant } from './restore-participant.js';
+// The approval rules and decision effects of the financial-year and bill-format changes, for the composition root
+// (access-and-approvals 9.8b; offline-counter 4.3b; S1-F12-T03).
+export { posApprovals } from './commands/numbering-changes.js';

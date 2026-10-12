@@ -1,0 +1,94 @@
+{
+  "id": "G10A-MA-BOOK",
+  "title": "G10a: with no rounding rule set, an outflow that does not divide into whole paise is refused; one that empties the pool takes all",
+  "synthetic": true,
+  "covers": ["PRD-LED-014", "PRD-MOD-014", "PRD-SEC-017", "PRD-INT-004"],
+  "sources": ["stock-ledger 7.3, 7.10, 11.8 G10, 12 SL-2", "S1-F10 spec 3.7"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "receipts",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "pieces": 1, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 10000
+            }
+          ]
+        },
+        { "command": "receipt", "receipt": "R2", "at": "S1", "pieces": 2, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R2" },
+        { "command": "pt-coverage", "receipt": "R2" },
+        {
+          "command": "pt-approval",
+          "receipt": "R2",
+          "pRatePaise": 10001,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 20002
+            }
+          ]
+        }
+      ],
+      "after": { "pools": [{ "pool": "book", "quantity": 3, "valuePaise": 30002 }], "transitPaise": 0, "cogsPaise": 0 }
+    },
+    {
+      "step": "an outflow that does not divide",
+      "commands": [{ "command": "sale", "sale": "B1", "at": "S1", "pieces": "R1:0", "refused": "stock.rule-not-set" }],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 3, "valuePaise": 30002 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "custody": [
+          { "origin": "R1", "at": "S1", "quantity": 1 },
+          { "origin": "R2", "at": "S1", "quantity": 2 }
+        ]
+      }
+    },
+    {
+      "step": "an outflow that empties the pool",
+      "commands": [
+        {
+          "command": "sale",
+          "sale": "B2",
+          "at": "S1",
+          "pieces": "R1:0,R2:0-1",
+          "movements": ["sale-issue"],
+          "journals": [
+            {
+              "eventKind": "stock.sale-issue",
+              "component": "cost",
+              "debit": "COGS",
+              "credit": "INV",
+              "amountPaise": 30002
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 0, "valuePaise": 0 }],
+        "transitPaise": 0,
+        "cogsPaise": 30002,
+        "custody": []
+      }
+    }
+  ],
+  "trialBalance": { "INV": 0, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -30002, "COGS": 30002, "LOSS": 0, "VAR": 0 }
+}

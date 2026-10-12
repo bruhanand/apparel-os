@@ -286,7 +286,7 @@ async function repeatRefusal(
   );
   const published = await publishedDocument(context, {
     target: body.target,
-    scopeKey: handler.sourceScope({ reference, rows: [] }),
+    scopeKey: handler.sourceScope({ reference, rows: [], place: scopeFactsOf(body.scope ?? {}) }),
     reference,
   });
   if (published === undefined || revisesPublished(handler, { kind: body.kind })) return undefined;
@@ -570,7 +570,7 @@ async function record(
       state: 'Staged',
       excluded: false,
       target: body.target,
-      scopeKey: handler.sourceScope({ reference: document.reference, rows: [] }),
+      scopeKey: handler.sourceScope({ reference: document.reference, rows: [], place: scopeFactsOf(body.scope ?? {}) }),
       ...columns,
     });
     for (const row of document.rows) rows.push(asRow(row, documentId));

@@ -118,7 +118,7 @@ export const outboxDispatch = kernel.table(
 );
 
 /**
- * One application backup that covered this Organisation (migrations/organisation/0066; backup-and-restore 3.2 step 8,
+ * One application backup that covered this Organisation (migrations/organisation/0075; backup-and-restore 3.2 step 8,
  * section 11; PRD-SEC-013). Append-only; written by the backup command as the migration role, read by the operations
  * view. Holds no record data and no key.
  */
@@ -137,7 +137,7 @@ export const backupRecord = kernel.table('backup_record', {
 });
 
 /**
- * What happened to this Organisation in a restore, one row per fact (migrations/organisation/0070; backup-and-restore
+ * What happened to this Organisation in a restore, one row per fact (migrations/organisation/0079; backup-and-restore
  * 4.2, 4.3, 4.5, section 6, section 11): restored, hold placed, a step or check with its result and counts, a gap, the
  * hold lifted. Append-only; counts, names and identifiers only (PRD-SEC-014).
  */
@@ -162,7 +162,7 @@ export const recoveryEvent = kernel.table('recovery_event', {
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** The recovery hold (migrations/organisation/0070; backup-and-restore 4.3): at most one row, while held. */
+/** The recovery hold (migrations/organisation/0079; backup-and-restore 4.3): at most one row, while held. */
 export const recoveryHold = kernel.table('recovery_hold', {
   id: uuid('id').primaryKey(),
   restoreId: uuid('restore_id').notNull(),

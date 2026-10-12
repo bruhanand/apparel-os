@@ -50,6 +50,9 @@ export type {
   ValueBasis,
 } from './domain/approval-rules.js';
 export type { LatestRequest } from './queries/access-records.js';
+// The latest approval request of each document version, for a read that composes no `Access`, such as the opening
+// plan read of files-imports that the stock-plan readiness check uses (module-map 4.16; DEC-117; S1-F13-T01).
+export { latestRequests } from './queries/access-records.js';
 export type { PartyNames, RoleHeldQuestion } from './queries/parties.js';
 // Who holds a permission at a place, for the users-and-access readiness check (module-map 4.16; S1-F04-T02).
 export { permissionHolders } from './queries/holders.js';
@@ -70,6 +73,7 @@ export type {
   SelectedPlace,
 } from './contracts/scope-members.js';
 export { ACCESS_JOBS_IDENTITY, accessJobKinds } from './jobs/job-kinds.js';
+export { jobIdentities } from './commands/job-identities.js';
 export type { AuthenticatedServiceIdentity } from './queries/service-identities.js';
 export { ORGANISATION_KEYS_VARIABLE } from './domain/organisation-keys.js';
 // The per-Organisation keys, for modules that encrypt before storing (stored files, imports-and-opening-data 11).
@@ -96,4 +100,3 @@ export { accessRestoreParticipant } from './restore-participant.js';
 // After a restore (backup-and-restore 4.2 step 7, 4.4, 5.1; S1-F14-T03): every session ended, and the reader check
 // `files-imports` makes of each attachment with Authorise's own rule.
 export { accessRestoreSteps, attachmentReaderCheck } from './restore-steps.js';
-export { jobIdentities } from './commands/job-identities.js';

@@ -73,7 +73,7 @@ export const activityGrant = configuration.table('activity_grant', {
 });
 
 /**
- * A validation of a restored Organisation before it reopens (migration 0072; backup-and-restore 4.3; POL-18.03): by
+ * A validation of a restored Organisation before it reopens (migration 0081; backup-and-restore 4.3; POL-18.03): by
  * Operations or by Accounts, what was compared, against what, with what evidence. Append-only.
  */
 export const recoveryValidation = configuration.table('recovery_validation', {
@@ -93,7 +93,7 @@ export const recoveryValidation = configuration.table('recovery_validation', {
 const daterange = customType<{ data: string; driverData: string }>({ dataType: () => 'daterange' });
 
 /**
- * A retention schedule of one record class (migration 0072; backup-and-restore 8.1, 8.2; POL-18.05). No row is
+ * A retention schedule of one record class (migration 0081; backup-and-restore 8.1, 8.2; POL-18.05). No row is
  * written while every period is OPEN (V-13), so nothing is deleted.
  */
 export const retentionSchedule = configuration.table('retention_schedule', {

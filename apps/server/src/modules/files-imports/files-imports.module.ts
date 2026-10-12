@@ -21,6 +21,7 @@ import {
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../numbering/index.js';
 import type { ImportDependencies } from './commands/import-common.js';
+import { COUNT_SETS, type CountSets } from './contracts/count-sets.js';
 import { IMPORT_HANDLERS, type ImportHandlers } from './contracts/import-handlers.js';
 import { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
 import { intakeCapsFromEnvironment, type IntakeCaps } from './domain/intake-caps.js';
@@ -75,6 +76,7 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         handlers: ImportHandlers,
         env: Readonly<Record<string, string | undefined>>,
         caps: IntakeCaps,
+        counts: CountSets,
       ): ImportDependencies => ({
         runner,
         helper,
@@ -87,6 +89,7 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         handlers,
         environment: deploymentEnvironmentFromEnvironment(env),
         caps,
+        counts,
       }),
       inject: [
         COMMAND_RUNNER,
@@ -100,6 +103,8 @@ const INTAKE_CAPS = 'files-imports.IntakeCaps';
         IMPORT_HANDLERS,
         FILES_IMPORTS_ENVIRONMENT,
         INTAKE_CAPS,
+        // The count side of a comparison run, which `stock` · ledger answers, from the composition root (S1-F13-T01).
+        COUNT_SETS,
       ],
     },
     { provide: FILE_STORE_ENVIRONMENT, useValue: process.env },

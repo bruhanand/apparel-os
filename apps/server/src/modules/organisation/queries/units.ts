@@ -117,6 +117,21 @@ export function accountingBookExists(context: TransactionContext, bookId: string
   return exists(context, 'accounting_book', bookId);
 }
 
+/**
+ * The one Site and business unit a location belongs to, fixed when it was made (structure-and-masters 3.5), or none
+ * when no such location exists: the stock ledger's place read (stock-ledger 13.1 `locationOf`; RR-436; S1-F10-T04).
+ */
+export async function locationPlace(
+  context: TransactionContext,
+  locationId: string,
+): Promise<{ readonly siteId: string; readonly businessUnitId: string } | undefined> {
+  const [row] = await context.tx
+    .select({ siteId: location.siteId, businessUnitId: location.businessUnitId })
+    .from(location)
+    .where(eq(location.id, locationId));
+  return row;
+}
+
 export async function unitLocationIds(context: TransactionContext, unitId: string): Promise<string[]> {
   const rows = await context.tx
     .select({ id: location.id })

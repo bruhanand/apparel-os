@@ -124,7 +124,11 @@ export async function batchOutcome(
     documents.map((document) => ({
       result: resultOf(document),
       rows: document.rows.map((row) =>
-        Object.fromEntries(handler.measures.map((measure) => [measure.field, knownValue(row.values[measure.field])])),
+        Object.fromEntries(
+          handler.measures
+            .flatMap((measure) => [measure.field, ...(measure.evidence === undefined ? [] : [measure.evidence])])
+            .map((field) => [field, knownValue(row.values[field])]),
+        ),
       ),
     })),
   );

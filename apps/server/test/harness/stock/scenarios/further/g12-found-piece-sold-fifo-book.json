@@ -1,0 +1,90 @@
+{
+  "id": "G12-FIFO-BOOK",
+  "title": "G12: a count finds piece A, which the ledger shows as sold; piece B of the same SKU is missing",
+  "synthetic": true,
+  "covers": ["PRD-STK-015", "PRD-STK-012", "PRD-ACS-014", "DEC-035"],
+  "sources": ["stock-ledger 8.4, 11.8 G12, 12 SL-28"],
+  "combination": { "formula": "fifo", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "stock at S1",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "S1", "pieces": 3, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 30000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 3, "valuePaise": 30000, "layers": [[3, 30000]] }],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "the bill names piece A, though the customer took piece B",
+      "commands": [
+        {
+          "command": "sale",
+          "sale": "B1",
+          "at": "S1",
+          "pieces": "R1:0",
+          "movements": ["sale-issue"],
+          "journals": [
+            {
+              "eventKind": "stock.sale-issue",
+              "component": "cost",
+              "debit": "COGS",
+              "credit": "INV",
+              "amountPaise": 10000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000, "layers": [[2, 20000]] }],
+        "transitPaise": 0,
+        "cogsPaise": 10000,
+        "pieces": { "R1:0": false, "R1:1-2": true }
+      }
+    },
+    {
+      "step": "the count finds A and misses B; after approval A is back and B is recorded as sold",
+      "commands": [
+        { "command": "count-freeze", "count": "C1", "at": "S1", "locations": ["S1"] },
+        {
+          "command": "count-approval",
+          "count": "C1",
+          "differences": [
+            { "difference": "piece-correction", "at": "S1", "found": "R1:0", "sale": "B1", "missing": "R1:1" }
+          ],
+          "approvedPaise": 0,
+          "movements": ["reversal", "sale-issue"],
+          "journals": []
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 2, "valuePaise": 20000, "layers": [[2, 20000]] }],
+        "transitPaise": 0,
+        "cogsPaise": 10000,
+        "custody": [{ "origin": "R1", "at": "S1", "quantity": 2 }],
+        "pieces": { "R1:0": true, "R1:1": false, "R1:2": true }
+      }
+    }
+  ],
+  "trialBalance": { "INV": 20000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -30000, "COGS": 10000, "LOSS": 0, "VAR": 0 }
+}

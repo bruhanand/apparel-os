@@ -35,7 +35,7 @@ export interface SiteLifecycleDependencies {
   readonly access: Pick<AccessInterface, 'requestApproval' | 'approvalRequestsOf' | 'partyNames'>;
   /** Whether the stock ledger holds stock at a location: `organisation`'s contract, which `stock` implements. */
   readonly locationInUse: LocationInUse;
-  /** The read of an approved opening plan, wired with S1-F13-T01; none counts while it is left out. */
+  /** The read of an approved opening plan, files-imports' (S1-F13-T01); none counts while it is left out. */
   readonly openingPlans?: OpeningPlans | undefined;
 }
 

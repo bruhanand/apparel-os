@@ -157,8 +157,9 @@ const filesImportsRecordTypes = [
   // An import batch (13.1, 15.1; S1-F06-T01) carries its Site, Store, business unit and legal entity: view reads it
   // with its staged rows; create starts it, which stages its rows; edit validates and publishes it. Its rows may hold
   // any restricted class its file holds, every class while its layout is not confirmed (section 11). Approve decides
-  // a batch whose handler requires an approval in `access` bound to the batch version (3.1 step 8, 13.2; S1-F06-T03);
-  // no stage 1 handler does.
+  // a batch whose handler requires an approval in `access` bound to the batch version (3.1 step 8, 13.2; S1-F06-T03):
+  // an update batch of product masters, and a batch of historical reference, reviewed by a second person before it is
+  // kept (PRD-IMP-005; product owner, 12 Oct 2026).
   declareWithFields('files_imports.import_batch', ['view', 'create', 'edit', 'approve'], LEGAL_ENTITY_AND_PLACE, [
     'salary-and-payroll',
     'identity-documents',
@@ -175,6 +176,15 @@ const filesImportsRecordTypes = [
   declare('files_imports.layout', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping', ['view', 'create', 'approve'], NONE),
   declare('files_imports.mapping_rule', ['view', 'create', 'approve'], NONE),
+  // The verification of an opening batch, one per opening kind (10.2, 10.4; product owner, 12 Oct 2026): approve on
+  // opening stock is Operations' (POL-14.02), on opening balances, the dues, advances and deposits, Accounts'
+  // (POL-14.03); each company assigns them through roles, and a holder of one cannot verify the other. The record is
+  // the batch at its version, read through `files_imports.import_batch`, so approve is the only action.
+  declare('files_imports.opening_stock', ['approve'], LEGAL_ENTITY_AND_PLACE),
+  declare('files_imports.opening_balances', ['approve'], LEGAL_ENTITY_AND_PLACE),
+  // A comparison run (2, 10.3, 14, 15.1; S1-F13-T01): view reads it with its lines; create runs one, which also needs
+  // view on each side it reads. It carries both sides' places; its lines hold keys and quantities only, no cost.
+  declare('files_imports.comparison_run', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
 /** A record type whose fields include restricted field classes (access-and-approvals 4.1, 6). */
@@ -379,7 +389,26 @@ const financeRecordTypes = [
  * does not hold it (access-and-approvals 9.11). A device carries its Store's place, so an assignment's place scope
  * decides where (5.3). Who holds them is KDPS's.
  */
-const posRecordTypes = [declare('pos.billing_device', ['view', 'create', 'edit'], PLACE)] as const;
+const posRecordTypes = [
+  declare('pos.billing_device', ['view', 'create', 'edit'], PLACE),
+  // The financial years and the bill-number format (offline-counter 4.3b; S1-F12-T03): create prepares a change, which
+  // a different authorised person decides (approve; PRD-ACS-006; product owner, 10 Oct 2026). Its preparer withdraws
+  // their own pending change with no permission; anyone else needs cancel (RR-489; product owner, 12 Oct 2026). They
+  // belong to the Organisation as a whole, so they carry no scope fact. Who holds them is KDPS's (V-01): Accounts and
+  // the CA for the dates (GC5-1), the CA for the format (V-40, POL-10.07).
+  declare('pos.financial_year_change', ['view', 'create', 'approve', 'cancel'], NONE),
+  declare('pos.bill_format_change', ['view', 'create', 'approve', 'cancel'], NONE),
+] as const;
+
+/**
+ * `ebo-imports` (module-map section 5, 11.1; imports-and-opening-data 4.1, 12; DEC-116; S1-F13-T01): in stage 1 only the
+ * reference records of the earlier POS's SOH and daily sales, kept for checking and reports and never moving stock
+ * (PRD-LIF-014, PRD-LIF-016). View reads them; create is what publishing a historical-reference batch needs, at the
+ * batch's place, beside edit on the batch. Who holds them is KDPS's.
+ */
+const eboImportsRecordTypes = [
+  declare('ebo_imports.reference_document', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
+] as const;
 
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
@@ -398,6 +427,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...financeTaxRulesRecordTypes,
   ...financeRecordTypes,
   ...posRecordTypes,
+  ...eboImportsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -415,7 +445,8 @@ export type RecordTypeCode =
   | (typeof siteLifecycleRecordTypes)[number]['code']
   | (typeof financeTaxRulesRecordTypes)[number]['code']
   | (typeof financeRecordTypes)[number]['code']
-  | (typeof posRecordTypes)[number]['code'];
+  | (typeof posRecordTypes)[number]['code']
+  | (typeof eboImportsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

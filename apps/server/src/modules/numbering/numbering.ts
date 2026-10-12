@@ -1,3 +1,4 @@
+import type { SettingOrigin } from '@apparel-os/schemas';
 import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import { allocate, type Allocated, type AllocationRequest } from './commands/allocate.js';
 import { changeState } from './commands/change-state.js';
@@ -7,12 +8,17 @@ import { seriesLockTarget } from './commands/lock-target.js';
 import {
   defineFinancialYear,
   financialYearOn,
+  financialYears,
+  formatExists,
+  kindFormatDetail,
   kindFormatOf,
   setKindFormat,
+  settingsLockTargets,
+  type FinancialYearDefined,
   type FinancialYearDraft,
   type FinancialYearRead,
+  type KindFormatDetail,
   type KindFormatRead,
-  type SettingOrigin,
 } from './commands/settings.js';
 import type { FormatPart } from './domain/format.js';
 import { checkKinds, type NumberedKind, type NumberingResult } from './domain/kinds.js';
@@ -58,6 +64,12 @@ export interface NumberingInterface {
   close(context: TransactionContext, seriesId: string): Promise<NumberingResult<SeriesState>>;
   /** Read series state: the financial year and the next sequence number (PRD-OFF-012). */
   seriesState(context: TransactionContext, seriesId: string): Promise<SeriesState | undefined>;
+  /**
+   * The row a change of the financial years or a kind's format holds exclusively at step 1, with its own document, so
+   * two such changes serialise and the second rechecks what the first wrote (code-house-rules 8.1, 8.2; S1-F12-T03
+   * review).
+   */
+  settingsLockTargets(context: TransactionContext): Promise<LockTarget[]>;
   /** Define a financial year, its label and dates (3.3; GC5-1): an Organisation setting with no default. */
   defineFinancialYear(
     context: TransactionContext,
@@ -74,6 +86,12 @@ export interface NumberingInterface {
   ): Promise<NumberingResult<{ readonly kindFormatId: string }>>;
   /** The format in force for a kind, or not set (3.5). */
   kindFormatOf(context: TransactionContext, kind: string): Promise<KindFormatRead>;
+  /** Every financial year defined, with its dates and origin, in date order (3.3; S1-F12-T03). */
+  financialYears(context: TransactionContext): Promise<FinancialYearDefined[]>;
+  /** The format in force for a kind with its parts and origin, or not set (3.5; S1-F12-T03). */
+  kindFormatDetail(context: TransactionContext, kind: string): Promise<KindFormatDetail>;
+  /** Whether a format of the code exists, for any kind (3.5; S1-F12-T03). */
+  formatExists(context: TransactionContext, code: string): Promise<boolean>;
   /** Every series of a kind under the scope keys named, live or closed (3.7 "Read series state"). */
   seriesOfScopes(context: TransactionContext, kind: string, scopeKeys: readonly string[]): Promise<SeriesState[]>;
   /** Every series of a kind whose scope key starts with the prefix, live or closed (S1-F12-T02). */
@@ -124,6 +142,10 @@ export class Numbering implements NumberingInterface {
     return row === undefined ? undefined : stateOf(row);
   }
 
+  settingsLockTargets(context: TransactionContext) {
+    return settingsLockTargets(context);
+  }
+
   defineFinancialYear(context: TransactionContext, draft: FinancialYearDraft) {
     return defineFinancialYear(context, draft);
   }
@@ -138,6 +160,18 @@ export class Numbering implements NumberingInterface {
 
   kindFormatOf(context: TransactionContext, kind: string) {
     return kindFormatOf(context, kind);
+  }
+
+  financialYears(context: TransactionContext) {
+    return financialYears(context);
+  }
+
+  kindFormatDetail(context: TransactionContext, kind: string) {
+    return kindFormatDetail(context, kind);
+  }
+
+  formatExists(context: TransactionContext, code: string) {
+    return formatExists(context, code);
   }
 
   seriesOfScopePrefix(context: TransactionContext, kind: string, prefix: string) {

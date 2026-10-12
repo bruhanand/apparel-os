@@ -18,6 +18,7 @@ import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner } from '../
 import { RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
 import { BatchRead } from './BatchView';
+import { ComparisonRuns } from './ComparisonRuns';
 import { OutcomesReport } from './OutcomesReport';
 import { base64Of, sizeText } from './Evidence';
 import { MappingRules, ProposeLayoutForm, SavedLayouts } from './SavedLayouts';
@@ -286,7 +287,7 @@ function Intake() {
   );
 }
 
-const TABS = ['intake', 'layouts', 'rules', 'outcomes'] as const;
+const TABS = ['intake', 'layouts', 'rules', 'outcomes', 'comparisons'] as const;
 type Tab = (typeof TABS)[number];
 
 /** Setup › File intake and saved layouts. */
@@ -321,6 +322,7 @@ export function FileIntakeScreen() {
         {tab === 'layouts' && <SavedLayouts />}
         {tab === 'rules' && <MappingRules />}
         {tab === 'outcomes' && <OutcomesReport />}
+        {tab === 'comparisons' && <ComparisonRuns />}
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import {
   type LayoutStructure,
   type StagedValueView,
 } from '@apparel-os/schemas';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   CommandDefect,
@@ -23,6 +23,7 @@ import {
 import type { AccessInterface, OrganisationKeys } from '../../access/index.js';
 import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
+import type { CountSets } from '../contracts/count-sets.js';
 import type { HandlerDocument, ImportHandler, ImportHandlers, ImportReview } from '../contracts/import-handlers.js';
 import {
   importBatch,
@@ -55,6 +56,8 @@ export interface ImportDependencies {
   readonly environment: DeploymentEnvironment;
   /** The caps at intake, which every read of a stored workbook keeps to (9.3; S1-F06-T02). */
   readonly caps: IntakeCaps;
+  /** The count side of a comparison run (10.3; S1-F13-T01), from the composition root. */
+  readonly counts: CountSets;
 }
 
 /** The person a route found: who, in which Organisation, under which request. */
@@ -182,16 +185,35 @@ export interface LoadedDocument extends HandlerDocument {
 }
 
 /** A batch's documents with their data rows, in the file's order, each entered value standing for the staged one. */
+/**
+ * A batch's documents in the order of its file: by the sheet and row number of each document's first data row, the
+ * order its rows are staged and read in (imports-and-opening-data 3.2, 13.3; PRD-IMP-012). Their UUIDv7 identifiers
+ * do not order documents staged within one millisecond (`PRD-MOD-008`), so they only break a tie.
+ */
+export const documentsInFileOrder: readonly SQL[] = [
+  sql`(select ${stagedRow.sheet} from ${stagedRow} where ${stagedRow.documentId} = ${importDocument.id}
+    order by ${stagedRow.sheet}, ${stagedRow.rowNumber} limit 1)`,
+  sql`(select ${stagedRow.rowNumber} from ${stagedRow} where ${stagedRow.documentId} = ${importDocument.id}
+    order by ${stagedRow.sheet}, ${stagedRow.rowNumber} limit 1)`,
+  asc(importDocument.id),
+];
+
 export async function documentsOf(
   context: TransactionContext,
-  batch: Pick<BatchRow, 'id' | 'kind'>,
+  batch: Pick<BatchRow, 'id' | 'kind' | 'legalEntityId' | 'siteId' | 'storeId' | 'businessUnitId'>,
 ): Promise<LoadedDocument[]> {
+  const place = scopeFactsOf({
+    legalEntityId: batch.legalEntityId,
+    siteId: batch.siteId,
+    storeId: batch.storeId,
+    businessUnitId: batch.businessUnitId,
+  });
   const batchId = batch.id;
   const documents = await context.tx
     .select()
     .from(importDocument)
     .where(eq(importDocument.batchId, batchId))
-    .orderBy(asc(importDocument.id));
+    .orderBy(...documentsInFileOrder);
   const rows = await context.tx
     .select()
     .from(stagedRow)
@@ -202,6 +224,7 @@ export async function documentsOf(
     documentId: document.id,
     reference: document.reference,
     kind: batch.kind,
+    place,
     state: document.state,
     excluded: document.excluded,
     revisesDocumentId: document.revisesDocumentId,

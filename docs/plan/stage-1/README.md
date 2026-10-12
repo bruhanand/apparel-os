@@ -22,7 +22,7 @@ Updated 7 Oct 2026.
 | --- | --- |
 | `S1-F01` Sign-in and access control | Built on the branch `s1/f01-first-access` with both rounds of review fixes, merged into `main` and deployed to Railway `dev` on 7 Oct 2026; every check and the six browser journeys pass locally. 21 tickets done, including T22 to T25 (`DEC-118`) and T26 and T27 from 7 Oct 2026: the starting roles can prepare and approve security settings changes, and assignment dates are checked at every request (T26, `DEC-120`); the server serves the screens at one address (T27). The Railway `dev` project `apparel-os` runs `main` with automatic deploys; the two synthetic Organisations are set up there (RR-187; T14's Demo 0 done). CI is green on the pushed branch (run 37603828723) and the product owner approved the screens on 7 Oct 2026 (T09 done). Left: T20 (Demo 1 and acceptance, RR-350). Open questions: RR-380, RR-401, RR-420 |
 | `S1-F11` Shared calculations | Done, accepted 8 Oct 2026: 38 golden cases pass on the server and in Chromium on the counter build (`apps/counter`), the counter bundle excludes costing, CI green (run 37679034974). Left in later stages: the live values (RR-136 to RR-145) and RR-042 |
-| `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) built and reviewed on 8 Oct 2026, merged into `main` and deployed to `dev`; part 2 "Stock valuation and accounting" waits for books, masters and exceptions |
+| `S1-F10` Stock ledger | Design choices approved on 6 Oct 2026 with two fixes, with the lock order and row security for stock rows (RR-012, RR-227, RR-228 (b) to (e); `DEC-116`). Part 1 "Stock quantities and movements" (T01, T02) built and reviewed on 8 Oct 2026, merged into `main` and deployed to `dev`. Part 2 "Stock valuation and accounting" (T03, T04, T06, T07) built, reviewed and accepted on 11 Oct 2026 on `s1/f10-stock-ledger-2`, with the large-posting fix decided before live counter sales in stage 4 (RR-504); it waits for the product owner's go-ahead to merge |
 | `S1-F12` Devices, `S1-F14` Backup and restore | GC-8 sections 3 to 5 and 11 approved on 6 Oct 2026; sections 6 to 10 stay Draft, due before the stage 1 exit gate (RR-014). GC-9 approved and Current on 10 Oct 2026 (`S1-F14-T01`, RR-010) |
 | `S1-F06` File intake | `S1-F06-T05` (stored files and evidence attachments) done 8 Oct 2026, merged into `main` and deployed to `dev`; `S1-F06-T06` (protected download, encrypted receipt names; RR-432, RR-433) done 8 Oct 2026. T01 to T04 (the synthetic XLSX tracer, intake refusals and caps, layouts, mappings and the validation report, duplicates, publishing per document and the outcomes report) done 10 Oct 2026 on `s1/f06-file-intake-2`, reviewed twice with `/code-review` and their fixes made, and merged into `main` on 12 Oct 2026. Open: RR-036 (the caps of `kdps-test`), RR-497 to RR-503 |
 | `S1-F08` Number series and exceptions | Done 9 Oct 2026: gapless number series (T01), exceptions in My work (T02), evidence files on exceptions and approval decisions (T03), live updates and the failed-jobs view (T04). Open: RR-449 (no screen defines number formats or series yet), RR-453, RR-454, RR-455, RR-456 |
@@ -171,7 +171,7 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | --- | --- | --- |
 | [F01-T14 Web shell](s1-f01-first-access/tickets/T14-web-shell.md) | done | — |
 | [F01-T20 Acceptance: journeys, concurrency, isolation and leak suite](s1-f01-first-access/tickets/T20-concurrency-isolation-and-leak-suite.md) | ready-for-human | — (acceptance evidence, RR-350) |
-| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | in-progress | F01-T15 (done) |
+| [F11-T10 Counter test page, counter run and bundle exclusion](s1-f11-shared-calculations/tickets/T10-counter-test-page-and-counter-run.md) | done | F01-T15 (done) |
 | [F06-T05 Stored files and evidence attachments](s1-f06-file-intake/tickets/T05-stored-files-and-evidence-attachments.md) | blocked | F01-T07, F01-T11 |
 | [F10-T01 Stock tables, constraints and row security](s1-f10-stock-ledger/tickets/T01-ledger-tables-and-constraints.md) | blocked | F01-T11 |
 | [F10-T02 Quantity operations](s1-f10-stock-ledger/tickets/T02-ledger-operations-of-the-story.md) | blocked | F01-T13, F10-T01 |
@@ -193,21 +193,21 @@ Regrouped on 6 Oct 2026 into vertical slices by the product owner: 52 open then,
 | [F09-T02 Posting maps, Post, open periods and trial balance](s1-f09-books-and-periods/tickets/T02-posting-maps-post-open-periods-and-trial-balance.md) | done | F06-T05, F02-T03, F08-T01, F04-T01, F09-T01 |
 | [F09-T03 Period lock and reopening](s1-f09-books-and-periods/tickets/T03-period-lock-and-reopening.md) | done | F09-T02 |
 | [F09-T04 Tax-rule records](s1-f09-books-and-periods/tickets/T04-tax-rule-records.md) | done | F06-T05, F02-T01 |
-| [F10-T03 Valuation and hand-off to Post](s1-f10-stock-ledger/tickets/T03-hand-off-to-post.md) | blocked | F10-T02, F08-T02, F09-T02 |
-| [F10-T04 Harness and the story under four combinations](s1-f10-stock-ledger/tickets/T04-harness-driver-fixtures-and-scenario-files.md) | blocked | F10-T03, F02-T03, F08-T01, F08-T02, F05-T01, F03-T02, F09-T03 |
-| [F10-T06 Scenarios G2 to G13 with G10a](s1-f10-stock-ledger/tickets/T06-scenarios-g2-to-g13-with-g10a.md) | blocked | F10-T04, F08-T02 |
-| [F10-T07 Failure, concurrency, large posting and acceptance](s1-f10-stock-ledger/tickets/T07-failure-and-concurrency-suites.md) | blocked | F10-T06, F08-T02, F09-T03 |
+| [F10-T03 Valuation and hand-off to Post](s1-f10-stock-ledger/tickets/T03-hand-off-to-post.md) | done | F10-T02, F08-T02, F09-T02 |
+| [F10-T04 Harness and the story under four combinations](s1-f10-stock-ledger/tickets/T04-harness-driver-fixtures-and-scenario-files.md) | done | F10-T03, F02-T03, F08-T01, F08-T02, F05-T01, F03-T02, F09-T03 |
+| [F10-T06 Scenarios G2 to G13 with G10a](s1-f10-stock-ledger/tickets/T06-scenarios-g2-to-g13-with-g10a.md) | done | F10-T04, F08-T02 |
+| [F10-T07 Failure, concurrency, large posting and acceptance](s1-f10-stock-ledger/tickets/T07-failure-and-concurrency-suites.md) | done | F10-T06, F08-T02, F09-T03 |
 | [F06-T01 Synthetic XLSX tracer](s1-f06-file-intake/tickets/T01-synthetic-xlsx-tracer.md) | done | F06-T05, F08-T01, F03-T02 |
 | [F06-T02 Intake refusals and caps](s1-f06-file-intake/tickets/T02-intake-refusals-and-caps.md) | done | F06-T01, F06-T03 + gate |
 | [F06-T03 Layouts, mappings and the validation report](s1-f06-file-intake/tickets/T03-layouts-mappings-and-the-validation-report.md) | done | F06-T01, F02-T02, F02-T03, F04-T01 |
 | [F06-T04 Duplicates, concurrent publish and the outcomes report](s1-f06-file-intake/tickets/T04-duplicates-concurrent-publish-and-the-outcomes-report.md) | done | F06-T03 |
 | [F12-T01 Register and enrol a billing device](s1-f12-billing-devices/tickets/T01-register-and-enrol-a-billing-device.md) | done | F01-T09, F11-T10, F02-T02, F08-T01 |
 | [F12-T02 Revoke, retire, replace and the devices readiness check](s1-f12-billing-devices/tickets/T02-revoke-retire-replace-and-the-devices-readiness-check.md) | done | F04-T02, F12-T01 |
-| [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | ready-for-agent | F12-T01, F12-T02, F01-T13, F02-T01 |
+| [F12-T03 Financial year and bill-number format settings](s1-f12-billing-devices/tickets/T03-financial-year-and-bill-format-settings.md) | done | F12-T01, F12-T02, F01-T13, F02-T01 |
 | [F14-T01 Finish the backup and restore design](s1-f14-backup-and-restore/tickets/T01-finish-the-backup-and-restore-design.md) | done | — |
 | [F14-T02 Backup](s1-f14-backup-and-restore/tickets/T02-backup.md) | done | F06-T01, F06-T05, F08-T01 |
 | [F14-T03 Restore into a fresh target](s1-f14-backup-and-restore/tickets/T03-restore-into-a-fresh-target.md) | done | F14-T02 |
 | [F14-T04 Restore drill on dev](s1-f14-backup-and-restore/tickets/T04-restore-drill-on-dev.md) | blocked | F14-T03 + gate |
-| [F13-T01 Opening-stock manifest and comparison runs](s1-f13-opening-data/tickets/T01-opening-stock-manifest-and-comparison-runs.md) | blocked | F06-T03, F10-T03, F04-T02 + gate |
-| [F13-T02 Dues, advances and deposits](s1-f13-opening-data/tickets/T02-dues-advances-and-deposits.md) | blocked | F13-T01 |
+| [F13-T01 Opening-stock manifest and comparison runs](s1-f13-opening-data/tickets/T01-opening-stock-manifest-and-comparison-runs.md) | done | F06-T03, F10-T03, F04-T02 + gate |
+| [F13-T02 Dues, advances and deposits](s1-f13-opening-data/tickets/T02-dues-advances-and-deposits.md) | done | F13-T01 |
 | [F13-T03 Publish gate and synthetic opening count job](s1-f13-opening-data/tickets/T03-publish-gate-and-synthetic-opening-count-job.md) | blocked | F10-T07, F04-T01, F13-T01 |

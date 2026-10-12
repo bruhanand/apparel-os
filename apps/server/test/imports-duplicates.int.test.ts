@@ -13,7 +13,7 @@ import {
   type LayoutStructure,
   type MappingFields,
 } from '@apparel-os/schemas';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   COMMAND_RUNNER,
   ORGANISATION_ROUTER,
@@ -751,6 +751,31 @@ describe('publishing one document per transaction (imports-and-opening-data 3.2,
     );
   }
 
+  it('PRD-IMP-012: documents keep the order of the file, though UUIDv7 does not order ids made in one millisecond', async () => {
+    // Documents staged in one Start may share a millisecond, where their UUIDv7 ids are random (PRD-MOD-008): the
+    // clock is held still while it runs, so they all do. The file's order is the reverse of the references', so
+    // neither does the reference order them.
+    const codes = Array.from({ length: 40 }, () => next('ORDER')).reverse();
+    const stored = await counted(codes.map((code) => [code, 1] as const));
+    const still = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    let batchId: string;
+    try {
+      batchId = await start(stored, {}, countedVersions, FAILING_TARGET);
+    } finally {
+      still.mockRestore();
+    }
+    const staged = await read(batchId);
+    expect(staged.documents.map((document) => document.reference)).toEqual(codes);
+    const inFileOrder = staged.documents.map((document) => document.documentId);
+    const report = importOutcomesSchema.parse(ok(await call(preparer, 'GET', '/api/files-imports/outcomes')));
+    expect(
+      report.batches.find((batch) => batch.batchId === batchId)?.documents.map((document) => document.documentId),
+    ).toEqual(inFileOrder);
+    await ready(batchId);
+    const attempt = ok(await publish(batchId));
+    expect((attempt.documents as { documentId: string }[]).map((document) => document.documentId)).toEqual(inFileOrder);
+  });
+
   it('GC-6 17 test 16 PRD-IMP-012: one failing line fails its document, the others publish, and the failed outcome is kept', async () => {
     const [good, bad, also] = [next('GOOD'), next('REFUSE'), next('ALSO')];
     const batchId = await start(
@@ -784,13 +809,14 @@ describe('publishing one document per transaction (imports-and-opening-data 3.2,
     // Each document published its own event, identifiers only, and the attempt its failure (13.3).
     const events = await rows<{ event_type: string; payload: Record<string, string> }>(
       `select event_type, payload from kernel.outbox_event where subject_record_id = $1 and event_type like
-         'files-imports.import-%' order by id`,
+         'files-imports.import-%'`,
       [batchId],
     );
-    expect(events.map((event) => event.event_type)).toEqual([
-      'files-imports.import-published',
-      'files-imports.import-published',
+    // Sorted: UUIDv7 does not order events recorded within one millisecond (PRD-MOD-008).
+    expect(events.map((event) => event.event_type).sort()).toEqual([
       'files-imports.import-failed',
+      'files-imports.import-published',
+      'files-imports.import-published',
     ]);
 
     // Corrected by a person's entry, it validates, is submitted and publishes the rest (3.2); the first outcome stays.

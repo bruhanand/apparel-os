@@ -31,6 +31,17 @@ export const MAPPING_RULE_CONFIRMATION = 'files_imports.mapping_rule.confirm';
  * itself, is approved by a different authorised person from its preparers (product owner, 11 Oct 2026).
  */
 export const IMPORT_BATCH_APPROVAL = 'files_imports.import_batch.approve';
+/**
+ * The verification of an opening batch, one approval action per opening kind, each on a record type of its own so
+ * each company assigns its verifiers through roles and a holder of one cannot decide the other (product owner, 12 Oct
+ * 2026; imports-and-opening-data 10.2, 10.4): opening stock, which Operations verifies (`POL-14.02`); and opening
+ * balances, the dues, advances and deposits, which Accounts verifies (`POL-14.03`). The request binds to the batch
+ * version, its record the batch under the record type of its kind.
+ */
+export const OPENING_STOCK_TYPE = 'files_imports.opening_stock';
+export const OPENING_STOCK_APPROVAL = 'files_imports.opening_stock.verify';
+export const OPENING_BALANCES_TYPE = 'files_imports.opening_balances';
+export const OPENING_BALANCES_APPROVAL = 'files_imports.opening_balances.verify';
 
 /**
  * The classes encrypted in the application before they reach PostgreSQL (access-and-approvals 6): bank details,
@@ -729,7 +740,13 @@ export const importSheetSchema = z.strictObject({
 /** The review a handler requires (3.1 step 8; 13.2): the preparer's submission, or an approval in `access`. */
 export const importReviewSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('submission') }),
-  z.strictObject({ kind: z.literal('approval'), actionType: z.string(), requestId: idSchema.optional() }),
+  z.strictObject({
+    kind: z.literal('approval'),
+    actionType: z.string(),
+    /** The record type whose approve permission decides it (13.2; product owner, 12 Oct 2026). */
+    recordType: z.string(),
+    requestId: idSchema.optional(),
+  }),
 ]);
 
 /**
@@ -928,3 +945,178 @@ export const importOutcomesSchema = z.strictObject({
   ),
 });
 export type ImportOutcomes = z.infer<typeof importOutcomesSchema>;
+
+/** The record type of a comparison run (2, 10.3, 15.1; S1-F13-T01): its two sides' places are its scope facts. */
+export const COMPARISON_RUN_TYPE = 'files_imports.comparison_run';
+/** The stock module's balances, on which a run with a count side needs view at the unit (10.3; stock-ledger 13.6). */
+export const STOCK_BALANCE_TYPE = 'stock.balance';
+/** The most runs one page of the comparison runs read holds (14). */
+export const COMPARISON_RUN_PAGE = 50;
+
+/**
+ * The comparison runs of 10.3 (PRD-LIF-027, POL-14.07): the manifest, and the count, against the earlier POS's last
+ * SOH by barcode, then SKU; the count against the manifest by SKU and location. The run kind names its key. With
+ * S1-F13-T02, the run of 10.4 (POL-14.03): an opening batch of dues, advances or deposits against the closed-books
+ * balances, per party and per account.
+ */
+export const comparisonRunKindSchema = z.enum([
+  'manifest-against-soh',
+  'count-against-manifest',
+  'count-against-soh',
+  'balances-against-closed-books',
+]);
+export type ComparisonRunKind = z.infer<typeof comparisonRunKindSchema>;
+export const comparisonKeySchema = z.enum(['barcode-then-sku', 'sku-and-location', 'party-and-account']);
+export type ComparisonKeyName = z.infer<typeof comparisonKeySchema>;
+
+/** A batch side: the batch, at the version it has when the run reads it. */
+const comparedBatchSchema = z.strictObject({ batchId: idSchema });
+/** A count side (10.3): the unit at its Site, read from the stock ledger's read model as of the run. */
+const comparedCountSchema = z.strictObject({ siteId: idSchema, businessUnitId: idSchema });
+
+/** Run a comparison (13.1): two sets; the run kind names the key. Neither set is changed. */
+export const runComparisonRequestSchema = z.discriminatedUnion('run', [
+  z.strictObject({
+    run: z.literal('manifest-against-soh'),
+    manifest: comparedBatchSchema,
+    stockOnHand: comparedBatchSchema,
+  }),
+  z.strictObject({
+    run: z.literal('count-against-manifest'),
+    count: comparedCountSchema,
+    manifest: comparedBatchSchema,
+  }),
+  z.strictObject({ run: z.literal('count-against-soh'), count: comparedCountSchema, stockOnHand: comparedBatchSchema }),
+  z.strictObject({
+    run: z.literal('balances-against-closed-books'),
+    balances: comparedBatchSchema,
+    closedBooks: comparedBatchSchema,
+  }),
+]);
+export type RunComparisonRequest = z.infer<typeof runComparisonRequestSchema>;
+
+/** One side of a run as the run keeps it (10.3): a batch at its version, or a count read as of a time. */
+export const comparisonSideSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('batch'),
+    set: z.enum(['manifest', 'stock-on-hand', 'opening-balances', 'closed-books']),
+    batchId: idSchema,
+    /** The batch's code; left out where the reader may not see the batch, which the screen says. */
+    batchCode: z.string().optional(),
+    batchVersionId: idSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('count'),
+    set: z.literal('count'),
+    siteId: idSchema,
+    businessUnitId: idSchema,
+    asOf,
+  }),
+]);
+export type ComparisonSide = z.infer<typeof comparisonSideSchema>;
+
+/** One side's quantity of a key: listed, listed with an Unknown quantity, or not listed, never zero (I-1). */
+export const sideQuantitySchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('listed'), quantity: z.number().int() }),
+  z.strictObject({ state: z.literal('unknown') }),
+  z.strictObject({ state: z.literal('not-listed') }),
+]);
+
+export const comparisonResultSchema = z.enum([
+  'same',
+  'different',
+  'not-listed-left',
+  'not-listed-right',
+  'unknown',
+  'unresolved',
+]);
+export type ComparisonResultName = z.infer<typeof comparisonResultSchema>;
+
+/** One line of a run: a key either side holds, with both sides' quantities and the rows they came from. */
+export const comparisonLineSchema = z.strictObject({
+  lineNumber: z.number().int().positive(),
+  keyedBy: z.enum(['barcode', 'sku', 'sku-and-location', 'unresolved']),
+  barcode: z.string().optional(),
+  skuId: idSchema.optional(),
+  locationId: idSchema.optional(),
+  left: sideQuantitySchema,
+  right: sideQuantitySchema,
+  result: comparisonResultSchema,
+  leftRows: z.array(z.string()),
+  rightRows: z.array(z.string()),
+});
+export type ComparisonLine = z.infer<typeof comparisonLineSchema>;
+
+/** One side's total of a balance line in paise: listed, listed with an Unknown amount, or not listed, never zero. */
+export const sideAmountSchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('listed'), paise: z.number().int().refine(Number.isSafeInteger) }),
+  z.strictObject({ state: z.literal('unknown') }),
+  z.strictObject({ state: z.literal('not-listed') }),
+]);
+
+/**
+ * One line of a run of opening balances against the closed books (10.4; S1-F13-T02): a party of a book and account,
+ * or an account's total, with both sides' totals in paise (PRD-MOD-014) and the rows they came from.
+ */
+export const comparisonBalanceLineSchema = z.strictObject({
+  lineNumber: z.number().int().positive(),
+  keyedBy: z.enum(['party', 'account', 'unresolved']),
+  accountingBookId: idSchema.optional(),
+  account: z.string().optional(),
+  party: z.string().optional(),
+  left: sideAmountSchema,
+  right: sideAmountSchema,
+  result: comparisonResultSchema,
+  leftRows: z.array(z.string()),
+  rightRows: z.array(z.string()),
+});
+export type ComparisonBalanceLine = z.infer<typeof comparisonBalanceLineSchema>;
+
+/** A run's lines counted by result. */
+export const comparisonCountsSchema = z.strictObject({
+  same: z.number().int().nonnegative(),
+  different: z.number().int().nonnegative(),
+  'not-listed-left': z.number().int().nonnegative(),
+  'not-listed-right': z.number().int().nonnegative(),
+  unknown: z.number().int().nonnegative(),
+  unresolved: z.number().int().nonnegative(),
+});
+export type ComparisonCounts = z.infer<typeof comparisonCountsSchema>;
+
+const comparisonRunFields = {
+  runId: idSchema,
+  run: comparisonRunKindSchema,
+  key: comparisonKeySchema,
+  left: comparisonSideSchema,
+  right: comparisonSideSchema,
+  runByUserId: idSchema,
+  runAt: asOf,
+  counts: comparisonCountsSchema,
+};
+
+/** A comparison run as its reader sees it (14): both sides, the key, who ran it and when, and every line. */
+export const comparisonRunReadSchema = z.strictObject({
+  asOf,
+  ...comparisonRunFields,
+  lines: z.array(comparisonLineSchema),
+  /** The lines of a run of opening balances against the closed books; none for a stock run (S1-F13-T02). */
+  balanceLines: z.array(comparisonBalanceLineSchema),
+});
+export type ComparisonRunRead = z.infer<typeof comparisonRunReadSchema>;
+
+/** One page of the comparison runs read (14): after the run named, newest first. */
+export const comparisonRunListQuerySchema = z.strictObject({ after: idSchema.optional() });
+export type ComparisonRunListQuery = z.infer<typeof comparisonRunListQuerySchema>;
+
+/**
+ * The runs the reader may see, newest first, with their counts (14), at most `COMPARISON_RUN_PAGE` of them; `next` names
+ * the last run of a full page, from which the next page reads, or is null.
+ */
+export const comparisonRunListSchema = z.strictObject({
+  asOf,
+  runs: z.array(z.strictObject(comparisonRunFields)),
+  next: idSchema.nullable(),
+});
+export type ComparisonRunList = z.infer<typeof comparisonRunListSchema>;
+
+export const comparisonRunStartedSchema = z.strictObject({ runId: idSchema, counts: comparisonCountsSchema });

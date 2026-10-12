@@ -17,7 +17,12 @@ import {
   mappingVersion,
   stagedRow,
 } from '../db/schema.js';
-import { factsOfBatch, parsedOrDefect, type ImportDependencies } from '../commands/import-common.js';
+import {
+  documentsInFileOrder,
+  factsOfBatch,
+  parsedOrDefect,
+  type ImportDependencies,
+} from '../commands/import-common.js';
 import { rowsReadOf } from '../commands/outcomes.js';
 import { maskedColumn, maskOutcome, maskPlan } from '../domain/masking.js';
 import { outcomeView } from './batches.js';
@@ -110,7 +115,7 @@ export async function importOutcomes(
       .select()
       .from(importDocument)
       .where(eq(importDocument.batchId, batch.id))
-      .orderBy(asc(importDocument.id));
+      .orderBy(...documentsInFileOrder);
     const rowCounts = await context.tx
       .select({ documentId: stagedRow.documentId, rows: sql<number>`count(*)::int` })
       .from(stagedRow)

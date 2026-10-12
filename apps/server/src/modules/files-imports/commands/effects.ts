@@ -7,6 +7,10 @@ import {
   MAPPING_CONFIRMATION,
   MAPPING_RULE_CONFIRMATION,
   MAPPING_RULE_TYPE,
+  OPENING_BALANCES_APPROVAL,
+  OPENING_BALANCES_TYPE,
+  OPENING_STOCK_APPROVAL,
+  OPENING_STOCK_TYPE,
 } from '@apparel-os/schemas';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -72,6 +76,12 @@ export const filesImportsApprovalRules: readonly ApprovalRule[] = [
   // 9.8a). An update batch of product masters needs it (product owner, 11 Oct 2026). The batch's staged cells may hold
   // any class its file holds, but the decision's evidence carries none (RR-453).
   rule(IMPORT_BATCH_APPROVAL, IMPORT_BATCH_TYPE),
+  // The verification of an opening batch, one rule per opening kind, so each company assigns its verifiers through
+  // roles and a holder of one cannot decide the other (10.2, 10.4; product owner, 12 Oct 2026): opening stock, which
+  // Operations verifies (POL-14.02), and opening dues, advances and deposits, which Accounts verifies (POL-14.03).
+  // Bound to the batch version like the batch's own; Publish verifies and uses it under its locks.
+  rule(OPENING_STOCK_APPROVAL, OPENING_STOCK_TYPE),
+  rule(OPENING_BALANCES_APPROVAL, OPENING_BALANCES_TYPE),
 ];
 
 async function recordDecision(

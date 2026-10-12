@@ -60,6 +60,18 @@ describe('outcomeMeasures', () => {
       { field: 'value', kind: 'value', accepted: '10.75', rejected: '1', pending: '0', duplicate: null },
     ]);
   });
+
+  it('GC-6 10.2 POL-14.03 PRD-MOD-015: a value that stands on evidence is Unknown on a row without it, never summed as known', () => {
+    const cost = [{ field: 'unitCost', kind: 'value' as const, evidence: 'valuationEvidence' }];
+    const row = (unitCost: string, valuationEvidence?: string) => ({ unitCost, valuationEvidence });
+    expect(outcomeMeasures(cost, [{ result: 'published', rows: [row('12000', 'SYN invoice 77')] }])).toEqual([
+      { field: 'unitCost', kind: 'value', accepted: '12000', rejected: '0', pending: '0', duplicate: '0' },
+    ]);
+    // A unit cost with no valuation evidence keeps the total Unknown (no value in a KDPS file is evidence yet, GC6-9).
+    expect(
+      outcomeMeasures(cost, [{ result: 'published', rows: [row('12000', 'SYN invoice 77'), row('5000')] }]),
+    ).toEqual([{ field: 'unitCost', kind: 'value', accepted: null, rejected: '0', pending: '0', duplicate: '0' }]);
+  });
 });
 
 describe('outcomeControlTotals', () => {

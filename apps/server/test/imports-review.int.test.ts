@@ -412,7 +412,7 @@ beforeAll(async () => {
     revisions: 'none',
     publishNeeds: () => Promise.resolve({ action: 'view', recordType: IMPORT_BATCH_TYPE }),
     lockTargets: () => Promise.resolve([]),
-    review: () => ({ kind: 'approval', actionType: REVIEW_ACTION }),
+    review: () => ({ kind: 'approval', actionType: REVIEW_ACTION, recordType: IMPORT_BATCH_TYPE }),
     suggestions: () => Promise.resolve([]),
     checkRuleTarget: () => Promise.resolve(undefined),
     preview: (_context, document) =>

@@ -1,4 +1,6 @@
 import type {
+  BillFormatDraftInput,
+  FinancialYearDraftInput,
   BillingDeviceDraft,
   BillingDeviceReplacement,
   BillingDeviceUnitChange,
@@ -7,7 +9,7 @@ import type {
 } from '@apparel-os/schemas';
 import { and, asc, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../kernel/index.js';
-import type { RecordFacts } from '../access/index.js';
+import type { Preparer, RecordFacts } from '../access/index.js';
 import { businessUnitHeads } from '../organisation/index.js';
 import {
   billingDeviceRows,
@@ -22,6 +24,15 @@ import {
   type PosDependencies,
 } from './commands/devices.js';
 import { changeBillingDeviceUnits, endBillingDevice, replaceBillingDevice } from './commands/lifecycle.js';
+import {
+  billFormatRead,
+  changePreparer,
+  financialYearList,
+  prepareBillFormatChange,
+  prepareFinancialYearChange,
+  withdrawNumberingChange,
+  type Withdrawer,
+} from './commands/numbering-changes.js';
 import { seriesOfDevice } from './commands/series.js';
 import { unitDevicesCheck } from './queries/devices-check.js';
 import { billingDeviceUnit } from './db/schema.js';
@@ -104,6 +115,44 @@ export class Pos {
     return unitDevicesCheck(context, businessUnitId, date);
   }
 
+  /** Prepare the change that defines a financial year, for a different person to decide (4.3b; S1-F12-T03). */
+  prepareFinancialYearChange(context: TransactionContext, preparer: Preparer, draft: FinancialYearDraftInput) {
+    return prepareFinancialYearChange(context, this.dependencies, preparer, draft);
+  }
+
+  /** Prepare the change that sets the bill-number format, for a different person to decide (4.3b; S1-F12-T03). */
+  prepareBillFormatChange(context: TransactionContext, preparer: Preparer, draft: BillFormatDraftInput) {
+    return prepareBillFormatChange(context, this.dependencies, preparer, draft);
+  }
+
+  /** Who prepared a financial-year or bill-format change, or undefined when none has the identifier (4.3b). */
+  changePreparer(context: TransactionContext, kind: 'financial-year' | 'bill-format', changeId: string) {
+    return changePreparer(context, kind, changeId);
+  }
+
+  /**
+   * Withdraw a financial-year or bill-format change awaiting its decision: by its preparer, or by a person holding
+   * cancel (4.3b; access-and-approvals 9.1a; RR-489; product owner, 12 Oct 2026).
+   */
+  withdrawNumberingChange(
+    context: TransactionContext,
+    by: Withdrawer,
+    kind: 'financial-year' | 'bill-format',
+    changeId: string,
+  ) {
+    return withdrawNumberingChange(context, this.dependencies, by, kind, changeId);
+  }
+
+  /** The financial years defined and every change prepared (4.3b). */
+  financialYears(context: TransactionContext) {
+    return financialYearList(context, this.dependencies);
+  }
+
+  /** The bill-number format in force, or not set, and every change prepared (4.3b). */
+  billFormat(context: TransactionContext) {
+    return billFormatRead(context, this.dependencies);
+  }
+
   /** Every billing device's rows, for the step 1 lock call of the change that defines their missing series (DEC-117). */
   missingSeriesLockTargets(context: TransactionContext) {
     return missingSeriesLockTargets(context);
@@ -114,7 +163,7 @@ export class Pos {
    * caller holds missingSeriesLockTargets at step 1.
    */
   defineMissingSeries(context: TransactionContext, date: string) {
-    return defineMissingSeries(context, this.dependencies, date);
+    return defineMissingSeries(context, this.dependencies.numbering, date);
   }
 
   /**

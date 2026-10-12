@@ -27,6 +27,12 @@ import type { RetrySettings, WorkerSettings } from './worker-settings.js';
 /** The queue of outbox deliveries, one job per event and consumer (migration 0009; code-house-rules 12.8). */
 export const OUTBOX_DELIVERY_QUEUE = 'kernel.outbox-delivery';
 /**
+ * The queue of a posting consumer's deliveries (migration 0069; stock-ledger 10.6; code-house-rules 12.9): pg-boss's
+ * `singleton` policy, the delivery's accounting book as its singleton key, so the deliveries of one book run one at a
+ * time however many workers run, and a second waits until the first ends.
+ */
+export const POSTING_DELIVERY_QUEUE = 'kernel.posting-delivery';
+/**
  * The code of the internal service identity the outbox processor runs as (access-and-approvals 2.3;
  * code-house-rules 6.3, 12.8). The setup step writes it with the Organisation's other service identities.
  */
@@ -264,7 +270,11 @@ export class Worker {
       if (await this.held(organisation)) continue;
       const boss = await startJobQueue(organisation, this.dependencies.logger, SERVICE);
       try {
-        for (const queue of [OUTBOX_DELIVERY_QUEUE, ...this.dependencies.registry.jobKinds.map((kind) => kind.name)]) {
+        for (const queue of [
+          OUTBOX_DELIVERY_QUEUE,
+          POSTING_DELIVERY_QUEUE,
+          ...this.dependencies.registry.jobKinds.map((kind) => kind.name),
+        ]) {
           if ((await boss.getQueue(queue)) === null) {
             throw new CommandDefect(`The queue ${queue} does not exist; queues are created by migration (3.2)`);
           }
@@ -392,26 +402,37 @@ export class Worker {
   private async work(served: Served): Promise<void> {
     const { boss, organisation } = served;
     const pollingIntervalSeconds = this.dependencies.settings.pollSeconds;
-    await boss.work<DeliveryData>(
-      OUTBOX_DELIVERY_QUEUE,
-      { batchSize: 1, perJobResults: true, pollingIntervalSeconds },
-      async (jobs): Promise<JobResult[]> =>
-        Promise.all(
-          jobs.map(async (job) => {
-            const result = await this.deliver(organisation.organisationCode, job.data, job.id);
-            const retry = this.dependencies.settings.consumers[job.data.consumer];
-            const consumer = this.dependencies.registry.consumers.find((each) => each.name === job.data.consumer);
-            if (finalFailure(result, job.retryCount, retry?.retries) && consumer?.event.type !== jobFailed.type) {
-              await this.recordFailure(served, {
-                jobId: job.id,
-                jobKind: job.data.consumer,
-                eventId: job.data.eventId,
-              });
-            }
-            return { id: job.id, ...result };
-          }),
-        ),
-    );
+    // The deliveries: the ordinary queue, and the posting queue, one at a time per book (stock-ledger 10.6). A posting
+    // delivery's book is both its singleton key, whose unique index never lets two of one book be active, and its
+    // group, so a fetch passes over a book with a job active and takes the next book's: a waiting job of one book
+    // never holds up another book's (S1-F10-T07).
+    for (const queue of [OUTBOX_DELIVERY_QUEUE, POSTING_DELIVERY_QUEUE]) {
+      await boss.work<DeliveryData>(
+        queue,
+        {
+          batchSize: 1,
+          perJobResults: true,
+          pollingIntervalSeconds,
+          ...(queue === POSTING_DELIVERY_QUEUE ? { groupConcurrency: 1 } : {}),
+        },
+        async (jobs): Promise<JobResult[]> =>
+          Promise.all(
+            jobs.map(async (job) => {
+              const result = await this.deliver(organisation.organisationCode, job.data, job.id);
+              const retry = this.dependencies.settings.consumers[job.data.consumer];
+              const consumer = this.dependencies.registry.consumers.find((each) => each.name === job.data.consumer);
+              if (finalFailure(result, job.retryCount, retry?.retries) && consumer?.event.type !== jobFailed.type) {
+                await this.recordFailure(served, {
+                  jobId: job.id,
+                  jobKind: job.data.consumer,
+                  eventId: job.data.eventId,
+                });
+              }
+              return { id: job.id, ...result };
+            }),
+          ),
+      );
+    }
     for (const kind of this.dependencies.registry.jobKinds) {
       const setting = this.dependencies.settings.jobKinds[kind.name];
       if (setting === undefined) throw new CommandDefect(`Job kind ${kind.name} has no setting`);
@@ -678,17 +699,37 @@ async function dispatchOne(
     .returning({ id: outboxDispatch.id });
   if (inserted.length === 0) return;
   const data: DeliveryData = { eventId: item.eventId, consumer: item.consumer.name };
+  const book = await postingBookOf(context, item.consumer, item.eventId);
   const sent = await boss.send(
-    OUTBOX_DELIVERY_QUEUE,
+    book === undefined ? OUTBOX_DELIVERY_QUEUE : POSTING_DELIVERY_QUEUE,
     { ...data },
     {
       id: jobId,
       ...KEEP_EVERY_JOB,
       ...retryOptions(item.retry),
+      ...(book === undefined ? {} : { singletonKey: book, group: { id: book } }),
       db: fromDrizzle(context.tx, sql),
     },
   );
   if (sent !== jobId) throw new CommandDefect('The delivery job was not created with its dispatch row');
+}
+
+/**
+ * The accounting book a posting consumer's delivery posts into, read from its event (stock-ledger 10.6); undefined for
+ * any other consumer. A payload that does not match its schema is a defect, as at delivery.
+ */
+async function postingBookOf(
+  context: TransactionContext,
+  consumer: ConsumerDefinition,
+  eventId: string,
+): Promise<string | undefined> {
+  if (consumer.postingBook === undefined) return undefined;
+  const event = await readEvent(context, eventId);
+  const payload = consumer.event.payload.safeParse(event.payload);
+  if (!payload.success) throw new CommandDefect(`The payload of event ${event.id} does not match its schema`);
+  const book = consumer.postingBook({ ...event, payload: payload.data });
+  if (book === '') throw new CommandDefect(`Consumer ${consumer.name} named no accounting book for event ${event.id}`);
+  return book;
 }
 
 /** Reads one event from the outbox in the consumer's transaction. */

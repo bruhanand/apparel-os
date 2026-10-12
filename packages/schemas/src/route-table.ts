@@ -25,6 +25,12 @@ import {
   billingDeviceReplacementSchema,
   billingDeviceUnitChangeSchema,
   billingDeviceUnitsChangedSchema,
+  billFormatDraftSchema,
+  billFormatReadSchema,
+  financialYearDraftSchema,
+  financialYearListSchema,
+  numberingChangePreparedSchema,
+  numberingChangeWithdrawnSchema,
   deviceChallengeRequestSchema,
   deviceChallengeSchema,
   deviceEnrolledSchema,
@@ -115,6 +121,12 @@ import {
 } from './exceptions.js';
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
+  COMPARISON_RUN_TYPE,
+  comparisonRunListQuerySchema,
+  comparisonRunListSchema,
+  comparisonRunReadSchema,
+  comparisonRunStartedSchema,
+  runComparisonRequestSchema,
   detectLayoutQuerySchema,
   documentExclusionRequestSchema,
   IMPORT_BATCH_TYPE,
@@ -1513,6 +1525,19 @@ export const routes = {
       'site-lifecycle.check-failed',
       'site-lifecycle.activity-already-granted',
       'site-lifecycle.site-already-ready',
+      // The financial years and the bill-number format, and the missing series their approval defines
+      // (offline-counter 4.3b; S1-F12-T03).
+      // Each code the effect can answer: the origin, the code and the year rechecked under the locks, numbering's
+      // refusal of the format version, and the series refusals a device's missing series can meet (12.3).
+      'pos.change-not-found',
+      'pos.format-code-taken',
+      'configuration.origin-not-allowed',
+      'numbering.financial-year-invalid',
+      'numbering.financial-year-label-taken',
+      'numbering.financial-year-overlaps',
+      'numbering.format-invalid',
+      'numbering.format-could-repeat',
+      'numbering.live-series-exists',
       'kernel.stale-version',
       'kernel.cross-site-request',
     ],
@@ -2083,6 +2108,46 @@ export const routes = {
     command: false,
     response: importOutcomesSchema,
     codes: [...HISTORY_CODES],
+  }),
+  // Comparison runs (imports-and-opening-data 2, 10.3, 13.1, 14; PRD-LIF-027, POL-14.07; S1-F13-T01): two sets
+  // compared by the key the run kind names, every difference listed; neither set is changed. Create on the run with its
+  // two sides' places, and view on each side, are authorised in the command, since the places are known only from the
+  // sets.
+  runComparison: defineRoute({
+    method: 'POST',
+    path: '/api/files-imports/comparison-runs',
+    access: { kind: 'action', action: 'create', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: runComparisonRequestSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: comparisonRunStartedSchema,
+    codes: [
+      ...PREPARE_CODES,
+      'files-imports.comparison-set-not-found',
+      'files-imports.comparison-set-wrong',
+      'files-imports.comparison-side-masked',
+      'files-imports.comparison-places-differ',
+    ],
+  }),
+  listComparisonRuns: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/comparison-runs',
+    query: comparisonRunListQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: comparisonRunListSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  readComparisonRun: defineRoute({
+    method: 'GET',
+    path: '/api/files-imports/comparison-runs/{runId}',
+    params: z.strictObject({ runId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: COMPARISON_RUN_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: comparisonRunReadSchema,
+    codes: [...HISTORY_CODES, 'files-imports.comparison-run-not-found'],
   }),
   // The organisation structure (structure-and-masters 2.3, 3, 8; module-map 4.11, 6.2 flow A; S1-F02-T01): each master's
   // paged list and one record with every version, preparing a new master with its first version, and preparing a later version. Preparing
@@ -4370,6 +4435,92 @@ export const routes = {
       'pos.unit-not-of-store',
       'pos.unit-listed-twice',
     ],
+  }),
+  // The financial years and the bill-number format (offline-counter 4.1, 4.3b; numbering-and-audit 3.3, 3.5;
+  // S1-F12-T03): each change prepared by one person and decided by a different one through access's Decide route, whose
+  // approval gives every Active billing device its missing series (DEC-117). Organisation-wide: no scope fact, so the
+  // guard Authorises (access-and-approvals 5.3).
+  listFinancialYears: defineRoute({
+    method: 'GET',
+    path: '/api/pos/financial-years',
+    access: { kind: 'action', action: 'view', recordType: 'pos.financial_year_change' },
+    command: false,
+    response: financialYearListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareFinancialYearChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/financial-year-changes',
+    access: { kind: 'action', action: 'create', recordType: 'pos.financial_year_change' },
+    command: true,
+    body: financialYearDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangePreparedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.origin-not-allowed',
+      'numbering.financial-year-invalid',
+      'numbering.financial-year-label-taken',
+      'numbering.financial-year-overlaps',
+    ],
+  }),
+  readBillFormat: defineRoute({
+    method: 'GET',
+    path: '/api/pos/bill-format',
+    access: { kind: 'action', action: 'view', recordType: 'pos.bill_format_change' },
+    command: false,
+    response: billFormatReadSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareBillFormatChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/bill-format-changes',
+    access: { kind: 'action', action: 'create', recordType: 'pos.bill_format_change' },
+    command: true,
+    body: billFormatDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangePreparedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.origin-not-allowed',
+      'numbering.format-invalid',
+      'pos.bill-format-without-device',
+      'pos.format-code-taken',
+    ],
+  }),
+  // The preparer withdraws their own pending change with no permission; anyone else needs cancel, which the command
+  // Authorises (offline-counter 4.3b; access-and-approvals 9.1a; RR-489; product owner, 12 Oct 2026).
+  withdrawFinancialYearChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/financial-year-changes/{changeId}/withdraw',
+    params: z.strictObject({ changeId: idSchema }),
+    access: { kind: 'own' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangeWithdrawnSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
+  }),
+  withdrawBillFormatChange: defineRoute({
+    method: 'POST',
+    path: '/api/pos/bill-format-changes/{changeId}/withdraw',
+    params: z.strictObject({ changeId: idSchema }),
+    access: { kind: 'own' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: numberingChangeWithdrawnSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

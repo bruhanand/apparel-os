@@ -29,6 +29,7 @@ import {
 } from '../db/schema.js';
 import {
   BATCH_NOT_FOUND,
+  documentsInFileOrder,
   enteredView,
   entriesOf,
   factsOfBatch,
@@ -120,7 +121,7 @@ export async function readBatch(
     .select()
     .from(importDocument)
     .where(eq(importDocument.batchId, batch.id))
-    .orderBy(asc(importDocument.id));
+    .orderBy(...documentsInFileOrder);
   const rows = await context.tx
     .select()
     .from(stagedRow)
@@ -158,6 +159,7 @@ export async function readBatch(
       documentId: document.id,
       reference: document.reference,
       kind: batch.kind,
+      place: factsOfBatch(batch),
       rows: effective.map(({ row, values }) => ({
         stagedRowId: row.id,
         sheet: row.sheet,

@@ -1,9 +1,9 @@
-import type { CommandRefusal, Composition, TransactionContext } from '../../../kernel/index.js';
+import type { CommandRefusal, Composition, LockTarget, TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface, AuditSource } from '../../audit/index.js';
 import { refusalOf, StockRefused, type LedgerRequest } from './domain/request.js';
 import { lockPlan, type ExtraTargets, type LockedPlan } from './lock.js';
 import { planRequest, type LedgerPlan } from './plan.js';
-import type { LedgerPlaces, LedgerSkus } from './ports.js';
+import type { LedgerBooks, LedgerPlaces, LedgerSkus } from './ports.js';
 import { recheckPlan, type CheckedRequest } from './recheck.js';
 import { CallerRegistry, type CallerRegistration } from './registry.js';
 import { writeRequest, type Written } from './write.js';
@@ -11,7 +11,8 @@ import { writeRequest, type Written } from './write.js';
 // The ledger's interface for the unvalued operations (stock-ledger 13.1 to 13.5; S1-F10-T02): one request in four
 // operations, Plan, Lock, Recheck and value and Write, inside the caller's command, which it joins and never opens or
 // commits (code-house-rules 8.1; module-map section 3, rule 3). Each operation is its own file: plan.ts, lock.ts,
-// recheck.ts and write.ts. The valued items and the call to Post arrive with S1-F10-T03.
+// recheck.ts and write.ts. The valued items value in posting order under the pool locks, and Write hands their values
+// to `finance` Post in the same transaction (7.11; books-and-posting 8; S1-F10-T03).
 
 export type { CheckedRequest, ExtraTargets, LedgerPlan, LockedPlan, Written };
 
@@ -23,6 +24,8 @@ export interface StockLedgerDependencies {
   readonly audit: AuditInterface;
   readonly places: LedgerPlaces;
   readonly skus: LedgerSkus;
+  /** `finance` · books: the cost setting, Check postable, Hold periods and Post (7.11; books-and-posting 8, 9.1). */
+  readonly books: LedgerBooks;
   readonly registrations: readonly CallerRegistration[];
   /** How the application was composed; a synthetic caller needs a test composition (13.2). */
   readonly composition: Composition;
@@ -32,8 +35,9 @@ export interface StockLedgerDependencies {
 export interface StockLedgerInterface {
   plan(context: TransactionContext, request: LedgerRequest): Promise<LedgerResult<LedgerPlan>>;
   lock(context: TransactionContext, plan: LedgerPlan, extra?: ExtraTargets): Promise<LockedPlan>;
+  holdPeriods(context: TransactionContext, plan: LedgerPlan): Promise<LedgerResult<readonly LockTarget[]>>;
   recheck(context: TransactionContext, locked: LockedPlan): Promise<LedgerResult<CheckedRequest>>;
-  write(context: TransactionContext, checked: CheckedRequest, source?: AuditSource): Promise<Written>;
+  write(context: TransactionContext, checked: CheckedRequest, source?: AuditSource): Promise<LedgerResult<Written>>;
 }
 
 async function answer<Value>(work: () => Promise<Value>): Promise<LedgerResult<Value>> {
@@ -71,6 +75,27 @@ export class StockLedger implements StockLedgerInterface {
   }
 
   /**
+   * Step 7 for the valued items (13.1; 10.3; books-and-posting 4.5, 9.1): `finance` Hold periods takes the period of
+   * each item Check postable answered at Plan in shared mode, and answers the journal series the caller locks with its
+   * own number series in its one call at step 8. A caller that posts money effects of its own holds their periods with
+   * the plan's `postingChecks` in its own call instead. A period locked since Plan refuses `posting-refused`.
+   */
+  async holdPeriods(context: TransactionContext, plan: LedgerPlan): Promise<LedgerResult<readonly LockTarget[]>> {
+    if (plan.postingChecks.length === 0) return { kind: 'done', value: [] };
+    const held = await this.dependencies.books.holdPeriods(context, plan.postingChecks);
+    if (held.kind === 'refused') {
+      return {
+        kind: 'refused',
+        refusal: refusalOf('posting-refused', undefined, [
+          { kind: 'posting', code: held.refusal.code },
+          ...held.refusal.missing,
+        ]),
+      };
+    }
+    return { kind: 'done', value: held.seriesTargets };
+  }
+
+  /**
    * Recheck and value (13.1; 10.4): a count freeze over the goods (8.1), available quantity, where each piece is,
    * holds, reservations, coverage and acceptance (6.2, 6.3), and what the actor cannot see (DEC-117). Answers each
    * item's value on its approval basis: Unknown for goods, none for a release; the request's is Unknown when any item's
@@ -81,11 +106,13 @@ export class StockLedger implements StockLedgerInterface {
   }
 
   /**
-   * Write (13.1): the request's records, set-based in the order of their keys; one audit record naming them; the
-   * events of 13.7 (PRD-INT-004, PRD-MOD-006). Movements carry the approval use the caller recorded first (13.3;
-   * DEC-097). A constraint refusing a row here is a defect (10.4).
+   * Write (13.1): `finance` Post with the valued movements' values, then the request's records, set-based in the
+   * order of their keys; one audit record naming them; the events of 13.7 (PRD-INT-004, PRD-MOD-006, PRD-MOD-013;
+   * DEC-087). Movements carry the approval use the caller recorded first (13.3; DEC-097). Post refusing is
+   * `posting-refused`, and the caller rolls the command back and raises its exception in a transaction of its own
+   * (SL-23 Outcome A; DEC-105). A constraint refusing a row here is a defect (10.4).
    */
-  write(context: TransactionContext, checked: CheckedRequest, source?: AuditSource): Promise<Written> {
-    return writeRequest(context, this.dependencies.audit, checked, source);
+  write(context: TransactionContext, checked: CheckedRequest, source?: AuditSource): Promise<LedgerResult<Written>> {
+    return answer(() => writeRequest(context, this.dependencies, checked, source));
   }
 }

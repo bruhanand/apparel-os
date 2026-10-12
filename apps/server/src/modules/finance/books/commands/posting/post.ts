@@ -2,7 +2,7 @@ import { uuidv7, type Paise } from '@apparel-os/domain';
 import { postingSource } from '../../db/schema.js';
 import { byText } from '../../domain/order.js';
 import { sumLines, type ItemLine } from '../../domain/posting.js';
-import type { TransactionContext } from '../../../../../kernel/index.js';
+import { insertInParts, type TransactionContext } from '../../../../../kernel/index.js';
 import { checkPostable } from './check.js';
 import { journalsByIds, recordUse, requirePeriodHeld, writeJournal, type JournalLineRow } from './journal.js';
 import type { PostableItem, PostDependencies, PostedJournal, PostRequest, PostResult } from './types.js';
@@ -38,7 +38,9 @@ export async function post(
   for (const check of postable) {
     requirePeriodHeld(context, check.period.id);
     const key = [check.bookId, check.eventKind, check.accountingDate].join('|');
-    groups.set(key, [...(groups.get(key) ?? []), check]);
+    const group = groups.get(key) ?? [];
+    group.push(check);
+    groups.set(key, group);
   }
   const written: PostedJournal[] = [];
   const uses = new Map<string, { journalId: string; period: PostableItem['period'] }>();
@@ -120,17 +122,17 @@ async function postGroup(
       }
     }
   }
-  await context.tx.insert(postingSource).values(
-    [...sources.values()].map((each) => ({
-      id: uuidv7(),
-      sourceModule: request.sourceModule,
-      itemKey: each.itemKey,
-      component: each.component,
-      amountPaise: each.amount,
-      journalId: answer.journal.journalId,
-      journalLineId: each.lineId,
-      itemHash: hashes.get(each.itemKey) ?? '',
-    })),
-  );
+  const rows = [...sources.values()].map((each) => ({
+    id: uuidv7(),
+    sourceModule: request.sourceModule,
+    itemKey: each.itemKey,
+    component: each.component,
+    amountPaise: each.amount,
+    journalId: answer.journal.journalId,
+    journalLineId: each.lineId,
+    itemHash: hashes.get(each.itemKey) ?? '',
+  }));
+  // A large document's rows (stock-ledger 10.6) in multi-row inserts of a bounded size (S1-F10-T07).
+  await insertInParts(context, postingSource, rows);
   return answer;
 }

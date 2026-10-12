@@ -3,6 +3,8 @@ import { and, eq, gt, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import {
   balance,
+  costLayer,
+  costPool,
   coverage,
   hold,
   holdClaim,
@@ -13,7 +15,17 @@ import {
   reservation,
   reservationClaim,
   skuBalance,
+  movement,
+  movementLeg,
+  movementPiece,
+  transitValue,
+  transitValueLayer,
+  valuation,
+  valuationLayer,
 } from './db/schema.js';
+import { Valuing, type SaleState, type TransitState, type ValuingInputs } from './domain/valuing.js';
+import type { PoolState } from './domain/valuation.js';
+import { paise } from '@apparel-os/domain';
 import { recheckHidden, type HiddenAnswer } from './db/recheck-hidden.js';
 import { refusalOf, StockRefused, type Condition, type ItemValue } from './domain/request.js';
 import {
@@ -24,8 +36,9 @@ import {
   type HeaderState,
   type OriginState,
   type PieceState,
+  type HeldAs,
   type SkuBalanceState,
-  type WorkingInputs,
+  type TransitKind,
 } from './domain/working.js';
 import type { LockedPlan } from './lock.js';
 import type { LedgerPlan } from './plan.js';
@@ -37,7 +50,7 @@ import type { LedgerPlan } from './plan.js';
 /** A request rechecked and valued under the locks (13.1 "Recheck and value"). Writes nothing. */
 export interface CheckedRequest {
   readonly plan: LedgerPlan;
-  readonly working: Working;
+  readonly working: Valuing;
   /** Each item's value on its approval basis, and the request's (PRD-ACS-015, PRD-ACS-016, DEC-066). */
   readonly itemValues: readonly ItemValue[];
   readonly value: ItemValue;
@@ -53,12 +66,19 @@ export async function recheckPlan(context: TransactionContext, locked: LockedPla
       refusalOf('invalid-item', undefined, [{ kind: lost.table.table.replaceAll('_', '-'), id: lost.id }]),
     );
   }
-  const working = new Working(await load(context, locked));
+  const working = new Valuing(await load(context, locked));
   await checkFreezes(context, plan, working);
   const itemValues = plan.request.items.map((item, line) => working.apply(item, line));
   await checkHidden(context, plan, working);
-  const value: ItemValue = itemValues.some((each) => each.kind === 'unknown') ? { kind: 'unknown' } : { kind: 'none' };
-  return { plan, working, itemValues, value };
+  return { plan, working, itemValues, value: requestValue(itemValues) };
+}
+
+/** The request's value on its approval basis: Unknown when any item's is, the sum when any is known (PRD-ACS-016). */
+function requestValue(values: readonly ItemValue[]): ItemValue {
+  if (values.some((each) => each.kind === 'unknown')) return { kind: 'unknown' };
+  const known = values.flatMap((each) => (each.kind === 'known' ? [each.amountPaise] : []));
+  if (known.length === 0) return { kind: 'none' };
+  return { kind: 'known', amountPaise: paise(known.reduce((sum, each) => sum + each, 0)) };
 }
 
 /** The first line the function answered for, in the request's order (13.8 names the item's line). */
@@ -79,10 +99,16 @@ async function checkFreezes(context: TransactionContext, plan: LedgerPlan, worki
   const answers = await recheckHidden(context, {
     touches: plan.request.items.flatMap((item, line) => working.touches(item).map((touch) => ({ ...touch, line }))),
   });
-  const line = firstLine(answers);
+  // An item of a count does not stop at its own count's freeze (8.2; 13.4 "Count difference"; S1-F10-T06).
+  const ownCount = (line: number) => {
+    const item = plan.request.items[line];
+    return item?.kind === 'count-difference' || item?.kind === 'piece-correction' ? item.countId : undefined;
+  };
+  const stopping = answers.filter((each) => each.holdId === null || each.holdId !== ownCount(each.line));
+  const line = firstLine(stopping);
   if (line === undefined) return;
   const lineId = plan.request.items[line]?.lineId;
-  const visible = answers.filter((each) => each.line === line && each.blocker === 'count-freeze');
+  const visible = stopping.filter((each) => each.line === line && each.blocker === 'count-freeze');
   if (visible.length > 0) {
     throw new StockRefused(
       refusalOf(
@@ -136,7 +162,7 @@ const headerScope = (row: {
 });
 
 /** The rows read under the locks (code-house-rules 8.1): every one locked, or changed only under a lock held. */
-async function load(context: TransactionContext, locked: LockedPlan): Promise<WorkingInputs> {
+async function load(context: TransactionContext, locked: LockedPlan): Promise<ValuingInputs> {
   const { plan } = locked;
   const totalIds = [...locked.skuBalanceIds];
   const totals =
@@ -263,8 +289,11 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Wo
       skuBalanceId: row.skuBalanceId,
       siteId: row.siteId,
       businessUnitId: row.businessUnitId,
-      locationId: row.locationId ?? '',
+      locationId: row.locationId,
       condition: row.condition as Condition,
+      heldAs: row.heldAs as HeldAs,
+      transitKind: row.transitKind as TransitKind | null,
+      transitRef: row.transitRef,
       skuId: row.skuId,
       batchCode: row.batchCode,
       expiryDate: row.expiryDate,
@@ -286,7 +315,10 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Wo
       quantity: origin.quantity,
       scope: scopeOf(origin),
       stateId: state.id,
+      ownerKind: state.ownerKind as OriginState['ownerKind'],
       valueKnown: state.valueKnown,
+      pRatePaise: state.pRatePaise,
+      establishedValuePaise: state.establishedValuePaise,
       ptRevisionId: state.ptRevisionId,
       coveredQuantity: state.coveredQuantity,
       lastStateMovementId: state.lastStateMovementId,
@@ -306,6 +338,8 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Wo
       locationId: row.locationId,
       condition: row.condition as Condition,
       heldAs: row.heldAs as PieceState['heldAs'],
+      transitKind: row.transitKind as TransitKind | null,
+      transitRef: row.transitRef,
       inCustody: row.inCustody,
       ptRevisionId: row.ptRevisionId,
       acceptedSiteId: row.acceptedSiteId,
@@ -372,5 +406,334 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Wo
     usedCodes: plan.usedCodes,
     lockedReservations: plan.reservationIds,
     newId: uuidv7,
+    ...(await loadValuing(context, locked)),
+  };
+}
+
+type ValuingOnly = Pick<
+  ValuingInputs,
+  'costSettings' | 'pools' | 'transits' | 'sales' | 'reversed' | 'entered' | 'handedOver' | 'lineage' | 'occurredAt'
+>;
+
+/**
+ * What the valued items read under the locks (7, 13.1 "Recheck and value"): the pools and transit values locked at
+ * step 6 with their layers, the sales the returns bring back, and for a late cost change the units its origin's cost
+ * put into pools, those handed over to a supplier and, under FIFO, its layers' lineage, every pool of which must be
+ * locked (`plan-stale` otherwise; 13.1).
+ */
+async function loadValuing(context: TransactionContext, locked: LockedPlan): Promise<ValuingOnly> {
+  const { plan } = locked;
+  const poolIds = [...locked.poolIds];
+  const poolRows =
+    poolIds.length === 0 ? [] : await context.tx.select().from(costPool).where(inArray(costPool.id, poolIds));
+  const layerRows =
+    poolIds.length === 0
+      ? []
+      : await context.tx
+          .select()
+          .from(costLayer)
+          .where(inArray(costLayer.costPoolId, poolIds))
+          .orderBy(costLayer.enteredSequence, costLayer.id);
+  const pools: PoolState[] = poolRows.map((row) => ({
+    id: row.id,
+    isNew: false,
+    bookId: row.bookId,
+    skuId: row.skuId,
+    mode: row.poolMode,
+    siteId: row.siteId,
+    formula: row.formula,
+    costSettingVersionId: row.costSettingVersionId,
+    legalEntityId: row.legalEntityId,
+    brandId: row.brandId,
+    quantity: row.quantity,
+    value: row.valuePaise,
+    lastSequence: row.lastSequence,
+    changed: false,
+    layers: layerRows
+      .filter((layer) => layer.costPoolId === row.id)
+      .map((layer) => ({
+        id: layer.id,
+        isNew: false,
+        poolId: layer.costPoolId,
+        enteredSequence: layer.enteredSequence,
+        enteredAt: layer.enteredAt,
+        quantityIn: layer.quantityIn,
+        valueIn: layer.valueInPaise,
+        quantityLeft: layer.quantityLeft,
+        valueLeft: layer.valueLeftPaise,
+        fromLayerId: layer.fromLayerId,
+        receiptOriginId: layer.receiptOriginId,
+        fromValuationId: layer.fromValuationId,
+        changed: false,
+      })),
+  }));
+  const transitIds = [...locked.transitIds];
+  const transitRows =
+    transitIds.length === 0
+      ? []
+      : await context.tx.select().from(transitValue).where(inArray(transitValue.id, transitIds));
+  const transitLayers =
+    transitIds.length === 0
+      ? []
+      : await context.tx
+          .select({ layer: transitValueLayer, order: costLayer.enteredSequence })
+          .from(transitValueLayer)
+          .innerJoin(costLayer, eq(costLayer.id, transitValueLayer.sourceLayerId))
+          .where(inArray(transitValueLayer.transitValueId, transitIds));
+  const transitPieces =
+    transitIds.length === 0
+      ? []
+      : await context.tx
+          .select({
+            transitId: valuation.transitValueId,
+            pieceId: valuationLayer.pieceId,
+            layerId: valuationLayer.costLayerId,
+          })
+          .from(valuationLayer)
+          .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
+          .where(and(inArray(valuation.transitValueId, transitIds), gt(valuationLayer.valuePaise, paise(0))))
+          .orderBy(valuationLayer.id);
+  const transits: TransitState[] = transitRows.map((row) => ({
+    id: row.id,
+    kind: row.transitKind as TransitKind,
+    ref: row.transitRef,
+    bookId: row.bookId,
+    skuId: row.skuId,
+    formula: row.formula,
+    scope: scopeOf(row),
+    quantity: row.quantity,
+    value: row.valuePaise,
+    changed: false,
+    layers: transitLayers
+      .filter((each) => each.layer.transitValueId === row.id)
+      .map((each) => ({
+        id: each.layer.id,
+        isNew: false,
+        sourceLayerId: each.layer.sourceLayerId,
+        order: each.order,
+        quantity: each.layer.quantity,
+        value: each.layer.valuePaise,
+        changed: false,
+      })),
+    pieceLayers: new Map(
+      transitPieces.flatMap((each) =>
+        each.transitId === row.id && each.pieceId !== null ? [[each.pieceId, each.layerId] as const] : [],
+      ),
+    ),
+  }));
+  const sales: SaleState[] = [];
+  for (const saleId of plan.saleIds) sales.push(await loadSale(context, saleId, 'returns'));
+  const reversed: SaleState[] = [];
+  for (const movementId of plan.reversedIds) reversed.push(await loadSale(context, movementId, 'reverses'));
+  const adjusted = plan.request.items.flatMap((item) =>
+    item.kind === 'cost-adjustment' ? [item.receiptOriginId] : [],
+  );
+  // The units an origin's cost put into pools, less those a reversal of its inflow took off (7.5, 7.7; S1-F10-T06).
+  const entered = new Map<string, number>();
+  for (const originId of new Set([...adjusted, ...plan.enteredOrigins])) {
+    const [established] = await context.tx
+      .select({ quantity: sql<number>`coalesce(sum(${valuation.quantityDelta}), 0)::integer` })
+      .from(valuation)
+      .where(
+        and(
+          eq(valuation.receiptOriginId, originId),
+          or(
+            and(eq(valuation.eventKind, 'stock.cost-established'), gt(valuation.quantityDelta, 0)),
+            eq(valuation.eventKind, 'stock.cost-established-reversal'),
+          ),
+        ),
+      );
+    entered.set(originId, established?.quantity ?? 0);
+  }
+  const handedOver = new Map<string, number>();
+  const lineage = new Map<string, { layerIds: ReadonlySet<string>; handedOver: number }>();
+  for (const originId of adjusted) {
+    const [handed] = await context.tx
+      .select({ quantity: sql<number>`coalesce(sum(${movementLeg.quantity}), 0)::integer` })
+      .from(movementLeg)
+      .innerJoin(movement, eq(movement.id, movementLeg.movementId))
+      .where(
+        and(
+          eq(movementLeg.receiptOriginId, originId),
+          eq(movement.kind, 'supplier-handover'),
+          eq(movementLeg.direction, 'out'),
+        ),
+      );
+    handedOver.set(originId, handed?.quantity ?? 0);
+    const layers = await context.tx.execute<{ id: string; pool: string }>(sql`
+      with recursive l as (
+        select id, cost_pool_id from stock.cost_layer where receipt_origin_id = ${originId}::uuid
+        union
+        select c.id, c.cost_pool_id from stock.cost_layer c join l on c.from_layer_id = l.id)
+      select id, cost_pool_id as pool from l`);
+    if (layers.rows.some((row) => !poolIds.includes(row.pool))) {
+      throw new StockRefused(refusalOf('plan-stale', plan.request.items[0]?.lineId));
+    }
+    const layerIds = new Set(layers.rows.map((row) => row.id));
+    const [handedFifo] =
+      layerIds.size === 0
+        ? [{ quantity: 0 }]
+        : await context.tx
+            .select({ quantity: sql<number>`coalesce(sum(${valuationLayer.quantity}), 0)::integer` })
+            .from(valuationLayer)
+            .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
+            .where(
+              and(
+                inArray(valuationLayer.costLayerId, [...layerIds]),
+                eq(valuation.eventKind, 'stock.supplier-handover'),
+              ),
+            );
+    lineage.set(originId, { layerIds, handedOver: handedFifo?.quantity ?? 0 });
+  }
+  return {
+    costSettings: plan.costSettings,
+    pools,
+    transits,
+    sales,
+    reversed,
+    entered,
+    handedOver,
+    lineage,
+    occurredAt: plan.occurredAt,
+  };
+}
+
+/**
+ * An outflow units come back from (7.5): a sale a customer return brings back, or a movement a reversal undoes (by
+ * `back`, the link the later movements name it by): its legs, pieces, valuations and what came back of it so far.
+ */
+async function loadSale(context: TransactionContext, saleId: string, back: 'returns' | 'reverses'): Promise<SaleState> {
+  const [sale] = await context.tx.select().from(movement).where(eq(movement.id, saleId));
+  if (sale === undefined) {
+    throw new StockRefused(refusalOf('invalid-item', undefined, [{ kind: 'movement', movementId: saleId }]));
+  }
+  // In the order the outflow took them, oldest origin first (PRD-STK-013; working.ts `balancesAt`): UUIDv7s made in
+  // one millisecond are not ordered (PRD-MOD-008), so the legs' own identifiers cannot say (S1-F10-T06, G9).
+  const legs = await context.tx
+    .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity, direction: movementLeg.direction })
+    .from(movementLeg)
+    .innerJoin(receiptOrigin, eq(receiptOrigin.id, movementLeg.receiptOriginId))
+    .where(eq(movementLeg.movementId, saleId))
+    .orderBy(
+      sql`${receiptOrigin.expiryDate} asc nulls last`,
+      receiptOrigin.countDate,
+      receiptOrigin.id,
+      movementLeg.id,
+    );
+  const direction = (legs[0]?.direction ?? null) as 'in' | 'out' | null;
+  const pieces = await context.tx
+    .select({ pieceId: movementPiece.pieceId })
+    .from(movementPiece)
+    .where(eq(movementPiece.movementId, saleId));
+  const valuations = await context.tx
+    .select()
+    .from(valuation)
+    .where(and(eq(valuation.movementId, saleId), sql`${valuation.costPoolId} is not null`));
+  const valued = new Map<string, { quantity: number; value: number }>();
+  const valuedTotal = { quantity: 0, value: 0 };
+  for (const row of valuations) {
+    valuedTotal.quantity -= row.quantityDelta;
+    valuedTotal.value -= row.valueDeltaPaise;
+    // A moving-average valuation of several origins names none (13.10); FIFO's always name theirs.
+    if (row.receiptOriginId === null) continue;
+    const sum = valued.get(row.receiptOriginId) ?? { quantity: 0, value: 0 };
+    sum.quantity -= row.quantityDelta;
+    sum.value -= row.valueDeltaPaise;
+    valued.set(row.receiptOriginId, sum);
+  }
+  const layers =
+    valuations.length === 0
+      ? []
+      : await context.tx
+          .select({ layer: valuationLayer, originId: valuation.receiptOriginId })
+          .from(valuationLayer)
+          .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
+          .innerJoin(costLayer, eq(costLayer.id, valuationLayer.costLayerId))
+          .where(
+            inArray(
+              valuationLayer.valuationId,
+              valuations.map((row) => row.id),
+            ),
+          )
+          // In the order taken: oldest layer first (7.4), not by the rows' identifiers (S1-F10-T06, G9).
+          .orderBy(costLayer.enteredSequence, valuation.sequence, valuationLayer.id);
+  const returns = await context.tx
+    .select({ id: movement.id })
+    .from(movement)
+    .where(
+      back === 'returns'
+        ? eq(movement.returnsMovementId, saleId)
+        : and(eq(movement.reversesMovementId, saleId), sql`${movement.correctionOfMovementId} is null`),
+    );
+  const returnIds = returns.map((row) => row.id);
+  const returned = new Map<string, { quantity: number; value: number }>();
+  const returnedTotal = { quantity: 0, value: 0 };
+  const returnedFromLayer = new Map<string, { quantity: number; value: number }>();
+  if (returnIds.length > 0) {
+    // What came back is in the legs going the other way: in for an outflow, out for an inflow (7.5).
+    const returnLegs = await context.tx
+      .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity })
+      .from(movementLeg)
+      .where(
+        and(
+          inArray(movementLeg.movementId, returnIds),
+          direction === 'in' ? eq(movementLeg.direction, 'out') : eq(movementLeg.direction, 'in'),
+        ),
+      );
+    for (const leg of returnLegs) {
+      const sum = returned.get(leg.originId) ?? { quantity: 0, value: 0 };
+      sum.quantity += leg.quantity;
+      returned.set(leg.originId, sum);
+    }
+    const returnValues = await context.tx
+      .select({
+        originId: valuation.receiptOriginId,
+        quantity: valuation.quantityDelta,
+        value: valuation.valueDeltaPaise,
+      })
+      .from(valuation)
+      .where(and(inArray(valuation.movementId, returnIds), sql`${valuation.costPoolId} is not null`));
+    for (const row of returnValues) {
+      returnedTotal.quantity += row.quantity;
+      returnedTotal.value += row.value;
+      if (row.originId === null) continue;
+      const sum = returned.get(row.originId) ?? { quantity: 0, value: 0 };
+      sum.value += row.value;
+      returned.set(row.originId, sum);
+    }
+    const returnLayers = await context.tx
+      .select({ from: costLayer.fromLayerId, quantity: valuationLayer.quantity, value: valuationLayer.valuePaise })
+      .from(valuationLayer)
+      .innerJoin(valuation, eq(valuation.id, valuationLayer.valuationId))
+      .innerJoin(costLayer, eq(costLayer.id, valuationLayer.costLayerId))
+      .where(inArray(valuation.movementId, returnIds));
+    for (const row of returnLayers) {
+      if (row.from === null) continue;
+      const sum = returnedFromLayer.get(row.from) ?? { quantity: 0, value: 0 };
+      sum.quantity += row.quantity;
+      sum.value += row.value;
+      returnedFromLayer.set(row.from, sum);
+    }
+  }
+  return {
+    id: sale.id,
+    kind: sale.kind,
+    direction,
+    siteId: sale.siteId,
+    businessUnitId: sale.businessUnitId,
+    legs: legs.map((leg) => ({ originId: leg.originId, quantity: leg.quantity })),
+    pieceIds: new Set(pieces.map((row) => row.pieceId)),
+    valued,
+    layers: layers.map((row) => ({
+      originId: row.originId,
+      layerId: row.layer.costLayerId,
+      pieceId: row.layer.pieceId,
+      quantity: row.layer.quantity,
+      value: 0 - row.layer.valuePaise,
+    })),
+    returned,
+    returnedFromLayer,
+    valuedTotal: valuations.length === 0 ? null : valuedTotal,
+    returnedTotal,
   };
 }

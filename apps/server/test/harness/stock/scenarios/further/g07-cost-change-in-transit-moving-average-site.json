@@ -1,0 +1,167 @@
+{
+  "id": "G7-MA-SITE",
+  "title": "G7 and P1: R1's cost rises after step 3's dispatch and before its arrival, under moving average with Site pools",
+  "synthetic": true,
+  "covers": ["PRD-LED-006", "PRD-LED-015", "PRD-LED-016", "PRD-TRF-012", "POL-09.08", "books-and-posting 16.4 P1"],
+  "sources": ["stock-ledger 7.7, 7.8, 11.3, 11.8 G7", "books-and-posting 16.1, 16.4 P1"],
+  "combination": { "formula": "moving-average", "poolMode": "site" },
+  "sku": { "pieceTracked": true },
+  "steps": [
+    {
+      "step": "1",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "W1", "pieces": 10, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 100000
+            }
+          ]
+        }
+      ],
+      "after": { "pools": [{ "pool": "W1", "quantity": 10, "valuePaise": 100000 }], "transitPaise": 0, "cogsPaise": 0 }
+    },
+    {
+      "step": "2",
+      "commands": [
+        { "command": "receipt", "receipt": "R2", "at": "S1", "pieces": 6, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R2" },
+        { "command": "pt-coverage", "receipt": "R2" },
+        {
+          "command": "pt-approval",
+          "receipt": "R2",
+          "pRatePaise": 13000,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 78000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [
+          { "pool": "W1", "quantity": 10, "valuePaise": 100000 },
+          { "pool": "S1", "quantity": 6, "valuePaise": 78000 }
+        ],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "3 dispatch",
+      "commands": [
+        {
+          "command": "transfer-approval",
+          "transfer": "T1",
+          "approvedPaise": 40000,
+          "from": "W1",
+          "to": "S1",
+          "pieces": "R1:0-3"
+        },
+        {
+          "command": "dispatch",
+          "transfer": "T1",
+          "movements": ["dispatch"],
+          "journals": [
+            {
+              "eventKind": "stock.pool-dispatch",
+              "component": "cost",
+              "debit": "TRN",
+              "credit": "INV",
+              "amountPaise": 40000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [
+          { "pool": "W1", "quantity": 6, "valuePaise": 60000 },
+          { "pool": "S1", "quantity": 6, "valuePaise": 78000 }
+        ],
+        "transitPaise": 40000,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "cost change in transit",
+      "commands": [
+        {
+          "command": "cost-change",
+          "change": "C1",
+          "receipt": "R1",
+          "amountPaise": 15000,
+          "movements": ["cost-adjustment"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-adjustment",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 9000,
+              "inventoryAt": { "W1": 9000 }
+            },
+            {
+              "eventKind": "stock.cost-adjustment",
+              "component": "to-dispatch",
+              "debit": "TRN",
+              "credit": "PUR",
+              "amountPaise": 6000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [
+          { "pool": "W1", "quantity": 6, "valuePaise": 69000 },
+          { "pool": "S1", "quantity": 6, "valuePaise": 78000 }
+        ],
+        "transitPaise": 46000,
+        "cogsPaise": 0
+      }
+    },
+    {
+      "step": "3 arrival",
+      "commands": [
+        {
+          "command": "arrival",
+          "transfer": "T1",
+          "movements": ["arrival-count"],
+          "journals": [
+            {
+              "eventKind": "stock.pool-arrival",
+              "component": "cost",
+              "debit": "INV",
+              "credit": "TRN",
+              "amountPaise": 46000
+            }
+          ]
+        },
+        { "command": "acceptance", "transfer": "T1" }
+      ],
+      "after": {
+        "pools": [
+          { "pool": "W1", "quantity": 6, "valuePaise": 69000 },
+          { "pool": "S1", "quantity": 10, "valuePaise": 124000 }
+        ],
+        "transitPaise": 0,
+        "cogsPaise": 0
+      }
+    }
+  ],
+  "trialBalance": { "INV": 193000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -193000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

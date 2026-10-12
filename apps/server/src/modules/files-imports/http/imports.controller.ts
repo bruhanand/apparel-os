@@ -22,6 +22,7 @@ import {
   type Outcome,
 } from '../commands/proposals.js';
 import { publishImport } from '../commands/publish-import.js';
+import { runComparison } from '../commands/run-comparison.js';
 import { markIssuesSeen, submitImport } from '../commands/review.js';
 import { enterStagedValue, excludeImportDocument } from '../commands/staging-edits.js';
 import { startImport } from '../commands/start-import.js';
@@ -29,6 +30,7 @@ import { storeFile, type StoreFileDependencies } from '../commands/store-file.js
 import { validateImport } from '../commands/validate-import.js';
 import { withdrawImport } from '../commands/withdraw.js';
 import { layoutList, mappingRuleList, readBatch } from '../queries/batches.js';
+import { comparisonRuns, readComparisonRun } from '../queries/comparisons.js';
 import { detectLayout, valueSuggestions } from '../queries/detection.js';
 import { importOutcomes } from '../queries/outcomes.js';
 import { STORE_FILE_DEPENDENCIES } from './files.controller.js';
@@ -278,6 +280,39 @@ export class ImportsController {
   ) {
     const answer = await this.imports.runner.read(this.request('files-imports.import-outcomes', user), (context) =>
       importOutcomes(this.imports, context, user.userId, input.query),
+    );
+    return routeAnswer(answer, { replayed: false });
+  }
+
+  @ApiRoute(routes.runComparison)
+  async runComparison(@RouteInput() input: RouteInputOf<typeof routes.runComparison>, @SignedIn() user: SignedInUser) {
+    const answer = await runComparison(this.imports, {
+      actor: actorOf(user),
+      key: input.idempotencyKey,
+      content: requestContentOf(routes.runComparison, input),
+      body: input.body,
+    });
+    return commandAnswer(answer);
+  }
+
+  @ApiRoute(routes.listComparisonRuns)
+  async listComparisonRuns(
+    @RouteInput() input: RouteInputOf<typeof routes.listComparisonRuns>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const answer = await this.imports.runner.read(this.request('files-imports.list-comparison-runs', user), (c) =>
+      comparisonRuns(this.imports, c, user.userId, input.query),
+    );
+    return routeAnswer(answer, { replayed: false });
+  }
+
+  @ApiRoute(routes.readComparisonRun)
+  async readComparisonRun(
+    @RouteInput() input: RouteInputOf<typeof routes.readComparisonRun>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const answer = await this.imports.runner.read(this.request('files-imports.read-comparison-run', user), (c) =>
+      readComparisonRun(this.imports, c, user.userId, input.params.runId),
     );
     return routeAnswer(answer, { replayed: false });
   }

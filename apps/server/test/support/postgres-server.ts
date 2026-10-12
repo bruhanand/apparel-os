@@ -12,6 +12,9 @@ import type { PostgresServer } from './postgres.js';
 // (global-setup.ts) and the server of the browser journeys (test/browser/serve.ts) both start theirs here.
 // The major version must match Railway's (CH-2, OPEN).
 
+/** The read-only test role (stock-ledger 15.4). */
+export const VERIFY_ROLE = 'syn_verify';
+
 export interface StartedPostgresServer {
   readonly server: PostgresServer;
   stop(): Promise<void>;
@@ -28,6 +31,7 @@ export async function startPostgresServer(): Promise<StartedPostgresServer> {
     // Throwaway passwords for this run only. Never a real credential.
     migrationPassword: randomBytes(16).toString('hex'),
     runtimePassword: randomBytes(16).toString('hex'),
+    verifyPassword: randomBytes(16).toString('hex'),
   };
 
   const client = new Client({ connectionString: credentials.superuserUrl });
@@ -38,6 +42,14 @@ export async function startPostgresServer(): Promise<StartedPostgresServer> {
     await client.query(readFileSync(join(serverPackageRoot(), 'db', 'runtime-limits-synthetic.sql'), 'utf8'));
     await client.query(`alter role aos_migration password ${client.escapeLiteral(credentials.migrationPassword)}`);
     await client.query(`alter role aos_runtime password ${client.escapeLiteral(credentials.runtimePassword)}`);
+    // The read-only verification role of the stock harness (stock-ledger 15.4; code-house-rules 5.1; DEC-112, CH-4,
+    // H6): made here, once per test container, and never by the runner, the local seed or the Railway runbook. It reads
+    // every table and bypasses row-level security, so an invariant query sees every row of the synthetic database it
+    // checks; its sessions are read-only; it owns nothing. A harness database copy grants it CONNECT (harness.ts).
+    await client.query(
+      `create role ${VERIFY_ROLE} login bypassrls in role pg_read_all_data password ${client.escapeLiteral(credentials.verifyPassword)}`,
+    );
+    await client.query(`alter role ${VERIFY_ROLE} set default_transaction_read_only = on`);
 
     // Where test files that must run at the same time tell each other how far they got (isolation-probe.ts).
     await client.query(

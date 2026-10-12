@@ -1,0 +1,77 @@
+{
+  "id": "P4-MA-BOOK",
+  "title": "P4: step 1 with no approved map for stock.cost-established; one exception; after the map is approved it posts once",
+  "synthetic": true,
+  "covers": [
+    "PRD-INT-004",
+    "PRD-INT-008",
+    "PRD-EXC-001",
+    "PRD-MOD-013",
+    "POL-09.12",
+    "DEC-105",
+    "books-and-posting 16.4 P4"
+  ],
+  "sources": ["stock-ledger 7.11, 12 SL-23", "books-and-posting 10, 16.4 P4"],
+  "combination": { "formula": "moving-average", "poolMode": "book" },
+  "sku": { "pieceTracked": true },
+  "withoutMaps": ["stock.cost-established"],
+  "steps": [
+    {
+      "step": "1 counted and covered",
+      "commands": [
+        { "command": "receipt", "receipt": "R1", "at": "W1", "pieces": 10, "movements": ["receipt-count"] },
+        { "command": "receipt-acceptance", "receipt": "R1" },
+        { "command": "pt-coverage", "receipt": "R1" }
+      ],
+      "after": { "pools": [], "transitPaise": 0, "cogsPaise": 0, "exceptions": 0 }
+    },
+    {
+      "step": "1 PT approval with no approved map: nothing commits, one exception",
+      "commands": [
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "refused": "stock.posting-refused",
+          "raise": true
+        }
+      ],
+      "after": {
+        "pools": [],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "exceptions": 1,
+        "custody": [{ "origin": "R1", "at": "W1", "quantity": 10 }]
+      }
+    },
+    {
+      "step": "the map approved; step 1 posts once",
+      "commands": [
+        { "command": "approve-map", "eventKind": "stock.cost-established" },
+        {
+          "command": "pt-approval",
+          "receipt": "R1",
+          "pRatePaise": 10000,
+          "retry": true,
+          "movements": ["cost-established"],
+          "journals": [
+            {
+              "eventKind": "stock.cost-established",
+              "component": "to-pool",
+              "debit": "INV",
+              "credit": "PUR",
+              "amountPaise": 100000
+            }
+          ]
+        }
+      ],
+      "after": {
+        "pools": [{ "pool": "book", "quantity": 10, "valuePaise": 100000 }],
+        "transitPaise": 0,
+        "cogsPaise": 0,
+        "exceptions": 1
+      }
+    }
+  ],
+  "trialBalance": { "INV": 100000, "TRN": 0, "RSH": 0, "CLM": 0, "PUR": -100000, "COGS": 0, "LOSS": 0, "VAR": 0 }
+}

@@ -393,6 +393,9 @@ export const financePostingCodes = declareCodes({
   'finance.no-period': 'refused',
   'finance.unknown-amount': 'refused',
   'finance.item-changed': 'refused',
+  // A posting whose source is an import of historical reference (imports-and-opening-data 4.2; books-and-posting 9.1;
+  // PRD-LIF-014, PRD-IMP-010; S1-F13-T01): a last guard behind the handler's own rule.
+  'finance.historical-reference-source': 'refused',
   'finance.store-mismatch': 'refused',
   'finance.no-journal-series': 'unavailable',
   'finance.journal-series-paused': 'unavailable',
@@ -615,6 +618,24 @@ export const filesImportsCodes = declareCodes({
   'files-imports.document-conflict': 'refused',
   'files-imports.counts-do-not-close': 'refused',
   'files-imports.starts-in-past': 'refused',
+  // Comparison runs (imports-and-opening-data 10.3, 13.1; S1-F13-T01).
+  'files-imports.comparison-run-not-found': 'not-found',
+  'files-imports.comparison-set-not-found': 'not-found',
+  'files-imports.comparison-set-wrong': 'refused',
+  'files-imports.comparison-side-masked': 'not-authorised',
+  'files-imports.comparison-places-differ': 'refused',
+});
+
+/**
+ * The codes of `ebo-imports` (module-map section 5; imports-and-opening-data 4.1, 12; S1-F13-T01), named by the
+ * historical-reference handler's preview: the batch names no Store, a row names no barcode and no item code, a
+ * quantity is not a whole number, or the report date is not a date.
+ */
+export const eboImportsCodes = declareCodes({
+  'ebo-imports.store-not-named': 'refused',
+  'ebo-imports.identity-missing': 'refused',
+  'ebo-imports.quantity-not-whole': 'refused',
+  'ebo-imports.date-not-accepted': 'refused',
 });
 
 /**
@@ -646,6 +667,10 @@ export const stockLedgerCodes = declareCodes({
   'stock.wrong-release-event': 'refused',
   'stock.condition-route': 'refused',
   'stock.rule-not-set': 'unavailable',
+  // The valued items (S1-F10-T03).
+  'stock.no-cost-setting': 'unavailable',
+  'stock.not-sellable': 'refused',
+  'stock.posting-refused': 'refused',
 });
 
 /**
@@ -954,6 +979,13 @@ export const financeTaxRulesCodes = declareCodes({
  * - `pos.unit-change-scheduled`: the device already has a unit listed from that date or later; a later change starts
  *   after it (offline-counter 3.6).
  * - `pos.units-unchanged`: the list is the one in force on that date.
+ * - `pos.bill-format-without-device`: a bill-number format carries no part taken from the device, so two devices of
+ *   one registration and year could give the same number (numbering-and-audit 3.5; S1-F12-T03).
+ * - `pos.format-code-taken`: the format code names a format other than the bill-number format in force, such as
+ *   another kind's; a new bill format takes a new code (offline-counter 4.3b).
+ * - `pos.change-not-found`: no financial-year or bill-format change has that identifier.
+ * - `pos.change-not-awaiting`: the change no longer awaits its decision, being decided or withdrawn already, so it
+ *   cannot be withdrawn (offline-counter 4.3b; RR-489).
  */
 export const deviceCodes = declareCodes({
   'access.device-code-taken': 'refused',
@@ -968,6 +1000,10 @@ export const deviceCodes = declareCodes({
   'pos.starts-in-past': 'refused',
   'pos.unit-change-scheduled': 'refused',
   'pos.units-unchanged': 'refused',
+  'pos.bill-format-without-device': 'refused',
+  'pos.format-code-taken': 'refused',
+  'pos.change-not-found': 'not-found',
+  'pos.change-not-awaiting': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
@@ -991,6 +1027,7 @@ export const errorCodes = {
   ...financePostingCodes,
   ...financePeriodCodes,
   ...deviceCodes,
+  ...eboImportsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

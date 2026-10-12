@@ -4,8 +4,8 @@ import * as filesImportsTables from './db/schema.js';
 
 /**
  * Files-imports' part in backup and restore (backup-and-restore 3.2 step 6, 3.3, 5.1, 10.1, 10.2; PRD-IMP-002,
- * PRD-ACP-019): the totals of its tables, the records others refer to (attachments, receipts, stored files, import
- * batches), the object key of every stored file, which the backup must hold (3.2 step 7), the key versions its files
+ * PRD-ACP-019): the totals of its tables, comparison runs and their lines included (RR-523), the records others refer
+ * to (attachments, receipts, stored files, import batches, documents and staged rows), the object key of every stored file, which the backup must hold (3.2 step 7), the key versions its files
  * and receipts name (2.3), and that every attachment's record resolves through the participant that answers for its
  * type. Opening each file and attachment after a restore is
  * its after-restore check, restore-check.ts (S1-F14-T03).
@@ -24,6 +24,19 @@ export const filesImportsRestoreParticipant: RestoreParticipant = {
     { recordType: 'files_imports.file_receipt', table: 'files_imports.file_receipt', suffixes: ['file_receipt_id'] },
     { recordType: 'files_imports.stored_file', table: 'files_imports.stored_file', suffixes: ['stored_file_id'] },
     { recordType: 'files_imports.import_batch', table: 'files_imports.import_batch', suffixes: ['import_batch_id'] },
+    // The documents and staged rows a published record names, such as a product proposal's or an earlier-POS
+    // reference document's source (imports-and-opening-data section 5; RR-523).
+    {
+      recordType: 'files_imports.import_document',
+      table: 'files_imports.import_document',
+      suffixes: ['import_document_id'],
+    },
+    {
+      recordType: 'files_imports.staged_row',
+      table: 'files_imports.staged_row',
+      suffixes: ['staged_row_id'],
+      arraySuffixes: ['staged_row_ids'],
+    },
   ],
   typedReferences: [{ table: 'files_imports.attachment', typeColumn: 'record_type', idColumn: 'record_id' }],
   notReferences: {

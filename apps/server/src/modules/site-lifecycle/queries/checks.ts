@@ -20,7 +20,7 @@ export interface CheckDependencies {
   readonly configuration: Pick<ConfigurationInterface, 'operations' | 'policyMissing'>;
   /** Whether the stock ledger holds stock at a location: `organisation`'s contract, which `stock` implements. */
   readonly locationInUse: LocationInUse;
-  /** Where an approved, unpublished opening-data batch is read; none is yet, so none counts (S1-F13-T01). */
+  /** Where an approved, unpublished opening-data batch is read: files-imports' `openingPlansOf` (S1-F13-T01). */
   readonly openingPlans?: OpeningPlans | undefined;
 }
 

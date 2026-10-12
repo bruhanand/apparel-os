@@ -59,7 +59,7 @@ export const partyBankDetails = merchandise.table('party_bank_details', {
   partyId: uuid('party_id').notNull(),
   sealed: text('sealed').notNull(),
   scheme: text('scheme').notNull(),
-  /** The key version that encrypted them (backup-and-restore 2.4). Null on rows written before migration 0069. */
+  /** The key version that encrypted them (backup-and-restore 2.4). Null on rows written before migration 0078. */
   keyVersion: text('key_version'),
 });
 export const brandSupplierLink = merchandise.table('brand_supplier_link', {
