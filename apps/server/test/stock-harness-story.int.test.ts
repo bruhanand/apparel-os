@@ -69,17 +69,17 @@ describe('the test-only migration set and the read-only role (stock-ledger 15.2,
     }
   }
 
-  it('code-house-rules 10.4 its register lists every table of its schema, with the runtime role’s privileges', async () => {
+  it('code-house-rules 10.4 its register lists every table of its schemas, with the runtime role’s privileges', async () => {
     const tables = await read<{ name: string }>(
       `select schemaname || '.' || tablename as name from pg_catalog.pg_tables
-       where schemaname = 'test_stock_harness' order by 1`,
+       where schemaname like 'test\\_%' order by 1`,
     );
     expect(tables.map((row) => row.name)).toEqual(entries.map((entry) => entry.table).sort());
     const grants = await read<{ name: string; privilege: string }>(
       `select n.nspname || '.' || c.relname as name, a.privilege_type as privilege
        from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
        cross join lateral pg_catalog.aclexplode(c.relacl) a join pg_catalog.pg_roles r on r.oid = a.grantee
-       where n.nspname = 'test_stock_harness' and r.rolname = 'aos_runtime'`,
+       where n.nspname like 'test\\_%' and r.rolname = 'aos_runtime'`,
     );
     for (const entry of entries) {
       expect(
@@ -93,7 +93,7 @@ describe('the test-only migration set and the read-only role (stock-ledger 15.2,
     const guarded = await read<{ name: string }>(
       `select n.nspname || '.' || c.relname as name from pg_catalog.pg_trigger t
        join pg_catalog.pg_class c on c.oid = t.tgrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-       where n.nspname = 'test_stock_harness' and t.tgname = 'refuse_row_change' order by 1`,
+       where n.nspname like 'test\\_%' and t.tgname = 'refuse_row_change' order by 1`,
     );
     expect(guarded.map((row) => row.name)).toEqual(
       entries

@@ -11,6 +11,7 @@ import type {
   ValueSuggestion,
 } from '@apparel-os/schemas';
 import { bigint, boolean, customType, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { BalanceLineDraft, SideAmount } from '../domain/balances.js';
 import type { ComparisonLineDraft, SideQuantity } from '../domain/comparison.js';
 import type { GridCell, GridNote } from '../domain/grid.js';
 import type { OutcomeControlTotal, OutcomeCounts, OutcomeDocument, OutcomeMeasure } from '../domain/outcome.js';
@@ -311,13 +312,13 @@ export const comparisonRun = filesImports.table('comparison_run', {
   id: uuid('id').primaryKey(),
   runKind: text('run_kind').$type<ComparisonRunKind>().notNull(),
   comparisonKey: text('comparison_key').$type<ComparisonKeyName>().notNull(),
-  leftSet: text('left_set').$type<'manifest' | 'count'>().notNull(),
+  leftSet: text('left_set').$type<'manifest' | 'count' | 'opening-balances'>().notNull(),
   leftBatchId: uuid('left_batch_id'),
   leftBatchVersionId: uuid('left_batch_version_id'),
   leftSiteId: uuid('left_site_id'),
   leftBusinessUnitId: uuid('left_business_unit_id'),
   leftAsOf: at('left_as_of'),
-  rightSet: text('right_set').$type<'manifest' | 'stock-on-hand'>().notNull(),
+  rightSet: text('right_set').$type<'manifest' | 'stock-on-hand' | 'closed-books'>().notNull(),
   rightBatchId: uuid('right_batch_id').notNull(),
   rightBatchVersionId: uuid('right_batch_version_id').notNull(),
   counts: jsonb('counts').$type<ComparisonCounts>().notNull(),
@@ -341,6 +342,26 @@ export const comparisonLine = filesImports.table('comparison_line', {
   leftQuantity: bigint('left_quantity', { mode: 'number' }),
   rightState: text('right_state').$type<SideQuantity['state']>().notNull(),
   rightQuantity: bigint('right_quantity', { mode: 'number' }),
+  result: text('result').$type<ComparisonResultName>().notNull(),
+  leftRows: jsonb('left_rows').$type<string[]>().notNull(),
+  rightRows: jsonb('right_rows').$type<string[]>().notNull(),
+  ...scopeColumns(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** One line of a run of opening balances against the closed books (10.4; 0072; S1-F13-T02): totals in paise. */
+export const comparisonBalanceLine = filesImports.table('comparison_balance_line', {
+  id: uuid('id').primaryKey(),
+  runId: uuid('run_id').notNull(),
+  lineNumber: integer('line_number').notNull(),
+  keyedBy: text('keyed_by').$type<BalanceLineDraft['keyedBy']>().notNull(),
+  accountingBookId: uuid('accounting_book_id'),
+  account: text('account'),
+  party: text('party'),
+  leftState: text('left_state').$type<SideAmount['state']>().notNull(),
+  leftPaise: bigint('left_paise', { mode: 'number' }),
+  rightState: text('right_state').$type<SideAmount['state']>().notNull(),
+  rightPaise: bigint('right_paise', { mode: 'number' }),
   result: text('result').$type<ComparisonResultName>().notNull(),
   leftRows: jsonb('left_rows').$type<string[]>().notNull(),
   rightRows: jsonb('right_rows').$type<string[]>().notNull(),

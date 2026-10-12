@@ -18,14 +18,18 @@ export { closeSuggestions, MOST_SUGGESTIONS, optionSuggestions } from './domain/
 export { COUNT_SETS } from './contracts/count-sets.js';
 export type { CountSets } from './contracts/count-sets.js';
 export type { ComparisonRow } from './domain/comparison.js';
+export type { BalanceRow } from './domain/balances.js';
 export { openingPlansOf } from './queries/opening-plans.js';
 export type {
+  BalanceComparison,
   HandlerDocument,
   HandlerPublished,
   HandlerRow,
   ImportField,
   ImportComparison,
   ImportHandler,
+  OpeningKind,
+  StockComparison,
   ImportMeasure,
   ImportPlace,
   ImportNeed,

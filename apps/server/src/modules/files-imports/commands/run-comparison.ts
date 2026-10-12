@@ -19,7 +19,8 @@ import {
 } from '../../../kernel/index.js';
 import type { AuditScope } from '../../audit/index.js';
 import type { ImportHandler } from '../contracts/import-handlers.js';
-import { comparisonLine, comparisonRun } from '../db/schema.js';
+import { comparisonBalanceLine, comparisonLine, comparisonRun } from '../db/schema.js';
+import { compareBalances, type BalanceLineDraft, type BalanceRow } from '../domain/balances.js';
 import { compareSets, type ComparisonKey, type ComparisonLineDraft, type ComparisonRow } from '../domain/comparison.js';
 import { maskedField, maskPlan } from '../domain/masking.js';
 import {
@@ -42,6 +43,10 @@ import { BATCH_LOCK } from './validate-import.js';
 // both sides hold, and view on each side with its own facts, the fields the comparison reads not masked for the reader
 // (section 11); the authority held at step 0; the batches locked shared at step 1 and read again; the rows read
 // through each side's handler, or the count; the lines worked out; the run and its lines written with the audit record.
+//
+// S1-F13-T02 adds the run of 10.4 (POL-14.03): an opening batch of dues, advances or deposits against the closed-books
+// balances, by party and account, the closed books read only for the accounts the opening batch's handler holds, so
+// each kind's totals are compared on their own (PRD-LIF-009).
 
 export interface RunComparisonInput {
   readonly actor: ImportActor;
@@ -50,7 +55,10 @@ export interface RunComparisonInput {
   readonly body: RunComparisonRequest;
 }
 
-type BatchSet = 'manifest' | 'stock-on-hand';
+type BatchSet = 'manifest' | 'stock-on-hand' | 'opening-balances' | 'closed-books';
+
+/** The keys of a run: the stock keys of 10.3, or party and account (10.4). */
+type RunKey = ComparisonKey | 'party-and-account';
 
 /** A side as the request names it. */
 type SideNamed =
@@ -60,7 +68,7 @@ type SideNamed =
 /** The run kind's sides and key (10.3). */
 function plannedRun(body: RunComparisonRequest): {
   readonly run: ComparisonRunKind;
-  readonly key: ComparisonKey;
+  readonly key: RunKey;
   readonly left: SideNamed;
   readonly right: SideNamed & { readonly kind: 'batch' };
 } {
@@ -86,13 +94,25 @@ function plannedRun(body: RunComparisonRequest): {
         left: { kind: 'count', ...body.count },
         right: { kind: 'batch', set: 'stock-on-hand', batchId: body.stockOnHand.batchId },
       };
+    case 'balances-against-closed-books':
+      return {
+        run: body.run,
+        key: 'party-and-account',
+        left: { kind: 'batch', set: 'opening-balances', batchId: body.balances.batchId },
+        right: { kind: 'batch', set: 'closed-books', batchId: body.closedBooks.batchId },
+      };
   }
 }
 
-/** The batch kind a set's batches are of (4.1): a manifest is opening balance, an SOH historical reference. */
+/**
+ * The batch kind a set's batches are of (4.1): a manifest and opening balances are opening balance; an SOH and the
+ * closed-books balances, facts kept for checks only, historical reference.
+ */
 const KIND_OF_SET: Readonly<Record<BatchSet, BatchRow['kind']>> = {
   manifest: 'opening-balance',
   'stock-on-hand': 'historical-reference',
+  'opening-balances': 'opening-balance',
+  'closed-books': 'historical-reference',
 };
 
 type Resolved =
@@ -245,8 +265,53 @@ async function rowsOf(
     if (deps.counts === undefined) return { rows: [] };
     return deps.counts.countAt(context, { siteId: side.siteId, businessUnitId: side.businessUnitId });
   }
+  const comparison = side.handler.comparison;
+  if (comparison === undefined || !('rows' in comparison)) return { rows: [] };
   const documents = (await documentsOf(context, side.batch)).filter((each) => !each.excluded);
-  return { rows: (await side.handler.comparison?.rows(context, documents)) ?? [] };
+  return { rows: await comparison.rows(context, documents) };
+}
+
+/** One batch side's balance rows (10.4): the handler's rows of the batch's documents not excluded. */
+async function balancesOf(context: TransactionContext, side: Resolved): Promise<readonly BalanceRow[]> {
+  if (side.kind !== 'batch') return [];
+  const comparison = side.handler.comparison;
+  if (comparison === undefined || !('balances' in comparison)) return [];
+  const documents = (await documentsOf(context, side.batch)).filter((each) => !each.excluded);
+  return comparison.balances(context, documents);
+}
+
+/** The accounts an opening side's handler holds, to which the closed books are read (10.4). */
+function accountsOf(side: Resolved): ReadonlySet<string> {
+  const comparison = side.kind === 'batch' ? side.handler.comparison : undefined;
+  return new Set(comparison !== undefined && 'balances' in comparison ? (comparison.accounts ?? []) : []);
+}
+
+/** The lines of the run: by the stock keys of 10.3, or by party and account (10.4). */
+async function linesOf(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  sides: { readonly left: Resolved; readonly right: Resolved },
+  key: RunKey,
+): Promise<
+  | { readonly kind: 'stock'; readonly lines: readonly ComparisonLineDraft[]; readonly asOf?: string }
+  | { readonly kind: 'balances'; readonly lines: readonly BalanceLineDraft[] }
+> {
+  if (key === 'party-and-account') {
+    const accounts = accountsOf(sides.left);
+    const left = await balancesOf(context, sides.left);
+    // The closed books hold every account of the book; each kind is compared with its own accounts only (PRD-LIF-009).
+    const right = (await balancesOf(context, sides.right)).filter(
+      (row) => row.account === null || accounts.has(row.account),
+    );
+    return { kind: 'balances', lines: compareBalances(left, right) };
+  }
+  const left = await rowsOf(deps, context, sides.left);
+  const right = await rowsOf(deps, context, sides.right);
+  return {
+    kind: 'stock',
+    lines: compareSets(left.rows, right.rows, key),
+    ...(left.asOf === undefined ? {} : { asOf: left.asOf }),
+  };
 }
 
 export function countsOf(lines: readonly Pick<ComparisonLineDraft, 'result'>[]): ComparisonCounts {
@@ -262,7 +327,21 @@ export function countsOf(lines: readonly Pick<ComparisonLineDraft, 'result'>[]):
   return counts;
 }
 
+/** The set a run's left side is, as the run keeps it: a count, a manifest or opening balances (10.3, 10.4). */
+function leftSetOf(side: Resolved): 'count' | 'manifest' | 'opening-balances' {
+  if (side.kind === 'count') return 'count';
+  if (side.set === 'manifest' || side.set === 'opening-balances') return side.set;
+  throw new Error(`A run's left side is never ${side.set}`);
+}
+
+/** The set a run's right side is: a manifest, an SOH or the closed books (10.3, 10.4). */
+function rightSetOf(set: BatchSet): 'manifest' | 'stock-on-hand' | 'closed-books' {
+  if (set === 'opening-balances') throw new Error("A run's right side is never opening balances");
+  return set;
+}
+
 const quantityColumn = (side: ComparisonLineDraft['left']) => (side.state === 'listed' ? side.quantity : null);
+const paiseColumn = (side: BalanceLineDraft['left']) => (side.state === 'listed' ? side.paise : null);
 
 const asRefusal = (refusal: CommandRefusal): CommandOutcome<JsonValue> => ({
   kind: 'refusal',
@@ -321,10 +400,8 @@ export async function runComparison(
         );
         const again = await sidesOf(deps, context, input.body);
         if (isRefusal(again)) return asRefusal(again);
-        const left = await rowsOf(deps, context, again.left);
-        const right = await rowsOf(deps, context, again.right);
-        const lines = compareSets(left.rows, right.rows, again.planned.key);
-        const counts = countsOf(lines);
+        const worked = await linesOf(deps, context, again, again.planned.key);
+        const counts = countsOf(worked.lines);
         const runId = uuidv7();
         const scope = {
           legalEntityId: again.facts.legalEntityId ?? null,
@@ -339,13 +416,16 @@ export async function runComparison(
           id: runId,
           runKind: again.planned.run,
           comparisonKey: again.planned.key,
-          leftSet: leftSide.kind === 'count' ? 'count' : 'manifest',
+          leftSet: leftSetOf(leftSide),
           leftBatchId: leftSide.kind === 'batch' ? leftSide.batch.id : null,
           leftBatchVersionId: leftSide.kind === 'batch' ? leftSide.batch.versionId : null,
           leftSiteId: leftSide.kind === 'count' ? leftSide.siteId : null,
           leftBusinessUnitId: leftSide.kind === 'count' ? leftSide.businessUnitId : null,
-          leftAsOf: leftSide.kind === 'count' ? new Date(left.asOf ?? context.startedAt.toISOString()) : null,
-          rightSet: rightSide.set,
+          leftAsOf:
+            leftSide.kind === 'count'
+              ? new Date((worked.kind === 'stock' ? worked.asOf : undefined) ?? context.startedAt.toISOString())
+              : null,
+          rightSet: rightSetOf(rightSide.set),
           rightBatchId: rightSide.batch.id,
           rightBatchVersionId: rightSide.batch.versionId,
           counts,
@@ -354,9 +434,30 @@ export async function runComparison(
           runAt: context.startedAt,
           ...scope,
         });
-        if (lines.length > 0) {
+        if (worked.kind === 'balances' && worked.lines.length > 0) {
+          await context.tx.insert(comparisonBalanceLine).values(
+            worked.lines.map((line, index) => ({
+              id: uuidv7(),
+              runId,
+              lineNumber: index + 1,
+              keyedBy: line.keyedBy,
+              accountingBookId: line.accountingBookId,
+              account: line.account,
+              party: line.party,
+              leftState: line.left.state,
+              leftPaise: paiseColumn(line.left),
+              rightState: line.right.state,
+              rightPaise: paiseColumn(line.right),
+              result: line.result,
+              leftRows: [...line.leftRows],
+              rightRows: [...line.rightRows],
+              ...scope,
+            })),
+          );
+        }
+        if (worked.kind === 'stock' && worked.lines.length > 0) {
           await context.tx.insert(comparisonLine).values(
-            lines.map((line, index) => ({
+            worked.lines.map((line, index) => ({
               id: uuidv7(),
               runId,
               lineNumber: index + 1,

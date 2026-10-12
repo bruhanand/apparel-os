@@ -934,11 +934,18 @@ export const COMPARISON_RUN_TYPE = 'files_imports.comparison_run';
 
 /**
  * The comparison runs of 10.3 (PRD-LIF-027, POL-14.07): the manifest, and the count, against the earlier POS's last
- * SOH by barcode, then SKU; the count against the manifest by SKU and location. The run kind names its key.
+ * SOH by barcode, then SKU; the count against the manifest by SKU and location. The run kind names its key. With
+ * S1-F13-T02, the run of 10.4 (POL-14.03): an opening batch of dues, advances or deposits against the closed-books
+ * balances, per party and per account.
  */
-export const comparisonRunKindSchema = z.enum(['manifest-against-soh', 'count-against-manifest', 'count-against-soh']);
+export const comparisonRunKindSchema = z.enum([
+  'manifest-against-soh',
+  'count-against-manifest',
+  'count-against-soh',
+  'balances-against-closed-books',
+]);
 export type ComparisonRunKind = z.infer<typeof comparisonRunKindSchema>;
-export const comparisonKeySchema = z.enum(['barcode-then-sku', 'sku-and-location']);
+export const comparisonKeySchema = z.enum(['barcode-then-sku', 'sku-and-location', 'party-and-account']);
 export type ComparisonKeyName = z.infer<typeof comparisonKeySchema>;
 
 /** A batch side: the batch, at the version it has when the run reads it. */
@@ -959,6 +966,11 @@ export const runComparisonRequestSchema = z.discriminatedUnion('run', [
     manifest: comparedBatchSchema,
   }),
   z.strictObject({ run: z.literal('count-against-soh'), count: comparedCountSchema, stockOnHand: comparedBatchSchema }),
+  z.strictObject({
+    run: z.literal('balances-against-closed-books'),
+    balances: comparedBatchSchema,
+    closedBooks: comparedBatchSchema,
+  }),
 ]);
 export type RunComparisonRequest = z.infer<typeof runComparisonRequestSchema>;
 
@@ -966,7 +978,7 @@ export type RunComparisonRequest = z.infer<typeof runComparisonRequestSchema>;
 export const comparisonSideSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('batch'),
-    set: z.enum(['manifest', 'stock-on-hand']),
+    set: z.enum(['manifest', 'stock-on-hand', 'opening-balances', 'closed-books']),
     batchId: idSchema,
     batchCode: z.string(),
     batchVersionId: idSchema,
@@ -1013,6 +1025,31 @@ export const comparisonLineSchema = z.strictObject({
 });
 export type ComparisonLine = z.infer<typeof comparisonLineSchema>;
 
+/** One side's total of a balance line in paise: listed, listed with an Unknown amount, or not listed, never zero. */
+export const sideAmountSchema = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('listed'), paise: z.number().int().refine(Number.isSafeInteger) }),
+  z.strictObject({ state: z.literal('unknown') }),
+  z.strictObject({ state: z.literal('not-listed') }),
+]);
+
+/**
+ * One line of a run of opening balances against the closed books (10.4; S1-F13-T02): a party of a book and account,
+ * or an account's total, with both sides' totals in paise (PRD-MOD-014) and the rows they came from.
+ */
+export const comparisonBalanceLineSchema = z.strictObject({
+  lineNumber: z.number().int().positive(),
+  keyedBy: z.enum(['party', 'account', 'unresolved']),
+  accountingBookId: idSchema.optional(),
+  account: z.string().optional(),
+  party: z.string().optional(),
+  left: sideAmountSchema,
+  right: sideAmountSchema,
+  result: comparisonResultSchema,
+  leftRows: z.array(z.string()),
+  rightRows: z.array(z.string()),
+});
+export type ComparisonBalanceLine = z.infer<typeof comparisonBalanceLineSchema>;
+
 /** A run's lines counted by result. */
 export const comparisonCountsSchema = z.strictObject({
   same: z.number().int().nonnegative(),
@@ -1040,6 +1077,8 @@ export const comparisonRunReadSchema = z.strictObject({
   asOf,
   ...comparisonRunFields,
   lines: z.array(comparisonLineSchema),
+  /** The lines of a run of opening balances against the closed books; none for a stock run (S1-F13-T02). */
+  balanceLines: z.array(comparisonBalanceLineSchema),
 });
 export type ComparisonRunRead = z.infer<typeof comparisonRunReadSchema>;
 

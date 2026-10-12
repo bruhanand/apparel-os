@@ -1,6 +1,7 @@
 import type { DocumentPreview, ImportKind, ValueSuggestion } from '@apparel-os/schemas';
 import type { CommandRefusal, LockTarget, TransactionContext } from '../../../kernel/index.js';
 import type { AuthoriseRequest } from '../../access/index.js';
+import type { BalanceRow } from '../domain/balances.js';
 import type { ComparisonRow } from '../domain/comparison.js';
 import type { EffectiveValue } from '../domain/report.js';
 
@@ -70,11 +71,26 @@ export interface HandlerDocument {
  * barcode, SKU, location and quantity, worked out through the handler's own module (a barcode through Resolve a code),
  * without writing.
  */
-export interface ImportComparison {
+export interface StockComparison {
   readonly set: 'manifest' | 'stock-on-hand';
   readonly fields: readonly string[];
   rows(context: TransactionContext, documents: readonly HandlerDocument[]): Promise<ComparisonRow[]>;
 }
+
+/**
+ * What a handler's batches are as a set of a run of opening balances against the closed books (10.4; S1-F13-T02): an
+ * opening batch of dues, advances or deposits, or the closed-books balances; the fields its rows are read from; the
+ * accounts it holds, to which a run reads the closed books (an opening set's only); and each row's book, account,
+ * party and amount in paise, worked out through the handler's own module without writing.
+ */
+export interface BalanceComparison {
+  readonly set: 'opening-balances' | 'closed-books';
+  readonly fields: readonly string[];
+  readonly accounts?: readonly string[];
+  balances(context: TransactionContext, documents: readonly HandlerDocument[]): Promise<BalanceRow[]>;
+}
+
+export type ImportComparison = StockComparison | BalanceComparison;
 
 /**
  * Whether a handler supports governed revisions (7.3), and what reversing means for its records: `none`, so a
@@ -125,12 +141,14 @@ export interface ImportHandler {
    * The effects it may have (4.2): master records; reference records, for a historical-reference handler, which never
    * moves stock or money (PRD-LIF-014, PRD-IMP-010); or stock, for an opening-balance handler (10.2).
    */
-  readonly effects: 'master-records' | 'reference-records' | 'stock';
+  readonly effects: 'master-records' | 'reference-records' | 'stock' | 'money';
   /**
    * The opening kind an opening-balance handler fills (10.1, 10.2, 10.4): opening stock, whose approved, unpublished
-   * batch is the unit's opening plan for the stock-plan readiness check (module-map 4.16; DEC-117). None otherwise.
+   * batch is the unit's opening plan for the stock-plan readiness check (module-map 4.16; DEC-117); or, each its own
+   * kind (PRD-LIF-009; S1-F13-T02), supplier dues, customer dues, advances given and received, or deposits given and
+   * received, whose handler's effect is money. None otherwise.
    */
-  readonly openingKind?: 'stock';
+  readonly openingKind?: OpeningKind;
   /** What its batches are as a set of a comparison run (10.3), where they are one. */
   readonly comparison?: ImportComparison;
   /** The fields of its staged row. */
@@ -184,6 +202,12 @@ export interface ImportHandler {
     source: ImportSource,
   ): Promise<HandlerPublished>;
 }
+
+/**
+ * The opening kinds of 10.2 and 10.4, each its own layout, imported separately (PRD-LIF-009). Outstanding commercial
+ * stock is named by PRD-LIF-009 but its fields are OPEN (GC6-10), so no handler fills it yet.
+ */
+export type OpeningKind = 'stock' | 'supplier-dues' | 'customer-dues' | 'advances' | 'deposits';
 
 /** The handlers of the targets whose modules registered one. */
 export class ImportHandlers {

@@ -15739,14 +15739,16 @@
                             "enum": [
                               "manifest-against-soh",
                               "count-against-manifest",
-                              "count-against-soh"
+                              "count-against-soh",
+                              "balances-against-closed-books"
                             ]
                           },
                           "key": {
                             "type": "string",
                             "enum": [
                               "barcode-then-sku",
-                              "sku-and-location"
+                              "sku-and-location",
+                              "party-and-account"
                             ]
                           },
                           "left": {
@@ -15762,7 +15764,9 @@
                                     "type": "string",
                                     "enum": [
                                       "manifest",
-                                      "stock-on-hand"
+                                      "stock-on-hand",
+                                      "opening-balances",
+                                      "closed-books"
                                     ]
                                   },
                                   "batchId": {
@@ -15839,7 +15843,9 @@
                                     "type": "string",
                                     "enum": [
                                       "manifest",
-                                      "stock-on-hand"
+                                      "stock-on-hand",
+                                      "opening-balances",
+                                      "closed-books"
                                     ]
                                   },
                                   "batchId": {
@@ -16397,6 +16403,49 @@
                       "run",
                       "count",
                       "stockOnHand"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "const": "balances-against-closed-books"
+                      },
+                      "balances": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "closedBooks": {
+                        "type": "object",
+                        "properties": {
+                          "batchId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        },
+                        "required": [
+                          "batchId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "run",
+                      "balances",
+                      "closedBooks"
                     ],
                     "additionalProperties": false
                   }
@@ -51844,14 +51893,16 @@
                       "enum": [
                         "manifest-against-soh",
                         "count-against-manifest",
-                        "count-against-soh"
+                        "count-against-soh",
+                        "balances-against-closed-books"
                       ]
                     },
                     "key": {
                       "type": "string",
                       "enum": [
                         "barcode-then-sku",
-                        "sku-and-location"
+                        "sku-and-location",
+                        "party-and-account"
                       ]
                     },
                     "left": {
@@ -51867,7 +51918,9 @@
                               "type": "string",
                               "enum": [
                                 "manifest",
-                                "stock-on-hand"
+                                "stock-on-hand",
+                                "opening-balances",
+                                "closed-books"
                               ]
                             },
                             "batchId": {
@@ -51944,7 +51997,9 @@
                               "type": "string",
                               "enum": [
                                 "manifest",
-                                "stock-on-hand"
+                                "stock-on-hand",
+                                "opening-balances",
+                                "closed-books"
                               ]
                             },
                             "batchId": {
@@ -52227,6 +52282,169 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "balanceLines": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lineNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "keyedBy": {
+                            "type": "string",
+                            "enum": [
+                              "party",
+                              "account",
+                              "unresolved"
+                            ]
+                          },
+                          "accountingBookId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "account": {
+                            "type": "string"
+                          },
+                          "party": {
+                            "type": "string"
+                          },
+                          "left": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "listed"
+                                  },
+                                  "paise": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "paise"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "not-listed"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "right": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "listed"
+                                  },
+                                  "paise": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "paise"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "state": {
+                                    "type": "string",
+                                    "const": "not-listed"
+                                  }
+                                },
+                                "required": [
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "result": {
+                            "type": "string",
+                            "enum": [
+                              "same",
+                              "different",
+                              "not-listed-left",
+                              "not-listed-right",
+                              "unknown",
+                              "unresolved"
+                            ]
+                          },
+                          "leftRows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rightRows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "lineNumber",
+                          "keyedBy",
+                          "left",
+                          "right",
+                          "result",
+                          "leftRows",
+                          "rightRows"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -52239,7 +52457,8 @@
                     "runByUserId",
                     "runAt",
                     "counts",
-                    "lines"
+                    "lines",
+                    "balanceLines"
                   ],
                   "additionalProperties": false
                 }

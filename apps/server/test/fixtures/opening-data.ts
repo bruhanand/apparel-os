@@ -9,7 +9,7 @@ interface Column {
   readonly name: string;
   readonly required: boolean;
   readonly type?: 'text' | 'number' | 'money';
-  readonly restrictedClass?: 'cost';
+  readonly restrictedClass?: 'cost' | 'customer-contact';
 }
 
 const layoutOf = (sheet: string, columns: readonly Column[], documentReference: string) => ({
@@ -104,11 +104,163 @@ export const SALES_LAYOUT = layoutOf(
 );
 export const SALES_MAPPING = mappingOf(SALES_FIELDS, { amount: 'paise' });
 
+// S1-F13-T02: the SYNTHETIC layouts of opening dues, advances and deposits, each its own opening kind (10.4;
+// PRD-LIF-009), and of the closed-books balances they reconcile with (POL-14.03). Their fields are GC-6's Proposed
+// ones (GC6-10, RR-133: the real fields stay with Accounts and the CA); amounts in rupees with up to two decimals,
+// staged as integer paise (PRD-MOD-014). Every row names the batch's unit and the cutoff date.
+
+const balanceLayout = (
+  sheet: string,
+  fields: Readonly<Record<string, string>>,
+  required: readonly string[],
+  money: readonly string[],
+  reference: string,
+  restricted: Readonly<Record<string, 'customer-contact'>> = {},
+) =>
+  layoutOf(
+    sheet,
+    Object.entries(fields).map(([field, name]) => ({
+      name,
+      required: required.includes(field),
+      ...(money.includes(field) ? { type: 'money' as const } : {}),
+      ...(restricted[field] === undefined ? {} : { restrictedClass: restricted[field] }),
+    })),
+    reference,
+  );
+const paiseOf = (money: readonly string[]) => Object.fromEntries(money.map((field) => [field, 'paise']));
+
+/** SYNTHETIC supplier dues: one open supplier document (10.4). */
+export const SUPPLIER_DUES_SHEET = 'SYNTHETIC Supplier dues';
+export const SUPPLIER_DUES_FIELDS = {
+  openingReference: 'Opening',
+  unitCode: 'Unit',
+  cutoffDate: 'Cutoff',
+  partyCode: 'Party',
+  legalEntityCode: 'Legal entity',
+  bookCode: 'Book',
+  documentReference: 'Document',
+  documentDate: 'Document date',
+  originalAmount: 'Original amount',
+  openAmount: 'Open amount',
+  dueDate: 'Due date',
+} as const;
+const SUPPLIER_DUES_MONEY = ['originalAmount', 'openAmount'];
+export const SUPPLIER_DUES_LAYOUT = balanceLayout(
+  SUPPLIER_DUES_SHEET,
+  SUPPLIER_DUES_FIELDS,
+  [
+    'openingReference',
+    'unitCode',
+    'cutoffDate',
+    'partyCode',
+    'legalEntityCode',
+    'bookCode',
+    'documentReference',
+    'documentDate',
+    'openAmount',
+  ],
+  SUPPLIER_DUES_MONEY,
+  'Opening',
+);
+export const SUPPLIER_DUES_MAPPING = mappingOf(SUPPLIER_DUES_FIELDS, paiseOf(SUPPLIER_DUES_MONEY));
+
+/** SYNTHETIC customer dues: one open customer amount (10.4); the customer's name is customer contact (section 11). */
+export const CUSTOMER_DUES_SHEET = 'SYNTHETIC Customer dues';
+export const CUSTOMER_DUES_FIELDS = {
+  openingReference: 'Opening',
+  unitCode: 'Unit',
+  cutoffDate: 'Cutoff',
+  customerCode: 'Customer',
+  customerName: 'Customer name',
+  documentReference: 'Document',
+  documentDate: 'Document date',
+  openAmount: 'Open amount',
+  dueDate: 'Due date',
+} as const;
+export const CUSTOMER_DUES_LAYOUT = balanceLayout(
+  CUSTOMER_DUES_SHEET,
+  CUSTOMER_DUES_FIELDS,
+  ['openingReference', 'unitCode', 'cutoffDate', 'customerCode', 'documentReference', 'documentDate', 'openAmount'],
+  ['openAmount'],
+  'Opening',
+  { customerName: 'customer-contact' },
+);
+export const CUSTOMER_DUES_MAPPING = mappingOf(CUSTOMER_DUES_FIELDS, paiseOf(['openAmount']));
+
+/** SYNTHETIC advances given and received: one advance (10.4). */
+export const ADVANCES_SHEET = 'SYNTHETIC Advances';
+export const ADVANCES_FIELDS = {
+  openingReference: 'Opening',
+  unitCode: 'Unit',
+  cutoffDate: 'Cutoff',
+  direction: 'Given or received',
+  partyCode: 'Party',
+  purpose: 'Purpose',
+  amount: 'Amount',
+  evidence: 'Evidence',
+} as const;
+export const ADVANCES_LAYOUT = balanceLayout(
+  ADVANCES_SHEET,
+  ADVANCES_FIELDS,
+  ['openingReference', 'unitCode', 'cutoffDate', 'direction', 'partyCode', 'purpose', 'amount', 'evidence'],
+  ['amount'],
+  'Opening',
+);
+export const ADVANCES_MAPPING = mappingOf(ADVANCES_FIELDS, paiseOf(['amount']));
+
+/** SYNTHETIC deposits given and received: one deposit (10.4). */
+export const DEPOSITS_SHEET = 'SYNTHETIC Deposits';
+export const DEPOSITS_FIELDS = {
+  openingReference: 'Opening',
+  unitCode: 'Unit',
+  cutoffDate: 'Cutoff',
+  direction: 'Given or received',
+  partyCode: 'Party',
+  agreementReference: 'Agreement',
+  amount: 'Amount',
+  evidence: 'Evidence',
+} as const;
+export const DEPOSITS_LAYOUT = balanceLayout(
+  DEPOSITS_SHEET,
+  DEPOSITS_FIELDS,
+  ['openingReference', 'unitCode', 'cutoffDate', 'direction', 'partyCode', 'agreementReference', 'amount', 'evidence'],
+  ['amount'],
+  'Opening',
+);
+export const DEPOSITS_MAPPING = mappingOf(DEPOSITS_FIELDS, paiseOf(['amount']));
+
+/**
+ * SYNTHETIC closed-books balances: one balance of a book's account, of a party or of the account alone (10.4). Their
+ * real form, such as a Tally export, is OPEN (GC6-10).
+ */
+export const CLOSED_BOOKS_SHEET = 'SYNTHETIC Closed books';
+export const CLOSED_BOOKS_FIELDS = {
+  balancesReference: 'Balances',
+  closedOn: 'Closed on',
+  bookCode: 'Book',
+  account: 'Account',
+  partyCode: 'Party',
+  balance: 'Balance',
+} as const;
+export const CLOSED_BOOKS_LAYOUT = balanceLayout(
+  CLOSED_BOOKS_SHEET,
+  CLOSED_BOOKS_FIELDS,
+  ['balancesReference', 'closedOn', 'bookCode', 'account', 'balance'],
+  ['balance'],
+  'Balances',
+);
+export const CLOSED_BOOKS_MAPPING = mappingOf(CLOSED_BOOKS_FIELDS, paiseOf(['balance']));
+
 /** The SYNTHETIC layouts' codes. */
 export const OPENING_LAYOUT_CODES = {
   manifest: { layout: syntheticCode('MANIFEST-LAYOUT'), mapping: syntheticCode('MANIFEST-MAPPING') },
   soh: { layout: syntheticCode('SOH-LAYOUT'), mapping: syntheticCode('SOH-MAPPING') },
   sales: { layout: syntheticCode('SALES-LAYOUT'), mapping: syntheticCode('SALES-MAPPING') },
+  supplierDues: { layout: syntheticCode('SUPPLIER-DUES-LAYOUT'), mapping: syntheticCode('SUPPLIER-DUES-MAPPING') },
+  customerDues: { layout: syntheticCode('CUSTOMER-DUES-LAYOUT'), mapping: syntheticCode('CUSTOMER-DUES-MAPPING') },
+  advances: { layout: syntheticCode('ADVANCES-LAYOUT'), mapping: syntheticCode('ADVANCES-MAPPING') },
+  deposits: { layout: syntheticCode('DEPOSITS-LAYOUT'), mapping: syntheticCode('DEPOSITS-MAPPING') },
+  closedBooks: { layout: syntheticCode('CLOSED-BOOKS-LAYOUT'), mapping: syntheticCode('CLOSED-BOOKS-MAPPING') },
 } as const;
 
 /** The cells of a row in the columns' order, a missing value an empty cell. */

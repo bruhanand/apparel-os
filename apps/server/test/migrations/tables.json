@@ -40,6 +40,14 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "stock-ledger 10.6, 15.2; access-and-approvals 9.8; code-house-rules 7.1, 11.4",
       "why": "A synthetic document can span two places and every row is synthetic (stock-ledger 15.2)"
+    },
+    {
+      "table": "test_opening_balances.live_open_item",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["SELECT"],
+      "design": "imports-and-opening-data 10.4; code-house-rules 11.4",
+      "why": "A test-only stand-in for the live open items of stage 5; every row is synthetic (imports-and-opening-data 10.4)"
     }
   ]
 }

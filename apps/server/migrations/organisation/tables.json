@@ -655,6 +655,13 @@
       "design": "imports-and-opening-data 10.3, 14, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
     },
     {
+      "table": "files_imports.comparison_balance_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "imports-and-opening-data 10.4, 14, 15.1; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "stock.unit_anchor",
       "class": "scoped",
       "marks": ["append-only", "locked"],

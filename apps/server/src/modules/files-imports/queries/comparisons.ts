@@ -1,5 +1,6 @@
 import {
   COMPARISON_RUN_TYPE,
+  type ComparisonBalanceLine,
   type ComparisonLine,
   type ComparisonRunList,
   type ComparisonRunRead,
@@ -8,12 +9,14 @@ import {
 import { asc, desc, eq, inArray } from 'drizzle-orm';
 import { ApiRefusal, scopeFactsOf, type TransactionContext } from '../../../kernel/index.js';
 import type { ImportDependencies } from '../commands/import-common.js';
-import { comparisonLine, comparisonRun, importBatch } from '../db/schema.js';
+import { comparisonBalanceLine, comparisonLine, comparisonRun, importBatch } from '../db/schema.js';
 
 // The comparison runs read model (imports-and-opening-data 10.3, 14; PRD-LIF-027, PRD-SEC-005; S1-F13-T01): each run
 // the reader may see, newest first, with both sides as the run kept them and its counts by result; and one run with
 // every line. Row-level security shows only the runs inside the reader's scope, and Authorise checks view on each run
-// with its places under the reader's own assignment. The lines hold keys and quantities only.
+// with its places under the reader's own assignment. The lines hold keys and quantities only; a run of opening
+// balances against the closed books (10.4; S1-F13-T02) has balance lines instead, holding book, account, party code and
+// totals in paise, never a customer's name (section 11).
 
 type RunRow = typeof comparisonRun.$inferSelect;
 
@@ -43,7 +46,11 @@ async function batchCodes(context: TransactionContext, runs: readonly RunRow[]):
 }
 
 function sidesOf(run: RunRow, codes: ReadonlyMap<string, string>): { left: ComparisonSide; right: ComparisonSide } {
-  const batchSide = (set: 'manifest' | 'stock-on-hand', batchId: string, versionId: string): ComparisonSide => ({
+  const batchSide = (
+    set: 'manifest' | 'stock-on-hand' | 'opening-balances' | 'closed-books',
+    batchId: string,
+    versionId: string,
+  ): ComparisonSide => ({
     kind: 'batch',
     set,
     batchId,
@@ -59,7 +66,7 @@ function sidesOf(run: RunRow, codes: ReadonlyMap<string, string>): { left: Compa
           businessUnitId: run.leftBusinessUnitId ?? '',
           asOf: (run.leftAsOf ?? run.runAt).toISOString(),
         }
-      : batchSide('manifest', run.leftBatchId ?? '', run.leftBatchVersionId ?? '');
+      : batchSide(run.leftSet, run.leftBatchId ?? '', run.leftBatchVersionId ?? '');
   return { left, right: batchSide(run.rightSet, run.rightBatchId, run.rightBatchVersionId) };
 }
 
@@ -125,6 +132,11 @@ export async function readComparisonRun(
     .from(comparisonLine)
     .where(eq(comparisonLine.runId, run.id))
     .orderBy(asc(comparisonLine.lineNumber));
+  const balanceLines = await context.tx
+    .select()
+    .from(comparisonBalanceLine)
+    .where(eq(comparisonBalanceLine.runId, run.id))
+    .orderBy(asc(comparisonBalanceLine.lineNumber));
   const codes = await batchCodes(context, [run]);
   return {
     asOf: context.startedAt.toISOString(),
@@ -141,7 +153,24 @@ export async function readComparisonRun(
       leftRows: line.leftRows,
       rightRows: line.rightRows,
     })),
+    balanceLines: balanceLines.map((line): ComparisonBalanceLine => ({
+      lineNumber: line.lineNumber,
+      keyedBy: line.keyedBy,
+      ...(line.accountingBookId === null ? {} : { accountingBookId: line.accountingBookId }),
+      ...(line.account === null ? {} : { account: line.account }),
+      ...(line.party === null ? {} : { party: line.party }),
+      left: sideAmount(line.leftState, line.leftPaise),
+      right: sideAmount(line.rightState, line.rightPaise),
+      result: line.result,
+      leftRows: line.leftRows,
+      rightRows: line.rightRows,
+    })),
   };
+}
+
+function sideAmount(state: 'listed' | 'unknown' | 'not-listed', amount: number | null): ComparisonBalanceLine['left'] {
+  if (state === 'listed' && amount !== null) return { state, paise: amount };
+  return state === 'not-listed' ? { state } : { state: 'unknown' };
 }
 
 function sideQuantity(state: 'listed' | 'unknown' | 'not-listed', quantity: number | null): ComparisonLine['left'] {
