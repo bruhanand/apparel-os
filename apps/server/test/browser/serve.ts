@@ -1875,11 +1875,12 @@ await backupFixture.query(
 const syntheticRestoreId = uuidv7();
 await backupFixture.query(
   `insert into kernel.recovery_event (id, restore_id, kind, backup_id, recovery_point, unit, name, passed, checked,
-     failed, actor_id, role_assignment_id, occurred_at)
-   values ($1, $5, 'restored', $6, now() - interval '1 minute', null, null, null, null, null, null, null, now()),
-          ($2, $5, 'hold-placed', null, null, null, null, null, null, null, null, null, now()),
-          ($3, $5, 'check', null, null, 'audit', 'audit seal chain verifies', true, 1, 0, null, null, now()),
-          ($4, $5, 'hold-lifted', null, null, null, null, null, null, null, $7, $8, now() + interval '1 second')`,
+     failed, actor_id, role_assignment_id, check_run, occurred_at)
+   values ($1, $5, 'restored', $6, now() - interval '1 minute', null, null, null, null, null, null, null, null, now()),
+          ($2, $5, 'hold-placed', null, null, null, null, null, null, null, null, null, null, now()),
+          ($3, $5, 'check', null, null, 'audit', 'audit seal chain verifies', true, 1, 0, null, null, 1, now()),
+          ($4, $5, 'hold-lifted', null, null, null, null, null, null, null, $7, $8, null,
+           now() + interval '1 second')`,
   [uuidv7(), uuidv7(), uuidv7(), uuidv7(), syntheticRestoreId, syntheticBackupId, operationsViewer.id, uuidv7()],
 );
 await backupFixture.end();
