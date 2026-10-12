@@ -1304,6 +1304,7 @@
               "files-imports.proposal-not-open",
               "files-imports.rule-conflict",
               "files-imports.rule-target-refused",
+              "files-imports.starts-in-past",
               "finance.cost-change-after-stock",
               "finance.no-ca-evidence",
               "finance.starts-in-past",
@@ -3509,7 +3510,8 @@
             },
             "x-error-codes": [
               "kernel.idempotency-key-reused",
-              "kernel.request-in-progress"
+              "kernel.request-in-progress",
+              "kernel.stale-version"
             ]
           },
           "422": {
@@ -3563,6 +3565,11 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
                   "field": {
                     "type": "string",
                     "pattern": "^[A-Za-z][A-Za-z0-9]{0,59}$"
@@ -3619,6 +3626,7 @@
                   }
                 },
                 "required": [
+                  "versionId",
                   "field",
                   "value",
                   "reason"
@@ -3777,7 +3785,8 @@
             },
             "x-error-codes": [
               "kernel.idempotency-key-reused",
-              "kernel.request-in-progress"
+              "kernel.request-in-progress",
+              "kernel.stale-version"
             ]
           },
           "422": {
@@ -3830,11 +3839,17 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
                   "excluded": {
                     "type": "boolean"
                   }
                 },
                 "required": [
+                  "versionId",
                   "excluded"
                 ],
                 "additionalProperties": false
@@ -4235,6 +4250,19 @@
                                         "string",
                                         "null"
                                       ]
+                                    },
+                                    "masked": {
+                                      "type": "string",
+                                      "enum": [
+                                        "salary-and-payroll",
+                                        "identity-documents",
+                                        "bank-details",
+                                        "customer-contact",
+                                        "cost",
+                                        "margin",
+                                        "employee-photos",
+                                        "location-evidence"
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -4280,6 +4308,19 @@
                                       "type": [
                                         "string",
                                         "null"
+                                      ]
+                                    },
+                                    "masked": {
+                                      "type": "string",
+                                      "enum": [
+                                        "salary-and-payroll",
+                                        "identity-documents",
+                                        "bank-details",
+                                        "customer-contact",
+                                        "cost",
+                                        "margin",
+                                        "employee-photos",
+                                        "location-evidence"
                                       ]
                                     }
                                   },
@@ -18653,7 +18694,8 @@
             "x-error-codes": [
               "access.starts-in-past",
               "files-imports.rule-attribute-unknown",
-              "files-imports.rule-target-refused"
+              "files-imports.rule-target-refused",
+              "files-imports.starts-in-past"
             ]
           },
           "500": {
@@ -30973,7 +31015,8 @@
             },
             "x-error-codes": [
               "kernel.idempotency-key-reused",
-              "kernel.request-in-progress"
+              "kernel.request-in-progress",
+              "kernel.stale-version"
             ]
           },
           "422": {
@@ -30987,6 +31030,7 @@
             },
             "x-error-codes": [
               "access.starts-in-past",
+              "files-imports.already-submitted",
               "files-imports.batch-not-validated",
               "files-imports.not-a-warning"
             ]
@@ -31028,6 +31072,11 @@
                   {
                     "type": "object",
                     "properties": {
+                      "versionId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                      },
                       "issueIds": {
                         "minItems": 1,
                         "maxItems": 500,
@@ -31040,6 +31089,7 @@
                       }
                     },
                     "required": [
+                      "versionId",
                       "issueIds"
                     ],
                     "additionalProperties": false
@@ -31047,12 +31097,18 @@
                   {
                     "type": "object",
                     "properties": {
+                      "versionId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                      },
                       "class": {
                         "type": "string",
-                        "pattern": "^(?:[A-L]-[0-9]+|handler|required|rule|calculation)$"
+                        "pattern": "^(?:[A-L]-[0-9]+|handler|required|rule|calculation|duplicate|conflict|revision)$"
                       }
                     },
                     "required": [
+                      "versionId",
                       "class"
                     ],
                     "additionalProperties": false
@@ -54066,6 +54122,19 @@
                                   "boolean",
                                   "null"
                                 ]
+                              },
+                              "masked": {
+                                "type": "string",
+                                "enum": [
+                                  "salary-and-payroll",
+                                  "identity-documents",
+                                  "bank-details",
+                                  "customer-contact",
+                                  "cost",
+                                  "margin",
+                                  "employee-photos",
+                                  "location-evidence"
+                                ]
                               }
                             },
                             "required": [
@@ -54238,6 +54307,19 @@
                                     "string",
                                     "null"
                                   ]
+                                },
+                                "masked": {
+                                  "type": "string",
+                                  "enum": [
+                                    "salary-and-payroll",
+                                    "identity-documents",
+                                    "bank-details",
+                                    "customer-contact",
+                                    "cost",
+                                    "margin",
+                                    "employee-photos",
+                                    "location-evidence"
+                                  ]
                                 }
                               },
                               "required": [
@@ -54283,6 +54365,19 @@
                                   "type": [
                                     "string",
                                     "null"
+                                  ]
+                                },
+                                "masked": {
+                                  "type": "string",
+                                  "enum": [
+                                    "salary-and-payroll",
+                                    "identity-documents",
+                                    "bank-details",
+                                    "customer-contact",
+                                    "cost",
+                                    "margin",
+                                    "employee-photos",
+                                    "location-evidence"
                                   ]
                                 }
                               },
@@ -70231,7 +70326,8 @@
             },
             "x-error-codes": [
               "kernel.idempotency-key-reused",
-              "kernel.request-in-progress"
+              "kernel.request-in-progress",
+              "kernel.stale-version"
             ]
           },
           "422": {
@@ -70287,7 +70383,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  }
+                },
+                "required": [
+                  "versionId"
+                ],
                 "additionalProperties": false
               }
             }
