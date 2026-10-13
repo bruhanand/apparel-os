@@ -33,9 +33,20 @@ import {
 // place, SKU, document and actor is SYNTHETIC.
 
 const world = new StockWorld();
+/**
+ * A poster scoped to BRAND_A, a SYNTHETIC brand identifier no catalogue record holds; made here, where it is used, so
+ * no other world holds a scope a restore would report as unresolved (backup-and-restore 5.1; S1-F14-T04).
+ */
+let brandLimited: Actor;
 
 beforeAll(async () => {
   await world.start('stockops');
+  brandLimited = await world.actor('BRAND-A', {
+    kind: 'dimensions',
+    legalEntity: { kind: 'all' },
+    place: { kind: 'all' },
+    brand: { kind: 'selected', members: [BRAND_A] },
+  });
 });
 
 afterAll(async () => {
@@ -661,7 +672,7 @@ describe('what the actor cannot see (stock-ledger 14.1, 14.3; code-house-rules 6
       condition: 'good',
       goods: { skuId: SKUS.quantityA2.skuId, quantity: 1 },
     };
-    const hidden = await refusal(world.brandLimited, [item]);
+    const hidden = await refusal(brandLimited, [item]);
     expect(hidden).toEqual({ kind: 'refused', code: 'stock.blocked', missing: [{ kind: 'line', lineId }] });
     expect(JSON.stringify(hidden)).not.toContain(freezeId);
     // The reader scoped to every brand is told which freeze it is (13.8 `count-freeze-active`).
@@ -669,7 +680,7 @@ describe('what the actor cannot see (stock-ledger 14.1, 14.3; code-house-rules 6
     expect(seen.code).toBe('stock.count-freeze-active');
     expect(seen.missing).toContainEqual({ kind: 'count-freeze', holdId: freezeId });
     written(await world.post(world.poster, [{ kind: 'end-count-freeze', lineId: line(), holdId: freezeId ?? '' }]));
-    written(await world.post(world.brandLimited, [{ ...item, lineId: line() }]));
+    written(await world.post(brandLimited, [{ ...item, lineId: line() }]));
   });
 
   it('DEC-117 a brand-limited reservation of goods a hold over another brand too claims counts that claim, and says only blocked', async () => {
@@ -707,12 +718,12 @@ describe('what the actor cannot see (stock-ledger 14.1, 14.3; code-house-rules 6
     expect(seen.code).toBe('stock.held');
     expect(seen.missing).toContainEqual({ kind: 'hold', holdKind: 'ordinary', holdId: held.holdIds[0] });
     // The brand-limited actor cannot see the hold, which records brand B too: the refusal is generic.
-    const hidden = await refusal(world.brandLimited, [reserveAt(2)]);
+    const hidden = await refusal(brandLimited, [reserveAt(2)]);
     expect(hidden.code).toBe('stock.blocked');
     expect(hidden.missing).toEqual([{ kind: 'line', lineId: expect.any(String) as string }]);
     expect(JSON.stringify(hidden)).not.toContain(held.holdIds[0]);
     // The one unit the hidden hold leaves free is reservable, as it is for anyone (6.2).
-    written(await world.post(world.brandLimited, [reserveAt(1)]));
+    written(await world.post(brandLimited, [reserveAt(1)]));
     expect(await rebuild()).toEqual([]);
   });
 });
@@ -969,7 +980,7 @@ describe('review fixes: blocked names the item it blocks (stock-ledger 13.8; S3)
     );
     const first = reserve({ skuId: free.sku.skuId, quantity: 1, receiptOriginId: free.origin });
     const second = reserve({ skuId: held.sku.skuId, quantity: 1, receiptOriginId: held.origin });
-    expect(await refusal(world.brandLimited, [first, second])).toEqual({
+    expect(await refusal(brandLimited, [first, second])).toEqual({
       kind: 'refused',
       code: 'stock.blocked',
       missing: [{ kind: 'line', lineId: second.lineId }],
@@ -1029,7 +1040,7 @@ describe('review fixes: Rebuild and compare (stock-ledger 2.1, 13.6; S4)', () =>
     await receive(addSyntheticSku(BRAND_B), 1, at('bin'));
     const whole = await world.run(world.poster.user.id, (context) => rebuildAndCompare(context));
     expect(whole.partial).toBe(false);
-    const part = await world.run(world.brandLimited.user.id, (context) => rebuildAndCompare(context));
+    const part = await world.run(brandLimited.user.id, (context) => rebuildAndCompare(context));
     expect(part.partial).toBe(true);
     expect(typeof part.asOf).toBe('string');
   });

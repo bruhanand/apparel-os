@@ -257,15 +257,8 @@ export class StockWorld {
   access!: Access;
   ledger!: StockLedger;
   poster!: Actor;
-  brandLimited!: Actor;
   approver!: Actor;
   reasonId!: string;
-  /**
-   * Whether the brand-limited poster is made, scoped to BRAND_A, a SYNTHETIC brand identifier no catalogue record
-   * holds. A world that is backed up and restored leaves it out, since a restore checks that every brand a scope names
-   * resolves (backup-and-restore 5.1; S1-F14-T04).
-   */
-  withBrandLimitedActor = true;
   protected offsetMs = 0;
   protected keysEnvironment!: Record<string, string>;
   /** The declared reads and the books the ledger is composed with: stand-ins here; a subclass gives real ones. */
@@ -316,13 +309,6 @@ export class StockWorld {
       composition: TEST_COMPOSITION,
     });
     this.poster = await this.actor('POSTER');
-    if (this.withBrandLimitedActor)
-      this.brandLimited = await this.actor('BRAND-A', {
-        kind: 'dimensions',
-        legalEntity: { kind: 'all' },
-        place: { kind: 'all' },
-        brand: { kind: 'selected', members: [BRAND_A] },
-      });
     const approver = await writeSyntheticUser(this.database, this.routed.organisationCode, this.keysEnvironment, {
       label: 'APPROVER',
       enrolled: true,

@@ -140,13 +140,87 @@ export interface OpeningCodes {
   readonly season: string;
 }
 
+/** Where a file is stored through files-imports (Store a file, imports 13.1). */
+export const STORE_FILE_PATH = '/api/files-imports/files';
+
+/** The body that stores a SYNTHETIC PDF, its text naming the label and a unique mark (code-house-rules 11.2). */
+export function syntheticPdfUpload(
+  label: string,
+  mark: string,
+): { sourceSystem: 'manual-upload'; originalName: string; contentBase64: string } {
+  const bytes = Buffer.from(
+    `%PDF-1.4\n% SYNTHETIC ${label} ${mark}\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n`,
+    'latin1',
+  );
+  return {
+    sourceSystem: 'manual-upload',
+    originalName: syntheticFileName(label, 'pdf'),
+    contentBase64: bytes.toString('base64'),
+  };
+}
+
+/**
+ * Signs a SYNTHETIC user in to the application at `baseUrl` with an authenticator code for `at` (access-and-approvals
+ * 3.3), and answers the session cookie; throws when it is refused.
+ */
+export async function signInTo(
+  baseUrl: string,
+  organisationCode: string,
+  user: SyntheticUser,
+  at: Date = new Date(),
+): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.43' },
+    body: JSON.stringify({
+      organisationCode,
+      login: user.login,
+      password: user.password,
+      totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0), 0, at),
+    }),
+  });
+  if (response.status !== 200) throw new Error(`${user.login} was not signed in: ${String(response.status)}`);
+  return (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+}
+
+/** Calls the application at `baseUrl` in a session, a write with a fresh idempotency key (code-house-rules 12.4). */
+export async function callAs(
+  baseUrl: string,
+  cookie: string,
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+): Promise<Answer> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      cookie,
+      origin: SYNTHETIC_ORIGIN,
+      ...(method === 'POST' ? { 'content-type': 'application/json', 'idempotency-key': uuidv7() } : {}),
+    },
+    ...(method === 'POST' ? { body: JSON.stringify(body ?? {}) } : {}),
+  });
+  const text = await response.text();
+  return { status: response.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
+}
+
 /** A running worker serving the test-only posting consumer. */
 export interface OpeningWorker {
   stop(): Promise<void>;
 }
 
+/** What an opening world is made with (S1-F14-T04). */
+export interface OpeningAppOptions {
+  /**
+   * A world that is backed up and restored holds only what a restore can prove (backup-and-restore 5.1): every
+   * policy's evidence is a real file stored through files-imports by a SYNTHETIC clerk, not a SYNTHETIC row with no
+   * object (code-house-rules 11.2).
+   */
+  readonly restorable?: boolean;
+}
+
 export class OpeningApp {
-  readonly harness = new OpeningHarness();
+  readonly harness: OpeningHarness;
   fixtures!: HarnessFixtures;
   api!: AccessTestApp;
   codes!: OpeningCodes;
@@ -159,6 +233,8 @@ export class OpeningApp {
   private approveReason!: string;
   private routed!: RoutedOrganisation;
   private readonly cookies = new Map<string, string>();
+  /** Every SYNTHETIC user `enrolled` wrote, so a test can look for their secrets where none may be (S1-F14-T04). */
+  readonly enrolledUsers: SyntheticUser[] = [];
   private layout!: { layoutVersionId: string; mappingVersionId: string };
   private counter = 0;
   private clerk: SyntheticUser | undefined;
@@ -167,8 +243,19 @@ export class OpeningApp {
   /** The book a test names for a document instead of its unit's, SYNTHETIC (`files-imports.several-books`). */
   bookOf: ((reference: string) => string | undefined) | undefined;
 
+  constructor(options: OpeningAppOptions = {}) {
+    this.harness = new OpeningHarness(
+      options.restorable === true ? { evidenceFile: () => this.storedFile('policy-evidence') } : {},
+    );
+  }
+
   get database(): string {
     return this.harness.database;
+  }
+
+  /** The session cookies of the users signed in to the application. */
+  sessionCookies(): string[] {
+    return [...this.cookies.values()];
   }
 
   /** The MinIO file store the application stores into. */
@@ -188,15 +275,7 @@ export class OpeningApp {
    */
   async storedFile(label: string): Promise<{ readonly storedFileId: string; readonly fileReceiptId: string }> {
     this.clerk ??= await this.enrolled('FILE-CLERK', [{ recordType: 'files_imports.stored_file', action: 'create' }]);
-    const bytes = Buffer.from(
-      `%PDF-1.4\n% SYNTHETIC ${label} ${this.next('FILE')}\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n`,
-      'latin1',
-    );
-    const stored = await this.ok(this.clerk, 'POST', '/api/files-imports/files', {
-      sourceSystem: 'manual-upload',
-      originalName: syntheticFileName(label, 'pdf'),
-      contentBase64: bytes.toString('base64'),
-    });
+    const stored = await this.ok(this.clerk, 'POST', STORE_FILE_PATH, syntheticPdfUpload(label, this.next('FILE')));
     const { storedFileId, receiptId } = stored.body as { storedFileId: string; receiptId: string };
     return { storedFileId, fileReceiptId: receiptId };
   }
@@ -207,14 +286,11 @@ export class OpeningApp {
   }
 
   /**
-   * Starts the world: the harness, the application on it, then the harness's fixtures. A `restorable` world holds only
-   * what a restore can prove (backup-and-restore 5.1; S1-F14-T04): every policy's evidence is a real file stored
-   * through files-imports by a SYNTHETIC clerk, not a SYNTHETIC row with no object (code-house-rules 11.2), and no
-   * scope names a brand no catalogue record holds.
+   * Starts the world: the harness, the application on it, then the harness's fixtures, so a restorable world's policy
+   * evidence can be stored through the application (S1-F14-T04).
    */
-  async start(label: string, options: { readonly restorable?: boolean } = {}): Promise<void> {
+  async start(label: string): Promise<void> {
     const { harness } = this;
-    if (options.restorable === true) harness.withBrandLimitedActor = false;
     await harness.start(label);
     this.minio = await startTestFileStore();
     this.clock = new SyntheticClock();
@@ -233,7 +309,6 @@ export class OpeningApp {
       clock: this.clock,
       validityChecks: [POLICY_FOURTEEN_VALUES],
     });
-    if (options.restorable === true) harness.evidenceFile = () => this.storedFile('policy-evidence');
     this.fixtures = await harness.fixtures('moving-average', 'book', { pieceTracked: false });
     const { setup } = harness;
     const seasonAttribute = await setup.asPreparerDo((c, p) =>
@@ -348,32 +423,13 @@ export class OpeningApp {
       ...(scope === undefined ? {} : { scope }),
     });
     this.clock.advance(30);
-    const response = await fetch(`${this.api.baseUrl}/api/access/sign-in`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.43' },
-      body: JSON.stringify({
-        organisationCode: organisation.code,
-        login: user.login,
-        password: user.password,
-        totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0), 0, this.clock.now()),
-      }),
-    });
-    if (response.status !== 200) throw new Error(`${label} was not signed in: ${String(response.status)}`);
-    this.cookies.set(user.id, (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '');
+    this.enrolledUsers.push(user);
+    this.cookies.set(user.id, await signInTo(this.api.baseUrl, organisation.code, user, this.clock.now()));
     return user;
   }
 
   async call(user: SyntheticUser, method: 'GET' | 'POST', path: string, body?: unknown): Promise<Answer> {
-    const response = await fetch(`${this.api.baseUrl}${path}`, {
-      method,
-      headers: {
-        cookie: this.cookies.get(user.id) ?? '',
-        origin: SYNTHETIC_ORIGIN,
-        ...(method === 'POST' ? { 'content-type': 'application/json', 'idempotency-key': uuidv7() } : {}),
-      },
-      ...(method === 'POST' ? { body: JSON.stringify(body ?? {}) } : {}),
-    });
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return callAs(this.api.baseUrl, this.cookies.get(user.id) ?? '', method, path, body);
   }
 
   async ok(user: SyntheticUser, method: 'GET' | 'POST', path: string, body?: unknown): Promise<Answer> {

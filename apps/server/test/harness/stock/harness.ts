@@ -267,6 +267,16 @@ export async function applyHarnessMigrations(database: string): Promise<void> {
   await allowVerifier(database);
 }
 
+/** A stored file handed to a record as its evidence: the stored file and its receipt. */
+export type EvidenceFile = (
+  receivedBy: string,
+) => Promise<{ readonly storedFileId: string; readonly fileReceiptId: string }>;
+
+/** What a harness is made with: how its policies' evidence files are made (S1-F14-T04). */
+export interface StockHarnessOptions {
+  readonly evidenceFile?: EvidenceFile;
+}
+
 export class StockHarness extends ValuedWorld {
   protected override readonly registrations: readonly CallerRegistration[] = [syntheticCaller, harnessCaller];
   protected override readonly approvalRules: readonly ApprovalRule[] = [...syntheticRules, ...harnessRules];
@@ -277,14 +287,17 @@ export class StockHarness extends ValuedWorld {
    * through files-imports instead, since a restore checks every stored file against its object (backup-and-restore
    * 5.1; S1-F14-T04).
    */
-  evidenceFile: (receivedBy: string) => Promise<{ readonly storedFileId: string; readonly fileReceiptId: string }> = (
-    receivedBy,
-  ) => writeSyntheticStoredFile(this.database, receivedBy);
+  readonly evidenceFile: EvidenceFile;
   /** The person who prepares the driver's documents and posts their steps. */
   preparer!: Actor;
   /** A different person, who decides the driver's approvals within a SYNTHETIC limit (PRD-ACS-006). */
   checker!: Actor;
   private helper!: IdempotencyHelper;
+
+  constructor(options: StockHarnessOptions = {}) {
+    super();
+    this.evidenceFile = options.evidenceFile ?? ((receivedBy) => writeSyntheticStoredFile(this.database, receivedBy));
+  }
 
   protected override async compose(): Promise<void> {
     await super.compose();

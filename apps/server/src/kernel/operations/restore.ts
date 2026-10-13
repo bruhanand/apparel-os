@@ -228,7 +228,17 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestoreOut
     options.log(
       `Restore ${restoreId} of backup ${options.backupId} started: ${String(plan.organisations.length)} Organisation(s)${plan.wholeEnvironment ? ' and the directory' : ''}`,
     );
-    const steps: DrillStep[] = [];
+    // Step 1 is in the drill record too, with its start and end (4.2, section 6; S1-F14-T04). A refusal in it writes
+    // nothing, no drill record included, so it is recorded only once it is done.
+    const steps: DrillStep[] = [
+      {
+        step: 'check before writing',
+        organisationCode: null,
+        startedAt: startedAt.toISOString(),
+        endedAt: clock.now().toISOString(),
+        outcome: 'done',
+      },
+    ];
     const step = async <T>(name: string, organisationCode: string | null, work: () => Promise<T>): Promise<T> => {
       const began = clock.now();
       const at = organisationCode === null ? '' : ` (${organisationCode})`;

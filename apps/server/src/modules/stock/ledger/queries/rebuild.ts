@@ -35,7 +35,19 @@ const ACCEPTED_KEY = sql.raw(`k.site_id = b.site_id and k.business_unit_id = b.b
   and k.location_id is not distinct from b.location_id and k.condition = b.condition
   and k.receipt_origin_id = b.receipt_origin_id`);
 
-const CHECKS: readonly { readonly table: string; readonly column: string; readonly query: SQL }[] = [
+/**
+ * One comparison of Rebuild and compare: the projection table and column, the query that answers the differences, and,
+ * where it compares only some of the table's rows, the query answering the identifiers of the rows it compares (every
+ * row of the table otherwise), so what was compared is counted exactly (backup-and-restore section 6; S1-F14-T04).
+ */
+interface RebuildCheck {
+  readonly table: string;
+  readonly column: string;
+  readonly query: SQL;
+  readonly compares?: SQL;
+}
+
+const CHECKS: readonly RebuildCheck[] = [
   {
     table: 'balance',
     column: 'quantity',
@@ -153,6 +165,10 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
         and l.receipt_origin_id = p.receipt_origin_id
       where (l.business_unit_id, l.location_id, l.condition)
         is distinct from (p.business_unit_id, p.location_id, p.condition)`,
+    compares: sql`
+      select p.id from stock.piece p
+      join stock.movement_leg l on l.movement_id = p.last_movement_id and l.direction = 'in'
+        and l.receipt_origin_id = p.receipt_origin_id`,
   },
   // Value (S1-F10-T03): each pool and transit value from its valuations, in posting order (7.10), and each FIFO pool
   // and its transit values from their layers (11.7 "Each FIFO pool's quantity and value equal the sum of its layers").
@@ -182,6 +198,7 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
           from stock.cost_pool t
           where t.formula = 'fifo'
             and ${stored} <> coalesce((select sum(l.${left}) from stock.cost_layer l where l.cost_pool_id = t.id), 0)`,
+        compares: sql`select t.id from stock.cost_pool t where t.formula = 'fifo'`,
       },
       {
         table: 'transit_value',
@@ -204,6 +221,9 @@ const CHECKS: readonly { readonly table: string; readonly column: string; readon
           from stock.transit_value t
           where exists (select 1 from stock.transit_value_layer l where l.transit_value_id = t.id)
             and ${stored} <> (select sum(l.${held}) from stock.transit_value_layer l where l.transit_value_id = t.id)`,
+        compares: sql`
+          select t.id from stock.transit_value t
+          where exists (select 1 from stock.transit_value_layer l where l.transit_value_id = t.id)`,
       },
     ];
   }),
@@ -251,15 +271,21 @@ export async function rebuildDifferences(tx: Pick<TransactionContext['tx'], 'exe
 }
 
 /**
- * How many projection rows Rebuild and compare covers: the rows of each table it compares, each table counted once.
- * The restore participant reports it as what its check checked, so a drill record says how much was compared, not
- * only how much differed (backup-and-restore 5.1, section 6; S1-F14-T04).
+ * How many projection rows Rebuild and compare compared, each row once however many of its columns were compared: for
+ * each table, the union of the rows its checks compare. A check of only some rows counts only those: the place check
+ * leaves out a piece whose last movement has no in leg at its origin; the layer checks leave out a pool that is not
+ * FIFO and a transit value with no layers, each of which is still counted once, since its valuations are compared. The restore
+ * participant reports it as what its check checked, so a drill record says how much was compared, not only how much
+ * differed (backup-and-restore 5.1, section 6; S1-F14-T04).
  */
 export async function rebuildCoveredRows(tx: Pick<TransactionContext['tx'], 'execute'>): Promise<number> {
   let covered = 0;
   for (const table of [...new Set(CHECKS.map((check) => check.table))]) {
+    const compared = CHECKS.filter((check) => check.table === table).map(
+      (check) => check.compares ?? sql`select id from ${sql.identifier('stock')}.${sql.identifier(table)}`,
+    );
     const result = await tx.execute<{ n: string }>(
-      sql`select count(*)::text as n from ${sql.identifier('stock')}.${sql.identifier(table)}`,
+      sql`select count(*)::text as n from (${sql.join(compared, sql` union `)}) compared`,
     );
     covered += Number(result.rows[0]?.n ?? 0);
   }

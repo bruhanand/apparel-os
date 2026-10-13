@@ -3,6 +3,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import {
   attachedFileSchema,
   deviceEnrolledSchema,
+  recoveryReopenedSchema,
   recoveryStatusSchema,
   routes,
   type AssignmentScope,
@@ -20,9 +21,11 @@ import {
   RESTORE_IDENTITY,
   type BackupManifest,
   type DrillRecord,
+  type OrganisationPart,
   type RoutedOrganisation,
   type TransactionContext,
 } from '../src/kernel/index.js';
+import { base32 } from '../src/modules/access/domain/totp.js';
 import { ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
 import { Audit } from '../src/modules/audit/index.js';
 import { Exceptions, type ExceptionTypeRegistration } from '../src/modules/exceptions/index.js';
@@ -36,7 +39,6 @@ import { runRestoreCommand, type RestoreAnswers, type RestoreCommandOutcome } fr
 import { RESTORE_IDENTITY_AUTHORITIES } from '../src/restore-steps.js';
 import { loadScenarios, runScenario } from './harness/stock/scenario.js';
 import {
-  codeFor,
   startAccessApp,
   syntheticTimezone,
   SYNTHETIC_ORIGIN,
@@ -57,7 +59,14 @@ import {
 import { BILL_FORMAT, DEVICE_AUTHORITY, done, nextCode } from './support/billing-devices.js';
 import { grantSynthetic } from './support/grants.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
-import { OpeningApp } from './support/opening-app.js';
+import {
+  callAs,
+  OpeningApp,
+  signInTo,
+  STORE_FILE_PATH,
+  syntheticPdfUpload,
+  type Answer,
+} from './support/opening-app.js';
 import { syntheticDeviceKey } from './support/pos.js';
 import { connect, databaseUrl } from './support/postgres.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from './fixtures/synthetic.js';
@@ -81,7 +90,7 @@ import { syntheticCode, syntheticIdentifier, syntheticName } from './fixtures/sy
 const SYNTHETIC_POOL_MAX = 4;
 const log = capturingLogger();
 const numbering = new Numbering({ kinds: numberedKinds });
-const drill = new OpeningApp();
+const drill = new OpeningApp({ restorable: true });
 const backupKey = syntheticBackupKey();
 const signingKey = syntheticSigningKey();
 const logLines: string[] = [];
@@ -96,11 +105,20 @@ let organisationId: string;
 /** What the source holds that the checks after the restore look for. */
 const source = {
   batchId: '',
+  exceptionId: '',
   evidenceAttachmentId: '',
   evidenceOwner: undefined as SyntheticUser | undefined,
   billSeriesId: '',
   billsGiven: 0,
+  roleId: '',
+  roleCode: '',
+  assignmentId: '',
+  holderId: '',
+  /** The attachments of policy evidence, to a signature and to a validation, counted in the source before the backup. */
+  policyEvidence: { signature: 0, validation: 0 },
 };
+/** Every SYNTHETIC user this file writes itself, whose secrets no log or drill record may hold. */
+const people: SyntheticUser[] = [];
 let recovery: SyntheticUser;
 let operations: SyntheticUser;
 let accounts: SyntheticUser;
@@ -147,15 +165,17 @@ async function accessChanges(): Promise<void> {
   const admin = await writeSyntheticUser(organisation.database, organisation.code, drill.harness.keys(), {
     label: 'DRILL-ACCESS-ADMIN',
   });
+  people.push(admin);
   const { assignmentId } = await grantSynthetic(organisation.database, { kind: 'user', id: admin.id }, [
     { recordType: 'access.role', action: 'create' },
     { recordType: 'access.role_assignment', action: 'create' },
   ]);
   const preparer = { userId: admin.id, roleAssignmentId: assignmentId };
   const decider = { actor: { kind: 'user' as const, id: setup.approver.id } };
+  const roleCode = syntheticCode('DRILL-ROLE');
   const role = await setup.run(admin.id, (c) =>
     setup.access.prepareRole(c, preparer, {
-      code: syntheticCode('DRILL-ROLE'),
+      code: roleCode,
       name: syntheticName('Drill reader'),
       permissions: [{ kind: 'action', recordType: 'organisation.site', action: 'view', selfService: false }],
       validFrom: setup.today(),
@@ -169,6 +189,7 @@ async function accessChanges(): Promise<void> {
   const holder = await writeSyntheticUser(organisation.database, organisation.code, drill.harness.keys(), {
     label: 'DRILL-ROLE-HOLDER',
   });
+  people.push(holder);
   const all = { kind: 'all' } as const;
   const scope: AssignmentScope = { kind: 'dimensions', legalEntity: all, place: all, brand: all };
   const assignment = await setup.run(admin.id, (c) =>
@@ -184,6 +205,10 @@ async function accessChanges(): Promise<void> {
     setup.access.approveAssignment(c, decider, assignment.answer.assignmentId),
   );
   if (assigned.kind !== 'success') throw new Error(`The assignment was not approved: ${assigned.refusal.code}`);
+  source.roleId = role.answer.roleId;
+  source.roleCode = roleCode;
+  source.assignmentId = assignment.answer.assignmentId;
+  source.holderId = holder.id;
 }
 
 /** An opening-stock batch on a stored workbook, verified, Published and posted by its queued job (GC-6 10.6). */
@@ -281,6 +306,7 @@ async function exceptionWithEvidence(): Promise<void> {
     }),
   );
   if (raised.kind !== 'done') throw new Error(`Not raised: ${raised.refusal.code}`);
+  source.exceptionId = raised.value.exceptionId;
   const evidence = await drill.storedFile('exception-evidence');
   const added = await setup.run(owner.userId, (context) =>
     exceptions.addEvidence(
@@ -360,11 +386,32 @@ async function billingDevice(): Promise<void> {
   source.billsGiven = given.sequenceNumber;
 }
 
+/** How many evidence files the source attached to a policy signature and to a policy validation. */
+async function policyEvidenceAttached(): Promise<{ signature: number; validation: number }> {
+  const owner = await connect(drill.database, 'migration');
+  try {
+    const counted = await owner.query<{ record_type: string; n: string }>(
+      `select record_type, count(*)::text as n from files_imports.attachment
+       where record_type in ('configuration.policy_status', 'configuration.policy_validation') group by record_type`,
+    );
+    const of = (type: string) => Number(counted.rows.find((row) => row.record_type === type)?.n ?? 0);
+    return { signature: of('configuration.policy_status'), validation: of('configuration.policy_validation') };
+  } finally {
+    await owner.end();
+  }
+}
+
 /** The restore operator, and the SYNTHETIC Operations and Accounts users who validate (GC9-6 stays OPEN). */
 async function recoveryPeople(): Promise<void> {
   const organisation = drill.harness.world.organisations[0];
-  const write = (label: string) =>
-    writeSyntheticUser(organisation.database, organisation.code, drill.harness.keys(), { label, enrolled: true });
+  const write = async (label: string) => {
+    const user = await writeSyntheticUser(organisation.database, organisation.code, drill.harness.keys(), {
+      label,
+      enrolled: true,
+    });
+    people.push(user);
+    return user;
+  };
   recovery = await write('DRILL-RECOVERY');
   await grantSynthetic(organisation.database, { kind: 'user', id: recovery.id }, [
     { recordType: 'kernel.recovery_event', action: 'view' },
@@ -384,7 +431,7 @@ async function recoveryPeople(): Promise<void> {
 }
 
 beforeAll(async () => {
-  await phase('start', () => drill.start('drill', { restorable: true }));
+  await phase('start', () => drill.start('drill'));
   const organisation = drill.harness.world.organisations[0];
   code = organisation.code;
   // Books and journals, stock movements with valuation: the moving-average book story, posted step by step through
@@ -410,6 +457,9 @@ beforeAll(async () => {
   for (const each of drill.harness.world.organisations) {
     await writeSyntheticServiceIdentity(each.database, RESTORE_IDENTITY, RESTORE_IDENTITY_AUTHORITIES);
   }
+  // The policy evidence the source holds, by the record type it is attached to, so the restore's reference checks can
+  // be held to exactly what was attached (5.1).
+  source.policyEvidence = await policyEvidenceAttached();
   target = await startTargetServer();
   backupBucket = `syn-drill-${uuidv7().slice(-8)}`;
   backupEnvironment = {
@@ -463,7 +513,28 @@ async function bucketKeys(bucket: string, prefix: string): Promise<string[]> {
   return found.sort();
 }
 
+/** The row count a manifest part holds for a table; a missing total is a defect of the backup, never zero. */
+function rowsHeld(part: OrganisationPart, table: string): number {
+  const total = part.controlTotals.flatMap((each) => each.totals).find((each) => each.name === `${table}.rows`);
+  if (total === undefined) throw new Error(`The backup holds no row count of ${table}`);
+  return Number(total.value);
+}
+
+/** What the restored database's recovery events say of one check or step. */
+interface RecoveryEventRow extends Record<string, unknown> {
+  readonly unit: string;
+  readonly name: string;
+  readonly subject: string | null;
+  readonly passed: boolean;
+  readonly checked: string;
+  readonly failed: string;
+}
+
 describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backed up and restored into a fresh target', () => {
+  // The restore and everything the recovery people do after it run once, in order, in beforeAll; each `it` only reads
+  // what was found, so each passes or fails on its own (code-house-rules 10.1).
+  let manifest: BackupManifest;
+  let part: OrganisationPart;
   let directory: string;
   let bucket: string;
   let env: Record<string, string>;
@@ -472,6 +543,35 @@ describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backe
   let api: AccessTestApp;
   let router: OrganisationRouter;
   const cookies = new Map<string, string>();
+  /** What the restore and the recovery people's steps found, read by the tests below. */
+  const found = {
+    events: [] as RecoveryEventRow[],
+    holds: 0,
+    gapsAtRestore: 0,
+    role: [] as { id: string; code: string; decision: string }[],
+    assignment: [] as { id: string; role_id: string; app_user_id: string; decision: string }[],
+    batch: [] as { id: string; state: string }[],
+    exception: [] as { id: string }[],
+    evidenceForOwner: undefined as Answer | undefined,
+    evidenceForOther: undefined as Answer | undefined,
+    seriesBefore: [] as string[],
+    allocationsWhilePaused: [] as unknown[],
+    earlyReopen: undefined as Answer | undefined,
+    billReconciled: undefined as Answer | undefined,
+    otherReconciled: [] as Answer[],
+    seriesAfter: [] as string[],
+    allocationAfter: undefined as unknown,
+    raised: undefined as RestoreCommandOutcome | undefined,
+    validations: [] as Answer[],
+    validationsBetween: { from: '', to: '' },
+    storedUnderHold: undefined as Answer | undefined,
+    reopened: undefined as Answer | undefined,
+    holdsAfter: 0,
+    storedAfter: undefined as Answer | undefined,
+    written: undefined as RestoreCommandOutcome | undefined,
+    record: undefined as DrillRecord | undefined,
+    text: '',
+  };
 
   const answers = (): Promise<RestoreAnswers> =>
     Promise.resolve({
@@ -495,60 +595,26 @@ describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backe
     return answer;
   }
 
-  async function on(user: SyntheticUser): Promise<string> {
-    const kept = cookies.get(user.id);
-    if (kept !== undefined) return kept;
-    const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.14.4' },
-      body: JSON.stringify({
-        organisationCode: code,
-        login: user.login,
-        password: user.password,
-        totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0)),
-      }),
-    });
-    expect(response.status, `${user.login} signs in to the restored application`).toBe(200);
-    const cookie = (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-    cookies.set(user.id, cookie);
-    return cookie;
+  /** Calls the restored application as the user, signing in once (OpeningApp's sign-in and call). */
+  async function send(user: SyntheticUser, method: 'GET' | 'POST', path: string, body?: unknown): Promise<Answer> {
+    let cookie = cookies.get(user.id);
+    if (cookie === undefined) {
+      cookie = await signInTo(api.baseUrl, code, user);
+      cookies.set(user.id, cookie);
+    }
+    return callAs(api.baseUrl, cookie, method, path, body);
   }
 
-  async function send(
-    user: SyntheticUser,
-    method: 'GET' | 'POST',
-    path: string,
-    body?: unknown,
-  ): Promise<{ status: number; json: unknown }> {
-    const response = await fetch(`${api.baseUrl}${path}`, {
-      method,
-      headers: {
-        cookie: await on(user),
-        origin: SYNTHETIC_ORIGIN,
-        ...(method === 'POST' ? { 'content-type': 'application/json', 'idempotency-key': uuidv7() } : {}),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    const text = await response.text();
-    return { status: response.status, json: text === '' ? null : (JSON.parse(text) as unknown) };
-  }
-
-  function storeFile(): Promise<{ status: number; json: unknown }> {
-    const pdf = Buffer.from('%PDF-1.4\n% SYNTHETIC after the drill\n%%EOF\n', 'latin1');
-    return send(operations, 'POST', '/api/files-imports/files', {
-      sourceSystem: 'manual-upload',
-      originalName: 'SYNTHETIC-after-the-drill.pdf',
-      contentBase64: pdf.toString('base64'),
-    });
-  }
+  const storeFile = () => send(operations, 'POST', STORE_FILE_PATH, syntheticPdfUpload('after-the-drill', uuidv7()));
 
   async function status(): Promise<NonNullable<RecoveryStatus['restore']>> {
-    const read = recoveryStatusSchema.parse((await send(recovery, 'GET', routes.readRecoveryStatus.path)).json);
+    const read = recoveryStatusSchema.parse((await send(recovery, 'GET', routes.readRecoveryStatus.path)).body);
     if (read.restore === null) throw new Error('No restore');
     return read.restore;
   }
 
-  beforeAll(async () => {
+  /** Restores the backup into the fresh target and starts the application on it. */
+  async function restoreIntoTarget(): Promise<void> {
     await target.clear();
     directory = await target.createDirectory('rt_drill');
     bucket = `syn-drill-target-${randomBytes(4).toString('hex')}`;
@@ -588,20 +654,129 @@ describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backe
       { directoryConnectionString: target.url(directory, 'runtime'), poolMax: SYNTHETIC_POOL_MAX },
       log.logger,
     );
-  }, 600_000);
+  }
+
+  /** What the restore left, read before anyone acts on the restored Organisation. */
+  async function readRestored(): Promise<void> {
+    found.events = await target.query<RecoveryEventRow>(
+      database,
+      "select unit, name, subject, passed, checked::text, failed::text from kernel.recovery_event where kind in ('step', 'check')",
+    );
+    found.holds = (await target.query(database, 'select restore_id from kernel.recovery_hold')).length;
+    found.gapsAtRestore = (
+      await target.query(database, "select 1 from kernel.recovery_event where kind = 'gap'")
+    ).length;
+    found.role = await target.query(
+      database,
+      'select r.id, r.code, v.decision from access.role r join access.role_version v on v.role_id = r.id where r.id = $1',
+      [source.roleId],
+    );
+    found.assignment = await target.query(
+      database,
+      'select id, role_id, app_user_id, decision from access.role_assignment where id = $1',
+      [source.assignmentId],
+    );
+    found.batch = await target.query(database, 'select id, state from files_imports.import_batch where id = $1', [
+      source.batchId,
+    ]);
+    found.exception = await target.query(database, 'select id from exceptions.exception where id = $1', [
+      source.exceptionId,
+    ]);
+    // The exception's evidence, read under the hold through the restored application (imports 17 test 23).
+    const owner = source.evidenceOwner;
+    if (owner === undefined) throw new Error('No owner');
+    const path = `/api/files-imports/attachments/${source.evidenceAttachmentId}/file`;
+    found.evidenceForOwner = await send(owner, 'GET', path);
+    found.evidenceForOther = await send(operations, 'GET', path);
+  }
+
+  /** The restore operator reconciles every series, the bill series past the counter's evidence (5.3; GC-5 7 test 7). */
+  async function reconcileSeries(): Promise<void> {
+    const restored = await status();
+    found.seriesBefore = restored.seriesToReconcile.map((each) => each.seriesId);
+    const routed = await routedIn(router, code);
+    const allocate = (seriesId: string) =>
+      command(routed, recovery.id, 'configuration.reconcile-series-after-restore', async (context) => {
+        await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(seriesId)]);
+        return numbering.allocate(context, { seriesId, documentType: 'test-synthetic.bill', documentId: uuidv7() });
+      });
+    for (const seriesId of found.seriesBefore) found.allocationsWhilePaused.push(await allocate(seriesId));
+    found.earlyReopen = await send(recovery, 'POST', routes.reopenAfterRestore.path, {
+      revocationsPlacedAgain: true,
+      legalHoldsPlacedAgain: true,
+    });
+    const reconcile = (seriesId: string, body: unknown) =>
+      send(recovery, 'POST', routes.reconcileSeriesAfterRestore.path.replace('{seriesId}', seriesId), body);
+    found.billReconciled = await reconcile(source.billSeriesId, {
+      evidence: 'SYNTHETIC: the counter’s record shows one more bill printed after the recovery point',
+      evidenceHighest: source.billsGiven + 1,
+      reason: 'SYNTHETIC drill',
+    });
+    for (const each of (await status()).seriesToReconcile) {
+      found.otherReconciled.push(
+        await reconcile(each.seriesId, {
+          evidence: 'SYNTHETIC: no document left the system',
+          evidenceHighest: null,
+          reason: 'SYNTHETIC drill',
+        }),
+      );
+    }
+    found.seriesAfter = (await status()).seriesToReconcile.map((each) => each.seriesId);
+    found.allocationAfter = await allocate(source.billSeriesId);
+  }
+
+  /** Operations and Accounts validate, a command is refused under the hold, and the Organisation reopens (4.3). */
+  async function validateAndReopen(): Promise<void> {
+    if (outcome.outcome !== 'held') throw new Error('Not held');
+    found.raised = await restore(['--raise-gaps', outcome.restoreId]);
+    found.validationsBetween.from = new Date().toISOString();
+    for (const [user, body] of [
+      [operations, { validates: 'operations', compared: ['stock', 'bills'] }],
+      [accounts, { validates: 'accounts', compared: ['financial-totals'] }],
+    ] as const) {
+      found.validations.push(
+        await send(user, 'POST', routes.recordRecoveryValidation.path, {
+          ...body,
+          comparedAgainst: 'SYNTHETIC: the source’s totals before the drill',
+          evidence: 'SYNTHETIC: the drill notes',
+        }),
+      );
+    }
+    found.validationsBetween.to = new Date().toISOString();
+    found.storedUnderHold = await storeFile();
+    found.reopened = await send(recovery, 'POST', routes.reopenAfterRestore.path, {
+      revocationsPlacedAgain: true,
+      legalHoldsPlacedAgain: true,
+    });
+    found.holdsAfter = (await target.query(database, 'select 1 from kernel.recovery_hold')).length;
+    found.storedAfter = await storeFile();
+    found.written = await restore(['--drill-record', outcome.restoreId]);
+    if (found.written.outcome === 'written') {
+      const { record, text } = await drillRecordOf(found.written.json);
+      found.record = record;
+      found.text = text;
+    }
+  }
+
+  beforeAll(async () => {
+    manifest = await manifestOf(backupId);
+    const mine = manifest.organisations.find((each) => each.organisationCode === code);
+    if (mine === undefined) throw new Error('The backup holds no part of the Organisation');
+    part = mine;
+    await restoreIntoTarget();
+    await readRestored();
+    await reconcileSeries();
+    await validateAndReopen();
+  }, 900_000);
 
   afterAll(async () => {
     await (api as AccessTestApp | undefined)?.close();
     await (router as OrganisationRouter | undefined)?.close();
   });
 
+  const named = (name: string) => found.events.find((each) => each.name === name);
+
   it('PRD-SEC-012 the backup holds records of every stage 1 feature, linked, with their stored files', async () => {
-    const part = (await manifestOf(backupId)).organisations.find((each) => each.organisationCode === code);
-    if (part === undefined) throw new Error('No part');
-    const rows = new Map(
-      part.controlTotals.flatMap((each) => each.totals).map((total) => [total.name, Number(total.value)]),
-    );
-    const held = (table: string) => rows.get(`${table}.rows`) ?? 0;
     for (const table of [
       // Masters.
       'organisation.legal_entity',
@@ -645,221 +820,213 @@ describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backe
       'configuration.policy_validation',
       'audit.audit_seal',
     ]) {
-      expect(held(table), table).toBeGreaterThan(0);
+      expect(rowsHeld(part, table), table).toBeGreaterThan(0);
     }
     expect(part.latestSeal).not.toBeNull();
-    expect(rows.get('finance.journal_line.amount_paise.sum') ?? 0).toBeGreaterThan(0);
+    const journalLines = part.controlTotals
+      .flatMap((each) => each.totals)
+      .find((total) => total.name === 'finance.journal_line.amount_paise.sum');
+    expect(Number(journalLines?.value)).toBeGreaterThan(0);
     // Every stored file's object is in the backup store (3.3).
     const objects = await bucketKeys(backupBucket, `files/${organisationId}/`);
-    expect(objects.length).toBe(held('files_imports.stored_file'));
+    expect(objects.length).toBe(rowsHeld(part, 'files_imports.stored_file'));
   });
 
-  it('GC-9 12 test 1 PRD-ACP-019 restores into a fresh target and holds the Organisation with every check of 5.1 passed', async () => {
+  it('PRD-SEC-012 the drill’s own records are restored, found by their identifiers', () => {
+    // The role and its assignment the drill prepared and had approved through `access` (access-and-approvals 4.2, 4.3).
+    expect(found.role).toEqual([{ id: source.roleId, code: source.roleCode, decision: 'Approved' }]);
+    expect(found.assignment).toEqual([
+      { id: source.assignmentId, role_id: source.roleId, app_user_id: source.holderId, decision: 'Approved' },
+    ]);
+    expect(found.batch).toEqual([{ id: source.batchId, state: 'Published' }]);
+    expect(found.exception).toEqual([{ id: source.exceptionId }]);
+  });
+
+  it('GC-9 12 test 1 PRD-ACP-019 restores into a fresh target and holds the Organisation with every check of 5.1 passed', () => {
     expect(outcome.outcome).toBe('held');
-    expect(await target.query(database, 'select restore_id from kernel.recovery_hold')).toHaveLength(1);
-    const results = await target.query<{ unit: string; name: string; passed: boolean; checked: string }>(
-      database,
-      "select unit, name, passed, checked::text from kernel.recovery_event where kind in ('step', 'check')",
-    );
-    expect(results.filter((each) => !each.passed)).toEqual([]);
-    const named = (name: string) => results.find((each) => each.name === name);
+    expect(found.holds).toBe(1);
+    expect(found.events.filter((each) => !each.passed)).toEqual([]);
     // Stored files and attachments, every one the backup holds (5.1; imports-and-opening-data 17 test 23).
-    const part = (await manifestOf(backupId)).organisations.find((each) => each.organisationCode === code);
-    const held = (table: string) =>
-      Number(part?.controlTotals.flatMap((each) => each.totals).find((total) => total.name === `${table}.rows`)?.value);
     const files = named('every stored file is in the file store, opens with its key version and matches its hash');
-    expect(Number(files?.checked)).toBe(held('files_imports.stored_file'));
+    expect(Number(files?.checked)).toBe(rowsHeld(part, 'files_imports.stored_file'));
     const attachments = named(
       'every attachment opens from its record for an authorised reader and is refused outside its scope',
     );
-    expect(Number(attachments?.checked)).toBe(held('files_imports.attachment'));
+    expect(Number(attachments?.checked)).toBe(rowsHeld(part, 'files_imports.attachment'));
     // Numbering, audit and the module invariants, each counting what it checked.
     expect(named('every series paused')?.passed).toBe(true);
     expect(named('audit seal chain verifies')?.passed).toBe(true);
     expect(named('audit seal chain ends at the manifest seal')?.passed).toBe(true);
     expect(Number(named('every journal balances')?.checked)).toBeGreaterThan(0);
+    // Every projection row the stock ledger compares, counted once (stock-ledger-restore-participant.int.test.ts).
     expect(Number(named('stock balances equal the sum of their movements')?.checked)).toBeGreaterThan(0);
-    // The references across modules were followed, the evidence's to its exception and the policy's included.
+    // The references across modules were followed: the evidence to its exception, the exception to its import batch,
+    // and each policy evidence file to its signature or validation. Each count is every attachment the source held to
+    // that record type, counted in the source before the backup, so each was followed once.
     expect(Number(named('files_imports.attachment.record_id -> exceptions.exception')?.checked)).toBe(1);
-    expect(Number(named('files_imports.attachment.record_id -> configuration.policy_status')?.checked)).toBe(3);
     expect(Number(named('exceptions.exception_link.record_id -> files_imports.import_batch')?.checked)).toBe(1);
+    const policyEvidence = (recordType: string) =>
+      Number(named(`files_imports.attachment.record_id -> ${recordType}`)?.checked);
+    expect(policyEvidence('configuration.policy_status')).toBe(source.policyEvidence.signature);
+    expect(policyEvidence('configuration.policy_validation')).toBe(source.policyEvidence.validation);
     expect(named('every session ended after the restore')?.passed).toBe(true);
     // No object without a record: nothing was stored after the snapshot.
-    const gaps = await target.query(database, "select 1 from kernel.recovery_event where kind = 'gap'");
-    expect(gaps).toEqual([]);
+    expect(found.gapsAtRestore).toBe(0);
   });
 
-  it('GC-9 12 test 1 PRD-ACP-019 every control total of 5.2 equals the backup’s, for every module', async () => {
-    const totals = await target.query<{ unit: string; passed: boolean; checked: string }>(
-      database,
-      "select unit, passed, checked::text from kernel.recovery_event where name = 'control totals equal the backup'",
-    );
+  it('GC-9 12 test 1 PRD-ACP-019 every control total of 5.2 equals the backup’s, for every module', () => {
+    const totals = found.events.filter((each) => each.name === 'control totals equal the backup');
     expect(totals.map((each) => each.unit).sort()).toEqual(
       restoreRegistry.participants.map((participant) => participant.unit).sort(),
     );
-    const part = (await manifestOf(backupId)).organisations.find((each) => each.organisationCode === code);
     for (const each of totals) {
       expect(each.passed, each.unit).toBe(true);
-      const expected = part?.controlTotals.find((unit) => unit.unit === each.unit)?.totals.length ?? 0;
+      const expected = part.controlTotals.find((unit) => unit.unit === each.unit)?.totals.length;
       expect(Number(each.checked), each.unit).toBe(expected);
     }
   });
 
-  it('PRD-SEC-005 imports-and-opening-data 17 test 23 the exception’s evidence opens from its record through the restored application, matching its hash', async () => {
-    const owner = source.evidenceOwner;
-    if (owner === undefined) throw new Error('No owner');
-    const read = await send(owner, 'GET', `/api/files-imports/attachments/${source.evidenceAttachmentId}/file`);
-    expect(read.status, JSON.stringify(read.json)).toBe(200);
-    const file = attachedFileSchema.parse(read.json);
+  it('PRD-SEC-005 imports-and-opening-data 17 test 23 the exception’s evidence opens from its record through the restored application, matching its hash', () => {
+    const read = found.evidenceForOwner;
+    expect(read?.status, JSON.stringify(read?.body)).toBe(200);
+    const file = attachedFileSchema.parse(read?.body);
     expect(Buffer.from(file.contentBase64, 'base64').toString('latin1')).toContain('SYNTHETIC exception-evidence');
     // A person with no grant on the exception is refused.
-    expect(
-      (await send(operations, 'GET', `/api/files-imports/attachments/${source.evidenceAttachmentId}/file`)).status,
-    ).toBe(404);
+    expect(found.evidenceForOther?.status).toBe(404);
   });
 
-  it('POL-18.04 numbering-and-audit 7 test 7 every series stays paused until it is reconciled; a reconciliation sets the next bill past the evidence', async () => {
-    const restored = await status();
-    expect(restored.seriesToReconcile.map((each) => each.seriesId)).toContain(source.billSeriesId);
-    expect(restored.seriesToReconcile.length).toBeGreaterThanOrEqual(4);
-    const routed = await routedIn(router, code);
-    const allocate = (seriesId: string) =>
-      command(routed, recovery.id, 'configuration.reconcile-series-after-restore', async (context) => {
-        await context.lock(LOCK_STEP.numberSeries, [numbering.seriesLockTarget(seriesId)]);
-        return numbering.allocate(context, { seriesId, documentType: 'test-synthetic.bill', documentId: uuidv7() });
-      });
-    for (const each of restored.seriesToReconcile) {
-      expect(await allocate(each.seriesId)).toMatchObject({
-        kind: 'refused',
-        refusal: { code: 'numbering.series-paused' },
-      });
+  it('POL-18.04 numbering-and-audit 7 test 7 every series stays paused until it is reconciled; a reconciliation sets the next bill past the evidence', () => {
+    expect(found.seriesBefore).toContain(source.billSeriesId);
+    expect(found.seriesBefore.length).toBeGreaterThanOrEqual(4);
+    expect(found.allocationsWhilePaused).toHaveLength(found.seriesBefore.length);
+    for (const each of found.allocationsWhilePaused) {
+      expect(each).toMatchObject({ kind: 'refused', refusal: { code: 'numbering.series-paused' } });
     }
     // Reopening waits for them (4.3).
-    const early = await send(recovery, 'POST', routes.reopenAfterRestore.path, {
-      revocationsPlacedAgain: true,
-      legalHoldsPlacedAgain: true,
-    });
-    expect(early.status).toBe(422);
+    expect(found.earlyReopen?.status).toBe(422);
     // The device's bill series: the counter's evidence names the bill it printed (5.3).
-    const evidenceHighest = source.billsGiven + 1;
-    const bill = await send(
-      recovery,
-      'POST',
-      routes.reconcileSeriesAfterRestore.path.replace('{seriesId}', source.billSeriesId),
-      {
-        evidence: 'SYNTHETIC: the counter’s record shows one more bill printed after the recovery point',
-        evidenceHighest,
-        reason: 'SYNTHETIC drill',
-      },
-    );
-    expect(bill.json).toEqual({
+    expect(found.billReconciled?.body).toEqual({
       seriesId: source.billSeriesId,
       restoredHighest: source.billsGiven,
       nextSequenceBefore: source.billsGiven + 1,
-      nextSequenceAfter: evidenceHighest + 1,
+      nextSequenceAfter: source.billsGiven + 2,
     });
-    for (const each of (await status()).seriesToReconcile) {
-      const answer = await send(
-        recovery,
-        'POST',
-        routes.reconcileSeriesAfterRestore.path.replace('{seriesId}', each.seriesId),
-        { evidence: 'SYNTHETIC: no document left the system', evidenceHighest: null, reason: 'SYNTHETIC drill' },
-      );
-      expect(answer.status, JSON.stringify(answer.json)).toBe(200);
-    }
-    expect((await status()).seriesToReconcile).toEqual([]);
+    expect(found.otherReconciled).toHaveLength(found.seriesBefore.length - 1);
+    for (const answer of found.otherReconciled) expect(answer.status, JSON.stringify(answer.body)).toBe(200);
+    expect(found.seriesAfter).toEqual([]);
     // No number is given twice: the next bill is past the evidence.
-    expect(await allocate(source.billSeriesId)).toMatchObject({
-      kind: 'done',
-      value: { sequenceNumber: evidenceHighest + 1 },
-    });
+    expect(found.allocationAfter).toMatchObject({ kind: 'done', value: { sequenceNumber: source.billsGiven + 2 } });
   });
 
-  it('POL-18.03 synthetic Operations and Accounts users record their validations, and the Organisation reopens', async () => {
+  it('POL-18.03 synthetic Operations and Accounts users record their validations, and the Organisation reopens', () => {
     // No gap and no failed check to raise (4.5, 5.1).
-    if (outcome.outcome !== 'held') throw new Error('Not held');
-    expect(await restore(['--raise-gaps', outcome.restoreId])).toMatchObject({
+    expect(found.raised).toMatchObject({
       outcome: 'raised',
       organisations: [{ organisationCode: code, count: 0, refusals: [] }],
     });
-    for (const [user, body] of [
-      [operations, { validates: 'operations', compared: ['stock', 'bills'] }],
-      [accounts, { validates: 'accounts', compared: ['financial-totals'] }],
-    ] as const) {
-      const answer = await send(user, 'POST', routes.recordRecoveryValidation.path, {
-        ...body,
-        comparedAgainst: 'SYNTHETIC: the source’s totals before the drill',
-        evidence: 'SYNTHETIC: the drill notes',
-      });
-      expect(answer.status, JSON.stringify(answer.json)).toBe(200);
-    }
+    expect(found.validations.map((each) => each.status)).toEqual([200, 200]);
     // Under the hold a business command is refused, naming the hold (4.3; POL-18.03).
-    const held = await storeFile();
-    expect(held.status).toBe(403);
-    expect(held.json).toMatchObject({ error: { code: 'kernel.recovery-hold' } });
-    const reopened = await send(recovery, 'POST', routes.reopenAfterRestore.path, {
-      revocationsPlacedAgain: true,
-      legalHoldsPlacedAgain: true,
-    });
-    expect(reopened.status, JSON.stringify(reopened.json)).toBe(200);
-    expect(await target.query(database, 'select 1 from kernel.recovery_hold')).toEqual([]);
+    expect(found.storedUnderHold?.status).toBe(403);
+    expect(found.storedUnderHold?.body).toMatchObject({ error: { code: 'kernel.recovery-hold' } });
+    expect(found.reopened?.status, JSON.stringify(found.reopened?.body)).toBe(200);
+    expect(found.holdsAfter).toBe(0);
     // A business command runs again: Operations stores a file, which the hold refused before.
-    const stored = await storeFile();
-    expect(stored.status, JSON.stringify(stored.json)).toBe(200);
+    expect(found.storedAfter?.status, JSON.stringify(found.storedAfter?.body)).toBe(200);
   });
 
-  it('section 6 the drill record holds every step with its times, who conducted it, every result, the key versions and the measured recovery time', async () => {
-    if (outcome.outcome !== 'held') throw new Error('Not held');
-    const written = await restore(['--drill-record', outcome.restoreId]);
-    expect(written).toMatchObject({ outcome: 'written', result: 'reopened' });
-    if (written.outcome !== 'written') throw new Error('Not written');
-    const { record, text } = await drillRecordOf(written.json);
+  it('section 6 the drill record holds every step with its times, who conducted it, every result, the key versions and the measured recovery time', () => {
+    expect(found.written).toMatchObject({ outcome: 'written', result: 'reopened' });
+    const { record, text } = found;
+    if (record === undefined) throw new Error('No drill record');
     expect(record).toMatchObject({
-      purpose: { kind: 'drill' },
+      version: 2,
+      purpose: { kind: 'drill', note: 'SYNTHETIC drill: GC-9 12 test 1 in CI' },
       conductedBy: 'SYNTHETIC operator, platform (CI)',
       result: 'reopened',
-      backup: { backupId },
+      backup: { backupId, takenAt: manifest.startedAt, backupKeyVersion: manifest.backupKeyVersion },
     });
-    expect(record.steps.map((step) => step.step)).toEqual(
-      expect.arrayContaining([
-        'restore the database',
-        'migrate the database',
-        'compare the control totals with the backup',
-        'place the recovery hold',
-        'point the directory at the target',
-        'copy the file objects',
-        'run the restore participants',
-      ]),
-    );
-    for (const step of record.steps) {
+    // Every step of 4.2 a restore of one Organisation runs, in order, step 1 included.
+    expect(record.steps.map((step) => [step.step, step.organisationCode])).toEqual([
+      ['check before writing', null],
+      ['migrate the directory database', null],
+      ['restore the database', code],
+      ['migrate the database', code],
+      ['compare the control totals with the backup', code],
+      ['place the recovery hold', code],
+      ['point the directory at the target', null],
+      ['copy the file objects', code],
+      ['run the restore participants', code],
+    ]);
+    for (const [index, step] of record.steps.entries()) {
       expect(step.outcome, step.step).toBe('done');
-      expect(Date.parse(step.endedAt)).toBeGreaterThanOrEqual(Date.parse(step.startedAt));
+      expect(Date.parse(step.endedAt), step.step).toBeGreaterThanOrEqual(Date.parse(step.startedAt));
+      const next = record.steps[index + 1];
+      if (next !== undefined) expect(Date.parse(next.startedAt)).toBeGreaterThanOrEqual(Date.parse(step.endedAt));
     }
+    expect(record.organisations).toHaveLength(1);
     const [organisation] = record.organisations;
     if (organisation === undefined) throw new Error('No Organisation');
-    expect(organisation.checks.filter((check) => !check.passed)).toEqual([]);
-    expect(organisation.checks.map((check) => check.check)).toEqual(
-      expect.arrayContaining([
-        'every stored file is in the file store, opens with its key version and matches its hash',
-        'every attachment opens from its record for an authorised reader and is refused outside its scope',
-        'audit seal chain verifies',
-        'audit seal chain ends at the manifest seal',
-        'control totals equal the backup',
-        'every series paused',
-      ]),
+    expect(organisation).toMatchObject({
+      organisationCode: code,
+      organisationId,
+      recoveryPoint: part.snapshotAt,
+      databaseTo: database,
+      gaps: [],
+      recoveryItems: [],
+      seriesToReconcile: 0,
+      held: false,
+    });
+    // Every check with its result and counts, as the restored database keeps them (5.1, 5.2).
+    const key = (each: {
+      unit: string;
+      name: string;
+      subject: string | null;
+      passed: boolean;
+      checked: number;
+      failed: number;
+    }) =>
+      `${each.unit}|${each.name}|${each.subject ?? ''}|${String(each.passed)}|${String(each.checked)}|${String(each.failed)}`;
+    expect(
+      organisation.checks.map((check) => key({ ...check, name: check.check, subject: check.subject ?? null })).sort(),
+    ).toEqual(
+      found.events.map((each) => key({ ...each, checked: Number(each.checked), failed: Number(each.failed) })).sort(),
     );
-    expect(organisation.validations.map((each) => each.validates).sort()).toEqual(['accounts', 'operations']);
-    expect(organisation.seriesToReconcile).toBe(0);
+    expect(organisation.checks.filter((check) => !check.passed)).toEqual([]);
+    // Each series reconciled, with its skip and reason.
+    expect(organisation.seriesReconciled.map((each) => each.seriesId).sort()).toEqual([...found.seriesBefore].sort());
+    for (const each of organisation.seriesReconciled) expect(each.reason, each.seriesId).toBe('SYNTHETIC drill');
     expect(organisation.seriesReconciled.find((each) => each.seriesId === source.billSeriesId)).toMatchObject({
+      restoredHighest: source.billsGiven,
+      evidenceHighest: source.billsGiven + 1,
       skipped: { from: source.billsGiven + 1, to: source.billsGiven + 1 },
     });
-    expect(organisation.reopened).not.toBeNull();
+    // Who validated and when, and who reopened and when (POL-18.03).
+    const reopenedAt = recoveryReopenedSchema.parse(found.reopened?.body).reopenedAt;
+    expect(
+      organisation.validations.map(({ validates, compared, byUserId }) => ({ validates, compared, byUserId })),
+    ).toEqual(
+      expect.arrayContaining([
+        { validates: 'operations', compared: ['stock', 'bills'], byUserId: operations.id },
+        { validates: 'accounts', compared: ['financial-totals'], byUserId: accounts.id },
+      ]),
+    );
+    expect(organisation.validations).toHaveLength(2);
+    for (const each of organisation.validations) {
+      expect(Date.parse(each.at)).toBeGreaterThanOrEqual(Date.parse(found.validationsBetween.from));
+      expect(Date.parse(each.at)).toBeLessThanOrEqual(Date.parse(found.validationsBetween.to));
+    }
+    expect(organisation.reopened?.byUserId).toBe(recovery.id);
+    expect(Date.parse(organisation.reopened?.at ?? '')).toBe(Date.parse(reopenedAt));
+    // The key versions, each from its kept copy and matching its identifier (2.3, 2.4).
     expect(record.keyVersions.length).toBeGreaterThanOrEqual(2);
-    expect(record.keyVersions.every((key) => key.fromKeptCopy && key.matchedIdentifier)).toBe(true);
-    expect(record.keyVersions.map((key) => key.purpose).sort()).toEqual(['backup', 'organisation-data']);
+    expect(record.keyVersions.every((each) => each.fromKeptCopy && each.matchedIdentifier)).toBe(true);
+    expect([...new Set(record.keyVersions.map((each) => each.purpose))].sort()).toEqual([
+      'backup',
+      'organisation-data',
+    ]);
     // Measured, never promised (deployment.md section 4; RR-075 stays OPEN).
     const seconds = record.measured.recoveryTimeSeconds;
-    expect(seconds).not.toBeNull();
+    expect(seconds).toBe(Math.round((Date.parse(reopenedAt) - Date.parse(record.restoreStartedAt)) / 1000));
     expect(text).toContain(`Recovery time: ${String(seconds)} s`);
     if (process.env.AOS_RESTORE_DRILL_REPORT === '1') {
       console.log(
@@ -868,29 +1035,70 @@ describe('GC-9 12 test 1: the stage 1 exit check, a synthetic Organisation backe
     }
   });
 
-  it('GC-9 12 test 17 PRD-SEC-014 the drill records and the logs hold no key, no secret and no connection string', async () => {
+  it('GC-9 12 test 17 PRD-SEC-014 the drill records and the logs hold no key, no secret, no session and no connection string', async () => {
     const keys = Object.values(
       JSON.parse(drill.harness.keys()[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<string, string>,
     );
+    const { harness } = drill;
+    const users = [
+      ...people,
+      ...drill.enrolledUsers,
+      drill.preparer,
+      drill.approver,
+      harness.poster.user,
+      harness.approver.user,
+      harness.preparer.user,
+      harness.checker.user,
+    ];
+    const sessions = [...drill.sessionCookies(), ...cookies.values()]
+      .map((cookie) => cookie.slice(cookie.indexOf('=') + 1))
+      .filter((value) => value.length >= 16);
+    const urls = (role: 'migration' | 'runtime') => [
+      databaseUrl(harness.world.directory, role),
+      ...harness.world.organisations.map((each) => databaseUrl(each.database, role)),
+      target.url(directory, role),
+      target.url(database, role),
+    ];
     const forbidden = [
       backupKey.privateText,
       ...Object.values(signingKey.backupRunner),
+      ...Object.values(signingKey.restoreRunner),
       ...keys,
-      databaseUrl(drill.harness.world.directory, 'migration'),
-      target.url(directory, 'migration'),
-      recovery.password,
+      ...urls('migration'),
+      ...urls('runtime'),
+      ...users.map((user) => user.password),
+      ...users.flatMap((user) =>
+        user.factorSecret === undefined
+          ? []
+          : [base32(user.factorSecret), user.factorSecret.toString('hex'), user.factorSecret.toString('base64')],
+      ),
+      ...sessions,
     ];
-    const records = (await bucketKeys(backupBucket, `backups/${backupId}/restores/`)).filter((key) =>
-      key.includes('/drill-record-'),
+    expect(users.length).toBeGreaterThanOrEqual(12);
+    expect(sessions.length).toBeGreaterThanOrEqual(5);
+    const records = (await bucketKeys(backupBucket, `backups/${backupId}/restores/`)).filter((each) =>
+      each.includes('/drill-record-'),
     );
     expect(records.length).toBeGreaterThanOrEqual(2);
-    const texts = [
-      logLines.join('\n'),
-      JSON.stringify(log.lines),
+    const texts: [string, string][] = [
+      ['the command output', logLines.join('\n')],
+      ['the test logger', JSON.stringify(log.lines)],
+      ['the harness logger', JSON.stringify(harness.log.lines)],
+      ['the source application’s log', drill.api.logText()],
+      ['the restored application’s log', api.logText()],
       ...(await Promise.all(
-        records.map(async (key) => (await objectOf(drill.fileStore.client, backupBucket, key)).toString('utf8')),
+        records.map(async (each): Promise<[string, string]> => [
+          each,
+          (await objectOf(drill.fileStore.client, backupBucket, each)).toString('utf8'),
+        ]),
       )),
     ];
-    for (const each of texts) for (const value of forbidden) expect(each.includes(value)).toBe(false);
+    const leaks: string[] = [];
+    for (const [where, text] of texts) {
+      forbidden.forEach((value, index) => {
+        if (value !== '' && text.includes(value)) leaks.push(`forbidden value ${String(index)} in ${where}`);
+      });
+    }
+    expect(leaks).toEqual([]);
   });
 });

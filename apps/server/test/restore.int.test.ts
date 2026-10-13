@@ -1465,6 +1465,7 @@ describe('a whole environment restored into a fresh target (backup-and-restore 4
     });
     expect(first.record.steps.map((step) => step.step)).toEqual(
       expect.arrayContaining([
+        'check before writing',
         'restore the directory database',
         'restore the database',
         'migrate the database',
