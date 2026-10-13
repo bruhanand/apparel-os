@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lockTable, planLockRuns, type LockTarget } from './lock-helper.js';
+import { lockTable, planLockRuns, queuedLockKey, type LockTarget } from './lock-helper.js';
 
 // S1-F01-T03: the order the lock helper takes one step's rows in (code-house-rules 8.2; PRD-INT-003). The tables and
 // identifiers are synthetic; the integration test proves the order on PostgreSQL.
@@ -87,5 +87,23 @@ describe('planLockRuns (code-house-rules 8.2)', () => {
     ],
   ])('refuses %s', (_, plan) => {
     expect(plan).toThrow();
+  });
+});
+
+describe('queued lock tables (code-house-rules 8.2; stock-ledger 14.3)', () => {
+  const anchor = lockTable('stock', 'unit_anchor', { queued: true });
+
+  it('PRD-INT-003 keeps a table queued through the plan, in the same order as any other', () => {
+    const runs = planLockRuns([target(anchor, ID_2, 'shared'), target(document, ID_1)]);
+    expect(runs).toEqual([
+      { table: document, mode: 'exclusive', ids: [ID_1] },
+      { table: { schema: 'stock', table: 'unit_anchor', queued: true }, mode: 'shared', ids: [ID_2] },
+    ]);
+  });
+
+  it('keys each queued row by the last 64 bits of its identifier, as a signed bigint', () => {
+    expect(queuedLockKey(ID_1)).toBe('-9223372036854775807');
+    expect(queuedLockKey('01900000-0000-7000-0000-0000000000aa')).toBe('170');
+    expect(queuedLockKey('01900000-0000-7000-7FFF-FFFFFFFFFFFF')).toBe('9223372036854775807');
   });
 });

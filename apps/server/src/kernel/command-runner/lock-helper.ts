@@ -32,6 +32,14 @@ export type LockMode = 'exclusive' | 'shared';
 export interface LockTable {
   readonly schema: string;
   readonly table: string;
+  /**
+   * Whether waiters for its rows are served in order. PostgreSQL lets a new `FOR SHARE` join the holders of a row ahead
+   * of a waiting `FOR NO KEY UPDATE`, so a steady stream of shared lockers can keep an exclusive one waiting until the
+   * statement limit. For a queued table the helper first takes a transaction advisory lock of the same mode on each
+   * row, keyed by its identifier: PostgreSQL's lock manager queues a new shared request behind a waiting exclusive one
+   * (code-house-rules 8.2; the unit anchor, stock-ledger 14.3; S1-F14-T04 review fixes).
+   */
+  readonly queued?: true;
 }
 
 /**
@@ -62,11 +70,22 @@ const NAME = /^[a-z][a-z0-9_]*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Names a lockable table. Names are lower-case snake_case (code-house-rules 3.2), so they need no quoting rules. */
-export function lockTable(schema: string, table: string): LockTable {
+export function lockTable(schema: string, table: string, options: { readonly queued?: boolean } = {}): LockTable {
   if (!NAME.test(schema) || !NAME.test(table)) {
     throw new Error('A lock table is named by a lower-case snake_case schema and table');
   }
-  return { schema, table };
+  return options.queued === true ? { schema, table, queued: true } : { schema, table };
+}
+
+/**
+ * The advisory lock key of a queued table's row: the last 64 bits of its UUID as a signed bigint, in text. A UUIDv7
+ * carries 62 random bits there, so two rows share a key only by a negligible chance, which would make them wait for
+ * each other, never let one past the other.
+ */
+export function queuedLockKey(id: string): string {
+  const hex = id.toLowerCase().replace(/-/g, '').slice(16);
+  if (!/^[0-9a-f]{16}$/.test(hex)) throw new Error('A queued lock is keyed by a UUID');
+  return BigInt.asIntN(64, BigInt(`0x${hex}`)).toString();
 }
 
 /**
@@ -78,7 +97,7 @@ export function lockTable(schema: string, table: string): LockTable {
 export function planLockRuns(targets: readonly LockTarget[]): LockRun[] {
   const rows = new Map<string, { table: LockTable; id: string; mode: LockMode }>();
   for (const target of targets) {
-    const table = lockTable(target.table.schema, target.table.table);
+    const table = lockTable(target.table.schema, target.table.table, { queued: target.table.queued === true });
     const id = target.id.toLowerCase();
     if (!UUID.test(id)) throw new Error('A lock target is named by its UUID');
     // Checked at run time too: a target may come from another module's interface.
@@ -106,7 +125,16 @@ export function planLockRuns(targets: readonly LockTarget[]): LockRun[] {
 export async function takeLocks(tx: Transaction, targets: readonly LockTarget[]): Promise<LockResult> {
   const locked: LockTarget[] = [];
   const missing: LockTarget[] = [];
-  for (const run of planLockRuns(targets)) {
+  const runs = planLockRuns(targets);
+  // A queued table's rows: their advisory locks first, in the step's order, then every row lock (see LockTable.queued).
+  for (const run of runs) {
+    if (run.table.queued !== true) continue;
+    const take = sql.raw(run.mode === 'exclusive' ? 'pg_advisory_xact_lock' : 'pg_advisory_xact_lock_shared');
+    for (const id of run.ids) {
+      await tx.execute(sql`select pg_catalog.${take}(${queuedLockKey(id)}::bigint)`);
+    }
+  }
+  for (const run of runs) {
     // PostgreSQL sorts the rows, then locks them in that order (code-house-rules 8.2). Bound parameters only.
     const ids = sql.join(
       run.ids.map((id) => sql`${id}::uuid`),

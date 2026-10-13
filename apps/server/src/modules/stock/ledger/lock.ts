@@ -15,7 +15,7 @@ import type { LedgerPlan } from './plan.js';
 // with any targets the caller adds for the step (code-house-rules 8.2).
 
 const RECEIPT_ORIGIN = lockTable('stock', 'receipt_origin');
-const UNIT_ANCHOR = lockTable('stock', 'unit_anchor');
+const UNIT_ANCHOR = lockTable('stock', 'unit_anchor', { queued: true });
 const SKU_BALANCE = lockTable('stock', 'sku_balance');
 const PIECE = lockTable('stock', 'piece');
 const HOLD = lockTable('stock', 'hold');

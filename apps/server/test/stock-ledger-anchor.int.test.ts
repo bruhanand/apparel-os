@@ -160,6 +160,43 @@ describe('the unit anchor orders items and count freezes (stock-ledger 14.3, 11.
     );
   });
 
+  it('PRD-STK-008 an item that comes while a freeze start waits queues behind it, so a stream of items never starves the freeze', async () => {
+    // PostgreSQL lets a new FOR SHARE row lock join the sharers ahead of a waiting FOR NO KEY UPDATE, so a steady
+    // stream of items could keep a freeze start waiting until the statement limit; the anchor is a queued lock table,
+    // whose waiters are served in order (code-house-rules 8.2; stock-ledger 14.3; S1-F14-T04 review fixes).
+    // The unit's anchor exists, so no item waits for another's insert of it.
+    written(await world.post(world.poster, [receipt(addSyntheticSku().skuId, at('bin'))]));
+    const held = gate();
+    const release = gate();
+    let firstPid = 0;
+    const first = world.post(world.poster, [receipt(addSyntheticSku().skuId, at('bin'))], {
+      hold: async (context) => {
+        firstPid = await backendPid(context);
+        held.open();
+        await release.wait;
+      },
+    });
+    await held.wait;
+    const freeze = world.post(world.poster, [startFreeze()]);
+    const freezePid = await waitUntilAnyWaitingForLock(world.database, [firstPid]);
+    const second = world.post(world.poster, [receipt(addSyntheticSku().skuId, at('bin'))]);
+    const queued = await Promise.race([
+      second.then(() => 'posted ahead of the freeze'),
+      waitUntilAnyWaitingForLock(world.database, [firstPid, freezePid]).then(() => 'queued behind the freeze'),
+    ]);
+    release.open();
+    written(await first);
+    const started = written(await freeze);
+    const after = await second;
+    expect(queued).toBe('queued behind the freeze');
+    expect(after.kind === 'refused' && after.refusal.code).toBe('stock.count-freeze-active');
+    written(
+      await world.post(world.poster, [
+        { kind: 'end-count-freeze', lineId: uuidv7(), holdId: started.holdIds[0] ?? '' },
+      ]),
+    );
+  });
+
   it('PRD-STK-009 an item that locks after a freeze start sees the freeze', async () => {
     const sku = addSyntheticSku();
     const held = gate();
