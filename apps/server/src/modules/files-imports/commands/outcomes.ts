@@ -1,8 +1,8 @@
 import { normalisedName } from '@apparel-os/schemas';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import { knownValue, type ImportHandler } from '../contracts/import-handlers.js';
-import { controlTotal, stagedRow } from '../db/schema.js';
+import { controlTotal } from '../db/schema.js';
 import {
   outcomeControlTotals,
   outcomeCounts,
@@ -13,7 +13,7 @@ import {
   type OutcomeDocument,
   type OutcomeMeasure,
 } from '../domain/outcome.js';
-import { identityOf, type BatchRow, type LoadedDocument } from './import-common.js';
+import { identityOf, stagedRowCounts, stagedRowsOf, type BatchRow, type LoadedDocument } from './import-common.js';
 
 // The outcome of a batch (imports-and-opening-data 7.4; PRD-IMP-012, PRD-IMP-013; S1-F06-T04): rows read, as the
 // reader counted them, against the rows staged; rows ignored; rows, quantities and values accepted, rejected, pending
@@ -34,11 +34,7 @@ export async function countsRefusal(
   context: TransactionContext,
   batch: Pick<BatchRow, 'id' | 'sheets'>,
 ): Promise<CommandRefusal | undefined> {
-  const [row] = await context.tx
-    .select({ staged: sql<number>`count(*)::int` })
-    .from(stagedRow)
-    .where(eq(stagedRow.batchId, batch.id));
-  const staged = row?.staged ?? 0;
+  const staged = (await stagedRowCounts(context, batch.id)).all;
   const read = rowsReadOf(batch);
   if (staged === read) return undefined;
   return {
@@ -101,10 +97,9 @@ export async function batchOutcome(
   documents: readonly LoadedDocument[],
   results: ReadonlyMap<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>,
 ): Promise<BatchOutcome> {
-  const others = await context.tx
-    .select({ role: stagedRow.role, cells: stagedRow.cells })
-    .from(stagedRow)
-    .where(and(eq(stagedRow.batchId, batch.id), ne(stagedRow.role, 'data')));
+  // Every staged row, read once in parts (`stagedRowsOf`): the rows that are not data, and the lines of each document.
+  const staged = await stagedRowsOf(context, batch.id, 'all');
+  const others = staged.filter((row) => row.role !== 'data');
   const resultOf = (document: LoadedDocument): DocumentResult =>
     results.get(document.documentId)?.result ?? (document.state === 'Published' ? 'published' : 'not-attempted');
   const outcomeDocuments: OutcomeDocument[] = documents.map((document) => ({
@@ -137,10 +132,7 @@ export async function batchOutcome(
   const accepted = new Set(
     documents.filter((document) => resultOf(document) === 'published').map((document) => document.documentId),
   );
-  const lines = await context.tx
-    .select({ documentId: stagedRow.documentId, cells: stagedRow.cells })
-    .from(stagedRow)
-    .where(and(eq(stagedRow.batchId, batch.id), eq(stagedRow.role, 'data')));
+  const lines = staged.filter((row) => row.role === 'data');
   const acceptedLines = (column: string) => {
     const at = header?.cells.find((cell) => normalisedName(cell.text) === normalisedName(column))?.column;
     if (at === undefined) return undefined;

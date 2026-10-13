@@ -15,12 +15,12 @@ import {
   layoutVersion,
   mapping,
   mappingVersion,
-  stagedRow,
 } from '../db/schema.js';
 import {
   documentsInFileOrder,
   factsOfBatch,
   parsedOrDefect,
+  stagedRowCounts,
   type ImportDependencies,
 } from '../commands/import-common.js';
 import { rowsReadOf } from '../commands/outcomes.js';
@@ -116,11 +116,7 @@ export async function importOutcomes(
       .from(importDocument)
       .where(eq(importDocument.batchId, batch.id))
       .orderBy(...documentsInFileOrder);
-    const rowCounts = await context.tx
-      .select({ documentId: stagedRow.documentId, rows: sql<number>`count(*)::int` })
-      .from(stagedRow)
-      .where(and(eq(stagedRow.batchId, batch.id), eq(stagedRow.role, 'data')))
-      .groupBy(stagedRow.documentId);
+    const rowCounts = (await stagedRowCounts(context, batch.id)).byDocument;
     const outcomes = await context.tx
       .select()
       .from(importOutcome)
@@ -150,7 +146,7 @@ export async function importOutcomes(
         ...(masked === undefined ? {} : { referenceMasked: masked }),
         state: document.state,
         excluded: document.excluded,
-        rows: rowCounts.find((each) => each.documentId === document.id)?.rows ?? 0,
+        rows: rowCounts.get(document.id) ?? 0,
         ...(document.revisesDocumentId === null ? {} : { revisesDocumentId: document.revisesDocumentId }),
         ...(document.replacedByDocumentId === null ? {} : { replacedByDocumentId: document.replacedByDocumentId }),
       })),
