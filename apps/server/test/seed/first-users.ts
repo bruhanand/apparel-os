@@ -17,10 +17,14 @@ export const FIRST_USERS_FILE_VARIABLE = 'AOS_SEED_FIRST_USERS_FILE';
  */
 export const FIRST_USERS_FILE_NAME = /^SYNTHETIC-[A-Za-z0-9_-]+\.secrets\.json$/;
 
-/** SYNTHETIC settings (GC3-5 and POL-02.18 stay OPEN; the timezone is no KDPS value, RR-250). */
+/**
+ * SYNTHETIC settings (GC3-5 and POL-02.18 stay OPEN; the timezone is no KDPS value, RR-250). The timezone is the
+ * one the product owner gave for KDPS, so the seeded screens read as KDPS's will (RR-528; `PRD-MOD-017`); KDPS has
+ * not yet confirmed it in writing, and the setting stays labelled synthetic.
+ */
 const SYNTHETIC_SETTINGS = {
   origin: 'synthetic',
-  timezone: 'Etc/UTC',
+  timezone: 'Asia/Kolkata',
   passwordRules: { minimumLength: 12 },
   signInThrottling: { failureLimit: 5, windowSeconds: 600 },
   officeSessionLimits: { idleLockSeconds: 1800, absoluteSeconds: 28_800 },
