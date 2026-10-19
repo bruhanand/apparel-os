@@ -15,12 +15,13 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 `docs/README.md` is binding. When two documents disagree, the higher one wins:
 
 1. `docs/prd.md`: what the product does. Source of truth for requirements and vocabulary.
-2. `docs/kdps-policies.md`: what KDPS decided, within the options the PRD allows.
+2. `docs/kdps-policies.md`: the product owner's policy answers, within the options the PRD allows.
 3. `docs/design/`: how the system implements both. Never contradicts the two above.
 4. Code: implements the design.
 
-`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/questions-for-kdps.md` holds open questions for KDPS. `docs/plan/` (roadmap, stage folders with specs and tickets, open items, KDPS values, build rules), `docs/qa/` (hand-test scripts per stage and their results), `docs/data-notes/`, `docs/research/` and `docs/history/` (old reports, kept as they were) are not ranked: they decide nothing, and the plan follows `docs/phases.md`.
+`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/questions-for-kdps.md` holds the facts and confirmations the product owner asks KDPS, Accounts or the CA for. `docs/plan/` (roadmap, stage folders with specs and tickets, open items, KDPS values, build rules), `docs/qa/` (hand-test scripts per stage and their results), `docs/data-notes/`, `docs/research/` and `docs/history/` (old reports, kept as they were) are not ranked: they decide nothing, and the plan follows `docs/phases.md`.
 
+- **The product owner decides.** Every open question, business value and rule is settled by the product owner (`DEC-125`). KDPS, Accounts, the CA and other named people supply facts, files and confirmations when the product owner asks. Never write that a decision waits for KDPS, and never name KDPS as decider or blocker.
 - Fix the lower document to match the higher one. Never edit a higher document just to fit a lower one.
 - A business decision is never settled in design or code. Raise it against the PRD or the policies.
 - Use words exactly as the PRD's "Words used" tables define them, in docs and code. Add a new term there first.
@@ -31,7 +32,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 ## Never invent a value
 
 - Never invent a policy value, threshold, tolerance, account, rate, limit, formula, date or approver. Not in documents, not in code, not in configuration.
-- Mark every unknown as **OPEN** and name its owner: the product owner, the KDPS Owner, the CA or Accounts (or another PRD persona the PRD names as decider). Say which delivery stage it blocks.
+- Mark every unknown as **OPEN** and name its owner: the product owner (`DEC-125`). Name also whoever supplies the fact, such as KDPS, Accounts, the CA or another PRD persona. Say which delivery stage it blocks.
 - Synthetic test data is allowed only when it is labelled as synthetic. It never becomes a default.
 - An example in the PRD or policies (such as "30-, 15- and 7-day reminders") is not a setting until a signed policy makes it one.
 
@@ -44,7 +45,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 - Design documents cite the requirement and policy IDs they implement: in their header and next to each rule they apply. Code and tests cite the ID where a rule is enforced.
 - Any change to `prd.md` or `kdps-policies.md` is logged first in `docs/decisions.md`: one short entry (`DEC-001` …) with date, who decided, question, options, choice and why, and the IDs changed. Then edit the document to match the entry.
 - The PRD and policy text belong to the user. Propose a decision entry and wait for approval unless the user decides the change directly.
-- Questions only KDPS or the CA can answer go in `docs/questions-for-kdps.md`, grouped by person, in plain language, and are tracked in `docs/plan/kdps-values.md`. Questions for the product owner go in `docs/plan/open-items.md`.
+- Every open question goes in `docs/plan/open-items.md`, owned by the product owner. Requests for facts from KDPS, Accounts or the CA go in `docs/questions-for-kdps.md`, grouped by the person who holds the fact, in plain language, and are tracked in `docs/plan/kdps-values.md`.
 - `node tools/link-check/check.mts` (`pnpm check:links`) checks that every relative link in `docs/` and this file resolves and every cited `PRD-`, `POL-` and `DEC-` ID exists. It skips `docs/history/` and files git ignores. It reads no meaning: a passing check is not proof that the documents agree.
 
 
@@ -71,7 +72,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 
 ## Delivery
 
-Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before KDPS policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Stage 1 fixes the stock and money recording rules; each later live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; Hindi for stages 1 to 5 arrives in stage 5 and for stage 6 in stage 6; email, WhatsApp and SMS messaging arrive in stage 5; before then nothing is sent, and alerts reach people in My work (DEC-099, `PRD-EXC-013`).
+Build in the six stages of `docs/phases.md`: shared foundation, goods-in, stock movement, store day, financial control, people and planning. Design, development and synthetic-data testing may proceed before policy signatures. Enable each policy-dependent live operation only after the required policy is signed and its real values, authorities and evidence are configured and validated. Stage 1 fixes the stock and money recording rules; each later live operational stage records its stock and money effects from its first enabled operation. Design offline billing in stage 1; enable it only under the signed Offline operation policy. Screens are English first; Hindi for stages 1 to 5 arrives in stage 5 and for stage 6 in stage 6; email, WhatsApp and SMS messaging arrive in stage 5; before then nothing is sent, and alerts reach people in My work (DEC-099, `PRD-EXC-013`).
 
 During the side-by-side test, the earlier POS keeps selling and stays the system of record. Its daily sales report and stock-on-hand (SOH) are imported into the Railway test setup for checking only; they never move stock (`PRD-LIF-014`). Stores switch over one at a time at a day close, but only on production hosting, which is chosen before the first switch (`PRD-LIF-026`).
 
@@ -129,7 +130,7 @@ The plan lives in `docs/plan/`. Each stage has a folder (`docs/plan/stage-1/`); 
 
 Work runs through the skills in `.claude/skills/` (decided by the product owner, 6 Oct 2026); they replace the earlier separate review-and-recheck loop:
 
-1. **Grill.** `/grill-with-docs` settles with the product owner only what the PRD, the policies and the designs leave open. Business answers go up as "Document order" says; KDPS values go to `docs/questions-for-kdps.md`.
+1. **Grill.** `/grill-with-docs` settles with the product owner only what the PRD, the policies and the designs leave open. The product owner settles business answers, as "Document order" says; facts from KDPS go to `docs/questions-for-kdps.md`.
 2. **Spec and tickets.** `/to-spec` and `/to-tickets`, published as "Agent skills" says. Each ticket has `Status:`, `Blocked by:`, what to build, the design sections and IDs it follows, and when it is done.
 3. **Build.** `/implement` for a ticket or `/implement-spec` for a spec's ticket graph: test first with `/tdd`, reviewed with `/code-review`, as those skills say. Cite the PRD, policy or decision ID where a rule is enforced. A design detail found while coding is edited in the design in the same change.
 4. **Close.** Set the ticket's status, note any follow-up in `docs/plan/open-items.md` with its owner and the gate it blocks, and update `docs/STATUS.md`. Commit subjects start with the ticket label (`S1-F01-T04: idempotency helper`).

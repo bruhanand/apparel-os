@@ -1300,3 +1300,13 @@
 - **Why.** An approved but unpublished opening batch is the unit's opening plan (`DEC-117`), verified before the switch, and posts only at the Store's switch (`POL-14.07`, `PRD-LIF-026`). Recording the request at the verification would post it before the switch.
 - **Changed.** No PRD or policy text changes: `DEC-097` is a decision, not a PRD or policy bullet. imports-and-opening-data 10.6; ticket `S1-F13-T03`.
 
+## DEC-125 — The product owner decides every question; KDPS, Accounts and the CA supply facts
+
+- **Date:** 19 Oct 2026 · **Decided by:** product owner · **Report item:** owner's instruction, 19 Oct 2026: agents kept naming KDPS as decider and blocker
+- **Question.** Who settles the open questions, business values and rules: KDPS, as `AGENTS.md` and the owner columns said, or the product owner?
+- **Options.** KDPS settles its policy answers and values, and the product owner builds to them · The product owner settles every question and value; KDPS, Accounts, the CA and other named people supply facts, files and confirmations when the product owner asks.
+- **Choice.** The second option. Apparel OS is the product owner's design for KDPS: KDPS adapts to the workflow it is given. No decision waits for KDPS.
+- **Why.** The product owner is the only one building Apparel OS and takes every decision. The documents named KDPS as decider, so agents asked KDPS questions it cannot settle and listed KDPS as a blocker.
+- **Changed.** No PRD or `kdps-policies.md` text changed. `AGENTS.md`: "Document order" (new decider bullet, rank 2 wording), "Never invent a value" (owner), "Alignment rules" (where questions go), "Delivery" (policy signatures wording), "How we work" step 1. `docs/README.md`: rank 2 and the questions-file rows. `docs/questions-for-kdps.md`: heading and banner; the file name is kept because links point at it. `docs/plan/open-items.md`: §1 rows 1 to 3 marked done or partly done; row 11 added. `docs/plan/kdps-values.md` and `open-items.md`: the owner column of 134 RR rows now reads "Product owner; facts from …" (section 6, confirmed values, unchanged).
+- **Open.** Who signs a policy is not settled here: open item 11 in `docs/plan/open-items.md`. `kdps-policies.md` keeps its own text until a separate decision changes it.
+

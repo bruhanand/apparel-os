@@ -9,7 +9,7 @@ When two documents disagree, the one higher in this order wins.
 | Rank | Document | What it says |
 | --- | --- | --- |
 | 1 | [prd.md](prd.md) | What the product does. The source of truth for requirements and for vocabulary, through its "Words used" tables. |
-| 2 | [kdps-policies.md](kdps-policies.md) | What KDPS has decided, within the options the PRD allows. |
+| 2 | [kdps-policies.md](kdps-policies.md) | The product owner's policy answers, within the options the PRD allows. |
 | 3 | [design/](design/README.md) | How the system implements the PRD and the KDPS policies. A design document may never contradict either of them. |
 | 4 | Code | Implements the design. |
 
@@ -23,7 +23,7 @@ When two documents disagree, the one higher in this order wins.
 | [prd.md](prd.md), [kdps-policies.md](kdps-policies.md) | Ranks 1 and 2 | Everyone |
 | [phases.md](phases.md) | The six delivery stages and their exit checks | Everyone |
 | [decisions.md](decisions.md) | Log of every change to the PRD and policies (`DEC-nnn`): question, options, choice, why. The entry comes first; the edit follows | Everyone |
-| [questions-for-kdps.md](questions-for-kdps.md) | What only KDPS or the CA can answer, by person, in plain language | You, KDPS |
+| [questions-for-kdps.md](questions-for-kdps.md) | Facts and confirmations asked of KDPS, Accounts or the CA, by person, in plain language. The product owner decides | You, KDPS |
 | [design/](design/README.md) | Rank 3. One folder per area: `access/`, `architecture/`, `calculations/`, `finance/`, `masters/`, `platform/`, `pos/`, `stock/`, `ui/` | Builders |
 | [plan/](plan/roadmap.md) | How the stages are built: [roadmap.md](plan/roadmap.md) (all stages and features), [stage-1/](plan/stage-1/README.md) (the current stage: one folder per feature with its spec and tickets), [open-items.md](plan/open-items.md) (questions for you and builders), [kdps-values.md](plan/kdps-values.md) (what KDPS must answer before going live), [how-we-build.md](plan/how-we-build.md) (build rules), [coverage.md](plan/coverage.md) (which feature delivers each PRD rule) | You and builders |
 | [qa/](qa/stage-1/manual-qa.md) | Hand-test scripts per stage: what was built and why, and the cases to run on `dev`, with their results | You |
