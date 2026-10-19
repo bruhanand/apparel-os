@@ -178,3 +178,11 @@ The build follows the `DEC-105` and `DEC-112` baseline picks now. Each confirmer
 | RR-184 | KDPS Owner 40; `DEC-053` | Does the earlier POS accept the approved PT export in the KDPS layout | KDPS Owner | S2-F04 | Live: the side-by-side test | Yes |
 | RR-197 | `DEC-112`: GC6-4, GC6-6, GC6-8; KDPS Owner 37, 59; D-4 | Confirm the import picks for KDPS: a separate person confirms each new or changed layout and mapping version, and who the confirmers are; on `kdps-test`, files with customer-contact columns refused before storing; opening files staged and validated there as a rehearsal that never publishes | KDPS Owner | S1-F06, S1-F13, S2-F12 | Live S1 (layout confirmation); the side-by-side test | Yes |
 | RR-198 | `DEC-112`: GC4-2, GC4-4; CA 18, Accounts 21; `POL-09.01` | Confirm the posting-map workflow (an Accounts maker, a different Accounts approver in the app, the CA's evidence attached or referenced before a version takes effect, one piece of evidence possibly covering a named set of versions) and one journal series per book and financial year. This is not the Accounts and CA approval of the rules themselves | Accounts, CA | S1-F09, S1-F10 | Live S2 (first live posting) | Yes |
+
+## 6. Confirmed values
+
+Values given in chat, recorded here until KDPS confirms them in writing. Each is recorded with its source. A confirmed value is not a policy change, so it needs no entry in `decisions.md` unless it changes a PRD or policy rule.
+
+| RR | Value | Source | Owner | Affects | Blocks at | Synthetic work proceeds |
+| --- | --- | --- | --- | --- | --- | --- |
+| RR-528 | Organisation timezone: `Asia/Kolkata` (IANA name). Set through `configuration` (`DEC-118`, `PRD-MOD-017`; the value is a KDPS value, since no PRD or policy text names one) | Given by the product owner in chat, 19 Oct 2026. KDPS has not yet confirmed it in writing; the dev test Organisation `SYN-ORG-A` still holds `Etc/UTC` from the synthetic seed | Product owner; KDPS to confirm in writing | `configuration`; every time on screen and every business date | Live S1: KDPS's Organisation, set up with this value | Yes, labelled synthetic work keeps `Etc/UTC` |
