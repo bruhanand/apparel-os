@@ -19,7 +19,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 3. `docs/design/`: how the system implements both. Never contradicts the two above.
 4. Code: implements the design.
 
-`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/questions-for-kdps.md` holds open questions for KDPS. `docs/plan/` (roadmap, stage folders with specs and tickets, open items, KDPS values, build rules), `docs/data-notes/`, `docs/research/` and `docs/history/` (old reports, kept as they were) are not ranked: they decide nothing, and the plan follows `docs/phases.md`.
+`docs/phases.md` sets delivery order only; the PRD and policies win over it. `docs/decisions.md` logs why the PRD or policies changed. `docs/questions-for-kdps.md` holds open questions for KDPS. `docs/plan/` (roadmap, stage folders with specs and tickets, open items, KDPS values, build rules), `docs/qa/` (hand-test scripts per stage and their results), `docs/data-notes/`, `docs/research/` and `docs/history/` (old reports, kept as they were) are not ranked: they decide nothing, and the plan follows `docs/phases.md`.
 
 - Fix the lower document to match the higher one. Never edit a higher document just to fit a lower one.
 - A business decision is never settled in design or code. Raise it against the PRD or the policies.

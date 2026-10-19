@@ -26,6 +26,7 @@ When two documents disagree, the one higher in this order wins.
 | [questions-for-kdps.md](questions-for-kdps.md) | What only KDPS or the CA can answer, by person, in plain language | You, KDPS |
 | [design/](design/README.md) | Rank 3. One folder per area: `access/`, `architecture/`, `calculations/`, `finance/`, `masters/`, `platform/`, `pos/`, `stock/`, `ui/` | Builders |
 | [plan/](plan/roadmap.md) | How the stages are built: [roadmap.md](plan/roadmap.md) (all stages and features), [stage-1/](plan/stage-1/README.md) (the current stage: one folder per feature with its spec and tickets), [open-items.md](plan/open-items.md) (questions for you and builders), [kdps-values.md](plan/kdps-values.md) (what KDPS must answer before going live), [how-we-build.md](plan/how-we-build.md) (build rules), [coverage.md](plan/coverage.md) (which feature delivers each PRD rule) | You and builders |
+| [qa/](qa/stage-1/manual-qa.md) | Hand-test scripts per stage: what was built and why, and the cases to run on `dev`, with their results | You |
 | [data-notes/](data-notes/README.md) | Notes on the KDPS data by topic: layouts, codes, offers, data quality, fit with the PRD | Builders |
 | [data-from-kdps/](data-from-kdps/README.md) | Raw data KDPS sent (June–July 2026). Git-ignored; only its READMEs are tracked | Builders |
 | [research/](research/discount-patterns-research.md) | Reference research for later designs (discount patterns) | Builders, later |
