@@ -234,6 +234,9 @@ describe('changing a device’s units (offline-counter 12.1, 4.3)', () => {
       { startsOn: from, units: [w.stores.wholeStore, w.stores.counterOtherRegistration].sort() },
       { startsOn: later, units: [w.stores.counterOtherRegistration] },
     ]);
+    // A device revoked before its change shows none: it bills for nothing again.
+    expect((await w.end(device.deviceId, 'revocation')).status).toBe(200);
+    expect((await listed())?.scheduledUnits).toEqual([]);
   });
 
   it('PRD-ORG-005 PRD-MOD-010 the refusals: not Active, a past date, a change scheduled on that date or later, the same list, a unit not of the Store', async () => {

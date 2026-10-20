@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { permissionRegistry } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
-import { migrationSetFolder, PinoLoggerService, restoreIdentityAuthorities } from './kernel/index.js';
+import { migrationSetFolder, PinoLoggerService, restoreIdentityAuthorities, RestoreRegistry } from './kernel/index.js';
 import { OrganisationKeys } from './modules/access/index.js';
 import { Audit } from './modules/audit/index.js';
 import { restoreRegistry } from './restore-participants.js';
@@ -51,6 +51,21 @@ describe('the restore participants (backup-and-restore 10.1, 10.2)', () => {
     expect(declared.filter((type) => !answered.has(type) && NOT_ATTACHED[type] === undefined)).toEqual([]);
     // The list holds no type that is answered for, or that is no longer declared.
     expect(Object.keys(NOT_ATTACHED).filter((type) => answered.has(type) || !declared.includes(type))).toEqual([]);
+  });
+
+  it('RR-535 is refused when an actor reference has no participant answering for users and service identities', () => {
+    // A user or a service identity named by a column is proved against both kinds (backup-and-restore 10.4).
+    expect(
+      () =>
+        new RestoreRegistry([
+          {
+            unit: 'synthetic',
+            tier: 0,
+            tables: ['synthetic.event'],
+            actorReferences: [{ table: 'synthetic.event', idColumn: 'actor_id' }],
+          },
+        ]),
+    ).toThrow('No restore participant answers for the actor kind user');
   });
 
   it('runs in tier order, kernel first', () => {

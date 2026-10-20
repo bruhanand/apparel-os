@@ -424,6 +424,12 @@ export class RestoreRegistry {
         if (reference.kindColumn !== undefined) column(reference.kindColumn);
       }
     }
+    // An actor reference is proved against the users and the service identities, so both must be answered for (10.4).
+    if (participants.some((participant) => (participant.actorReferences ?? []).length > 0)) {
+      for (const kind of ['user', 'service-identity'] as const) {
+        if (!actors.has(kind)) throw new Error(`No restore participant answers for the actor kind ${kind}`);
+      }
+    }
     this.participants = [...participants].sort((a, b) => a.tier - b.tier || (a.unit < b.unit ? -1 : 1));
     this.#owners = owners;
     this.#actors = actors;
@@ -541,8 +547,8 @@ export class RestoreRegistry {
 
   /**
    * That every identifier of an actor reference names a user or a service identity the database holds, and, where the
-   * row keeps its kind, one of that kind (10.4; RR-535). Without a participant answering for both kinds the reference
-   * cannot be proved: a failure, never skipped.
+   * row keeps its kind, one of that kind (10.4; RR-535). The registry is refused when no participant answers for both
+   * kinds, so no actor reference is ever skipped.
    */
   private async resolveActors(
     context: ParticipantContext,
@@ -552,16 +558,10 @@ export class RestoreRegistry {
     const check = `${reference.table}.${reference.idColumn} -> user or service identity`;
     const users = this.#actors.get('user');
     const serviceIdentities = this.#actors.get('service-identity');
+    if (users === undefined || serviceIdentities === undefined) throw new Error('Checked in the constructor');
     const id = column(reference.idColumn);
+    // An actor record's table keeps it by `id`, as every record a participant answers for (ReferencedRecord.table).
     const holds = (table: string) => sql`exists (select 1 from ${identifier(table)} t where t.id = r.id)`;
-    if (users === undefined || serviceIdentities === undefined) {
-      const [count] = await rowsOf<{ n: string }>(
-        context,
-        sql`select count(distinct ${id})::text as n from ${identifier(reference.table)}`,
-      );
-      const failed = Number(count?.n ?? 0);
-      return { unit, check, passed: false, checked: failed, failed };
-    }
     const kind = reference.kindColumn === undefined ? sql`null::text` : column(reference.kindColumn);
     const resolves =
       reference.kindColumn === undefined

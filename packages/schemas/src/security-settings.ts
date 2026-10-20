@@ -4,8 +4,9 @@ import { passwordRulesSchema, sessionLimitsSchema, settingOriginSchema, signInTh
 
 // Changing an essential security setting after setup (access-and-approvals 3.3, 9.11; code-house-rules 7.3, 12.14;
 // POL-02.06, POL-02.07, PRD-MOD-010; DEC-118, RR-334; S1-F01-T25): the sign-in throttling, the password rules, the
-// office session limits and, since S1-F12-T05 (RR-494; POL-02.18), the shared POS session limits. A change is a new version, prepared by a person with edit on `access.setting` and approved by
-// a different authorised person with approve on it, with a fresh authenticator code. No value here is a default: the
+// office session limits and, since S1-F12-T05 (RR-494; POL-02.18), the shared POS session limits. A change is a new
+// version, prepared by a person with edit on `access.setting` and approved by a different authorised person with
+// approve on it, with a fresh authenticator code. No value here is a default: the
 // preparer states every value and its origin (AGENTS.md "Never invent a value").
 
 /** The essential security settings that change this way (access-and-approvals 3.1, 3.2, 3.3; RR-494). */

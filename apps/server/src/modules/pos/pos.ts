@@ -237,7 +237,11 @@ export class Pos {
         state: device.state,
         storeId: row.storeId,
         units: unitsOn(row.id, date),
-        scheduledUnits: changeDates(row.id).map((day) => ({ startsOn: day, units: unitsOn(row.id, day) })),
+        // A Revoked or Ended device bills for nothing again, so a change scheduled before it ended is not shown.
+        scheduledUnits:
+          device.state === 'Revoked' || device.state === 'Ended'
+            ? []
+            : changeDates(row.id).map((day) => ({ startsOn: day, units: unitsOn(row.id, day) })),
         series: await seriesOfDevice(context, this.dependencies.numbering, row.id, date),
         replacesDeviceId: row.replacesDeviceId,
       });
