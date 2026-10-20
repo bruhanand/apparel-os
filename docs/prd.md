@@ -92,6 +92,7 @@ Business words:
 | Acceptance | Confirmation that goods meet the applicable identity, count, condition, policy and destination checks |
 | Accrual | Recording income, expense, assets or obligations when their applicable recognition event occurs, rather than only when cash moves |
 | Ageing | How long stock has been held, or how long a due has been unpaid |
+| Arrival | One delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Not a batch, which means goods tracked by lot and expiry |
 | AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
 | Bank transfer | A customer payment sent directly between bank accounts, confirmed by bank/provider evidence |

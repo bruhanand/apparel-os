@@ -1328,3 +1328,12 @@
 - **Choice.** The first. Each book's cost formula is moving weighted average or FIFO (`PRD-LED-014`, `DEC-031`), and the product owner chooses it and the pool mode for each book, as the book's approved cost setting. KDPS's current CA-approved method is a fact Accounts and the CA supply; it informs the choice and does not bind it. Periodic average stays out.
 - **Why.** The policy must stay inside the PRD (rank 1), and the product owner decides (`DEC-125`). Both formulas and both pool modes are built and proved on synthetic data (`S1-F10`).
 - **Changed.** `POL-09.06` and `POL-09.21` reworded (IDs kept). books-and-posting 2 and stock-ledger 6 wording; `questions-for-kdps.md` Accounts 1 and CA 2; `docs/plan/open-items.md` §1 row 8 and §6 item 1; `docs/plan/kdps-values.md` RR-071, RR-072. Still OPEN: each book's actual formula and pool (V-08, V-09), chosen by the product owner before the first live valued movement.
+
+## DEC-128 — One delivery is an Arrival
+
+- **Date:** 20 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 1 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** The product owner called one delivery a "batch", but the PRD keeps batch for goods tracked by lot and expiry (`PRD-MER-010`, `PRD-MER-011`). The PRD names the arrival record (`PRD-REC-003`) but never defines it. What is one delivery called?
+- **Options.** Arrival · Delivery · Batch.
+- **Choice.** Arrival: one delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Batch keeps its lot-and-expiry meaning.
+- **Why.** The PRD and the earlier RetailsOps goods plan already use arrival; batch would clash with lot tracking.
+- **Changed.** PRD "Words used": new word Arrival. Whether an Arrival also gives exactly one PT (`PRD-REC-015` allows supplemental PTs) waits for the PT discussion the product owner will open.
