@@ -52,7 +52,7 @@ Answers (the product owner accepted each recommendation):
 2. **Every booking line has a style code.**
 3. **How a booking is recorded and linked.** Someone uploads a document with the supplier, brand, destination, season and, per item, style code, colour, size and quantity ("can be present"). It is only a booking record. When the GRN is created it is linked to that booking. One booking can arrive in several Arrivals. Mostly lines will match; a line that does not match goes for review.
 4. **Booking data.** Header: supplier, brand, terms according to the brand, destination, season. Per item: style code, size, quantity and colour can be present.
-5. **GRN format** follows industry standards. A layout is to be drafted for the design from common practice, keeping the round 1 rule that the GRN holds quantities, never values.
+5. **GRN format** follows industry standards. A layout is to be drafted for the design from common practice ([grn-standard-fields.md](../research/grn-standard-fields.md)), keeping the round 1 rule that the GRN holds quantities, never values.
 
 ## Not settled
 
