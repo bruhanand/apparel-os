@@ -46,6 +46,14 @@ Answers (the product owner accepted each recommendation):
 1. **Goods owned before they arrive.** Inbound ownership stays in stage 2, as the PRD says (`PRD-ORG-017` to `PRD-ORG-019`, `PRD-ACP-020`).
 2. **Booking (owner's words).** A booking is made by brand, season and destination, with lines of style code, colour, size and quantity. Terms come from the brand. The PRD's other booking rules stay: approval against open-to-buy, ordered, delivered, outstanding and cancelled quantities, late-delivery follow-up, supplier confirmations, commitment and cancellation rules, and the actual supplier named (`PRD-BKG-001` to `PRD-BKG-011`, `PRD-BKG-013`, `PRD-BKG-014`).
 
+## Round 3, 20 Oct 2026 (owner's words, booking)
+
+1. **Booking terms** are filled according to the signed MOU with the supplier or the brand (the recommendation that the brand's terms fill in and a booking may change them was declined). What exactly this means is asked in round 4.
+2. **Every booking line has a style code.**
+3. **How a booking is recorded and linked.** Someone uploads a document with the supplier, brand, destination, season and, per item, style code, colour, size and quantity ("can be present"). It is only a booking record. When the GRN is created it is linked to that booking. One booking can arrive in several Arrivals. Mostly lines will match; a line that does not match goes for review.
+4. **Booking data.** Header: supplier, brand, terms according to the brand, destination, season. Per item: style code, size, quantity and colour can be present.
+5. **GRN format** follows industry standards. A layout is to be drafted for the design from common practice, keeping the round 1 rule that the GRN holds quantities, never values.
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.
