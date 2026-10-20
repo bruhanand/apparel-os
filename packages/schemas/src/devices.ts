@@ -125,6 +125,12 @@ export const deviceEnrolledSchema = z.strictObject({
 });
 export type DeviceEnrolled = z.infer<typeof deviceEnrolledSchema>;
 
+const deviceUnitSchema = z.strictObject({
+  businessUnitId: idSchema,
+  code: z.string().min(1),
+  kind: businessUnitKindSchema,
+});
+
 /** A billing device as the devices screen and the counter's enrolment page list it. */
 export const billingDeviceViewSchema = z.strictObject({
   deviceId: idSchema,
@@ -132,7 +138,12 @@ export const billingDeviceViewSchema = z.strictObject({
   label: z.string().min(1),
   state: deviceStateSchema,
   storeId: idSchema,
-  units: z.array(z.strictObject({ businessUnitId: idSchema, code: z.string().min(1), kind: businessUnitKindSchema })),
+  units: z.array(deviceUnitSchema),
+  /**
+   * Its scheduled unit changes (offline-counter 3.7, 12.1; RR-495; S1-F12-T04): each later date from which its list of
+   * units differs, with the whole list in force from that date, earliest first.
+   */
+  scheduledUnits: z.array(z.strictObject({ startsOn: businessDateSchema, units: z.array(deviceUnitSchema) })),
   series: z.array(deviceSeriesSchema),
   /** The device this one replaces, or null (offline-counter 3.5; S1-F12-T02). */
   replacesDeviceId: idSchema.nullable(),

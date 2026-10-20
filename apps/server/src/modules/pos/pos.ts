@@ -167,8 +167,9 @@ export class Pos {
   }
 
   /**
-   * The billing devices the reader may view, each with its state, its units on the date and its series (offline-counter
-   * 3.1, 4.4): every device, its Store's facts given to `allowed`, which keeps those its assignments cover (7.1 step 3).
+   * The billing devices the reader may view, each with its state, its units on the date, its scheduled later units
+   * (3.7; RR-495) and its series (offline-counter 3.1, 4.4): every device, its Store's facts given to `allowed`, which
+   * keeps those its assignments cover (7.1 step 3).
    */
   async billingDevices(
     context: TransactionContext,
@@ -187,8 +188,14 @@ export class Pos {
       context,
       visible.map((row) => row.id),
     );
+    // Every unit row in force on the date or later: today's units and the scheduled ones (3.7; RR-495).
     const unitRows = await context.tx
-      .select({ deviceId: billingDeviceUnit.billingDeviceId, unitId: billingDeviceUnit.businessUnitId })
+      .select({
+        deviceId: billingDeviceUnit.billingDeviceId,
+        unitId: billingDeviceUnit.businessUnitId,
+        from: sql<string>`lower(${billingDeviceUnit.validDuring})::text`,
+        to: sql<string | null>`upper(${billingDeviceUnit.validDuring})::text`,
+      })
       .from(billingDeviceUnit)
       .where(
         and(
@@ -196,11 +203,29 @@ export class Pos {
             billingDeviceUnit.billingDeviceId,
             visible.map((row) => row.id),
           ),
-          sql`${billingDeviceUnit.validDuring} @> ${date}::date`,
+          sql`(upper_inf(${billingDeviceUnit.validDuring}) or upper(${billingDeviceUnit.validDuring}) > ${date}::date)`,
         ),
       )
       .orderBy(asc(billingDeviceUnit.businessUnitId));
     const heads = await businessUnitHeads(context, [...new Set(unitRows.map((row) => row.unitId))]);
+    const unitsOn = (deviceId: string, day: string) =>
+      unitRows
+        .filter((unit) => unit.deviceId === deviceId && unit.from <= day && (unit.to === null || unit.to > day))
+        .flatMap((unit) => {
+          const head = heads.get(unit.unitId);
+          return head === undefined ? [] : [{ businessUnitId: head.id, code: head.code, kind: head.kind }];
+        });
+    // A change of units from a date starts the units it adds and ends those it drops there (3.7), so each later date
+    // a row starts or ends on is a scheduled change.
+    const changeDates = (deviceId: string) =>
+      [
+        ...new Set(
+          unitRows
+            .filter((unit) => unit.deviceId === deviceId)
+            .flatMap((unit) => [unit.from, unit.to])
+            .filter((day): day is string => day !== null && day > date),
+        ),
+      ].sort();
     const views: BillingDeviceView[] = [];
     for (const row of visible) {
       const device = devices.get(row.id);
@@ -211,12 +236,8 @@ export class Pos {
         label: device.label,
         state: device.state,
         storeId: row.storeId,
-        units: unitRows
-          .filter((unit) => unit.deviceId === row.id)
-          .flatMap((unit) => {
-            const head = heads.get(unit.unitId);
-            return head === undefined ? [] : [{ businessUnitId: head.id, code: head.code, kind: head.kind }];
-          }),
+        units: unitsOn(row.id, date),
+        scheduledUnits: changeDates(row.id).map((day) => ({ startsOn: day, units: unitsOn(row.id, day) })),
         series: await seriesOfDevice(context, this.dependencies.numbering, row.id, date),
         replacesDeviceId: row.replacesDeviceId,
       });

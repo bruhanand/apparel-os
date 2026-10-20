@@ -212,6 +212,30 @@ describe('changing a device’s units (offline-counter 12.1, 4.3)', () => {
     expect(after).toEqual([{ unit: w.stores.wholeStore, during: `[${w.setup.today()},${later})` }]);
   });
 
+  it('RR-495 the devices list shows a device’s scheduled later units with their start dates, earliest first', async () => {
+    const device = await w.activeDevice([w.stores.wholeStore]);
+    const listed = async () => (await w.listed(w.admin)).find((each) => each.deviceId === device.deviceId);
+    expect((await listed())?.scheduledUnits).toEqual([]);
+    const from = w.setup.day(5);
+    const later = w.setup.day(9);
+    expect((await change(device.deviceId, [w.stores.wholeStore, w.stores.counterOtherRegistration], from)).status).toBe(
+      200,
+    );
+    expect((await change(device.deviceId, [w.stores.counterOtherRegistration], later)).status).toBe(200);
+    const view = await listed();
+    // Today's units are unchanged until the first date (offline-counter 3.7).
+    expect(view?.units.map((unit) => unit.businessUnitId)).toEqual([w.stores.wholeStore]);
+    expect(
+      view?.scheduledUnits.map((each) => ({
+        startsOn: each.startsOn,
+        units: each.units.map((unit) => unit.businessUnitId).sort(),
+      })),
+    ).toEqual([
+      { startsOn: from, units: [w.stores.wholeStore, w.stores.counterOtherRegistration].sort() },
+      { startsOn: later, units: [w.stores.counterOtherRegistration] },
+    ]);
+  });
+
   it('PRD-ORG-005 PRD-MOD-010 the refusals: not Active, a past date, a change scheduled on that date or later, the same list, a unit not of the Store', async () => {
     const settingUp = await w.registered([w.stores.wholeStore]);
     expect(errorOf(await change(settingUp.deviceId, [w.stores.counterSameRegistration], w.setup.day(3))).code).toBe(

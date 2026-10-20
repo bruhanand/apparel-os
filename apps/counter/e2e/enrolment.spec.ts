@@ -90,6 +90,7 @@ async function answerTheApi(page: Page, server: Server): Promise<void> {
             state: server.publicKey === undefined ? 'Setting up' : 'Active',
             storeId: STORE_ID,
             units: [{ businessUnitId: UNIT_ID, code: 'SYN-UNIT', kind: 'whole-store' }],
+            scheduledUnits: [],
             series: [],
             replacesDeviceId: null,
           },

@@ -169,6 +169,8 @@ test('PRD-OFF-010 PRD-SEC-008 PRD-UXP-003 GC-8 test 12 the Admin enrols a device
     await device.getByLabel(new RegExp(counterUnit.code)).check();
     await change.click();
     await expect(device.getByRole('status').filter({ hasText: 'Units changed.' })).toBeVisible();
+    // RR-495: today's units stay as they are, and the scheduled ones show under them with their start date.
+    await expect(device).toContainText(new RegExp(`From \\d{1,2} \\w+ \\d{4}, units: .*${counterUnit.code}`));
   });
 
   // A second page of the same Admin, opened before the device is revoked, still offers Revoke and Retire on it.

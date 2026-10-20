@@ -14,6 +14,7 @@ import { useTimeZone } from '../shell/session';
 import { RefusalBanner } from '../sign-in/RefusalBanner';
 import { BillNumbering } from './BillNumbering';
 import { useBusinessToday } from './business-date';
+import { formatDate } from './format';
 import { Card, GrantedButton, inputClass, ListRead, Toolbar, useGranted } from './parts';
 
 // Setup › Devices, tills and bill series (ui-blueprint Setup; offline-counter 3.1, 3.2 step 1, 4.1, 4.4, 12.1;
@@ -381,6 +382,14 @@ function DeviceRow({ device }: { device: BillingDeviceView }) {
       <span className="text-body-sm">
         {t('devices.units.listed', { units: device.units.map((unit) => unit.code).join(', ') })}
       </span>
+      {device.scheduledUnits.map((change) => (
+        <span key={change.startsOn} className="text-body-sm text-text-2">
+          {t('devices.units.scheduled', {
+            from: formatDate(change.startsOn),
+            units: change.units.map((unit) => unit.code).join(', '),
+          })}
+        </span>
+      ))}
       {device.series.length === 0 ? (
         <span className="text-body-sm text-text-2">
           {t(device.state === 'Setting up' ? 'devices.series.after-enrolment' : 'devices.series.none')}
