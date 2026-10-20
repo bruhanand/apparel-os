@@ -41,10 +41,15 @@ Answers (the product owner accepted each recommendation):
 5. **One delivery is an Arrival** (`DEC-128`). Batch keeps its lot-and-expiry meaning.
 6. **PT making** is deferred: the product owner will open it. Agents do not raise it, including supplemental PTs, the costing profile per brand and the value of damaged goods.
 
+## Round 2, 20 Oct 2026
+
+1. **Goods owned before they arrive.** Inbound ownership stays in stage 2, as the PRD says (`PRD-ORG-017` to `PRD-ORG-019`, `PRD-ACP-020`).
+2. **Booking (owner's words).** A booking is made by brand, season and destination, with lines of style code, colour, size and quantity. Terms come from the brand. The PRD's other booking rules stay: approval against open-to-buy, ordered, delivered, outstanding and cancelled quantities, late-delivery follow-up, supplier confirmations, commitment and cancellation rules, and the actual supplier named (`PRD-BKG-001` to `PRD-BKG-011`, `PRD-BKG-013`, `PRD-BKG-014`).
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.
-- Booking, supplier-invoice matching, what is owed to the supplier, damage found later, stage 2 reports: the round on these was withdrawn as assumption-heavy. Start again with open questions.
+- Supplier-invoice matching, what is owed to the supplier and stage 2 reports: start with open questions. Booking was described in round 2; damage found later was agreed in round 2 (report, hold at once, a different person confirms, Operations follows up).
 - AI drafts and the file readers: not started. They feed PT making, so they wait for the owner's PT discussion too.
 
 ## PRD rules the answers above would change (not yet written as a decision)
