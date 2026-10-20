@@ -929,6 +929,7 @@ export const englishIndia = {
   'security.setting.access.sign-in-throttling': 'Sign-in throttling',
   'security.setting.access.password-rules': 'Password rules',
   'security.setting.access.office-session-limits': 'Office session limits',
+  'security.setting.access.shared-pos-session-limits': 'Shared POS session limits',
   'security.field.failureLimit': 'Failed sign-ins before slowing',
   'security.field.windowSeconds': 'Window (seconds)',
   'security.field.minimumLength': 'Least number of characters',
@@ -2104,6 +2105,8 @@ export const englishIndia = {
   'devices.none': 'No billing device is registered yet.',
   'devices.device': 'Device {code}',
   'devices.units.listed': 'Units: {units}',
+  // A till's scheduled later units (offline-counter 3.7; RR-495; S1-F12-T04).
+  'devices.units.scheduled': 'From {from}, units: {units}',
   'devices.series.after-enrolment': 'Its bill series are defined when it is enrolled.',
   'devices.series.none':
     'No bill series yet: the bill-number format or the financial year is not set, or a unit has no mapping.',

@@ -3,16 +3,17 @@ import { businessDateSchema, idSchema } from './common.js';
 import { passwordRulesSchema, sessionLimitsSchema, settingOriginSchema, signInThrottlingSchema } from './settings.js';
 
 // Changing an essential security setting after setup (access-and-approvals 3.3, 9.11; code-house-rules 7.3, 12.14;
-// POL-02.06, POL-02.07, PRD-MOD-010; DEC-118, RR-334; S1-F01-T25): the sign-in throttling, the password rules and the
-// office session limits. A change is a new version, prepared by a person with edit on `access.setting` and approved by
+// POL-02.06, POL-02.07, PRD-MOD-010; DEC-118, RR-334; S1-F01-T25): the sign-in throttling, the password rules, the
+// office session limits and, since S1-F12-T05 (RR-494; POL-02.18), the shared POS session limits. A change is a new version, prepared by a person with edit on `access.setting` and approved by
 // a different authorised person with approve on it, with a fresh authenticator code. No value here is a default: the
 // preparer states every value and its origin (AGENTS.md "Never invent a value").
 
-/** The essential security settings that change this way (access-and-approvals 3.1, 3.2, 3.3). */
+/** The essential security settings that change this way (access-and-approvals 3.1, 3.2, 3.3; RR-494). */
 export const securitySettingKeySchema = z.enum([
   'access.sign-in-throttling',
   'access.password-rules',
   'access.office-session-limits',
+  'access.shared-pos-session-limits',
 ]);
 export type SecuritySettingKey = z.infer<typeof securitySettingKeySchema>;
 
@@ -41,6 +42,7 @@ export const securitySettingVersionDraftSchema = z.discriminatedUnion('setting',
   draftOf('access.sign-in-throttling', signInThrottlingSchema),
   draftOf('access.password-rules', passwordRulesSchema),
   draftOf('access.office-session-limits', sessionLimitsSchema),
+  draftOf('access.shared-pos-session-limits', sessionLimitsSchema),
 ]);
 export type SecuritySettingVersionDraft = z.infer<typeof securitySettingVersionDraftSchema>;
 
@@ -85,6 +87,7 @@ export const securitySettingsSchema = z.strictObject({
       viewOf('access.sign-in-throttling', signInThrottlingSchema),
       viewOf('access.password-rules', passwordRulesSchema),
       viewOf('access.office-session-limits', sessionLimitsSchema),
+      viewOf('access.shared-pos-session-limits', sessionLimitsSchema),
     ]),
   ),
 });

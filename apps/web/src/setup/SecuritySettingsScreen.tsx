@@ -22,9 +22,9 @@ import { FormActions, RecordDrawer } from './RecordDrawer';
 import { stateIdOf } from './states';
 
 // Setup › Security settings (design-language 10.19; access-and-approvals 3.3, 9.11; POL-02.06, POL-02.07; DEC-118,
-// RR-334; S1-F01-T25): the sign-in throttling, the password rules and the office session limits, each with its version
-// in force and its origin, and a small form to prepare a new version, which a different authorised person decides from
-// My work with the approval panel. Every value is the preparer's: the form starts from the version in force and gives
+// RR-334; S1-F01-T25): the sign-in throttling, the password rules, the office session limits and the shared POS session
+// limits (POL-02.18; RR-494; S1-F12-T05), each with its version in force and its origin, and a small form to prepare a
+// new version, which a different authorised person decides from My work with the approval panel. Every value is the preparer's: the form starts from the version in force and gives
 // no default for the origin or when the change takes effect. The general settings screen waits for S1-F04.
 
 type SettingView = SecuritySettings['settings'][number];
@@ -37,6 +37,7 @@ const FIELDS: Record<SecuritySettingKey, readonly string[]> = {
   'access.sign-in-throttling': ['failureLimit', 'windowSeconds'],
   'access.password-rules': ['minimumLength'],
   'access.office-session-limits': ['idleLockSeconds', 'absoluteSeconds'],
+  'access.shared-pos-session-limits': ['idleLockSeconds', 'absoluteSeconds'],
 };
 
 function fieldLabel(field: string): MessageId {

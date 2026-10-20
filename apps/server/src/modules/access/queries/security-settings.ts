@@ -4,11 +4,12 @@ import { CommandDefect, type TransactionContext } from '../../../kernel/index.js
 import { setting, settingVersion } from '../db/schema.js';
 import { SETTING_FORMATS } from '../domain/sign-in-rules.js';
 
-/** The essential security settings, in the order the form shows them (design-language 10.19). */
+/** The essential security settings, in the order the form shows them (design-language 10.19; RR-494). */
 const KEYS: readonly SecuritySettingKey[] = [
   'access.sign-in-throttling',
   'access.password-rules',
   'access.office-session-limits',
+  'access.shared-pos-session-limits',
 ];
 
 /** An instant as the API writes it: ISO 8601 in UTC with milliseconds (code-house-rules 9). */

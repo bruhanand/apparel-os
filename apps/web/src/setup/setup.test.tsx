@@ -492,6 +492,21 @@ const securitySettings: SecuritySettings = {
         },
       ],
     },
+    {
+      setting: 'access.shared-pos-session-limits',
+      settingId: id(60),
+      inForceVersionId: id(61),
+      versions: [
+        {
+          id: id(61),
+          value: { idleLockSeconds: 900, absoluteSeconds: 43_200 },
+          origin: 'synthetic',
+          decision: 'Approved',
+          takesEffect: { kind: 'at-decision' },
+          validFrom: '2026-10-01T04:30:00.000Z',
+        },
+      ],
+    },
   ],
 };
 
@@ -513,6 +528,9 @@ describe('Setup › Security settings (design-language 10.19; access-and-approva
     expect(html).toContain('Idle lock (seconds) 1800');
     expect(html).toContain('Awaiting approval');
     expect(html).toContain('From 09 Oct 2026');
+    // RR-494: the shared POS session limits have a card of their own.
+    expect(html).toContain('Shared POS session limits');
+    expect(html).toContain('Idle lock (seconds) 900');
     expect(html).not.toContain('Needs');
   });
 

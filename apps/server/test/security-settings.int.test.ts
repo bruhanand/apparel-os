@@ -341,6 +341,33 @@ describe('changing a security setting after setup (access-and-approvals 3.3; tes
   });
 });
 
+describe('the shared POS session limits (access-and-approvals 3.3; POL-02.18; RR-494; S1-F12-T05)', () => {
+  it('PRD-ACS-006 are listed unset, and take effect only when a different authorised person approves a version', async () => {
+    // No value is chosen: the limits are policy 2's, OPEN (V-04). Every value here is SYNTHETIC.
+    const unset = await settingOf('access.shared-pos-session-limits');
+    expect(unset).toMatchObject({ settingId: null, inForceVersionId: null, versions: [] });
+    const change = await prepared({
+      setting: 'access.shared-pos-session-limits',
+      value: { idleLockSeconds: 900, absoluteSeconds: 43_200 },
+      origin: 'synthetic',
+      takesEffect: atDecision,
+    });
+    const waiting = await settingOf('access.shared-pos-session-limits');
+    expect(waiting.inForceVersionId).toBeNull();
+    expect(waiting.versions[0]).toMatchObject({ id: change.versionId, decision: 'Awaiting approval' });
+    // The preparer cannot approve it, though they hold approve (POL-02.08).
+    expect(errorOf(await decide(admin, change)).code).toBe('access.self-preparation');
+    await approved(change);
+    const after = await settingOf('access.shared-pos-session-limits');
+    expect(after.inForceVersionId).toBe(change.versionId);
+    expect(after.versions[0]).toMatchObject({
+      decision: 'Approved',
+      value: { idleLockSeconds: 900, absoluteSeconds: 43_200 },
+      origin: 'synthetic',
+    });
+  });
+});
+
 describe('an approved version applies at once (access-and-approvals 3.3; DEC-118)', () => {
   it('DEC-116 a new throttling applies to the next sign-in', async () => {
     await approved(
