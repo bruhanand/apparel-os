@@ -1,6 +1,6 @@
 # S1-F12-T05 — The shared POS session limits on Security settings
 
-Status: in-progress
+Status: done
 Blocked by: S1-F01-T25 (done; changing essential security settings); S1-F12-T01 (done; the setting `access.shared-pos-session-limits`)
 Feature: [S1-F12 Billing devices and device bill series](../../spec.md)
 
@@ -22,3 +22,8 @@ Setup › Security settings offers a shared POS session limits card (`access.sha
 - A shared POS session limits version prepared by one person takes effect only when a different authorised person approves it, and a device's shared POS session reads it
 - The card shows "not set" while the setting is not set, and the version in force once approved
 - No value is chosen; the design's bullet says what is built; RR-494 is closed
+
+## Notes
+
+- **Built** (20 Oct 2026; access-and-approvals 3.3 "As built"): `access.shared-pos-session-limits` added to the security settings key, draft and view schemas, the read's keys and the screen's fields, with its card name; the server's prepare and decide were already generic over `SETTING_SCHEMAS`. Tests: `security-settings.int.test.ts` (listed unset, prepared, refused to its preparer, approved by another) and `setup.test.tsx` (the card with its version in force). No value chosen; test values are SYNTHETIC.
+- The device sign-in reads the setting through the same `access.setting` rows and format (`sign-in-rules.ts`), already proved by the S1-F12-T01 tests that write it directly; no new test drives a device sign-in after an approval.

@@ -1,6 +1,6 @@
 # S1-F12-T04 — A till's scheduled later units on screen
 
-Status: in-progress
+Status: done
 Blocked by: S1-F12-T02 (done; a device's units change from a date)
 Feature: [S1-F12 Billing devices and device bill series](../../spec.md)
 
@@ -21,3 +21,9 @@ Setup › Devices, tills and bill series shows, under a till's units, its schedu
 - A change of units from a later date shows on the devices screen, under today's units, with its date and its whole list of units; today's units are unchanged until that date
 - A device with no later change shows none
 - The design's "Change units" bullet says what is built; RR-495 is closed
+
+## Notes
+
+- **Built** (20 Oct 2026; offline-counter 3.7 "As built"): `scheduledUnits` on `billingDeviceViewSchema`; `Pos.billingDevices` reads every unit row in force on the date or later and lists each later date a row starts or ends on with the whole list then; the screen shows "From <date>, units: <codes>". Tests: `billing-devices-lifecycle.int.test.ts` and the journey `billing-devices.spec.ts`; the counter's enrolment test answers the new field.
+- **Review fix** (20 Oct 2026): a Revoked or Ended device shows no scheduled units, since revoking or retiring does not end its unit rows. A display choice, not a business rule; tell the builders if it should show them.
+- No screen unit test: the screen is covered by the browser journey.

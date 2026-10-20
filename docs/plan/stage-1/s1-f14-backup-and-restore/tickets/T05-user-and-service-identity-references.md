@@ -1,6 +1,6 @@
 # S1-F14-T05 — The restore's check of user and service-identity references
 
-Status: in-progress
+Status: done
 Blocked by: S1-F14-T03 (done; the restore's checks run through the registry)
 Feature: [S1-F14 Backup, restore and export proof](../../spec.md)
 
@@ -23,3 +23,9 @@ The restore check that every column naming a user or a service identity names on
 - Every column naming a user or a service identity in the Organisation database is checked by the restore and the recheck, and a test fails when one is added undeclared
 - An identifier no user or service identity holds, or one of the wrong kind, fails its check with its count
 - The design's 10.4 bullet says what is built; RR-535 is closed
+
+## Notes
+
+- **Built** (20 Oct 2026; backup-and-restore 10.4): `ActorReference` and `ReferencedRecord.actor` in the restore contract; `access` marks `access.app_user` and `access.service_identity` as the two actor kinds; the actor columns of `kernel` (`idempotency_key`, `outbox_event`, `recovery_event`), `access` (`effective_grant`), `audit` (`audit_record`, kind kept), `exceptions` (`exception_event`) and `files-imports` (`attachment`, `file_receipt`, kind kept) are declared, replacing the earlier `notReferences` list. Tests: `backup.int.test.ts` (checks pass as backed up; every `actor_id` and `_by_id` column declared; a dangling actor and a wrong kind fail) and `restore-participants.test.ts`.
+- **Beyond the ticket**: `kernel.recovery_event.actor_id` was in no list before and is now checked; the registry is refused at start when actor references exist and no participant answers for both kinds, rather than failing at check time (review, 20 Oct 2026).
+- Not proved here: the check passes after a real restore through `restore.int.test.ts` and `restore-drill.int.test.ts`, which run every participant's checks and still pass.
