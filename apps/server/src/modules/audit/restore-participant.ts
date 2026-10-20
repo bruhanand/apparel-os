@@ -57,9 +57,7 @@ export const auditRestoreParticipant: RestoreParticipant = {
   unit: 'audit',
   tier: 1,
   tables: tablesOf(auditTables),
-  notReferences: {
-    'audit.audit_record.actor_id': 'a user or a service identity',
-  },
+  actorReferences: [{ table: 'audit.audit_record', idColumn: 'actor_id', kindColumn: 'actor_kind' }],
   async latestSeal(context) {
     const rows = await context.tx.execute<{ block_number: string; hash: string }>(
       sql`select block_number::text, hash from audit.audit_seal order by block_number desc limit 1`,

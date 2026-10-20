@@ -13,17 +13,20 @@ export const accessRestoreParticipant: RestoreParticipant = {
   tier: 1,
   tables: tablesOf(accessTables),
   records: [
-    { recordType: 'access.user', table: 'access.app_user', suffixes: ['user_id'] },
+    { recordType: 'access.user', table: 'access.app_user', suffixes: ['user_id'], actor: 'user' },
     { recordType: 'access.role', table: 'access.role', suffixes: ['role_id'] },
     { recordType: 'access.role_assignment', table: 'access.role_assignment', suffixes: ['role_assignment_id'] },
-    { recordType: 'access.service_identity', table: 'access.service_identity', suffixes: ['service_identity_id'] },
+    {
+      recordType: 'access.service_identity',
+      table: 'access.service_identity',
+      suffixes: ['service_identity_id'],
+      actor: 'service-identity',
+    },
     { recordType: 'access.approval_decision', table: 'access.approval_decision', suffixes: ['approval_decision_id'] },
     { recordType: 'access.approval_use', table: 'access.approval_use', suffixes: ['approval_use_id'] },
     { recordType: 'access.device', table: 'access.device', suffixes: ['device_id'] },
   ],
-  notReferences: {
-    'access.effective_grant.actor_id': 'a user or a service identity',
-  },
+  actorReferences: [{ table: 'access.effective_grant', idColumn: 'actor_id' }],
   async keyVersions(context) {
     const rows = await context.tx.execute<{ identifier: string | null; uses: string }>(
       sql`select secret_key_version as identifier, count(*)::text as uses

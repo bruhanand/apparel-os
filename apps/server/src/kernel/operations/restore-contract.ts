@@ -222,6 +222,22 @@ export interface ReferencedRecord {
   readonly suffixes?: readonly string[];
   /** The same for columns that hold an array of its identifiers. */
   readonly arraySuffixes?: readonly string[];
+  /** The kind of actor this record is, where an actor reference may name it (10.4; RR-535). */
+  readonly actor?: ActorKind;
+}
+
+/** The two kinds of actor a command runs as (access-and-approvals 2.3): a user, or a service identity. */
+export type ActorKind = 'user' | 'service-identity';
+
+/**
+ * A column naming a user or a service identity, such as `actor_id` (backup-and-restore 10.4; RR-535): it is checked to
+ * name one of the participant's actor records, and, where the row keeps which kind it names, one of that kind.
+ */
+export interface ActorReference {
+  readonly table: string;
+  readonly idColumn: string;
+  /** The column that says which kind of actor the row names, holding `user` or `service-identity`. */
+  readonly kindColumn?: string;
 }
 
 /** One key version an Organisation's data needs, and how many encrypted values or files name it. */
@@ -249,8 +265,8 @@ export interface RestoreParticipant {
   readonly records?: readonly ReferencedRecord[];
   /** References it holds by type and identifier. */
   readonly typedReferences?: readonly TypedReference[];
-  /** Columns that look like references by their name and are not, with the reason, such as an actor that may be a user or a service identity. */
-  readonly notReferences?: Readonly<Record<string, string>>;
+  /** Its columns that name a user or a service identity (10.4; RR-535). */
+  readonly actorReferences?: readonly ActorReference[];
   /** Totals beyond the generic ones, such as the highest number of each series (3.2 step 2). */
   totals?(context: ParticipantContext): Promise<ControlTotal[]>;
   /** Its own invariants, such as every journal balancing (5.1 "Module invariants"). */
@@ -366,11 +382,14 @@ export async function tableTotals(context: ParticipantContext, tables: readonly 
 export class RestoreRegistry {
   readonly participants: readonly RestoreParticipant[];
   readonly #owners: ReadonlyMap<string, { readonly participant: RestoreParticipant; readonly table: string }>;
+  /** The table holding each kind of actor, as the participant answering for it declares (10.4; RR-535). */
+  readonly #actors: ReadonlyMap<ActorKind, string>;
 
   constructor(participants: readonly RestoreParticipant[]) {
     const units = new Set<string>();
     const tables = new Map<string, string>();
     const owners = new Map<string, { participant: RestoreParticipant; table: string }>();
+    const actors = new Map<ActorKind, string>();
     for (const participant of participants) {
       if (units.has(participant.unit)) throw new Error(`Two restore participants for ${participant.unit}`);
       units.add(participant.unit);
@@ -392,10 +411,22 @@ export class RestoreRegistry {
           throw new Error(`Two participants answer for ${record.recordType}`);
         }
         owners.set(record.recordType, { participant, table: record.table });
+        if (record.actor !== undefined) {
+          if (actors.has(record.actor)) throw new Error(`Two records answer for the actor kind ${record.actor}`);
+          actors.set(record.actor, record.table);
+        }
+      }
+      for (const reference of participant.actorReferences ?? []) {
+        if (!participant.tables.includes(reference.table)) {
+          throw new Error(`${participant.unit} declares an actor reference of a table it does not own`);
+        }
+        column(reference.idColumn);
+        if (reference.kindColumn !== undefined) column(reference.kindColumn);
       }
     }
     this.participants = [...participants].sort((a, b) => a.tier - b.tier || (a.unit < b.unit ? -1 : 1));
     this.#owners = owners;
+    this.#actors = actors;
   }
 
   /** The latest audit seal, read in the same snapshot as everything else (3.2 step 3). */
@@ -456,9 +487,12 @@ export class RestoreRegistry {
       }
       const columns = await columnsOf(context, participant.tables);
       const schemas = new Set(participant.tables.map((table) => table.split('.')[0]));
+      const actorColumns = new Set(
+        (participant.actorReferences ?? []).map((reference) => `${reference.table}.${reference.idColumn}`),
+      );
       for (const each of columns) {
         const qualifiedColumn = `${each.table_name}.${each.column_name}`;
-        if (each.has_foreign_key || participant.notReferences?.[qualifiedColumn] !== undefined) continue;
+        if (each.has_foreign_key || actorColumns.has(qualifiedColumn)) continue;
         const target = named.find(
           (candidate) =>
             candidate.array === each.is_array &&
@@ -498,8 +532,49 @@ export class RestoreRegistry {
           results.push(await this.resolve(context, participant.unit, name, ids, owner.table));
         }
       }
+      for (const reference of participant.actorReferences ?? []) {
+        results.push(await this.resolveActors(context, participant.unit, reference));
+      }
     }
     return results;
+  }
+
+  /**
+   * That every identifier of an actor reference names a user or a service identity the database holds, and, where the
+   * row keeps its kind, one of that kind (10.4; RR-535). Without a participant answering for both kinds the reference
+   * cannot be proved: a failure, never skipped.
+   */
+  private async resolveActors(
+    context: ParticipantContext,
+    unit: string,
+    reference: ActorReference,
+  ): Promise<CheckResult> {
+    const check = `${reference.table}.${reference.idColumn} -> user or service identity`;
+    const users = this.#actors.get('user');
+    const serviceIdentities = this.#actors.get('service-identity');
+    const id = column(reference.idColumn);
+    const holds = (table: string) => sql`exists (select 1 from ${identifier(table)} t where t.id = r.id)`;
+    if (users === undefined || serviceIdentities === undefined) {
+      const [count] = await rowsOf<{ n: string }>(
+        context,
+        sql`select count(distinct ${id})::text as n from ${identifier(reference.table)}`,
+      );
+      const failed = Number(count?.n ?? 0);
+      return { unit, check, passed: false, checked: failed, failed };
+    }
+    const kind = reference.kindColumn === undefined ? sql`null::text` : column(reference.kindColumn);
+    const resolves =
+      reference.kindColumn === undefined
+        ? sql`(${holds(users)} or ${holds(serviceIdentities)})`
+        : sql`((r.kind = 'user' and ${holds(users)}) or (r.kind = 'service-identity' and ${holds(serviceIdentities)}))`;
+    const [row] = await rowsOf<{ checked: string; failed: string }>(
+      context,
+      sql`select count(*)::text as checked, count(*) filter (where not ${resolves})::text as failed
+            from (select distinct ${kind} as kind, ${id} as id from ${identifier(reference.table)}) r
+           where r.id is not null`,
+    );
+    const failed = Number(row?.failed ?? 0);
+    return { unit, check, passed: failed === 0, checked: Number(row?.checked ?? 0), failed };
   }
 
   private namedReferences(): { recordType: string; table: string; suffix: string; array: boolean }[] {

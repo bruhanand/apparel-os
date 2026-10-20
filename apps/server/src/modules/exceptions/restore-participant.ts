@@ -11,7 +11,5 @@ export const exceptionsRestoreParticipant: RestoreParticipant = {
   tier: 2,
   tables: tablesOf(exceptionsTables),
   typedReferences: [{ table: 'exceptions.exception_link', typeColumn: 'record_type', idColumn: 'record_id' }],
-  notReferences: {
-    'exceptions.exception_event.actor_id': 'a user or a service identity',
-  },
+  actorReferences: [{ table: 'exceptions.exception_event', idColumn: 'actor_id' }],
 };

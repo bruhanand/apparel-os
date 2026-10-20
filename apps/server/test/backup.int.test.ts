@@ -324,7 +324,84 @@ describe('the application backup (backup-and-restore 3.2; PRD-SEC-012)', () => {
       expect(
         results.find((result) => result.check === 'files_imports.attachment.site_id -> organisation.site')?.checked,
       ).toBe(1);
+      // RR-535: every column naming a user or a service identity is checked (10.4).
+      for (const name of [
+        'audit.audit_record.actor_id -> user or service identity',
+        'files_imports.attachment.attached_by_id -> user or service identity',
+        'files_imports.file_receipt.received_by_id -> user or service identity',
+        'kernel.idempotency_key.actor_id -> user or service identity',
+      ]) {
+        expect(results.find((result) => result.check === name)?.checked, name).toBeGreaterThan(0);
+      }
     }
+  });
+
+  it('RR-535 checks every column of the Organisation database that names a user or a service identity', async () => {
+    // A column named `actor_id`, or ending in `_by_id`, names a user or a service identity (backup-and-restore 10.4);
+    // `_by_user_id` columns are references to `access.user` and checked by their name. A table that adds one must
+    // declare it to its participant, or the restore would leave it unchecked.
+    const organisation = world.organisations[0];
+    const client = await connect(organisation.database, 'migration');
+    let columns: string[];
+    try {
+      columns = (
+        await client.query<{ name: string }>(
+          `select c.table_schema || '.' || c.table_name || '.' || c.column_name as name
+             from information_schema.columns c
+             join information_schema.tables t using (table_schema, table_name)
+            where t.table_type = 'BASE TABLE' and c.table_schema not in ('pg_catalog', 'information_schema', 'pgboss')
+              and (c.column_name = 'actor_id' or c.column_name like '%\\_by\\_id')
+              and not exists (select 1 from pg_catalog.pg_inherits i
+                               where i.inhrelid = (c.table_schema || '.' || c.table_name)::regclass)
+            order by 1`,
+        )
+      ).rows.map((row) => row.name);
+    } finally {
+      await client.end();
+    }
+    const declared = restoreRegistry.participants
+      .flatMap((participant) => participant.actorReferences ?? [])
+      .map((reference) => `${reference.table}.${reference.idColumn}`)
+      .sort();
+    expect(columns.length).toBeGreaterThan(0);
+    expect(declared).toEqual(columns);
+  });
+
+  it('RR-535 a check finds an actor no user or service identity holds, and one of the wrong kind', async () => {
+    const organisation = world.organisations[0];
+    const manifest = await manifestOf(first.backupId);
+    const part = manifest.organisations.find((each) => each.organisationCode === organisation.code);
+    if (part === undefined) throw new Error('The manifest lacks an Organisation');
+    const copy = await loadDump(
+      backupKey.privateKey.open(part.object, await objectOf(minio.client, backupBucket, part.object)),
+      'backup_actors',
+    );
+    loaded.push(copy);
+    const owner = await connect(copy, 'migration');
+    try {
+      await owner.query('alter table files_imports.attachment disable trigger user');
+      await owner.query('alter table files_imports.file_receipt disable trigger user');
+      // An attachment by nobody the database holds, and a receipt by a user recorded as a service identity.
+      await owner.query('update files_imports.attachment set attached_by_id = $1', [uuidv7()]);
+      await owner.query(
+        `update files_imports.file_receipt set received_by_kind = 'service-identity' where received_by_kind = 'user'`,
+      );
+    } finally {
+      await owner.end();
+    }
+    const results = await inSnapshot(copy, organisation.code, (context) => restoreRegistry.check(context));
+    expect(
+      results.find((result) => result.check === 'files_imports.attachment.attached_by_id -> user or service identity'),
+    ).toMatchObject({ passed: false, failed: 1 });
+    const receipts = results.find(
+      (result) => result.check === 'files_imports.file_receipt.received_by_id -> user or service identity',
+    );
+    expect(receipts?.passed).toBe(false);
+    expect(receipts?.failed).toBeGreaterThan(0);
+    // The other actor columns still resolve.
+    expect(
+      results.find((result) => result.check === 'audit.audit_record.actor_id -> user or service identity')?.passed,
+    ).toBe(true);
   });
 
   it('a check finds a reference that does not resolve', async () => {

@@ -40,10 +40,10 @@ export const filesImportsRestoreParticipant: RestoreParticipant = {
     },
   ],
   typedReferences: [{ table: 'files_imports.attachment', typeColumn: 'record_type', idColumn: 'record_id' }],
-  notReferences: {
-    'files_imports.attachment.attached_by_id': 'a user or a service identity, as attached_by_kind says',
-    'files_imports.file_receipt.received_by_id': 'a user or a service identity, as received_by_kind says',
-  },
+  actorReferences: [
+    { table: 'files_imports.attachment', idColumn: 'attached_by_id', kindColumn: 'attached_by_kind' },
+    { table: 'files_imports.file_receipt', idColumn: 'received_by_id', kindColumn: 'received_by_kind' },
+  ],
   async objectKeys(context) {
     const rows = await context.tx.execute<{ object_key: string }>(
       sql`select object_key from files_imports.stored_file order by object_key collate "C"`,

@@ -29,8 +29,10 @@ export const kernelRestoreParticipant: RestoreParticipant = {
     );
     return rows.rows.map((row) => ({ identifier: row.identifier, uses: Number(row.uses) }));
   },
-  notReferences: {
-    'kernel.idempotency_key.actor_id': 'a user or a service identity; the key is checked with its result',
-    'kernel.outbox_event.actor_id': 'a user or a service identity',
-  },
+  // The users and service identities its keys, events and recovery events name (10.4; RR-535).
+  actorReferences: [
+    { table: 'kernel.idempotency_key', idColumn: 'actor_id' },
+    { table: 'kernel.outbox_event', idColumn: 'actor_id' },
+    { table: 'kernel.recovery_event', idColumn: 'actor_id' },
+  ],
 };

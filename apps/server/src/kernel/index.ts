@@ -199,6 +199,8 @@ export {
   tableTotals,
 } from './operations/restore-contract.js';
 export type {
+  ActorKind,
+  ActorReference,
   CheckResult,
   ControlTotal,
   KeyVersionUse,
