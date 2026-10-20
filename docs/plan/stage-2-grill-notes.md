@@ -54,6 +54,12 @@ Answers (the product owner accepted each recommendation):
 4. **Booking data.** Header: supplier, brand, terms according to the brand, destination, season. Per item: style code, size, quantity and colour can be present.
 5. **GRN format** follows industry standards. A layout is to be drafted for the design from common practice ([grn-standard-fields.md](../research/grn-standard-fields.md)), keeping the round 1 rule that the GRN holds quantities, never values.
 
+## Round 4, 20 Oct 2026 (booking)
+
+1. **Terms from the signed MOU.** The MOU is recorded once as the supplier's or brand's Agreement (the PRD's word), with the signed copy attached. Every booking takes its terms from it and never differs. This removes the per-booking changes of `POL-01.02`, `POL-01.08` and `POL-01.14` and changes `PRD-BKG-002`; to be logged as a decision first.
+2. **Required item fields.** Style code and quantity on every line; colour and size optional, for orders placed at style level.
+3. **How a booking gets in.** There is no fixed template. The booking document arrives as a photo or a PDF; AI reads it and adds the booking lines as a draft; manual entry stays open (`PRD-SEC-003`).
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.
