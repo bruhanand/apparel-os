@@ -1310,3 +1310,21 @@
 - **Changed.** No PRD or `kdps-policies.md` text changed. `AGENTS.md`: "Document order" (new decider bullet, rank 2 wording), "Never invent a value" (owner), "Alignment rules" (where questions go), "Delivery" (policy signatures wording), "How we work" step 1. `docs/README.md`: rank 2 and the questions-file rows. `docs/questions-for-kdps.md`: heading and banner; the file name is kept because links point at it. `docs/plan/open-items.md`: §1 rows 1 to 3 marked done or partly done; row 11 added. `docs/plan/kdps-values.md` and `open-items.md`: the owner column of 134 RR rows now reads "Product owner; facts from …" (section 6, confirmed values, unchanged).
 - **Open.** Who signs a policy is not settled here: open item 11 in `docs/plan/open-items.md`. `kdps-policies.md` keeps its own text until a separate decision changes it.
 
+
+## DEC-126 — The product owner signs every policy
+
+- **Date:** 20 Oct 2026 · **Decided by:** product owner · **Report item:** `docs/plan/open-items.md` §1 row 11, left open by `DEC-125`
+- **Question.** Live operations wait for a Signed policy (`DEC-092`), but no document says who signs it.
+- **Options.** The product owner signs · the KDPS Owner signs · both sign.
+- **Choice.** The product owner signs each policy, completing its "Signed by, date" line. The signed copy is the evidence an Admin attaches when recording Signed on Setup › Policy readiness; a person who did not enter a policy's real values validates them (DM-6). KDPS, Accounts and the CA supply the facts behind the values when asked (`DEC-125`).
+- **Why.** The product owner takes every decision (`DEC-125`); a policy is a decision.
+- **Changed.** `kdps-policies.md` the status paragraph under the ID banner ("until the product owner signs them"). No policy answer bullet changed. `docs/plan/open-items.md` §1 row 11; `docs/plan/kdps-values.md` §4.
+
+## DEC-127 — Policy 9 names the two cost formulas the PRD supports
+
+- **Date:** 20 Oct 2026 · **Decided by:** product owner · **Report item:** `docs/plan/open-items.md` §1 row 8 and §6 item 1 (X-07, N-11)
+- **Question.** `POL-09.06` says "FIFO and weighted-average" with moving average preferred, which would let in periodic average (ruled out by `DEC-031`), and `POL-09.21` says keep KDPS's current method. Which reading holds?
+- **Options.** Moving average or FIFO, chosen per book by the product owner · moving average only · keep KDPS's current method, within moving average or FIFO.
+- **Choice.** The first. Each book's cost formula is moving weighted average or FIFO (`PRD-LED-014`, `DEC-031`), and the product owner chooses it and the pool mode for each book, as the book's approved cost setting. KDPS's current CA-approved method is a fact Accounts and the CA supply; it informs the choice and does not bind it. Periodic average stays out.
+- **Why.** The policy must stay inside the PRD (rank 1), and the product owner decides (`DEC-125`). Both formulas and both pool modes are built and proved on synthetic data (`S1-F10`).
+- **Changed.** `POL-09.06` and `POL-09.21` reworded (IDs kept). books-and-posting 2 and stock-ledger 6 wording; `questions-for-kdps.md` Accounts 1 and CA 2; `docs/plan/open-items.md` §1 row 8 and §6 item 1; `docs/plan/kdps-values.md` RR-071, RR-072. Still OPEN: each book's actual formula and pool (V-08, V-09), chosen by the product owner before the first live valued movement.

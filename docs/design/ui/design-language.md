@@ -246,7 +246,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 6 | Ended | Neutral | ○ | Offer, end-of-season price list, master version, user, billing device retired after use |
 | 7 | Unknown | Neutral | ○ | A value not known yet, such as pre-PT cost, season or identity. In tables the cell is blank instead (§8) |
 | 8 | Submitted | Pending | ◔ | PT, adjustment, offer, damage report |
-| 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval |
+| 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval, a period reopening among them |
 | 10 | Awaiting outcome | Pending | ◔ | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment |
 | 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch |
 | 12 | Recorded manually | Pending | ◔ | Card or UPI payment recorded by the cashier without provider evidence (`PRD-POS-010`) |
@@ -259,7 +259,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 19 | Issued | Done | ✓ | Booking (sent to the supplier), GRN |
 | 20 | Confirmed | Done | ✓ | Booking (supplier accepted), damage report, refund, proposal |
 | 21 | Official | Done | ✓ | PT |
-| 22 | Completed | Done | ✓ | Bill, transfer, supplier return |
+| 22 | Completed | Done | ✓ | Bill, transfer, supplier return, period reopening (every correction posted) |
 | 23 | Live | Done | ✓ | Offer |
 | 24 | Authorised | Done | ✓ | Offline counter with valid offline authority |
 | 25 | Accepted | Done | ✓ | Delivery (put away), excess, transfer receipt |
@@ -275,7 +275,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 35 | Stale | Attention | ! | Trust chip, sync |
 | 36 | Reopened | Attention | ! | Exception, financial period |
 | 37 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
-| 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer, master version, proposal |
+| 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer, master version, proposal, period reopening |
 | 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch |
 | 40 | Refused | Stopped | ✕ | Offline bill refused on upload |
 | 41 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
@@ -291,7 +291,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 51 | Active | Done | ✓ | Site, Store and business unit; user; billing device |
 | 52 | Closing | Moving | ▸ | Site, Store and business unit after closure starts |
 | 53 | Scheduled | Pending | ◔ | Master version approved with a later start date |
-| 54 | In force | Done | ✓ | Master version |
+| 54 | In force | Done | ✓ | Master version, period reopening |
 | 55 | Disabled | Stopped | ✕ | User |
 | 56 | Staged | Neutral | ○ | Import batch |
 | 57 | Validated | Pending | ◔ | Import batch waiting for review |
@@ -301,7 +301,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 61 | Locked | Done | ✓ | Financial period |
 | 62 | Unresolved | Attention | ! | Exception raised and not yet resolved |
 | 63 | Superseded | Neutral | ○ | Approval request ended by a material change |
-| 64 | Withdrawn | Neutral | ○ | A Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change, or a request withdrawn before approval, such as a rejected user's pending assignments; the record keeps which and why; never in force ([code-house-rules.md](../platform/code-house-rules.md) 7.3; `DEC-117`) |
+| 64 | Withdrawn | Neutral | ○ | A Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change, or a request withdrawn before approval, such as a rejected user's pending assignments; the record keeps which and why; never in force ([code-house-rules.md](../platform/code-house-rules.md) 7.3; `DEC-117`); a period reopening withdrawn before its approval (product owner, 20 Oct 2026; RR-490) |
 
 Rules:
 

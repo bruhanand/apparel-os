@@ -137,7 +137,7 @@ Each value below is unset and has no default (`AGENTS.md`, "Never invent a value
 
 ## 4. Policy signatures
 
-All 19 policies are Open: none is signed ([kdps-policies.md](../kdps-policies.md) status table). A policy is Signed when its "Signed by, date" line is complete (`DEC-092`). Its live operations also need their real values configured and validated by a person who did not enter them (DM-6, `DEC-105`, `DEC-116`). Synthetic work proceeds for every policy.
+All 19 policies are Open: none is signed ([kdps-policies.md](../kdps-policies.md) status table). A policy is Signed when the product owner completes its "Signed by, date" line (`DEC-092`, `DEC-126`). Its live operations also need their real values configured and validated by a person who did not enter them (DM-6, `DEC-105`, `DEC-116`). Synthetic work proceeds for every policy.
 
 | RR | Policy | Decided by | Live gate | Features it switches on |
 | --- | --- | --- | --- | --- |
