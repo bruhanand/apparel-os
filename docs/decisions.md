@@ -1382,3 +1382,12 @@
 - **Choice.** The first. An Arrival records at least one supplier invoice, and may record several, before its count starts; the count is matched against the invoice by hand. A missing booking or PT still does not stop the count.
 - **Why.** Every delivery arrives with its invoice, and the count is checked against it.
 - **Changed.** `PRD-REC-005` reworded. `roadmap.md` `S2-F02` and the count step of `ui-blueprint.html`.
+
+## DEC-134 — The first version of goods-in makes a PT only by uploading the fixed PT template
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 9 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Stage 2 plans the PT workbench (preparation from the GRN count, supplier-file conversion, mapping rules), readers for vendor PT files in XLS, XLSB and CSV with their layouts, and AI reading of PT files. What does the first version build?
+- **Options.** PT only by uploading the Organisation's fixed PT template for a GRN, the rest after the first version · the whole stage 2 PT scope at once.
+- **Choice.** The first. Whoever is assigned makes the PT file by hand in the Organisation's fixed PT template (for KDPS, its 20-column template with the values of its master sheet, [pt-file-layouts.md](data-notes/pt-file-layouts.md) section 1) and uploads it for a GRN; the template is read as XLSX. The master sheet's lists are set up once as the Organisation's approved vocabularies, each confirmed by a second person (`PRD-IMP-008`); the upload refuses a cell whose value is not on its list and names the cell. The upload makes a draft PT; a different person approves it (`PRD-REC-017`), and the approval makes the stock real and sellable at the GRN's Site (round 1). The file's quantities must match the GRN count (`PRD-REC-016`). The PT workbench, the vendor-file readers and their layouts, and AI reading of PT files follow after the first version; AI reading of booking documents stays (`DEC-131`).
+- **Why.** The product owner designs the PT workbench later; the KDPS format is fixed, so the first version needs only its upload.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 (first version); `coverage.md` note. No PRD rule changes: the deferred parts keep their IDs. Still OPEN: where the deferred parts are placed (RR-546; product owner, when the PT workbench is designed).

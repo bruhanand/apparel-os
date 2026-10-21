@@ -95,6 +95,15 @@ GRN is settled, apart from what PT making decides.
 - **Who:** whoever is assigned makes the file by hand and uploads it. The upload is what makes the stock real, to sell at a location.
 - **Fixed vocabulary:** KDPS's PT values come from its fixed master sheet (`docs/data-from-kdps/pt-master-sheet.xlsx`, the `Master Sheet` of the template; kept outside git): 22 seasons, 592 brands, 23 colours, 5 genders, 9 sub categories, 7 types, 98 items, 75 fits, 135 sizes, 4 GST rates, and the item map from item to sub category and type ([item-master-vocabulary.md](../data-notes/item-master-vocabulary.md)).
 
+## Round 9, 21 Oct 2026 (PT upload)
+
+1. **Out of the first version:** the vendor-file readers (XLS, XLSB, CSV), the vendor layouts and AI reading of PT files, with the workbench; AI reading of booking photos stays.
+2. **Master sheet values:** set up once as approved vocabularies, each confirmed by a second person; the upload refuses an off-list cell, naming it.
+3. **Upload, then approval:** the upload makes a draft PT; a different person approves it; the approval makes the stock real and sellable at the GRN's Site.
+4. **Against the GRN:** "count should match". Whether by style, colour and size or in total is asked in round 10.
+
+Written as `DEC-134`; placement of the deferred parts is RR-546.
+
 ## Not settled
 
 - PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.

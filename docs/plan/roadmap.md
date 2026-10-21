@@ -24,6 +24,8 @@
 
 **Excluded.** Inter-Site transfers, supplier returns, disposal, payment runs; buying suggestions (stage 6).
 
+**First version** (`DEC-134`). The operational flow first: booking, the Arrival with its invoice, the GRN, then the PT made only by uploading the fixed PT template for a GRN and approved by a different person. `S2-F04` builds only that upload; `S2-F13`'s other readers and vendor layouts, the PT part of `S2-F05` and the rest of `S2-F04` follow after it, placement OPEN (RR-546). Reports and stock search take the PRD's list with builders' defaults.
+
 **Prerequisite gates.** Under the stage-overlap rule (section 7): coding once `S1-F04`, `S1-F08` and `S1-F09` are merged, each feature once its stage 2 area design (RR-024) is written and approved (`S2-F13` needs none: its design is imports-and-opening-data, already approved) and the features it depends on are merged; exit only after stage 1 exits. The AI feature also needs the AI gateway design; real side-by-side files need KDPS's agreement to hold real data (RR-180).
 
 **Outside services, simulators first** ([how-we-build.md](how-we-build.md) section 4): the AI provider stub for `S2-F05`, the fake local helper for `S2-F07`.

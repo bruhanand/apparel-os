@@ -12,6 +12,7 @@
 - A stage exits only when every bullet whose **Complete at** falls in that stage passes its whole acceptance, and every bullet it owns passes the part it builds ([stage 1](stage-1/README.md) section 7, [roadmap](roadmap.md) for later stages).
 - Checked on 5 Oct 2026: all 520 PRD bullets have one owner, none twice, and no placed ID is missing from the PRD. Re-check by hand when the PRD changes.
 - 21 Oct 2026: `PRD-BKG-014` and the new `PRD-BKG-015` placed under `S2-F01`. The counts in section 2 are not re-checked yet, and `PRD-MER-019` to `PRD-MER-021`, `PRD-PAY-015`, `PRD-LIF-030` and `PRD-LIF-031` (`DEC-123`) are still unplaced.
+- 21 Oct 2026 (`DEC-134`): the first version of stage 2 builds the PT only as an upload of the fixed PT template for a GRN. The rest of `PRD-PTW-001` to `PRD-PTW-013` and `PRD-PRO-002` (`S2-F04`), and the XLS, XLSB, CSV, PDF and photograph PT files of `PRD-IMP-001` (`S2-F13`, `S2-F05`), follow after it; their placement is OPEN (RR-546).
 
 ## 2. Summary
 
