@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft, complete**, 21 Oct 2026. Sections 1 to 10 approved by the product owner section by section on 21 Oct 2026, sections 3 to 10 with their design choices; sections 11 and 12 written on the product owner's instruction to complete the document, waiting for approval of the whole. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Current**, approved as a whole by the product owner on 21 Oct 2026: sections 1 to 10 section by section with their design choices, then sections 11 and 12 with the whole. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
