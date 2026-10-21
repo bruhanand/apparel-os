@@ -99,13 +99,15 @@ export interface IdentityPart {
 }
 
 /**
- * What a receipt count counts (stock-ledger 13.14): goods of a SKU, with no identity as described; or goods of a product
- * not yet set up, their SKU null, Unknown, with their identity as described, counted in good condition and not
- * quarantined (stock-ledger 2.2; PRD-DMG-005; GI-1).
+ * What a receipt count counts (stock-ledger 13.14): goods of a SKU, with no identity as described, whose brand is the
+ * SKU's; or goods of a product not yet set up, their SKU null, Unknown, with their identity as described and the brand
+ * they are counted under, counted in good condition and not quarantined (stock-ledger 2.2, 14.1; PRD-DMG-005; GI-1,
+ * RR-555). Receiving names its Arrival's brand, so a person scoped to that brand sees the goods before PT approval
+ * names their SKU.
  */
 export type CountedGoods =
-  | { readonly skuId: string; readonly described?: undefined }
-  | { readonly skuId: null; readonly described: DescribedIdentity };
+  | { readonly skuId: string; readonly described?: undefined; readonly brandId?: undefined }
+  | { readonly skuId: null; readonly described: DescribedIdentity; readonly brandId: string };
 
 /** One item of a request (13.4, 13.5). `lineId` is the source line, kept without a foreign key (PRD-ACS-007). */
 export type LedgerItem =

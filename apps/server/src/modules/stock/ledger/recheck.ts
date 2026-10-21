@@ -213,8 +213,8 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
     if (elsewhere.length > 0) throw new StockRefused(refusalOf('plan-stale', plan.request.items[0]?.lineId));
   }
   const freezeUnits = [...plan.freezeUnits].map((at) => at.split('|'));
-  // The goods of Unknown SKU at a unit share one SKU balance (14.2; 13.14): of its balances only those of the origins
-  // the request names are read, since no item takes such goods but by naming their origin.
+  // The goods of Unknown SKU of one brand at a unit share one SKU balance (14.2; 13.14; RR-555): of its balances only
+  // those of the origins the request names are read, since no item takes such goods but by naming their origin.
   const unknownTotals = totals.filter((row) => row.skuId === null).map((row) => row.id);
   const knownTotals = totalIds.filter((id) => !unknownTotals.includes(id));
   const namedOrigins = [...plan.originIds.keys()];
@@ -319,6 +319,7 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
       siteId: row.siteId,
       businessUnitId: row.businessUnitId,
       skuId: row.skuId,
+      brandId: row.brandId,
       quantity: row.quantity,
       changed: false,
     })),

@@ -175,7 +175,7 @@ export const businessUnitMapping = organisation.table('business_unit_mapping', {
   taxRegistrationId: uuid('tax_registration_id').notNull(),
   accountingBookId: uuid('accounting_book_id').notNull(),
   preparedWithVersionId: uuid('prepared_with_version_id'),
-  /** Where the mapping came from, as policy 10's value (code-house-rules 12.14; migration 0091; RR-558). */
+  /** Where the mapping came from, as policy 10's value (code-house-rules 12.14; migration 0092; RR-558). */
   origin: text('origin').$type<SettingOrigin>().notNull(),
 });
 
