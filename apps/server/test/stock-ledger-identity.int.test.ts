@@ -161,14 +161,9 @@ async function approvedDocument() {
 }
 
 /** The parts of an identity step from the split rule, a new origin for each part that does not keep its own. */
-function partsOf(split: IdentitySplit): IdentityPart[] {
+function partsOf(split: IdentitySplit): readonly IdentityPart[] {
   if (split.kind !== 'split') throw new Error(`mismatch ${String(split.units)} ${String(split.rows)}`);
-  return split.parts.map(({ receiptOriginId, skuId, quantity, keeps }) => ({
-    receiptOriginId,
-    skuId,
-    quantity,
-    ...(keeps ? {} : { newReceiptOriginId: uuidv7() }),
-  }));
+  return split.parts;
 }
 
 const identity = (at: At, parts: readonly IdentityPart[]): LedgerItem => ({
@@ -237,6 +232,7 @@ describe('the identity step (stock-ledger 13.14; goods-in 6.3 step 4; GI-1)', ()
           { skuId: skuA.skuId, quantity: 6 },
           { skuId: skuB.skuId, quantity: 2 },
         ],
+        uuidv7,
       ),
     );
     const result = written(await underApproval([identity(at, parts)]));
@@ -329,6 +325,7 @@ describe('the identity step (stock-ledger 13.14; goods-in 6.3 step 4; GI-1)', ()
           { skuId: skuX.skuId, quantity: 3 },
           { skuId: skuY.skuId, quantity: 3 },
         ],
+        uuidv7,
       ),
     );
     const result = written(await underApproval([identity(at, parts)]));

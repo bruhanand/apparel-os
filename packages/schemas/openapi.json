@@ -7472,6 +7472,22 @@
                           "from"
                         ],
                         "additionalProperties": false
+                      },
+                      "defaultModel": {
+                        "deprecated": true,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "outright",
+                              "sale-or-return",
+                              "consignment"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -21726,7 +21742,27 @@
           "recordType": "booking.open_to_buy_budget",
           "authorisedIn": "command"
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -21980,11 +22016,24 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "asOf",
-                    "budgets"
+                    "budgets",
+                    "next"
                   ],
                   "additionalProperties": false
                 }
@@ -35565,6 +35614,22 @@
                           "from"
                         ],
                         "additionalProperties": false
+                      },
+                      "defaultModel": {
+                        "deprecated": true,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "outright",
+                              "sale-or-return",
+                              "consignment"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -74149,6 +74214,24 @@
                         },
                         "alias": {
                           "type": "boolean"
+                        },
+                        "skuId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "packId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "mappingId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                         }
                       },
                       "required": [

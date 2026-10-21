@@ -1,9 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
-  OPEN_TO_BUY_APPROVAL,
-  OPEN_TO_BUY_BUDGET_TYPE,
   OPEN_TO_BUY_CHECK,
-  OPEN_TO_BUY_CHECK_TYPE,
   type OpenToBuyBudgetDraft,
   type OpenToBuyBudgetPrepared,
   type OpenToBuyBudgetVersionDraft,
@@ -15,7 +12,7 @@ import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import type { ConfigurationInterface } from '../../configuration/index.js';
 import { brandInForce, type CatalogueInterface } from '../../merchandise/catalogue/index.js';
 import { openToBuyBudget, openToBuyBudgetVersion } from '../db/schema.js';
-import { budgetItem } from '../domain/budgets.js';
+import { budgetAuditRecord, budgetItem, checkDocument, versionDecisions } from '../domain/budgets.js';
 import { budgetOf, budgetRow, versionsOf } from '../queries/budgets.js';
 import { lockBudget, refused, today, type Outcome } from './common.js';
 
@@ -39,20 +36,6 @@ const value = (field: string, after: ValueChange['after']): ValueChange => ({
   field,
   before: null,
   after,
-});
-
-/** The document Accounts' check of a version decides, and the one its approval decides (3.3). */
-const checkDocument = (budgetId: string, versionId: string) => ({
-  module: 'booking',
-  recordType: OPEN_TO_BUY_CHECK_TYPE,
-  recordId: budgetId,
-  versionId,
-});
-const approvalDocument = (budgetId: string, versionId: string) => ({
-  module: 'booking',
-  recordType: OPEN_TO_BUY_BUDGET_TYPE,
-  recordId: budgetId,
-  versionId,
 });
 
 /** Writes a version Awaiting approval, its audit record, and the request of Accounts' check (3.3; POL-05.09). */
@@ -79,7 +62,7 @@ async function writeVersion(
     actor: { kind: 'user', id: preparer.userId },
     roleAssignmentId: preparer.roleAssignmentId,
     scope: { brandId: budget.brandId },
-    record: { module: 'booking', type: 'open_to_buy_budget', id: budget.id, versionId },
+    record: budgetAuditRecord(budget.id, versionId),
     operation,
     changes: [...changes, value('amount', draft.amount), value('origin', draft.origin)],
     source: { kind: 'screen' },
@@ -176,10 +159,7 @@ export async function prepareBudgetVersion(
   const waiting = (await versionsOf(context, budgetId)).filter((each) => each.decision === 'Awaiting approval');
   const targets: LockTarget[] = [];
   for (const each of waiting) {
-    for (const [actionType, document] of [
-      [OPEN_TO_BUY_CHECK, checkDocument(budgetId, each.id)],
-      [OPEN_TO_BUY_APPROVAL, approvalDocument(budgetId, each.id)],
-    ] as const) {
+    for (const [actionType, document] of versionDecisions(budgetId, each.id)) {
       targets.push(...(await dependencies.access.requestLockTargets(context, { ...document, actionType })));
     }
   }
@@ -192,10 +172,7 @@ export async function prepareBudgetVersion(
     return refused('conflict', 'kernel.stale-version', [budgetItem(budgetId)]);
   }
   for (const each of versions.filter((version) => version.decision === 'Awaiting approval')) {
-    for (const [actionType, document] of [
-      [OPEN_TO_BUY_CHECK, checkDocument(budgetId, each.id)],
-      [OPEN_TO_BUY_APPROVAL, approvalDocument(budgetId, each.id)],
-    ] as const) {
+    for (const [actionType, document] of versionDecisions(budgetId, each.id)) {
       await dependencies.access.supersedeRequest(context, { ...document, actionType }, preparer);
     }
   }

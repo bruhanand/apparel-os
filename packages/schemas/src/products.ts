@@ -195,10 +195,29 @@ export const codeResolvedSchema = z
     candidates: z.array(codeCandidateSchema).min(1),
     repeated: z.boolean(),
     alias: z.boolean(),
+    /**
+     * Deprecated: the one candidate's SKU, kept for the clients of the deploy before `candidates` (code-house-rules 12.1
+     * "Compatible changes"): present exactly when the code names one SKU. Read `candidates`; removed in a later deploy.
+     */
+    skuId: idSchema.optional().meta({ deprecated: true }),
+    /** Deprecated: the one candidate's pack, as `skuId` is kept. Read `candidates`. */
+    packId: idSchema.optional().meta({ deprecated: true }),
+    /** Deprecated: the one candidate's mapping, as `skuId` is kept. Read `candidates`. */
+    mappingId: idSchema.optional().meta({ deprecated: true }),
   })
   .refine((resolved) => resolved.repeated === resolved.candidates.length > 1, {
     message: 'A code is repeated exactly when it names more than one SKU',
-  });
+  })
+  .refine(
+    (resolved) => {
+      const [only] = resolved.candidates;
+      if (resolved.candidates.length !== 1 || only === undefined) {
+        return [resolved.skuId, resolved.packId, resolved.mappingId].every((each) => each === undefined);
+      }
+      return resolved.skuId === only.skuId && resolved.packId === only.packId && resolved.mappingId === only.mappingId;
+    },
+    { message: 'The kept SKU, pack and mapping are those of the one candidate, and none for a repeated code' },
+  );
 export type CodeResolved = z.infer<typeof codeResolvedSchema>;
 export const resolveCodeAnswerSchema = z.strictObject({ asOf, resolved: codeResolvedSchema });
 

@@ -6,6 +6,7 @@ import {
   openToBuyBudgetListSchema,
   openToBuyBudgetReadSchema,
   type AssignmentScope,
+  type OpenToBuyBudgetList,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -607,6 +608,23 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
     expect((await get(booking, `/api/booking/open-to-buy-budgets/${uuidv7()}`)).status).toBe(404);
   });
 
+  it('PRD-UXP-003 answers a version of a budget that does not exist as not found, naming the budget', async () => {
+    const missing = uuidv7();
+    const versioned = await post(booking, `/api/booking/open-to-buy-budgets/${missing}/versions`, {
+      amount: SYNTHETIC_AMOUNT,
+      origin: 'synthetic',
+      versionToken: uuidv7(),
+    });
+    expect(versioned.status, JSON.stringify(versioned.body)).toBe(404);
+    expect(versioned.body).toMatchObject({
+      error: {
+        kind: 'not-found',
+        code: 'booking.record-not-found',
+        missing: [{ kind: 'record', recordType: BUDGET, recordId: missing }],
+      },
+    });
+  });
+
   it('code-house-rules 12.14 refuses a value of an origin this environment does not accept, and replays a key once', async () => {
     const testSetup = await post(booking, '/api/booking/open-to-buy-budgets', {
       brandId: otherBrandId,
@@ -622,6 +640,71 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
     // The same key and content answers the same, recording nothing more (PRD-INT-002; 12.4).
     expect((await prepare(booking, body, key)).body).toEqual(made.body);
     expect((await readBudget(booking, made.body.budgetId as string)).versions).toHaveLength(1);
+  });
+});
+
+describe('the budgets a page at a time (goods-in 3.3, section 11; code-house-rules 12.1 "Reads")', () => {
+  /** Every page of the list as the user reads it, `limit` budgets at most to a page, following the cursor. */
+  async function pages(user: SyntheticUser, limit: number) {
+    const read: OpenToBuyBudgetList[] = [];
+    let after: string | null = null;
+    do {
+      const query = new URLSearchParams({ limit: String(limit), ...(after === null ? {} : { after }) });
+      const page = await get(user, `/api/booking/open-to-buy-budgets?${query.toString()}`);
+      expect(page.status, JSON.stringify(page.body)).toBe(200);
+      const parsed = openToBuyBudgetListSchema.parse(page.body);
+      read.push(parsed);
+      after = parsed.next;
+    } while (after !== null && read.length < 100);
+    return read;
+  }
+
+  it('code-house-rules 12.1 pages the budgets by a cursor, in the order they were prepared, every budget once', async () => {
+    const made: string[] = [];
+    for (const label of ['OTB-PAGE-A', 'OTB-PAGE-B', 'OTB-PAGE-C']) {
+      const pageBrand = await syntheticBrand(label);
+      made.push(
+        preparedIds(await prepare(booking, { brandId: pageBrand, season: season(0), amount: SYNTHETIC_AMOUNT }))
+          .budgetId,
+      );
+    }
+    const whole = openToBuyBudgetListSchema.parse((await get(owner, '/api/booking/open-to-buy-budgets')).body);
+    expect(whole.next).toBeNull();
+    const paged = await pages(owner, 2);
+    expect(paged.every((page) => page.budgets.length <= 2)).toBe(true);
+    expect(paged.at(-1)?.next).toBeNull();
+    // Page after page, the same budgets in the same order as one read of the whole list.
+    const ids = paged.flatMap((page) => page.budgets.map((budget) => budget.id));
+    expect(ids).toEqual(whole.budgets.map((budget) => budget.id));
+    expect(ids.filter((id) => made.includes(id))).toEqual(made);
+    // A cursor naming no budget reads nothing (12.1).
+    const none = openToBuyBudgetListSchema.parse(
+      (await get(owner, `/api/booking/open-to-buy-budgets?after=${uuidv7()}`)).body,
+    );
+    expect(none).toMatchObject({ budgets: [], next: null });
+    // The largest page is the builders' cap, a technical limit (12.1).
+    expect((await get(owner, '/api/booking/open-to-buy-budgets?limit=0')).status).toBe(400);
+    expect((await get(owner, '/api/booking/open-to-buy-budgets?limit=101')).status).toBe(400);
+  });
+
+  it('PRD-ACS-001 code-house-rules 12.1 a page leaves out the budgets outside the reader’s scope, and its cursor moves past them', async () => {
+    const outside = preparedIds(
+      await prepare(booking, {
+        brandId: await syntheticBrand('OTB-PAGE-OUT'),
+        season: season(0),
+        amount: SYNTHETIC_AMOUNT,
+      }),
+    );
+    const inside = preparedIds(
+      await prepare(booking, { brandId: otherBrandId, season: season(2), amount: SYNTHETIC_AMOUNT }),
+    );
+    const paged = await pages(otherBrandBooking, 1);
+    const ids = paged.flatMap((page) => page.budgets.map((budget) => budget.id));
+    expect(ids).toContain(inside.budgetId);
+    expect(ids).not.toContain(outside.budgetId);
+    expect(paged.flatMap((page) => page.budgets).every((budget) => budget.brand.id === otherBrandId)).toBe(true);
+    // A page may hold fewer budgets than its limit, none at all where it read only budgets left out.
+    expect(paged.some((page) => page.budgets.length === 0 && page.next !== null)).toBe(true);
   });
 });
 

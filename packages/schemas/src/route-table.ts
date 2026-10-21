@@ -5,6 +5,7 @@ import {
   OPEN_TO_BUY_BUDGET_TYPE,
   openToBuyBudgetDraftSchema,
   openToBuyBudgetListSchema,
+  openToBuyBudgetPageQuerySchema,
   openToBuyBudgetPreparedSchema,
   openToBuyBudgetReadSchema,
   openToBuyBudgetVersionDraftSchema,
@@ -4569,6 +4570,7 @@ export const routes = {
   listOpenToBuyBudgets: defineRoute({
     method: 'GET',
     path: '/api/booking/open-to-buy-budgets',
+    query: openToBuyBudgetPageQuerySchema,
     access: { kind: 'action', action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
     command: false,
     response: openToBuyBudgetListSchema,

@@ -44,7 +44,7 @@ import {
   partyVersion,
 } from '../db/schema.js';
 import { sealBankDetails } from '../domain/bank-seal.js';
-import { AGREEMENT_TERMS_FORMAT } from '../domain/kinds.js';
+import { AGREEMENT_TERMS_FORMAT, termsToStore } from '../domain/kinds.js';
 import {
   approvedOn,
   holdsRoleOn,
@@ -419,6 +419,7 @@ export class PartiesMaintenance {
     fixed: readonly AuditChange[],
   ): Promise<Outcome<PartyChanged>> {
     const versionId = uuidv7();
+    const terms = termsToStore(draft.terms);
     // The signed agreement, stored files attached to this version as evidence, carrying margin (5.2; S1-F06-T05).
     const attachmentIds: string[] = [];
     for (const file of draft.signedAgreement) {
@@ -436,7 +437,7 @@ export class PartiesMaintenance {
     await context.tx.insert(agreementVersion).values({
       id: versionId,
       agreementId,
-      terms: draft.terms,
+      terms,
       termsFormat: AGREEMENT_TERMS_FORMAT,
       margins: draft.margins,
       signedAgreementAttachmentIds: attachmentIds,
@@ -446,7 +447,7 @@ export class PartiesMaintenance {
     });
     await this.audit(context, preparer, { type: 'agreement', id: agreementId, versionId }, operation, [
       ...fixed,
-      value('terms', draft.terms),
+      value('terms', terms),
       // Margins are restricted: the audit record keeps them under their field class (numbering-and-audit 4.3).
       { kind: 'restricted', field: 'margins', fieldClass: 'margin', before: null, after: draft.margins },
       value('signedAgreement', attachmentIds),

@@ -366,40 +366,61 @@ describe('agreements through the routes (structure-and-masters 5.2; PRD-ACS-008;
     expect(Buffer.from(file.contentBase64, 'base64').equals(bytes)).toBe(true);
   });
 
-  it('DEC-129 POL-01.02 refuses a default model for new bookings in a draft, and no read carries one', async () => {
-    // Every booking takes the agreement's own commercial model (structure-and-masters 5.2; RR-545).
+  it('DEC-129 POL-01.02 code-house-rules 12.1 takes a draft naming the retired default model for one deploy and ignores it: never stored, never answered', async () => {
+    // Every booking takes the agreement's own commercial model (structure-and-masters 5.2; RR-545). A client of the
+    // earlier deploy may still send the term, so for one deploy it is accepted and dropped (12.1 "Compatible changes").
     const partyId = await newSupplier();
-    const terms = { ...UNKNOWN_TERMS, commercialModel: 'outright', defaultModel: 'consignment' };
+    const terms = { ...UNKNOWN_TERMS, commercialModel: 'outright' as const };
     const created = await post(preparer, '/api/merchandise/agreements', {
       code: code('AGR'),
       counterparty: { kind: 'supplier', partyId },
-      terms,
+      terms: { ...terms, defaultModel: 'consignment' },
       margins: null,
       signedAgreement: [],
       validFrom: today(),
     });
-    expect(created.status, JSON.stringify(created.body)).toBe(400);
-    expect(created.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
-    const record = agreementReadSchema.parse((await get(preparer, `/api/merchandise/agreements/${agreementId}`)).body);
-    const versioned = await post(preparer, `/api/merchandise/agreements/${agreementId}/versions`, {
-      terms,
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
+    const createdId = created.body.recordId as string;
+    const record = agreementReadSchema.parse((await get(preparer, `/api/merchandise/agreements/${createdId}`)).body);
+    const versioned = await post(preparer, `/api/merchandise/agreements/${createdId}/versions`, {
+      terms: { ...terms, commercialModel: 'consignment', defaultModel: null },
       margins: null,
       signedAgreement: [],
       validFrom: today(),
       versionToken: record.record.versionToken,
     });
-    expect(versioned.status, JSON.stringify(versioned.body)).toBe(400);
-    expect(versioned.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
-    const supplierId = record.record.counterparty.kind === 'supplier' ? record.record.counterparty.partyId : '';
+    expect(versioned.status, JSON.stringify(versioned.body)).toBe(200);
+    const read = agreementReadSchema.parse((await get(preparer, `/api/merchandise/agreements/${createdId}`)).body);
+    expect(read.record.versions.map((version) => version.terms)).toEqual(
+      expect.arrayContaining([terms, { ...terms, commercialModel: 'consignment' }]),
+    );
+    expect(read.record.versions).toHaveLength(2);
+    // A field the drafts no longer name is still refused: only the retired term is taken (12.2 "Every input parsed").
+    const unknownField = await post(preparer, `/api/merchandise/agreements/${createdId}/versions`, {
+      terms: { ...terms, notATerm: true },
+      margins: null,
+      signedAgreement: [],
+      validFrom: today(),
+      versionToken: read.record.versionToken,
+    });
+    expect(unknownField.status, JSON.stringify(unknownField.body)).toBe(400);
+    expect(unknownField.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
+    // The terms in force are read of the approved agreement of this block.
+    const approved = agreementReadSchema.parse(
+      (await get(preparer, `/api/merchandise/agreements/${agreementId}`)).body,
+    );
+    const supplierId = approved.record.counterparty.kind === 'supplier' ? approved.record.counterparty.partyId : '';
     for (const path of [
       '/api/merchandise/agreements',
-      `/api/merchandise/agreements/${agreementId}`,
+      `/api/merchandise/agreements/${createdId}`,
       `/api/merchandise/agreement-terms?partyId=${supplierId}&date=${today()}`,
     ]) {
-      const read = await get(preparer, path);
-      expect(read.status, path).toBe(200);
-      expect(JSON.stringify(read.body), path).not.toContain('defaultModel');
+      const answered = await get(preparer, path);
+      expect(answered.status, path).toBe(200);
+      expect(JSON.stringify(answered.body), path).not.toContain('defaultModel');
     }
+    // Never stored either: a version is read back as stored, and the stored shape refuses the term (migration 0087;
+    // agreement-terms-shape.int.test.ts).
   });
 
   it('PRD-SEC-005 refuses a reader without the agreement, or without the margin class it carries', async () => {

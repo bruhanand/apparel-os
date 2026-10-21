@@ -1,8 +1,9 @@
-import type {
-  OpenToBuyBudget,
-  OpenToBuyBudgetDraft,
-  OpenToBuyBudgetVersionDraft,
-  OpenToBuyRemaining,
+import {
+  OPEN_TO_BUY_PAGE_CAP,
+  type OpenToBuyBudget,
+  type OpenToBuyBudgetDraft,
+  type OpenToBuyBudgetVersionDraft,
+  type OpenToBuyRemaining,
 } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, Preparer, RecordFacts } from '../access/index.js';
@@ -10,7 +11,7 @@ import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
 import type { CatalogueInterface } from '../merchandise/catalogue/index.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
-import { budgetOf, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
+import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
 
 export interface BookingDependencies {
   readonly audit: AuditInterface;
@@ -54,22 +55,26 @@ export class Booking {
   }
 
   /**
-   * The budgets as a reader sees them, each with its versions and remaining amount; `covered` answers, for the facts
-   * of each, whether the reader may view it (access-and-approvals 7.1 step 3), and the others are left out.
+   * A page of the budgets as a reader sees them, each with its versions and remaining amount (code-house-rules 12.1
+   * "Reads"); `covered` answers, for the facts of each budget read, whether the reader may view it (access-and-approvals
+   * 7.1 step 3), and the others are left out, so a page may hold fewer than its limit; its cursor still moves past them.
    */
   async listBudgets(
     context: TransactionContext,
     today: string,
+    page: { readonly after?: string | undefined; readonly limit?: number | undefined },
     covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
-  ): Promise<OpenToBuyBudget[]> {
-    const rows = await budgetRows(context);
+  ): Promise<{ readonly budgets: OpenToBuyBudget[]; readonly next: string | null }> {
+    const limit = Math.min(page.limit ?? OPEN_TO_BUY_PAGE_CAP, OPEN_TO_BUY_PAGE_CAP);
+    const { rows, next } = await budgetPage(context, { after: page.after, limit });
     const allowed = await covered(rows.map((row) => ({ brandId: row.brandId })));
-    return budgetViews(
+    const budgets = await budgetViews(
       context,
       this.dependencies,
       rows.filter((_row, index) => allowed[index] === true),
       today,
     );
+    return { budgets, next };
   }
 
   /** One budget with its versions and remaining amount, or undefined. */

@@ -1,9 +1,11 @@
+import type { IdentityPart } from './request.js';
+
 // The identity step's split rule (stock-ledger 13.14; goods-in 6.3 step 4; GI-1): at PT approval the receipt origins of
 // one style and size take the SKUs the PT's rows give that style and size, by quantity. The PT is the record of identity
 // (goods-in 6.3), and colour is not compared with the GRN (DEC-138), so which counted units take which SKU is decided
-// by quantity alone, by this rule. Pure: no database, no clock (code-house-rules 2). The caller runs it with the units
-// it expects, before Plan, and sends its parts as an `identity-resolved` item; the ledger checks them under the locks
-// (13.14). **Design choice**; no business value.
+// by quantity alone, by this rule. Pure: no database, no clock, and the identifiers of new origins come from the caller
+// (code-house-rules 2). The caller runs it with the units it expects, before Plan, and sends its parts as an
+// `identity-resolved` item; the ledger checks them under the locks (13.14). **Design choice**; no business value.
 
 /** One receipt origin of the style and size, with the units that take an identity. */
 export interface IdentitySource {
@@ -19,16 +21,12 @@ export interface IdentityRow {
   readonly quantity: number;
 }
 
-/** Units of one origin that take one SKU; `keeps` when the origin already names that SKU, so it stays as it is. */
-export interface IdentitySplitPart {
-  readonly receiptOriginId: string;
-  readonly skuId: string;
-  readonly quantity: number;
-  readonly keeps: boolean;
-}
-
+/**
+ * The parts of the identity step (13.14): a part that keeps its origin's own SKU names no new origin; every other part
+ * names the new origin its units move into.
+ */
 export type IdentitySplit =
-  | { readonly kind: 'split'; readonly parts: readonly IdentitySplitPart[] }
+  | { readonly kind: 'split'; readonly parts: readonly IdentityPart[] }
   | { readonly kind: 'mismatch'; readonly units: number; readonly rows: number };
 
 function wholeNumber(value: number, aboveZero: boolean): void {
@@ -44,10 +42,15 @@ function wholeNumber(value: number, aboveZero: boolean): void {
  *    allows, origins in the order given, so a GRN line that named the right product is not changed.
  * 3. Every other unit takes the SKUs' remaining quantities in the rows' order, origins in the order given; so an origin
  *    that named another SKU, or none, is given the PT's (goods-in 6.3 step 4).
- * The parts come per origin in the order given, the kept part first. When the rows do not add up to the units the
- * answer is a mismatch and nothing is split: the PT must match the GRN's good pieces (goods-in 5.4).
+ * The parts come per origin in the order given, the kept part first; each part that does not keep its origin's SKU names
+ * a new origin, its identifier from `newOriginId`, a UUIDv7 the caller makes (PRD-MOD-008). When the rows do not add up
+ * to the units the answer is a mismatch and nothing is split: the PT must match the GRN's good pieces (goods-in 5.4).
  */
-export function splitIdentity(sources: readonly IdentitySource[], rows: readonly IdentityRow[]): IdentitySplit {
+export function splitIdentity(
+  sources: readonly IdentitySource[],
+  rows: readonly IdentityRow[],
+  newOriginId: () => string,
+): IdentitySplit {
   for (const source of sources) wholeNumber(source.units, false);
   if (new Set(sources.map((source) => source.receiptOriginId)).size !== sources.length) {
     throw new Error('Identity split: an origin is given twice');
@@ -67,18 +70,18 @@ export function splitIdentity(sources: readonly IdentitySource[], rows: readonly
     kept.set(source.receiptOriginId, take);
     left.set(source.skuId, (left.get(source.skuId) ?? 0) - take);
   }
-  const parts: IdentitySplitPart[] = [];
+  const parts: IdentityPart[] = [];
   for (const source of sources) {
     const keeping = kept.get(source.receiptOriginId) ?? 0;
     if (keeping > 0 && source.skuId !== null) {
-      parts.push({ receiptOriginId: source.receiptOriginId, skuId: source.skuId, quantity: keeping, keeps: true });
+      parts.push({ receiptOriginId: source.receiptOriginId, skuId: source.skuId, quantity: keeping });
     }
     let rest = source.units - keeping;
     for (const [skuId, quantity] of left) {
       if (rest === 0) break;
       const take = Math.min(rest, quantity);
       if (take <= 0) continue;
-      parts.push({ receiptOriginId: source.receiptOriginId, skuId, quantity: take, keeps: false });
+      parts.push({ receiptOriginId: source.receiptOriginId, skuId, quantity: take, newReceiptOriginId: newOriginId() });
       left.set(skuId, quantity - take);
       rest -= take;
     }

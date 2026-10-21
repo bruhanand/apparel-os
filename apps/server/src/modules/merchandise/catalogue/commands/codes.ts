@@ -324,15 +324,20 @@ export async function resolveCode(
     }
     // Only a brand's barcode may name more than one SKU (PRD-MER-007, DEC-135).
     if (bySku.size > 1 && query.kind !== REPEATABLE_KIND) return ambiguous;
+    const candidates = [...bySku.values()].map((row) => ({
+      skuId: row.skuId,
+      ...(row.packId === null ? {} : { packId: row.packId }),
+      mappingId: row.id,
+    }));
+    const [only] = candidates;
     return {
       resolved: {
-        candidates: [...bySku.values()].map((row) => ({
-          skuId: row.skuId,
-          ...(row.packId === null ? {} : { packId: row.packId }),
-          mappingId: row.id,
-        })),
-        repeated: bySku.size > 1,
+        candidates,
+        repeated: candidates.length > 1,
         alias,
+        // The one candidate at the top level too, for the clients of the earlier deploy (code-house-rules 12.1
+        // "Compatible changes"); removed in a later deploy (open-items section 4).
+        ...(candidates.length === 1 && only !== undefined ? only : {}),
       },
     };
   }

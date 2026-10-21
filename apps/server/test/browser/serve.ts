@@ -1823,7 +1823,8 @@ await grantSynthetic(
 );
 
 // The agreement journey's people (S2-F01-T01): Booking, who prepares an agreement with a supplier, and a different
-// person who approves it from My work. Who holds which is KDPS's (V-01, RR-064).
+// person who approves it from My work. Who holds which is the product owner's to decide, with facts from KDPS
+// (DEC-125; V-01, RR-064); these SYNTHETIC grants decide nothing.
 const agreementPreparer = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
   label: 'BROWSER-AGREEMENT-PREPARER',
   enrolled: true,
