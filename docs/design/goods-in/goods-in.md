@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 3 approved by the product owner on 21 Oct 2026, section 3 with its design choices; section 4 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 4 approved by the product owner on 21 Oct 2026, sections 3 and 4 with their design choices; section 5 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -259,7 +259,67 @@ Every held line is decided before the PT file is uploaded (`DEC-137`):
 
 ## 5. The PT file upload
 
-To draft.
+In the first version a PT is made only by uploading a PT file for one GRN, in the Organisation's fixed PT template (`DEC-134`). The file is made by hand, outside the app, by whoever is assigned. The upload runs through the stage 1 import pipeline of `files-imports` as a transaction batch whose target is `merchandise` · PT (imports-and-opening-data 3.1, 4.1, 13.2). The PT workbench comes later (RR-546).
+
+### 5.1 When a file can be uploaded
+
+- The GRN is issued, and every held line on it is decided (section 4.6, `DEC-137`).
+- The GRN has no other PT, draft or official, unless that one was reversed (section 6). One PT per GRN (`DEC-137`).
+- The uploader holds the permission to prepare PTs for the GRN's Site and business unit. They may work at another Site; the stock stays at the GRN's Site (`PRD-REC-014`).
+
+### 5.2 The template
+
+- The template is a layout version in `files-imports`, proposed and confirmed by a different person, like every layout (imports-and-opening-data 6.4). For KDPS it is its 20-column template plus the two `SUGGESTED` columns ([pt-file-layouts.md](../../data-notes/pt-file-layouts.md) 1.2; `PRD-PTW-008`). Which of its columns are required is stated by the layout version, set when the product owner confirms KDPS's layout.
+- The header is found by its column names, on row 1 or row 2: a work tab has a subtotal row above it, a copy saved as values does not (pt-file-layouts 1.7; imports-and-opening-data 6.5).
+- A row may hold one piece or several pieces of one barcode (`QTY`); both occur (pt-file-layouts 1.7).
+- XLSX only in the first version (`DEC-134`). Formula cells are read by their saved values and never recalculated; no formula is taken as a rule (imports-and-opening-data 3.1 step 3, 6.7).
+- The stage 1 intake checks apply. KDPS's template file links to a copy of another workbook (pt-file-layouts 1.1), which intake refuses, asking for a self-contained copy (imports-and-opening-data 9.3); the person saves the sheet as a copy with values before uploading.
+- The values come from the master sheet's lists, set up once as the Organisation's approved vocabularies, each confirmed by a second person (`PRD-IMP-008`, `DEC-134`): seasons, brands, colours (with the tags ECONOMY, MEDIUM and PREMIUM), genders, sub categories, types, items, fits, sizes and GST rates, and the map from item to sub category and type ([item-master-vocabulary.md](../../data-notes/item-master-vocabulary.md)).
+
+### 5.3 Checks on each row
+
+| Column | Check | Kept as |
+| --- | --- | --- |
+| `SEASON`, `COLOR`, `GENDER`, `SUB CATEGORY`, `TYPE`, `ITEM`, `FIT` | On its list; the cell is named when not | Supplied |
+| `BRAND` | On the brand list, and the GRN's brand | Supplied |
+| `SIZE` | On the size list | Supplied |
+| `DESIGN` | Present; the style code | Supplied |
+| `BARCODE` | Present; digits, leading zeros kept (`PRD-MER-007`) | Supplied |
+| `HSN` | Six or eight digits | Supplied |
+| `QTY` | Whole pieces, more than zero | Supplied |
+| `MRP`, `BASIC`, `P RATE` | Present, more than zero, at most two decimals, turned into paise exactly and never rounded; `P RATE` not above `MRP` (system-dumb 18.4 rule 27) | Supplied (`PRD-IMP-006`); the approver checks them (`DEC-135`) |
+| `INPUT TAX`, `OUTPUT TAX` | On the GST rate list | Supplied; the approver checks them (`DEC-135`) |
+| `NAG` | Equals `QTY` (`PRD-PTW-011`) | Calculated |
+| `MARGIN` | Worked out as (`MRP` − `P RATE`) ÷ `MRP` × 100, rounded half-up to two decimals; the file's value, rounded the same way, must agree (`PRD-PTW-011`) | Calculated |
+| `SUGGESTED SUB CATEGORY`, `SUGGESTED TYPE` | None; shown beside the row, never applied (`PRD-PTW-012`) | Supplied hint |
+
+Every problem is listed at once in the validation report, naming the row, the column and the correction (`PRD-IMP-007`).
+
+### 5.4 Matching the GRN
+
+- Rows are grouped by style (`DESIGN`) and size; text is compared ignoring case and spaces at the ends. Colour is not compared (`DEC-138`).
+- For each style and size, the file's `QTY` must add up to the GRN's good pieces: those received, less pieces under a confirmed damage report, less excess, wrong or unidentified pieces Booking did not take in (section 4.6).
+- No style and size may appear in the file that the GRN does not have, and none of the GRN's may be missing (`PRD-REC-016`, `DEC-135`).
+
+### 5.5 Products and barcodes
+
+- **A row's product** is found by its barcode's external code mapping, or by brand, style, colour and size. When none exists, the upload proposes a new style and SKU from the row's values, with its barcode as an external code (structure-and-masters 4.2, 4.3); the PT approver confirms the proposal with the PT (`PRD-MER-013`, `DEC-135`).
+- **A row that differs from an existing product** in a value the product holds, such as its HSN, is shown to the approver as a difference. The PT keeps the file's value; the product is changed only through its own master change. **Design choice.**
+- **A barcode repeated across products** is flagged, never refused, and kept for each product; the scan-in asks which product it is (`PRD-MER-007`, `DEC-135`). The same barcode on several rows of one product is ordinary.
+
+### 5.6 The steps
+
+1. **Upload.** The person picks the GRN and uploads the file. Intake, reading, layout and staging run as in imports-and-opening-data 3.1.
+2. **Check.** Every check of 5.3 and 5.4 runs. If any fails, the upload is refused whole: nothing is created, the report lists every problem, and the person uploads a corrected file (`DEC-134`, `PRD-IMP-012`).
+3. **Submit for approval.** A file that passes shows its preview: the rows, the totals, the new products, the repeated barcodes and the differences from existing products. The person submits it. In one transaction the handler creates the draft PT revision for the GRN and the approval request bound to it (imports-and-opening-data 3.1 steps 7 to 9; `PRD-REC-017`).
+4. A file of 10,000 lines is checked within one minute (`PRD-PRF-001`).
+
+### 5.7 What the draft PT holds
+
+- The GRN it covers, its Site and business unit, the stored file, the layout version, the uploader and the time (`PRD-REC-018`).
+- Every row with its supplied values, its calculated `NAG` and `MARGIN`, each value's origin (`PRD-IMP-006`), its product or product proposal, and the GRN lines of its style and size.
+- Totals: pieces, the sum of `P RATE` times `QTY` (the total proposed acquisition cost the approval is judged on) and the MRP value.
+- A draft is never edited: a wrong file is withdrawn and a new one uploaded. It creates no stock and no money effect.
 
 ## 6. PT approval
 
