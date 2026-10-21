@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 and 2 approved by the product owner on 21 Oct 2026; section 3 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 3 approved by the product owner on 21 Oct 2026, section 3 with its design choices; section 4 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -166,7 +166,96 @@ Example (`PRD-BKG-005`): sizes S, M and L booked at 10 each; deliveries of 5, 3 
 
 ## 4. Arrival, count and GRN
 
-To draft.
+The Arrival, the count and the GRN live in `receiving` (module-map section 5). Everything here is entered by hand (`DEC-136`). The GRN records what was physically counted at the Site where the goods are; it holds quantities, never values (`PRD-REC-008`, grill round 1).
+
+### 4.1 The Receive Goods inbox
+
+- One inbox per Site, with Pending and History views (`PRD-REC-001`). In the first version it holds supplier deliveries; incoming transfers join it in stage 3.
+- "Goods arrived" and "Receive against booking" open the same guided workflow: Arrival, count, GRN (`PRD-REC-002`). Against a booking, the booking's open lines are shown as the expected goods.
+- Pending shows Arrivals not yet issued as a GRN, GRNs with held lines not yet decided, and GRNs waiting for their PT or its scan-in. History shows the rest.
+- Receiving is available at a business unit only after its receiving readiness is approved (`PRD-LIF-001`, `PRD-LIF-002`), with its mapping to a tax registration verified (`POL-10.08`); otherwise the inbox names what is missing.
+
+### 4.2 Recording the Arrival
+
+The receiver, Warehouse (P-WHS) at a warehouse or the Store's staff (P-STM) at a Store, records:
+
+| Field | Rule |
+| --- | --- |
+| Site and business unit | Where the goods physically are, even when another Site later prepares the PT (`PRD-REC-004`) |
+| Booking | Optional; one booking of the same supplier and brand (section 3.7) |
+| Supplier and brand | Required; the supplier linked to the brand (`PRD-MER-021`) |
+| Invoices | At least one before the count starts, each with its number and date and the uploaded file (`DEC-133`). Several invoices may come on one delivery; they still make one Arrival and one GRN. An invoice number the same supplier already used on another Arrival is shown as a possible duplicate, which the receiver confirms or corrects. **Design choice** |
+| Transporter; lorry receipt number and date | Required |
+| Vehicle number; e-way bill number | Optional (grill round 7) |
+| Number of cartons | Required |
+| Photos | Cartons, seals and any damage, as stored files (`PRD-REC-007`) |
+| Arrival time | When the goods arrived; the recording time is kept apart (`PRD-MOD-009`) |
+
+### 4.3 The count
+
+- By hand, against the invoice (grill notes, 19 Oct 2026). Several people may count; the process is the same whatever the size of the delivery. The GRN names who counted and who entered it, from their sign-ins.
+- The count is saved as it goes and can be resumed; nothing reaches stock until the GRN is issued.
+- **One line per style, colour and size**, as the invoice lists the goods:
+
+| Field | Rule |
+| --- | --- |
+| Style code | As the invoice writes it |
+| Colour | As the invoice names it; none when it names none (`DEC-138`). ECONOMY, MEDIUM and PREMIUM are never used on the GRN |
+| Size | A value of the Organisation's size list, the one matching the invoice's size, so that the PT file can be matched (section 5). A missing size stays missing (`PRD-MER-005`). **Design choice** |
+| Product | The SKU when the style, colour and size name a product already set up; otherwise left empty, and the PT approval sets it up (section 6) |
+| Invoice quantity | As the invoice states it |
+| Counted quantity | Whole pieces, as counted |
+| Batch and expiry | Only for a product whose tracking profile requires them; missing values block the GRN (`PRD-MER-011`) |
+
+- Every product is tracked by quantity in the first version (`DEC-137`).
+
+### 4.4 What the count finds
+
+Kept apart on each line; they can coexist (`PRD-REC-006`):
+
+| Finding | Meaning | At the count |
+| --- | --- | --- |
+| Shortage | Counted less than the invoice quantity | The missing quantity is recorded; nothing is held, since absent goods are not in custody |
+| Excess | Counted more than the invoice quantity | The receiver records the extra pieces as received, kept under an excess hold, or as not received |
+| Wrong | A known product that is not on the invoice | Received, kept in quarantine as wrong, or not received |
+| Unidentified | Goods not on the invoice that match no product | Received, kept in quarantine with their identity Unknown, or not received |
+| Damage | Damaged pieces, whatever else the line shows | A damage report at once, with photos; the pieces go under a damage hold before anyone confirms it (`PRD-DMG-001`, section 8) |
+
+- "Not received" means the goods are not kept at the Site: no custody is created, and the finding stays on the GRN as a record (grill notes, 19 Oct 2026).
+- Damage never lowers the counted quantity. A missing PT alone never makes goods wrong (`PRD-REC-012`).
+- A line for a product not yet set up, but on the invoice, is an ordinary line, not unidentified.
+
+### 4.5 Issuing the GRN
+
+- The receiver issues the GRN once every line has its counted quantity. No approval is needed (grill round 7). The GRN takes its number from its own number series.
+- **In one transaction** (module-map 6.1), or nothing:
+  - `receiving` freezes the GRN with its lines, findings, documents and photos;
+  - `stock` · ledger records a receipt count for each line's received pieces, into a location of the unit chosen for receiving (for example a receiving zone the Site sets up; structure-and-masters 3.5), in good condition, cost Unknown and not accepted; the owner on each receipt origin follows the brand's Agreement version (the booking's when the line is linked, otherwise the one in force on the arrival date; `PRD-ORG-014`);
+  - the excess hold, the quarantine and the damage holds are placed on the pieces they cover (stock-ledger 6.1);
+  - `booking` links each matched line (section 3.7);
+  - `exceptions` raises the follow-ups: shortage, excess, wrong and unidentified goods and unmatched lines to Booking; damage to Operations (grill notes, 19 Oct 2026);
+  - `audit` and the outbox record it.
+- **Goods of a product not yet set up** are counted with their identity as described (style code, colour, size) and their SKU Unknown (stock-ledger 2.2, `PRD-DMG-005`); unlike unidentified goods they are not quarantined, and PT approval gives them their SKU. The stage 1 receipt count needs a known SKU (stock-ledger 13.9); the ledger is extended for this (GI-1).
+- The printed GRN follows common practice ([grn-standard-fields.md](../../research/grn-standard-fields.md)): the header of 4.2 with the GRN number and date; per line the style code, colour, size, invoice and counted quantities and each finding; who counted and who entered it, with the time. It carries no price, tax or value.
+
+### 4.6 Deciding the held lines
+
+Every held line is decided before the PT file is uploaded (`DEC-137`):
+
+| Held line | Decided by | Take it in | Do not take it in |
+| --- | --- | --- | --- |
+| Excess | A Booking approver, a different person from the receiver (`PRD-REC-013`) | The pieces join the good pieces the PT covers; the excess hold is released through the PT route | They stay under the excess hold until a supplier return (stage 3) |
+| Wrong | A Booking approver named for the Site and brand (`POL-17.02`, `POL-17.11`) | The product is confirmed; the pieces return to good condition through the identity route and join the PT | They stay in quarantine until a supplier return (stage 3) |
+| Unidentified | As wrong goods | Booking names the product first; then as wrong goods | As wrong goods |
+| Damage | A different authorised person (section 8) | Rejected report: the pieces are good and join the PT | Confirmed: the pieces stay held and take no PT |
+
+- Each decision keeps the original finding (`PRD-REC-013`) and is recorded with who decided, when and why.
+- Accepting goods that are also damaged never clears their damage hold (`PRD-DMG-010`).
+
+### 4.7 Correcting a GRN
+
+- A GRN is never edited. A miscount is corrected by a linked recount of the lines concerned, which a different person approves (grill notes, 19 Oct 2026; `PRD-REC-019`). It adds or reverses receipt counts for the difference and keeps the original count.
+- A recount is possible until the GRN's PT is uploaded. After that, the PT is reversed first (section 6), which is possible only before the scan-in (`DEC-137`). **Design choice.**
 
 ## 5. The PT file upload
 
@@ -202,4 +291,6 @@ To draft.
 
 ## 13. Open questions
 
-None yet.
+| ID | Question | Owner | Blocks |
+| --- | --- | --- | --- |
+| GI-1 | The stage 1 receipt count needs a known SKU (stock-ledger 13.9). Goods of a product not yet set up must be counted with their identity as described and their SKU Unknown, not quarantined, and get their SKU at PT approval. Extend the ledger's receipt count and its identity step for this; technical | Builders, with the product owner's review of the stock-ledger change | Code: the GRN |
