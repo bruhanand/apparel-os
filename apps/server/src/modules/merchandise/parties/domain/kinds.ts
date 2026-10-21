@@ -3,6 +3,7 @@ import {
   AGREEMENT_TYPE,
   BANK_DETAILS_CHANGE,
   BANK_DETAILS_TYPE,
+  type AgreementTerms,
   type RecordState,
 } from '@apparel-os/schemas';
 import type { ApprovalRule, LatestRequest } from '../../../access/index.js';
@@ -11,10 +12,25 @@ import type { Decision } from '../db/schema.js';
 // The parties part's approval rules and version states (structure-and-masters 2.3, 5; S1-F03-T03).
 
 /**
- * The shape of an agreement version's stored terms (code-house-rules 3.3): `agreement-terms/1` without the default
- * model for new bookings, which DEC-129 retired (POL-01.02; RR-545); every version stored in `/1` was brought to it.
+ * The shape a new agreement version's terms are stored in (code-house-rules 3.3): `agreement-terms/1` without the
+ * default model for new bookings, which DEC-129 retired (POL-01.02; RR-545).
  */
 export const AGREEMENT_TERMS_FORMAT = 'agreement-terms/2';
+/** The shape of the versions stored before, kept as stored (structure-and-masters 5.2; PRD-MOD-011). */
+const RETIRED_TERMS_FORMAT = 'agreement-terms/1';
+
+/**
+ * A version's terms as read, from either stored shape: a `/1` version is kept as stored, and its retired default model
+ * is dropped here, so no read carries it and every other term reads as stored (DEC-129; RR-545).
+ */
+export function termsAsRead(stored: unknown, format: string): AgreementTerms {
+  if (format === AGREEMENT_TERMS_FORMAT) return stored as AgreementTerms;
+  if (format === RETIRED_TERMS_FORMAT) {
+    const terms = Object.entries(stored as Record<string, unknown>).filter(([term]) => term !== 'defaultModel');
+    return Object.fromEntries(terms) as AgreementTerms;
+  }
+  throw new Error(`An agreement version's terms are in an unknown shape, ${format}`);
+}
 
 /**
  * The approval rules the parties part declares (access-and-approvals 8; structure-and-masters 2.3): a party's bank-

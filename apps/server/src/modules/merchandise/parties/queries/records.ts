@@ -1,6 +1,5 @@
 import type {
   AgreementRecord,
-  AgreementTerms,
   BrandSupplierLinkRecord,
   PartyRecord,
   RestrictedText,
@@ -23,7 +22,7 @@ import {
   type Decision,
 } from '../db/schema.js';
 import { openBankDetails, type BankValues } from '../domain/bank-seal.js';
-import { versionState } from '../domain/kinds.js';
+import { termsAsRead, versionState } from '../domain/kinds.js';
 import { datesOf } from '../commands/lines.js';
 
 // The parties part's records with every version, a page at a time or one at a time (structure-and-masters 5.5, 8;
@@ -304,7 +303,7 @@ async function agreementsOf(
         ...(token === undefined ? {} : { versionToken: token }),
         versions: own.map((row) => ({
           ...versionView(row, today, latest.get(row.id)),
-          terms: row.terms as AgreementTerms,
+          terms: termsAsRead(row.terms, row.termsFormat),
           margins: marginsOf(row.margins, showMargins),
           signedAgreement: row.signedAgreementAttachmentIds,
         })),
@@ -352,6 +351,7 @@ export async function termsInForce(
       versionId: agreementVersion.id,
       validDuring: agreementVersion.validDuring,
       terms: agreementVersion.terms,
+      termsFormat: agreementVersion.termsFormat,
       margins: agreementVersion.margins,
     })
     .from(agreementVersion)
@@ -376,7 +376,7 @@ export async function termsInForce(
     versionId: row.versionId,
     validFrom: dates.start,
     ...(dates.end === undefined ? {} : { validTo: dates.end }),
-    terms: row.terms as AgreementTerms,
+    terms: termsAsRead(row.terms, row.termsFormat),
     margins: marginsOf(row.margins, showMargins),
   };
 }
