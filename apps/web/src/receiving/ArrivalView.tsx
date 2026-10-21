@@ -52,10 +52,10 @@ function personOf(arrival: Arrival, userId: string): string {
 const peopleOf = (arrival: Arrival, userIds: readonly string[]) =>
   formatList(userIds.map((id) => personOf(arrival, id)));
 
-/** A document's number and date, "SYN-1 of 21 Oct 2026". */
+/** A document's number and its date as design-language 8 writes it: "<number> of DD MMM YYYY". */
 const numberOfDate = (number: string, date: string) => t('receive.number-of-date', { number, date: formatDate(date) });
 
-/** A batch and its expiry, "SYN-BATCH-1, expires 19 Jan 2027", or None. */
+/** A batch and its expiry date, "<code>, expires DD MMM YYYY", or None. */
 const batchText = (batch: { readonly code: string; readonly expiryDate: string } | null) =>
   batch === null
     ? t('receive.none')
