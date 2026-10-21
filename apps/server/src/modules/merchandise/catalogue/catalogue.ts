@@ -39,7 +39,10 @@ export interface CatalogueDependencies {
     AccessInterface,
     'requestApproval' | 'approvalRequestsOf' | 'requestLockTargets' | 'supersedeRequest'
   >;
-  /** Which origins of a value this environment accepts, for the season and size attributes (12.14). */
+  /**
+   * Which origins of a value this environment accepts: for a tracking profile version's origin (RR-558) and for the
+   * season and size attributes (code-house-rules 12.14; RR-550, RR-556).
+   */
   readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
   /** Whether a party holds the supplier role, for a code scoped to a supplier (4.3); the parties part implements it. */
   readonly suppliers: SupplierRoles;
@@ -58,13 +61,11 @@ export interface CatalogueDependencies {
  */
 export class Catalogue extends CataloguePreparation {
   private readonly approvals: CatalogueDependencies['access'];
-  private readonly origins: CatalogueDependencies['origins'];
   private readonly suppliers: SupplierRoles;
 
   constructor(dependencies: CatalogueDependencies) {
-    super(dependencies.audit, dependencies.access, dependencies.stockPresence);
+    super(dependencies.audit, dependencies.access, dependencies.origins, dependencies.stockPresence);
     this.approvals = dependencies.access;
-    this.origins = dependencies.origins;
     this.suppliers = dependencies.suppliers;
   }
 

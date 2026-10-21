@@ -6,6 +6,7 @@ import {
   type MasterLists,
   type MasterRecords,
   type RecordState,
+  type SettingOrigin,
 } from '@apparel-os/schemas';
 import { and, asc, eq, inArray, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import type { PgSelect } from 'drizzle-orm/pg-core';
@@ -564,6 +565,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
                 legalEntityId: businessUnitMapping.legalEntityId,
                 taxRegistrationId: businessUnitMapping.taxRegistrationId,
                 accountingBookId: businessUnitMapping.accountingBookId,
+                origin: businessUnitMapping.origin,
               })
               .from(businessUnitMapping)
               .where(
@@ -580,6 +582,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
           legalEntityId: mapping?.legalEntityId ?? null,
           taxRegistrationId: mapping?.taxRegistrationId ?? null,
           accountingBookId: mapping?.accountingBookId ?? null,
+          origin: mapping?.origin ?? null,
         };
       });
     },
@@ -593,12 +596,16 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
     fields: (row) => ({
       name: row.name,
       status: row.status,
-      ...(row.legalEntityId === null || row.taxRegistrationId === null || row.accountingBookId === null
+      ...(row.legalEntityId === null ||
+      row.taxRegistrationId === null ||
+      row.accountingBookId === null ||
+      row.origin === null
         ? {}
         : {
             legalEntityId: row.legalEntityId,
             taxRegistrationId: row.taxRegistrationId,
             accountingBookId: row.accountingBookId,
+            origin: row.origin,
           }),
     }),
   }),
@@ -614,6 +621,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
             legalEntityId: businessUnitMapping.legalEntityId,
             taxRegistrationId: businessUnitMapping.taxRegistrationId,
             accountingBookId: businessUnitMapping.accountingBookId,
+            origin: businessUnitMapping.origin,
           })
           .from(businessUnitMapping)
           .$dynamic(),
@@ -639,6 +647,7 @@ export const kindReads: { readonly [K in MasterKind]: KindReads<K> } = {
       legalEntityId: row.legalEntityId,
       taxRegistrationId: row.taxRegistrationId,
       accountingBookId: row.accountingBookId,
+      origin: row.origin,
       ...(row.verification === undefined
         ? {}
         : {
@@ -770,6 +779,8 @@ export interface UnitMapping {
   readonly legalEntityId: string;
   readonly taxRegistrationId: string;
   readonly accountingBookId: string;
+  /** Where the mapping came from (code-house-rules 12.14; 3.4 "As built"; RR-558). */
+  readonly origin: SettingOrigin;
   /** The mapping version the caller stores on what it writes (PRD-ACP-013, PRD-MOD-010). */
   readonly mappingVersionId: string;
   /** Absent while the version is unverified; a live statutory action refuses then (POL-10.08). */
@@ -791,6 +802,7 @@ export async function mappingOn(
       legalEntityId: businessUnitMapping.legalEntityId,
       taxRegistrationId: businessUnitMapping.taxRegistrationId,
       accountingBookId: businessUnitMapping.accountingBookId,
+      origin: businessUnitMapping.origin,
     })
     .from(businessUnitMapping)
     .innerJoin(businessUnit, eq(businessUnit.id, businessUnitMapping.businessUnitId))

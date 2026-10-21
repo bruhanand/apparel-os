@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { priceBill, type PriceBillInput } from '@apparel-os/calculations';
 import type { TaxRuleCaEvidenceDraft, TaxRuleChanged, TaxRuleKind, TaxRulesInForceAnswer } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { calculationInputs } from '../src/modules/finance/tax-rules/index.js';
+import { calculationInputs, taxRulesCheck } from '../src/modules/finance/tax-rules/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment } from './support/access.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
@@ -330,6 +330,29 @@ describe('what is read (shared-calculations 10.2; code-house-rules 12.14)', () =
     expect(record?.versions).toEqual([
       expect.objectContaining({ id: first.versionId, state: 'In force', caEvidence: 1, origin: 'synthetic' }),
     ]);
+  });
+
+  it("POL-10.02 RR-558 each approved version in force is policy 10's value, with its origin and its preparer", async () => {
+    const value = (versionId: string) =>
+      setup.run(setup.outsider.id, async (c) => (await taxRulesCheck.values(c)).find((each) => each.key === versionId));
+    expect(taxRulesCheck.policy).toBe(10);
+    const awaiting = await classification(syntheticCode(next('HSNV')));
+    // Awaiting approval, it is no value yet (shared-calculations 10.1).
+    expect(await value(awaiting.versionId)).toBeUndefined();
+    await approve('goods-classification', awaiting);
+    expect(await value(awaiting.versionId)).toEqual({
+      key: awaiting.versionId,
+      version: `[${setup.today()},)`,
+      origin: 'synthetic',
+      enteredBy: [setup.preparer.id],
+    });
+    // Recording a validation locks, shared, the identity row each change and decision of the record locks.
+    const locks = await setup.run(setup.outsider.id, (c) => taxRulesCheck.locks(c));
+    expect(locks).toContainEqual({
+      table: { schema: 'finance', table: 'goods_classification' },
+      id: awaiting.recordId,
+      mode: 'shared',
+    });
   });
 
   it('PRD-MOD-001 a second synthetic Organisation sees none of these records', async () => {

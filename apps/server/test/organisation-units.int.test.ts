@@ -119,6 +119,7 @@ async function entity(stateId: string, on: StructureSetup = setup) {
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: book.recordId,
+    origin: 'synthetic' as const,
   };
 }
 
@@ -323,8 +324,8 @@ describe('business units and their mappings (structure-and-masters 3.3, 3.4)', (
         await sqlState(
           owner.query(
             `insert into organisation.business_unit_mapping (id, business_unit_id, legal_entity_id, tax_registration_id,
-               accounting_book_id, valid_during, decision, prepared_by_user_id)
-             values ($1, $2, $3, $4, $5, daterange(current_date + 5, null), 'Awaiting approval', $6)`,
+               accounting_book_id, valid_during, decision, prepared_by_user_id, origin)
+             values ($1, $2, $3, $4, $5, daterange(current_date + 5, null), 'Awaiting approval', $6, 'synthetic')`,
             [
               uuidv7(),
               unit.recordId,

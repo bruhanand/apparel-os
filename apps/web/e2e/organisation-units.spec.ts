@@ -101,6 +101,8 @@ test('PRD-ORG-005 POL-10.08 two units at one Site mapped to different books and 
         await drawer.getByLabel(/^Legal entity/).selectOption({ label: entity.legalEntityOption });
         await drawer.getByLabel(/^Tax registration/).selectOption({ label: entity.registrationOption });
         await drawer.getByLabel(/^Accounting book/).selectOption({ label: entity.bookOption });
+        // Verified, the mapping is policy 10's value, so it says where it comes from (RR-558).
+        await drawer.getByLabel(/^Where the mapping comes from/).selectOption({ label: 'SYNTHETIC' });
         await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' }).click();
         await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
         await admin.keyboard.press('Escape');

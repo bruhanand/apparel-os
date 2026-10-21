@@ -3,6 +3,7 @@ import { approvalRequestStateSchema } from './approvals.js';
 import { recordStateSchema } from './access-records.js';
 import { businessDateSchema, idSchema } from './common.js';
 import { businessUnitKindSchema, masterCodeSchema } from './organisation.js';
+import { settingOriginSchema } from './settings.js';
 
 // The merchandise catalogue's first masters (structure-and-masters 4.1, 4.2, 4.7, 6.2; module-map 4.12;
 // S1-F03-T01): brands with their aliases and optional parent brand (PRD-MER-001, PRD-MER-020), a business unit's brand
@@ -189,6 +190,11 @@ const trackingProfileFields = {
   /** Minimum remaining shelf life in days for receiving and for selling; absent is Unknown (POL-04.05; V-05). */
   receivingShelfLifeDays: shelfLifeDays,
   sellingShelfLifeDays: shelfLifeDays,
+  /**
+   * Where the version's values came from, stated with no default: the profiles are policy 4's values, reported to the
+   * policy gate with their origin (code-house-rules 12.14; goods-in 10.5; RR-558).
+   */
+  origin: settingOriginSchema,
 };
 export const trackingProfileDraftSchema = z.strictObject({
   code: masterCodeSchema,

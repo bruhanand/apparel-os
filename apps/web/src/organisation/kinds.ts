@@ -151,6 +151,12 @@ export type FieldSpec = {
 );
 
 const code: FieldSpec = { name: 'code', label: 'organisation.field.code', kind: 'text', mono: true, fixed: true };
+/** Where a version's values come from (code-house-rules 12.14): no option is chosen for the person. */
+const ORIGIN_OPTIONS: readonly Option[] = [
+  { value: 'kdps', label: 'rules.origin.kdps' },
+  { value: 'test-setup', label: 'rules.origin.test-setup' },
+  { value: 'synthetic', label: 'rules.origin.synthetic' },
+];
 const name: FieldSpec = { name: 'name', label: 'organisation.field.name', kind: 'text' };
 const openingDate: FieldSpec = {
   name: 'openingDate',
@@ -462,6 +468,9 @@ export const fields: Readonly<Record<Kind, readonly FieldSpec[]>> = {
       optional: true,
     },
     { name: 'sellingShelfLifeDays', label: 'merchandise.field.sellingShelfLifeDays', kind: 'whole', optional: true },
+    // The profiles are policy 4's values, reported to the policy gate with their origin (code-house-rules 12.14;
+    // goods-in 10.5; RR-558).
+    { name: 'origin', label: 'merchandise.field.origin', kind: 'select', options: ORIGIN_OPTIONS },
   ],
   category_tracking_profile: [
     {
@@ -546,6 +555,9 @@ function mappingFields(withFirst: boolean): FieldSpec[] {
       target: 'accounting_book',
       ...flag,
     },
+    // Verified, the mappings are policy 10's values, reported to the policy gate with their origin (code-house-rules
+    // 12.14; POL-10.08; goods-in 10.5; RR-558).
+    { name: 'origin', label: 'organisation.field.mappingOrigin', kind: 'select', options: ORIGIN_OPTIONS, ...flag },
   ];
 }
 

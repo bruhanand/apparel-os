@@ -1,4 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
+import type { TransactionContext } from '../../src/kernel/index.js';
+import type { ValidityCheck } from '../../src/modules/configuration/index.js';
 import { connect } from './postgres.js';
 
 // A policy's SYNTHETIC Signed record and validation, written as fixtures (module-map 4.4; DM-6; code-house-rules 11.2),
@@ -8,8 +10,26 @@ import { connect } from './postgres.js';
 // support/receiving.ts does. Never a KDPS value.
 
 /**
+ * How a validation names each value the checks report now, `<check>:<key>@<version>` (module-map 4.4 "As built";
+ * RR-478), read through the checks themselves in a transaction `run` gives: for a fixture validation that covers the
+ * values a module reports, such as the verified mappings of policy 10 (RR-558).
+ */
+export async function reportedValues(
+  run: <T>(work: (context: TransactionContext) => Promise<T>) => Promise<T>,
+  checks: readonly ValidityCheck[],
+): Promise<string[]> {
+  const names: string[] = [];
+  for (const check of checks) {
+    const values = await run((context) => check.values(context));
+    names.push(...values.map((value) => `${check.code}:${value.key}@${value.version}`));
+  }
+  return names;
+}
+
+/**
  * Policy `policy` Signed and validated as SYNTHETIC fixtures, the validation covering `validatedValues`, each
- * `<check>:<key>@<version>` of a SYNTHETIC validity check the composition registers (RR-480).
+ * `<check>:<key>@<version>` of a validity check the composition registers (RR-480), a SYNTHETIC one or one whose
+ * values reportedValues names.
  */
 export async function signedFixture(
   database: string,

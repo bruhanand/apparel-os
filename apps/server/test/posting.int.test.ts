@@ -178,6 +178,7 @@ async function book(on: StructureSetup = setup, geography = { stateId, areaId })
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: bookId,
+    origin: 'synthetic' as const,
   };
   const site = await approved(on, (c, p) =>
     on.organisation.prepareSite(c, p, {

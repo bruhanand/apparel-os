@@ -3,6 +3,7 @@ import { businessDateSchema, idSchema } from './common.js';
 import { recordStateSchema } from './access-records.js';
 import { approvalRequestStateSchema } from './approvals.js';
 import { evidenceListSchema } from './files.js';
+import { settingOriginSchema } from './settings.js';
 
 // The organisation structure the first organisation ticket builds (structure-and-masters 2, 3.1 to 3.3, 3.6 to 3.8,
 // 8; module-map 4.11; S1-F02-T01): geography, legal entities, tax registrations, accounting books, Sites, Stores and
@@ -356,9 +357,16 @@ const STORE_FOR_STORE_KINDS = {
 
 /**
  * A business unit's mapping: one legal entity, one tax registration and one accounting book, never inferred from the
- * Site (structure-and-masters 3.4; PRD-ORG-005, POL-10.01).
+ * Site (structure-and-masters 3.4; PRD-ORG-005, POL-10.01), and where it came from, stated with no default: verified,
+ * the mappings are policy 10's values, reported to the policy gate with their origin (code-house-rules 12.14;
+ * POL-10.08; goods-in 10.5; RR-558).
  */
-const mappingFields = { legalEntityId: idSchema, taxRegistrationId: idSchema, accountingBookId: idSchema };
+const mappingFields = {
+  legalEntityId: idSchema,
+  taxRegistrationId: idSchema,
+  accountingBookId: idSchema,
+  origin: settingOriginSchema,
+};
 const businessUnitFields = { name: textSchema };
 
 /** The kinds of internal stock location (PRD-ORG-012). */
@@ -400,7 +408,7 @@ export const businessUnitDraftSchema = z
   .refine(storeForStoreKinds, STORE_FOR_STORE_KINDS);
 /**
  * A later version of a unit: its name. A unit that has no approved version yet, such as a new unit's draft being
- * re-dated (GC2-7), names its first mapping again: all three fields, or none.
+ * re-dated (GC2-7), names its first mapping again: all three fields and its origin, or none.
  */
 export const businessUnitVersionDraftSchema = z
   .strictObject({
@@ -408,16 +416,20 @@ export const businessUnitVersionDraftSchema = z
     legalEntityId: idSchema.optional(),
     taxRegistrationId: idSchema.optional(),
     accountingBookId: idSchema.optional(),
+    origin: settingOriginSchema.optional(),
     validFrom,
   })
   .refine(
     (value) => {
-      const given = [value.legalEntityId, value.taxRegistrationId, value.accountingBookId].filter(
+      const given = [value.legalEntityId, value.taxRegistrationId, value.accountingBookId, value.origin].filter(
         (each) => each !== undefined,
       );
-      return given.length === 0 || given.length === 3;
+      return given.length === 0 || given.length === 4;
     },
-    { message: 'A mapping names its legal entity, tax registration and book together', path: ['legalEntityId'] },
+    {
+      message: 'A mapping names its legal entity, tax registration, book and origin together',
+      path: ['legalEntityId'],
+    },
   );
 /** A later mapping version of a unit (3.4). */
 export const businessUnitMappingVersionDraftSchema = z.strictObject({ ...mappingFields, validFrom });
@@ -496,6 +508,7 @@ const businessUnitHistoryFields = {
   legalEntityId: idSchema.optional(),
   taxRegistrationId: idSchema.optional(),
   accountingBookId: idSchema.optional(),
+  origin: settingOriginSchema.optional(),
 };
 const businessUnitFixed = { siteId: idSchema, kind: businessUnitKindSchema, storeId: idSchema.optional() };
 /**

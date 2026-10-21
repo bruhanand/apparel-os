@@ -1,7 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import type { MappingVerificationRequest, MappingVerified } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import { sqlStateOf, type TransactionContext } from '../../../kernel/index.js';
+import { LOCK_STEP, lockTable, sqlStateOf, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { businessUnitMapping, businessUnitMappingVerification } from '../db/schema.js';
@@ -13,7 +13,9 @@ import { placeFactsOfRecord } from '../queries/scope.js';
 // append-only record linked to the one version, with who verified it, when, and its evidence, stored files attached
 // through files-imports in the same transaction (S1-F06-T05; DEC-116). The verify permission, create on the
 // verification record, is checked by the route's Authorise and held at step 0; the verifier is never the person who made
-// the mapping, checked here and by the migration's trigger (0029).
+// the mapping, checked here and by the migration's trigger (0029). A verified mapping is policy 10's value
+// (queries/validity.ts; goods-in 10.5; RR-558), so verifying one first locks the unit's row at step 1, as a decision on
+// its mapping does, which recording policy 10's validation locks shared (S1-F04 review S3).
 
 /** The record type of a verification, which the evidence is attached to and read through (imports-and-opening-data 11). */
 export const VERIFICATION_RECORD_TYPE = 'organisation.business_unit_mapping_verification';
@@ -31,6 +33,9 @@ export async function verifyMapping(
   mappingVersionId: string,
   request: MappingVerificationRequest,
 ): Promise<Prepared<MappingVerified>> {
+  await context.lock(LOCK_STEP.document, [
+    { table: lockTable('organisation', 'business_unit'), id: unitId, mode: 'exclusive' },
+  ]);
   const [mapping] = await context.tx
     .select({ decision: businessUnitMapping.decision, preparedBy: businessUnitMapping.preparedByUserId })
     .from(businessUnitMapping)

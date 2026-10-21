@@ -27,3 +27,5 @@ export type { MarkedAttributeAt } from './queries/marks.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
 export { catalogueRestoreParticipant } from './restore-participant.js';
+// The tracking profiles as policy 4's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
+export { TRACKING_PROFILES_CHECK, trackingProfilesCheck } from './queries/validity.js';
