@@ -242,7 +242,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await seededDatabases()).toEqual([]);
   });
 
-  it('PRD-ACS-023 PRD-ACS-020 DEC-118 sets up both Organisations through the setup step, each with its own first Admin and first approver, and a rerun changes nothing', async () => {
+  it('PRD-ACS-023 PRD-ACS-020 DEC-118 sets up both Organisations through the setup step, each with its own first Admin and first approver and the SYNTHETIC GRN series, and a rerun changes nothing', async () => {
     const variables = { AOS_ENVIRONMENT: 'local', AOS_MIGRATION_DATABASE_URL: databaseUrl(directory, 'migration') };
     const first = await runSeed(variables);
     expect(first.exitCode, first.output).toBe(0);
@@ -297,6 +297,15 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
         );
         expect(logins.rows).toHaveLength(2);
         people.push(...logins.rows.map((row) => row.login));
+        // DEC-118 RR-449: the GRN series, Open, with its format labelled SYNTHETIC, so a GRN can be numbered on `dev`
+        // once receiving is available there (goods-in 4.8).
+        const grnSeries = await owner.query<{ state: string; parts: string }>(
+          `select s.state, string_agg(coalesce(p.text, '#' || p.width::text), '' order by p.position) as parts
+             from numbering.series s join numbering.number_format_part p on p.number_format_version_id = s.number_format_version_id
+            where s.kind = 'receiving.grn' and s.scope_key = 'organisation'
+            group by s.id, s.state`,
+        );
+        expect(grnSeries.rows).toEqual([{ state: 'Open', parts: 'SYN-GRN-#5' }]);
       } finally {
         await owner.end();
       }

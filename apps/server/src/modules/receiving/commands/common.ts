@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { ARRIVAL_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { ARRIVAL_TYPE, GRN_TYPE, type MissingItem } from '@apparel-os/schemas';
 import { desc, eq, inArray } from 'drizzle-orm';
 import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
@@ -170,7 +170,7 @@ export async function grnOf(context: TransactionContext, arrivalId: string) {
  * linked recount (goods-in 4.5, 4.7; PRD-REC-019).
  */
 export const grnIssued = (grnId: string): Outcome<never> =>
-  refused('refused', 'receiving.grn-issued', [recordItem('receiving.grn', grnId)]);
+  refused('refused', 'receiving.grn-issued', [recordItem(GRN_TYPE, grnId)]);
 
 type ValueChange = Extract<AuditChange, { kind: 'value' }>;
 
