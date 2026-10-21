@@ -265,6 +265,17 @@ export interface SyntheticWorld {
     readonly supplierCode: string;
   };
   /**
+   * The agreement journey (S2-F01-T01), in the security settings Organisation: Booking, who prepares an agreement, a
+   * different person who approves it from My work, and the SYNTHETIC supplier with no agreement yet.
+   */
+  readonly agreement: {
+    readonly organisationCode: string;
+    readonly preparer: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly supplierCode: string;
+    readonly supplierName: string;
+  };
+  /**
    * The policy readiness journey (S1-F04-T01), in the security settings Organisation: the Admin who records policy 14
    * as Signed and switches its capability on, the person who validates its values without having entered them, and
    * the SYNTHETIC operation it governs, with its capability.

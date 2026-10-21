@@ -10,8 +10,11 @@ import type { Decision } from '../db/schema.js';
 
 // The parties part's approval rules and version states (structure-and-masters 2.3, 5; S1-F03-T03).
 
-/** The shape of an agreement version's stored terms (code-house-rules 3.3). */
-export const AGREEMENT_TERMS_FORMAT = 'agreement-terms/1';
+/**
+ * The shape of an agreement version's stored terms (code-house-rules 3.3): `agreement-terms/1` without the default
+ * model for new bookings, which DEC-129 retired (POL-01.02; RR-545); every version stored in `/1` was brought to it.
+ */
+export const AGREEMENT_TERMS_FORMAT = 'agreement-terms/2';
 
 /**
  * The approval rules the parties part declares (access-and-approvals 8; structure-and-masters 2.3): a party's bank-

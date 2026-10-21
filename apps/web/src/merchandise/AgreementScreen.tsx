@@ -26,8 +26,9 @@ import { stateIdOf } from '../setup/states';
 // Setup › Agreement (structure-and-masters 5.2, 5.5, 8; ui-blueprint Setup › Agreement; S1-F03-T03): an agreement with a
 // brand or a supplier, its versions with their dated terms and the version in force on a chosen date. Every term is a
 // value or Unknown, none filled in (POL-01.11); margins show only with their field class, masked otherwise
-// (PRD-ACS-008); a version waits for a different authorised person (GC2-2, DEC-105). The costing profile belongs to
-// merchandise · PT, from stage 2.
+// (PRD-ACS-008); a version waits for a different authorised person (GC2-2, DEC-105). Every booking takes the
+// agreement's commercial model, so no default model for new bookings is asked or shown (POL-01.02; DEC-129, RR-545).
+// The costing profile belongs to merchandise · PT, from stage 2.
 
 const READS = ['listAgreements', 'readAgreement', 'listMyWork'] as const;
 const models = commercialModelSchema.options;
@@ -42,7 +43,6 @@ const yesNo = (value: string): boolean | null => (value === '' ? null : value ==
 /** The form's fields, as text, each empty for Unknown. */
 interface Draft {
   commercialModel: string;
-  defaultModel: string;
   ownershipEvent: string;
   ownershipDescription: string;
   returnAllowed: string;
@@ -70,7 +70,6 @@ interface Draft {
 const EMPTY: Draft = Object.fromEntries(
   [
     'commercialModel',
-    'defaultModel',
     'ownershipEvent',
     'ownershipDescription',
     'returnAllowed',
@@ -105,7 +104,6 @@ function termsOf(draft: Draft): AgreementTerms {
     .filter((line) => line !== '');
   return {
     commercialModel: draft.commercialModel === '' ? null : (draft.commercialModel as CommercialModel),
-    defaultModel: draft.defaultModel === '' ? null : (draft.defaultModel as CommercialModel),
     ownershipEvent:
       event === ''
         ? null
@@ -228,11 +226,6 @@ function TermsFields({ draft, set }: { draft: Draft; set: (field: keyof Draft, v
         options={models.map((model) => ({ value: model, label: `agreement.model.${model}` as const }))}
       />
       <Choice
-        {...field('defaultModel')}
-        label="agreement.field.defaultModel"
-        options={models.map((model) => ({ value: model, label: `agreement.model.${model}` as const }))}
-      />
-      <Choice
         {...field('ownershipEvent')}
         label="agreement.field.ownershipEvent"
         options={EVENTS.map((event) => ({ value: event, label: `agreement.event.${event}` as const }))}
@@ -280,7 +273,7 @@ function TermsFields({ draft, set }: { draft: Draft; set: (field: keyof Draft, v
 }
 
 /** A new agreement, or a new version of one, with its signed agreement stored first (S1-F06-T05). */
-function AgreementForm({ agreement }: { agreement?: AgreementRecord }) {
+export function AgreementForm({ agreement }: { agreement?: AgreementRecord }) {
   const today = useBusinessToday();
   const brands = useQuery(readQuery(api, 'listBrands', { query: {} }));
   const parties = useQuery(readQuery(api, 'listParties', { query: {} }));
@@ -418,9 +411,6 @@ function TermsView({ version }: { version: AgreementRecord['versions'][number] }
       <Term label="agreement.field.commercialModel">
         {terms.commercialModel === null ? unknown() : t(`agreement.model.${terms.commercialModel}`)}
       </Term>
-      <Term label="agreement.field.defaultModel">
-        {terms.defaultModel === null ? unknown() : t(`agreement.model.${terms.defaultModel}`)}
-      </Term>
       <Term label="agreement.field.ownershipEvent">
         {event === null ? unknown() : event.kind === 'other' ? event.description : t(`agreement.event.${event.kind}`)}
       </Term>
@@ -460,7 +450,7 @@ function TermsView({ version }: { version: AgreementRecord['versions'][number] }
 }
 
 /** One agreement: the version in force on a chosen date, and every version with its state. */
-function AgreementView({ agreement }: { agreement: AgreementRecord }) {
+export function AgreementView({ agreement }: { agreement: AgreementRecord }) {
   const today = useBusinessToday();
   const [on, setOn] = useState(today);
   const [versioning, setVersioning] = useState(false);

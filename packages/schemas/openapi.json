@@ -6318,21 +6318,6 @@
                                         }
                                       ]
                                     },
-                                    "defaultModel": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string",
-                                          "enum": [
-                                            "outright",
-                                            "sale-or-return",
-                                            "consignment"
-                                          ]
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
-                                    },
                                     "ownershipEvent": {
                                       "anyOf": [
                                         {
@@ -6701,7 +6686,6 @@
                                   },
                                   "required": [
                                     "commercialModel",
-                                    "defaultModel",
                                     "ownershipEvent",
                                     "returnRights",
                                     "returnConditions",
@@ -7121,21 +7105,6 @@
                           }
                         ]
                       },
-                      "defaultModel": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "enum": [
-                              "outright",
-                              "sale-or-return",
-                              "consignment"
-                            ]
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
                       "ownershipEvent": {
                         "anyOf": [
                           {
@@ -7504,7 +7473,6 @@
                     },
                     "required": [
                       "commercialModel",
-                      "defaultModel",
                       "ownershipEvent",
                       "returnRights",
                       "returnConditions",
@@ -34655,21 +34623,6 @@
                           }
                         ]
                       },
-                      "defaultModel": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "enum": [
-                              "outright",
-                              "sale-or-return",
-                              "consignment"
-                            ]
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
                       "ownershipEvent": {
                         "anyOf": [
                           {
@@ -35038,7 +34991,6 @@
                     },
                     "required": [
                       "commercialModel",
-                      "defaultModel",
                       "ownershipEvent",
                       "returnRights",
                       "returnConditions",
@@ -48920,21 +48872,6 @@
                                       }
                                     ]
                                   },
-                                  "defaultModel": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string",
-                                        "enum": [
-                                          "outright",
-                                          "sale-or-return",
-                                          "consignment"
-                                        ]
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
                                   "ownershipEvent": {
                                     "anyOf": [
                                       {
@@ -49303,7 +49240,6 @@
                                 },
                                 "required": [
                                   "commercialModel",
-                                  "defaultModel",
                                   "ownershipEvent",
                                   "returnRights",
                                   "returnConditions",
@@ -68056,21 +67992,6 @@
                             }
                           ]
                         },
-                        "defaultModel": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "enum": [
-                                "outright",
-                                "sale-or-return",
-                                "consignment"
-                              ]
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "ownershipEvent": {
                           "anyOf": [
                             {
@@ -68439,7 +68360,6 @@
                       },
                       "required": [
                         "commercialModel",
-                        "defaultModel",
                         "ownershipEvent",
                         "returnRights",
                         "returnConditions",

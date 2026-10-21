@@ -132,11 +132,12 @@ export const supplierTermSchema = z.strictObject({
   from: textSchema.nullable(),
 });
 
-/** An agreement version's terms other than margins, which are restricted (PRD-ACS-008) and kept apart. */
+/**
+ * An agreement version's terms other than margins, which are restricted (PRD-ACS-008) and kept apart. Every booking
+ * takes the agreement's commercial model, so no other model is kept for new bookings (POL-01.02; DEC-129, RR-545).
+ */
 export const agreementTermsSchema = z.strictObject({
   commercialModel: commercialModelSchema.nullable(),
-  /** The default model for new bookings of the brand (POL-01.02). */
-  defaultModel: commercialModelSchema.nullable(),
   ownershipEvent: ownershipEventSchema.nullable(),
   returnRights: returnRightsSchema,
   returnConditions: returnConditionsSchema,
