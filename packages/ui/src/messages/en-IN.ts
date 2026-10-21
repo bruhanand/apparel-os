@@ -2995,11 +2995,13 @@ export const englishIndia = {
     'This supplier’s invoice number is on another Arrival. Correct the number, or confirm it is right.',
   'error.receiving.invoice-required': 'Record the supplier invoice first: the count starts only once it is recorded.',
   'error.receiving.size-not-on-list': 'This size is not an approved value of the size list in force today.',
+  'error.receiving.line-repeated':
+    'The count already has a line for this style, colour and size. Change that line instead of adding another.',
   'error.receiving.sku-not-of-line':
     'This product is not in force here today, or it is of another brand or style code than the line.',
   'error.receiving.no-lines': 'Count at least one line before issuing the GRN.',
   'error.receiving.line-differs-from-invoice':
-    'A counted quantity differs from its invoice quantity. Shortage and excess are not recorded yet, so this GRN cannot be issued.',
+    'A counted quantity differs from its invoice quantity. The GRN is issued only when every line’s counted quantity equals its invoice quantity.',
   'error.receiving.batch-required': 'This product needs its batch and expiry on the line.',
   'error.receiving.batch-not-tracked': 'This line has a batch, but its product does not track batches.',
   'error.receiving.no-grn-series': 'No open number series for GRNs is set up yet.',
@@ -3098,8 +3100,7 @@ export const englishIndia = {
   'receive.pieces.none': 'A line has pieces on the invoice or counted.',
   'receive.counted-by': 'Counted by',
   'receive.issue': 'The GRN',
-  'receive.issue.intro':
-    'The GRN needs no approval. Once issued it is never changed; a miscount is corrected by a recount.',
+  'receive.issue.intro': 'The GRN needs no approval. Once issued, it is never changed.',
   'receive.issue-grn': 'Issue the GRN',
   'receive.grn-issued': 'GRN issued.',
   'receive.blocked': 'Before the GRN can be issued',

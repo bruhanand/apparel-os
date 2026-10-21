@@ -16,11 +16,29 @@ export const GRN_TYPE = 'receiving.grn';
 
 const instantSchema = z.iso.datetime({ offset: true });
 
+/**
+ * The technical caps on what a receiver enters (goods-in 4.8 "Input caps"): the builders' choice, set by no rule of the
+ * PRD or the policies, so that a row stays bounded and a quantity fits the database's whole-number column with room to
+ * add lines up. **Design choice**; none is a business limit.
+ */
+export const RECEIVING_CAPS = {
+  /** Pieces on one line, on the invoice or counted. */
+  pieces: 1_000_000,
+  /** Cartons of one Arrival. */
+  cartons: 100_000,
+  /** A vehicle or e-way bill number. */
+  shortText: 30,
+  /** A lorry receipt or invoice number, a style code, a colour or a batch code. */
+  codeText: 60,
+  /** The transporter. */
+  longText: 200,
+} as const;
+
 /** Text as the receiver types it: at least one character that is not a space, at most `max` characters. */
 const text = (max: number) => z.string().max(max).regex(/\S/, { message: 'Needs a character that is not a space' });
 
 /** A whole number of pieces, never below zero (goods-in 4.3). */
-const piecesSchema = z.int().min(0).max(1_000_000);
+const piecesSchema = z.int().min(0).max(RECEIVING_CAPS.pieces);
 
 /** A new Arrival (goods-in 4.2): where the goods physically are, who sent them and how they came. */
 export const arrivalDraftSchema = z.strictObject({
@@ -30,11 +48,11 @@ export const arrivalDraftSchema = z.strictObject({
   receivingLocationId: idSchema,
   supplierPartyId: idSchema,
   brandId: idSchema,
-  transporter: text(200),
-  lorryReceipt: z.strictObject({ number: text(60), date: businessDateSchema }),
-  vehicleNumber: text(30).optional(),
-  ewayBillNumber: text(30).optional(),
-  cartons: z.int().min(1).max(100_000),
+  transporter: text(RECEIVING_CAPS.longText),
+  lorryReceipt: z.strictObject({ number: text(RECEIVING_CAPS.codeText), date: businessDateSchema }),
+  vehicleNumber: text(RECEIVING_CAPS.shortText).optional(),
+  ewayBillNumber: text(RECEIVING_CAPS.shortText).optional(),
+  cartons: z.int().min(1).max(RECEIVING_CAPS.cartons),
   /** When the goods arrived; the recording time is kept apart (PRD-MOD-009). */
   arrivedAt: instantSchema,
 });
@@ -48,7 +66,7 @@ export type ArrivalRecorded = z.infer<typeof arrivalRecordedSchema>;
  * another Arrival is refused as a possible duplicate until the receiver confirms it (goods-in 4.2).
  */
 export const invoiceDraftSchema = z.strictObject({
-  number: text(60),
+  number: text(RECEIVING_CAPS.codeText),
   date: businessDateSchema,
   file: evidenceFileSchema,
   confirmPossibleDuplicate: z.boolean().optional(),
@@ -83,9 +101,9 @@ export type SizeRef = z.infer<typeof sizeRefSchema>;
 export const countLineDraftSchema = z
   .strictObject({
     line: z.strictObject({ lineId: idSchema, versionToken: idSchema }).optional(),
-    styleCode: text(60),
+    styleCode: text(RECEIVING_CAPS.codeText),
     /** As the invoice names it; null when it names none (DEC-138). */
-    colour: text(60).nullable(),
+    colour: text(RECEIVING_CAPS.codeText).nullable(),
     /** Null when the invoice states none: a missing size stays missing (PRD-MER-005). */
     size: sizeRefSchema.nullable(),
     /** The product, when the style, colour and size name one already set up; null otherwise (goods-in 4.3). */
@@ -93,7 +111,7 @@ export const countLineDraftSchema = z
     invoiceQuantity: piecesSchema,
     countedQuantity: piecesSchema,
     /** Only for a product whose tracking profile requires them (PRD-MER-011). */
-    batch: z.strictObject({ code: text(60), expiryDate: businessDateSchema }).nullable(),
+    batch: z.strictObject({ code: text(RECEIVING_CAPS.codeText), expiryDate: businessDateSchema }).nullable(),
   })
   .refine((line) => line.invoiceQuantity > 0 || line.countedQuantity > 0, {
     message: 'A line has pieces on the invoice or counted',

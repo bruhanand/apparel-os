@@ -18,31 +18,18 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedInUser } from '../../access/index.js';
-import { siteExists } from '../../organisation/index.js';
-import type { Actor, Outcome } from '../commands/common.js';
+import {
+  BUSINESS_DATE_NOT_SET,
+  recordNotFound,
+  unitNotAtSite,
+  type Actor,
+  type Outcome,
+} from '../commands/common.js';
 import type { ReceivingInterface } from '../receiving.js';
 import { RECEIVING } from '../tokens.js';
 
 /** Finds the facts of the record a route acts on, in its transaction; undefined when it does not exist. */
 type FactsOf = (context: TransactionContext, today: string) => Promise<RecordFacts | undefined>;
-
-const BUSINESS_DATE_NOT_SET: CommandRefusal = {
-  kind: 'unavailable',
-  code: 'access.business-date-not-set',
-  missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-};
-
-const notFound = (recordType: string, recordId: string): CommandRefusal => ({
-  kind: 'not-found',
-  code: 'receiving.record-not-found',
-  missing: [{ kind: 'record', recordType, recordId }],
-});
-
-const unitNotFound = (businessUnitId: string): CommandRefusal => ({
-  kind: 'refused',
-  code: 'receiving.unit-not-at-site',
-  missing: [{ kind: 'record', recordType: 'organisation.business_unit', recordId: businessUnitId }],
-});
 
 /**
  * Receive Goods (goods-in 4.1 to 4.5, section 11; module-map section 5; code-house-rules 12.1; S2-F02-T02). An Arrival
@@ -68,7 +55,6 @@ export class ReceivingController {
   ) {
     const { siteId } = input.params;
     const answer = await this.read(user, 'receiving.read-inbox', async (context, today) => {
-      if (!(await siteExists(context, siteId))) return { refused: notFound('organisation.site', siteId) };
       let refusal: CommandRefusal | undefined;
       const inbox = await this.receiving.inbox(context, siteId, input.query, today, async (facts) => {
         const checked = await this.access.authoriseEach(
@@ -83,6 +69,7 @@ export class ReceivingController {
         return checked.each.map((each) => each.kind === 'allowed');
       });
       if (refusal !== undefined) return { refused: refusal };
+      if (inbox === undefined) return { refused: recordNotFound('organisation.site', siteId) };
       return { asOf: context.startedAt.toISOString(), ...inbox };
     });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
@@ -109,7 +96,7 @@ export class ReceivingController {
         today,
         async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
       );
-      if (arrival === undefined) return { refused: notFound(ARRIVAL_TYPE, arrivalId) };
+      if (arrival === undefined) return { refused: recordNotFound(ARRIVAL_TYPE, arrivalId) };
       return { asOf: context.startedAt.toISOString(), arrival };
     });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
@@ -125,7 +112,7 @@ export class ReceivingController {
       user,
       input,
       (context, today) => this.receiving.newArrivalFacts(context, businessUnitId, brandId, today),
-      unitNotFound(businessUnitId),
+      unitNotAtSite(businessUnitId),
       (context, actor) => this.receiving.recordArrival(context, actor, input.body),
     );
   }
@@ -191,7 +178,7 @@ export class ReceivingController {
       user,
       input,
       (context) => this.receiving.arrivalFacts(context, arrivalId),
-      notFound(ARRIVAL_TYPE, arrivalId),
+      recordNotFound(ARRIVAL_TYPE, arrivalId),
       work,
     );
   }

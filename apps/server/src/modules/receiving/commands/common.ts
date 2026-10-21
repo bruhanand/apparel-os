@@ -1,17 +1,22 @@
 import { uuidv7 } from '@apparel-os/domain';
-import type { MissingItem } from '@apparel-os/schemas';
-import { and, desc, eq } from 'drizzle-orm';
+import { ARRIVAL_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
-import type { AuditScope } from '../../audit/index.js';
-import { arrival, arrivalChange, grn, type ArrivalChangeKind } from '../db/schema.js';
+import type { AuditChange, AuditInterface, AuditScope } from '../../audit/index.js';
+import { entryFacts } from '../db/columns.js';
+import { arrival, arrivalChange, countEntry, grn, type ArrivalChangeKind } from '../db/schema.js';
+import type { CountEntryFacts } from '../domain/lines.js';
 
-// What every command of `receiving` shares (code-house-rules 8.1, 8.2, 12.3, 12.7).
+// What every command and read of `receiving` shares (code-house-rules 8.1, 8.2, 12.3, 12.7).
 
 /** A command's answer: its success, or a refusal naming what is missing (PRD-UXP-003). */
 export type Outcome<Answer> =
   | { readonly kind: 'success'; readonly answer: Answer }
   | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
+
+/** A refusal outcome from a refusal (code-house-rules 12.3). */
+export const refusalOf = (refusal: CommandRefusal): Outcome<never> => ({ kind: 'refusal', refusal });
 
 export function refused<Answer>(
   kind: CommandRefusal['kind'],
@@ -27,43 +32,48 @@ export interface Actor {
   readonly roleAssignmentId: string;
 }
 
-/** Today under the Organisation's timezone, or the refusal while it has none (code-house-rules 9). */
+/** The refusal while the Organisation has no timezone, so no business date (code-house-rules 9; PRD-SEC-017). */
+export const BUSINESS_DATE_NOT_SET: CommandRefusal = {
+  kind: 'unavailable',
+  code: 'access.business-date-not-set',
+  missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+};
+
+/** Today under the Organisation's timezone, or the business date of `at`; the refusal while it has none. */
 export async function today(context: TransactionContext, at?: Date): Promise<string | CommandRefusal> {
   const date = await context.businessDate(at);
-  if (date.kind === 'set') return date.date;
-  return {
-    kind: 'unavailable',
-    code: 'access.business-date-not-set',
-    missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-  };
+  return date.kind === 'set' ? date.date : BUSINESS_DATE_NOT_SET;
 }
 
-export type ArrivalRow = typeof arrival.$inferSelect;
-
-/** An Arrival named in a refusal (PRD-UXP-003). */
-export const arrivalItem = (arrivalId: string): MissingItem => ({
+/** A record named in a refusal (PRD-UXP-003). */
+export const recordItem = (recordType: string, recordId: string): MissingItem => ({
   kind: 'record',
-  recordType: 'receiving.arrival',
-  recordId: arrivalId,
+  recordType,
+  recordId,
 });
 
-export const arrivalNotFound = <Answer>(arrivalId: string): Outcome<Answer> =>
-  refused('not-found', 'receiving.record-not-found', [arrivalItem(arrivalId)]);
+/** No record of the type with that identifier, or none the actor may see (code-house-rules 6.2). */
+export const recordNotFound = (recordType: string, recordId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'receiving.record-not-found',
+  missing: [recordItem(recordType, recordId)],
+});
 
-/** The scope facts of an Arrival, which its routes authorise with (access-and-approvals 5.3). */
-export function factsOf(row: Pick<ArrivalRow, 'siteId' | 'storeId' | 'businessUnitId' | 'legalEntityId' | 'brandId'>) {
-  const facts: RecordFacts & AuditScope = {
-    siteId: row.siteId,
-    businessUnitId: row.businessUnitId,
-    legalEntityId: row.legalEntityId,
-    brandId: row.brandId,
-    ...(row.storeId === null ? {} : { storeId: row.storeId }),
-  };
-  return facts;
-}
+export const arrivalNotFound = (arrivalId: string): Outcome<never> =>
+  refusalOf(recordNotFound(ARRIVAL_TYPE, arrivalId));
 
-/** The scope columns every row of an Arrival carries (code-house-rules 6.1). */
-export function scopeColumns(row: ArrivalRow) {
+/** A business unit not in force today at a Site (goods-in 4.2). */
+export const unitNotAtSite = (businessUnitId: string): CommandRefusal => ({
+  kind: 'refused',
+  code: 'receiving.unit-not-at-site',
+  missing: [recordItem('organisation.business_unit', businessUnitId)],
+});
+
+export type ArrivalRow = typeof arrival.$inferSelect;
+type Scoped = Pick<ArrivalRow, 'siteId' | 'storeId' | 'businessUnitId' | 'legalEntityId' | 'brandId'>;
+
+/** The scope columns every row of an Arrival carries: its place, legal entity and brand (code-house-rules 6.1). */
+export function scopeColumns(row: Scoped): Scoped {
   return {
     siteId: row.siteId,
     storeId: row.storeId,
@@ -71,6 +81,12 @@ export function scopeColumns(row: ArrivalRow) {
     legalEntityId: row.legalEntityId,
     brandId: row.brandId,
   };
+}
+
+/** The same as scope facts, which its routes authorise with (access-and-approvals 5.3), a Store only when it has one. */
+export function factsOf(row: Scoped): RecordFacts & AuditScope {
+  const { storeId, ...facts } = scopeColumns(row);
+  return storeId === null ? facts : { ...facts, storeId };
 }
 
 /** The Arrival as the actor may see it, or undefined (code-house-rules 6.2). */
@@ -122,12 +138,30 @@ export async function recordChange(
   return id;
 }
 
+/** Every saved entry of an Arrival's count, as the domain reads them. */
+export async function entriesOf(context: TransactionContext, arrivalId: string): Promise<CountEntryFacts[]> {
+  const rows = await context.tx.select().from(countEntry).where(eq(countEntry.arrivalId, arrivalId));
+  return rows.map(entryFacts);
+}
+
+/** Every saved entry of the count of each Arrival given, by Arrival. */
+export async function entriesByArrival(
+  context: TransactionContext,
+  arrivalIds: readonly string[],
+): Promise<ReadonlyMap<string, CountEntryFacts[]>> {
+  const byArrival = new Map<string, CountEntryFacts[]>(arrivalIds.map((id) => [id, []]));
+  if (arrivalIds.length === 0) return byArrival;
+  const rows = await context.tx
+    .select()
+    .from(countEntry)
+    .where(inArray(countEntry.arrivalId, [...arrivalIds]));
+  for (const row of rows) byArrival.get(row.arrivalId)?.push(entryFacts(row));
+  return byArrival;
+}
+
 /** The Arrival's GRN, once issued. */
 export async function grnOf(context: TransactionContext, arrivalId: string) {
-  const [row] = await context.tx
-    .select()
-    .from(grn)
-    .where(and(eq(grn.arrivalId, arrivalId)));
+  const [row] = await context.tx.select().from(grn).where(eq(grn.arrivalId, arrivalId));
   return row;
 }
 
@@ -135,11 +169,42 @@ export async function grnOf(context: TransactionContext, arrivalId: string) {
  * The refusal of a change to an Arrival whose GRN is issued: a GRN is never changed or issued again; a miscount is a
  * linked recount (goods-in 4.5, 4.7; PRD-REC-019).
  */
-export const grnIssued = <Answer>(grnId: string): Outcome<Answer> =>
-  refused('refused', 'receiving.grn-issued', [{ kind: 'record', recordType: 'receiving.grn', recordId: grnId }]);
+export const grnIssued = (grnId: string): Outcome<never> =>
+  refused('refused', 'receiving.grn-issued', [recordItem('receiving.grn', grnId)]);
 
-/** Text as the receiver typed it, without spaces at its ends (goods-in 4.2, 4.3). */
-export const trimmed = (text: string): string => text.trim();
+type ValueChange = Extract<AuditChange, { kind: 'value' }>;
 
-/** Text compared ignoring case and spaces at the ends (goods-in 3.7, 5.4). */
-export const textKey = (text: string): string => text.trim().toUpperCase();
+/** A field's value before and after a change, as its audit record keeps it (numbering-and-audit 4.1). */
+export const valueChange = (
+  field: string,
+  before: ValueChange['before'],
+  after: ValueChange['after'],
+): ValueChange => ({ kind: 'value', field, before, after });
+
+/**
+ * The audit record of a change to an Arrival or its GRN, made on the screen by the actor and scoped as the Arrival is
+ * (numbering-and-audit 4.1; PRD-MOD-006): the record changed, the operation and the fields changed.
+ */
+export async function audited(
+  context: TransactionContext,
+  audit: AuditInterface,
+  actor: Actor,
+  row: ArrivalRow,
+  change: {
+    readonly record: { readonly type: string; readonly id: string; readonly versionId?: string };
+    readonly operation: string;
+    readonly changes: readonly ValueChange[];
+    readonly idempotencyKey?: string;
+  },
+): Promise<void> {
+  await audit.record(context, {
+    actor: { kind: 'user', id: actor.userId },
+    roleAssignmentId: actor.roleAssignmentId,
+    scope: factsOf(row),
+    record: { module: 'receiving', ...change.record },
+    operation: change.operation,
+    changes: change.changes,
+    source: { kind: 'screen' },
+    ...(change.idempotencyKey === undefined ? {} : { idempotencyKey: change.idempotencyKey }),
+  });
+}

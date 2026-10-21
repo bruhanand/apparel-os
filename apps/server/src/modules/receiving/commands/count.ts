@@ -2,19 +2,30 @@ import { uuidv7 } from '@apparel-os/domain';
 import { ARRIVAL_TYPE, type CountLineDraft, type CountLineRemoval, type CountLineSaved } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
-import type { AuditChange, AuditInterface } from '../../audit/index.js';
-import { skuOn, type CatalogueInterface } from '../../merchandise/catalogue/index.js';
+import type { AuditInterface } from '../../audit/index.js';
+import { skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
+import { batchColumns, sizeColumns } from '../db/columns.js';
 import { arrivalInvoice, countEntry } from '../db/schema.js';
-import { lineItem, newestEntry, type CountEntryFacts } from '../domain/lines.js';
+import {
+  currentLines,
+  lineCounting,
+  lineItem,
+  newestEntry,
+  type CountEntryFacts,
+  type Size,
+} from '../domain/lines.js';
+import { textKey, trimmed } from '../domain/text.js';
 import { arrivalForChange } from './arrival.js';
 import {
-  factsOf,
+  audited,
+  entriesOf,
   recordChange,
+  recordItem,
+  refusalOf,
   refused,
   scopeColumns,
-  textKey,
   today,
-  trimmed,
+  valueChange,
   type Actor,
   type ArrivalRow,
   type Outcome,
@@ -28,29 +39,18 @@ import {
 
 export interface CountDependencies {
   readonly audit: AuditInterface;
-  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn'>;
 }
 
-type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const change = (field: string, before: ValueChange['before'], after: ValueChange['after']): ValueChange => ({
-  kind: 'value',
-  field,
-  before,
-  after,
-});
-
-async function entriesOf(context: TransactionContext, arrivalId: string): Promise<CountEntryFacts[]> {
-  return context.tx.select().from(countEntry).where(eq(countEntry.arrivalId, arrivalId));
-}
+/** An entry as it is written: everything but who saved it and when, which the command and the database add. */
+type NewEntry = Omit<CountEntryFacts, 'enteredByUserId' | 'recordedAt'>;
 
 /** The line and its newest entry, when the token names that entry; the refusal otherwise (code-house-rules 12.7). */
-async function lineInForce(
-  context: TransactionContext,
-  row: ArrivalRow,
+function lineInForce(
+  entries: readonly CountEntryFacts[],
   lineId: string,
   versionToken: string,
-): Promise<{ readonly kind: 'found'; readonly entry: CountEntryFacts } | Outcome<never>> {
-  const newest = newestEntry(await entriesOf(context, row.id), lineId);
+): { readonly kind: 'found'; readonly entry: CountEntryFacts } | Outcome<never> {
+  const newest = newestEntry(entries, lineId);
   if (newest === undefined || newest.removed) {
     return refused('not-found', 'receiving.record-not-found', [lineItem(lineId)]);
   }
@@ -59,32 +59,33 @@ async function lineInForce(
 }
 
 /** The entry's audited fields. */
-function fieldsOf(
-  entry: Omit<CountEntryFacts, 'id' | 'lineId' | 'replacesEntryId' | 'enteredByUserId' | 'recordedAt'>,
-) {
+function fieldsOf(entry: NewEntry) {
   return {
     removed: entry.removed,
     styleCode: entry.styleCode,
     colour: entry.colour,
-    size: entry.sizeCode,
+    size: entry.size?.code ?? null,
     skuId: entry.skuId,
     invoiceQuantity: entry.invoiceQuantity,
     countedQuantity: entry.countedQuantity,
-    batch: entry.batchCode === null ? null : { code: entry.batchCode, expiryDate: entry.expiryDate },
+    batch: entry.batch === null ? null : { ...entry.batch },
   };
 }
 
-/** Writes an entry, the Arrival's next change and the audit record. */
+/** Writes an entry, the Arrival's next change and the audit record of the fields it changed. */
 async function writeEntry(
   context: TransactionContext,
   dependencies: CountDependencies,
   actor: Actor,
   row: ArrivalRow,
-  entry: Omit<CountEntryFacts, 'enteredByUserId' | 'recordedAt'>,
+  entry: NewEntry,
   replaced: CountEntryFacts | undefined,
 ): Promise<CountLineSaved> {
+  const { size, batch, ...rest } = entry;
   await context.tx.insert(countEntry).values({
-    ...entry,
+    ...rest,
+    ...sizeColumns(size),
+    ...batchColumns(batch),
     arrivalId: row.id,
     ...scopeColumns(row),
     enteredByUserId: actor.userId,
@@ -97,26 +98,22 @@ async function writeEntry(
   );
   const after = fieldsOf(entry);
   const before = replaced === undefined ? undefined : fieldsOf(replaced);
-  await dependencies.audit.record(context, {
-    actor: { kind: 'user', id: actor.userId },
-    roleAssignmentId: actor.roleAssignmentId,
-    scope: factsOf(row),
-    record: { module: 'receiving', type: ARRIVAL_TYPE, id: row.id, versionId: entry.id },
+  const field = (name: keyof typeof after) => before?.[name] ?? null;
+  await audited(context, dependencies.audit, actor, row, {
+    record: { type: ARRIVAL_TYPE, id: row.id, versionId: entry.id },
     operation: entry.removed ? 'remove-count-line' : 'save-count-line',
-    changes: Object.entries(after)
-      .filter(
-        ([field, value]) => JSON.stringify(before?.[field as keyof typeof after] ?? null) !== JSON.stringify(value),
-      )
-      .map(([field, value]) => change(field, before?.[field as keyof typeof after] ?? null, value)),
-    source: { kind: 'screen' },
+    changes: (Object.keys(after) as (keyof typeof after)[])
+      .filter((name) => JSON.stringify(field(name)) !== JSON.stringify(after[name]))
+      .map((name) => valueChange(name, field(name), after[name])),
   });
   return { lineId: entry.lineId, lineVersionToken: entry.id, versionToken };
 }
 
 /**
  * Saves a line of the count, new or the next version of one (goods-in 4.3). Refused while the Arrival holds no invoice
- * (DEC-133); a size that is not an approved value of its attribute in force today; a product not in force at the Site
- * today, of another brand or of another style code than the line's.
+ * (DEC-133); a size that is not an approved value of its attribute in force today; a style, colour and size another
+ * line counts already; a product not in force at the Site today, of another brand or of another style code than the
+ * line's.
  */
 export async function saveCountLine(
   context: TransactionContext,
@@ -126,7 +123,7 @@ export async function saveCountLine(
   draft: CountLineDraft,
 ): Promise<Outcome<CountLineSaved>> {
   const date = await today(context);
-  if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
+  if (typeof date !== 'string') return refusalOf(date);
   const found = await arrivalForChange(context, arrivalId);
   if (found.kind !== 'open') return found;
   const { row } = found;
@@ -136,24 +133,32 @@ export async function saveCountLine(
     .where(eq(arrivalInvoice.arrivalId, row.id))
     .limit(1);
   if (invoice === undefined) return refused('refused', 'receiving.invoice-required', [{ kind: 'invoice' }]);
+  const entries = await entriesOf(context, row.id);
   let replaced: CountEntryFacts | undefined;
   if (draft.line !== undefined) {
-    const inForce = await lineInForce(context, row, draft.line.lineId, draft.line.versionToken);
+    const inForce = lineInForce(entries, draft.line.lineId, draft.line.versionToken);
     if (inForce.kind !== 'found') return inForce;
     replaced = inForce.entry;
   }
-  let size: { readonly attributeId: string; readonly valueId: string; readonly code: string } | null = null;
+  let size: Size | null = null;
   if (draft.size !== null) {
-    const values = await dependencies.catalogue.vocabularyOn(context, draft.size.attributeId, date);
-    const value = values.find((each) => each.id === draft.size?.valueId);
+    const { attributeId, valueId } = draft.size;
+    const value = (await vocabularyOn(context, attributeId, date)).find((each) => each.id === valueId);
     if (value === undefined) {
       return refused('refused', 'receiving.size-not-on-list', [
-        { kind: 'record', recordType: 'merchandise.attribute', recordId: draft.size.attributeId },
-        { kind: 'record', recordType: 'merchandise.vocabulary_value', recordId: draft.size.valueId },
+        recordItem('merchandise.attribute', attributeId),
+        recordItem('merchandise.vocabulary_value', valueId),
       ]);
     }
-    size = { attributeId: draft.size.attributeId, valueId: value.id, code: value.code };
+    size = { attributeId, valueId: value.id, code: value.code };
   }
+  // One line per style, colour and size (goods-in 4.3): a line for them already is the one to change.
+  const repeated = lineCounting(
+    currentLines(entries),
+    { styleCode: draft.styleCode, colour: draft.colour, size },
+    draft.line?.lineId,
+  );
+  if (repeated !== undefined) return refused('refused', 'receiving.line-repeated', [lineItem(repeated.lineId)]);
   if (draft.skuId !== null) {
     const read = await skuOn(context, draft.skuId, row.siteId, date);
     if (
@@ -161,9 +166,7 @@ export async function saveCountLine(
       read.sku.brandId !== row.brandId ||
       textKey(read.sku.styleCode) !== textKey(draft.styleCode)
     ) {
-      return refused('refused', 'receiving.sku-not-of-line', [
-        { kind: 'record', recordType: 'merchandise.sku', recordId: draft.skuId },
-      ]);
+      return refused('refused', 'receiving.sku-not-of-line', [recordItem('merchandise.sku', draft.skuId)]);
     }
   }
   const id = uuidv7();
@@ -179,14 +182,11 @@ export async function saveCountLine(
       removed: false,
       styleCode: trimmed(draft.styleCode),
       colour: draft.colour === null ? null : trimmed(draft.colour),
-      sizeAttributeId: size?.attributeId ?? null,
-      sizeValueId: size?.valueId ?? null,
-      sizeCode: size?.code ?? null,
+      size,
       skuId: draft.skuId,
       invoiceQuantity: draft.invoiceQuantity,
       countedQuantity: draft.countedQuantity,
-      batchCode: draft.batch === null ? null : trimmed(draft.batch.code),
-      expiryDate: draft.batch?.expiryDate ?? null,
+      batch: draft.batch === null ? null : { code: trimmed(draft.batch.code), expiryDate: draft.batch.expiryDate },
     },
     replaced,
   );
@@ -205,7 +205,7 @@ export async function removeCountLine(
   const found = await arrivalForChange(context, arrivalId);
   if (found.kind !== 'open') return found;
   const { row } = found;
-  const inForce = await lineInForce(context, row, lineId, draft.lineVersionToken);
+  const inForce = lineInForce(await entriesOf(context, row.id), lineId, draft.lineVersionToken);
   if (inForce.kind !== 'found') return inForce;
   const { entry } = inForce;
   const answer = await writeEntry(
@@ -220,14 +220,11 @@ export async function removeCountLine(
       removed: true,
       styleCode: entry.styleCode,
       colour: entry.colour,
-      sizeAttributeId: entry.sizeAttributeId,
-      sizeValueId: entry.sizeValueId,
-      sizeCode: entry.sizeCode,
+      size: entry.size,
       skuId: entry.skuId,
       invoiceQuantity: entry.invoiceQuantity,
       countedQuantity: entry.countedQuantity,
-      batchCode: entry.batchCode,
-      expiryDate: entry.expiryDate,
+      batch: entry.batch,
     },
     entry,
   );

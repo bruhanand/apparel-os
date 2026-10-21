@@ -12,6 +12,8 @@ export { actionTypeOf, masterKinds, organisationApprovalRules, recordTypeOf } fr
 export type { MasterKind } from './domain/kinds.js';
 export type { InForce, PageRequest, RecordPage, RecordView, Structure, UnitMapping } from './queries/records.js';
 export { mappingOn, mappingVersionStart } from './queries/records.js';
+// The structure in force on a date, for `receiving`'s Arrival and inbox (goods-in 4.1, 4.2; S2-F02-T02).
+export { structureOn } from './queries/records.js';
 export { mappingChanged, structureChanged } from './events.js';
 export { isPlaceScoped, organisationScopeMembers, placeScopedKinds } from './queries/scope.js';
 export type { PlaceFacts, PlaceScopedKind } from './queries/scope.js';

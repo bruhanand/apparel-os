@@ -14,9 +14,8 @@ import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
-import type { CatalogueInterface } from '../merchandise/catalogue/index.js';
 import type { NumberingInterface } from '../numbering/index.js';
-import { unitReadiness, type OrganisationInterface } from '../organisation/index.js';
+import { unitReadiness } from '../organisation/index.js';
 import type { StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
 import { arrivalRow, type Actor } from './commands/common.js';
@@ -31,15 +30,14 @@ export interface ReceivingDependencies {
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
   readonly ledger: StockLedgerInterface;
-  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn'>;
-  readonly organisation: Pick<OrganisationInterface, 'structureOn'>;
 }
 
 /**
  * `receiving`'s interface (module-map section 5; goods-in 10.1): in its first piece the Receive Goods inbox, the
  * Arrival with its invoices and photos, the count and the issue of a GRN whose lines match their invoice quantities
  * (goods-in 4.1 to 4.5; S2-F02-T02). Every operation joins the caller's transaction through its context
- * (code-house-rules 8.1); the caller has authorised it.
+ * (code-house-rules 8.1); the caller has authorised it. The services it acts through are handed to it; the masters of
+ * `organisation` and `merchandise` it reads through their interfaces' read functions, as stage 1 modules do.
  */
 export class Receiving {
   constructor(private readonly dependencies: ReceivingDependencies) {}
@@ -114,14 +112,14 @@ export class Receiving {
     return { ...arrival, people: [...names].map(([userId, name]) => ({ userId, name })) };
   }
 
-  /** The Receive Goods inbox of a Site (goods-in 4.1). */
+  /** The Receive Goods inbox of a Site (goods-in 4.1), or undefined when no Site has the identifier. */
   inbox(
     context: TransactionContext,
     siteId: string,
     query: InboxQuery,
     today: string,
     covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
-  ): Promise<Omit<Inbox, 'asOf'>> {
+  ): Promise<Omit<Inbox, 'asOf'> | undefined> {
     return inboxOf(context, this.dependencies, siteId, query, today, covered);
   }
 }

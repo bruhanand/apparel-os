@@ -8,21 +8,25 @@ import {
   type MissingItem,
 } from '@apparel-os/schemas';
 import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
-import type { OrganisationInterface } from '../../organisation/index.js';
-import { arrival, arrivalInvoice, arrivalPhoto, countEntry, grn, grnLine } from '../db/schema.js';
+import { siteExists, structureOn } from '../../organisation/index.js';
+import { batchOf } from '../db/columns.js';
+import { arrival, arrivalInvoice, arrivalPhoto, grn, grnLine } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
-import { factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
+import {
+  arrivalRow,
+  entriesByArrival,
+  entriesOf,
+  factsOf,
+  newestChange,
+  type ArrivalRow,
+} from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
 
 // The Arrival as the Arrival and Count screens show it, and the Receive Goods inbox of a Site (goods-in 4.1 to 4.5,
 // section 11; PRD-REC-001, PRD-REC-002, PRD-UXP-003; S2-F02-T02). Rows are read under row-level security, so a reader
 // sees only the receipts their scope covers (code-house-rules 6.2; goods-in 12 test 20); the route authorises each.
-
-export interface ReadDependencies extends AvailabilityDependencies {
-  readonly organisation: Pick<OrganisationInterface, 'structureOn'>;
-}
 
 const instant = (at: Date) => at.toISOString();
 
@@ -50,10 +54,7 @@ async function grnView(context: TransactionContext, arrivalId: string): Promise<
       skuId: line.skuId,
       invoiceQuantity: line.invoiceQuantity,
       countedQuantity: line.countedQuantity,
-      batch:
-        line.batchCode === null || line.expiryDate === null
-          ? null
-          : { code: line.batchCode, expiryDate: line.expiryDate },
+      batch: batchOf(line),
       countedBy: line.countedByUserIds,
     })),
   };
@@ -61,7 +62,7 @@ async function grnView(context: TransactionContext, arrivalId: string): Promise<
 
 /** The facts a route authorises an Arrival with, or undefined when the reader may not see it. */
 export async function arrivalFacts(context: TransactionContext, arrivalId: string): Promise<RecordFacts | undefined> {
-  const [row] = await context.tx.select().from(arrival).where(eq(arrival.id, arrivalId));
+  const row = await arrivalRow(context, arrivalId);
   return row === undefined ? undefined : factsOf(row);
 }
 
@@ -71,7 +72,7 @@ export async function arrivalFacts(context: TransactionContext, arrivalId: strin
  */
 export async function arrivalView(
   context: TransactionContext,
-  dependencies: ReadDependencies,
+  dependencies: AvailabilityDependencies,
   row: ArrivalRow,
   today: string,
 ): Promise<Arrival> {
@@ -85,9 +86,11 @@ export async function arrivalView(
     .from(arrivalPhoto)
     .where(eq(arrivalPhoto.arrivalId, row.id))
     .orderBy(asc(arrivalPhoto.recordedAt), asc(arrivalPhoto.id));
-  const lines = currentLines(await context.tx.select().from(countEntry).where(eq(countEntry.arrivalId, row.id)));
+  const lines = currentLines(await entriesOf(context, row.id));
   const issued = await grnView(context, row.id);
+  // Recording the Arrival records its first change in the same transaction (commands/arrival.ts).
   const newest = await newestChange(context, row.id);
+  if (newest === undefined) throw new CommandDefect('An Arrival has no change recorded');
   const blocking: MissingItem[] = [];
   if (issued === null) {
     blocking.push(
@@ -118,7 +121,7 @@ export async function arrivalView(
     arrivedAt: instant(row.arrivedAt),
     recordedBy: row.recordedByUserId,
     recordedAt: instant(row.recordedAt),
-    versionToken: newest?.id ?? row.id,
+    versionToken: newest.id,
     invoices: invoices.map((invoice) => ({
       id: invoice.id,
       number: invoice.invoiceNumber,
@@ -135,17 +138,11 @@ export async function arrivalView(
       versionToken: line.entry.id,
       styleCode: line.entry.styleCode,
       colour: line.entry.colour,
-      size:
-        line.entry.sizeAttributeId === null || line.entry.sizeValueId === null || line.entry.sizeCode === null
-          ? null
-          : { attributeId: line.entry.sizeAttributeId, valueId: line.entry.sizeValueId, code: line.entry.sizeCode },
+      size: line.entry.size,
       skuId: line.entry.skuId,
       invoiceQuantity: line.entry.invoiceQuantity,
       countedQuantity: line.entry.countedQuantity,
-      batch:
-        line.entry.batchCode === null || line.entry.expiryDate === null
-          ? null
-          : { code: line.entry.batchCode, expiryDate: line.entry.expiryDate },
+      batch: line.entry.batch,
       countedBy: [...line.countedBy],
       savedAt: instant(line.entry.recordedAt),
     })),
@@ -167,21 +164,22 @@ export function peopleOf(arrival: Arrival): string[] {
 }
 
 /**
- * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1).
- * Pending holds Arrivals not yet issued as a GRN and GRNs waiting for their PT, which every GRN does until the PT
- * upload is built (S2-F04-T02); History holds the rest, none yet. Each
- * unit of the Site in force today comes with whether receiving is available there, naming what is missing, and its
- * locations in force; `covered` answers, for the facts of each Arrival, whether the reader may view it.
+ * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);
+ * undefined when no Site has the identifier. Pending holds Arrivals not yet issued as a GRN and GRNs waiting for their
+ * PT, which every GRN does until the PT upload is built (S2-F04-T02); History holds the rest, none yet. Each unit of
+ * the Site in force today comes with whether receiving is available there, naming what is missing, and its locations
+ * in force; `covered` answers, for the facts of each Arrival, whether the reader may view it.
  */
 export async function inboxOf(
   context: TransactionContext,
-  dependencies: ReadDependencies,
+  dependencies: AvailabilityDependencies,
   siteId: string,
   query: InboxQuery,
   today: string,
   covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
-): Promise<Omit<Inbox, 'asOf'>> {
-  const structure = await dependencies.organisation.structureOn(context, today);
+): Promise<Omit<Inbox, 'asOf'> | undefined> {
+  if (!(await siteExists(context, siteId))) return undefined;
+  const structure = await structureOn(context, today);
   const units = [];
   for (const unit of structure.businessUnits.filter((each) => each.siteId === siteId)) {
     const missing = await receivingMissing(context, dependencies, { siteId, businessUnitId: unit.id }, today);
@@ -219,8 +217,7 @@ export async function inboxOf(
           .from(arrivalInvoice)
           .where(inArray(arrivalInvoice.arrivalId, ids))
           .orderBy(asc(arrivalInvoice.recordedAt), asc(arrivalInvoice.id));
-  const entries =
-    ids.length === 0 ? [] : await context.tx.select().from(countEntry).where(inArray(countEntry.arrivalId, ids));
+  const entries = await entriesByArrival(context, ids);
   const grns =
     ids.length === 0
       ? []
@@ -230,7 +227,7 @@ export async function inboxOf(
           .where(inArray(grn.arrivalId, ids));
   const listed: InboxEntry[] = shown.map((row) => {
     const numbers = invoices.filter((each) => each.arrivalId === row.id).map((each) => each.number);
-    const lines = currentLines(entries.filter((each) => each.arrivalId === row.id));
+    const lines = currentLines(entries.get(row.id) ?? []);
     const issued = grns.find((each) => each.arrivalId === row.id);
     const waitingFor: InboxEntry['waitingFor'] =
       issued !== undefined ? 'pt' : numbers.length === 0 ? 'invoice' : lines.length === 0 ? 'count' : 'grn';

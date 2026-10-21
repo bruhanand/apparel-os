@@ -1,8 +1,32 @@
 import type { MissingItem } from '@apparel-os/schemas';
+import { textKey } from './text.js';
 
 // The count as it stands (goods-in 4.3, 4.5; S2-F02-T02): each line is the chain of its saved entries, the newest the
 // one in force, and who counted it everyone who saved one, from their sign-ins. Pure: no database, no clock
 // (code-house-rules 2).
+
+/**
+ * A size of the Organisation's size list: a value of a list attribute, named with its attribute, and the value's code
+ * then, the text the PT file is matched on (goods-in 4.3, 5.4; GI-3).
+ */
+export interface Size {
+  readonly attributeId: string;
+  readonly valueId: string;
+  readonly code: string;
+}
+
+/** A batch and its expiry, for a product whose tracking profile requires them (PRD-MER-011). */
+export interface Batch {
+  readonly code: string;
+  readonly expiryDate: string;
+}
+
+/** What a line counts: the style code and colour as the invoice writes them, and the size; each may be missing. */
+export interface LineGoods {
+  readonly styleCode: string;
+  readonly colour: string | null;
+  readonly size: Pick<Size, 'valueId'> | null;
+}
 
 /** One saved entry of a count line, as `receiving` keeps it. */
 export interface CountEntryFacts {
@@ -12,14 +36,11 @@ export interface CountEntryFacts {
   readonly removed: boolean;
   readonly styleCode: string;
   readonly colour: string | null;
-  readonly sizeAttributeId: string | null;
-  readonly sizeValueId: string | null;
-  readonly sizeCode: string | null;
+  readonly size: Size | null;
   readonly skuId: string | null;
   readonly invoiceQuantity: number;
   readonly countedQuantity: number;
-  readonly batchCode: string | null;
-  readonly expiryDate: string | null;
+  readonly batch: Batch | null;
   readonly enteredByUserId: string;
   readonly recordedAt: Date;
 }
@@ -67,6 +88,26 @@ function chainOf(entries: readonly CountEntryFacts[], first: CountEntryFacts): C
   const chain = [first];
   for (let next = byReplaced.get(first.id); next !== undefined; next = byReplaced.get(next.id)) chain.push(next);
   return chain;
+}
+
+/**
+ * The line in force that counts the same style, colour and size already, other than the line being saved, or
+ * undefined: one line per style, colour and size (goods-in 4.3). The style code and colour compare ignoring case and
+ * spaces at the ends; a missing colour or size matches only another missing one (PRD-MER-005).
+ */
+export function lineCounting(
+  lines: readonly CurrentLine[],
+  goods: LineGoods,
+  exceptLineId?: string,
+): CurrentLine | undefined {
+  const colourKey = (colour: string | null) => (colour === null ? null : textKey(colour));
+  return lines.find(
+    ({ lineId, entry }) =>
+      lineId !== exceptLineId &&
+      textKey(entry.styleCode) === textKey(goods.styleCode) &&
+      colourKey(entry.colour) === colourKey(goods.colour) &&
+      (entry.size?.valueId ?? null) === (goods.size?.valueId ?? null),
+  );
 }
 
 /** A line named in a refusal, by its identifier (PRD-UXP-003). */

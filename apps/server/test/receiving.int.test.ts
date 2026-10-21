@@ -29,7 +29,7 @@ import { startTestFileStore, type TestFileStore } from './support/minio.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
-import { databaseUrl } from './support/postgres.js';
+import { allowVerifier, connect, databaseUrl } from './support/postgres.js';
 import {
   defineSyntheticGrnSeries,
   placeScope,
@@ -197,6 +197,7 @@ function asUser<T>(user: SyntheticUser, work: (context: TransactionContext) => P
 beforeAll(async () => {
   world = await createSyntheticOrganisations('receiving');
   database = world.organisations[0].database;
+  await allowVerifier(database);
   organisationCode = world.organisations[0].code;
   keys = syntheticKeysEnvironment(world);
   await writeSyntheticSetting(database, 'access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 });
@@ -475,6 +476,31 @@ describe('the count (goods-in 4.3; DEC-138, PRD-MER-005, PRD-MER-011)', () => {
   });
 });
 
+describe('one line per style, colour and size (goods-in 4.3)', () => {
+  it('PRD-REC-005 a second line for the same style, colour and size is refused, naming the line that counts them', async () => {
+    const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
+    expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
+    const first = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-ONCE', 2, 2));
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    const { lineId, lineVersionToken } = first.body as { lineId: string; lineVersionToken: string };
+    // The style code and colour compare ignoring case and spaces at the ends.
+    const again = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine(' syn-style-once ', 1, 1),
+      colour: 'synthetic navy ',
+    });
+    expect(again.status).toBe(422);
+    expect(errorOf(again)).toMatchObject({ code: 'receiving.line-repeated', missing: [{ kind: 'count-line', lineId }] });
+    // Another size is another line, and the line itself is saved again over its own version.
+    expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-ONCE', 1, 1, 1))).status).toBe(200);
+    const resaved = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine('SYN-STYLE-ONCE', 2, 3),
+      line: { lineId, versionToken: lineVersionToken },
+    });
+    expect(resaved.status, JSON.stringify(resaved.body)).toBe(200);
+    expect((await readArrival(storeReceiver, arrivalId)).lines).toHaveLength(2);
+  });
+});
+
 describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT-002)', () => {
   it('goods-in 12 test 19 PRD-INT-002 a GRN issued twice with the same request gives one GRN; its custody equals its count', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
@@ -602,6 +628,46 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
       expect.objectContaining({ quantity: 5, batchCode: 'SYN-BATCH-1', expiryDate: setup.day(90) }),
     ]);
     expect(total(held.rows)).toBe(13);
+
+    // PRD-ORG-014 PRD-MOD-015: each receipt origin of the GRN, one per line, carries cost Unknown and the owner the
+    // brand's Agreement in force on the arrival date gives: the brand, under that version, since ownership passes at
+    // the sale (POL-01.05). Read with the read-only test role (code-house-rules 10.1).
+    const verify = await connect(database, 'verify');
+    try {
+      const origins = await verify.query<{
+        quantity: number;
+        owner_kind: string | null;
+        owner_brand_id: string | null;
+        owner_legal_entity_id: string | null;
+        agreement_version_id: string | null;
+        value_known: boolean;
+        p_rate_paise: string | null;
+        established_value_paise: string | null;
+      }>(
+        `select o.quantity, s.owner_kind, s.owner_brand_id::text as owner_brand_id,
+                s.owner_legal_entity_id::text as owner_legal_entity_id,
+                s.agreement_version_id::text as agreement_version_id, s.value_known, s.p_rate_paise,
+                s.established_value_paise
+           from stock.receipt_origin o join stock.receipt_origin_state s on s.receipt_origin_id = o.id
+          where o.source_module = 'receiving' and o.source_record_type = 'grn' and o.source_record_id = $1
+          order by o.quantity`,
+        [grnId],
+      );
+      expect(origins.rows).toEqual(
+        [2, 5, 6].map((quantity) => ({
+          quantity,
+          owner_kind: 'brand',
+          owner_brand_id: fixture.brand.id,
+          owner_legal_entity_id: null,
+          agreement_version_id: fixture.agreementVersionId,
+          value_known: false,
+          p_rate_paise: null,
+          established_value_paise: null,
+        })),
+      );
+    } finally {
+      await verify.end();
+    }
   });
 
   it('goods-in 12 test 19 PRD-INT-002 every write of an Arrival replays its first answer under its key, and writes once', async () => {

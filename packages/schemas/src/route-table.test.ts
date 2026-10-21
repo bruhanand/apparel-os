@@ -192,3 +192,31 @@ describe('the test sign-in routes (POL-02.17, PRD-ACS-017; DEC-121)', () => {
     ).toBe(false);
   });
 });
+
+// S2-F02-T02: the Receive Goods routes list only what each can answer (code-house-rules 12.2; goods-in 4.8).
+describe('the Receive Goods routes (goods-in 4.8; code-house-rules 12.2)', () => {
+  it('PRD-SEC-017 only recording an Arrival and issuing its GRN answer the policy gate; invoices, photos and the count are not gated', () => {
+    expect(codesOfRoute(routes.recordArrival)).toContain('configuration.operation-unavailable');
+    expect(codesOfRoute(routes.issueGrn)).toContain('configuration.operation-unavailable');
+    for (const route of [
+      routes.recordArrivalInvoice,
+      routes.attachArrivalPhotos,
+      routes.saveCountLine,
+      routes.removeCountLine,
+    ]) {
+      expect(codesOfRoute(route)).not.toContain('configuration.operation-unavailable');
+    }
+  });
+
+  it('DEC-133 only saving a count line and issuing the GRN wait for an invoice', () => {
+    expect(codesOfRoute(routes.saveCountLine)).toContain('receiving.invoice-required');
+    expect(codesOfRoute(routes.issueGrn)).toContain('receiving.invoice-required');
+    for (const route of [routes.recordArrivalInvoice, routes.attachArrivalPhotos, routes.removeCountLine]) {
+      expect(codesOfRoute(route)).not.toContain('receiving.invoice-required');
+    }
+  });
+
+  it('PRD-REC-005 saving a count line answers a second line for the same style, colour and size (goods-in 4.3)', () => {
+    expect(codesOfRoute(routes.saveCountLine)).toContain('receiving.line-repeated');
+  });
+});
