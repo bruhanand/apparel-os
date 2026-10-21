@@ -19,6 +19,7 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { BookingModule, bookingApprovals } from './modules/booking/index.js';
+import { ReceivingModule, receivingStockCaller } from './modules/receiving/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import {
@@ -73,8 +74,10 @@ import {
   LedgerCountSet,
   LocationStock,
   SkuStockPresence,
+  STOCK_CALLERS,
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
+  type CallerRegistration,
 } from './modules/stock/ledger/index.js';
 import {
   BOOK_HELD_STOCK,
@@ -189,6 +192,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: POSTING_EVENT_KINDS,
       useFactory: () => checkEventKinds(STOCK_POSTING_EVENT_KINDS satisfies readonly PostingEventKind[]),
     },
+    // The modules that post stock, registered with the ledger at start, none synthetic (stock-ledger 13.2): `receiving`'s
+    // receipt counts from a GRN (goods-in 4.5; S2-F02-T02).
+    { provide: STOCK_CALLERS, useValue: [receivingStockCaller] satisfies readonly CallerRegistration[] },
     // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
     { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
@@ -208,6 +214,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     SCOPE_MEMBERS,
     NUMBERED_KINDS,
     POSTING_EVENT_KINDS,
+    STOCK_CALLERS,
     EXCEPTION_TYPES,
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
@@ -252,6 +259,8 @@ export class ModuleApprovalsModule {}
     EboImportsModule,
     // Bookings: in the first piece of stage 2, the open-to-buy budgets (module-map section 5; goods-in 3.3; S2-F01-T02).
     BookingModule,
+    // Receive Goods: the inbox, the Arrival, the count and the GRN (module-map section 5; goods-in 4; S2-F02-T02).
+    ReceivingModule,
   ],
 })
 export class AppModule {}

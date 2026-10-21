@@ -18,7 +18,7 @@ export interface Grant {
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 
-export const sections = ['home', 'booking', 'money', 'setup'] as const;
+export const sections = ['home', 'booking', 'receive-goods', 'money', 'setup'] as const;
 export type Section = (typeof sections)[number];
 
 export interface Screen {
@@ -40,6 +40,9 @@ export const screens = {
     path: '/booking/open-to-buy',
     need: view('booking.open_to_buy_budget'),
   },
+  // Receive Goods › Inbox: the deliveries of a Site, the Arrival, the count and the GRN (goods-in 4.1 to 4.5, section
+  // 11; ui-blueprint Receive Goods; S2-F02-T02).
+  'receiving.inbox': { section: 'receive-goods', path: '/receive-goods/inbox', need: view('receiving.arrival') },
   'setup.users': { section: 'setup', path: '/setup/users', need: view('access.user') },
   'setup.roles': { section: 'setup', path: '/setup/roles', need: view('access.role') },
   'setup.role-assignments': {
@@ -171,9 +174,11 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   'P-BKG': { home: null, menu: ['booking.open-to-buy', 'setup.products'] },
   // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
   'P-OPS': { home: 'my-work', menu: ['my-work', 'setup.site-opening'] },
-  'P-WHS': { home: null, menu: ['my-work'] },
+  // Warehouse lands on Receive Goods › Inbox (Pending), from S2-F02-T02 (ui-blueprint "Menus by persona").
+  'P-WHS': { home: 'receiving.inbox', menu: ['my-work', 'receiving.inbox'] },
   'P-BRM': { home: null, menu: [] },
-  'P-STM': { home: null, menu: ['my-work'] },
+  // A Store's staff receive goods at their Store, from S2-F02-T02 (ui-blueprint "Menus by persona").
+  'P-STM': { home: null, menu: ['my-work', 'receiving.inbox'] },
   'P-CSH': { home: null, menu: [] },
   'P-SLS': { home: null, menu: [] },
   'P-EBO': { home: null, menu: [] },

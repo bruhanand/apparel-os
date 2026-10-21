@@ -2024,6 +2024,55 @@
       "runtime": ["INSERT", "SELECT"],
       "design": "goods-in 3.3, 10.1; POL-05.09; code-house-rules 7.1",
       "why": "An open-to-buy budget's record type carries its brand, and every route authorises in its command with that fact, as the masters of organisation are (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
+    },
+    {
+      "table": "receiving.arrival",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 4.2, 10.1, 10.3; code-house-rules 6.2, 7.1, 8.2"
+    },
+    {
+      "table": "receiving.arrival_invoice",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.2; DEC-133; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "receiving.arrival_photo",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.2; PRD-REC-007; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "receiving.count_entry",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.3; code-house-rules 6.2, 7.1, 7.2, 12.7"
+    },
+    {
+      "table": "receiving.grn",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.5, 10.3, 10.4; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "receiving.grn_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.3, 4.5; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "receiving.arrival_change",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.2, 4.3; code-house-rules 6.2, 7.1, 12.7"
     }
   ]
 }

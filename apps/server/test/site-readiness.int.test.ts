@@ -46,6 +46,17 @@ const MOVE = `${GATE}.move-synthetic`;
 /** The policies the synthetic operations name, chosen for the test only: 4 for receiving, 6 for movement. */
 const RECEIVE_POLICY = 4;
 const MOVE_POLICY = 6;
+/**
+ * The policy `receiving`'s own operations name beside 4, which the receiving activity needs too since S2-F02-T02
+ * (goods-in 10.5): Signed and validated as a fixture, as policy 4 is.
+ */
+const RECEIVING_STATUTORY_POLICY = 10;
+/** The people `receiving`'s own operations need at a unit (goods-in 10.5; PRD-ACS-006), held by a SYNTHETIC receiver. */
+const RECEIVING_PEOPLE: readonly SyntheticAuthority[] = [
+  { recordType: 'receiving.arrival', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'edit' },
+  { recordType: 'receiving.grn', action: 'create' },
+];
 
 /** One SYNTHETIC value of each policy the operations name, so a validation has something to cover (RR-480). */
 const VALUES_CHECK = `${GATE}.synthetic-values`;
@@ -418,6 +429,7 @@ beforeAll(async () => {
   await verifyFixture(a.database, counterUnit.id);
   await location(counterUnit);
   await signedFixture(a.database, RECEIVE_POLICY);
+  await signedFixture(a.database, RECEIVING_STATUTORY_POLICY);
   approveReason = await writeSyntheticReason(a.database, 'approve');
   // The SYNTHETIC essential security settings sign-in reads (access-and-approvals 3.3), in both Organisations.
   for (const organisation of world.organisations) {
@@ -435,12 +447,13 @@ beforeAll(async () => {
   api = await startAccessApp(world, keys, {
     clock,
     gatedOperations: operations,
-    validityChecks: [valuesCheck(RECEIVE_POLICY), valuesCheck(MOVE_POLICY)],
+    validityChecks: [valuesCheck(RECEIVE_POLICY), valuesCheck(MOVE_POLICY), valuesCheck(RECEIVING_STATUTORY_POLICY)],
     locationInUse,
   });
   operationsUser = await enrolled(a.database, a.code, 'READY-OPS', READINESS_AUTHORITY);
   approver = await enrolled(a.database, a.code, 'READY-APPROVER', APPROVER_AUTHORITY);
   otherOperations = await enrolled(b.database, b.code, 'READY-OTHER', READINESS_AUTHORITY);
+  await enrolled(a.database, a.code, 'READY-RECEIVER', RECEIVING_PEOPLE);
 });
 
 afterAll(async () => {

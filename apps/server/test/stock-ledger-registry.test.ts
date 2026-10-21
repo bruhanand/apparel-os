@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_COMPOSITION } from '../src/kernel/index.js';
+import { receivingStockCaller } from '../src/modules/receiving/index.js';
 import type { LedgerSource } from '../src/modules/stock/ledger/index.js';
 // The registry itself, which the ledger builds from its registrations (stock-ledger 13.2).
 import { CallerRegistry, type CallerRegistration } from '../src/modules/stock/ledger/registry.js';
@@ -65,7 +66,7 @@ describe('registered callers (stock-ledger 13.2; DEC-112, H2)', () => {
     );
   });
 
-  it('stock-ledger 13.2 the production composition is the only one code under src can name, and it registers no caller', () => {
+  it('stock-ledger 13.2 the production composition is the only one code under src can name, and registers no synthetic caller', () => {
     // A test composition is a branded value made only in apps/server/test/support/composition.ts; a lint rule refuses
     // a cast to it under src/ (eslint.config.mjs), and src/ never imports a test folder (code-house-rules 11.2).
     expect(PRODUCTION_COMPOSITION.kind).toBe('production');
@@ -74,7 +75,19 @@ describe('registered callers (stock-ledger 13.2; DEC-112, H2)', () => {
       join(import.meta.dirname, '../src/modules/stock/ledger/stock-ledger.module.ts'),
       'utf8',
     );
-    expect(module).toMatch(/registrations: \[\]/);
+    // The ledger takes only the callers the composition root hands over, and none when it hands over none.
+    expect(module).toMatch(/registrations: callers \?\? \[\]/);
     expect(module).toMatch(/composition: PRODUCTION_COMPOSITION/);
+    const root = readFileSync(join(import.meta.dirname, '../src/app.module.ts'), 'utf8');
+    expect(root).toMatch(/provide: STOCK_CALLERS, useValue: \[receivingStockCaller\]/);
+    // Since stage 2, `receiving`'s receipt counts from a GRN (goods-in 4.5; S2-F02-T02): not synthetic, so it starts
+    // in the production composition.
+    expect(receivingStockCaller.synthetic).toBe(false);
+    const registry = new CallerRegistry([receivingStockCaller], PRODUCTION_COMPOSITION);
+    expect(
+      registry.check({ module: 'receiving', recordType: 'grn', recordId: line, versionId: line, importKind: 'none' }, [
+        { kind: 'receipt-count', lineId: line },
+      ]),
+    ).toBeUndefined();
   });
 });
