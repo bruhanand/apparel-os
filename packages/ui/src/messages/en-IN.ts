@@ -2932,7 +2932,8 @@ export const englishIndia = {
   'history.operation.reject-open-to-buy-budget-version': 'Rejected an open-to-buy budget version',
   'budget.what': 'open-to-buy budgets',
   'budget.intro':
-    'One budget for each brand and season. Booking prepares it, Accounts checks it and the Owner approves it, each a different person, from My work. Only an approved version is used. On dev every amount is SYNTHETIC.',
+    'One budget for each brand and season. Booking prepares it, Accounts checks it and the Owner approves it, each a different person, from My work. Only an approved version is used.',
+  'budget.intro.synthetic': 'Every amount here is SYNTHETIC: this environment holds synthetic data only.',
   'budget.list': 'Open-to-buy budgets',
   'budget.empty.title': 'No open-to-buy budget yet',
   'budget.empty.body':

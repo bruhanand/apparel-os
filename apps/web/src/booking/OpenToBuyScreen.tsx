@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { api } from '../api';
+import { banner } from '../banner';
 import { useSubmission } from '../api/command';
 import { ApiFailure, readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
@@ -36,13 +37,15 @@ import {
 } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
+import { holdsSyntheticDataOnly } from '../shell/environment';
 import { useTimeZone } from '../shell/session';
 
 // Booking › Open-to-buy (goods-in 3.3, section 11; PRD-BKG-004; POL-05.09, POL-02.07; S2-F01-T02): every budget by
 // brand and season, with its approved amount, what approved bookings reserve and what remains, and every version
 // with its history. Booking prepares a budget, or its next version; Accounts records its check, and the Owner, or
 // whoever holds the approval, approves it, each from My work and each a different person from its preparer. Every
-// amount is the product owner's, OPEN until set (V-17, RR-080); on dev every amount is SYNTHETIC.
+// amount is the product owner's, OPEN until set (V-17, RR-080); where the environment holds synthetic data only, local
+// work and dev, the screen says every amount is SYNTHETIC, as their banner does (deployment.md section 1).
 
 const LIST_READS = ['listOpenToBuyBudgets', 'readOpenToBuyBudget', 'listMyWork'] as const;
 
@@ -439,6 +442,9 @@ export function OpenToBuyScreen() {
         />
       </Toolbar>
       <p className="m-0 text-body-sm text-text-2">{t('budget.intro')}</p>
+      {holdsSyntheticDataOnly(banner.environment) && (
+        <p className="m-0 text-body-sm text-text-2">{t('budget.intro.synthetic')}</p>
+      )}
       <ListRead query={query} what="budget.what">
         {({ pages }) => {
           const budgets = pages.flatMap((page) => page.budgets);
