@@ -10,8 +10,9 @@
 -- issued; create on `receiving.grn` is what issuing one needs. Every row is append-only (code-house-rules 7.1): a
 -- count line changes by a new entry naming the one it replaces, and the GRN freezes the lines as they stood. The
 -- Arrival's identity row is locked by every change of it (code-house-rules 8.2, step 1), so a GRN is issued from a
--- count no one is changing. References to other modules' records keep their identifiers with no foreign key
--- (code-house-rules 3.2).
+-- count no one is changing. References to other modules' records keep their identifiers with no foreign key; every
+-- reference inside the schema has one, a count line's to its first entry and a GRN's to the Arrival version it froze
+-- included (code-house-rules 3.2); every foreign key and every scope column has an index (3.3).
 
 create schema receiving;
 grant usage on schema receiving to aos_runtime;
@@ -45,7 +46,10 @@ create table receiving.arrival (
   constraint arrival_cartons check (cartons > 0)
 );
 create index arrival_site on receiving.arrival (site_id, arrived_at);
+create index arrival_store on receiving.arrival (store_id);
 create index arrival_unit on receiving.arrival (business_unit_id);
+create index arrival_legal_entity on receiving.arrival (legal_entity_id);
+create index arrival_brand on receiving.arrival (brand_id);
 create trigger refuse_row_change before update or delete on receiving.arrival
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.arrival
@@ -70,6 +74,11 @@ create table receiving.arrival_change (
   constraint arrival_change_kind check (change in ('arrival', 'invoice', 'photos', 'count-line', 'count-line-removal')),
   constraint arrival_change_once unique (arrival_id, change_number)
 );
+create index arrival_change_site on receiving.arrival_change (site_id);
+create index arrival_change_store on receiving.arrival_change (store_id);
+create index arrival_change_unit on receiving.arrival_change (business_unit_id);
+create index arrival_change_legal_entity on receiving.arrival_change (legal_entity_id);
+create index arrival_change_brand on receiving.arrival_change (brand_id);
 create trigger refuse_row_change before update or delete on receiving.arrival_change
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.arrival_change
@@ -100,6 +109,11 @@ create table receiving.arrival_invoice (
   constraint arrival_invoice_once unique (arrival_id, number_key)
 );
 create index arrival_invoice_number_key on receiving.arrival_invoice (supplier_party_id, number_key);
+create index arrival_invoice_site on receiving.arrival_invoice (site_id);
+create index arrival_invoice_store on receiving.arrival_invoice (store_id);
+create index arrival_invoice_unit on receiving.arrival_invoice (business_unit_id);
+create index arrival_invoice_legal_entity on receiving.arrival_invoice (legal_entity_id);
+create index arrival_invoice_brand on receiving.arrival_invoice (brand_id);
 create trigger refuse_row_change before update or delete on receiving.arrival_invoice
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.arrival_invoice
@@ -120,6 +134,11 @@ create table receiving.arrival_photo (
   recorded_at timestamptz not null default now(),
   constraint arrival_photo_once unique (arrival_id, stored_file_id)
 );
+create index arrival_photo_site on receiving.arrival_photo (site_id);
+create index arrival_photo_store on receiving.arrival_photo (store_id);
+create index arrival_photo_unit on receiving.arrival_photo (business_unit_id);
+create index arrival_photo_legal_entity on receiving.arrival_photo (legal_entity_id);
+create index arrival_photo_brand on receiving.arrival_photo (brand_id);
 create trigger refuse_row_change before update or delete on receiving.arrival_photo
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.arrival_photo
@@ -134,7 +153,7 @@ create trigger refuse_truncate before truncate on receiving.arrival_photo
 create table receiving.count_entry (
   id uuid primary key,
   arrival_id uuid not null references receiving.arrival (id),
-  line_id uuid not null,
+  line_id uuid not null references receiving.count_entry (id),
   replaces_entry_id uuid references receiving.count_entry (id),
   site_id uuid not null,
   store_id uuid,
@@ -164,6 +183,11 @@ create table receiving.count_entry (
 );
 create index count_entry_arrival on receiving.count_entry (arrival_id);
 create index count_entry_line on receiving.count_entry (line_id);
+create index count_entry_site on receiving.count_entry (site_id);
+create index count_entry_store on receiving.count_entry (store_id);
+create index count_entry_unit on receiving.count_entry (business_unit_id);
+create index count_entry_legal_entity on receiving.count_entry (legal_entity_id);
+create index count_entry_brand on receiving.count_entry (brand_id);
 create trigger refuse_row_change before update or delete on receiving.count_entry
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.count_entry
@@ -182,7 +206,7 @@ create table receiving.grn (
   brand_id uuid not null,
   number text not null,
   number_allocation_id uuid not null,
-  arrival_version_id uuid not null,
+  arrival_version_id uuid not null references receiving.arrival_change (id),
   agreement_version_id uuid,
   owner_kind text not null,
   owner_id uuid,
@@ -196,6 +220,12 @@ create table receiving.grn (
   constraint grn_owner check (owner_kind in ('organisation', 'supplier', 'brand', 'unknown')
     and (owner_kind = 'unknown') = (owner_id is null))
 );
+create index grn_arrival_version on receiving.grn (arrival_version_id);
+create index grn_site on receiving.grn (site_id);
+create index grn_store on receiving.grn (store_id);
+create index grn_unit on receiving.grn (business_unit_id);
+create index grn_legal_entity on receiving.grn (legal_entity_id);
+create index grn_brand on receiving.grn (brand_id);
 create trigger refuse_row_change before update or delete on receiving.grn
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.grn
@@ -226,6 +256,11 @@ create table receiving.grn_line (
   constraint grn_line_entry_once unique (count_entry_id),
   constraint grn_line_quantities check (invoice_quantity >= 0 and counted_quantity >= 0 and line_number > 0)
 );
+create index grn_line_site on receiving.grn_line (site_id);
+create index grn_line_store on receiving.grn_line (store_id);
+create index grn_line_unit on receiving.grn_line (business_unit_id);
+create index grn_line_legal_entity on receiving.grn_line (legal_entity_id);
+create index grn_line_brand on receiving.grn_line (brand_id);
 create trigger refuse_row_change before update or delete on receiving.grn_line
   for each row execute function kernel.refuse_change();
 create trigger refuse_truncate before truncate on receiving.grn_line
