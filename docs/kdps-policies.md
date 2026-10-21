@@ -54,7 +54,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-01.02` The commercial model is set in the brand's Agreement and applies to every booking of that brand. A booking cannot change it.
 - `POL-01.03` Commercial models and related commercial terms are configured in the Agreement, recorded from the signed MOU, and may be revised later through a new Agreement version. Bookings carry no terms of their own.
 - `POL-01.04` A booking never edits commercial terms. A change of terms is a new effective-dated Agreement version, which preserves prior transaction history. A booking keeps the version in force when it was approved and takes a later one only when it is approved again.
-- `POL-01.05` The ownership-transfer event is configurable per brand agreement and inherited by its bookings. Options include supplier dispatch, receipt and acceptance by KDPS, sale to the customer (typically for consignment), or another explicitly agreed event.
+- `POL-01.05` The ownership-transfer event is configurable per brand agreement and inherited by its bookings. Options include supplier dispatch, receipt and acceptance by KDPS, sale to the customer (typically for consignment), or another explicitly agreed event. Under receipt and acceptance, the brand owns counted goods until they are scanned in at the receiving Site, which is their acceptance (`DEC-141`).
 - `POL-01.06` Receipt and acceptance may be proposed for a new purchase agreement, but must be confirmed against the actual supplier terms. The configured event does not automatically assign ownership or override the governing agreement.
 - `POL-01.07` Sale-or-return rights are separate from ownership transfer. PT approval confirms merchandise data and approved cost; it does not automatically change legal ownership.
 - `POL-01.08` Supplier return rights are configured in the brand's Agreement and apply to every booking of that brand; a booking cannot override them.
@@ -181,7 +181,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-05.06` When the delivery window expires, mark the remaining balance overdue and raise a follow-up exception. Expiry alone does not cancel the balance.
 - `POL-05.07` An authorised user may extend the window or cancel undelivered balance under the supplier terms and required approval.
 - `POL-05.08` Late or excess goods may be recorded into physical custody, but require approval before acceptance into the booking.
-- `POL-05.09` Booking prepares the buying budget, Accounts checks it, and the Owner approves it before use. Actual budgets, names and authority remain to be supplied.
+- `POL-05.09` Booking prepares the buying budget, Accounts checks it, and the Owner approves it before use: three different people for each budget version, the approval without a value limit (`DEC-142`). Actual budgets, names and authority remain to be supplied.
 - `POL-05.10` Booking proposes material booking changes or cancellation; an authorised approver approves them under the signed brand agreement and configured authority. Actual rights and time windows come from each agreement.
 
 **Signed by, date:**

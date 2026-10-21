@@ -1454,3 +1454,30 @@
 - **Choice.** BASIC is the basic rate; P RATE is the actual purchase rate of the piece, including handling and transportation, and is the cost the PT approval establishes. All 20 columns of KDPS's template must be filled; the two `SUGGESTED` columns are optional.
 - **Why.** The product owner's description of the template.
 - **Changed.** PRD "Words used": P RATE reworded. goods-in design 5.2 and 6.
+
+## DEC-141 — Who owns counted goods follows the brand Agreement's ownership event
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-557; goods-in 4.8, GI-4
+- **Question.** A GRN records an owner for each receipt count. How does the brand Agreement's ownership-transfer event (`POL-01.05`) decide it, and when does "receipt and acceptance" pass ownership?
+- **Options.** By the event as built, with receipt and acceptance at the scan-in · the same, with receipt and acceptance at the GRN · Unknown until the Agreement names the owner outright.
+- **Choice.** The first. Ownership at the supplier's dispatch: the Organisation (the receiving unit's legal entity) owns the goods when they are counted. Ownership at the sale to the customer: the brand owns them until they are sold. Receipt and acceptance: the brand owns them at the count, and ownership passes to the Organisation at the scan-in at the receiving Site, which is the acceptance (goods-in section 7). Another event described in words, or no event recorded: Unknown until recorded.
+- **Why.** It follows the brand's own signed Agreement (`DEC-129`, `DEC-132`); acceptance in the PRD is the scan-in (`PRD-REC-021`, `PRD-REC-022`).
+- **Changed.** `POL-01.05` (a sentence added; ID kept). goods-in 4.5 and 4.8; RR-557 closed. The scan-in ticket (`S2-F07-T01`) posts the ownership change.
+
+## DEC-142 — An open-to-buy budget needs three different people and stays outside policy 5's validation
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-548, RR-549; goods-in 3.3
+- **Question.** May the person who records Accounts' check also approve the same budget version, is the approval limited by value, and does approving a new budget version end policy 5's validation?
+- **Options.** Checker barred, no value limit, no reset · checker allowed · a value limit · reset at each new version.
+- **Choice.** The first. Booking prepares, Accounts checks and the Owner approves, three different people for each version; the approval has no value limit. A budget's own check and approval are its control: approving a new version does not end policy 5's validation.
+- **Why.** `POL-05.09` names three roles, and a budget changes often; resetting policy 5 each time would stop every booking approval.
+- **Changed.** `POL-05.09` (a sentence added; ID kept). goods-in 3.3; RR-548 and RR-549 closed.
+
+## DEC-143 — The seed gives finished synthetic Organisations the GRN series
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** code review 2 of stage 2; `DEC-118`, RR-330
+- **Question.** `DEC-118` leaves a finished seed Organisation as it is. The GRN series came after `dev`'s synthetic Organisations finished setup. May the seed add it to them?
+- **Options.** Add the series once to a finished synthetic Organisation that lacks it · leave them without it, so `dev` cannot issue a GRN.
+- **Choice.** The first. The seed adds the labelled synthetic GRN series to a finished synthetic Organisation that lacks it; a rerun adds nothing. Everything else of a finished Organisation stays as it is.
+- **Why.** Without it `dev` could never issue a GRN.
+- **Changed.** `AGENTS.md` "Code workspace" `pnpm seed` line; code-house-rules 11.2 as built.
