@@ -289,6 +289,10 @@ const merchandiseRecordTypes = [
   declare('merchandise.attribute', ['view', 'create', 'edit'], NONE),
   declare('merchandise.vocabulary_value', ['view', 'edit'], NONE),
   declare('merchandise.vocabulary_proposal', ['view', 'create', 'approve'], NONE),
+  // The season attribute and the size attribute, two Organisation settings (4.2 "As built"; RR-550, RR-556): as the
+  // access settings are, view reads them, edit prepares a version and approve decides it, by a different person; no
+  // permission creates or removes a setting.
+  declare('merchandise.marked_attribute', ['view', 'edit', 'approve'], NONE),
   // Tracking profiles, styles, SKUs, packs, external codes and product proposals (structure-and-masters 4; S1-F03-T02),
   // the Organisation's as the catalogue is, so they carry no scope fact (5.3). A style or SKU is created only by
   // confirming a product proposal: create proposes, approve confirms or rejects, by a different person (4.2; DM-5,

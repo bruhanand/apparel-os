@@ -272,6 +272,10 @@ export const accessApprovalCodes = declareCodes({
   // A grant is approved by someone other than its preparer, the stand-in and the person stood in for (product owner,
   // 9 Oct 2026); `missing` names the person as `stand-in-party`.
   'access.stand-in-party': 'refused',
+  // A document decided in two steps is decided at its second by none who decided its first, such as Accounts' check
+  // of an open-to-buy budget version and its approval (access-and-approvals 9.8b; DEC-142); `missing` names the person
+  // as `earlier-step-decider`.
+  'access.earlier-step-decider': 'refused',
   'access.stand-in-wider-than-authority': 'refused',
   'access.stand-in-grant-not-found': 'not-found',
   // An approved grant of the same stand-in, person stood in for and exact scope overlaps its dates (code-house-rules 7.3).
@@ -873,11 +877,15 @@ export const exceptionsCodes = declareCodes({
  *   or a brand it names is retired then (2.2, 2.5).
  * - `merchandise.parent-cycle`: the parent brand or category is nested under the record already (4.1).
  * - `merchandise.size-set-of-another-category`: a category names a size set fixed to another category (4.1).
- * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type (4.2; GC2-9).
+ * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type, or such an
+ *   attribute is marked as the season or the size list (4.2; GC2-9).
  * - `merchandise.office-unit-has-no-brand`: an office unit operates without a brand (3.3; PRD-ORG-006).
  * - `merchandise.brand-counter-one-brand`: a brand-counter unit covers at most one brand (3.3; PRD-ORG-006).
  * - `merchandise.proposal-not-found`: no proposal has that identifier.
  * - `merchandise.proposal-not-open`: the proposal is already confirmed or rejected (4.2).
+ * - `merchandise.attribute-not-marked`: no attribute is marked as the season, or as the size list, in force now, so a
+ *   budget's season or a count line's size cannot be read (4.2 "As built"; RR-550, RR-556); `missing` names the
+ *   setting, `merchandise.season-attribute` or `merchandise.size-attribute`.
  */
 export const merchandiseCodes = declareCodes({
   'merchandise.code-taken': 'refused',
@@ -892,6 +900,7 @@ export const merchandiseCodes = declareCodes({
   'merchandise.brand-counter-one-brand': 'refused',
   'merchandise.proposal-not-found': 'not-found',
   'merchandise.proposal-not-open': 'refused',
+  'merchandise.attribute-not-marked': 'unavailable',
   ...merchandisePartiesCodes(),
   ...merchandiseProductCodes(),
 });

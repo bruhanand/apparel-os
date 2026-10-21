@@ -125,6 +125,8 @@ interface DocumentHandler {
    * grant (access-and-approvals 10; product owner, 9 Oct 2026).
    */
   parties?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /** The people who decided an earlier step of the document, who may not decide it (9.8b; DEC-142). */
+  earlierStepDeciders?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   /** A check of the document's own, under the locks, before the code is taken. */
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
   approve(context: TransactionContext, decider: Decider, versionId: string): Promise<Prepared<unknown>>;
@@ -183,6 +185,12 @@ function moduleEffect(effect: DocumentEffect): DocumentHandler {
     ...(effect.decidesWith === undefined
       ? {}
       : { decidesWith: (c: TransactionContext, v: string) => effect.decidesWith?.(c, v) ?? Promise.resolve([]) }),
+    ...(effect.earlierStepDeciders === undefined
+      ? {}
+      : {
+          earlierStepDeciders: (c: TransactionContext, v: string) =>
+            effect.earlierStepDeciders?.(c, v) ?? Promise.resolve([]),
+        }),
     approve: (c, d, v) => effect.approve(c, decider(d), v),
     reject: (c, d, v) => effect.reject(c, decider(d), v),
   };
@@ -501,7 +509,8 @@ export class Approvals {
    * Independence (access-and-approvals 9.3; PRD-ACS-006, POL-02.08): the decider is none of the request's preparers,
    * through any role, an access change's read again from its change rows and another module's those it named (9.1);
    * nor one of the people its document names as parties, such as the two people of a stand-in grant (10; product owner,
-   * 9 Oct 2026). Answers the refusal, or undefined.
+   * 9 Oct 2026); nor one who decided an earlier step of a document decided in two steps, such as Accounts' check of an
+   * open-to-buy budget version (9.8b; DEC-142). Answers the refusal, or undefined.
    */
   private async independenceRefusal(
     context: TransactionContext,
@@ -527,6 +536,18 @@ export class Approvals {
           kind: 'refused',
           code: 'access.stand-in-party',
           missing: [{ kind: 'stand-in-party', userId: actorId }],
+        },
+      };
+    }
+    const earlier =
+      (await this.handlerOf(request.actionType).earlierStepDeciders?.(context, request.documentVersionId)) ?? [];
+    if (earlier.includes(actorId)) {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'refused',
+          code: 'access.earlier-step-decider',
+          missing: [{ kind: 'earlier-step-decider', userId: actorId }],
         },
       };
     }

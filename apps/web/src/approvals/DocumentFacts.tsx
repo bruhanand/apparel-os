@@ -11,6 +11,8 @@ import {
   FINANCIAL_YEAR_CHANGE_TYPE,
   LAYOUT_CONFIRMATION,
   MAPPING_CONFIRMATION,
+  MARKED_ATTRIBUTE_CHANGE,
+  MARKED_ATTRIBUTE_TYPE,
   MAPPING_RULE_CONFIRMATION,
   PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
@@ -467,6 +469,47 @@ function BudgetFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A version of the season or size attribute: which it marks, the attribute it names and what is in force now, and
+ * where the choice came from (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+ */
+function MarkedAttributeFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'listMarkedAttributes', {}),
+    enabled: useViewable(MARKED_ATTRIBUTE_TYPE),
+  });
+  const marking = query.data?.marks.find((each) => each.versions.some((v) => v.id === view.document.versionId));
+  const version = marking?.versions.find((each) => each.id === view.document.versionId);
+  const attributeName = (attributeId: string) => <AttributeName attributeId={attributeId} />;
+  if (marking === undefined || version === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="marked.title">{t(marking.mark === 'season' ? 'marked.mark.season' : 'marked.mark.size')}</Fact>
+      <Fact label="marked.attribute">{attributeName(version.attributeId)}</Fact>
+      <Fact label="marked.in-force">
+        {marking.inForce.kind === 'set' ? attributeName(marking.inForce.attributeId) : t('marked.not-set')}
+      </Fact>
+      <Fact label="rules.origin">{t(`rules.origin.${version.origin}`)}</Fact>
+    </Facts>
+  );
+}
+
+/** An attribute's code and name, where the reader may read attributes; Unknown otherwise (PRD-MOD-015). */
+function AttributeName({ attributeId }: { attributeId: string }) {
+  const query = useQuery({
+    ...readQuery(api, 'readAttribute', { params: { recordId: attributeId } }),
+    enabled: useViewable('merchandise.attribute'),
+  });
+  const record = query.data?.record;
+  if (record === undefined) return <>{t('organisation.unknown')}</>;
+  const name = record.versions[0]?.name;
+  return (
+    <>
+      <span className="font-mono">{record.code}</span> {typeof name === 'string' ? name : ''}
+    </>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -505,6 +548,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     case OPEN_TO_BUY_CHECK:
     case OPEN_TO_BUY_APPROVAL:
       return <BudgetFacts view={view} />;
+    // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+    case MARKED_ATTRIBUTE_CHANGE:
+      return <MarkedAttributeFacts view={view} />;
     // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
     case LAYOUT_CONFIRMATION:
     case MAPPING_CONFIRMATION:

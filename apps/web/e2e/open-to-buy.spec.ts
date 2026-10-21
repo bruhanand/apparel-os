@@ -67,7 +67,6 @@ test('POL-05.09 POL-02.07 a budget prepared by Booking, checked by Accounts and 
       await booking.getByRole('button', { name: 'Prepare a budget' }).click();
       const form = booking.getByRole('form', { name: 'Prepare a budget' });
       await form.locator('#budget-brand').selectOption({ label: world.brandOption });
-      await form.locator('#budget-season-attribute').selectOption({ label: world.seasonListOption });
       await form.locator('#budget-season').selectOption({ label: world.seasonOption });
       await form.locator('#budget-amount').fill(AMOUNT);
       await form.locator('#budget-origin').selectOption('synthetic');

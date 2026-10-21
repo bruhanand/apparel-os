@@ -19,7 +19,7 @@ export interface BookingDependencies {
     AccessInterface,
     'requestApproval' | 'requestLockTargets' | 'supersedeRequest' | 'approvalRequestsOf'
   >;
-  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn' | 'record'>;
+  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn' | 'record' | 'markedAttributeAt'>;
   readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 

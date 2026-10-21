@@ -2073,6 +2073,22 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "goods-in 4.2, 4.3; code-house-rules 6.2, 7.1, 12.7"
+    },
+    {
+      "table": "merchandise.marked_attribute",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "structure-and-masters 4.2, 6.2; code-house-rules 7.1, 8.2",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "merchandise.marked_attribute_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "structure-and-masters 4.2, 6.2; code-house-rules 3.3, 7.3, 12.14",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
     }
   ]
 }

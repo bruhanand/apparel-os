@@ -323,6 +323,12 @@ import {
   packVersionDraftSchema,
 } from './catalogue.js';
 import {
+  MARKED_ATTRIBUTE_TYPE,
+  markedAttributeListSchema,
+  markedAttributePreparedSchema,
+  markedAttributeVersionDraftSchema,
+} from './marked-attributes.js';
+import {
   codeMappedSchema,
   codeMappingDraftSchema,
   codeMappingEndSchema,
@@ -843,6 +849,24 @@ const CATALOGUE_DECISION_CODES = [
   'merchandise.party-not-supplier',
   // A product proposal's confirmation (4.2; S1-F03-T02).
   ...PRODUCT_RULE_CODES,
+  // The season or size attribute's approval: its origin and its attribute rechecked under the lock (4.2 "As built";
+  // RR-550, RR-556); a version decided or superseded meanwhile is stale.
+  'configuration.origin-not-allowed',
+  'kernel.stale-version',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes preparing the season or size attribute can answer (structure-and-masters 4.2 "As built"; RR-550, RR-556):
+ * the attribute it names, the origin and the version token (code-house-rules 12.7, 12.14).
+ */
+const MARKED_ATTRIBUTE_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.origin-not-allowed',
+  'merchandise.record-not-found',
+  'merchandise.reference-not-in-force',
+  'merchandise.attribute-not-list',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes every change of the parties part can answer (structure-and-masters 2, 5; S1-F03-T03). */
@@ -956,6 +980,8 @@ const OPEN_TO_BUY_CHANGE_CODES = [
   'booking.brand-not-in-force',
   'booking.season-not-in-vocabulary',
   'booking.budget-exists',
+  // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
+  'merchandise.attribute-not-marked',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes the check or the approval of a budget version can answer under Decide's locks (3.3; POL-05.09). */
@@ -1567,6 +1593,8 @@ export const routes = {
       'access.not-eligible',
       'access.self-preparation',
       'access.stand-in-party',
+      // A second step decided by none who decided the first (access-and-approvals 9.8b; DEC-142).
+      'access.earlier-step-decider',
       'access.authenticator-code-refused',
       'access.enrolment-not-started',
       'access.approval-not-open',
@@ -3464,6 +3492,29 @@ export const routes = {
     response: vocabularyProposedSchema,
     codes: CATALOGUE_PROPOSE_CODES,
   }),
+  // The season attribute and the size attribute (structure-and-masters 4.2 "As built"; goods-in GI-2, GI-3; RR-550,
+  // RR-556): two Organisation settings, each marking one list-type attribute, prepared by one person and approved by a
+  // different one through My work; every version kept. The record type carries no scope fact (access-and-approvals 5.3).
+  listMarkedAttributes: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes',
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeListSchema,
+    codes: HISTORY_CODES,
+  }),
+  prepareMarkedAttributeVersion: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/marked-attributes/versions',
+    access: { kind: 'action', action: 'edit', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: true,
+    body: markedAttributeVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: markedAttributePreparedSchema,
+    codes: MARKED_ATTRIBUTE_CHANGE_CODES,
+  }),
   // Tracking profiles, a category's profile link, styles, SKUs and packs (structure-and-masters 4.1, 4.4 to 4.7, 8;
   // S1-F03-T02): each master's list, one record, a new record where it has one and a new version, taking effect when
   // recorded (2.3). A style and its SKUs enter the catalogue only when a different person confirms their product
@@ -4617,7 +4668,7 @@ export const routes = {
   // Booking › Open-to-buy (goods-in 3.3, section 11; PRD-BKG-004; POL-05.09; S2-F01-T02): budgets by brand and season,
   // each version prepared by Booking, checked by Accounts and approved by the Owner, or whoever holds the approval,
   // through My work. A budget carries its brand, so each route authorises in its command with the brand's facts
-  // (access-and-approvals 5.3). Not policy-gated: a budget is how policy 5's values are entered (DEC-116).
+  // (access-and-approvals 5.3). Not policy-gated: a budget's own check and approval are its control (DEC-142).
   listOpenToBuyBudgets: defineRoute({
     method: 'GET',
     path: '/api/booking/open-to-buy-budgets',

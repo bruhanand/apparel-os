@@ -22,16 +22,13 @@ export const OPEN_TO_BUY_APPROVAL = 'booking.open_to_buy_budget.change';
 const amountSchema = paiseSchema.refine((value) => value >= 0, { message: 'An amount is never below zero' });
 
 /**
- * The season a budget is for: a value of the Organisation's season attribute, named by its attribute and its value
- * (structure-and-masters 4.2; goods-in 3.1). Which attribute is the season is the Organisation's (GI-2).
+ * A new budget for a brand and a season, with its first version (3.3). The season is a value of the attribute the
+ * Organisation marks as its season (structure-and-masters 4.2 "As built"; goods-in 3.1; RR-550), so a budget names the
+ * value alone; while none is marked, a budget is refused, naming the setting.
  */
-export const seasonRefSchema = z.strictObject({ attributeId: idSchema, valueId: idSchema });
-export type SeasonRef = z.infer<typeof seasonRefSchema>;
-
-/** A new budget for a brand and a season, with its first version (3.3). */
 export const openToBuyBudgetDraftSchema = z.strictObject({
   brandId: idSchema,
-  season: seasonRefSchema,
+  seasonValueId: idSchema,
   amount: amountSchema,
   origin: settingOriginSchema,
 });

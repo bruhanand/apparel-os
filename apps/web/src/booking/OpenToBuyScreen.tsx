@@ -37,6 +37,7 @@ import {
 } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
+import { useMarkedAttribute } from '../merchandise/marked';
 import { holdsSyntheticDataOnly } from '../shell/environment';
 import { useTimeZone } from '../shell/session';
 
@@ -65,7 +66,6 @@ function amountOf(text: string): number {
 
 const budgetFormSchema = z.object({
   brandId: z.uuid(),
-  seasonAttributeId: z.uuid(),
   seasonValueId: z.uuid(),
   amount: amountField,
   // Where the amount came from, stated each time, with no default (code-house-rules 11.1, 12.14).
@@ -100,10 +100,8 @@ function NewBudgetForm() {
     ...readQuery(api, 'listBrands', { query: {} }),
     enabled: useGranted('merchandise.brand', 'view'),
   });
-  const attributes = useQuery({
-    ...readQuery(api, 'listAttributes', { query: {} }),
-    enabled: useGranted('merchandise.attribute', 'view'),
-  });
+  // The seasons are the values of the attribute the Organisation marks as its season (RR-550).
+  const seasons = useMarkedAttribute('season');
   const values = useQuery({
     ...readQuery(api, 'listVocabularyValues', { query: {} }),
     enabled: useGranted('merchandise.vocabulary_value', 'view'),
@@ -111,11 +109,11 @@ function NewBudgetForm() {
   const form = useForm<BudgetForm>({
     resolver: zodResolver(budgetFormSchema),
     mode: 'onBlur',
-    defaultValues: { brandId: '', seasonAttributeId: '', seasonValueId: '', amount: '' },
+    defaultValues: { brandId: '', seasonValueId: '', amount: '' },
   });
   const submission = useSubmission('prepareOpenToBuyBudget', LIST_READS);
   const errors = form.formState.errors;
-  const attributeId = form.watch('seasonAttributeId');
+  const attributeId = seasons.kind === 'set' ? seasons.attributeId : undefined;
   const inForce = <T extends { versions: readonly { state: string }[] }>(list: readonly T[] | undefined) =>
     (list ?? []).filter((each) => each.versions.some((version) => version.state === 'In force'));
   const nameOf = (record: { code: string; versions: readonly { state: string; name?: string }[] }) =>
@@ -131,7 +129,7 @@ function NewBudgetForm() {
           await submission.submit({
             body: {
               brandId: entered.brandId,
-              season: { attributeId: entered.seasonAttributeId, valueId: entered.seasonValueId },
+              seasonValueId: entered.seasonValueId,
               amount: amountOf(entered.amount),
               origin: entered.origin,
             },
@@ -157,33 +155,16 @@ function NewBudgetForm() {
         </select>
       </FormField>
       <FormField
-        id="budget-season-attribute"
-        label="budget.season-attribute"
+        id="budget-season"
+        label="budget.season"
         required
-        error={errors.seasonAttributeId}
-        help="budget.season-attribute.help"
+        error={errors.seasonValueId}
+        help="budget.season.help"
       >
-        <select
-          id="budget-season-attribute"
-          className={inputClass}
-          {...describedBy('budget-season-attribute', { invalid: errors.seasonAttributeId !== undefined, help: true })}
-          {...form.register('seasonAttributeId')}
-        >
-          <option value="">{t('setup.choose')}</option>
-          {inForce(attributes.data?.records)
-            .filter((attribute) => attribute.valueKind === 'list')
-            .map((attribute) => (
-              <option key={attribute.id} value={attribute.id}>
-                {t('budget.option', { code: attribute.code, name: nameOf(attribute) })}
-              </option>
-            ))}
-        </select>
-      </FormField>
-      <FormField id="budget-season" label="budget.season" required error={errors.seasonValueId}>
         <select
           id="budget-season"
           className={inputClass}
-          {...describedBy('budget-season', { invalid: errors.seasonValueId !== undefined, help: false })}
+          {...describedBy('budget-season', { invalid: errors.seasonValueId !== undefined, help: true })}
           {...form.register('seasonValueId')}
         >
           <option value="">{t('setup.choose')}</option>
@@ -195,6 +176,11 @@ function NewBudgetForm() {
               </option>
             ))}
         </select>
+        {seasons.kind === 'not-set' && (
+          <p role="status" className="m-0 text-body-sm text-text-2">
+            {t('budget.season.not-marked')}
+          </p>
+        )}
       </FormField>
       <FormField
         id="budget-amount"

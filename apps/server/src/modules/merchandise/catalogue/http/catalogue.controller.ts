@@ -3,6 +3,7 @@ import {
   type CatalogueChanged,
   type CatalogueKind,
   type CodeMapped,
+  type MarkedAttributePrepared,
   type ProductProposed,
   type CommandRoute,
   type VocabularyProposed,
@@ -35,7 +36,10 @@ import { recordTypeOf } from '../domain/kinds.js';
 import { CATALOGUE } from '../tokens.js';
 
 type Outcome =
-  | { readonly kind: 'success'; readonly answer: CatalogueChanged | VocabularyProposed | ProductProposed | CodeMapped }
+  | {
+      readonly kind: 'success';
+      readonly answer: CatalogueChanged | VocabularyProposed | ProductProposed | CodeMapped | MarkedAttributePrepared;
+    }
   | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
 
 /**
@@ -269,6 +273,29 @@ export class CatalogueController {
   ) {
     return this.command(routes.proposeVocabularyValue, 'merchandise.propose-vocabulary-value', user, input, (c, p) =>
       this.catalogue.proposeVocabularyValue(c, p, input.body),
+    );
+  }
+
+  // The season attribute and the size attribute (4.2 "As built"; RR-550, RR-556).
+  @ApiRoute(routes.listMarkedAttributes)
+  listMarkedAttributes(@SignedIn() user: SignedInUser) {
+    return this.read(user, 'merchandise.list-marked-attributes', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      marks: await this.catalogue.markedAttributes(context),
+    }));
+  }
+
+  @ApiRoute(routes.prepareMarkedAttributeVersion)
+  prepareMarkedAttributeVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.prepareMarkedAttributeVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    return this.command(
+      routes.prepareMarkedAttributeVersion,
+      'merchandise.prepare-marked-attribute-version',
+      user,
+      input,
+      (c, p) => this.catalogue.prepareMarkedAttributeVersion(c, p, input.body),
     );
   }
 

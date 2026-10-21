@@ -5,5 +5,4 @@ export { Booking } from './booking.js';
 export type { BookingDependencies, BookingInterface } from './booking.js';
 export { bookingApprovals } from './commands/effects.js';
 export type { EffectDependencies as BookingApprovalDependencies } from './commands/effects.js';
-export { OPEN_TO_BUY_BUDGETS_CHECK } from './queries/validity.js';
 export { bookingRestoreParticipant } from './restore-participant.js';

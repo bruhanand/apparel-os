@@ -1,6 +1,8 @@
 import {
   BRAND_COVERAGE_CHANGE,
   catalogueRecordType,
+  MARKED_ATTRIBUTE_CHANGE,
+  MARKED_ATTRIBUTE_TYPE,
   PRODUCT_CONFIRMATION,
   PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_CONFIRMATION,
@@ -28,8 +30,8 @@ export const approved = (kind: CatalogueKind): boolean => kind !== 'business_uni
 
 /**
  * The approval rules `merchandise` declares (access-and-approvals 8; structure-and-masters 2.3): brand coverage,
- * decided by a different authorised person (GC2-2, DEC-105), and the confirmation of a vocabulary value, by a different
- * person from its proposer (PRD-IMP-008, POL-02.07). Neither has a value (DM-8); the reasons are configured, with no
+ * decided by a different authorised person (GC2-2, DEC-105), the confirmation of a vocabulary value, by a different
+ * person from its proposer (PRD-IMP-008, POL-02.07), and the season and size attributes. None has a value (DM-8); the reasons are configured, with no
  * default (POL-02.23); their decision evidence carries no restricted field class (access-and-approvals 9.5).
  */
 export const catalogueApprovalRules: readonly ApprovalRule[] = [
@@ -58,6 +60,18 @@ export const catalogueApprovalRules: readonly ApprovalRule[] = [
     actionType: PRODUCT_CONFIRMATION,
     module: 'merchandise',
     recordType: PRODUCT_PROPOSAL_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
+  // The season attribute or the size attribute, an Organisation setting approved by a different person from its
+  // preparer (4.2 "As built"; RR-550, RR-556; POL-02.07).
+  {
+    actionType: MARKED_ATTRIBUTE_CHANGE,
+    module: 'merchandise',
+    recordType: MARKED_ATTRIBUTE_TYPE,
     independent: true,
     value: 'none',
     freeTextReason: false,

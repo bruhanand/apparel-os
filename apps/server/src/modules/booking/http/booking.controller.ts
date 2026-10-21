@@ -57,7 +57,7 @@ const budgetNotFound = (budgetId: string): CommandRefusal => ({
  * facts (access-and-approvals 5.3, 7.1 step 3; RR-296); each command runs under its idempotency key, holds its
  * authority at step 0 (code-house-rules 8.2) and answers a replay only while the same Authorise still passes (12.4).
  * Accounts' check and the approval are decided through `access`'s decision route from My work. None is policy-gated:
- * a budget is how policy 5's values are entered (DEC-116; goods-in 10.5). No rule lives here.
+ * a budget's own check and approval are its control (DEC-142; goods-in 10.5). No rule lives here.
  */
 @Controller()
 export class BookingController {

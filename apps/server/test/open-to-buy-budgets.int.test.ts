@@ -95,6 +95,8 @@ let otherBrandId: string;
 let laterBrandId: string;
 let seasonAttributeId: string;
 let seasonValueIds: string[];
+/** A SYNTHETIC value of a list attribute that is not the season. */
+let colourValueId: string;
 
 interface Call {
   readonly status: number;
@@ -110,16 +112,22 @@ async function enrolled(
   label: string,
   authorities: readonly SyntheticAuthority[],
   scope?: AssignmentScope,
+  at: { readonly database: string; readonly organisationCode: string } = { database, organisationCode },
 ): Promise<SyntheticUser> {
-  const user = await writeSyntheticUser(database, organisationCode, keys, {
+  const user = await writeSyntheticUser(at.database, at.organisationCode, keys, {
     label: `${label}${String(randomInt(1_000_000))}`,
     enrolled: true,
   });
-  await grantSynthetic(database, { kind: 'user', id: user.id }, authorities, scope === undefined ? {} : { scope });
+  await grantSynthetic(at.database, { kind: 'user', id: user.id }, authorities, scope === undefined ? {} : { scope });
   const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.71' },
-    body: JSON.stringify({ organisationCode, login: user.login, password: user.password, totpCode: freshCode(user) }),
+    body: JSON.stringify({
+      organisationCode: at.organisationCode,
+      login: user.login,
+      password: user.password,
+      totpCode: freshCode(user),
+    }),
   });
   expect(response.status).toBe(200);
   cookies.set(user.id, (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '');
@@ -147,10 +155,10 @@ async function get(user: SyntheticUser, path: string): Promise<Call> {
 
 const today = () => clock.now().toISOString().slice(0, 10);
 /** The SYNTHETIC season value of an index, as the setup confirmed it. */
-function season(index: number): { attributeId: string; valueId: string } {
+function season(index: number): string {
   const valueId = seasonValueIds[index];
   if (valueId === undefined) throw new Error(`no season ${String(index)}`);
-  return { attributeId: seasonAttributeId, valueId };
+  return valueId;
 }
 const code = (part: string) => syntheticCode(`${part}-${String(randomInt(1_000_000))}`);
 
@@ -166,10 +174,10 @@ async function syntheticBrand(label: string, validFrom = today()): Promise<strin
   return made.body.recordId as string;
 }
 
-/** A SYNTHETIC season value: proposed, then confirmed by a different person (structure-and-masters 4.2). */
-async function syntheticSeason(label: string): Promise<string> {
+/** A SYNTHETIC value of a list attribute: proposed, then confirmed by a different person (structure-and-masters 4.2). */
+async function syntheticValue(attributeId: string, label: string): Promise<string> {
   const proposed = await post(merchandiser, '/api/merchandise/vocabulary-proposals', {
-    attributeId: seasonAttributeId,
+    attributeId,
     code: code(label),
     name: syntheticName(label),
   });
@@ -181,9 +189,21 @@ async function syntheticSeason(label: string): Promise<string> {
     attributeId: string;
     code: string;
   }[];
-  const value = values.find((each) => each.attributeId === seasonAttributeId && each.code.includes(label));
-  if (value === undefined) throw new Error(`season ${label} not confirmed`);
+  const value = values.find((each) => each.attributeId === attributeId && each.code.includes(label));
+  if (value === undefined) throw new Error(`${label} not confirmed`);
   return value.id;
+}
+
+/** A SYNTHETIC list attribute, recorded at once through the catalogue's route (structure-and-masters 4.2). */
+async function syntheticListAttribute(label: string): Promise<string> {
+  const attribute = await post(merchandiser, '/api/merchandise/attributes', {
+    code: code(label),
+    valueKind: 'list',
+    name: syntheticName(label),
+    validFrom: today(),
+  });
+  expect(attribute.status, JSON.stringify(attribute.body)).toBe(200);
+  return attribute.body.recordId as string;
 }
 
 function decide(
@@ -302,19 +322,26 @@ beforeAll(async () => {
     { recordType: 'merchandise.vocabulary_value', action: 'view' },
     { recordType: 'merchandise.vocabulary_proposal', action: 'view' },
     { recordType: 'merchandise.vocabulary_proposal', action: 'create' },
+    { recordType: 'merchandise.marked_attribute', action: 'view' },
+    { recordType: 'merchandise.marked_attribute', action: 'edit' },
   ]);
   confirmer = await enrolled('OTB-CONFIRMER', [
     { recordType: 'merchandise.vocabulary_proposal', action: 'view' },
     { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
+    { recordType: 'merchandise.marked_attribute', action: 'view' },
+    { recordType: 'merchandise.marked_attribute', action: 'approve' },
   ]);
-  const attribute = await post(merchandiser, '/api/merchandise/attributes', {
-    code: code('SEASON'),
-    valueKind: 'list',
-    name: syntheticName('Season'),
-    validFrom: today(),
+  seasonAttributeId = await syntheticListAttribute('SEASON');
+  // The season attribute, marked by the merchandiser and approved by a different person (RR-550; POL-02.07).
+  const marking = await post(merchandiser, '/api/merchandise/marked-attributes/versions', {
+    mark: 'season',
+    attributeId: seasonAttributeId,
+    origin: 'synthetic',
   });
-  expect(attribute.status, JSON.stringify(attribute.body)).toBe(200);
-  seasonAttributeId = attribute.body.recordId as string;
+  expect(marking.status, JSON.stringify(marking.body)).toBe(200);
+  const marked = await decide(confirmer, marking.body.requestId as string, marking.body.versionId as string);
+  expect(marked.status, JSON.stringify(marked.body)).toBe(200);
+  colourValueId = await syntheticValue(await syntheticListAttribute('COLOUR'), 'TEAL');
   brandId = await syntheticBrand('OTB-BRAND');
   otherBrandId = await syntheticBrand('OTB-OTHER');
   laterBrandId = await syntheticBrand(
@@ -322,7 +349,9 @@ beforeAll(async () => {
     new Date(clock.now().getTime() + 86_400_000).toISOString().slice(0, 10),
   );
   seasonValueIds = [];
-  for (const label of ['SS1', 'AW1', 'SS2', 'AW2', 'SS3']) seasonValueIds.push(await syntheticSeason(label));
+  for (const label of ['SS1', 'AW1', 'SS2', 'AW2', 'SS3']) {
+    seasonValueIds.push(await syntheticValue(seasonAttributeId, label));
+  }
   booking = await enrolled('OTB-BOOKING', [
     { recordType: BUDGET, action: 'view' },
     { recordType: BUDGET, action: 'create' },
@@ -369,7 +398,7 @@ describe('preparing a budget (goods-in 3.3; PRD-BKG-004)', () => {
   it('PRD-BKG-004 POL-05.09 a budget prepared by Booking waits for Accounts’ check and is not usable', async () => {
     const made = await prepare(booking, {
       brandId,
-      season: season(0),
+      seasonValueId: season(0),
       amount: SYNTHETIC_AMOUNT,
     });
     const { budgetId, versionId, requestId } = preparedIds(made);
@@ -377,7 +406,8 @@ describe('preparing a budget (goods-in 3.3; PRD-BKG-004)', () => {
     expect(budget).toMatchObject({
       id: budgetId,
       brand: { id: brandId },
-      season: season(0),
+      // The season's attribute is the one marked as the season when the budget was prepared (RR-550).
+      season: { attributeId: seasonAttributeId, valueId: season(0) },
       versionToken: versionId,
       remaining: { kind: 'not-approved' },
       versions: [
@@ -404,7 +434,7 @@ describe('preparing a budget (goods-in 3.3; PRD-BKG-004)', () => {
 describe('the check and the approval (goods-in 3.3; POL-05.09, POL-02.07)', () => {
   it('POL-05.09 POL-02.07 Accounts checks and the Owner approves, each other than the preparer; only then is the budget used', async () => {
     const { budgetId, versionId, requestId } = preparedIds(
-      await prepare(booking, { brandId, season: season(1), amount: SYNTHETIC_AMOUNT }),
+      await prepare(booking, { brandId, seasonValueId: season(1), amount: SYNTHETIC_AMOUNT }),
     );
     // The preparer may not check their own version, though they hold the check (PRD-ACS-006).
     const ownCheck = await decide(booking, requestId, versionId);
@@ -455,7 +485,7 @@ describe('the check and the approval (goods-in 3.3; POL-05.09, POL-02.07)', () =
   });
 
   it('POL-05.09 a check Accounts rejects, and an approval the Owner rejects, return the version to Booking unused', async () => {
-    const first = preparedIds(await prepare(booking, { brandId, season: season(2), amount: SYNTHETIC_AMOUNT }));
+    const first = preparedIds(await prepare(booking, { brandId, seasonValueId: season(2), amount: SYNTHETIC_AMOUNT }));
     const returned = await decide(accounts, first.requestId, first.versionId, 'reject');
     expect(returned.status, JSON.stringify(returned.body)).toBe(200);
     expect((await readBudget(booking, first.budgetId)).versions).toEqual([
@@ -486,9 +516,45 @@ describe('the check and the approval (goods-in 3.3; POL-05.09, POL-02.07)', () =
   });
 });
 
+describe('three different people for each version (goods-in 3.3; POL-05.09; DEC-142)', () => {
+  it('DEC-142 POL-05.09 the person who recorded Accounts’ check cannot approve the same version; another approves it, with no value limit', async () => {
+    // Accounts and the Owner in one person: they may check a version, or approve one, never both (DEC-142).
+    const checkerOwner = await enrolled('OTB-CHECKER-OWNER', [
+      { recordType: BUDGET, action: 'view' },
+      { recordType: BUDGET, action: 'approve' },
+      { recordType: CHECK, action: 'view' },
+      { recordType: CHECK, action: 'approve' },
+      PANEL,
+    ]);
+    const { versionId, requestId } = preparedIds(
+      await prepare(booking, {
+        brandId: await syntheticBrand('OTB-THREE'),
+        seasonValueId: season(0),
+        amount: SYNTHETIC_RAISED_AMOUNT,
+      }),
+    );
+    const checked = await decide(checkerOwner, requestId, versionId);
+    expect(checked.status, JSON.stringify(checked.body)).toBe(200);
+    // The approval reaches the Owner in My work, and not the person who checked it.
+    const approval = await offered(owner, versionId);
+    expect(await offeredNow(checkerOwner, versionId)).toBeUndefined();
+    const own = await decide(checkerOwner, approval.id, versionId);
+    expect(own.status).toBe(422);
+    expect(own.body).toMatchObject({
+      error: {
+        code: 'access.earlier-step-decider',
+        missing: [{ kind: 'earlier-step-decider', userId: checkerOwner.id }],
+      },
+    });
+    // The Owner approves it; no approval limit is set up for anyone, and none is asked (DEC-142).
+    const approved = await decide(owner, approval.id, versionId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+  });
+});
+
 describe('a budget’s versions (goods-in 3.3; code-house-rules 7.3, 12.7)', () => {
   it('PRD-MOD-010 a change is a new version through the same steps; the one in force stays until it is approved, and history is kept', async () => {
-    const first = preparedIds(await prepare(booking, { brandId, season: season(3), amount: SYNTHETIC_AMOUNT }));
+    const first = preparedIds(await prepare(booking, { brandId, seasonValueId: season(3), amount: SYNTHETIC_AMOUNT }));
     await checkAndApprove(first.versionId, first.requestId);
     const change = (versionToken: string, amount: number) =>
       post(booking, `/api/booking/open-to-buy-budgets/${first.budgetId}/versions`, {
@@ -553,12 +619,39 @@ describe('a budget’s versions (goods-in 3.3; code-house-rules 7.3, 12.7)', () 
   });
 });
 
+describe('the season attribute (goods-in 3.3, GI-2; structure-and-masters 4.2; RR-550)', () => {
+  it('RR-550 code-house-rules 12.14 in an Organisation that marks no season attribute, a budget is refused, naming the setting', async () => {
+    // The world's second SYNTHETIC Organisation, where no attribute is marked as the season.
+    const second = world.organisations[1];
+    for (const [setting, value] of [
+      ['access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 }],
+      ['access.password-rules', { minimumLength: 12 }],
+      ['access.office-session-limits', { idleLockSeconds: 1800, absoluteSeconds: 28800 }],
+    ] as const) {
+      await writeSyntheticSetting(second.database, setting, value);
+    }
+    const unmarked = await enrolled('OTB-UNMARKED', [{ recordType: BUDGET, action: 'create' }], undefined, {
+      database: second.database,
+      organisationCode: second.code,
+    });
+    const refused = await prepare(unmarked, { brandId: uuidv7(), seasonValueId: uuidv7(), amount: SYNTHETIC_AMOUNT });
+    expect(refused.status).toBe(403);
+    expect(refused.body).toMatchObject({
+      error: {
+        kind: 'unavailable',
+        code: 'merchandise.attribute-not-marked',
+        missing: [{ kind: 'setting', setting: 'merchandise.season-attribute' }],
+      },
+    });
+  });
+});
+
 describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () => {
   it('PRD-UXP-003 refuses a second budget for a brand and season, a brand not in force and a season off its vocabulary', async () => {
     const made = preparedIds(
-      await prepare(booking, { brandId: otherBrandId, season: season(4), amount: SYNTHETIC_AMOUNT }),
+      await prepare(booking, { brandId: otherBrandId, seasonValueId: season(4), amount: SYNTHETIC_AMOUNT }),
     );
-    const again = await prepare(booking, { brandId: otherBrandId, season: season(4), amount: SYNTHETIC_AMOUNT });
+    const again = await prepare(booking, { brandId: otherBrandId, seasonValueId: season(4), amount: SYNTHETIC_AMOUNT });
     expect(again.status).toBe(422);
     expect(again.body).toMatchObject({
       error: {
@@ -567,29 +660,40 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
       },
     });
     // A brand whose first version starts tomorrow is not in force today (structure-and-masters 2.2).
-    const notInForce = await prepare(booking, { brandId: laterBrandId, season: season(4), amount: SYNTHETIC_AMOUNT });
+    const notInForce = await prepare(booking, {
+      brandId: laterBrandId,
+      seasonValueId: season(4),
+      amount: SYNTHETIC_AMOUNT,
+    });
     expect(notInForce.body).toMatchObject({
       error: {
         code: 'booking.brand-not-in-force',
         missing: [{ kind: 'record', recordType: 'merchandise.brand', recordId: laterBrandId }],
       },
     });
-    const offVocabulary = await prepare(booking, {
-      brandId,
-      season: { attributeId: seasonAttributeId, valueId: uuidv7() },
-      amount: SYNTHETIC_AMOUNT,
-    });
+    const offVocabulary = await prepare(booking, { brandId, seasonValueId: uuidv7(), amount: SYNTHETIC_AMOUNT });
     expect(offVocabulary.body).toMatchObject({ error: { code: 'booking.season-not-in-vocabulary' } });
+    // A value of another list attribute is no season: only the attribute marked as the season counts (RR-550).
+    const notSeason = await prepare(booking, { brandId, seasonValueId: colourValueId, amount: SYNTHETIC_AMOUNT });
+    expect(notSeason.body).toMatchObject({
+      error: {
+        code: 'booking.season-not-in-vocabulary',
+        missing: [
+          { kind: 'record', recordType: 'merchandise.attribute', recordId: seasonAttributeId },
+          { kind: 'record', recordType: 'merchandise.vocabulary_value', recordId: colourValueId },
+        ],
+      },
+    });
     // An amount below zero is no amount (PRD-MOD-014).
-    const negative = await prepare(booking, { brandId, season: season(4), amount: -1 });
+    const negative = await prepare(booking, { brandId, seasonValueId: season(4), amount: -1 });
     expect(negative.status).toBe(400);
   });
 
   it('PRD-ACS-001 PRD-UXP-003 refuses a person outside the brand’s scope, or holding no permission, naming what is missing', async () => {
-    const outside = await prepare(otherBrandBooking, { brandId, season: season(4), amount: SYNTHETIC_AMOUNT });
+    const outside = await prepare(otherBrandBooking, { brandId, seasonValueId: season(4), amount: SYNTHETIC_AMOUNT });
     expect(outside.status).toBe(403);
     expect(outside.body).toMatchObject({ error: { code: 'access.not-authorised' } });
-    const none = await prepare(outsider, { brandId, season: season(4), amount: SYNTHETIC_AMOUNT });
+    const none = await prepare(outsider, { brandId, seasonValueId: season(4), amount: SYNTHETIC_AMOUNT });
     expect(none.status).toBe(403);
     expect(none.body).toMatchObject({
       error: {
@@ -602,7 +706,7 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
       (await get(otherBrandBooking, '/api/booking/open-to-buy-budgets')).body,
     );
     expect(listed.budgets.every((each) => each.brand.id === otherBrandId)).toBe(true);
-    const own = preparedIds(await prepare(booking, { brandId, season: season(4), amount: SYNTHETIC_AMOUNT }));
+    const own = preparedIds(await prepare(booking, { brandId, seasonValueId: season(4), amount: SYNTHETIC_AMOUNT }));
     expect((await get(otherBrandBooking, `/api/booking/open-to-buy-budgets/${own.budgetId}`)).status).toBe(403);
     expect((await get(outsider, '/api/booking/open-to-buy-budgets')).status).toBe(403);
     expect((await get(booking, `/api/booking/open-to-buy-budgets/${uuidv7()}`)).status).toBe(404);
@@ -628,13 +732,13 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
   it('code-house-rules 12.14 refuses a value of an origin this environment does not accept, and replays a key once', async () => {
     const testSetup = await post(booking, '/api/booking/open-to-buy-budgets', {
       brandId: otherBrandId,
-      season: season(3),
+      seasonValueId: season(3),
       amount: SYNTHETIC_AMOUNT,
       origin: 'test-setup',
     });
     expect(testSetup.body).toMatchObject({ error: { code: 'configuration.origin-not-allowed' } });
     const key = uuidv7();
-    const body = { brandId: otherBrandId, season: season(3), amount: SYNTHETIC_AMOUNT };
+    const body = { brandId: otherBrandId, seasonValueId: season(3), amount: SYNTHETIC_AMOUNT };
     const made = await prepare(booking, body, key);
     expect(made.status, JSON.stringify(made.body)).toBe(200);
     // The same key and content answers the same, recording nothing more (PRD-INT-002; 12.4).
@@ -664,7 +768,7 @@ describe('the budgets a page at a time (goods-in 3.3, section 11; code-house-rul
     for (const label of ['OTB-PAGE-A', 'OTB-PAGE-B', 'OTB-PAGE-C']) {
       const pageBrand = await syntheticBrand(label);
       made.push(
-        preparedIds(await prepare(booking, { brandId: pageBrand, season: season(0), amount: SYNTHETIC_AMOUNT }))
+        preparedIds(await prepare(booking, { brandId: pageBrand, seasonValueId: season(0), amount: SYNTHETIC_AMOUNT }))
           .budgetId,
       );
     }
@@ -691,12 +795,12 @@ describe('the budgets a page at a time (goods-in 3.3, section 11; code-house-rul
     const outside = preparedIds(
       await prepare(booking, {
         brandId: await syntheticBrand('OTB-PAGE-OUT'),
-        season: season(0),
+        seasonValueId: season(0),
         amount: SYNTHETIC_AMOUNT,
       }),
     );
     const inside = preparedIds(
-      await prepare(booking, { brandId: otherBrandId, season: season(2), amount: SYNTHETIC_AMOUNT }),
+      await prepare(booking, { brandId: otherBrandId, seasonValueId: season(2), amount: SYNTHETIC_AMOUNT }),
     );
     const paged = await pages(otherBrandBooking, 1);
     const ids = paged.flatMap((page) => page.budgets.map((budget) => budget.id));
@@ -708,31 +812,19 @@ describe('the budgets a page at a time (goods-in 3.3, section 11; code-house-rul
   });
 });
 
-describe('the budgets as policy 5’s values (goods-in 10.5; module-map 4.4; DM-6)', () => {
-  it('POL-05.09 every approved budget is reported to the policy gate under policy 5, with who entered it', async () => {
+describe('the budgets and policy 5 (goods-in 3.3, 10.5; DEC-142)', () => {
+  it('DEC-142 a budget is no value of policy 5: approving a version reports nothing to the policy gate', async () => {
     const reader = await enrolled('OTB-READINESS', [{ recordType: 'configuration.policy_status', action: 'view' }]);
     const made = preparedIds(
-      await prepare(booking, { brandId: otherBrandId, season: season(1), amount: SYNTHETIC_AMOUNT }),
+      await prepare(booking, { brandId: otherBrandId, seasonValueId: season(1), amount: SYNTHETIC_AMOUNT }),
     );
-    const valuesOf = async (user: SyntheticUser) => {
-      const read = await get(user, '/api/access/policy-readiness');
-      expect(read.status, JSON.stringify(read.body)).toBe(200);
-      const policies = read.body.policies as {
-        policy: number;
-        values: { check: string; key: string; enteredByYou: boolean }[];
-      }[];
-      return (policies.find((each) => each.policy === 5)?.values ?? []).filter(
-        (each) => each.check === 'booking.open-to-buy-budgets',
-      );
-    };
-    // A budget waiting for its check is no value yet.
-    expect((await valuesOf(reader)).map((each) => each.key)).not.toContain(made.budgetId);
     await checkAndApprove(made.versionId, made.requestId);
-    expect(await valuesOf(reader)).toContainEqual({
-      check: 'booking.open-to-buy-budgets',
-      key: made.budgetId,
-      origin: 'synthetic',
-      enteredByYou: false,
-    });
+    const read = await get(reader, '/api/access/policy-readiness');
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    const policies = read.body.policies as { policy: number; values: { check: string; key: string }[] }[];
+    const values = policies.find((each) => each.policy === 5)?.values ?? [];
+    // A budget's own check and approval are its control, so a new version leaves policy 5's validation as it is.
+    expect(values.map((each) => each.key)).not.toContain(made.budgetId);
+    expect(values.map((each) => each.check)).not.toContain('booking.open-to-buy-budgets');
   });
 });
