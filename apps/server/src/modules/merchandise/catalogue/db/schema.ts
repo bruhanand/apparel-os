@@ -3,6 +3,7 @@ import type {
   CodeScope,
   ExternalCodeKind,
   ProposalState,
+  SettingOrigin,
   SkuPurpose,
   StockUnit,
 } from '@apparel-os/schemas';
@@ -145,6 +146,8 @@ export const trackingProfileVersion = merchandise.table('tracking_profile_versio
   requiredIdentifiers: text('required_identifiers').array().notNull(),
   receivingShelfLifeDays: integer('receiving_shelf_life_days'),
   sellingShelfLifeDays: integer('selling_shelf_life_days'),
+  /** Where the version came from, as policy 4's value (code-house-rules 12.14; migration 0089; RR-558). */
+  origin: text('origin').$type<SettingOrigin>().notNull(),
 });
 export const trackingProfileSiteChange = merchandise.table('tracking_profile_site_change', {
   id: uuid('id').primaryKey(),

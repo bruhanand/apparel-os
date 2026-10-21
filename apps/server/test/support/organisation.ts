@@ -193,6 +193,7 @@ export async function structureSetup(options: {
     access,
     suppliers: partiesSupplierRoles,
     stockPresence: options.stockPresence,
+    origins: localOrigins,
   });
   const parties = new Parties({ audit, access, files: new FilesImports(audit), keys });
   const numbering = new Numbering({ kinds: [JOURNAL_KIND] });
@@ -209,6 +210,7 @@ export async function structureSetup(options: {
     access,
     files: new FilesImports(audit),
     locationInUse: options.locationInUse,
+    origins: localOrigins,
   });
   const write = (label: string) =>
     writeSyntheticUser(options.database, options.organisationCode, options.keysEnvironment, { label, enrolled: true });

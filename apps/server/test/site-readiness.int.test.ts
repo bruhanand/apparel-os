@@ -28,7 +28,8 @@ import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { approved, approvedGeography, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
-import { signedFixture } from './support/signed-policies.js';
+import { RECEIVING_POLICY_CHECKS } from './support/receiving.js';
+import { reportedValues, signedFixture } from './support/signed-policies.js';
 
 // S1-F04-T02: readiness checks and unit activation through the whole application, on real PostgreSQL (module-map
 // 4.16; domain-model 3.6, section 5, section 6 "Granting an activity", invariant 7; stage 1 exit check 6; PRD-LIF-001
@@ -286,11 +287,20 @@ async function verifyFixture(database: string, unitId: string): Promise<void> {
   }
 }
 
-/** A SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports (RR-480). */
-const signed = (database: string, policy: number) =>
-  signedFixture(database, policy, [`${VALUES_CHECK}-${String(policy)}:syn-value@v1`]);
+/**
+ * A SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports (RR-480) and
+ * the values the modules report for it, such as the verified mappings of policy 10 (RR-558).
+ */
+const signed = async (database: string, policy: number) =>
+  signedFixture(database, policy, [
+    `${VALUES_CHECK}-${String(policy)}:syn-value@v1`,
+    ...(await reportedValues(
+      (work) => setup.run(setup.preparer.id, work),
+      RECEIVING_POLICY_CHECKS.filter((check) => check.policy === policy),
+    )),
+  ]);
 
-let mapping: { legalEntityId: string; taxRegistrationId: string; accountingBookId: string };
+let mapping: { legalEntityId: string; taxRegistrationId: string; accountingBookId: string; origin: 'synthetic' };
 let siteId: string;
 let storeId: string;
 
@@ -372,6 +382,7 @@ beforeAll(async () => {
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: book.recordId,
+    origin: 'synthetic',
   };
   siteId = (
     await approved(setup, (c, p) =>

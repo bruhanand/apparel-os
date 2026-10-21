@@ -9,6 +9,7 @@ import type {
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { Preparer } from '../../organisation/index.js';
 import { endCodeMapping, mapCode, resolveCode } from './commands/codes.js';
 import { CataloguePreparation } from './commands/maintain.js';
@@ -35,6 +36,8 @@ export interface CatalogueDependencies {
   readonly suppliers: SupplierRoles;
   /** The stock-presence contract `stock` · ledger implements (4.4, 4.6); none answers when left out. */
   readonly stockPresence?: StockPresence | undefined;
+  /** Whether this environment accepts a tracking profile version's origin (code-house-rules 12.14; RR-558). */
+  readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 
 /**
@@ -51,7 +54,7 @@ export class Catalogue extends CataloguePreparation {
   private readonly suppliers: SupplierRoles;
 
   constructor(dependencies: CatalogueDependencies) {
-    super(dependencies.audit, dependencies.access, dependencies.stockPresence);
+    super(dependencies.audit, dependencies.access, dependencies.origins, dependencies.stockPresence);
     this.approvals = dependencies.access;
     this.suppliers = dependencies.suppliers;
   }

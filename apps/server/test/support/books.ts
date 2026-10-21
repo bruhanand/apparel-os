@@ -129,6 +129,7 @@ export function syntheticBooks(setup: StructureSetup, geography: { stateId: stri
           legalEntityId: legalEntity.recordId,
           taxRegistrationId: registration.recordId,
           accountingBookId: bookId,
+          origin: 'synthetic',
           validFrom: setup.today(),
         }),
       ),

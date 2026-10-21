@@ -526,6 +526,7 @@ export class StockHarness extends ValuedWorld {
           pieceTracked,
           batchExpiryRequired,
           requiredIdentifiers: [],
+          origin: 'synthetic',
           validFrom: today,
         }),
       ),

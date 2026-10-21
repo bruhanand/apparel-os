@@ -744,6 +744,15 @@ const ORGANISATION_UNIT_PREPARE_CODES = [
   ...ORGANISATION_STRUCTURE_RULE_CODES,
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The codes a preparation of a unit or a mapping can answer: those of 3.3 to 3.6, and a mapping's origin this
+ * environment does not accept (code-house-rules 12.14; 3.4 "As built"; RR-558).
+ */
+const ORGANISATION_MAPPING_PREPARE_CODES = [
+  ...ORGANISATION_UNIT_PREPARE_CODES,
+  'configuration.origin-not-allowed',
+] as const satisfies readonly ErrorCode[];
+
 /** The codes a read of one catalogue master can answer (structure-and-masters 4.7; S1-F03-T01). */
 const CATALOGUE_READ_CODES = [...HISTORY_CODES, 'merchandise.record-not-found'] as const satisfies readonly ErrorCode[];
 
@@ -774,6 +783,15 @@ const CATALOGUE_CHANGE_CODES = [
   'merchandise.labelling-count-not-planned',
   'merchandise.stock-presence-unanswered',
   'merchandise.pieces-held',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes a tracking profile change can answer: a catalogue change's, and a version's origin this environment does
+ * not accept (code-house-rules 12.14; 4.5 "As built"; RR-558).
+ */
+const TRACKING_PROFILE_CHANGE_CODES = [
+  ...CATALOGUE_CHANGE_CODES,
+  'configuration.origin-not-allowed',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes proposing a product can answer (4.2; S1-F03-T02), and its confirmation under the proposal's lock. */
@@ -2839,7 +2857,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   prepareBusinessUnitVersion: defineRoute({
     method: 'POST',
@@ -2852,7 +2870,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   listBusinessUnitMappings: defineRoute({
     method: 'GET',
@@ -2898,7 +2916,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   verifyBusinessUnitMapping: defineRoute({
     method: 'POST',
@@ -3496,7 +3514,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: catalogueChangedSchema,
-    codes: CATALOGUE_CHANGE_CODES,
+    codes: TRACKING_PROFILE_CHANGE_CODES,
   }),
   prepareTrackingProfileVersion: defineRoute({
     method: 'POST',
@@ -3509,7 +3527,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: catalogueChangedSchema,
-    codes: CATALOGUE_CHANGE_CODES,
+    codes: TRACKING_PROFILE_CHANGE_CODES,
   }),
   listCategoryTrackingProfiles: defineRoute({
     method: 'GET',

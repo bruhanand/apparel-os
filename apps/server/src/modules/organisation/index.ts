@@ -30,3 +30,5 @@ export type { BusinessUnitHead, UnitReadinessAnswer } from './queries/units.js';
 // A tax registration's code, for the registration applicability of `finance` · tax rules (S1-F09-T04).
 export { taxRegistrationCodes } from './queries/tax-registrations.js';
 export { organisationRestoreParticipant } from './restore-participant.js';
+// The verified mappings as policy 10's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
+export { VERIFIED_MAPPINGS_CHECK, verifiedMappingsCheck } from './queries/validity.js';

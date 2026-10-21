@@ -117,12 +117,10 @@ import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import {
   placeScope,
   RECEIVER_AUTHORITY,
-  RECEIVING_STATUTORY_CHECK,
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
 } from '../support/receiving.js';
-import { signedFixture } from '../support/signed-policies.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 import { z } from 'zod';
@@ -665,8 +663,8 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
-// The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
-// its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
+// A SYNTHETIC legal entity with a registration and a book, to which the devices journey's units are mapped. The
+// readiness journey's own Site and unit are in the receiving Organisation, below (RR-558).
 const readinessEntity = await approved(structureFixture, (c, p) =>
   structureFixture.organisation.prepareLegalEntity(c, p, {
     code: syntheticCode('JOURNEY-READY-LE'),
@@ -689,39 +687,6 @@ const readinessBook = await approved(structureFixture, (c, p) =>
     code: syntheticCode('JOURNEY-READY-BK'),
     legalEntityId: readinessEntity.recordId,
     name: syntheticName('Journey Ready Book'),
-    validFrom: structureFixture.today(),
-  }),
-);
-const readinessSite = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareSite(c, p, {
-    code: syntheticCode('JOURNEY-READY-SITE'),
-    name: syntheticName('Journey Ready Site'),
-    physicalKind: 'regional-warehouse',
-    areaId: structureGeography.area.recordId,
-    addresses: [syntheticName('1 Ready Road')],
-    aliases: [],
-    validFrom: structureFixture.today(),
-  }),
-);
-const readinessUnit = { code: syntheticCode('JOURNEY-READY-UNIT'), name: syntheticName('Journey Ready Unit') };
-const readinessUnitAnswer = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareBusinessUnit(c, p, {
-    ...readinessUnit,
-    siteId: readinessSite.recordId,
-    kind: 'warehouse',
-    legalEntityId: readinessEntity.recordId,
-    taxRegistrationId: readinessRegistration.recordId,
-    accountingBookId: readinessBook.recordId,
-    validFrom: structureFixture.today(),
-  }),
-);
-await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareLocation(c, p, {
-    code: syntheticCode('JOURNEY-READY-LOC'),
-    siteId: readinessSite.recordId,
-    businessUnitId: readinessUnitAnswer.recordId,
-    name: syntheticName('Journey Ready Floor'),
-    kind: 'floor',
     validFrom: structureFixture.today(),
   }),
 );
@@ -789,6 +754,7 @@ for (const unit of devicesUnits) {
       legalEntityId: readinessEntity.recordId,
       taxRegistrationId: readinessRegistration.recordId,
       accountingBookId: readinessBook.recordId,
+      origin: 'synthetic',
       validFrom: structureFixture.today(),
     }),
   );
@@ -895,6 +861,7 @@ const postingMapping = {
   legalEntityId: postingEntity.recordId,
   taxRegistrationId: postingRegistration.recordId,
   accountingBookId: postingBook.recordId,
+  origin: 'synthetic' as const,
 };
 const postingStoreUnit = await approved(postingFixture, (c, p) =>
   postingFixture.organisation.prepareBusinessUnit(c, p, {
@@ -1068,6 +1035,7 @@ const periodUnit = await approved(postingFixture, (c, p) =>
     legalEntityId: postingEntity.recordId,
     taxRegistrationId: postingRegistration.recordId,
     accountingBookId: periodBook.recordId,
+    origin: 'synthetic',
     validFrom: postingFixture.today(),
   }),
 );
@@ -2258,11 +2226,9 @@ const policyValidator = await provisionUser('BROWSER-POLICY-VALIDATOR', 'P-ACC',
   { recordType: 'files_imports.stored_file', action: 'create' },
 ]);
 
-// The readiness journey (site-readiness.spec.ts; S1-F04-T02), in the settings Organisation: a test-only module's
-// SYNTHETIC receiving operation governed by policy 4, needing someone at the unit to run the checks and two different
-// people to prepare and approve them; policy 4 Signed and validated as SYNTHETIC fixtures, since that journey is
-// S1-F04-T01's; the unit's mapping verified as a fixture, since that journey is S1-F02-T02's (code-house-rules 11.2);
-// an Operations user who runs the checks and declares the unit holds no stock; and a different approver.
+// The readiness journey (site-readiness.spec.ts; S1-F04-T02), in the receiving Organisation below: a test-only
+// module's SYNTHETIC receiving operation governed by policy 4, needing someone at the unit to run the checks and two
+// different people to prepare and approve them. Its world is made with the receiving Organisation's (RR-558).
 const READINESS_GATE = syntheticIdentifier('readiness');
 /** One SYNTHETIC value of policy 4, so its SYNTHETIC validation covers something (RR-480). */
 const readinessValuesCheck: ValidityCheck = {
@@ -2289,29 +2255,6 @@ const readinessOperation: GatedOperation = {
     ],
   },
 };
-{
-  const owner = await connect(settingsDatabase, 'migration');
-  try {
-    await owner.query(
-      `insert into organisation.business_unit_mapping_verification
-         (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
-       select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
-        where business_unit_id = $4 and decision = 'Approved'`,
-      [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
-    );
-  } finally {
-    await owner.end();
-  }
-}
-await signedFixture(settingsDatabase, 4, [`${readinessValuesCheck.code}:syn-readiness-value@v1`]);
-const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
-  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
-  { recordType: 'site_lifecycle.readiness_record', action: 'create' },
-  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
-  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
-  // The unit list the screen chooses from (structure-and-masters 8).
-  { recordType: 'organisation.business_unit', action: 'view' },
-]);
 // The devices journey's Admin (S1-F12-T01, S1-F12-T02): register, view, enrol, revoke and replace billing devices, and
 // the Stores and units the form chooses from. SYNTHETIC grants: who registers devices is KDPS's (POL-02.03).
 const devicesAdmin = await provisionUser('BROWSER-DEVICES-ADMIN', 'P-ADM', [
@@ -2351,22 +2294,6 @@ const numberingApprover = await provisionUser('BROWSER-NUMBERING-APPROVER', 'P-O
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
-const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
-  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
-  { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
-  { recordType: 'access.approval_request', action: 'view' },
-  { recordType: 'access.approval_reason', action: 'view' },
-]);
-const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
-// Since S2-F02-T02 the receiving activity needs `receiving`'s own operations too (goods-in 10.5): policy 10 Signed and
-// validated, as policy 4 is above, and someone at the unit who records Arrivals, counts and issues GRNs (PRD-ACS-006).
-await signedFixture(settingsDatabase, 10, [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`]);
-await provisionUser('BROWSER-READINESS-RECEIVER', 'P-WHS', [
-  { recordType: 'receiving.arrival', action: 'create' },
-  { recordType: 'receiving.arrival', action: 'edit' },
-  { recordType: 'receiving.grn', action: 'create' },
-]);
-
 // The Receive Goods journeys (receive-goods.spec.ts; S2-F02-T02), in an Organisation of its own so its Sites, Stores
 // and brands change no other journey's lists: made by the setup step like the ones above. Each journey has a world of
 // its own, so neither sees the other's deliveries: a Site with two Stores, their units and receiving locations, their
@@ -2406,16 +2333,130 @@ const receivingStructure = await structureSetup({
 });
 const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
 const storeStaffWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-STM');
-// Policy 4 is covered through the readiness journey's SYNTHETIC check, which every Organisation's policy 4 reports.
-const receivingChecks = [readinessValuesCheck, RECEIVING_STATUTORY_CHECK];
-await receivingGateOpen(receivingStructure, receivingDatabase, receivingChecks);
+// The readiness journey's world (site-readiness.spec.ts; S1-F04-T02), here, where policies 4 and 10 are validated on
+// the values the modules report (goods-in 10.5; RR-558), so no other journey's mapping verification makes their
+// validation lapse while it runs: an approved SYNTHETIC Site with one warehouse unit of its own legal entity, its
+// mapping verified as a fixture, since that journey is S1-F02-T02's (code-house-rules 11.2), and one location, so every
+// check but the stock plan passes; an Operations user who runs the checks and declares the unit holds no stock, a
+// different approver, and someone at the unit who records Arrivals, counts and issues GRNs (PRD-ACS-006).
+const readyGeography = await approvedGeography(receivingStructure, 'READY');
+const readyEntity = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareLegalEntity(c, p, {
+    code: syntheticCode('JOURNEY-READY-LE'),
+    legalName: syntheticName('Journey Ready Entity'),
+    validFrom: receivingStructure.today(),
+  }),
+);
+const readyRegistration = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareTaxRegistration(c, p, {
+    code: syntheticCode('JOURNEY-READY-GSTIN'),
+    legalEntityId: readyEntity.recordId,
+    registrationNumber: 'SYNTHETIC-GSTIN-READY',
+    stateId: readyGeography.state.recordId,
+    validityFrom: receivingStructure.today(),
+    validFrom: receivingStructure.today(),
+  }),
+);
+const readyBook = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareAccountingBook(c, p, {
+    code: syntheticCode('JOURNEY-READY-BK'),
+    legalEntityId: readyEntity.recordId,
+    name: syntheticName('Journey Ready Book'),
+    validFrom: receivingStructure.today(),
+  }),
+);
+const readinessSite = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-READY-SITE'),
+    name: syntheticName('Journey Ready Site'),
+    physicalKind: 'regional-warehouse',
+    areaId: readyGeography.area.recordId,
+    addresses: [syntheticName('1 Ready Road')],
+    aliases: [],
+    validFrom: receivingStructure.today(),
+  }),
+);
+const readinessUnit = { code: syntheticCode('JOURNEY-READY-UNIT'), name: syntheticName('Journey Ready Unit') };
+const readinessUnitAnswer = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareBusinessUnit(c, p, {
+    ...readinessUnit,
+    siteId: readinessSite.recordId,
+    kind: 'warehouse',
+    legalEntityId: readyEntity.recordId,
+    taxRegistrationId: readyRegistration.recordId,
+    accountingBookId: readyBook.recordId,
+    origin: 'synthetic',
+    validFrom: receivingStructure.today(),
+  }),
+);
+await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareLocation(c, p, {
+    code: syntheticCode('JOURNEY-READY-LOC'),
+    siteId: readinessSite.recordId,
+    businessUnitId: readinessUnitAnswer.recordId,
+    name: syntheticName('Journey Ready Floor'),
+    kind: 'floor',
+    validFrom: receivingStructure.today(),
+  }),
+);
+{
+  const owner = await connect(receivingDatabase, 'migration');
+  try {
+    await owner.query(
+      `insert into organisation.business_unit_mapping_verification
+         (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
+       select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
+        where business_unit_id = $4 and decision = 'Approved'`,
+      [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
+    );
+  } finally {
+    await owner.end();
+  }
+}
+/** An enrolled SYNTHETIC user of the receiving Organisation holding one persona and the authorities given. */
+async function provisionReceivingUser(
+  label: string,
+  persona: PersonaId,
+  authorities: Parameters<typeof grantSynthetic>[2],
+): Promise<SyntheticUser> {
+  const user = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+    label,
+    enrolled: true,
+    personas: [persona],
+  });
+  await grantSynthetic(receivingDatabase, { kind: 'user', id: user.id }, authorities);
+  return user;
+}
+const readinessOps = await provisionReceivingUser('BROWSER-READINESS-OPS', 'P-OPS', [
+  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+  { recordType: 'site_lifecycle.readiness_record', action: 'create' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
+  // The unit list the screen chooses from (structure-and-masters 8).
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
+const readinessApprover = await provisionReceivingUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
+  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+  { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const readinessReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
+await provisionReceivingUser('BROWSER-READINESS-RECEIVER', 'P-WHS', [
+  { recordType: 'receiving.arrival', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'edit' },
+  { recordType: 'receiving.grn', action: 'create' },
+]);
+// Policies 4 and 10 validated on the values the modules report, the receiving worlds' and the readiness unit's, and on
+// the readiness journey's SYNTHETIC value of policy 4, which the application registers for every Organisation.
+await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
 for (const each of [receivingWorld, storeStaffWorld]) {
   await receivingGranted(
     receivingStructure,
     receivingDatabase,
     each.siteId,
     [each.wholeStore, each.otherStoreUnit],
-    receivingChecks,
+    [readinessValuesCheck],
   );
 }
 await receivingStructure.close();
@@ -2492,7 +2533,7 @@ const app = await startAccessApp(
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck, RECEIVING_STATUTORY_CHECK],
+    validityChecks: [policyValuesCheck, readinessValuesCheck],
     // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
     postingEventKinds: POSTING_JOURNEY_KINDS,
   },
@@ -2858,7 +2899,7 @@ writeFileSync(
     // S1-F04-T02: the Operations user who runs the checks, the approver who decides from My work, the reason they
     // give, and how the screen names the unit.
     readiness: {
-      organisationCode: settingsCode,
+      organisationCode: receivingCode,
       operations: credentialsOf(readinessOps),
       approver: credentialsOf(readinessApprover),
       reasonId: readinessReasonId,

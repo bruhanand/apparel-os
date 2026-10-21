@@ -13141,6 +13141,14 @@
                                   "format": "uuid",
                                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                                 },
+                                "origin": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kdps",
+                                    "test-setup",
+                                    "synthetic"
+                                  ]
+                                },
                                 "verification": {
                                   "type": "object",
                                   "properties": {
@@ -13183,7 +13191,8 @@
                                 "state",
                                 "legalEntityId",
                                 "taxRegistrationId",
-                                "accountingBookId"
+                                "accountingBookId",
+                                "origin"
                               ],
                               "additionalProperties": false
                             }
@@ -13451,6 +13460,14 @@
                                   "type": "string",
                                   "format": "uuid",
                                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "origin": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kdps",
+                                    "test-setup",
+                                    "synthetic"
+                                  ]
                                 }
                               },
                               "required": [
@@ -13703,6 +13720,7 @@
               }
             },
             "x-error-codes": [
+              "configuration.origin-not-allowed",
               "organisation.code-taken",
               "organisation.location-holds-stock",
               "organisation.location-unit-at-another-site",
@@ -13793,6 +13811,14 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -13807,6 +13833,7 @@
                   "legalEntityId",
                   "taxRegistrationId",
                   "accountingBookId",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -32175,6 +32202,14 @@
                                   "type": "integer",
                                   "minimum": 0,
                                   "maximum": 9007199254740991
+                                },
+                                "origin": {
+                                  "type": "string",
+                                  "enum": [
+                                    "kdps",
+                                    "test-setup",
+                                    "synthetic"
+                                  ]
                                 }
                               },
                               "required": [
@@ -32184,7 +32219,8 @@
                                 "name",
                                 "pieceTracked",
                                 "batchExpiryRequired",
-                                "requiredIdentifiers"
+                                "requiredIdentifiers",
+                                "origin"
                               ],
                               "additionalProperties": false
                             }
@@ -32426,6 +32462,7 @@
               }
             },
             "x-error-codes": [
+              "configuration.origin-not-allowed",
               "merchandise.brand-counter-one-brand",
               "merchandise.code-taken",
               "merchandise.labelling-count-not-planned",
@@ -32506,6 +32543,14 @@
                     "minimum": 0,
                     "maximum": 9007199254740991
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -32518,6 +32563,7 @@
                   "pieceTracked",
                   "batchExpiryRequired",
                   "requiredIdentifiers",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -38453,6 +38499,7 @@
               }
             },
             "x-error-codes": [
+              "configuration.origin-not-allowed",
               "organisation.code-taken",
               "organisation.location-holds-stock",
               "organisation.location-unit-at-another-site",
@@ -38516,6 +38563,14 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -38526,6 +38581,7 @@
                   "legalEntityId",
                   "taxRegistrationId",
                   "accountingBookId",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -38682,6 +38738,7 @@
               }
             },
             "x-error-codes": [
+              "configuration.origin-not-allowed",
               "organisation.code-taken",
               "organisation.location-holds-stock",
               "organisation.location-unit-at-another-site",
@@ -38748,6 +38805,14 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
                   },
                   "validFrom": {
                     "type": "string",
@@ -46506,6 +46571,7 @@
               }
             },
             "x-error-codes": [
+              "configuration.origin-not-allowed",
               "merchandise.brand-counter-one-brand",
               "merchandise.code-taken",
               "merchandise.labelling-count-not-planned",
@@ -46582,6 +46648,14 @@
                     "minimum": 0,
                     "maximum": 9007199254740991
                   },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "kdps",
+                      "test-setup",
+                      "synthetic"
+                    ]
+                  },
                   "validFrom": {
                     "type": "string",
                     "format": "date",
@@ -46598,6 +46672,7 @@
                   "pieceTracked",
                   "batchExpiryRequired",
                   "requiredIdentifiers",
+                  "origin",
                   "validFrom"
                 ],
                 "additionalProperties": false
@@ -53373,6 +53448,14 @@
                                 "type": "string",
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "origin": {
+                                "type": "string",
+                                "enum": [
+                                  "kdps",
+                                  "test-setup",
+                                  "synthetic"
+                                ]
                               }
                             },
                             "required": [
@@ -53844,6 +53927,14 @@
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                               },
+                              "origin": {
+                                "type": "string",
+                                "enum": [
+                                  "kdps",
+                                  "test-setup",
+                                  "synthetic"
+                                ]
+                              },
                               "verification": {
                                 "type": "object",
                                 "properties": {
@@ -53886,7 +53977,8 @@
                               "state",
                               "legalEntityId",
                               "taxRegistrationId",
-                              "accountingBookId"
+                              "accountingBookId",
+                              "origin"
                             ],
                             "additionalProperties": false
                           }
@@ -62022,6 +62114,14 @@
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                           },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "kdps",
+                              "test-setup",
+                              "synthetic"
+                            ]
+                          },
                           "verification": {
                             "type": "object",
                             "properties": {
@@ -62064,7 +62164,8 @@
                           "versionId",
                           "legalEntityId",
                           "taxRegistrationId",
-                          "accountingBookId"
+                          "accountingBookId",
+                          "origin"
                         ],
                         "additionalProperties": false
                       }
@@ -71331,6 +71432,14 @@
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
+                              },
+                              "origin": {
+                                "type": "string",
+                                "enum": [
+                                  "kdps",
+                                  "test-setup",
+                                  "synthetic"
+                                ]
                               }
                             },
                             "required": [
@@ -71340,7 +71449,8 @@
                               "name",
                               "pieceTracked",
                               "batchExpiryRequired",
-                              "requiredIdentifiers"
+                              "requiredIdentifiers",
+                              "origin"
                             ],
                             "additionalProperties": false
                           }

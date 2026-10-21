@@ -318,6 +318,7 @@ export class ValuedWorld extends StockWorld {
           legalEntityId: book.legalEntityId,
           taxRegistrationId: book.registrationId,
           accountingBookId: book.bookId,
+          origin: 'synthetic',
           validFrom: this.setup.today(),
         }),
       ),

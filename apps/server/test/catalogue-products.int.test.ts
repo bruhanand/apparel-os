@@ -2,7 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import type { CatalogueChanged, ProductProposalDraft, ProposedSku } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TransactionContext } from '../src/kernel/index.js';
-import type { StockPresence } from '../src/modules/merchandise/catalogue/index.js';
+import { trackingProfilesCheck, type StockPresence } from '../src/modules/merchandise/catalogue/index.js';
 import { catalogueSkus } from '../src/modules/stock/ledger/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticKeysEnvironment } from './support/access.js';
@@ -664,6 +664,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           pieceTracked: false,
           batchExpiryRequired: false,
           requiredIdentifiers: [],
+          origin: 'synthetic',
           validFrom: setup.today(),
         }),
       ),
@@ -710,6 +711,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           pieceTracked: true,
           batchExpiryRequired: false,
           requiredIdentifiers: [],
+          origin: 'synthetic',
           validFrom,
           versionToken: record?.versionToken,
         }),
@@ -764,6 +766,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           pieceTracked: false,
           batchExpiryRequired: false,
           requiredIdentifiers: [],
+          origin: 'synthetic',
           validFrom: setup.today(),
         }),
       ),
@@ -804,6 +807,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           pieceTracked,
           batchExpiryRequired: false,
           requiredIdentifiers: [],
+          origin: 'synthetic',
           validFrom: setup.today(),
         }),
       ),
@@ -817,6 +821,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
         pieceTracked,
         batchExpiryRequired: false,
         requiredIdentifiers: [],
+        origin: 'synthetic',
         validFrom,
         versionToken: record?.versionToken,
       }),
@@ -963,6 +968,7 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
           pieceTracked: false,
           batchExpiryRequired: true,
           requiredIdentifiers: ['SYNTHETIC lot'],
+          origin: 'synthetic',
           sellingShelfLifeDays: 7,
           validFrom: setup.today(),
         }),
@@ -971,6 +977,54 @@ describe('tracking profiles (structure-and-masters 4.5, 4.6, 9 test 10; PRD-MER-
     const record = await read('tracking_profile', profile.recordId);
     expect(record?.versions[0]).toMatchObject({ batchExpiryRequired: true, sellingShelfLifeDays: 7 });
     expect(record?.versions[0]?.receivingShelfLifeDays).toBeUndefined();
+  });
+
+  it("code-house-rules 12.14 POL-04.01 RR-558 a version states where it came from, and is policy 4's value with that origin and its preparer", async () => {
+    const draft = {
+      code: syntheticCode(next('ORIGIN')),
+      name: syntheticName('Origin profile'),
+      pieceTracked: false,
+      batchExpiryRequired: false,
+      requiredIdentifiers: [],
+      validFrom: setup.today(),
+    };
+    // The test setup's values belong on `kdps-test` only; these tests run as local work.
+    expect(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareTrackingProfile(c, p, { ...draft, origin: 'test-setup' }),
+      ),
+    ).toMatchObject({
+      kind: 'refusal',
+      refusal: { code: 'configuration.origin-not-allowed', missing: [{ kind: 'origin', origin: 'test-setup' }] },
+    });
+    const profile = recorded(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareTrackingProfile(c, p, { ...draft, origin: 'synthetic' }),
+      ),
+    );
+    expect((await read('tracking_profile', profile.recordId))?.versions[0]).toMatchObject({ origin: 'synthetic' });
+    const values = await setup.run(setup.preparer.id, (c) => trackingProfilesCheck.values(c));
+    expect(trackingProfilesCheck.policy).toBe(4);
+    expect(values).toContainEqual({
+      key: profile.versionId,
+      version: `[${setup.today()},)`,
+      origin: 'synthetic',
+      enteredBy: [setup.preparer.id],
+    });
+    // A later version ends this one in place: the value's version changes, so a validation of it lapses (RR-478).
+    const token = (await read('tracking_profile', profile.recordId))?.versionToken;
+    recorded(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareTrackingProfileVersion(c, p, profile.recordId, {
+          ...draft,
+          origin: 'synthetic',
+          validFrom: setup.day(3),
+          versionToken: token,
+        }),
+      ),
+    );
+    const after = await setup.run(setup.preparer.id, (c) => trackingProfilesCheck.values(c));
+    expect(after.find((value) => value.key === profile.versionId)?.version).toBe(`[${setup.today()},${setup.day(3)})`);
   });
 });
 

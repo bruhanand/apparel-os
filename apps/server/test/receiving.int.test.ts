@@ -1,6 +1,12 @@
 import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { arrivalReadSchema, inboxSchema, type Arrival, type AssignmentScope } from '@apparel-os/schemas';
+import {
+  arrivalReadSchema,
+  inboxSchema,
+  policyReadinessSchema,
+  type Arrival,
+  type AssignmentScope,
+} from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   COMMAND_RUNNER,
@@ -10,6 +16,7 @@ import {
   type TransactionContext,
 } from '../src/kernel/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
+import { mappingOn } from '../src/modules/organisation/index.js';
 import { custody } from '../src/modules/stock/ledger/index.js';
 import { syntheticName } from './fixtures/synthetic.js';
 import {
@@ -38,7 +45,7 @@ import {
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
-  receivingValidityChecks,
+  receivingPolicyValidated,
   type ReceivingFixture,
 } from './support/receiving.js';
 
@@ -47,7 +54,9 @@ import {
 // PRD-REC-001 to PRD-REC-005, PRD-REC-007, PRD-REC-008, PRD-ACP-001, PRD-LIF-001, PRD-INT-002, POL-10.08; DEC-133,
 // DEC-138). The structure, the masters, the mappings' verification, the policies' Signed records and validations, the
 // capability and receiving granted after readiness are all made through their real interfaces (support/receiving.ts;
-// code-house-rules 11.2). Every person, place, brand, invoice and number here is SYNTHETIC.
+// code-house-rules 11.2). Policies 4 and 10 are validated on the values the modules report, the fixture's tracking
+// profile and its verified mappings, each labelled synthetic (goods-in 10.5; RR-558). Every person, place, brand,
+// invoice and number here is SYNTHETIC.
 
 let world: SyntheticWorld;
 let database: string;
@@ -68,6 +77,8 @@ let receiver: SyntheticUser;
 /** A reader of the other Store's receipts only (goods-in 12 test 20). */
 let otherStoreReader: SyntheticUser;
 let outsider: SyntheticUser;
+/** A reader of policy readiness, who sees each policy's values (module-map 4.4). */
+let policyReader: SyntheticUser;
 
 interface Call {
   readonly status: number;
@@ -209,11 +220,7 @@ beforeAll(async () => {
   });
   minio = await startTestFileStore();
   clock = new SyntheticClock();
-  api = await startAccessApp(world, keys, {
-    clock,
-    fileStoreEnvironment: minio.environment,
-    validityChecks: receivingValidityChecks,
-  });
+  api = await startAccessApp(world, keys, { clock, fileStoreEnvironment: minio.environment });
   router = new OrganisationRouter(
     { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 4 },
     capturingLogger().logger,
@@ -237,6 +244,7 @@ beforeAll(async () => {
     placeScope([{ type: 'store', id: fixture.otherStoreId }]),
   );
   outsider = await enrolled('RCV-OUTSIDER', [{ recordType: 'merchandise.brand', action: 'view' }]);
+  policyReader = await enrolled('RCV-POLICIES', [{ recordType: 'configuration.policy_status', action: 'view' }]);
 }, 240_000);
 
 afterAll(async () => {
@@ -273,6 +281,39 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
       arrivalBody(fixture.wholeStore, fixture.storeLocation),
     );
     expect(opened.status, JSON.stringify(opened.body)).toBe(200);
+  });
+
+  it('POL-04.01 POL-10.01 POL-10.08 RR-558 policy 4 reports the tracking profiles and policy 10 the verified mappings, each with its origin', async () => {
+    const read = await get(policyReader, '/api/access/policy-readiness');
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    const policies = policyReadinessSchema.parse(read.body).policies;
+    const policy = (number: number) => policies.find((each) => each.policy === number);
+    // The fixture's one tracking profile, labelled synthetic (structure-and-masters 4.5).
+    expect(policy(4)?.values.map((value) => ({ check: value.check, origin: value.origin }))).toEqual([
+      { check: 'merchandise.tracking-profiles', origin: 'synthetic' },
+    ]);
+    // The mappings of the Stores' units and the warehouse, which are verified; never the brand counter's, which is not
+    // (POL-10.08). No tax-rule record is configured here, so none is reported.
+    const mappingVersion = async (unit: string) =>
+      (await asUser(receiver, (context) => mappingOn(context, unit, setup.today())))?.mappingVersionId;
+    const verified = await Promise.all(
+      [fixture.wholeStore, fixture.otherStoreUnit, fixture.warehouse].map(mappingVersion),
+    );
+    expect(
+      policy(10)
+        ?.values.map((value) => ({ check: value.check, key: value.key, origin: value.origin }))
+        .sort((a, b) => a.key.localeCompare(b.key)),
+    ).toEqual(
+      verified
+        .map((key) => ({ check: 'organisation.verified-mappings', key, origin: 'synthetic' }))
+        .sort((a, b) => (a.key ?? '').localeCompare(b.key ?? '')),
+    );
+    expect(policy(10)?.values.map((value) => value.key)).not.toContain(
+      await mappingVersion(fixture.counterSameRegistration),
+    );
+    // Signed and validated on those values, policies 4 and 10 lack nothing (DM-6).
+    expect(policy(4)?.missing).toEqual([]);
+    expect(policy(10)?.missing).toEqual([]);
   });
 
   it('PRD-LIF-001 POL-10.08 goods-in 12 test 18 receiving is refused at a unit without receiving granted, or with an unverified mapping', async () => {
@@ -800,5 +841,49 @@ describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', ()
       (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending&limit=1&after=${other}`)).body,
     );
     expect(second.entries.map((entry) => entry.arrivalId)).toEqual([own]);
+  });
+});
+
+// Last in the file: it leaves a value of an origin this environment does not accept, which keeps receiving unavailable.
+describe('a value of an origin this environment does not accept (code-house-rules 12.14; goods-in 10.5; RR-558)', () => {
+  it('PRD-SEC-017 RR-558 a tracking profile of the test setup keeps receiving unavailable here, policy 4 validated again', async () => {
+    // A tracking profile version of the test setup's origin, written as a fixture: preparing one is refused outside
+    // `kdps-test` (configuration.origin-not-allowed), so here it could only come from elsewhere, as a restore brings it.
+    const profileId = uuidv7();
+    const versionId = uuidv7();
+    const owner = await connect(database, 'migration');
+    try {
+      await owner.query(`insert into merchandise.tracking_profile (id, code) values ($1, $2)`, [
+        profileId,
+        `SYN-TEST-SETUP-PROFILE-${String(randomInt(1_000_000))}`,
+      ]);
+      await owner.query(
+        `insert into merchandise.tracking_profile_version (id, tracking_profile_id, name, piece_tracked,
+           batch_expiry_required, required_identifiers, valid_during, decision, prepared_by_user_id, origin)
+         values ($1, $2, 'SYNTHETIC test-setup profile', false, false, '{}', daterange($3::date, null), 'Approved', $4,
+           'test-setup')`,
+        [versionId, profileId, setup.today(), setup.preparer.id],
+      );
+    } finally {
+      await owner.end();
+    }
+    // Validated again, so the validation covers it: the one thing missing is the value's origin (DM-6).
+    await receivingPolicyValidated(setup, database, 4);
+    const refused = await post(
+      receiver,
+      '/api/receiving/arrivals',
+      arrivalBody(fixture.wholeStore, fixture.storeLocation),
+    );
+    expect(refused.status).toBe(403);
+    expect(errorOf(refused)).toMatchObject({
+      code: 'configuration.operation-unavailable',
+      missing: [{ kind: 'origin', check: 'merchandise.tracking-profiles', key: versionId, origin: 'test-setup' }],
+    });
+    const read = await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`);
+    const unit = inboxSchema.parse(read.body).units.find((each) => each.businessUnitId === fixture.wholeStore);
+    expect(unit?.receiving).toEqual({
+      state: 'unavailable',
+      missing: [{ kind: 'origin', check: 'merchandise.tracking-profiles', key: versionId, origin: 'test-setup' }],
+    });
   });
 });

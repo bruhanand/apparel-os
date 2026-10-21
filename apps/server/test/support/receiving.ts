@@ -1,12 +1,14 @@
 import { permissionRegistry, type AgreementTerms, type AssignmentScope, type PolicyNumber } from '@apparel-os/schemas';
 import { Audit } from '../../src/modules/audit/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
+import { taxRulesCheck } from '../../src/modules/finance/tax-rules/index.js';
 import { policyEvidence } from '../../src/modules/files-imports/index.js';
-import { mappingOn } from '../../src/modules/organisation/index.js';
+import { trackingProfilesCheck } from '../../src/modules/merchandise/catalogue/index.js';
+import { mappingOn, verifiedMappingsCheck } from '../../src/modules/organisation/index.js';
 import { RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from '../../src/modules/receiving/index.js';
 import { SiteLifecycle, siteLifecycleApprovals } from '../../src/modules/site-lifecycle/index.js';
 import { LocationStock } from '../../src/modules/stock/ledger/index.js';
-import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
+import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic, type SyntheticAuthority } from './grants.js';
 import { capturingLogger } from './jobs.js';
@@ -23,21 +25,19 @@ import { writeSyntheticStoredFile } from './tax-rules.js';
 // SYNTHETIC stored file written as a fixture, as the stock harness writes it, since S1-F06-T05 proves storing files.
 // Nothing here is KDPS's: every value, person and setting is SYNTHETIC.
 
-/** The SYNTHETIC values the receiving policies' validations cover, for a validity check per policy (RR-480). */
-const RECEIVING_GATE = syntheticIdentifier('receiving-gate');
-const valuesCheck = (policy: 4 | 10): ValidityCheck => ({
-  code: `${RECEIVING_GATE}.values-${String(policy)}`,
-  policy,
-  check: () => Promise.resolve({ kind: 'valid' }),
-  values: () => Promise.resolve([{ key: 'syn-value', version: 'v1', origin: 'synthetic', enteredBy: [] }]),
-  locks: () => Promise.resolve([]),
-});
+/**
+ * The validity checks that report policies 4 and 10's values, as the application registers them (goods-in 10.5;
+ * RR-558): the tracking profiles (policy 4), and the verified mappings and the tax-rule records (policy 10). Each
+ * value they report here is one a fixture made, labelled synthetic.
+ */
+export const RECEIVING_POLICY_CHECKS: readonly ValidityCheck[] = [
+  trackingProfilesCheck,
+  verifiedMappingsCheck,
+  taxRulesCheck,
+];
 
-/** The SYNTHETIC validity check reporting one value of policy 10, which receiving needs beside policy 4. */
-export const RECEIVING_STATUTORY_CHECK = valuesCheck(10);
-
-/** The SYNTHETIC validity checks reporting one value of policies 4 and 10, registered in the test composition. */
-export const receivingValidityChecks: readonly ValidityCheck[] = [valuesCheck(4), RECEIVING_STATUTORY_CHECK];
+/** The two policies receiving needs (goods-in 10.5). */
+const RECEIVING_POLICIES: readonly PolicyNumber[] = [4, 10];
 
 /** Every stock record type, viewed: what writing receipt counts needs under row-level security (stock-ledger 14.3). */
 export const STOCK_VIEW: readonly SyntheticAuthority[] = permissionRegistry
@@ -292,6 +292,7 @@ export async function receivingFixture(
         pieceTracked: false,
         batchExpiryRequired: true,
         requiredIdentifiers: [],
+        origin: 'synthetic',
         validFrom: today,
       }),
     ),
@@ -406,47 +407,70 @@ async function mappingsVerified(setup: StructureSetup, database: string, unitIds
 }
 
 /**
- * `configuration` as the composition root composes it for these fixtures: with the SYNTHETIC validity checks given
- * and receiving's two operations (goods-in 10.5), so its policy status and readiness checks read what the
- * application's do.
+ * `configuration` as the composition root composes it for these fixtures: with the checks reporting policies 4 and
+ * 10's values (RECEIVING_POLICY_CHECKS), any SYNTHETIC check the application under test registers beside them, and
+ * receiving's two operations (goods-in 10.5), so its policy status and readiness checks read what the application's
+ * do.
  */
-function composedConfiguration(checks: readonly ValidityCheck[]) {
+function composedConfiguration(syntheticChecks: readonly ValidityCheck[]) {
   const audit = new Audit(capturingLogger().logger);
   const configuration = new Configuration({ audit, environment: { name: 'local' }, evidence: policyEvidence(audit) });
-  for (const check of checks) configuration.registerCheck(check, TEST_COMPOSITION);
+  for (const check of RECEIVING_POLICY_CHECKS) configuration.registerCheck(check);
+  for (const check of syntheticChecks) configuration.registerCheck(check, TEST_COMPOSITION);
   configuration.registerOperation(RECEIVE_GOODS);
   configuration.registerOperation(RECEIVE_GOODS_STATUTORY);
   return { audit, configuration };
 }
 
 /**
+ * The policy's values validated through configuration's command as labelled synthetic status (DM-6; code-house-rules
+ * 12.14): by the setup's approver, who entered none of them, with a SYNTHETIC stored file as evidence. The validation
+ * covers the values the policy reports now (RR-478). `syntheticChecks` as for receivingGateOpen.
+ */
+export async function receivingPolicyValidated(
+  setup: StructureSetup,
+  database: string,
+  policy: PolicyNumber,
+  syntheticChecks: readonly ValidityCheck[] = [],
+): Promise<void> {
+  const { configuration } = composedConfiguration(syntheticChecks);
+  const validator = setup.approver;
+  const validating = await grantSynthetic(database, { kind: 'user', id: validator.id }, [
+    { recordType: 'configuration.policy_validation', action: 'create' },
+  ]);
+  const validationEvidence = await writeSyntheticStoredFile(database, validator.id);
+  ok(
+    await setup.run(validator.id, (context) =>
+      configuration.recordValidation(
+        context,
+        { userId: validator.id, roleAssignmentId: validating.assignmentId },
+        policy,
+        { origin: 'synthetic', evidence: [validationEvidence] },
+      ),
+    ),
+  );
+}
+
+/**
  * The receiving gate open Organisation-wide (goods-in 10.5; module-map 4.4; DM-6), through configuration's commands as
  * labelled synthetic status (code-house-rules 12.14): the setup's preparer records policies 4 and 10 Signed, the
  * approver, who entered none of their values, validates them, each with a SYNTHETIC stored file as evidence, and the
- * preparer switches the receiving capability on. `checks` are the SYNTHETIC checks reporting the policies' values that
- * the application under test registers.
+ * preparer switches the receiving capability on. The values validated are those the modules report (RR-558): the
+ * fixture's tracking profile, its verified mappings and any tax-rule record, all labelled synthetic; with the values of
+ * `syntheticChecks`, the SYNTHETIC checks of another journey that the application under test registers beside them.
  */
 export async function receivingGateOpen(
   setup: StructureSetup,
   database: string,
-  checks: readonly ValidityCheck[] = receivingValidityChecks,
+  syntheticChecks: readonly ValidityCheck[] = [],
 ): Promise<void> {
-  const { configuration } = composedConfiguration(checks);
+  const { configuration } = composedConfiguration(syntheticChecks);
   const signer = setup.preparer;
-  const validator = setup.approver;
   const signing = await grantSynthetic(database, { kind: 'user', id: signer.id }, [
     { recordType: 'configuration.policy_status', action: 'create' },
     { recordType: 'configuration.capability', action: 'edit' },
   ]);
-  const validating = await grantSynthetic(database, { kind: 'user', id: validator.id }, [
-    { recordType: 'configuration.policy_validation', action: 'create' },
-  ]);
-  const policies = new Set<PolicyNumber>();
-  for (const check of checks) {
-    if (check.policy === null) throw new Error(`The check ${check.code} reports no policy's values`);
-    policies.add(check.policy);
-  }
-  for (const policy of policies) {
+  for (const policy of RECEIVING_POLICIES) {
     const signatureEvidence = await writeSyntheticStoredFile(database, signer.id);
     ok(
       await setup.run(signer.id, (context) =>
@@ -458,17 +482,7 @@ export async function receivingGateOpen(
         }),
       ),
     );
-    const validationEvidence = await writeSyntheticStoredFile(database, validator.id);
-    ok(
-      await setup.run(validator.id, (context) =>
-        configuration.recordValidation(
-          context,
-          { userId: validator.id, roleAssignmentId: validating.assignmentId },
-          policy,
-          { origin: 'synthetic', evidence: [validationEvidence] },
-        ),
-      ),
-    );
+    await receivingPolicyValidated(setup, database, policy, syntheticChecks);
   }
   ok(
     await setup.run(signer.id, (context) =>
@@ -500,9 +514,9 @@ export async function receivingGranted(
   database: string,
   siteId: string,
   unitIds: readonly string[],
-  checks: readonly ValidityCheck[] = receivingValidityChecks,
+  syntheticChecks: readonly ValidityCheck[] = [],
 ): Promise<void> {
-  const { audit, configuration } = composedConfiguration(checks);
+  const { audit, configuration } = composedConfiguration(syntheticChecks);
   const locationInUse = new LocationStock();
   const access = setup.accessWith(
     siteLifecycleApprovals({ audit, configuration, grants: configuration.claimActivityGrants(), locationInUse }),

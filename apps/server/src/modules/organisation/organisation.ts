@@ -30,6 +30,7 @@ import type {
 import type { TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
+import type { ConfigurationInterface } from '../configuration/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { Prepared, Preparer } from './commands/common.js';
 import { StructurePreparation, type NamedKind, type PreparedVersion } from './commands/prepare.js';
@@ -204,6 +205,8 @@ export interface OrganisationDependencies {
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   /** The location-in-use contract `stock` implements, or undefined while none answers (3.5). */
   readonly locationInUse?: LocationInUse | undefined;
+  /** Whether this environment accepts a mapping's origin (code-house-rules 12.14; 3.4 "As built"; RR-558). */
+  readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 
 /** Preparing is StructurePreparation's; the reads are the queries'. */
@@ -212,7 +215,7 @@ export class Organisation extends StructurePreparation implements OrganisationIn
   private readonly files: OrganisationDependencies['files'];
 
   constructor(dependencies: OrganisationDependencies) {
-    super(dependencies.audit, dependencies.access, dependencies.locationInUse);
+    super(dependencies.audit, dependencies.access, dependencies.locationInUse, dependencies.origins);
     this.approvals = dependencies.access;
     this.files = dependencies.files;
   }
