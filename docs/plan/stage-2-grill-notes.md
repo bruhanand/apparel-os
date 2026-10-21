@@ -36,7 +36,7 @@ Answers (the product owner accepted each recommendation):
 
 1. **Where stage 2 ends.** At accepted stock at the receiving Site, as `phases.md` says. Transfers, supplier returns, write-off, disposal and counts stay in stage 3; the old plan's transfer and return rules are used when stage 3 is designed.
 2. **When goods become sellable.** ~~Finishing the PT includes the barcode check and acceptance in one step.~~ Corrected in round 10 (`DEC-135`): after PT approval the goods are scanned in at the Site; only then are they sellable at a Store. `PRD-REC-021`, `PRD-REC-022` and `PRD-STK-003` stand.
-3. **Money in stage 2.** As the PRD says (`PRD-STG-002`): PT approval values the stock, posts balanced journals and records what is owed to the supplier. The old plan's no-books rule is not taken.
+3. **Money in stage 2.** As the PRD says (`PRD-STG-002`): PT approval values the stock and posts balanced journals. The old plan's no-books rule is not taken. Corrected with goods-in design 6.3 (approved 21 Oct 2026): since `P RATE` includes handling and transportation (`DEC-140`), the journal's other side is a receipt account set by Accounts and the CA, not the supplier's payable; what the supplier is owed comes from invoice matching in stage 5.
 4. **Taking in excess, wrong or unidentified goods.** The receiver records the line; a different person from Booking approves taking it in (`PRD-REC-013`, `POL-17.02`, `POL-17.11`).
 5. **One delivery is an Arrival** (`DEC-128`). Batch keeps its lot-and-expiry meaning.
 6. **PT making** is deferred: the product owner will open it. Agents do not raise it, including supplemental PTs, the costing profile per brand and the value of damaged goods.

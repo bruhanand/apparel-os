@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 5 approved by the product owner on 21 Oct 2026, sections 3 to 5 with their design choices; section 6 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 6 approved by the product owner on 21 Oct 2026, sections 3 to 6 with their design choices; section 7 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -366,7 +366,35 @@ A different person approves the draft PT. The approval makes the PT official and
 
 ## 7. Scan-in at the Site
 
-To draft.
+After the PT is approved, the goods are scanned in where they are. The scan-in verifies each piece's barcode against the approved PT and accepts it at a location of the Site; at a Store that makes it sellable (`PRD-REC-021`, `PRD-REC-022`, `PRD-STK-003`, `DEC-135`). It lives in `receiving`, with `stock` · ledger.
+
+### 7.1 Who and when
+
+- At a Store, its staff (P-STM); at a warehouse, Warehouse (P-WHS): people authorised at the GRN's Site, whoever uploaded or approved the PT (`PRD-REC-022`).
+- Once the GRN's PT is approved, the GRN shows in the Receive Goods inbox as waiting for scan-in (section 4.1).
+- Several people may scan the same GRN; the scan-in is saved as it goes and can be resumed.
+
+### 7.2 Scanning
+
+- The person chooses where the goods go: at a Store, the floor or the backstore; at a warehouse, a bin (structure-and-masters 3.5; system-dumb 13.3, 18.6). They can change it between scans.
+- Each scan accepts one piece. A barcode is scanned with a keyboard-input scanner or typed from the tag; both go through the same checks (PRD Stack: Hardware). Quantities are not typed, so every piece is verified. **Design choice.**
+- The barcode is resolved through its external code mapping to a product the PT covers, with pieces still waiting at the receiving location:
+  - one product: accepted;
+  - a barcode repeated across products: the screen lists the PT's products that carry it, and the person chooses; nothing is chosen silently (`PRD-MER-007`, `DEC-135`);
+  - a barcode the PT does not cover, or a product with no pieces left to accept: refused and shown, kept in the scan-in's record, and no stock changes (earlier RetailsOps plan, ruling R3).
+- **Each accepted scan**, in one transaction: `stock` · ledger records the acceptance of that piece and its location move from the receiving location to the chosen one (stock-ledger 2.3 Location move; 6.3); `audit` records who scanned, when and where.
+- **Damage found while scanning** is reported as in section 8; the piece goes under a damage hold and is not accepted (ruling R4).
+
+### 7.3 Finishing
+
+- The scan-in is complete when every piece the PT covers is accepted or under a damage report.
+- The person may stop with pieces left; they stay unaccepted at the receiving location, visible in the inbox, and the scan-in can be resumed later. Nothing is written off (ruling R5).
+
+### 7.4 What the scan-in makes
+
+- **At a Store**, an accepted piece in good condition, covered by the official PT and with no hold or reservation, is sellable (stock-ledger 6.3). Selling at the till comes in stage 4.
+- **At a warehouse**, an accepted piece is available to move; transfers come in stage 3.
+- Once any piece of a PT is scanned in, the PT can no longer be reversed (`DEC-137`).
 
 ## 8. Damage at or after receipt
 
