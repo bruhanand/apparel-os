@@ -235,7 +235,7 @@ Kept apart on each line; they can coexist (`PRD-REC-006`):
   - `booking` links each matched line (section 3.7);
   - `exceptions` raises the follow-ups: shortage, excess, wrong and unidentified goods and unmatched lines to Booking; damage to Operations (grill notes, 19 Oct 2026);
   - `audit` and the outbox record it.
-- **Goods of a product not yet set up** are counted with their identity as described (style code, colour, size) and their SKU Unknown (stock-ledger 2.2, `PRD-DMG-005`); unlike unidentified goods they are not quarantined, and PT approval gives them their SKU. The stage 1 receipt count needs a known SKU (stock-ledger 13.9); the ledger is extended for this (GI-1).
+- **Goods of a product not yet set up** are counted with their identity as described (style code, colour, size) and their SKU Unknown (stock-ledger 2.2, `PRD-DMG-005`); unlike unidentified goods they are not quarantined, and PT approval gives them their SKU. The stage 1 receipt count needed a known SKU (stock-ledger 13.9); the ledger is extended for this (GI-1, built in `S2-F02-T01`: stock-ledger 13.14, for the product owner's review).
 - The printed GRN follows common practice ([grn-standard-fields.md](../../research/grn-standard-fields.md)): the header of 4.2 with the GRN number and date; per line the style code, colour, size, invoice and counted quantities and each finding; who counted and who entered it, with the time. It carries no price, tax or value.
 
 ### 4.6 Deciding the held lines
@@ -524,7 +524,7 @@ Policy 2 governs every approval. On `dev` with synthetic data these run under la
 
 ### 10.6 Changes this needs in stage 1 work
 
-- **GI-1:** the receipt count of goods with Unknown SKU, not quarantined, and the identity step at PT approval that splits a style and size into the PT's SKUs (stock-ledger 13.9).
+- **GI-1:** the receipt count of goods with Unknown SKU, not quarantined, and the identity step at PT approval that splits a style and size into the PT's SKUs (stock-ledger 13.9). Built in `S2-F02-T01` (stock-ledger 13.14), for the product owner's review.
 - **RR-547:** a brand barcode on more than one SKU (`PRD-MER-007`, `DEC-135`).
 - **RR-545:** remove the Agreement's default model for new bookings (`DEC-129`).
 - The new call of 10.2: done in module-map section 5 and the module check.
@@ -582,4 +582,4 @@ Not proved by the first version: goods owned before they arrive (`PRD-ACP-020`, 
 
 | ID | Question | Owner | Blocks |
 | --- | --- | --- | --- |
-| GI-1 | The stage 1 receipt count needs a known SKU (stock-ledger 13.9). Goods of a product not yet set up must be counted with their identity as described and their SKU Unknown, not quarantined, and get their SKU at PT approval. Extend the ledger's receipt count and its identity step for this; technical | Builders, with the product owner's review of the stock-ledger change | Code: the GRN |
+| GI-1 | The stage 1 receipt count needs a known SKU (stock-ledger 13.9). Goods of a product not yet set up must be counted with their identity as described and their SKU Unknown, not quarantined, and get their SKU at PT approval. Extend the ledger's receipt count and its identity step for this; technical. **Closed** by `S2-F02-T01`, 21 Oct 2026: stock-ledger 2.2, 2.3, 13.4, 13.9, 13.14 and 14.2 amended, each marked for the product owner's review of the ledger change | Builders, with the product owner's review of the stock-ledger change | — (the review is the product owner's) |

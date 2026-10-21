@@ -16,10 +16,14 @@ export type {
   StockLedgerInterface,
   Written,
 } from './ledger.js';
+export { splitIdentity } from './domain/identity.js';
+export type { IdentityRow, IdentitySource, IdentitySplit, IdentitySplitPart } from './domain/identity.js';
 export type {
   Condition,
+  DescribedIdentity,
   FreezeScope,
   Goods,
+  IdentityPart,
   ImportKind,
   ItemValue,
   LedgerActor,

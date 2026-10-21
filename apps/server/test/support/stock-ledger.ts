@@ -131,6 +131,8 @@ export const syntheticCaller: CallerRegistration = {
         'count-difference',
         'reversal',
         'piece-correction',
+        // S2-F02-T01 (GI-1).
+        'identity-resolved',
       ],
       importKinds: ['none'],
     },

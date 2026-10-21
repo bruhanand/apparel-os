@@ -122,9 +122,15 @@ export interface AnchorTarget {
   readonly mode: 'exclusive' | 'shared';
 }
 
+/**
+ * A SKU balance a request locks at step 3 (10.3): of a SKU at a unit, or of the goods of Unknown SKU there, which share
+ * one row, in pieces and of no brand (14.1, 14.2; 13.14).
+ */
 export interface SkuBalanceTarget {
   readonly unit: UnitFacts;
-  readonly sku: SkuFacts;
+  readonly skuId: string | null;
+  readonly stockUnit: SkuFacts['stockUnit'];
+  readonly brandId: string | null;
 }
 
 /** What Plan reads from: the declared reads of `organisation` and `merchandise` (13.9). */
@@ -155,6 +161,11 @@ export async function planRequest(
   const quantityGoods = new Map<string, { unit: UnitFacts; sku: SkuFacts }>();
   const coverageOrigins = new Set<string>();
   const reservedSkus = new Set<string>();
+  /**
+   * The origins an identity step of this request makes, by the identifier the caller gave (13.14): later items of the
+   * request may name them, as PT approval records their coverage and cost (goods-in 6.3 steps 4 and 5).
+   */
+  const madeInRequest = new Map<string, { at: UnitFacts; receiving: UnitFacts; sku: SkuFacts }>();
 
   const shared = (originId: string) => {
     if (!originIds.has(originId)) originIds.set(originId, 'shared');
@@ -193,7 +204,20 @@ export async function planRequest(
     return sku;
   };
   const balanceOf = (unit: UnitFacts, sku: SkuFacts) =>
-    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId), { unit, sku });
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId), {
+      unit,
+      skuId: sku.skuId,
+      stockUnit: sku.stockUnit,
+      brandId: sku.brandId,
+    });
+  /** The SKU balance of the goods of Unknown SKU at a unit (13.14): one row, in pieces, of no brand (14.1). */
+  const unknownBalanceOf = (unit: UnitFacts) =>
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, null), {
+      unit,
+      skuId: null,
+      stockUnit: 'piece',
+      brandId: null,
+    });
   const goodsAt = async (lineId: string, unit: UnitFacts, goods: Goods, reserving = false) => {
     const sku = await skuOf(lineId, goods.skuId, unit.siteId);
     balanceOf(unit, sku);
@@ -338,6 +362,15 @@ export async function planRequest(
    * transit values its units are in, and under FIFO those its cost layers' lineage reached, locked at step 6.
    */
   const costOrigin = async (lineId: string, originId: string, adjusting: boolean) => {
+    // An origin the identity step makes earlier in the request (13.14): a new row, so nothing of it is locked; its
+    // units are at the identity step's unit, whose pool is locked at step 6, and it keeps its parent's receiving unit.
+    const madeHere = madeInRequest.get(originId);
+    if (madeHere !== undefined) {
+      if (adjusting) throw new StockRefused(refusalOf('exceeds-source', lineId, [{ kind: 'cost-established' }]));
+      await poolOf(lineId, madeHere.at, madeHere.sku);
+      await settingOf(lineId, madeHere.receiving.bookId);
+      return { unit: madeHere.receiving, sku: madeHere.sku };
+    }
     const [origin] = await context.tx.select().from(receiptOrigin).where(eq(receiptOrigin.id, originId));
     if (origin?.skuId == null) {
       throw new StockRefused(
@@ -391,6 +424,56 @@ export async function planRequest(
 
   const planItem = async (item: LedgerItem) => {
     switch (item.kind) {
+      case 'identity-resolved': {
+        // The approved identity route (13.4, 13.14; PRD-DMG-005, POL-17.02): the request carries the approval it runs
+        // under, the PT approval's. Whether that decision holds is `access`'s Verify under lock (13.1).
+        if (request.approval === undefined) {
+          throw new StockRefused(refusalOf('condition-route', item.lineId, [{ kind: 'route', route: 'identity' }]));
+        }
+        if (item.parts.length === 0)
+          throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'parts' }]));
+        const at = await unitOf(item.lineId, item.at.siteId, item.at.businessUnitId);
+        anchor(at, 'shared');
+        const made: string[] = [];
+        for (const part of item.parts) {
+          const [origin] = await context.tx
+            .select()
+            .from(receiptOrigin)
+            .where(eq(receiptOrigin.id, part.receiptOriginId));
+          if (origin === undefined) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [
+                { kind: 'receipt-origin', receiptOriginId: part.receiptOriginId },
+              ]),
+            );
+          }
+          // The origin's identity is what changes, so it is locked exclusively (14.3), with the SKU balances its units
+          // leave and enter at the unit (10.3 steps 2 and 3).
+          originIds.set(origin.id, 'exclusive');
+          const receiving = await unitOf(item.lineId, origin.siteId, origin.businessUnitId);
+          if (origin.skuId === null) unknownBalanceOf(at);
+          else balanceOf(at, await skuOf(item.lineId, origin.skuId, at.siteId));
+          const sku = await skuOf(item.lineId, part.skuId, at.siteId);
+          balanceOf(at, sku);
+          if (part.newReceiptOriginId !== undefined) {
+            made.push(part.newReceiptOriginId);
+            madeInRequest.set(part.newReceiptOriginId, { at, receiving, sku });
+          }
+        }
+        // A new origin's identifier is the caller's (13.14): one already written is no new origin.
+        if (made.length > 0) {
+          const [taken] = await context.tx
+            .select({ id: receiptOrigin.id })
+            .from(receiptOrigin)
+            .where(inArray(receiptOrigin.id, made));
+          if (taken !== undefined) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: taken.id }]),
+            );
+          }
+        }
+        return;
+      }
       case 'receipt-count':
       case 'opening-count': {
         // An opening count comes from an opening batch only (13.4; S1-F13-T03).
@@ -404,9 +487,14 @@ export async function planRequest(
             throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'reason' }]));
         }
         const unit = await place(item.lineId, item.to.siteId, item.to.businessUnitId, item.to.locationId);
-        const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
         if (!Number.isInteger(item.quantity) || item.quantity <= 0)
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'quantity' }]));
+        if (item.skuId === null) {
+          // Goods of a product not yet set up (13.14; GI-1): the Recheck checks their identity as described.
+          unknownBalanceOf(unit);
+          return;
+        }
+        const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
         if (sku.batchTracked !== (item.batch !== undefined))
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'batch' }]));
         const codes = item.pieceCodes ?? [];
@@ -469,6 +557,12 @@ export async function planRequest(
         return;
       }
       case 'record-coverage': {
+        // An origin the identity step makes earlier in the request (13.14): a new row, nothing of it to read or lock.
+        if (madeInRequest.has(item.receiptOriginId)) {
+          if (item.pieceCodes !== undefined)
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'piece-codes' }]));
+          return;
+        }
         const [origin] = await context.tx
           .select()
           .from(receiptOrigin)

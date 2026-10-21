@@ -172,7 +172,7 @@ export abstract class Corrections extends SaleItems {
       skuId: item.goods.skuId,
       quantity: item.goods.quantity,
       ...(item.goods.pieceCodes === undefined ? {} : { pieceCodes: item.goods.pieceCodes }),
-      ownerKind: null,
+      owner: { kind: 'unknown' },
     });
     this.holdAsExcess(item.lineId, item.at, item.goods.skuId, item.reason, counted, item.goods.quantity);
     return { kind: 'unknown' };

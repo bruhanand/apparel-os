@@ -94,8 +94,11 @@ export async function writeRequest(
   const times = { businessDate: plan.businessDate, occurredAt: plan.occurredAt };
   // Movements by identifier, so a large document's origins find theirs at once (10.6).
   const movementById = new Map(entries.movements.map((each) => [each.id, each]));
-  if (!entries.origins.every((origin) => lines.has(movementById.get(origin.lastStateMovementId ?? '')?.lineId ?? ''))) {
-    throw new CommandDefect('An origin without its receipt movement');
+  // A new origin keeps the source line of the movement that made it (14.2), whatever later item of the request changed
+  // its state.
+  const madeBy = (origin: (typeof entries.origins)[number]) => movementById.get(origin.madeByMovementId ?? '');
+  if (!entries.origins.every((origin) => lines.has(madeBy(origin)?.lineId ?? ''))) {
+    throw new CommandDefect('An origin without the movement that made it');
   }
 
   if (entries.origins.length > 0) {
@@ -103,27 +106,29 @@ export async function writeRequest(
       context,
       receiptOrigin,
       entries.origins.map((origin) => {
-        const unit = working.unit(origin.scope.siteId, origin.scope.businessUnitId);
-        const sku = working.sku(origin.skuId ?? '');
-        const movementOf = movementById.get(origin.lastStateMovementId ?? '');
+        // A SKU's version and batch tracking; goods of Unknown SKU have neither (13.14; GI-1).
+        const sku = origin.skuId === null ? undefined : working.sku(origin.skuId);
         return {
           id: origin.id,
           originKind: origin.originKind ?? 'receipt',
-          parentOriginId: null,
-          ...sourceColumns(movementOf?.lineId ?? ''),
+          parentOriginId: origin.parentOriginId,
+          ...sourceColumns(madeBy(origin)?.lineId ?? ''),
           skuId: origin.skuId,
-          skuVersionId: sku.versionId,
-          stockUnit: sku.stockUnit,
+          skuVersionId: sku?.versionId ?? null,
+          stockUnit: origin.stockUnit,
           pieceTracked: origin.pieceTracked,
-          batchTracked: sku.batchTracked,
+          batchTracked: sku?.batchTracked ?? false,
           batchCode: origin.batchCode,
           expiryDate: origin.expiryDate,
           quantity: origin.quantity,
           countDate: origin.countDate,
           ...origin.scope,
-          mappingVersionId: unit.mappingVersionId,
-          bookId: unit.bookId,
+          mappingVersionId: origin.mappingVersionId,
+          bookId: origin.bookId,
           occurredAt: plan.occurredAt,
+          describedStyleCode: origin.described?.styleCode ?? null,
+          describedColour: origin.described?.colour ?? null,
+          describedSize: origin.described?.size ?? null,
         };
       }),
     );
@@ -168,12 +173,11 @@ export async function writeRequest(
     );
     if (legs.length > 0) await insertInParts(context, movementLeg, legs);
   }
-  // Origin states: new ones with their owner (PRD-ORG-014, PRD-ORG-019); changed ones in place, under the origin's
-  // exclusive lock (14.3).
+  // Origin states: new ones with their owner (PRD-ORG-014, PRD-ORG-019), and with what a later item of the request
+  // recorded on them, such as the coverage and cost of an origin the identity step made (13.14); changed ones in
+  // place, under the origin's exclusive lock (14.3).
   const newStates = entries.origins.map((origin) => {
-    const owner = movementById.get(origin.lastStateMovementId ?? '')?.owner ?? {
-      kind: 'unknown' as const,
-    };
+    const owner = origin.owner;
     return {
       id: origin.stateId,
       receiptOriginId: origin.id,
@@ -182,9 +186,9 @@ export async function writeRequest(
       ownerPartyId: owner.kind === 'supplier' ? owner.partyId : null,
       ownerBrandId: owner.kind === 'brand' ? owner.brandId : null,
       agreementVersionId: owner.kind === 'unknown' ? null : (owner.agreementVersionId ?? null),
-      valueKnown: false,
-      pRatePaise: null,
-      establishedValuePaise: null,
+      valueKnown: origin.valueKnown,
+      pRatePaise: origin.pRatePaise,
+      establishedValuePaise: origin.establishedValuePaise,
       originQuantity: origin.quantity,
       ptRevisionId: origin.ptRevisionId,
       coveredQuantity: origin.coveredQuantity,
@@ -500,6 +504,14 @@ export async function writeRequest(
     valuationIds: working.valuations.map((row) => row.id),
     posting,
   };
+  // A request whose items change nothing, such as an identity step whose every origin keeps its SKU (13.14), writes no
+  // audit record and no event: there is no stock record to name. The caller's command records its own action.
+  const wroteNothing =
+    written.receiptOriginIds.length === 0 &&
+    [written.movementIds, written.holdIds, written.reservationIds, written.coverageIds, written.acceptanceIds].every(
+      (ids) => ids.length === 0,
+    );
+  if (wroteNothing) return written;
   await recordAudit(context, dependencies.audit, checked, written, source);
   await publish(context, checked, written);
   return written;

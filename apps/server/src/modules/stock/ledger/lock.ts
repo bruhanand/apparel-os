@@ -71,8 +71,8 @@ export async function lockPlan(
   );
   const totals = [...plan.skuBalances].sort((a, b) =>
     compareCodeUnits(
-      skuKey(a.unit.siteId, a.unit.businessUnitId, a.sku.skuId),
-      skuKey(b.unit.siteId, b.unit.businessUnitId, b.sku.skuId),
+      skuKey(a.unit.siteId, a.unit.businessUnitId, a.skuId),
+      skuKey(b.unit.siteId, b.unit.businessUnitId, b.skuId),
     ),
   );
   for (const { unit } of anchors) {
@@ -87,25 +87,29 @@ export async function lockPlan(
       })
       .onConflictDoNothing({ target: [unitAnchor.siteId, unitAnchor.businessUnitId] });
   }
-  for (const { unit, sku } of totals) {
+  for (const { unit, skuId, stockUnit, brandId } of totals) {
     await context.tx
       .insert(skuBalance)
       .values({
         id: uuidv7(),
         siteId: unit.siteId,
         businessUnitId: unit.businessUnitId,
-        skuId: sku.skuId,
-        stockUnit: sku.stockUnit,
+        skuId,
+        stockUnit,
         quantity: 0,
         storeId: unit.storeId,
         legalEntityId: unit.legalEntityId,
-        brandId: sku.brandId,
+        brandId,
       })
       .onConflictDoNothing();
   }
   const rowsOf = async (
-    found: readonly { siteId: string; businessUnitId: string; skuId?: string }[],
-    read: (each: { siteId: string; businessUnitId: string; skuId?: string }) => Promise<{ id: string } | undefined>,
+    found: readonly { siteId: string; businessUnitId: string; skuId?: string | null }[],
+    read: (each: {
+      siteId: string;
+      businessUnitId: string;
+      skuId?: string | null;
+    }) => Promise<{ id: string } | undefined>,
     what: string,
   ) => {
     const ids: string[] = [];
@@ -128,7 +132,7 @@ export async function lockPlan(
     'unit anchor',
   );
   const skuBalanceIds = await rowsOf(
-    totals.map(({ unit, sku }) => ({ siteId: unit.siteId, businessUnitId: unit.businessUnitId, skuId: sku.skuId })),
+    totals.map(({ unit, skuId }) => ({ siteId: unit.siteId, businessUnitId: unit.businessUnitId, skuId })),
     async ({ siteId, businessUnitId, skuId }) =>
       (
         await context.tx
@@ -138,7 +142,8 @@ export async function lockPlan(
             and(
               eq(skuBalance.siteId, siteId),
               eq(skuBalance.businessUnitId, businessUnitId),
-              eq(skuBalance.skuId, skuId ?? ''),
+              // The goods of Unknown SKU at the unit share one row (14.2, nulls not distinct; 13.14).
+              skuId == null ? isNull(skuBalance.skuId) : eq(skuBalance.skuId, skuId),
             ),
           )
       )[0],
