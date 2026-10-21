@@ -682,7 +682,7 @@ describe('the brand of goods of a product not yet set up (stock-ledger 13.14, 14
     written(await world.post(world.poster, [{ ...count, lineId: line() }]));
   });
 
-  it('RR-555 a receipt count of goods of Unknown SKU names the brand they are counted under', async () => {
+  it('PRD-SEC-005 RR-555 a receipt count of goods of Unknown SKU names the brand they are counted under', async () => {
     const result = await world.post(world.poster, [
       { ...described(1, { styleCode: style(), colour: null, size: null }), brandId: undefined } as LedgerItem,
     ]);

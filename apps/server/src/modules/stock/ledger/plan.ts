@@ -1,6 +1,6 @@
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { ItemCheck, PostItem } from '../../finance/books/index.js';
 import {
   balance,
@@ -18,6 +18,7 @@ import {
 import { STOCK_POSTING_EVENT_KINDS } from './domain/event-kinds.js';
 import { skuKey, unitKey, type UnitKey } from './domain/keys.js';
 import {
+  countedBrandRefused,
   postedRecordType,
   refusalOf,
   StockRefused,
@@ -130,7 +131,8 @@ export interface SkuBalanceTarget {
   readonly unit: UnitFacts;
   readonly skuId: string | null;
   readonly stockUnit: SkuFacts['stockUnit'];
-  readonly brandId: string | null;
+  /** The SKU's brand; for the goods of Unknown SKU, the brand they were counted under, which they always name. */
+  readonly brandId: string;
 }
 
 /** What Plan reads from: the declared reads of `organisation` and `merchandise` (13.9). */
@@ -204,7 +206,7 @@ export async function planRequest(
     return sku;
   };
   const balanceOf = (unit: UnitFacts, sku: SkuFacts) =>
-    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId), {
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId, sku.brandId), {
       unit,
       skuId: sku.skuId,
       stockUnit: sku.stockUnit,
@@ -214,7 +216,7 @@ export async function planRequest(
    * The SKU balance of the goods of Unknown SKU of one brand at a unit (13.14): one row, in pieces, of the brand they
    * were counted under (14.1; RR-555).
    */
-  const unknownBalanceOf = (unit: UnitFacts, brandId: string | null) =>
+  const unknownBalanceOf = (unit: UnitFacts, brandId: string) =>
     skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, null, brandId), {
       unit,
       skuId: null,
@@ -229,7 +231,7 @@ export async function planRequest(
       shared(goods.receiptOriginId);
       if (reserving && !sku.pieceTracked) coverageOrigins.add(goods.receiptOriginId);
     } else if (!sku.pieceTracked) {
-      const at = skuKey(unit.siteId, unit.businessUnitId, sku.skuId);
+      const at = skuKey(unit.siteId, unit.businessUnitId, sku.skuId, sku.brandId);
       quantityGoods.set(at, { unit, sku });
       if (reserving) reservedSkus.add(at);
     }
@@ -454,8 +456,12 @@ export async function planRequest(
           // leave and enter at the unit (10.3 steps 2 and 3).
           originIds.set(origin.id, 'exclusive');
           const receiving = await unitOf(item.lineId, origin.siteId, origin.businessUnitId);
-          if (origin.skuId === null) unknownBalanceOf(at, origin.brandId);
-          else balanceOf(at, await skuOf(item.lineId, origin.skuId, at.siteId));
+          if (origin.skuId === null) {
+            // Goods of Unknown SKU keep the brand they were counted under: their origin names it, as its check holds
+            // (14.1; RR-555; migration stock.ledger__described_goods_by_brand).
+            if (origin.brandId === null) throw new CommandDefect('An origin of goods of Unknown SKU names no brand');
+            unknownBalanceOf(at, origin.brandId);
+          } else balanceOf(at, await skuOf(item.lineId, origin.skuId, at.siteId));
           const sku = await skuOf(item.lineId, part.skuId, at.siteId);
           balanceOf(at, sku);
           if (part.newReceiptOriginId !== undefined) {
@@ -495,7 +501,7 @@ export async function planRequest(
         if (item.skuId === null) {
           // Goods of a product not yet set up (13.14; GI-1): their SKU balance is of the brand they are counted under,
           // which they must name before anything is locked (RR-555); the Recheck checks their identity as described.
-          if (typeof item.brandId !== 'string' || item.brandId.trim() === '')
+          if (countedBrandRefused(item))
             throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'brand' }]));
           unknownBalanceOf(unit, item.brandId);
           return;
