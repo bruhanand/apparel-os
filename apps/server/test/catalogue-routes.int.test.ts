@@ -296,7 +296,7 @@ describe('a brand barcode on two products through the routes (goods-in 12 test 1
     return skuId;
   }
 
-  it('PRD-MER-007 DEC-135 keeps the barcode for both products, flags it as repeated and resolves it to both; another kind is refused', async () => {
+  it('PRD-MER-007 DEC-135 RR-554 keeps a brand’s barcode for both products, flags it as repeated and resolves it to both; another kind, or the Organisation’s barcode, is refused', async () => {
     const brand = await post(booking, '/api/merchandise/brands', {
       code: code('BRAND'),
       name: syntheticName('Route brand'),
@@ -350,6 +350,21 @@ describe('a brand barcode on two products through the routes (goods-in 12 test 1
     const refused = await map(second, 'other');
     expect(refused.status).toBe(422);
     expect(refused.body).toMatchObject({ error: { code: 'merchandise.code-conflict' } });
+    // A barcode recorded for the whole Organisation is no brand's: it names one SKU too (RR-554).
+    const organisationBarcode = `0${String(randomInt(100_000_000, 999_999_999))}`;
+    const forOrganisation = (skuId: string) =>
+      post(booking, '/api/merchandise/external-codes', {
+        code: organisationBarcode,
+        kind: 'supplier-barcode',
+        scope: { kind: 'organisation' },
+        skuId,
+        alias: false,
+        validFrom: today(),
+      });
+    expect((await forOrganisation(first)).status).toBe(200);
+    const notRepeated = await forOrganisation(second);
+    expect(notRepeated.status).toBe(422);
+    expect(notRepeated.body).toMatchObject({ error: { code: 'merchandise.code-conflict' } });
   });
 
   it('code-house-rules 12.1 answers a code of one SKU with its SKU and mapping at the top level too, for one deploy; a repeated code without them', async () => {

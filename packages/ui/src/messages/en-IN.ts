@@ -1705,7 +1705,7 @@ export const englishIndia = {
   'error.merchandise.not-a-piece-tracking-change': 'This profile version is not a change to piece-tracked.',
   'error.merchandise.pack-of-another-sku': 'This pack belongs to another SKU.',
   'error.merchandise.code-conflict':
-    'This code already names another SKU or unit in an overlapping scope and dates. Only a supplier barcode may name several SKUs, and never one SKU in two units.',
+    'This code already names another SKU or unit in an overlapping scope and dates. Only a supplier barcode recorded under a brand may name several SKUs of that brand, and never one SKU in two units.',
   'error.merchandise.code-ambiguous': 'This code names more than one SKU or unit here.',
   'error.merchandise.code-not-found': 'No mapping of this code matches.',
   'error.merchandise.no-version-in-force': 'This SKU has no version in force on that date.',

@@ -123,8 +123,9 @@ function paiseOf(row: HandlerRow): number | null {
 }
 
 /**
- * The SKU a barcode names on a date, or null: not found, or two SKUs, a brand barcode repeated across products among
- * them, whose choice is the person's, never this handler's (structure-and-masters 4.7; PRD-MER-007, DEC-135).
+ * The SKU a barcode names on a date, or null: not found, or two SKUs, whose choice is the person's, never this
+ * handler's. It names no brand, so a barcode a brand repeats across products names nothing here (structure-and-masters
+ * 4.7; PRD-MER-007, DEC-135; RR-554).
  */
 async function skuOfBarcode(
   context: TransactionContext,
