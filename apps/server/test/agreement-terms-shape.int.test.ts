@@ -11,6 +11,7 @@ import { ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
 import { SYNTHETIC_ORGANISATIONS, syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { decided, structureSetup, type StructureSetup } from './support/organisation.js';
 import {
+  allowVerifier,
   connect,
   createEmptyDatabase,
   createTestDatabase,
@@ -135,17 +136,20 @@ async function writeStored(owner: Client, label: string, agreement: Stored): Pro
   ]);
 }
 
-/** The rows of one agreement's versions, whole, as stored. */
-async function versionRows(agreementId: string): Promise<string[]> {
-  const owner = await connect(database, 'migration');
+/**
+ * The rows of one agreement's versions, whole, as stored: in test setup as the migration role, and in a test as the
+ * read-only test role, a raw invariant query (code-house-rules 10.1, 5.1; CH-4).
+ */
+async function versionRows(agreementId: string, role: 'migration' | 'verify'): Promise<string[]> {
+  const client = await connect(database, role);
   try {
-    const rows = await owner.query<{ row: string }>(
+    const rows = await client.query<{ row: string }>(
       'select to_jsonb(v)::text as row from merchandise.agreement_version v where agreement_id = $1 order by id',
       [agreementId],
     );
     return rows.rows.map((each) => each.row);
   } finally {
-    await owner.end();
+    await client.end();
   }
 }
 
@@ -170,9 +174,11 @@ beforeAll(async () => {
   } finally {
     await owner.end();
   }
-  keptRows = await versionRows(kept.agreementId);
-  // Then the rest of the set, as a deploy would run it (code-house-rules 4.3).
+  keptRows = await versionRows(kept.agreementId, 'migration');
+  // Then the rest of the set, as a deploy would run it (code-house-rules 4.3); only then may the read-only test role
+  // connect, since the runner checks who holds privileges on the database.
   await migrateDatabase({ connectionString: databaseUrl(database, 'migration'), folder: SET });
+  await allowVerifier(database);
   const listing = await connect(directory, 'migration');
   try {
     await listing.query(
@@ -209,7 +215,7 @@ function recorded(outcome: { kind: 'success'; answer: PartyChanged } | { kind: '
 describe('agreement versions stored before the default model was retired (structure-and-masters 5.2; DEC-129)', () => {
   it('DEC-129 PRD-MOD-011 keeps every version stored in agreement-terms/1 exactly as it was stored', async () => {
     expect(keptRows).toHaveLength(2);
-    expect(await versionRows(kept.agreementId)).toEqual(keptRows);
+    expect(await versionRows(kept.agreementId, 'verify')).toEqual(keptRows);
   });
 
   it('DEC-129 POL-01.02 reads each stored version back without the default model, every other term as stored', async () => {
@@ -257,9 +263,10 @@ describe('agreement versions stored before the default model was retired (struct
       ),
     );
     decided(await setup.decide(prepared.requestId ?? '', prepared.versionId));
-    const owner = await connect(database, 'migration');
+    // A raw invariant query, as the read-only test role (code-house-rules 10.1).
+    const verifier = await connect(database, 'verify');
     try {
-      const rows = await owner.query<{ id: string; format: string; retired: boolean; ends: string | null }>(
+      const rows = await verifier.query<{ id: string; format: string; retired: boolean; ends: string | null }>(
         `select id, terms_format as format, terms ? 'defaultModel' as retired, upper(valid_during)::text as ends
          from merchandise.agreement_version where agreement_id = $1 order by lower(valid_during)`,
         [revised.agreementId],
@@ -271,7 +278,7 @@ describe('agreement versions stored before the default model was retired (struct
         { id: revised.awaitingId, format: 'agreement-terms/1', retired: true, ends: null },
       ]);
     } finally {
-      await owner.end();
+      await verifier.end();
     }
     const runtime = await connect(database, 'runtime');
     try {
