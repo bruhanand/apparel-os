@@ -11,11 +11,23 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   COMMAND_RUNNER,
+  CommandRunner,
+  IdempotencyHelper,
   OrganisationRouter,
-  type CommandRunner,
+  OUTBOX_AUTHORITY,
+  OUTBOX_PROCESSOR_IDENTITY,
+  restrictedValueCipherNotConfigured,
+  secretCheckNotImplemented,
+  Worker,
+  type JobRegistry,
   type RoutedOrganisation,
 } from '../src/kernel/index.js';
+import { approvalDecided, approvalRequested } from '../src/modules/access/index.js';
+// The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
+import { INBOX_IDENTITY, inboxConsumers } from '../src/modules/inbox/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
+import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import {
@@ -23,6 +35,7 @@ import {
   startAccessApp,
   syntheticKeysEnvironment,
   SyntheticClock,
+  syntheticTimezone,
   SYNTHETIC_ORIGIN,
   writeSyntheticReason,
   writeSyntheticSetting,
@@ -32,7 +45,7 @@ import {
 } from './support/access.js';
 import { BOOKING_POLICY_CHECKS, bookingGateOpen } from './support/booking.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
-import { capturingLogger } from './support/jobs.js';
+import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { writeSyntheticMarking } from './support/marked-attributes.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
@@ -60,6 +73,14 @@ const SYNTHETIC_SMALL_BUDGET = 1_000;
 const SYNTHETIC_OWNER_LIMIT = 50_000_000;
 const SYNTHETIC_LOW_LIMIT = 100;
 
+/** My work is fed by the inbox's consumers, run by a worker with SYNTHETIC settings (DEC-118, DEC-119; CH-10). */
+const inboxRegistry: JobRegistry = {
+  events: [approvalRequested, approvalDecided],
+  consumers: inboxConsumers,
+  jobKinds: [],
+};
+const log = capturingLogger();
+let worker: Worker;
 let world: SyntheticWorld;
 let database: string;
 let organisationCode: string;
@@ -172,6 +193,14 @@ function decide(
     reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
     totpCode: freshCode(by),
   });
+}
+
+/** Whether My work offers the user the approval request named, once the worker has published it (11.1, 11.2). */
+async function offeredInMyWork(user: SyntheticUser, requestId: string): Promise<boolean> {
+  const work = (await get(user, '/api/inbox/my-work')).body.items as
+    | { kind: string; owner: { recordId: string } }[]
+    | undefined;
+  return (work ?? []).some((each) => each.kind === 'approval' && each.owner.recordId === requestId);
 }
 
 function ok(call: Call): Record<string, unknown> {
@@ -305,11 +334,33 @@ beforeAll(async () => {
   });
   router = new OrganisationRouter(
     { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 4 },
-    capturingLogger().logger,
+    log.logger,
   );
   const routed = await router.resolveForSignIn(organisationCode);
   if (!routed.routed) throw new Error('not routed');
   organisation = routed.organisation;
+  // My work is fed by the inbox's consumers, run by a worker with SYNTHETIC settings (DEC-118, DEC-119; CH-10).
+  await writeSyntheticServiceIdentity(database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
+  await writeSyntheticServiceIdentity(database, INBOX_IDENTITY, [{ action: 'edit', recordType: 'inbox.work_item' }]);
+  const runner = new CommandRunner({
+    clock: { now: () => new Date() },
+    timezones: syntheticTimezone,
+    logger: log.logger,
+  });
+  worker = new Worker({
+    router,
+    runner,
+    helper: new IdempotencyHelper({
+      runner,
+      logger: log.logger,
+      secretCheck: secretCheckNotImplemented,
+      cipher: restrictedValueCipherNotConfigured,
+    }),
+    identities: jobIdentities(),
+    logger: log.logger,
+    registry: inboxRegistry,
+    settings: syntheticWorkerSettings(inboxRegistry, { fast: true }),
+  });
   setup = await structureSetup({
     directory: world.directory,
     database,
@@ -430,9 +481,13 @@ beforeAll(async () => {
   await bookingLimit(booker, SYNTHETIC_OWNER_LIMIT);
   await bookingLimit(lowApprover, SYNTHETIC_LOW_LIMIT);
   await bookingLimit(secondApprover, SYNTHETIC_OWNER_LIMIT);
+  // A consumer receives only events recorded after it is first registered, so the worker starts once the setup's own
+  // approvals are decided: My work then carries only this file's bookings, with no backlog before them.
+  await worker.start();
 }, 300_000);
 
 afterAll(async () => {
+  await (worker as Worker | undefined)?.stop();
   await (setup as StructureSetup | undefined)?.close();
   await (router as OrganisationRouter | undefined)?.close();
   await (api as AccessTestApp | undefined)?.close();
@@ -585,6 +640,9 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
       await post(booker, `/api/booking/bookings/${bookingId}/submission`, { versionToken: attached.versionToken }),
     );
     first = { bookingId, versionId: sent.versionId as string, requestId: sent.requestId as string };
+    // The approval reaches the Owner in My work, whose limit covers the value; never the preparer (9.4, 11.1).
+    await eventually(() => offeredInMyWork(owner, first.requestId));
+    expect(await offeredInMyWork(booker, first.requestId)).toBe(false);
     expect(first.versionId).toBe(made.versionId);
     const booking = await readBooking(owner, bookingId);
     expect(booking).toMatchObject({

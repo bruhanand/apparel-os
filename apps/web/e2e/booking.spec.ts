@@ -116,12 +116,14 @@ test('PRD-BKG-001 PRD-BKG-004 POL-02.07 Booking records a booking with the size-
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
         .click();
+      // The worker publishes the receiving Organisation's events in order, its setup's many approvals first, so the
+      // item may take a while to reach My work on a busy machine.
       await expect(async () => {
         await owner.getByRole('button', { name: 'Refresh' }).click();
         await expect(owner.getByRole('listitem').filter({ hasText: 'Booking approval' })).toHaveCount(1, {
           timeout: 1_000,
         });
-      }).toPass({ timeout: 30_000 });
+      }).toPass({ timeout: 180_000 });
       await owner
         .getByRole('listitem')
         .filter({ hasText: 'Booking approval' })
