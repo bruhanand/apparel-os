@@ -1,6 +1,6 @@
 # S2-F08-T01 — Damage reports
 
-Status: blocked
+Status: ready-for-agent
 Blocked by: S2-F02-T02
 Feature: [Stage 2 first version](../../spec.md)
 

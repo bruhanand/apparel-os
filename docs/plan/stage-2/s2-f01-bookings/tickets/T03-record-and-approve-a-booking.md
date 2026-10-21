@@ -1,6 +1,6 @@
 # S2-F01-T03 — Record and approve a booking
 
-Status: blocked
+Status: ready-for-agent
 Blocked by: S2-F01-T01, S2-F01-T02
 Feature: [Stage 2 first version](../../spec.md)
 

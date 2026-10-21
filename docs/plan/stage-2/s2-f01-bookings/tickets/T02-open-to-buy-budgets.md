@@ -1,6 +1,6 @@
 # S2-F01-T02 — Open-to-buy budgets
 
-Status: ready-for-human
+Status: done
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -35,3 +35,4 @@ A budget is usable only once checked and approved by people other than its prepa
   - Design written into goods-in 3.1, 3.3 "As built", 10.5, 11 and 13 (GI-2 closed), structure-and-masters 4.2 "As built", 4.7, 6.2 and 8, access-and-approvals 9.3 and 9.8b, module-map 4.12 and domain-model section 5. Tests: `apps/server/test/season-and-size-attributes.int.test.ts` (new), `apps/server/test/open-to-buy-budgets.int.test.ts`, the journeys `apps/web/e2e/open-to-buy.spec.ts` and `apps/web/e2e/season-and-size-attributes.spec.ts` (new).
   - **Beyond the ticket**: the `access` hook `earlierStepDeciders` and its code `access.earlier-step-decider` (with its screen text); the approval panel's facts of a marking (`DocumentFacts.tsx`); the test helper `writeSyntheticMarking`, a SYNTHETIC marking written as a fixture, as the access settings are, since a marking approved on a fixture's own clock is in force only from that clock's instant.
   - **For the product owner**: with the budgets no longer reported, no module reports a value of policy 5, so policy 5 cannot be validated (`configuration.no-values-to-validate`, RR-480) and a booking's approval, gated by policy 5 (goods-in 10.5), stays unavailable until `S2-F01-T03` settles which of policy 5's values the gate covers.
+- Closed 22 Oct 2026 on `s2/goods-in-first-version`: the product owner's answers (RR-548 to RR-550, `DEC-142`) built in the season-and-size follow-up (merged `266259e`), reviewed with `/code-review` and fixed (merged `da4786c`); no blocking finding left. Left open for the product owner: which records are policy 5's values, now that budgets are not (RR-561, before `S2-F01-T03`), and the season marking on `dev` (RR-562).

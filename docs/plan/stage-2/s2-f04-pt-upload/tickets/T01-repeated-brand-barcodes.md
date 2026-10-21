@@ -1,6 +1,6 @@
 # S2-F04-T01 — A brand barcode on several products
 
-Status: ready-for-human
+Status: done
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -27,3 +27,4 @@ The barcode part of design test 10 passes; the stage 1 import tests still pass; 
 - Built and merged 21 Oct 2026 on `s2/goods-in-first-version`: commit `6b3a975`, merged as `08b0e9e`; reviewed with `/code-review`, its fixes merged as `aa55bb2`. Waits for the product owner: the code lets every supplier barcode repeat in any scope, wider than `PRD-MER-007`'s "a brand's external barcode ... where the brand's tags repeat it" (RR-554). It closes once that is answered and any change it needs is built.
 - **RR-554 built** (21 Oct 2026, branch `s2/w2-repeats-under-a-brand`; the product owner decided the same day that only a barcode recorded under a brand may repeat, `PRD-MER-007` as written). Migration `0089__merchandise.catalogue__repeats_only_under_a_brand.sql`: the same-scope exclusion leaves out only a supplier barcode recorded under a brand; the one-unit exclusion stays. The service refuses a second SKU for a supplier's or the Organisation's barcode again (`merchandise.code-conflict`), and the Organisation's mapping and a brand's repeat refuse each other across scopes. **Design choices** (structure-and-masters 4.3 "As built"): Resolve answers several SKUs only where the brand given names each under its scope; a matched mapping in another scope that names one of them, such as the supplier's own, adds no choice, and one naming another SKU makes the code ambiguous, as before; the repeated flag is set only on a brand's mapping that another under the same brand repeats. The stage 1 import handlers resolve without a brand, so a brand's repeat never reaches them; their test now records its repeat under a brand. The products browser journey maps its barcode under the style's brand.
 - Beyond the ticket (RR-554): goods-in 5.5 and 7.2 now say the PT upload records a row's barcode under its product's brand and the scan-in resolves with the PT's brand, so a repeat stays possible there (`S2-F04-T02`, `S2-F07-T01`); the refusal's message names the brand rule.
+- Closed 22 Oct 2026 on `s2/goods-in-first-version`: the product owner's answer (RR-554) built in the brand-barcode follow-up (merged `043af6c`), reviewed with `/code-review` and fixed (merged `da4786c`, including Resolve without a brand); no blocking finding left.
