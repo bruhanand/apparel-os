@@ -1,4 +1,6 @@
 import {
+  MARKED_ATTRIBUTE_PAGE_CAP,
+  MARKED_ATTRIBUTE_TYPE,
   routes,
   type CatalogueChanged,
   type CatalogueKind,
@@ -283,6 +285,39 @@ export class CatalogueController {
       asOf: context.startedAt.toISOString(),
       marks: await this.catalogue.markedAttributes(context),
     }));
+  }
+
+  @ApiRoute(routes.listMarkedAttributeVersions)
+  listMarkedAttributeVersions(
+    @RouteInput() input: RouteInputOf<typeof routes.listMarkedAttributeVersions>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { after, limit } = input.query;
+    const page = { after, limit: Math.min(Number(limit ?? MARKED_ATTRIBUTE_PAGE_CAP), MARKED_ATTRIBUTE_PAGE_CAP) };
+    return this.read(user, 'merchandise.list-marked-attribute-versions', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      ...(await this.catalogue.markedAttributeVersions(context, input.params.mark, page)),
+    }));
+  }
+
+  @ApiRoute(routes.readMarkedAttributeVersion)
+  async readMarkedAttributeVersion(
+    @RouteInput() input: RouteInputOf<typeof routes.readMarkedAttributeVersion>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { versionId } = input.params;
+    const answer = await this.read(user, 'merchandise.read-marked-attribute-version', async (context) => ({
+      asOf: context.startedAt.toISOString(),
+      found: await this.catalogue.markedAttributeVersion(context, versionId),
+    }));
+    if (answer.found === undefined) {
+      throw new ApiRefusal({
+        kind: 'not-found',
+        code: 'merchandise.record-not-found',
+        missing: [{ kind: 'version', recordType: MARKED_ATTRIBUTE_TYPE, versionId }],
+      });
+    }
+    return { asOf: answer.asOf, ...answer.found };
   }
 
   @ApiRoute(routes.prepareMarkedAttributeVersion)

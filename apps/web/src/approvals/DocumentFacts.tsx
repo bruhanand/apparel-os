@@ -34,6 +34,8 @@ import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
+import { AttributeName } from '../merchandise/AttributeName';
+import { MARK_LABEL } from '../merchandise/marked';
 import { ImportFacts } from './ImportFacts';
 import { actionTitle } from './subject';
 
@@ -475,38 +477,22 @@ function BudgetFacts({ view }: { view: ApprovalRequestView }) {
  */
 function MarkedAttributeFacts({ view }: { view: ApprovalRequestView }) {
   const query = useQuery({
-    ...readQuery(api, 'listMarkedAttributes', {}),
+    ...readQuery(api, 'readMarkedAttributeVersion', { params: { versionId: view.document.versionId } }),
     enabled: useViewable(MARKED_ATTRIBUTE_TYPE),
   });
-  const marking = query.data?.marks.find((each) => each.versions.some((v) => v.id === view.document.versionId));
-  const version = marking?.versions.find((each) => each.id === view.document.versionId);
-  const attributeName = (attributeId: string) => <AttributeName attributeId={attributeId} />;
-  if (marking === undefined || version === undefined) return null;
+  if (query.data === undefined) return null;
+  const { mark, inForce, version } = query.data;
   return (
     <Facts>
-      <Fact label="marked.title">{t(marking.mark === 'season' ? 'marked.mark.season' : 'marked.mark.size')}</Fact>
-      <Fact label="marked.attribute">{attributeName(version.attributeId)}</Fact>
+      <Fact label="marked.title">{t(MARK_LABEL[mark])}</Fact>
+      <Fact label="marked.attribute">
+        <AttributeName attributeId={version.attributeId} />
+      </Fact>
       <Fact label="marked.in-force">
-        {marking.inForce.kind === 'set' ? attributeName(marking.inForce.attributeId) : t('marked.not-set')}
+        {inForce.kind === 'set' ? <AttributeName attributeId={inForce.attributeId} /> : t('marked.not-set')}
       </Fact>
       <Fact label="rules.origin">{t(`rules.origin.${version.origin}`)}</Fact>
     </Facts>
-  );
-}
-
-/** An attribute's code and name, where the reader may read attributes; Unknown otherwise (PRD-MOD-015). */
-function AttributeName({ attributeId }: { attributeId: string }) {
-  const query = useQuery({
-    ...readQuery(api, 'readAttribute', { params: { recordId: attributeId } }),
-    enabled: useViewable('merchandise.attribute'),
-  });
-  const record = query.data?.record;
-  if (record === undefined) return <>{t('organisation.unknown')}</>;
-  const name = record.versions[0]?.name;
-  return (
-    <>
-      <span className="font-mono">{record.code}</span> {typeof name === 'string' ? name : ''}
-    </>
   );
 }
 

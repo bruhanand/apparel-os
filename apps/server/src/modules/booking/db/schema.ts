@@ -22,6 +22,8 @@ export const openToBuyBudget = booking.table('open_to_buy_budget', {
   brandId: uuid('brand_id').notNull(),
   seasonAttributeId: uuid('season_attribute_id').notNull(),
   seasonValueId: uuid('season_value_id').notNull(),
+  /** The version of the season's marking the season was read under (code-house-rules 7.3, 12.14; RR-550). */
+  seasonMarkedAttributeVersionId: uuid('season_marked_attribute_version_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 

@@ -5,8 +5,9 @@
 -- is the product owner's, OPEN until set (V-17, RR-080).
 --
 -- A budget is an identity row, fixed at creation and never changed or deleted, naming its brand and its season, a
--- value of the Organisation's season attribute; both belong to `merchandise` and are kept by identifier with no
--- foreign key (code-house-rules 3.2). Its versions follow code-house-rules 7.3 dated by instants, as user versions are
+-- value of the Organisation's season attribute, with the version of the season's marking it was read under
+-- (code-house-rules 7.3, 12.14; structure-and-masters 4.2 "As built"; RR-550); all belong to `merchandise` and are
+-- kept by identifier with no foreign key (code-house-rules 3.2). Its versions follow code-house-rules 7.3 dated by instants, as user versions are
 -- (access-and-approvals 9.5): a version is frozen when it is prepared, Awaiting approval with no dates through
 -- Accounts' check and the approval; the approval records its decision once and starts it at the decision's instant,
 -- ending the version in force there; approved versions never overlap. Accounts' check is an append-only row of its
@@ -25,6 +26,7 @@ create table booking.open_to_buy_budget (
   brand_id uuid not null,
   season_attribute_id uuid not null,
   season_value_id uuid not null,
+  season_marked_attribute_version_id uuid not null,
   recorded_at timestamptz not null default now(),
   constraint open_to_buy_budget_once unique (brand_id, season_value_id)
 );

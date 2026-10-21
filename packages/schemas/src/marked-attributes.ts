@@ -79,13 +79,15 @@ export const markedAttributeInForceSchema = z.discriminatedUnion('kind', [
 ]);
 export type MarkedAttributeInForce = z.infer<typeof markedAttributeInForceSchema>;
 
-/** One marking as Setup › Vocabularies shows it: what is in force, and every version, oldest first. */
+/**
+ * One marking as Setup › Vocabularies shows it: what is in force, and the newest version's identifier. Its versions are
+ * read a page at a time (`listMarkedAttributeVersions`; code-house-rules 12.1 "Reads").
+ */
 export const markedAttributeSchema = z.strictObject({
   mark: attributeMarkSchema,
   inForce: markedAttributeInForceSchema,
   /** The newest version's identifier, which a later version names (code-house-rules 12.7); none before the first. */
   versionToken: idSchema.optional(),
-  versions: z.array(markedAttributeVersionSchema),
 });
 export type MarkedAttribute = z.infer<typeof markedAttributeSchema>;
 
@@ -95,3 +97,43 @@ export const markedAttributeListSchema = z.strictObject({
   marks: z.array(markedAttributeSchema),
 });
 export type MarkedAttributeList = z.infer<typeof markedAttributeListSchema>;
+
+/**
+ * The largest page of a marking's versions: a technical cap the builders set (code-house-rules 12.1 "Reads"), not a
+ * KDPS value. A longer history is read page by page with the cursor.
+ */
+export const MARKED_ATTRIBUTE_PAGE_CAP = 100;
+
+/**
+ * A page of a marking's versions (code-house-rules 12.1): newest first, starting after the version `after` names, at
+ * most `limit` of them (the cap when left out). The cursor is the last version's identifier, opaque to the screen, which
+ * only hands back the `next` it was given.
+ */
+export const markedAttributeVersionPageQuerySchema = z.strictObject({
+  after: idSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= MARKED_ATTRIBUTE_PAGE_CAP, {
+      message: `At most ${String(MARKED_ATTRIBUTE_PAGE_CAP)}`,
+    })
+    .optional(),
+});
+export type MarkedAttributeVersionPageQuery = z.infer<typeof markedAttributeVersionPageQuerySchema>;
+
+/** A page of one marking's versions, newest first, at the instant read; `next` is null on the last page. */
+export const markedAttributeVersionListSchema = z.strictObject({
+  asOf: instantSchema,
+  versions: z.array(markedAttributeVersionSchema),
+  next: idSchema.nullable(),
+});
+export type MarkedAttributeVersionList = z.infer<typeof markedAttributeVersionListSchema>;
+
+/** One version with the marking it belongs to and what that marking has in force, for its approval panel. */
+export const markedAttributeVersionReadSchema = z.strictObject({
+  asOf: instantSchema,
+  mark: attributeMarkSchema,
+  inForce: markedAttributeInForceSchema,
+  version: markedAttributeVersionSchema,
+});
+export type MarkedAttributeVersionRead = z.infer<typeof markedAttributeVersionReadSchema>;

@@ -4,8 +4,11 @@ import {
   MARKED_ATTRIBUTE_CHANGE,
   MARKED_ATTRIBUTE_TYPE,
   markedAttributeListSchema,
+  markedAttributeVersionListSchema,
+  markedAttributeVersionReadSchema,
   type AttributeMark,
   type MarkedAttribute,
+  type MarkedAttributeVersion,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
@@ -129,12 +132,30 @@ function preparedIds(call: Call): { markedAttributeId: string; versionId: string
   return call.body as { markedAttributeId: string; versionId: string; requestId: string };
 }
 
-async function marked(user: SyntheticUser, mark: AttributeMark): Promise<MarkedAttribute> {
+/** A page of a marking's versions, newest first (code-house-rules 12.1 "Reads"). */
+async function versionPage(user: SyntheticUser, mark: AttributeMark, query: string) {
+  const read = await get(user, `/api/merchandise/marked-attributes/${mark}/versions${query}`);
+  expect(read.status, JSON.stringify(read.body)).toBe(200);
+  return markedAttributeVersionListSchema.parse(read.body);
+}
+
+/** A marking and every version, oldest first, its versions read one to a page through the cursor. */
+async function marked(
+  user: SyntheticUser,
+  mark: AttributeMark,
+): Promise<MarkedAttribute & { readonly versions: readonly MarkedAttributeVersion[] }> {
   const read = await get(user, '/api/merchandise/marked-attributes');
   expect(read.status, JSON.stringify(read.body)).toBe(200);
   const found = markedAttributeListSchema.parse(read.body).marks.find((each) => each.mark === mark);
   if (found === undefined) throw new Error(`no ${mark} in the read`);
-  return found;
+  const versions: MarkedAttributeVersion[] = [];
+  let after: string | null = null;
+  do {
+    const page = await versionPage(user, mark, `?limit=1${after === null ? '' : `&after=${after}`}`);
+    versions.push(...page.versions);
+    after = page.next;
+  } while (after !== null);
+  return { ...found, versions: versions.reverse() };
 }
 
 const SETTING: readonly SyntheticAuthority[] = [
@@ -251,6 +272,41 @@ describe('changing the size attribute (structure-and-masters 4.2; goods-in GI-3;
     const [ended, , current] = after.versions;
     expect(ended?.inForceUntil).toBe(current?.inForceFrom);
     expect(after.versionToken).toBe(c.versionId);
+  });
+});
+
+describe('reading a marking’s versions (structure-and-masters 4.2; code-house-rules 12.1 "Reads")', () => {
+  it('PRD-MOD-010 code-house-rules 12.1 a marking’s versions are read newest first, a page at a time by a cursor; one version is read with its marking', async () => {
+    const attributeId = await syntheticAttribute('PAGED');
+    let token = (await marked(reader, 'season')).versionToken;
+    const ids: string[] = [];
+    for (let each = 0; each < 3; each++) {
+      const made = preparedIds(
+        await prepare(admin, { mark: 'season', attributeId, ...(token === undefined ? {} : { versionToken: token }) }),
+      );
+      ids.push(made.versionId);
+      token = made.versionId;
+    }
+    const [oldest, middle, newest] = ids as [string, string, string];
+    const first = await versionPage(reader, 'season', '?limit=2');
+    expect(first.versions.map((each) => each.id)).toEqual([newest, middle]);
+    expect(first.next).toBe(middle);
+    const second = await versionPage(reader, 'season', `?limit=2&after=${middle}`);
+    expect(second.versions[0]?.id).toBe(oldest);
+    // A page larger than the cap is refused (code-house-rules 12.1).
+    const tooLarge = await get(reader, '/api/merchandise/marked-attributes/season/versions?limit=101');
+    expect(tooLarge.status).toBe(400);
+    // One version, with the marking it belongs to and what that marking has in force, for its approval panel.
+    const one = await get(reader, `/api/merchandise/marked-attributes/versions/${middle}`);
+    expect(one.status, JSON.stringify(one.body)).toBe(200);
+    expect(markedAttributeVersionReadSchema.parse(one.body)).toMatchObject({
+      mark: 'season',
+      inForce: (await marked(reader, 'season')).inForce,
+      version: { id: middle, attributeId, state: 'Superseded' },
+    });
+    const missing = await get(reader, `/api/merchandise/marked-attributes/versions/${uuidv7()}`);
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ error: { code: 'merchandise.record-not-found' } });
   });
 });
 

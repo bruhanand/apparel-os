@@ -276,6 +276,7 @@ export async function budgetViews(
       season: {
         attributeId: budget.seasonAttributeId,
         valueId: budget.seasonValueId,
+        markedAttributeVersionId: budget.seasonMarkedAttributeVersionId,
         ...(season === undefined ? {} : { code: season.code }),
         ...(seasonName === undefined ? {} : { name: seasonName }),
       },

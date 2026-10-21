@@ -1,4 +1,5 @@
 import {
+  MARKED_ATTRIBUTE_CHANGE,
   MARKED_ATTRIBUTE_TYPE,
   markedAttributeSetting,
   type AttributeMark,
@@ -14,6 +15,10 @@ import type { Decision } from '../db/schema.js';
 /** The document a marking's version is approved as (access-and-approvals 9.1): the marking, at that version. */
 export const markDocument = (markedAttributeId: string, versionId: string) =>
   ({ module: 'merchandise', recordType: MARKED_ATTRIBUTE_TYPE, recordId: markedAttributeId, versionId }) as const;
+
+/** The action type and document each waiting version's request was made under, for supersession (9.6). */
+export const markDecision = (markedAttributeId: string, versionId: string) =>
+  ({ ...markDocument(markedAttributeId, versionId), actionType: MARKED_ATTRIBUTE_CHANGE }) as const;
 
 /** The record a marking's audit record names (numbering-and-audit 4.1). */
 export const markAuditRecord = (markedAttributeId: string, versionId: string) =>
