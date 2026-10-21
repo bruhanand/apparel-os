@@ -135,7 +135,10 @@ Written as `DEC-137`.
 ## Round 13, 21 Oct 2026
 
 1. **GRN colour (owner's baseline):** whatever the receiving invoice names, none if it names none. ECONOMY, MEDIUM and PREMIUM are for the PT file only. So the PT matches the GRN per style and size; colour is not compared (`DEC-138`).
-2. **Goods owned before they arrive:** the owner asked for an explanation before deciding the first version.
+2. **Goods owned before they arrive:** explained; deferred to after the first version (`DEC-139`).
+3. **The PT-to-GRN match** is per style and size, with the same quantity for each (owner's correction).
+
+The first version is settled: booking (document uploaded, entered by hand), the Arrival with its invoice, the GRN (counted by hand, documents and photos), the PT file uploaded for the GRN and approved by a different person, then the scan-in at the Site.
 
 ## Not settled
 

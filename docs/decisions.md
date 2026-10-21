@@ -1433,6 +1433,15 @@
 - **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 13 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
 - **Question.** What colour does a GRN line carry, and are the tags ECONOMY, MEDIUM and PREMIUM, which KDPS's colour list holds, used on the GRN?
 - **Options.** The colour as the invoice names it, none if it names none · a value from the PT colour list, tags included.
-- **Choice.** The first. A GRN line carries the colour the supplier invoice names, or no colour when the invoice names none. ECONOMY, MEDIUM and PREMIUM are tags for the PT file only. So the PT file matches the GRN per style and size; colour is kept on both but not compared. This amends the match of `DEC-135` (per style, colour and size).
+- **Choice.** The first. A GRN line carries the colour the supplier invoice names, or no colour when the invoice names none. ECONOMY, MEDIUM and PREMIUM are tags for the PT file only. So the PT file matches the GRN per style and size, with the same quantity for each; colour is kept on both but not compared. This amends the match of `DEC-135` (per style, colour and size).
 - **Why.** The product owner's baseline: the GRN copies the invoice, and the PT may carry a grade tag where the colour is unclear.
 - **Changed.** No PRD rule changes. `roadmap.md` stage 2 first version; grill notes.
+
+## DEC-139 — Goods owned before they arrive follow after the first version
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 13 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** The first-version flow starts at the Arrival. Is inbound ownership (goods owned under the brand's Agreement before they arrive, `PRD-ORG-017` to `PRD-ORG-019`) built in the first version?
+- **Options.** After the first version · in the first version.
+- **Choice.** After the first version. Until then nothing is recorded before the goods and their invoice reach the Site; a brand whose Agreement passes ownership at dispatch shows nothing until the Arrival.
+- **Why.** The product owner keeps the first version to the operational flow from booking to scan-in.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 first version; `coverage.md` note; RR-546 widened. No PRD rule changes; the stage 2 exit check on inbound ownership (`PRD-ACP-020`) waits for its placement (RR-546).
