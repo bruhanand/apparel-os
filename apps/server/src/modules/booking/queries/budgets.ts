@@ -1,7 +1,7 @@
 import { paise, type Paise } from '@apparel-os/domain';
 import type { OpenToBuyBudget, OpenToBuyBudgetVersion, OpenToBuyRemaining } from '@apparel-os/schemas';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest } from '../../access/index.js';
 import type { CatalogueInterface, CatalogueRecord } from '../../merchandise/catalogue/index.js';
 import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
@@ -259,14 +259,18 @@ export async function budgetViews(
       );
     }
     const brand = brands.get(budget.brandId);
+    // A budget is prepared only for a brand in force (3.3), and no brand is ever deleted (PRD-MOD-011),
+    // so a budget whose brand the catalogue does not hold is a defect, never named by its identifier (PRD-MOD-015).
+    if (brand === undefined)
+      throw new CommandDefect(`An open-to-buy budget's brand is not in the catalogue: ${budget.id}`);
     const season = seasons.get(budget.seasonValueId);
-    const brandName = brand?.versions.find((version) => version.state === 'In force')?.name;
+    const brandName = brand.versions.find((version) => version.state === 'In force')?.name;
     const seasonName = season?.versions.find((version) => version.state === 'In force')?.name;
     views.push({
       id: budget.id,
       brand: {
         id: budget.brandId,
-        code: brand?.code ?? budget.brandId,
+        code: brand.code,
         ...(brandName === undefined ? {} : { name: brandName }),
       },
       season: {

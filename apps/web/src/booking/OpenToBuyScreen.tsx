@@ -50,6 +50,16 @@ const amountField = z
   .string()
   .refine((text) => paiseOfRupees(text) !== undefined, { message: 'budget.amount.invalid' });
 
+/**
+ * The amount the form's schema accepted, in paise. The schema refuses any text that is not an amount, so one that does
+ * not parse here is a defect, never sent as zero (PRD-MOD-014, PRD-MOD-015).
+ */
+function amountOf(text: string): number {
+  const amount = paiseOfRupees(text);
+  if (amount === undefined) throw new Error('An amount the form accepted is not an amount');
+  return amount;
+}
+
 const budgetFormSchema = z.object({
   brandId: z.uuid(),
   seasonAttributeId: z.uuid(),
@@ -119,7 +129,7 @@ function NewBudgetForm() {
             body: {
               brandId: entered.brandId,
               season: { attributeId: entered.seasonAttributeId, valueId: entered.seasonValueId },
-              amount: paiseOfRupees(entered.amount) ?? 0,
+              amount: amountOf(entered.amount),
               origin: entered.origin,
             },
           });
@@ -225,7 +235,7 @@ function NewVersionForm({ budget }: { budget: OpenToBuyBudget }) {
           await submission.submit({
             params: { budgetId: budget.id },
             body: {
-              amount: paiseOfRupees(entered.amount) ?? 0,
+              amount: amountOf(entered.amount),
               origin: entered.origin,
               versionToken: budget.versionToken,
             },
