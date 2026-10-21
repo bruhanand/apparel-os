@@ -14,6 +14,7 @@
 - 21 Oct 2026: `PRD-BKG-014` and the new `PRD-BKG-015` placed under `S2-F01`. The counts in section 2 are not re-checked yet, and `PRD-MER-019` to `PRD-MER-021`, `PRD-PAY-015`, `PRD-LIF-030` and `PRD-LIF-031` (`DEC-123`) are still unplaced.
 - 21 Oct 2026 (`DEC-134`): the first version of stage 2 builds the PT only as an upload of the fixed PT template for a GRN. The rest of `PRD-PTW-001` to `PRD-PTW-013` and `PRD-PRO-002` (`S2-F04`), and the XLS, XLSB, CSV, PDF and photograph PT files of `PRD-IMP-001` (`S2-F13`, `S2-F05`), follow after it; their placement is OPEN (RR-546).
 - 21 Oct 2026 (`DEC-136`): the AI part of `PRD-BKG-015` (`S2-F05`) and the labels of `PRD-MER-008` and `PRD-REC-020` (`S2-F07`) also follow after the first version (RR-546).
+- 21 Oct 2026 (`DEC-137`): `S2-F10` moves to stage 5 with `S5-F04`, so `PRD-REC-010`, `PRD-LED-005` and the invoice-matching part of `PRD-ORG-019` complete there. `PRD-REC-011`, the supplemental PTs of `PRD-REC-015`, corrections after scan-in (`PRD-REC-019`) and piece IDs (`PRD-MER-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-MER-018`) follow after the first version (RR-546).
 
 ## 2. Summary
 

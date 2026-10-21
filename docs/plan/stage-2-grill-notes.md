@@ -123,6 +123,15 @@ Written as `DEC-135` (`PRD-MER-007` reworded; RR-547 for the stage 1 code). The 
 
 Written as `DEC-136`.
 
+## Round 12, 21 Oct 2026
+
+1. **PT corrections:** reverse and re-upload, approved again by a different person, only before scan-in; later fixes later.
+2. **Invoice matching:** moves to stage 5 with supplier payments.
+3. **Held lines:** the PT is uploaded once every held line is decided; one PT per GRN; confirmed-damaged pieces stay held without a PT.
+4. **Piece tracking:** none in the first version; every product by quantity.
+
+Written as `DEC-137`.
+
 ## Not settled
 
 - PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.

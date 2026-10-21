@@ -1414,3 +1414,16 @@
 - **Choice.** Both after the first version. A booking is recorded by uploading its document (photo or PDF, kept as evidence) and entering the booking by hand; AI reading of booking documents follows later, like the PT workbench. The GRN is all manual entry: the count is entered by hand, and the invoice, other documents and photos are uploaded. The uploaded PT carries every barcode already sorted; generating barcodes and printing labels for goods without a brand barcode follow later.
 - **Why.** The product owner keeps the first version to the manual flow.
 - **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 (first version); `coverage.md` note; RR-546 widened. No PRD rule changes: `PRD-BKG-015` (AI part), `PRD-MER-008` and `PRD-REC-020` keep their IDs and wait for their placement (RR-546).
+
+## DEC-137 — First-version PT corrections, held lines, quantity tracking; invoice matching moves to stage 5
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 12 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** In the first version: how is a wrong PT fixed, when is the PT uploaded if some GRN lines are still held, are any products piece-tracked, and does supplier invoice matching stay in stage 2?
+- **Options.** Corrections: reverse and re-upload before scan-in · full linked corrections now. Held lines: the PT waits until every held line is decided · supplemental PTs for lines released later. Piece tracking: none in the first version · piece-tracked profiles now. Invoice matching: stage 5 with supplier payments · stage 2.
+- **Choice.**
+  - A wrong PT is reversed and a corrected file uploaded and approved again by a different person, only while none of its goods is scanned in. Corrections after scan-in follow later (`PRD-REC-019`).
+  - The PT is uploaded only once every held line of its GRN is decided (damage confirmed or rejected; excess, wrong or unidentified taken in or not). It covers all the GRN's good pieces; confirmed-damaged pieces stay held without a PT. One PT per GRN; `PRD-REC-011` (clean lines go ahead while others are disputed) and the supplemental PTs of `PRD-REC-015` wait until after the first version.
+  - No product is piece-tracked in the first version; every product is tracked by quantity per SKU (`PRD-MER-014`). Piece IDs and their labels (`PRD-MER-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-MER-018`) follow later.
+  - Supplier invoice matching (`PRD-REC-010`) moves to stage 5, with supplier payments (`S5-F04`). In the first version the invoice is an uploaded file, with its number, date and quantities entered at the GRN.
+- **Why.** The product owner keeps the first version to the manual flow; matching needs the invoice's values, which the first version does not capture.
+- **Changed.** `phases.md` stage 2 goal and scope, stage 5 scope; `roadmap.md` `S2-F10` and first version; `coverage.md` note. No PRD rule changes: the deferred parts keep their IDs and wait for their placement (RR-546).

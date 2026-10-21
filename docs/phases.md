@@ -65,7 +65,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 ## Stage 2 — Complete goods-in workflow
 
-**Goal.** Booking/order → physical receipt → discrepancies → PT approval → labels → accepted stock. Include damage holds, corrections and supplier invoice matching in this stage.
+**Goal.** Booking/order → physical receipt → discrepancies → PT approval → labels → accepted stock. Include damage holds and corrections in this stage; supplier invoice matching moves to stage 5 with supplier payments (`DEC-137`).
 
 **In scope (PRD sections)**
 
@@ -78,7 +78,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Inbound ownership: goods owned under an agreement before receipt, recorded outside stock, with an amount only from invoice or agreement-price evidence, and closed against the receipt count (`PRD-ORG-017` to `PRD-ORG-019`).
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.
 - PT corrections and reversals through linked records.
-- Supplier invoice capture and matching against GRN and PT, with quantity, price, tax and charge exceptions.
+- Supplier invoice capture at the GRN (number, date, quantities, the file). Matching against GRN and PT moves to stage 5 (`DEC-137`).
 - Stock search by product, brand, size, barcode, location and condition.
 - Receiving is enabled for a Site or business unit only after its readiness approval (`PRD-LIF-001`, `PRD-LIF-002`).
 - The side-by-side test import of the earlier POS's daily sales report and SOH, for checking and reports only; it never moves stock (`PRD-LIF-013`, `PRD-LIF-014`). Piece rules at that Store start at its switch (`PRD-MER-017`).
@@ -176,7 +176,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 
 - Ledger and official books: reconciliations, period locks, month close, Tally XML exchange, net realisable value write-downs (`PRD-LED-007`).
 - Cash, collections and bank: provider settlement matching, bank statement import and matching.
-- Payables, receivables and payments: payment plans and runs, bank files, supplier-credit application, receivables, commission, and Customer credit at the till.
+- Payables, receivables and payments: supplier invoice matching against GRN and PT, with quantity, price, tax and charge exceptions (moved from stage 2, `DEC-137`); payment plans and runs, bank files, supplier-credit application, receivables, commission, and Customer credit at the till.
 - Tax and assets: GST registers, GSTR-2B matching, e-way bills through a GSP, TDS, statutory calendar, fixed assets.
 - Net asset value and profitability; brand-by-store profit and Store P&L.
 - Franchise and partner accounts.
