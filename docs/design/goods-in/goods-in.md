@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 6 approved by the product owner on 21 Oct 2026, sections 3 to 6 with their design choices; section 7 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 7 approved by the product owner on 21 Oct 2026, sections 3 to 7 with their design choices; section 8 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -398,7 +398,34 @@ After the PT is approved, the goods are scanned in where they are. The scan-in v
 
 ## 8. Damage at or after receipt
 
-To draft.
+Damage is reported on goods at a Site and holds them at once; a different person confirms or rejects the report (`PRD-DMG-001`, `PRD-DMG-002`; grill notes, 19 Oct 2026). The damage report lives in `stock` · documents, with `stock` · ledger (module-map section 5). Quarantine movements, write-off, disposal and supplier returns come in stage 3.
+
+### 8.1 When damage is reported
+
+- At the count, on a GRN line (section 4.4).
+- After the GRN and before the PT, on goods at the receiving location.
+- During the scan-in (section 7.2).
+- After the scan-in, on stock at the Site (`PRD-DMG-004`).
+
+### 8.2 The report
+
+- Anyone authorised at the Site reports it: the goods (a GRN line, or a product at a location), the quantity, what is wrong, and photos as stored files.
+- **At once**, before anyone confirms it, a damage hold covers that quantity, so it is unavailable (`PRD-DMG-001`, `PRD-ACP-005`; stock-ledger 6.1).
+- Before the PT, the goods' identity, cost and tax may be Unknown; they stay Unknown, and nothing is invented for them (`PRD-DMG-005`).
+- The report reaches Operations (P-OPS) in My work as the follow-up owner (grill notes, 19 Oct 2026).
+
+### 8.3 Confirm or reject
+
+- A different authorised person from the reporter decides, with a reason, keeping the report's observations (`PRD-DMG-002`, `POL-02.07`). The approval is judged on the goods' cost; goods of Unknown cost need explicit authority for Unknown values (domain-model section 5; access-and-approvals; `PRD-ACS-016`).
+- **Reject:** only that damage hold is released; every other hold and reservation stays (`PRD-DMG-003`).
+- **Confirm:** the goods take the damaged condition and are quarantined (stock-ledger 2.3 Condition change, 6.1). They stay where they are, with no forced movement and no release by time (`PRD-DMG-006`), until a stage 3 outcome.
+- **A mistaken confirmation** is undone by a linked reversal that restores the goods' earlier condition and holds; the confirmation itself is never edited (`PRD-STK-017`). Someone proposes the reversal with a reason and a different person approves it. **Design choice.**
+
+### 8.4 Damage and the PT
+
+- Damage at the count is decided before the PT is uploaded; confirmed-damaged pieces take no PT and stay held (`DEC-137`).
+- Goods damaged after the PT keep their coverage and cost, so their value stays on record, but they are unavailable (stock-ledger 6.2).
+- Accepting or scanning in damaged goods never makes them good stock (`PRD-DMG-010`, `POL-17.03`).
 
 ## 9. Stock search and the stage 2 reports
 
