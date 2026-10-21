@@ -114,7 +114,15 @@ import {
 } from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import { BOOKING_KIND } from '../../src/modules/booking/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
+import {
+  BOOKING_POLICY_CHECKS,
+  bookingGateOpen,
+  writeSyntheticBookingLimit,
+  writeSyntheticBudget,
+} from '../support/booking.js';
 import {
   mappingsVerified,
   placeScope,
@@ -2397,6 +2405,54 @@ for (const each of [receivingWorld, storeStaffWorld]) {
     [readinessValuesCheck],
   );
 }
+// The booking journey (booking.spec.ts; goods-in 3.1 to 3.4, section 11; S2-F01-T03), in the receiving Organisation,
+// on the Receive Goods world's Site, brand, linked supplier and approved Agreement: a SYNTHETIC season attribute marked
+// as the Organisation's season with one value; a SYNTHETIC approved open-to-buy budget for the brand and that season;
+// policies 5 and 1 Signed and validated on the TEST-ONLY values the application registers for them, since no module
+// reports either policy's values yet (RR-561; support/booking.ts), and the bookings capability switched on; a booking
+// series with a SYNTHETIC format (RR-449). Every value is SYNTHETIC.
+const bookingSeason = await (async () => {
+  const today = receivingStructure.today();
+  const attribute = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.prepareAttribute(c, p, {
+      code: syntheticCode('JOURNEY-BKG-SEASON'),
+      valueKind: 'list',
+      name: syntheticName('Booking season'),
+      validFrom: today,
+    }),
+  );
+  if (attribute.kind !== 'success')
+    throw new Error(`The booking season attribute was refused: ${attribute.refusal.code}`);
+  const code = syntheticCode('JOURNEY-BKG-SS1');
+  const name = syntheticName('Booking SS1');
+  const proposed = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.proposeVocabularyValue(c, p, { attributeId: attribute.answer.recordId, code, name }),
+  );
+  if (proposed.kind !== 'success') throw new Error(`The booking season value was refused: ${proposed.refusal.code}`);
+  const confirmed = await receivingStructure.decide(proposed.answer.requestId, proposed.answer.proposalId);
+  if (confirmed.kind !== 'success') throw new Error(`The booking season was not confirmed: ${confirmed.refusal.code}`);
+  const proposal = await receivingStructure.run(receivingStructure.preparer.id, (c) =>
+    receivingStructure.catalogue.proposal(c, proposed.answer.proposalId),
+  );
+  if (proposal?.valueId === undefined) throw new Error('The booking season value was not confirmed');
+  const markingVersionId = await writeSyntheticMarking(
+    receivingDatabase,
+    'season',
+    attribute.answer.recordId,
+    receivingStructure.preparer.id,
+  );
+  return { attributeId: attribute.answer.recordId, valueId: proposal.valueId, code, name, markingVersionId };
+})();
+await writeSyntheticBudget(receivingDatabase, {
+  brandId: receivingWorld.brand.id,
+  seasonAttributeId: bookingSeason.attributeId,
+  seasonValueId: bookingSeason.valueId,
+  markingVersionId: bookingSeason.markingVersionId,
+  // A SYNTHETIC ₹10,00,000.00.
+  amountPaise: 100_000_000,
+  preparedBy: receivingStructure.preparer.id,
+});
+await bookingGateOpen(receivingStructure, receivingDatabase);
 await receivingStructure.close();
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
@@ -2443,6 +2499,46 @@ await fixtureRunner.run(
     actor: { kind: 'actor', actorId: receivingReceiver.id },
   },
   (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
+);
+// The booking journey's people (booking.spec.ts; S2-F01-T03): Booking (P-BKG), who records the booking with its grid,
+// attaches its document and submits it; and the Owner (P-OWN), who approves it from My work within a SYNTHETIC booking
+// limit on its value at cost (DM-8, DEC-105). SYNTHETIC grants and limit: who holds them is the product owner's (V-01,
+// V-02).
+const BOOKING_LISTS = [...RECEIVING_LISTS, { recordType: 'access.approval_request', action: 'view' }] as const;
+const bookingBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const bookingOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-BOOKING-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+// A SYNTHETIC limit of ₹10,00,000.00 on cost.
+await writeSyntheticBookingLimit(receivingDatabase, bookingOwner.id, 100_000_000);
+const bookingReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-booking.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: bookingOwner.id },
+  },
+  (context) => defineSyntheticBookingSeries(context, new Numbering({ kinds: [BOOKING_KIND] })),
 );
 await receivingRouter.close();
 
@@ -2614,9 +2710,10 @@ const app = await startAccessApp(
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
-    // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
+    // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4), and
+    // the booking journey's TEST-ONLY values of policies 5 and 1 (RR-561; S2-F01-T03).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck],
+    validityChecks: [policyValuesCheck, readinessValuesCheck, ...BOOKING_POLICY_CHECKS],
     // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
     postingEventKinds: POSTING_JOURNEY_KINDS,
   },
@@ -2852,6 +2949,17 @@ writeFileSync(
       storeStaff: credentialsOf(receivingStoreStaff),
       storeOptions: storeStaffWorld.options,
       storeBatchStyleCode: storeStaffWorld.batchSku.styleCode,
+    },
+    booking: {
+      organisationCode: receivingCode,
+      booker: credentialsOf(bookingBooker),
+      owner: credentialsOf(bookingOwner),
+      reasonId: bookingReasonId,
+      // How the booking form names the SYNTHETIC brand, Site, supplier and season (receive.option).
+      brandOption: receivingWorld.options.brand,
+      siteOption: receivingWorld.options.site,
+      supplierOption: receivingWorld.options.supplier,
+      seasonOption: `${bookingSeason.code} · ${bookingSeason.name}`,
     },
     openToBuy: {
       organisationCode: settingsCode,

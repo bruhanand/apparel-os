@@ -1,5 +1,7 @@
 import {
   ACTIVITY_APPROVAL,
+  BOOKING_APPROVAL,
+  BOOKING_TYPE,
   OPEN_TO_BUY_APPROVAL,
   OPEN_TO_BUY_BUDGET_TYPE,
   OPEN_TO_BUY_CHECK,
@@ -36,6 +38,8 @@ import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
 import { AttributeName } from '../merchandise/AttributeName';
 import { MARK_LABEL } from '../merchandise/marked';
+import { OpenToBuyFacts, TermsFacts, TotalsView } from '../booking/facts';
+import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
 import { actionTitle } from './subject';
 
@@ -472,6 +476,50 @@ function BudgetFacts({ view }: { view: ApprovalRequestView }) {
 }
 
 /**
+ * A booking version, for its approval (goods-in 3.4; S2-F01-T03): its brand, season, supplier, destination and window,
+ * its totals at cost and MRP by style, its documents, the brand's Agreement terms and the remaining open-to-buy of its
+ * brand and season, so the approver decides on what was entered and on what the budget leaves. The booking is read with
+ * view on its own type, within the reader's scope.
+ */
+function BookingFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  if (booking?.version.id !== view.document.versionId) return null;
+  const { version } = booking;
+  const unknownText = () => t('organisation.unknown');
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brandText(booking.brandId) ?? unknownText()}</Fact>
+        <Fact label="booking.season">{names.seasonText(version.season.valueId) ?? unknownText()}</Fact>
+        <Fact label="booking.supplier">{names.partyText(version.supplierPartyId) ?? unknownText()}</Fact>
+        <Fact label="booking.destination">{names.siteText(booking.destinationSiteId) ?? unknownText()}</Fact>
+        <Fact label="booking.window">
+          {t('booking.window.range', {
+            from: formatDate(version.deliveryWindow.from),
+            to: formatDate(version.deliveryWindow.to),
+          })}
+        </Fact>
+        <Fact label="booking.documents">{t('booking.documents.count', { count: booking.documents.length })}</Fact>
+      </Facts>
+      <TotalsView lines={version.lines} />
+      <section aria-label={t('booking.open-to-buy')} className="flex flex-col gap-1">
+        <h4 className="text-label font-semibold text-text-2">{t('booking.open-to-buy')}</h4>
+        <OpenToBuyFacts remaining={booking.openToBuy} />
+      </section>
+      <section aria-label={t('booking.terms')} className="flex flex-col gap-1">
+        <h4 className="text-label font-semibold text-text-2">{t('booking.terms')}</h4>
+        <TermsFacts terms={booking.terms} />
+      </section>
+    </div>
+  );
+}
+
+/**
  * A version of the season or size attribute: which it marks, the attribute it names and what is in force now, and
  * where the choice came from (structure-and-masters 4.2 "As built"; RR-550, RR-556).
  */
@@ -534,6 +582,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     case OPEN_TO_BUY_CHECK:
     case OPEN_TO_BUY_APPROVAL:
       return <BudgetFacts view={view} />;
+    // A booking version's approval (goods-in 3.4; S2-F01-T03).
+    case BOOKING_APPROVAL:
+      return <BookingFacts view={view} />;
     // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
     case MARKED_ATTRIBUTE_CHANGE:
       return <MarkedAttributeFacts view={view} />;

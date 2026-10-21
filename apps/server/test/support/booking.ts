@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import type { PolicyNumber } from '@apparel-os/schemas';
+import { BOOKING_APPROVAL, type PolicyNumber } from '@apparel-os/schemas';
 import { Audit } from '../../src/modules/audit/index.js';
 import { BOOKING_CAPABILITY, BOOKING_OPERATIONS } from '../../src/modules/booking/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
@@ -9,6 +9,7 @@ import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic } from './grants.js';
 import { capturingLogger } from './jobs.js';
 import type { StructureSetup } from './organisation.js';
+import { connect } from './postgres.js';
 import { writeSyntheticStoredFile } from './tax-rules.js';
 
 // The policy gate of a booking's approval in tests (goods-in 10.5; S2-F01-T03). A booking's approval needs policies 5
@@ -17,6 +18,82 @@ import { writeSyntheticStoredFile } from './tax-rules.js';
 // gate through TEST-ONLY validity checks, each reporting one labelled synthetic value, registered only in the test
 // composition (code-house-rules 11.1). They stand for nothing of KDPS's; live use waits for RR-561 and policy 1's
 // values.
+
+/**
+ * A SYNTHETIC open-to-buy budget of a brand and season, Approved and in force from a day before now, written as a
+ * fixture, as writeSyntheticMarking writes a marking (code-house-rules 11.1, 12.14), for the browser journey's booking:
+ * a version approved through Decide is in force from its decision's instant, which a fixture's clock may put after the
+ * server's. Preparing, checking and approving a budget are proved through the routes (open-to-buy-budgets.int.test.ts).
+ * Answers the budget.
+ */
+export async function writeSyntheticBudget(
+  database: string,
+  budget: {
+    readonly brandId: string;
+    readonly seasonAttributeId: string;
+    readonly seasonValueId: string;
+    readonly markingVersionId: string;
+    readonly amountPaise: number;
+    readonly preparedBy: string;
+  },
+): Promise<string> {
+  const owner = await connect(database, 'migration');
+  try {
+    const budgetId = uuidv7();
+    await owner.query(
+      `insert into booking.open_to_buy_budget
+         (id, brand_id, season_attribute_id, season_value_id, season_marked_attribute_version_id)
+       values ($1, $2, $3, $4, $5)`,
+      [budgetId, budget.brandId, budget.seasonAttributeId, budget.seasonValueId, budget.markingVersionId],
+    );
+    await owner.query(
+      `insert into booking.open_to_buy_budget_version
+         (id, open_to_buy_budget_id, amount_paise, origin, decision, valid_during, prepared_by_user_id)
+       values ($1, $2, $3, 'synthetic', 'Approved', tstzrange($4::timestamptz, null), $5)`,
+      [uuidv7(), budgetId, budget.amountPaise, new Date(Date.now() - 86_400_000).toISOString(), budget.preparedBy],
+    );
+    return budgetId;
+  } finally {
+    await owner.end();
+  }
+}
+
+/**
+ * A SYNTHETIC booking limit on cost for the role of a user's one assignment, all members, Approved from yesterday,
+ * written as a fixture as the browser server writes its bulk approver's (access-and-approvals 9.2; DM-8, DEC-105):
+ * the real limits and their holders are the product owner's (V-02). Preparing and approving a limit are proved through
+ * the routes (approval-limits.int.test.ts, bookings.int.test.ts).
+ */
+export async function writeSyntheticBookingLimit(database: string, userId: string, amountPaise: number): Promise<void> {
+  const owner = await connect(database, 'migration');
+  try {
+    const [assignment] = (
+      await owner.query<{ role_id: string }>('select role_id from access.role_assignment where app_user_id = $1', [
+        userId,
+      ])
+    ).rows;
+    if (assignment === undefined) throw new Error('The booking approver has no role assignment');
+    const scope = { kind: 'dimensions', legalEntity: { kind: 'all' }, place: { kind: 'all' }, brand: { kind: 'all' } };
+    const scopeKey = 'legal-entity=all;place=all;brand=all';
+    await owner.query(
+      `insert into access.approval_limit (id, action_type, basis, holder_kind, role_id, scope, scope_key, holder_key,
+         amount, unlimited, covers_unknown, origin, valid_during, decision)
+       values ($1, $2, 'cost', 'role', $3, $4, $5, $6, $7, false, false, 'synthetic',
+         daterange(current_date - 1, null), 'Approved')`,
+      [
+        uuidv7(),
+        BOOKING_APPROVAL,
+        assignment.role_id,
+        JSON.stringify(scope),
+        scopeKey,
+        `role:${assignment.role_id}:${scopeKey}`,
+        amountPaise,
+      ],
+    );
+  } finally {
+    await owner.end();
+  }
+}
 
 /** Who entered the synthetic values: a SYNTHETIC person who is none of the validators (DM-6). */
 const SYNTHETIC_ENTERER = uuidv7();

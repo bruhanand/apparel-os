@@ -403,7 +403,24 @@ const flag = (value: boolean | null) =>
 
 /** One version's terms, Unknown shown as Unknown, never as a default (POL-01.11; PRD-MOD-015). */
 function TermsView({ version }: { version: AgreementRecord['versions'][number] }) {
-  const terms = version.terms;
+  return (
+    <AgreementTermsList terms={version.terms}>
+      <Term label="agreement.field.margins">
+        {version.margins.kind === 'masked' ? t('agreement.margins.masked') : text(version.margins.value)}
+      </Term>
+      <Term label="agreement.field.signedAgreement">
+        {t('agreement.signed.count', { count: version.signedAgreement.length })}
+      </Term>
+    </AgreementTermsList>
+  );
+}
+
+/**
+ * An Agreement's terms, read-only, Unknown shown as Unknown (POL-01.11; PRD-MOD-015), with any further terms given:
+ * the Agreement's own view adds its margins and signed copy; a booking shows the terms alone (goods-in 3.2;
+ * S2-F01-T03).
+ */
+export function AgreementTermsList({ terms, children }: { terms: AgreementTerms; children?: ReactNode }) {
   const event = terms.ownershipEvent;
   const window = terms.returnRights.window;
   return (
@@ -427,9 +444,6 @@ function TermsView({ version }: { version: AgreementRecord['versions'][number] }
           : t(`agreement.settlement.${terms.returnConditions.settlement}`)}
       </Term>
       <Term label="agreement.field.supplierApproval">{flag(terms.returnConditions.supplierApproval)}</Term>
-      <Term label="agreement.field.margins">
-        {version.margins.kind === 'masked' ? t('agreement.margins.masked') : text(version.margins.value)}
-      </Term>
       <Term label="agreement.field.commissions">{text(terms.commissions)}</Term>
       <Term label="agreement.field.paymentTerms">{text(terms.paymentTerms)}</Term>
       <Term label="agreement.field.creditNoteTerms">{text(terms.creditNoteTerms)}</Term>
@@ -442,9 +456,7 @@ function TermsView({ version }: { version: AgreementRecord['versions'][number] }
       <Term label="agreement.field.interest">
         {[text(terms.interest.rate), terms.interest.days ?? unknown(), text(terms.interest.from)].join(' · ')}
       </Term>
-      <Term label="agreement.field.signedAgreement">
-        {t('agreement.signed.count', { count: version.signedAgreement.length })}
-      </Term>
+      {children}
     </dl>
   );
 }
