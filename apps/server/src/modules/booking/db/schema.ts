@@ -2,7 +2,7 @@ import type { SettingOrigin } from '@apparel-os/schemas';
 import { bigint, customType, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `booking`'s tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0084) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0085) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 

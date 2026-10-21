@@ -3,7 +3,7 @@ import type { OpenToBuyBudget, OpenToBuyBudgetVersion, OpenToBuyRemaining } from
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest } from '../../access/index.js';
-import type { CatalogueInterface } from '../../merchandise/catalogue/index.js';
+import type { CatalogueInterface, CatalogueRecord } from '../../merchandise/catalogue/index.js';
 import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
 import { versionState } from '../domain/budgets.js';
 
@@ -213,13 +213,25 @@ export async function budgetViews(
           .where(inArray(openToBuyBudgetCheck.openToBuyBudgetVersionId, versionIds));
   const spans = await spansOf(context, versionIds);
   const requests = await dependencies.access.approvalRequestsOf(context, versionIds);
+  // Each brand and season is read once, however many budgets name it.
+  const brands = new Map<string, CatalogueRecord<'brand'> | undefined>();
+  const seasons = new Map<string, CatalogueRecord<'vocabulary_value'> | undefined>();
   const views: OpenToBuyBudget[] = [];
   for (const budget of budgets) {
     const own = versions.filter((version) => version.openToBuyBudgetId === budget.id);
     const newest = own.at(-1);
     if (newest === undefined) continue;
-    const brand = await dependencies.catalogue.record(context, 'brand', budget.brandId, today);
-    const season = await dependencies.catalogue.record(context, 'vocabulary_value', budget.seasonValueId, today);
+    if (!brands.has(budget.brandId)) {
+      brands.set(budget.brandId, await dependencies.catalogue.record(context, 'brand', budget.brandId, today));
+    }
+    if (!seasons.has(budget.seasonValueId)) {
+      seasons.set(
+        budget.seasonValueId,
+        await dependencies.catalogue.record(context, 'vocabulary_value', budget.seasonValueId, today),
+      );
+    }
+    const brand = brands.get(budget.brandId);
+    const season = seasons.get(budget.seasonValueId);
     const brandName = brand?.versions.find((version) => version.state === 'In force')?.name;
     const seasonName = season?.versions.find((version) => version.state === 'In force')?.name;
     views.push({

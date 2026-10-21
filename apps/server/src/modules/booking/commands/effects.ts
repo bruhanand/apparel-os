@@ -31,7 +31,7 @@ import { budgetLock } from './common.js';
 //   instant, ending the version in force there. Rejected: the version is Rejected.
 //
 // Neither may be decided by the version's preparer: `access` refuses every preparer (9.3; PRD-ACS-006), and the check
-// table's trigger stands behind it (migration 0084).
+// table's trigger stands behind it (migration 0085).
 
 /** What the effects need: audit, and Request approval of `access`, bound late since `access` is built with them. */
 export interface EffectDependencies {
