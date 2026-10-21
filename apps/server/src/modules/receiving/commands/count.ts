@@ -6,14 +6,7 @@ import type { AuditInterface } from '../../audit/index.js';
 import { skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
 import { batchColumns, sizeColumns } from '../db/columns.js';
 import { arrivalInvoice, countEntry } from '../db/schema.js';
-import {
-  currentLines,
-  lineCounting,
-  lineItem,
-  newestEntry,
-  type CountEntryFacts,
-  type Size,
-} from '../domain/lines.js';
+import { currentLines, lineCounting, lineItem, newestEntry, type CountEntryFacts, type Size } from '../domain/lines.js';
 import { textKey, trimmed } from '../domain/text.js';
 import { arrivalForChange } from './arrival.js';
 import {

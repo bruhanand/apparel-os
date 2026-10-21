@@ -113,14 +113,16 @@ import {
 } from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import {
-  defineSyntheticGrnSeries,
-  policiesSigned,
+  placeScope,
   RECEIVER_AUTHORITY,
   RECEIVING_STATUTORY_CHECK,
   receivingFixture,
   receivingGateOpen,
+  receivingGranted,
 } from '../support/receiving.js';
+import { signedFixture } from '../support/signed-policies.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 import { z } from 'zod';
@@ -2297,22 +2299,11 @@ const readinessOperation: GatedOperation = {
         where business_unit_id = $4 and decision = 'Approved'`,
       [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
     );
-    await owner.query(
-      `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-         evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-       values ($1, 4, 'SYNTHETIC signatory', current_date, 'synthetic', array[$2::uuid], $3, $4, now())`,
-      [uuidv7(), uuidv7(), uuidv7(), uuidv7()],
-    );
-    await owner.query(
-      `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-         evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, 4, 'synthetic', array[$5], array[$2::uuid], $3, $4, now())`,
-      [uuidv7(), uuidv7(), uuidv7(), uuidv7(), `${readinessValuesCheck.code}:syn-readiness-value@v1`],
-    );
   } finally {
     await owner.end();
   }
 }
+await signedFixture(settingsDatabase, 4, [`${readinessValuesCheck.code}:syn-readiness-value@v1`]);
 const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
   { recordType: 'site_lifecycle.readiness_record', action: 'view' },
   { recordType: 'site_lifecycle.readiness_record', action: 'create' },
@@ -2369,21 +2360,21 @@ const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-O
 const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
 // Since S2-F02-T02 the receiving activity needs `receiving`'s own operations too (goods-in 10.5): policy 10 Signed and
 // validated, as policy 4 is above, and someone at the unit who records Arrivals, counts and issues GRNs (PRD-ACS-006).
-await policiesSigned(settingsDatabase, [
-  { policy: 10, validatedValues: [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`] },
-]);
+await signedFixture(settingsDatabase, 10, [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`]);
 await provisionUser('BROWSER-READINESS-RECEIVER', 'P-WHS', [
   { recordType: 'receiving.arrival', action: 'create' },
   { recordType: 'receiving.arrival', action: 'edit' },
   { recordType: 'receiving.grn', action: 'create' },
 ]);
 
-// The Receive Goods journey (receive-goods.spec.ts; S2-F02-T02), in an Organisation of its own so its Site, Stores and
-// brand change no other journey's lists: made by the setup step like the ones above; a Site with two Stores, their
-// units and receiving locations, a brand with a linked supplier and an approved Agreement, and a size list, through the
-// real interfaces; receiving granted after readiness at the Stores' units, their mappings verified, the capability on
-// and policies 4 and 10 Signed and validated, as fixtures (support/receiving.ts); a GRN series with a SYNTHETIC
-// format (RR-449); and a Warehouse receiver who records the Arrival, counts and issues the GRN.
+// The Receive Goods journeys (receive-goods.spec.ts; S2-F02-T02), in an Organisation of its own so its Sites, Stores
+// and brands change no other journey's lists: made by the setup step like the ones above. Each journey has a world of
+// its own, so neither sees the other's deliveries: a Site with two Stores, their units and receiving locations, their
+// mappings verified, a brand with a linked supplier and an approved Agreement, a size list and a batch-tracked product,
+// all through the real interfaces (support/receiving.ts); the capability switched on and policies 4 and 10 Signed and
+// validated through configuration's commands, and receiving granted after readiness at the Stores' units through
+// site-lifecycle's; a GRN series with a SYNTHETIC format (RR-449); a Warehouse receiver (P-WHS) over every place, and
+// a Store's staff (P-STM) who receives at their Store only.
 const receivingSetup = await runSetupStep({
   migrationConnectionString: databaseUrl(world.directory, 'migration'),
   runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
@@ -2414,12 +2405,20 @@ const receivingStructure = await structureSetup({
   label: 'BROWSER-RCV',
 });
 const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
-await receivingStructure.close();
+const storeStaffWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-STM');
 // Policy 4 is covered through the readiness journey's SYNTHETIC check, which every Organisation's policy 4 reports.
-await receivingGateOpen(receivingDatabase, [
-  { policy: 4, validatedValues: [`${readinessValuesCheck.code}:syn-readiness-value@v1`] },
-  { policy: 10, validatedValues: [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`] },
-]);
+const receivingChecks = [readinessValuesCheck, RECEIVING_STATUTORY_CHECK];
+await receivingGateOpen(receivingStructure, receivingDatabase, receivingChecks);
+for (const each of [receivingWorld, storeStaffWorld]) {
+  await receivingGranted(
+    receivingStructure,
+    receivingDatabase,
+    each.siteId,
+    [each.wholeStore, each.otherStoreUnit],
+    receivingChecks,
+  );
+}
+await receivingStructure.close();
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
   fixtureLog.logger,
@@ -2431,15 +2430,31 @@ const receivingReceiver = await writeSyntheticUser(receivingDatabase, receivingC
   enrolled: true,
   personas: ['P-WHS'],
 });
-await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingReceiver.id }, [
-  ...RECEIVER_AUTHORITY,
-  // The lists the Receive Goods screens choose from (structure-and-masters 8).
+/** The lists the Receive Goods screens choose from and name records by (structure-and-masters 8). */
+const RECEIVING_LISTS = [
   { recordType: 'organisation.site', action: 'view' },
   { recordType: 'merchandise.brand', action: 'view' },
   { recordType: 'merchandise.party', action: 'view' },
   { recordType: 'merchandise.attribute', action: 'view' },
   { recordType: 'merchandise.vocabulary_value', action: 'view' },
+  { recordType: 'merchandise.style', action: 'view' },
+  { recordType: 'merchandise.sku', action: 'view' },
+] as const;
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  ...RECEIVING_LISTS,
 ]);
+// A Store's staff: receiving at their own Store only, and the lists of masters, which carry no place, from a second
+// assignment (access-and-approvals 5.3; PRD-ACS-004). SYNTHETIC grants: who receives where is the product owner's.
+const receivingStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-STORE-STAFF',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStoreStaff.id }, RECEIVER_AUTHORITY, {
+  scope: placeScope([{ type: 'store', id: storeStaffWorld.storeId }]),
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStoreStaff.id }, RECEIVING_LISTS);
 await fixtureRunner.run(
   {
     commandName: 'test-syn-receiving.fixture',
@@ -2703,6 +2718,9 @@ writeFileSync(
       receiver: credentialsOf(receivingReceiver),
       // How the screens name the SYNTHETIC Site, units, location, supplier, brand and size (receive.option).
       options: receivingWorld.options,
+      storeStaff: credentialsOf(receivingStoreStaff),
+      storeOptions: storeStaffWorld.options,
+      storeBatchStyleCode: storeStaffWorld.batchSku.styleCode,
     },
     openToBuy: {
       organisationCode: settingsCode,

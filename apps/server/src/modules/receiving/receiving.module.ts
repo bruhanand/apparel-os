@@ -20,14 +20,7 @@ import { RECEIVING } from './tokens.js';
  * GRN number kind reach the ledger and `numbering` through the composition root (module-map section 3, rule 6).
  */
 @Module({
-  imports: [
-    CommandRunnerModule,
-    AuditModule,
-    AccessModule,
-    FilesImportsModule,
-    NumberingModule,
-    StockLedgerModule,
-  ],
+  imports: [CommandRunnerModule, AuditModule, AccessModule, FilesImportsModule, NumberingModule, StockLedgerModule],
   controllers: [ReceivingController],
   providers: [
     {

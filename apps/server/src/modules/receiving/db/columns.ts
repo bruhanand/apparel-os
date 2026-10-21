@@ -23,7 +23,11 @@ export function sizeOf(row: SizeColumns): Size | null {
 }
 
 export function sizeColumns(size: Size | null): SizeColumns {
-  return { sizeAttributeId: size?.attributeId ?? null, sizeValueId: size?.valueId ?? null, sizeCode: size?.code ?? null };
+  return {
+    sizeAttributeId: size?.attributeId ?? null,
+    sizeValueId: size?.valueId ?? null,
+    sizeCode: size?.code ?? null,
+  };
 }
 
 /** A batch as its row keeps it, or none (`count_entry_batch`). */

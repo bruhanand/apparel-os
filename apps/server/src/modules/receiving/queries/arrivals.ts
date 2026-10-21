@@ -14,14 +14,7 @@ import { siteExists, structureOn } from '../../organisation/index.js';
 import { batchOf } from '../db/columns.js';
 import { arrival, arrivalInvoice, arrivalPhoto, grn, grnLine } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
-import {
-  arrivalRow,
-  entriesByArrival,
-  entriesOf,
-  factsOf,
-  newestChange,
-  type ArrivalRow,
-} from '../commands/common.js';
+import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
 
 // The Arrival as the Arrival and Count screens show it, and the Receive Goods inbox of a Site (goods-in 4.1 to 4.5,

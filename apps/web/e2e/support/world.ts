@@ -30,6 +30,21 @@ export interface EnrolledUser {
   readonly factorSecretHex: string;
 }
 
+/** How the Receive Goods screens name one SYNTHETIC world's records ("CODE · Name"). */
+export interface ReceivingOptions {
+  readonly site: string;
+  readonly wholeStore: string;
+  readonly otherStoreUnit: string;
+  readonly warehouse: string;
+  readonly storeLocation: string;
+  readonly otherStoreLocation: string;
+  readonly supplier: string;
+  readonly brand: string;
+  readonly sizeList: string;
+  readonly sizes: readonly string[];
+  readonly batchSku: string;
+}
+
 export interface SyntheticWorld {
   readonly organisationCode: string;
   readonly login: string;
@@ -198,22 +213,18 @@ export interface SyntheticWorld {
    * products journey's SYNTHETIC brand, season list and season.
    */
   /**
-   * The Receive Goods journey (S2-F02-T02), in an Organisation of its own: a Warehouse receiver, and how the screens
-   * name the SYNTHETIC Site, units, location, supplier, brand, size list and sizes ("CODE · Name").
+   * The Receive Goods journeys (S2-F02-T02), in an Organisation of its own, each in a world of its own: a Warehouse
+   * receiver (P-WHS) and a Store's staff (P-STM), who receives at their Store only, and how the screens name each
+   * world's SYNTHETIC Site, units, locations, supplier, brand, size list, sizes and batch-tracked product ("CODE ·
+   * Name"); and the style code of the Store's batch-tracked product.
    */
   readonly receiving: {
     readonly organisationCode: string;
     readonly receiver: EnrolledUser;
-    readonly options: {
-      readonly site: string;
-      readonly wholeStore: string;
-      readonly warehouse: string;
-      readonly storeLocation: string;
-      readonly supplier: string;
-      readonly brand: string;
-      readonly sizeList: string;
-      readonly sizes: readonly string[];
-    };
+    readonly options: ReceivingOptions;
+    readonly storeStaff: EnrolledUser;
+    readonly storeOptions: ReceivingOptions;
+    readonly storeBatchStyleCode: string;
   };
   readonly openToBuy: {
     readonly organisationCode: string;

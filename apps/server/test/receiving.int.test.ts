@@ -30,13 +30,14 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { allowVerifier, connect, databaseUrl } from './support/postgres.js';
+import { defineSyntheticGrnSeries } from './fixtures/grn-series.js';
 import {
-  defineSyntheticGrnSeries,
   placeScope,
   RECEIPT_READER_AUTHORITY,
   RECEIVER_AUTHORITY,
   receivingFixture,
   receivingGateOpen,
+  receivingGranted,
   receivingValidityChecks,
   type ReceivingFixture,
 } from './support/receiving.js';
@@ -44,9 +45,9 @@ import {
 // S2-F02-T02: the Receive Goods inbox, the Arrival with its invoices first, the count and a clean GRN through the whole
 // application, on real PostgreSQL (goods-in 4.1 to 4.5, 10.3, 10.5, 12 tests 3, 18 and 19, part of tests 1 and 20;
 // PRD-REC-001 to PRD-REC-005, PRD-REC-007, PRD-REC-008, PRD-ACP-001, PRD-LIF-001, PRD-INT-002, POL-10.08; DEC-133,
-// DEC-138). The structure and the masters are made through their real interfaces; a mapping's verification, receiving
-// granted after readiness, the capability and the policies' Signed records are fixtures, since other tickets prove
-// them (support/receiving.ts). Every person, place, brand, invoice and number here is SYNTHETIC.
+// DEC-138). The structure, the masters, the mappings' verification, the policies' Signed records and validations, the
+// capability and receiving granted after readiness are all made through their real interfaces (support/receiving.ts;
+// code-house-rules 11.2). Every person, place, brand, invoice and number here is SYNTHETIC.
 
 let world: SyntheticWorld;
 let database: string;
@@ -247,7 +248,7 @@ afterAll(async () => {
 });
 
 describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
-  it('goods-in 12 test 18 receiving is refused while the capability is off and policies 4 and 10 are not Signed', async () => {
+  it('PRD-SEC-017 goods-in 12 test 18 receiving is refused while the capability is off and policies 4 and 10 are not Signed', async () => {
     const refused = await post(
       receiver,
       '/api/receiving/arrivals',
@@ -262,7 +263,10 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
         { kind: 'policy', policy: '10', lacks: 'signature' },
       ]),
     );
-    await receivingGateOpen(database);
+    // The gate opened as an Admin and a different approver open it: policies 4 and 10 Signed and validated, the
+    // capability switched on, and receiving granted after readiness at the Stores' units (S1-F04-T01, S1-F04-T02).
+    await receivingGateOpen(setup, database);
+    await receivingGranted(setup, database, fixture.siteId, [fixture.wholeStore, fixture.otherStoreUnit]);
     const opened = await post(
       receiver,
       '/api/receiving/arrivals',
@@ -271,7 +275,7 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
     expect(opened.status, JSON.stringify(opened.body)).toBe(200);
   });
 
-  it('goods-in 12 test 18 PRD-LIF-001 POL-10.08 receiving is refused at a unit without receiving granted, or with an unverified mapping', async () => {
+  it('PRD-LIF-001 POL-10.08 goods-in 12 test 18 receiving is refused at a unit without receiving granted, or with an unverified mapping', async () => {
     const warehouse = await post(
       receiver,
       '/api/receiving/arrivals',
@@ -287,11 +291,21 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
       '/api/receiving/arrivals',
       arrivalBody(fixture.counterSameRegistration, fixture.counterLocation),
     );
+    // The brand counter's mapping is not verified, which receiving names itself, beside the activity its readiness
+    // could not be granted without (POL-10.08).
     expect(counter.status).toBe(403);
-    expect(errorOf(counter)).toMatchObject({
-      code: 'configuration.operation-unavailable',
-      missing: [{ kind: 'mapping', businessUnitId: fixture.counterSameRegistration, lacks: 'verification' }],
-    });
+    expect(errorOf(counter)?.code).toBe('configuration.operation-unavailable');
+    expect(errorOf(counter)?.missing).toEqual(
+      expect.arrayContaining([
+        {
+          kind: 'activity',
+          activity: 'receiving',
+          placeType: 'business-unit',
+          placeId: fixture.counterSameRegistration,
+        },
+        { kind: 'mapping', businessUnitId: fixture.counterSameRegistration, lacks: 'verification' },
+      ]),
+    );
   });
 
   it('PRD-REC-001 goods-in 4.1 the inbox of a Site names, for each unit, whether it may receive and what is missing', async () => {
@@ -305,9 +319,11 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
       state: 'unavailable',
       missing: [{ kind: 'activity', activity: 'receiving' }],
     });
-    expect(unit(fixture.counterSameRegistration)?.receiving).toMatchObject({
-      state: 'unavailable',
-      missing: [{ kind: 'mapping', lacks: 'verification' }],
+    expect(unit(fixture.counterSameRegistration)?.receiving.state).toBe('unavailable');
+    expect(unit(fixture.counterSameRegistration)?.receiving.missing).toContainEqual({
+      kind: 'mapping',
+      businessUnitId: fixture.counterSameRegistration,
+      lacks: 'verification',
     });
   });
 });
@@ -372,7 +388,7 @@ describe('recording the Arrival (goods-in 4.2; PRD-REC-004, PRD-MER-021)', () =>
 });
 
 describe('invoices first (goods-in 4.2, 4.3; DEC-133)', () => {
-  it('goods-in 12 test 3 DEC-133 without an invoice the count does not start and no GRN is issued', async () => {
+  it('DEC-133 PRD-REC-005 goods-in 12 test 3 without an invoice the count does not start and no GRN is issued', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     const line = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-NOINV', 2, 2));
     expect(line.status).toBe(422);
@@ -386,7 +402,7 @@ describe('invoices first (goods-in 4.2, 4.3; DEC-133)', () => {
     expect(counted.status, JSON.stringify(counted.body)).toBe(200);
   });
 
-  it('goods-in 4.2 an invoice number the supplier used on another Arrival is a possible duplicate, kept once confirmed', async () => {
+  it('PRD-REC-005 an invoice number the supplier used on another Arrival is a possible duplicate, kept once confirmed (goods-in 4.2)', async () => {
     const number = `SYN-DUP-${String(randomInt(1_000_000))}`;
     const first = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     expect((await recordInvoice(storeReceiver, first, number)).status).toBe(200);
@@ -416,7 +432,7 @@ describe('invoices first (goods-in 4.2, 4.3; DEC-133)', () => {
 });
 
 describe('the count (goods-in 4.3; DEC-138, PRD-MER-005, PRD-MER-011)', () => {
-  it('goods-in 4.3 saves the count line by line as it goes, and resumes it with each version checked', async () => {
+  it('PRD-UXP-003 saves the count line by line as it goes, and resumes it with each version checked (goods-in 4.3)', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
     const saved = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-A', 4, 3));
@@ -489,7 +505,10 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
       colour: 'synthetic navy ',
     });
     expect(again.status).toBe(422);
-    expect(errorOf(again)).toMatchObject({ code: 'receiving.line-repeated', missing: [{ kind: 'count-line', lineId }] });
+    expect(errorOf(again)).toMatchObject({
+      code: 'receiving.line-repeated',
+      missing: [{ kind: 'count-line', lineId }],
+    });
     // Another size is another line, and the line itself is saved again over its own version.
     expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-ONCE', 1, 1, 1))).status).toBe(200);
     const resaved = await saveLine(storeReceiver, arrivalId, {
@@ -502,7 +521,7 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
 });
 
 describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT-002)', () => {
-  it('goods-in 12 test 19 PRD-INT-002 a GRN issued twice with the same request gives one GRN; its custody equals its count', async () => {
+  it('PRD-INT-002 PRD-REC-008 goods-in 12 test 19 a GRN issued twice with the same request gives one GRN; its custody equals its count', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
     expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-G1', 6, 6))).status).toBe(200);
@@ -670,7 +689,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     }
   });
 
-  it('goods-in 12 test 19 PRD-INT-002 every write of an Arrival replays its first answer under its key, and writes once', async () => {
+  it('PRD-INT-002 goods-in 12 test 19 every write of an Arrival replays its first answer under its key, and writes once', async () => {
     const recordKey = uuidv7();
     const body = arrivalBody(fixture.wholeStore, fixture.storeLocation);
     const recorded = await post(storeReceiver, '/api/receiving/arrivals', body, recordKey);
@@ -713,7 +732,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     expect(errorOf(reused)?.code).toBe('kernel.idempotency-key-reused');
   });
 
-  it('S2-F02-T03 a line whose counted quantity differs from its invoice is not issued until the findings are built', async () => {
+  it('PRD-REC-008 a GRN with a line whose counted quantity differs from its invoice quantity is refused, naming the line', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
     const short = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-SHORT', 10, 8));
@@ -727,7 +746,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
 });
 
 describe('goods of a product not yet set up (stock-ledger 13.14; RR-555)', () => {
-  it('stock-ledger 13.14 a receiver scoped to the brand alone cannot issue a GRN of goods whose brand stays Unknown until the PT', async () => {
+  it('PRD-MOD-015 a receiver scoped to the brand alone cannot issue a GRN of goods whose brand stays Unknown until the PT (stock-ledger 13.14)', async () => {
     const brandReceiver = await enrolled('RCV-BRAND', RECEIVER_AUTHORITY, {
       kind: 'dimensions',
       legalEntity: { kind: 'all' },
@@ -746,7 +765,7 @@ describe('goods of a product not yet set up (stock-ledger 13.14; RR-555)', () =>
 });
 
 describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', () => {
-  it('goods-in 12 test 20 a reader scoped to one Store sees only its Store’s receipts', async () => {
+  it('PRD-SEC-005 goods-in 12 test 20 a reader scoped to one Store sees only its Store’s receipts', async () => {
     const own = await recordArrival(receiver, fixture.otherStoreUnit, fixture.otherStoreLocation);
     const other = await recordArrival(receiver, fixture.wholeStore, fixture.storeLocation);
     const read = await get(otherStoreReader, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`);

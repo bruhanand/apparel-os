@@ -80,7 +80,9 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
   ]);
 
   it('PRD-REC-005 finds the line already counting the style, colour and size, ignoring case and spaces at the ends', () => {
-    expect(lineCounting(lines, { styleCode: ' syn-style ', colour: 'synthetic navy', size: SIZE_M })?.lineId).toBe('n1');
+    expect(lineCounting(lines, { styleCode: ' syn-style ', colour: 'synthetic navy', size: SIZE_M })?.lineId).toBe(
+      'n1',
+    );
     expect(lineCounting(lines, { styleCode: 'SYN-STYLE', colour: null, size: null })?.lineId).toBe('b1');
   });
 
