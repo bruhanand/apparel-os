@@ -149,8 +149,9 @@ export const codeMappingSchema = z.strictObject({
   validFrom: businessDateSchema,
   validTo: businessDateSchema.optional(),
   /**
-   * Whether this brand barcode is repeated: another mapping of it, active or alias as this one, names another SKU over
-   * a day this one covers, in a scope one Resolve could match with this one's, so a scan asks which (PRD-MER-007).
+   * Whether this brand barcode is repeated: it is a supplier barcode recorded under a brand, and another mapping of it
+   * under the same brand, active or alias as this one, names another SKU over a day this one covers, so a scan asks
+   * which (PRD-MER-007; RR-554).
    */
   repeated: z.boolean(),
 });
@@ -186,9 +187,9 @@ export const codeCandidateSchema = z.strictObject({
 });
 export type CodeCandidate = z.infer<typeof codeCandidateSchema>;
 /**
- * What the code names (4.7; PRD-MER-006, PRD-MER-007): one candidate; or, for a brand's barcode its tags repeat across
- * products, one candidate for each SKU, flagged as repeated, for the person to choose from at each scan, never one
- * chosen silently (DEC-135). Whether they matched historical aliases.
+ * What the code names (4.7; PRD-MER-006, PRD-MER-007): one candidate; or, for a barcode recorded under the brand given
+ * whose tags repeat it across products, one candidate for each SKU, flagged as repeated, for the person to choose from
+ * at each scan, never one chosen silently (DEC-135; RR-554). Whether they matched historical aliases.
  */
 export const codeResolvedSchema = z
   .strictObject({

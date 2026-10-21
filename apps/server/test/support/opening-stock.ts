@@ -197,8 +197,8 @@ function skuRead(
 
 /**
  * The SKU a barcode or supplier code names today, or undefined (Resolve a code; structure-and-masters 4.7): a code
- * that names more than one SKU, a brand barcode repeated across products among them, is the person's choice, so the
- * row stays unresolved (PRD-MER-007, DEC-135).
+ * that names more than one SKU is the person's choice, so the row stays unresolved. It names no brand, so a barcode a
+ * brand repeats across products names nothing here (PRD-MER-007, DEC-135; RR-554).
  */
 function skuOf(
   context: TransactionContext,

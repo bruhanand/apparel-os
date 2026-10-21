@@ -982,17 +982,19 @@ describe('an approved, unpublished opening batch is the unit’s opening plan (m
   }, 600_000);
 });
 
-describe('a brand barcode repeated across products (S2-F04-T01; structure-and-masters 4.7; PRD-MER-007, DEC-135)', () => {
-  it('PRD-MER-007 DEC-135: a manifest row whose barcode names two SKUs is not resolved, and an SOH line of it keeps no SKU; the choice is the person’s', async () => {
+describe('a brand barcode repeated across products (S2-F04-T01; structure-and-masters 4.7; PRD-MER-007, DEC-135, RR-554)', () => {
+  it('PRD-MER-007 DEC-135 RR-554: a manifest row whose barcode the brand repeats on two SKUs is not resolved, and an SOH line of it keeps no SKU; the choice is the person’s', async () => {
     const { setup } = harness;
     const other = await harness.catalogueSku(false);
     const repeated = next('BC-R');
+    // Only a barcode recorded under a brand repeats (RR-554). These loads name no brand, so neither mapping answers
+    // them: the row stays unresolved and nothing is chosen silently.
     for (const skuId of [fixtures.sku.skuId, other.skuId]) {
       const mapped = await setup.asPreparerDo((c, p) =>
         setup.catalogue.mapCode(c, p, {
           code: repeated,
           kind: 'supplier-barcode',
-          scope: { kind: 'organisation' },
+          scope: { kind: 'brand', brandId: fixtures.sku.brandId },
           skuId,
           alias: false,
           validFrom: setup.today(),

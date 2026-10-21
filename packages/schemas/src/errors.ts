@@ -912,10 +912,11 @@ export const merchandiseCodes = declareCodes({
  *   while a Site holds pieces of the goods (4.6; PRD-MER-018; product owner, 10 Oct 2026).
  * - `merchandise.not-a-piece-tracking-change`: the profile version is not a change from quantity to piece-tracked.
  * - `merchandise.pack-of-another-sku`: the pack named is not one of the SKU's (4.3).
- * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target; for a
- *   supplier barcode, which may name more than one SKU, the same SKU in another unit (4.3; PRD-MER-007, DEC-135).
- * - `merchandise.code-ambiguous`: more than one target matches the code, other than a brand barcode's SKUs, which are
- *   answered as candidates (4.7; PRD-MER-007, DEC-135).
+ * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target; between
+ *   two mappings of a supplier barcode under one brand, which may name more than one SKU, the same SKU in another unit
+ *   (4.3; PRD-MER-007, DEC-135; RR-554).
+ * - `merchandise.code-ambiguous`: more than one target matches the code, other than SKUs each named by a barcode
+ *   recorded under the brand given, which are answered as candidates (4.7; PRD-MER-007, DEC-135; RR-554).
  * - `merchandise.code-not-found`: no mapping of the code matches (4.7).
  * - `merchandise.no-version-in-force`: the SKU has no approved version in force on the date (4.7).
  * - `merchandise.end-not-allowed`: a mapping's end is before today, not after its start, or later than its end.

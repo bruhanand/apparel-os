@@ -9,7 +9,7 @@ import { syntheticKeysEnvironment } from './support/access.js';
 import { grantSynthetic } from './support/grants.js';
 import { approved, approvedGeography, decided, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
-import { connect } from './support/postgres.js';
+import { connect, sqlState } from './support/postgres.js';
 
 // S1-F03-T02: styles, SKUs, product proposals, external codes, packs and tracking profiles through the catalogue's
 // interface and access's Decide, on real PostgreSQL (structure-and-masters 4.1 to 4.7, 9 tests 7, 8, 9, 10, 18 and
@@ -569,6 +569,197 @@ describe('external codes (structure-and-masters 4.3, 9 test 7; PRD-MER-006, PRD-
     expect(await mappings(other.skuIds[0] ?? '')).toEqual([
       expect.objectContaining({ id: single.mappingId, repeated: false }),
     ]);
+  });
+
+  it('RR-554 PRD-MER-007: only a barcode recorded under a brand repeats; one recorded for a supplier or the whole Organisation names one product, and a repeat meets the Organisation across scopes', async () => {
+    const proposal = await confirmedProduct(styleDraft([skuDraft({ size: 'SYN-S' }), skuDraft({ size: 'SYN-M' })]));
+    const [small, medium] = proposal.skuIds as [string, string];
+    const supplier = ok(
+      await setup.asPreparerDo((c, p) =>
+        setup.parties.prepareParty(c, p, {
+          code: syntheticCode(next('SUPPLIER')),
+          legalName: syntheticName('Supplier'),
+          taxIdentities: [],
+          msmeClassification: null,
+          contacts: [],
+          roles: ['supplier'],
+          validFrom: setup.today(),
+        }),
+      ),
+    ).recordId;
+    const brand = { kind: 'brand', brandId: catalogue.brandId } as const;
+    const organisation = { kind: 'organisation' } as const;
+    const map = (code: string, draft: Partial<Parameters<typeof setup.catalogue.mapCode>[2]>) =>
+      setup.asPreparerDo((c, p) =>
+        setup.catalogue.mapCode(c, p, {
+          code,
+          kind: 'supplier-barcode',
+          scope: brand,
+          skuId: small,
+          alias: false,
+          validFrom: setup.today(),
+          ...draft,
+        }),
+      );
+    const conflict = { kind: 'refusal', refusal: { code: 'merchandise.code-conflict' } };
+    // A supplier's barcode, and the whole Organisation's, name one product: a second is refused, as before S2-F04-T01.
+    for (const scope of [{ kind: 'supplier', partyId: supplier } as const, organisation]) {
+      const code = syntheticCode(next('BARCODE'));
+      ok(await map(code, { scope }));
+      expect(await map(code, { scope, skuId: medium })).toMatchObject(conflict);
+    }
+    // Under a brand it repeats; the whole Organisation overlaps the brand, so its mapping to either product is refused.
+    const repeated = syntheticCode(next('BARCODE'));
+    ok(await map(repeated, {}));
+    ok(await map(repeated, { skuId: medium }));
+    expect(await map(repeated, { scope: organisation })).toMatchObject(conflict);
+    // The Organisation's mapping first: the brand's mapping to the same product agrees with it, to another is refused.
+    const organisationFirst = syntheticCode(next('BARCODE'));
+    ok(await map(organisationFirst, { scope: organisation }));
+    expect(await map(organisationFirst, { skuId: medium })).toMatchObject(conflict);
+    ok(await map(organisationFirst, {}));
+  });
+
+  it('RR-554 PRD-MER-007: Resolve answers several products only where the brand names each, and flags only the brand’s mappings', async () => {
+    const proposal = await confirmedProduct(
+      styleDraft([skuDraft({ size: 'SYN-S' }), skuDraft({ size: 'SYN-M' }), skuDraft({ size: 'SYN-FREE' })]),
+    );
+    const [small, medium, free] = proposal.skuIds as [string, string, string];
+    const supplier = ok(
+      await setup.asPreparerDo((c, p) =>
+        setup.parties.prepareParty(c, p, {
+          code: syntheticCode(next('SUPPLIER')),
+          legalName: syntheticName('Supplier'),
+          taxIdentities: [],
+          msmeClassification: null,
+          contacts: [],
+          roles: ['supplier'],
+          validFrom: setup.today(),
+        }),
+      ),
+    ).recordId;
+    const brand = { kind: 'brand', brandId: catalogue.brandId } as const;
+    const forSupplier = { kind: 'supplier', partyId: supplier } as const;
+    const map = async (code: string, draft: Partial<Parameters<typeof setup.catalogue.mapCode>[2]>) =>
+      ok(
+        await setup.asPreparerDo((c, p) =>
+          setup.catalogue.mapCode(c, p, {
+            code,
+            kind: 'supplier-barcode',
+            scope: brand,
+            skuId: small,
+            alias: false,
+            validFrom: setup.today(),
+            ...draft,
+          }),
+        ),
+      ).mappingId;
+    const resolve = (code: string, query: { supplierId?: string; brandId?: string }) =>
+      setup.run(setup.preparer.id, (c) =>
+        setup.catalogue.resolveCode(c, { code, kind: 'supplier-barcode', date: setup.today(), ...query }),
+      );
+    const flags = async () => {
+      const records = (
+        await Promise.all(
+          [small, medium, free].map(
+            async (skuId) =>
+              (await setup.run(setup.preparer.id, (c) => setup.catalogue.listCodeMappings(c, { skuId }))).records,
+          ),
+        )
+      ).flat();
+      return new Map(records.map((each) => [each.id, each.repeated]));
+    };
+    const both = { supplierId: supplier, brandId: catalogue.brandId };
+    // The brand names both products; the supplier's mapping names one of them and adds no choice.
+    const agreeing = syntheticCode(next('BARCODE'));
+    const brandSmall = await map(agreeing, {});
+    const brandMedium = await map(agreeing, { skuId: medium });
+    const supplierSmall = await map(agreeing, { scope: forSupplier });
+    expect(await resolve(agreeing, both)).toEqual({
+      resolved: {
+        candidates: [
+          { skuId: small, mappingId: brandSmall },
+          { skuId: medium, mappingId: brandMedium },
+        ],
+        repeated: true,
+        alias: false,
+      },
+    });
+    // The supplier names a product the brand does not: that is no repeat under the brand, and is refused as before.
+    const differing = syntheticCode(next('BARCODE'));
+    await map(differing, {});
+    await map(differing, { skuId: medium });
+    const supplierFree = await map(differing, { scope: forSupplier, skuId: free });
+    expect(await resolve(differing, both)).toMatchObject({ refusal: { code: 'merchandise.code-ambiguous' } });
+    expect(await resolve(differing, { brandId: catalogue.brandId })).toMatchObject({
+      resolved: { candidates: [{ skuId: small }, { skuId: medium }], repeated: true },
+    });
+    // Historical aliases of the whole Organisation on two products are no brand's repeat: ambiguous, as before.
+    const aliases = syntheticCode(next('BARCODE'));
+    const aliasSmall = await map(aliases, { scope: { kind: 'organisation' }, alias: true });
+    const aliasMedium = await map(aliases, { scope: { kind: 'organisation' }, alias: true, skuId: medium });
+    expect(await resolve(aliases, {})).toMatchObject({ refusal: { code: 'merchandise.code-ambiguous' } });
+    // Only a mapping under the brand that another under the same brand repeats is flagged (PRD-MER-007).
+    const flagged = await flags();
+    expect(
+      [brandSmall, brandMedium, supplierSmall, supplierFree, aliasSmall, aliasMedium].map((id) => flagged.get(id)),
+    ).toEqual([true, true, false, false, false, false]);
+  });
+
+  it('RR-554 PRD-MER-007: the database refuses a second product for a supplier barcode outside a brand, whatever the command does', async () => {
+    const proposal = await confirmedProduct(styleDraft([skuDraft({ size: 'SYN-S' }), skuDraft({ size: 'SYN-M' })]));
+    const [small, medium] = proposal.skuIds as [string, string];
+    const supplier = ok(
+      await setup.asPreparerDo((c, p) =>
+        setup.parties.prepareParty(c, p, {
+          code: syntheticCode(next('SUPPLIER')),
+          legalName: syntheticName('Supplier'),
+          taxIdentities: [],
+          msmeClassification: null,
+          contacts: [],
+          roles: ['supplier'],
+          validFrom: setup.today(),
+        }),
+      ),
+    ).recordId;
+    const owner = await connect(world.organisations[0].database, 'migration');
+    try {
+      const mapping = async (scope: 'supplier' | 'brand' | 'organisation') => {
+        const keyId = uuidv7();
+        await owner.query(
+          `insert into merchandise.external_code_key (id, code, kind) values ($1, $2, 'supplier-barcode')`,
+          [keyId, syntheticCode(next('BARCODE'))],
+        );
+        return (skuId: string) =>
+          owner.query(
+            `insert into merchandise.external_code
+               (id, code_key_id, kind, scope_kind, scope_party_id, scope_brand_id, sku_id, alias, valid_during,
+                prepared_by_user_id)
+             values ($1, $2, 'supplier-barcode', $3, $4, $5, $6, false, daterange($7::date, null), $8)`,
+            [
+              uuidv7(),
+              keyId,
+              scope,
+              scope === 'supplier' ? supplier : null,
+              scope === 'brand' ? catalogue.brandId : null,
+              skuId,
+              setup.today(),
+              setup.preparer.id,
+            ],
+          );
+      };
+      for (const scope of ['supplier', 'organisation'] as const) {
+        const insert = await mapping(scope);
+        await insert(small);
+        expect(await sqlState(insert(medium))).toBe('23P01');
+      }
+      // Under a brand the second product is kept (PRD-MER-007).
+      const underBrand = await mapping('brand');
+      await underBrand(small);
+      await underBrand(medium);
+    } finally {
+      await owner.end();
+    }
   });
 
   it('PRD-MER-007 a brand barcode never names two units of one SKU, in one scope or across scopes', async () => {

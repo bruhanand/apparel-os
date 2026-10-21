@@ -18,7 +18,8 @@ import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 // Setup › Products › Barcodes and aliases (structure-and-masters 4.3, 8; PRD-MER-006 to PRD-MER-008; S1-F03-T02):
 // each code exactly as supplied, leading zeros kept, mapped to a SKU and a unit in its scope over its dates, active or
 // a historical alias; a mapping that would make a code ambiguous is refused with its reason (PRD-MER-007). A supplier
-// barcode the brand's tags repeat on another product is kept and flagged as repeated (DEC-135; S2-F04-T01).
+// barcode recorded under a brand whose tags repeat it on another product is kept and flagged as repeated (DEC-135;
+// S2-F04-T01; RR-554).
 
 const KINDS: readonly ExternalCodeKind[] = ['supplier-barcode', 'supplier-style-code', 'other', 'internal'];
 
