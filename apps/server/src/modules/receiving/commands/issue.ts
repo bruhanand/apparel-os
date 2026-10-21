@@ -2,7 +2,6 @@ import { uuidv7 } from '@apparel-os/domain';
 import { ARRIVAL_TYPE, GRN_TYPE, type GrnIssue, type GrnIssued, type MissingItem } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
 import { LOCK_STEP, type TransactionContext } from '../../../kernel/index.js';
-import type { AccessInterface } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { skuOn } from '../../merchandise/catalogue/index.js';
 import { termsInForce } from '../../merchandise/parties/index.js';
@@ -43,7 +42,6 @@ import {
 
 export interface IssueDependencies extends AvailabilityDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'authorise'>;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
   readonly ledger: StockLedgerInterface;
 }
@@ -89,12 +87,14 @@ async function batchRefusal(
 /** The receipt count of one line's counted pieces (stock-ledger 13.4, 13.14; goods-in 4.5). */
 function receiptCount(row: ArrivalRow, line: CurrentLine, grnLineId: string, owner: Owner): LedgerItem {
   const { entry } = line;
-  // A known product, or goods of a product not yet set up with their identity as described (stock-ledger 13.14).
+  // A known product, or goods of a product not yet set up with their identity as described, counted under the
+  // Arrival's brand, so a person scoped to it sees them before PT approval names their SKU (stock-ledger 13.14; RR-555).
   const goods =
     entry.skuId === null
       ? {
           skuId: null,
           described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.size?.code ?? null },
+          brandId: row.brandId,
         }
       : { skuId: entry.skuId };
   return {
@@ -144,18 +144,6 @@ export async function issueGrn(
   if (series === undefined) return refused('unavailable', 'receiving.no-grn-series', [MISSING_GRN_SERIES]);
   if (series.state !== 'Open') return refused('unavailable', 'receiving.grn-series-paused', [MISSING_GRN_SERIES]);
 
-  // Goods of a product not yet set up are of Unknown brand until PT approval names their SKU, so only a person whose
-  // scope covers every brand sees, and so writes, their stock (stock-ledger 13.14, 14.1; code-house-rules 6.2): asked
-  // here, so a person with a narrower scope is refused before anything is posted (RR-555).
-  if (lines.some((line) => line.entry.skuId === null)) {
-    const unknownBrand = await dependencies.access.authorise(context, {
-      actorId: actor.userId,
-      action: 'view',
-      recordType: 'stock.balance',
-      facts: { ...factsOf(row), brandId: undefined },
-    });
-    if (unknownBrand.kind === 'refused') return refusalOf(unknownBrand.refusal);
-  }
   // The owner each receipt origin records: the brand's Agreement version in force on the arrival date (PRD-ORG-014).
   const terms = await termsInForce(context, { brandId: row.brandId }, row.arrivalDate, SHOW_MARGINS);
   const agreement =

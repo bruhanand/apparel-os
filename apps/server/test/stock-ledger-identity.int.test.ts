@@ -12,7 +12,7 @@ import {
   type SkuFacts,
 } from '../src/modules/stock/ledger/index.js';
 import { connect } from './support/postgres.js';
-import { APPROVE_DOCUMENT, written } from './support/stock-ledger.js';
+import { APPROVE_DOCUMENT, written, type Actor } from './support/stock-ledger.js';
 import { ValuedWorld, type At, type SyntheticCombination } from './support/stock-valued.js';
 
 // S2-F02-T01 (GI-1): the receipt count of goods of a product not yet set up, counted with their identity as described
@@ -40,18 +40,25 @@ const line = () => uuidv7();
 let styleNumber = 0;
 /** A SYNTHETIC style code, never used before in this file. */
 const style = () => `SYN-STYLE-${String(++styleNumber)}`;
+/** The SYNTHETIC brand the goods of this file are counted under, unless a test names another (13.14; RR-555). */
+const BRAND = uuidv7();
 
-/** A receipt count of goods of a product not yet set up: SKU Unknown, identity as described (13.4; GI-1). */
+/**
+ * A receipt count of goods of a product not yet set up: SKU Unknown, identity as described, under the brand the
+ * caller names, as receiving names its Arrival's (13.4, 13.14; GI-1, RR-555).
+ */
 function described(
   quantity: number,
   identity: { styleCode: string; colour: string | null; size: string | null },
   to: At = combo.w1,
+  brandId: string = BRAND,
 ): LedgerItem {
   return {
     kind: 'receipt-count',
     lineId: line(),
     skuId: null,
     described: identity,
+    brandId,
     quantity,
     to,
     condition: 'good',
@@ -150,9 +157,9 @@ async function freshUnit(): Promise<At> {
 }
 
 /** A document approved by a different person, the approval the identity route runs under (13.14; access 9.5). */
-async function approvedDocument() {
+async function approvedDocument(preparer: Actor = world.poster) {
   const document = { recordId: uuidv7(), versionId: uuidv7() };
-  const { decision } = await world.approve(world.poster, document);
+  const { decision } = await world.approve(preparer, document);
   if (decision.kind !== 'success') throw new Error(decision.refusal.code);
   return {
     source: world.source(document.recordId, document.versionId),
@@ -573,3 +580,115 @@ describe('the identity step (stock-ledger 13.14; goods-in 6.3 step 4; GI-1)', ()
 function known(sku: SkuFacts, quantity: number, to: At): Extract<LedgerItem, { kind: 'receipt-count' }> {
   return { kind: 'receipt-count', lineId: line(), skuId: sku.skuId, quantity, to, condition: 'good', owner };
 }
+
+/** The brand of each receipt origin, movement and SKU balance of goods of Unknown SKU, as the verifier role reads it. */
+async function brandsOf(at: At, originIds: readonly string[], movementIds: readonly string[]) {
+  const client = await connect(world.database, 'verify');
+  try {
+    const origins = await client.query<{ id: string; brand_id: string | null }>(
+      `select id, brand_id::text as brand_id from stock.receipt_origin where id = any($1::uuid[]) order by id`,
+      [originIds],
+    );
+    const movements = await client.query<{ brand_ids: string[] }>(
+      `select brand_ids::text[] as brand_ids from stock.movement where id = any($1::uuid[]) order by id`,
+      [movementIds],
+    );
+    const totals = await client.query<{ brand_id: string | null; quantity: number }>(
+      `select brand_id::text as brand_id, quantity from stock.sku_balance
+        where site_id = $1 and business_unit_id = $2 and sku_id is null order by quantity`,
+      [at.siteId, at.businessUnitId],
+    );
+    return { origins: origins.rows, movements: movements.rows, totals: totals.rows };
+  } finally {
+    await client.end();
+  }
+}
+
+describe('the brand of goods of a product not yet set up (stock-ledger 13.14, 14.1; RR-555)', () => {
+  it('RR-555 PRD-SEC-005 goods of Unknown SKU take the brand they are counted under: a person scoped to it counts, sees and resolves them', async () => {
+    const at = await freshUnit();
+    const otherBrand = uuidv7();
+    const brandLimited = await world.actor(`BRAND-${String(++styleNumber)}`, {
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'all' },
+      brand: { kind: 'selected', members: [BRAND] },
+    });
+    const styleCode = style();
+    const counted = written(await world.post(brandLimited, [described(4, { styleCode, colour: null, size: 'M' }, at)]));
+    const [originId] = counted.receiptOriginIds as [string];
+    // Another brand's goods of a product not yet set up at the same unit, counted by a person over every brand.
+    const other = written(
+      await world.post(world.poster, [described(3, { styleCode: style(), colour: null, size: 'M' }, at, otherBrand)]),
+    );
+    // Each brand's goods of Unknown SKU at the unit have a SKU balance of their own, of their brand (14.1, 14.2).
+    expect(await brandsOf(at, [originId], [...counted.movementIds])).toEqual({
+      origins: [{ id: originId, brand_id: BRAND }],
+      movements: [{ brand_ids: [BRAND] }],
+      totals: [
+        { brand_id: otherBrand, quantity: 3 },
+        { brand_id: BRAND, quantity: 4 },
+      ],
+    });
+    // The person scoped to the brand sees its goods and only them (access-and-approvals 5.3).
+    const seen = await world.run(brandLimited.user.id, (context) =>
+      custody(context, { siteId: at.siteId, businessUnitId: at.businessUnitId }),
+    );
+    expect(seen.rows.map((row) => ({ origin: row.receiptOriginId, quantity: row.quantity }))).toEqual([
+      { origin: originId, quantity: 4 },
+    ]);
+    expect(seen.rows.some((row) => row.receiptOriginId === other.receiptOriginIds[0])).toBe(false);
+    // And gives them their SKU, a product of the brand, under the PT approval's route (goods-in 6.3 step 4).
+    const sku = world.sku(false, BRAND);
+    const resolved = written(
+      await world.post(
+        brandLimited,
+        [identity(at, [{ receiptOriginId: originId, skuId: sku.skuId, quantity: 4, newReceiptOriginId: uuidv7() }])],
+        await approvedDocument(brandLimited),
+      ),
+    );
+    expect((await brandsOf(at, [], [...resolved.movementIds])).movements).toEqual([{ brand_ids: [BRAND] }]);
+    expect(await bySku(at)).toEqual({
+      [sku.skuId]: { quantity: 4, accepted: 0, conditions: ['good'] },
+      unknown: { quantity: 3, accepted: 0, conditions: ['good'] },
+    });
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-STK-009 RR-555 a count freeze over a brand stops a receipt count of its goods of Unknown SKU, not another brand’s', async () => {
+    const at = await freshUnit();
+    const frozenBrand = uuidv7();
+    const freeze = written(
+      await world.post(world.poster, [
+        {
+          kind: 'start-count-freeze',
+          lineId: line(),
+          siteId: at.siteId,
+          businessUnitId: at.businessUnitId,
+          reason: 'SYNTHETIC count',
+          scope: [{ brandId: frozenBrand }],
+        },
+      ]),
+    );
+    const count = described(2, { styleCode: style(), colour: null, size: null }, at, frozenBrand);
+    expect(await world.post(world.poster, [count])).toMatchObject({
+      kind: 'refused',
+      refusal: { code: 'stock.count-freeze-active' },
+    });
+    written(await world.post(world.poster, [described(2, { styleCode: style(), colour: null, size: null }, at)]));
+    written(
+      await world.post(world.poster, [{ kind: 'end-count-freeze', lineId: line(), holdId: freeze.holdIds[0] ?? '' }]),
+    );
+    written(await world.post(world.poster, [{ ...count, lineId: line() }]));
+  });
+
+  it('RR-555 a receipt count of goods of Unknown SKU names the brand they are counted under', async () => {
+    const result = await world.post(world.poster, [
+      { ...described(1, { styleCode: style(), colour: null, size: null }), brandId: undefined } as LedgerItem,
+    ]);
+    expect(result.kind === 'refused' ? result.refusal : 'written').toMatchObject({
+      code: 'stock.invalid-item',
+      missing: expect.arrayContaining([{ kind: 'brand' }]) as unknown,
+    });
+  });
+});

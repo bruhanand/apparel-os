@@ -71,8 +71,8 @@ export async function lockPlan(
   );
   const totals = [...plan.skuBalances].sort((a, b) =>
     compareCodeUnits(
-      skuKey(a.unit.siteId, a.unit.businessUnitId, a.skuId),
-      skuKey(b.unit.siteId, b.unit.businessUnitId, b.skuId),
+      skuKey(a.unit.siteId, a.unit.businessUnitId, a.skuId, a.brandId),
+      skuKey(b.unit.siteId, b.unit.businessUnitId, b.skuId, b.brandId),
     ),
   );
   for (const { unit } of anchors) {
@@ -104,11 +104,12 @@ export async function lockPlan(
       .onConflictDoNothing();
   }
   const rowsOf = async (
-    found: readonly { siteId: string; businessUnitId: string; skuId?: string | null }[],
+    found: readonly { siteId: string; businessUnitId: string; skuId?: string | null; brandId?: string | null }[],
     read: (each: {
       siteId: string;
       businessUnitId: string;
       skuId?: string | null;
+      brandId?: string | null;
     }) => Promise<{ id: string } | undefined>,
     what: string,
   ) => {
@@ -132,8 +133,13 @@ export async function lockPlan(
     'unit anchor',
   );
   const skuBalanceIds = await rowsOf(
-    totals.map(({ unit, skuId }) => ({ siteId: unit.siteId, businessUnitId: unit.businessUnitId, skuId })),
-    async ({ siteId, businessUnitId, skuId }) =>
+    totals.map(({ unit, skuId, brandId }) => ({
+      siteId: unit.siteId,
+      businessUnitId: unit.businessUnitId,
+      skuId,
+      brandId,
+    })),
+    async ({ siteId, businessUnitId, skuId, brandId }) =>
       (
         await context.tx
           .select({ id: skuBalance.id })
@@ -142,8 +148,14 @@ export async function lockPlan(
             and(
               eq(skuBalance.siteId, siteId),
               eq(skuBalance.businessUnitId, businessUnitId),
-              // The goods of Unknown SKU at the unit share one row (14.2, nulls not distinct; 13.14).
-              skuId == null ? isNull(skuBalance.skuId) : eq(skuBalance.skuId, skuId),
+              // The goods of Unknown SKU of one brand at the unit share one row (14.2, nulls not distinct; 13.14;
+              // RR-555).
+              skuId == null
+                ? and(
+                    isNull(skuBalance.skuId),
+                    brandId == null ? isNull(skuBalance.brandId) : eq(skuBalance.brandId, brandId),
+                  )
+                : eq(skuBalance.skuId, skuId),
             ),
           )
       )[0],

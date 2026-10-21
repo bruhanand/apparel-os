@@ -10,9 +10,18 @@ export function unitKey(siteId: string, businessUnitId: string): UnitKey {
   return `${siteId}|${businessUnitId}` as UnitKey;
 }
 
-/** The key of a SKU at a Site and business unit: the key of its SKU balance (14.2). */
-export function skuKey(siteId: string, businessUnitId: string, skuId: string | null): string {
-  return `${unitKey(siteId, businessUnitId)}|${skuId ?? '-'}`;
+/**
+ * The key of a SKU at a Site and business unit: the key of its SKU balance (14.2). Goods of Unknown SKU have one SKU
+ * balance at the unit for each brand they are counted under, so their key names the brand (13.14; RR-555); a known
+ * SKU's brand is the SKU's, so its key needs none.
+ */
+export function skuKey(
+  siteId: string,
+  businessUnitId: string,
+  skuId: string | null,
+  brandId: string | null = null,
+): string {
+  return `${unitKey(siteId, businessUnitId)}|${skuId ?? `-|${brandId ?? '-'}`}`;
 }
 
 /**
