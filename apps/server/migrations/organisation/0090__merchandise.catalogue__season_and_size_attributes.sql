@@ -49,11 +49,13 @@ create index marked_attribute_version_marked_attribute on merchandise.marked_att
 create index marked_attribute_version_attribute on merchandise.marked_attribute_version (attribute_id);
 create index marked_attribute_version_prepared_by on merchandise.marked_attribute_version (prepared_by_user_id);
 
--- The guard of a version dated by instants (code-house-rules 7.3), as an open-to-buy budget version's: while Awaiting
--- approval only its decision is recorded, once, an approval starting it at an instant, open-ended, a rejection giving it
--- no dates; an Approved version only has its open end set, once, after its start, when the next one is approved; a
--- Rejected version never changes.
-create function merchandise.guard_instant_version_change() returns trigger
+-- The schema's one guard of a version row (code-house-rules 7.3, 10.4), merchandise.guard_version_change of migration
+-- 0045, extended for versions dated by instants. Called with no argument, as every earlier versions table of the schema
+-- calls it, it is unchanged. Called with 'instants', it guards a version as an open-to-buy budget version is guarded:
+-- while Awaiting approval only its decision is recorded, once, an approval starting it at an instant, open-ended, a
+-- rejection giving it no dates; an Approved version only has its open end set, once, after its start, when the next one
+-- is approved; a Rejected version never changes.
+create or replace function merchandise.guard_version_change() returns trigger
   language plpgsql
   set search_path = pg_catalog
 as $$
@@ -61,27 +63,46 @@ declare
   old_rest jsonb := pg_catalog.to_jsonb(old) - 'valid_during' - 'decision';
   new_rest jsonb := pg_catalog.to_jsonb(new) - 'valid_during' - 'decision';
 begin
-  if new_rest = old_rest and old.decision = 'Awaiting approval' and old.valid_during is null then
-    if new.decision = 'Approved' and new.valid_during is not null and pg_catalog.upper_inf(new.valid_during) then
+  if tg_nargs > 0 and tg_argv[0] = 'instants' then
+    if new_rest = old_rest and old.decision = 'Awaiting approval' and old.valid_during is null then
+      if new.decision = 'Approved' and new.valid_during is not null and pg_catalog.upper_inf(new.valid_during) then
+        return new;
+      end if;
+      if new.decision = 'Rejected' and new.valid_during is null then
+        return new;
+      end if;
+    end if;
+    if new_rest = old_rest and old.decision = 'Approved' and new.decision = 'Approved'
+       and pg_catalog.upper_inf(old.valid_during) and not pg_catalog.upper_inf(new.valid_during)
+       and pg_catalog.lower(new.valid_during) = pg_catalog.lower(old.valid_during)
+       and pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during) then
       return new;
     end if;
-    if new.decision = 'Rejected' and new.valid_during is null then
-      return new;
-    end if;
+    raise exception 'a version of %.% changes only as code-house-rules 7.3 allows', tg_table_schema, tg_table_name
+      using errcode = 'AO003';
   end if;
-  if new_rest = old_rest and old.decision = 'Approved' and new.decision = 'Approved'
-     and pg_catalog.upper_inf(old.valid_during) and not pg_catalog.upper_inf(new.valid_during)
-     and pg_catalog.lower(new.valid_during) = pg_catalog.lower(old.valid_during)
-     and pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during) then
+  if old.decision = 'Awaiting approval' and new.decision in ('Approved', 'Rejected') and new_rest = old_rest
+     and pg_catalog.lower(new.valid_during) is not distinct from pg_catalog.lower(old.valid_during)
+     and (new.valid_during = old.valid_during
+          or (new.decision = 'Approved' and pg_catalog.upper_inf(old.valid_during)
+              and pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during))) then
+    return new;
+  end if;
+  if old.decision = 'Approved' and new.decision = 'Approved' and new_rest = old_rest
+     and pg_catalog.lower(new.valid_during) is not distinct from pg_catalog.lower(old.valid_during)
+     and (new.valid_during = old.valid_during
+          or (pg_catalog.upper(new.valid_during) > pg_catalog.lower(new.valid_during)
+              and (pg_catalog.upper_inf(old.valid_during)
+                   or pg_catalog.upper(new.valid_during) < pg_catalog.upper(old.valid_during)))) then
     return new;
   end if;
   raise exception 'a version of %.% changes only as code-house-rules 7.3 allows', tg_table_schema, tg_table_name
     using errcode = 'AO003';
 end;
 $$;
-revoke execute on function merchandise.guard_instant_version_change() from public;
+revoke execute on function merchandise.guard_version_change() from public;
 create trigger guard_version_change before update on merchandise.marked_attribute_version
-  for each row execute function merchandise.guard_instant_version_change();
+  for each row execute function merchandise.guard_version_change('instants');
 
 -- Runtime grants (code-house-rules 5.2): the identity row is append-only and locked, a change locking it at step 1
 -- (8.2), hence UPDATE on its identifier only (7.1); a version takes the changes its guard allows.
