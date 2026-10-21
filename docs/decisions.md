@@ -1373,3 +1373,12 @@
 - **Choice.** The brand's Agreement; separate supplier terms for bookings are not needed now. A booking's terms are fixed at its approval: it keeps the Agreement version in force when it was approved, and takes a later version only when it is approved again.
 - **Why.** The product owner's answer; approval binds to the exact version of what was approved (`PRD-ACS-007`).
 - **Changed.** PRD "Words used" Agreement and `PRD-BKG-002` reworded. `POL-01.02`, `POL-01.04`, `POL-01.08` and `POL-01.14` reworded (IDs kept). structure-and-masters 5.2, domain-model, module-map 5, `roadmap.md` `S2-F01`. RR-543 and RR-544 closed. Not changed: a supplier's own Agreement and its cash-discount and interest terms (`PRD-PAY-015`).
+
+## DEC-133 — Every Arrival records its supplier invoice before the count
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 7 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** `PRD-REC-005` lets goods be counted with no invoice. The product owner says every delivery comes with its invoice. Must an Arrival have one?
+- **Options.** At least one supplier invoice recorded before the count starts · count without an invoice and add it later.
+- **Choice.** The first. An Arrival records at least one supplier invoice, and may record several, before its count starts; the count is matched against the invoice by hand. A missing booking or PT still does not stop the count.
+- **Why.** Every delivery arrives with its invoice, and the count is checked against it.
+- **Changed.** `PRD-REC-005` reworded. `roadmap.md` `S2-F02` and the count step of `ui-blueprint.html`.

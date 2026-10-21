@@ -73,6 +73,14 @@ Booking is written up: `DEC-129` (terms only from the Agreement), `DEC-130` (lin
 
 Both written as `DEC-132`; RR-543 and RR-544 closed. Booking is settled.
 
+## Round 7, 21 Oct 2026 (GRN)
+
+1. **GRN header.** GRN number and date; receiving Site; supplier and brand; each invoice's number and date; transporter; lorry receipt number and date; vehicle number and e-way bill number (both optional); number of cartons; carton, seal and damage photos (`PRD-REC-007`); who counted and who received ([grn-standard-fields.md](../research/grn-standard-fields.md)).
+2. **Issuing the GRN.** The receiver issues it after the count, with no second approval; later corrections need a different person.
+3. **Invoice first.** Every Arrival records at least one supplier invoice before its count starts (`DEC-133`).
+
+GRN is settled, apart from what PT making decides.
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.

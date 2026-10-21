@@ -383,7 +383,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-REC-002` Start supplier receiving through Goods arrived or Receive against booking; both open the same guided workflow.
 - `PRD-REC-003` Keep arrival, count, GRN, discrepancy, PT revision, approval, label job and acceptance records distinct within the workflow.
 - `PRD-REC-004` Receive directly at a Store or warehouse, by barcode scan or controlled count; record the actual Site even when another Site prepares the PT.
-- `PRD-REC-005` Count goods despite missing booking, invoice or PT. Capture actual quantity, identity evidence and condition.
+- `PRD-REC-005` Record at least one supplier invoice for each Arrival before its count starts; count goods despite a missing booking or PT. Capture actual quantity, identity evidence and condition.
 - `PRD-REC-006` Record shortage, excess, wrong, unidentified and damage observations separately; conditions can coexist.
 - `PRD-REC-007` Preserve carton, seal and damage photographs, transporter references and inbound e-way evidence.
 - `PRD-REC-008` Create physical custody only from the actual count. Invoice or PT quantities cannot manufacture stock.
