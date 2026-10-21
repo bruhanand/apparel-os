@@ -93,6 +93,7 @@ GRN is settled, apart from what PT making decides.
 - **First version:** the PT is made only by uploading a PT file for a GRN. The PT workbench is designed later, by the owner.
 - **Format:** KDPS's own fixed PT template ([pt-file-layouts.md](../data-notes/pt-file-layouts.md) section 1; the 20 columns of `PRD-PTW-008` plus the two `SUGGESTED` columns).
 - **Who:** whoever is assigned makes the file by hand and uploads it. The upload is what makes the stock real, to sell at a location.
+- **Fixed vocabulary:** KDPS's PT values come from its fixed master sheet (`docs/data-from-kdps/pt-master-sheet.xlsx`, the `Master Sheet` of the template; kept outside git): 22 seasons, 592 brands, 23 colours, 5 genders, 9 sub categories, 7 types, 98 items, 75 fits, 135 sizes, 4 GST rates, and the item map from item to sub category and type ([item-master-vocabulary.md](../data-notes/item-master-vocabulary.md)).
 
 ## Not settled
 
