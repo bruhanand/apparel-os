@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
+  DAMAGE_DECISION,
   fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
@@ -115,6 +116,14 @@ import {
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { GRN_KIND } from '../../src/modules/receiving/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
+import { DAMAGE_REPORT_KIND, damageExceptionType } from '../../src/modules/stock/documents/index.js';
+import {
+  damageGateOpen,
+  DECIDER_AUTHORITY,
+  RECEIVER_REPORTER_AUTHORITY,
+  SYNTHETIC_POLICY_17_VALUES,
+} from '../support/damage.js';
 import {
   mappingsVerified,
   placeScope,
@@ -2385,10 +2394,13 @@ const receivingStructure = await structureSetup({
 });
 const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
 const storeStaffWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-STM');
+// The damage journey's world (damage-reports.spec.ts; S2-F08-T01), its own so its deliveries and reports change no
+// other journey's lists.
+const damageWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-DMG');
 // Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
 // SYNTHETIC value of policy 4, which the application registers for every Organisation.
 await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
-for (const each of [receivingWorld, storeStaffWorld]) {
+for (const each of [receivingWorld, storeStaffWorld, damageWorld]) {
   await receivingGranted(
     receivingStructure,
     receivingDatabase,
@@ -2397,6 +2409,9 @@ for (const each of [receivingWorld, storeStaffWorld]) {
     [readinessValuesCheck],
   );
 }
+// Policy 17 Signed and validated on the test-only check's one SYNTHETIC value, and the damage capability switched on
+// (support/damage.ts): which records are policy 17's values is the product owner's to say (goods-in 10.5).
+await damageGateOpen(receivingStructure, receivingDatabase);
 await receivingStructure.close();
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
@@ -2444,6 +2459,83 @@ await fixtureRunner.run(
   },
   (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
 );
+// The damage journey (damage-reports.spec.ts; S2-F08-T01): a Store's staff (P-STM) who receive and report damage at
+// their Store only, the lists of masters from a second assignment; Operations (P-OPS), who decides reports over every
+// place from My work, with an individual SYNTHETIC limit on the decision covering an Unknown cost, approved as a fixture
+// (code-house-rules 11.2); an approve reason; the exception-code series and the damage-report series with SYNTHETIC
+// formats (RR-449; DEC-118); and the damage exception routed at the world's Site to Operations by a SYNTHETIC rule
+// approved as a fixture. Who reports, who decides, the limit and the routing are the product owner's: SYNTHETIC here.
+const damageReporter = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-REPORTER',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVER_REPORTER_AUTHORITY, {
+  scope: placeScope([{ type: 'store', id: damageWorld.storeId }]),
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVING_LISTS);
+const damageOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-OPS',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const damageDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: damageOperations.id },
+  DECIDER_AUTHORITY,
+);
+const damageReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
+const damageRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-damage.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  async (context) => {
+    const numbering = new Numbering({ kinds: [EXCEPTION_CODE_KIND, DAMAGE_REPORT_KIND] });
+    await defineSyntheticCodeSeries(context, numbering);
+    await defineSyntheticDamageReportSeries(context, numbering);
+    const exceptions = new Exceptions({
+      numbering,
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType],
+    });
+    return exceptions.prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: damageExceptionType.code,
+        siteId: damageWorld.siteId,
+        owner: { kind: 'user', userId: damageOperations.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: damageOperations.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    );
+  },
+);
+if (damageRouting.kind !== 'done') throw new Error(`The damage rule was refused: ${damageRouting.refusal.code}`);
+{
+  const owner = await connect(receivingDatabase, 'migration');
+  try {
+    await owner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
+      damageRouting.value.versionId,
+    ]);
+    const holderKey = `user:${damageOperations.id}:${damageDecider.assignmentId}`;
+    await owner.query(
+      `insert into access.approval_limit (id, action_type, basis, holder_kind, app_user_id, role_assignment_id,
+         holder_key, amount, unlimited, covers_unknown, origin, valid_during, decision)
+       values ($1, $2, 'cost', 'individual', $3, $4, $5, null, false, true, 'synthetic',
+         daterange(current_date - 1, null), 'Approved')`,
+      [uuidv7(), DAMAGE_DECISION, damageOperations.id, damageDecider.assignmentId, holderKey],
+    );
+  } finally {
+    await owner.end();
+  }
+}
 await receivingRouter.close();
 
 // The readiness journey's world (site-readiness.spec.ts; S1-F04-T02), in its own Organisation made by the setup step:
@@ -2610,13 +2702,15 @@ const app = await startAccessApp(
     webApp,
     counterApp,
     fileStoreEnvironment: fileStore.environment,
-    exceptionTypes: [syntheticMismatch],
+    // And the damage exception the application registers (S2-F08-T01).
+    exceptionTypes: [syntheticMismatch, damageExceptionType],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck],
+    // And policy 17's test-only check of the damage journey (support/damage.ts; S2-F08-T01).
+    validityChecks: [policyValuesCheck, readinessValuesCheck, SYNTHETIC_POLICY_17_VALUES],
     // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
     postingEventKinds: POSTING_JOURNEY_KINDS,
   },
@@ -2852,6 +2946,13 @@ writeFileSync(
       storeStaff: credentialsOf(receivingStoreStaff),
       storeOptions: storeStaffWorld.options,
       storeBatchStyleCode: storeStaffWorld.batchSku.styleCode,
+    },
+    damage: {
+      organisationCode: receivingCode,
+      reporter: credentialsOf(damageReporter),
+      operations: credentialsOf(damageOperations),
+      reasonId: damageReasonId,
+      options: damageWorld.options,
     },
     openToBuy: {
       organisationCode: settingsCode,

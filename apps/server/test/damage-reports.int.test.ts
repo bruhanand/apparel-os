@@ -12,6 +12,7 @@ import {
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OrganisationRouter, type RoutedOrganisation } from '../src/kernel/index.js';
+import { ACCESS, type AccessInterface } from '../src/modules/access/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { STOCK_DOCUMENTS, type StockDocumentsInterface } from '../src/modules/stock/documents/index.js';
 import { custody } from '../src/modules/stock/ledger/index.js';
@@ -483,6 +484,11 @@ describe('reporting damage (goods-in 8.1, 8.2; design test 16)', () => {
     expect(work.status, JSON.stringify(work.body)).toBe(200);
     const exceptions = myWorkSchema.parse(work.body).items.filter((each) => each.kind === 'exception');
     expect(exceptions).toEqual([expect.objectContaining({ exposure: { kind: 'unknown' }, state: 'Unresolved' })]);
+    // Its decision is offered to Operations, whose limit covers an Unknown cost, as My work lists it (11.2, 9.4).
+    const offered = await asUserIn(api.app, organisation, operations.user.id, (context) =>
+      api.app.get<AccessInterface>(ACCESS).eligibleRequests(context, operations.user.id, [first.requestId]),
+    );
+    expect(offered).toEqual([first.requestId]);
   });
 
   it('PRD-INT-002 the same request answers the same report; the goods must be in custody and of the line named', async () => {

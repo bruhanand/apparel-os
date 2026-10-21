@@ -4,9 +4,10 @@ import { DAMAGE_REPORT_KIND, DAMAGE_REPORT_SCOPE_KEY } from '../../src/modules/s
 import { syntheticCode } from './synthetic.js';
 
 // The SYNTHETIC damage-report series (goods-in 8.5, 10.4; numbering-and-audit 3.5, 3.7; RR-449; DEC-118): no screen
-// defines a damage-report series or its format yet, so the tests, the server of the browser journeys and the local seed,
-// which `dev` runs, define it here with a format labelled SYNTHETIC, as the GRN's (fixtures/grn-series.ts). No format is
-// the Organisation's until it chooses one. Never a KDPS value.
+// defines a damage-report series or its format yet, so the tests and the server of the browser journeys define it here
+// with a format labelled SYNTHETIC, as the GRN's (fixtures/grn-series.ts). The local seed does not: DEC-143 lets it add
+// only the GRN series to a finished synthetic Organisation (goods-in 8.5). No format is the Organisation's until it
+// chooses one. Never a KDPS value.
 
 /** The SYNTHETIC format of damage-report numbers: `SYN-DMG-` and a five-digit sequence. */
 export const SYNTHETIC_DAMAGE_REPORT_FORMAT = [

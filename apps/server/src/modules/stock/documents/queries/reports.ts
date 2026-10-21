@@ -1,9 +1,4 @@
-import {
-  DAMAGE_REPORT_TYPE,
-  type DamagedGoods,
-  type DamageReport,
-  type DamageReportState,
-} from '@apparel-os/schemas';
+import { DAMAGE_REPORT_TYPE, type DamagedGoods, type DamageReport, type DamageReportState } from '@apparel-os/schemas';
 import { asc, eq } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../../kernel/index.js';
 import type { LatestRequest, RecordFacts } from '../../../access/index.js';

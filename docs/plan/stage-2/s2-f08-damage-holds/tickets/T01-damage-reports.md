@@ -20,3 +20,14 @@ Feature: [Stage 2 first version](../../spec.md)
 ## Done when
 
 Design test 16 passes; a report raised through the receiving interface joins the caller's transaction and commits or rolls back with it; every check passes.
+
+## Notes
+
+Built beyond the ticket's list, each needed by it (goods-in 8.5 "As built"):
+
+- `access`: a document's decision effect may declare `postsWithDecision` and a `precheck`: the decision is written first, under a savepoint, so the effect's ledger request can verify and use it under the ledger's locks, and is rolled back when the effect refuses (access-and-approvals 9.8b "As built for a document posted with its decision").
+- `receiving`: the Arrival's read gives each GRN line its identifier, which a report names.
+- A read of a reversal, `GET /api/stock/damage-reversals/{damageReversalId}`, answering the report it belongs to, for the reversal's approval panel.
+- Decision renewal (`decision-renewal`): a new round when the goods' cost moved past the request's value under the ledger's locks.
+- The damage-report series is defined in the test fixtures and the server of the browser journeys only, not in the local seed (`DEC-143`): the product owner to say whether the seed adds it.
+- The approval panel reads damage reports again after a decision.

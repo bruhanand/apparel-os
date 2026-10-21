@@ -23,7 +23,7 @@ import { syntheticName } from '../fixtures/synthetic.js';
 import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic, type SyntheticAuthority } from './grants.js';
 import { capturingLogger } from './jobs.js';
-import { STOCK_VIEW } from './receiving.js';
+import { RECEIVER_AUTHORITY, STOCK_VIEW } from './receiving.js';
 import type { StructureSetup } from './organisation.js';
 import { writeSyntheticStoredFile } from './tax-rules.js';
 import type { AccessTestApp, SyntheticUser } from './access.js';
@@ -44,42 +44,56 @@ export const SYNTHETIC_POLICY_17_VALUES: ValidityCheck = {
   locks: () => Promise.resolve([]),
 };
 
+/**
+ * Each permission once, as a role grants it: the stock record types' views include the damage records' own, which a
+ * list may name too.
+ */
+function distinct(authorities: readonly SyntheticAuthority[]): readonly SyntheticAuthority[] {
+  return [...new Map(authorities.map((each) => [`${each.recordType}:${each.action}`, each] as const)).values()];
+}
+
 /** What a reporter holds: reporting and reading damage, storing photos, and seeing the stock it holds (goods-in 11). */
-export const REPORTER_AUTHORITY: readonly SyntheticAuthority[] = [
+export const REPORTER_AUTHORITY: readonly SyntheticAuthority[] = distinct([
   { recordType: 'stock.damage_report', action: 'view' },
   { recordType: 'stock.damage_report', action: 'create' },
   { recordType: 'files_imports.stored_file', action: 'create' },
   ...STOCK_VIEW,
-];
+]);
+
+/** What a Store's staff hold who receive goods and report damage on them (goods-in 4, 8.1, 11). */
+export const RECEIVER_REPORTER_AUTHORITY: readonly SyntheticAuthority[] = distinct([
+  ...RECEIVER_AUTHORITY,
+  ...REPORTER_AUTHORITY,
+]);
 
 /**
  * What a decider holds, as Operations (P-OPS) or whoever confirms or rejects a report made by someone else (goods-in
  * 8.3, 11): approve on the report, reading it and the approval panel, and seeing the stock its decision writes, since
  * the ledger's rows are scoped (stock-ledger 14.3).
  */
-export const DECIDER_AUTHORITY: readonly SyntheticAuthority[] = [
+export const DECIDER_AUTHORITY: readonly SyntheticAuthority[] = distinct([
   { recordType: 'stock.damage_report', action: 'view' },
   { recordType: 'stock.damage_report', action: 'approve' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
   ...STOCK_VIEW,
-];
+]);
 
 /** What proposes a reversal of a confirmation (goods-in 8.3). */
-export const PROPOSER_AUTHORITY: readonly SyntheticAuthority[] = [
+export const PROPOSER_AUTHORITY: readonly SyntheticAuthority[] = distinct([
   { recordType: 'stock.damage_report', action: 'view' },
   { recordType: 'stock.damage_reversal', action: 'create' },
   ...STOCK_VIEW,
-];
+]);
 
 /** What approves a reversal, a different person from its proposer (goods-in 8.3; PRD-STK-017). */
-export const REVERSAL_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
+export const REVERSAL_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = distinct([
   { recordType: 'stock.damage_report', action: 'view' },
   { recordType: 'stock.damage_reversal', action: 'approve' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
   ...STOCK_VIEW,
-];
+]);
 
 function ok<A>(
   outcome:

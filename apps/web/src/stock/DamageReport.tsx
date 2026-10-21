@@ -197,6 +197,14 @@ export function DamageReportView({ reportId }: { reportId: string }) {
               <StatusBadge state={stateIdOf(report.state)} />
               <span className="flex-1" />
               <AsOf asOf={asOf} timeZone={timeZone} />
+              {/* The decision is made elsewhere, in My work, so the report is read again on request. */}
+              <Button
+                label="damage.refresh"
+                size="small"
+                onClick={() => {
+                  void query.refetch();
+                }}
+              />
             </div>
             <DamageReportFacts report={report} />
             {report.state === 'Submitted' && (

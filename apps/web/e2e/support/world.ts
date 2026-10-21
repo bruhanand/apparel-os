@@ -235,6 +235,18 @@ export interface SyntheticWorld {
     readonly storeOptions: ReceivingOptions;
     readonly storeBatchStyleCode: string;
   };
+  /**
+   * The damage journey (S2-F08-T01), in the receiving Organisation, in a world of its own: a Store's staff (P-STM) who
+   * receive and report damage at their Store only, Operations (P-OPS), who decides reports from My work, the approve
+   * reason in force, and how the screens name the world's records.
+   */
+  readonly damage: {
+    readonly organisationCode: string;
+    readonly reporter: EnrolledUser;
+    readonly operations: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;

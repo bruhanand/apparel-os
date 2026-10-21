@@ -3218,6 +3218,7 @@ export const englishIndia = {
   'damage.reversal.proposed': 'Reversal proposed. A different person approves it in My work.',
   'damage.reversal.line': '{reason} — {state}',
   'damage.reading-again': 'Wait while the report is read again.',
+  'damage.refresh': 'Read the report again',
 
   // A setting a refusal names as missing, by name (code-house-rules 12.14; PRD-UXP-003).
   'missing.setting.named': 'Not set yet: {setting}.',
