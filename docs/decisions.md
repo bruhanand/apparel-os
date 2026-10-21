@@ -1405,3 +1405,12 @@
   - PT approval makes the PT official and values the stock. The goods then are scanned and inwarded at the Site: at a Store into the floor or backstore, at a warehouse into a bin. Only then are they sellable at a Store (`PRD-REC-021`, `PRD-REC-022`, `PRD-STK-003` stand). This corrects round 1 answer 2 and the words "the approval makes the stock real and sellable" in `DEC-134`.
 - **Why.** The product owner's description of the flow, which matches the earlier RetailsOps system document ([system-dumb.md](history/system-dumb.md) sections 6.1, 13.3, 13.8, 18.6).
 - **Changed.** `PRD-MER-007` reworded. `roadmap.md` stage 2 first version. Not changed: `PRD-PTW-007` (fields calculated from a costing profile) waits for the PT workbench (RR-546). The stage 1 code that refuses an ambiguous barcode mapping is changed by RR-547.
+
+## DEC-136 — The first version records bookings and GRNs by hand; AI reading and labels come later
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 11 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Does the first version keep AI reading of booking documents (`DEC-131`) and labels and barcodes for goods that arrive without a brand barcode?
+- **Options.** Both after the first version · either one now.
+- **Choice.** Both after the first version. A booking is recorded by uploading its document (photo or PDF, kept as evidence) and entering the booking by hand; AI reading of booking documents follows later, like the PT workbench. The GRN is all manual entry: the count is entered by hand, and the invoice, other documents and photos are uploaded. The uploaded PT carries every barcode already sorted; generating barcodes and printing labels for goods without a brand barcode follow later.
+- **Why.** The product owner keeps the first version to the manual flow.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 (first version); `coverage.md` note; RR-546 widened. No PRD rule changes: `PRD-BKG-015` (AI part), `PRD-MER-008` and `PRD-REC-020` keep their IDs and wait for their placement (RR-546).

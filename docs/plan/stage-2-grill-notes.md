@@ -114,6 +114,15 @@ Written as `DEC-134`; placement of the deferred parts is RR-546.
 
 Written as `DEC-135` (`PRD-MER-007` reworded; RR-547 for the stage 1 code). The owner asked why questions came back: round 1 answer 2 was built on a recommendation that merged the scan into the PT, and round 10 asked about it again. Latest owner words win; do not re-ask settled points.
 
+## Round 11, 21 Oct 2026 (owner's words)
+
+1. **Booking:** file upload and manual entry; AI reading deferred like the PT workbench. Booking document uploaded, booking entered: the booking is recorded.
+2. **GRN:** all manual entry: counting, and the documents and photos uploaded.
+3. **Labels and barcodes** for goods without a brand barcode: later. The PT uploaded in this version has everything sorted.
+4. Asked what PT corrections and supplier invoice matching are, and why a scan is needed in the GRN (it is not: the count is by hand; the only scan is the inward after PT approval, from round 10).
+
+Written as `DEC-136`.
+
 ## Not settled
 
 - PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.
