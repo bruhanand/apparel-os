@@ -10,5 +10,7 @@ export { partiesSupplierRoles } from './queries/supplier-roles.js';
 // `receiving`'s Arrival and GRN (goods-in 4.2, 4.5; PRD-MER-021, PRD-ORG-014; S2-F02-T02).
 export { brandSupplierLinkedOn } from './queries/links.js';
 export { termsInForce } from './queries/records.js';
+// The terms of the Agreement version a booking's approval fixed, for `booking` (goods-in 3.2; DEC-132; S2-F01-T03).
+export { termsOfVersion } from './queries/records.js';
 export type { Page, PageRequest } from './queries/records.js';
 export { partiesRestoreParticipant } from './restore-participant.js';

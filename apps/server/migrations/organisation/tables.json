@@ -2026,6 +2026,63 @@
       "why": "An open-to-buy budget's record type carries its brand, and every route authorises in its command with that fact, as the masters of organisation are (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
     },
     {
+      "table": "booking.booking",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 3.1, 3.4, 10.1, 10.3; code-house-rules 6.2, 7.1, 7.2, 8.2"
+    },
+    {
+      "table": "booking.booking_version",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.1; code-house-rules 6.2, 7.1, 7.2, 12.14"
+    },
+    {
+      "table": "booking.booking_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.1, 3.7; DEC-130; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_document",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.1; DEC-136; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_change",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.1, 3.4; code-house-rules 6.2, 7.1, 7.2, 12.7"
+    },
+    {
+      "table": "booking.booking_approval",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.2 to 3.4, 10.3; DEC-132; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_number",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.1, 10.4; numbering-and-audit 3.2; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.open_to_buy_reservation",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.3, 3.4, 10.3; POL-05.02; code-house-rules 7.1",
+      "why": "A reservation belongs to an open-to-buy budget, whose record type carries its brand and whose tables are unscoped, so whoever reads a budget's remaining amount reads every reservation of it (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
+    },
+    {
       "table": "receiving.arrival",
       "class": "scoped",
       "marks": ["append-only", "locked"],

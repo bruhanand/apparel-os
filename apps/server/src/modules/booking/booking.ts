@@ -1,5 +1,12 @@
 import {
+  BOOKING_PAGE_CAP,
   OPEN_TO_BUY_PAGE_CAP,
+  type Booking as BookingView,
+  type BookingDocumentsDraft,
+  type BookingDraft,
+  type BookingDraftChange,
+  type BookingPageQuery,
+  type BookingSubmission,
   type OpenToBuyBudget,
   type OpenToBuyBudgetDraft,
   type OpenToBuyBudgetVersionDraft,
@@ -9,8 +16,11 @@ import type { TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, Preparer, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
+import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { CatalogueInterface } from '../merchandise/catalogue/index.js';
+import { attachDocuments, factsOf, recordBooking, saveDraft, submitBooking, type Actor } from './commands/bookings.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
+import { bookingPage, bookingRow, bookingView } from './queries/bookings.js';
 import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
 
 export interface BookingDependencies {
@@ -21,6 +31,8 @@ export interface BookingDependencies {
   >;
   readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn' | 'record' | 'markedAttributeAt'>;
   readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
+  /** Where a booking's documents are attached (goods-in 3.1; S2-F01-T03). */
+  readonly files: Pick<FilesImportsInterface, 'attach'>;
 }
 
 /**
@@ -96,6 +108,44 @@ export class Booking {
     const budget = await budgetOf(context, brandId, seasonValueId);
     if (budget === undefined) return { kind: 'not-approved' };
     return { ...(await remainingOf(context, budget, context.startedAt)), budgetId: budget.id };
+  }
+
+  /** Record a new booking as a Draft, with its first version (goods-in 3.1; S2-F01-T03). */
+  recordBooking(context: TransactionContext, actor: Actor, draft: BookingDraft) {
+    return recordBooking(context, this.dependencies, actor, draft);
+  }
+
+  /** Save a booking's next Draft (goods-in 3.1, 3.5). */
+  saveDraft(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingDraftChange) {
+    return saveDraft(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** Attach booking documents to a Draft (goods-in 3.1). */
+  attachDocuments(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingDocumentsDraft) {
+    return attachDocuments(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** Submit the Draft for its approval (goods-in 3.4). */
+  submitBooking(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingSubmission) {
+    return submitBooking(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** The scope facts of a booking, which every route authorises with (access-and-approvals 5.3); none when unknown. */
+  async bookingFacts(context: TransactionContext, bookingId: string): Promise<RecordFacts | undefined> {
+    const row = await bookingRow(context, bookingId);
+    return row === undefined ? undefined : factsOf(row);
+  }
+
+  /** One booking as the reader sees it, or undefined (goods-in 3.1 to 3.4, section 11). */
+  async readBooking(context: TransactionContext, bookingId: string, today: string): Promise<BookingView | undefined> {
+    const row = await bookingRow(context, bookingId);
+    return row === undefined ? undefined : bookingView(context, this.dependencies, row, today);
+  }
+
+  /** A page of the bookings the reader may see (code-house-rules 12.1 "Reads"; goods-in section 11). */
+  listBookings(context: TransactionContext, query: BookingPageQuery) {
+    const limit = Math.min(query.limit === undefined ? BOOKING_PAGE_CAP : Number(query.limit), BOOKING_PAGE_CAP);
+    return bookingPage(context, query, limit);
   }
 }
 

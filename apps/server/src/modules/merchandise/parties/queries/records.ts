@@ -380,3 +380,39 @@ export async function termsInForce(
     margins: marginsOf(row.margins, showMargins),
   };
 }
+
+/**
+ * The terms of one approved agreement version, which a transaction kept (2.2; PRD-ACP-013), as termsInForce reads
+ * them; undefined when no approved version has the identifier. A booking shows the version its approval fixed
+ * (goods-in 3.2; DEC-132; S2-F01-T03).
+ */
+export async function termsOfVersion(
+  context: TransactionContext,
+  versionId: string,
+  showMargins: boolean,
+): Promise<Omit<TermsInForce, 'asOf'> | undefined> {
+  const [row] = await context.tx
+    .select({
+      agreementId: agreement.id,
+      code: agreement.code,
+      versionId: agreementVersion.id,
+      validDuring: agreementVersion.validDuring,
+      terms: agreementVersion.terms,
+      termsFormat: agreementVersion.termsFormat,
+      margins: agreementVersion.margins,
+    })
+    .from(agreementVersion)
+    .innerJoin(agreement, eq(agreement.id, agreementVersion.agreementId))
+    .where(and(eq(agreementVersion.id, versionId), eq(agreementVersion.decision, 'Approved')));
+  if (row === undefined) return undefined;
+  const dates = datesOf(row.validDuring);
+  return {
+    agreementId: row.agreementId,
+    code: row.code,
+    versionId: row.versionId,
+    validFrom: dates.start,
+    ...(dates.end === undefined ? {} : { validTo: dates.end }),
+    terms: termsAsRead(row.terms, row.termsFormat),
+    margins: marginsOf(row.margins, showMargins),
+  };
+}

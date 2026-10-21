@@ -425,10 +425,17 @@ const BRAND: ScopeFactsDeclared = { legalEntity: false, place: false, brand: tru
  * `booking.open_to_buy_check`, which no permission on the budget gives, so the check and the approval are held apart
  * (POL-05.09); view on it reads the check's evidence. **Design choice**; who holds them is the product owner's to
  * name (V-01).
+ *
+ * A booking (goods-in 3.1 to 3.4; S2-F01-T03) belongs to its destination, one Site, and to its brand, so it carries
+ * the place and the brand; several Stores may trade at one Site and the business unit is chosen when the goods arrive,
+ * so it carries no Store, no unit and no legal entity, and a place scope covering its Site covers it. Create records a booking as a Draft; edit saves its next Draft, attaches its documents and submits
+ * it; approve decides it, within the approver's booking limit on its value at cost (DM-8, DEC-105). **Design
+ * choice**; who holds them is the product owner's to name (V-01).
  */
 const bookingRecordTypes = [
   declare('booking.open_to_buy_budget', PREPARED, BRAND),
   declare('booking.open_to_buy_check', ['view', 'approve'], BRAND),
+  declare('booking.booking', PREPARED, PLACE_AND_BRAND),
 ] as const;
 
 /**

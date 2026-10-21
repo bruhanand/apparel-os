@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest } from '../../access/index.js';
 import type { CatalogueInterface, CatalogueRecord } from '../../merchandise/catalogue/index.js';
-import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
+import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion, openToBuyReservation } from '../db/schema.js';
 import { versionState } from '../domain/budgets.js';
 
 // The reads of open-to-buy budgets (goods-in 3.3, section 11; PRD-BKG-004): each budget with its brand and season,
@@ -120,10 +120,17 @@ export async function inForceAt(
 }
 
 /**
- * The value approved bookings of a budget's brand and season reserve (3.3; POL-05.02). Reservations arrive with the
- * booking's approval (S2-F01-T03); until then nothing is reserved, which is a known zero, not Unknown.
+ * The value approved bookings of a budget's brand and season reserve (3.3; POL-05.02): the sum of the budget's
+ * reservations, each written by a booking's approval (S2-F01-T03). With none, nothing is reserved, a known zero, not
+ * Unknown. Summed by PostgreSQL as an exact numeric and read back as whole paise (PRD-MOD-014).
  */
-const NOTHING_RESERVED: Paise = paise(0);
+export async function reservedOf(context: TransactionContext, budgetId: string): Promise<Paise> {
+  const [row] = await context.tx
+    .select({ reserved: sql<string>`coalesce(sum(${openToBuyReservation.amountPaise}), 0)::text` })
+    .from(openToBuyReservation)
+    .where(eq(openToBuyReservation.openToBuyBudgetId, budgetId));
+  return paise(Number(row?.reserved ?? '0'));
+}
 
 /** The remaining open-to-buy of a budget at an instant: the approved amount less what is reserved (3.3). */
 export async function remainingOf(
@@ -133,7 +140,7 @@ export async function remainingOf(
 ): Promise<OpenToBuyRemaining> {
   const approved = await inForceAt(context, budget.id, at);
   if (approved === undefined) return { kind: 'not-approved' };
-  const reserved = NOTHING_RESERVED;
+  const reserved = await reservedOf(context, budget.id);
   return {
     kind: 'approved',
     versionId: approved.versionId,

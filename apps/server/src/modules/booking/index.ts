@@ -6,3 +6,7 @@ export type { BookingDependencies, BookingInterface } from './booking.js';
 export { bookingApprovals } from './commands/effects.js';
 export type { EffectDependencies as BookingApprovalDependencies } from './commands/effects.js';
 export { bookingRestoreParticipant } from './restore-participant.js';
+// The booking number kind (goods-in 3.1, 10.4) and a booking's approval at the policy gate (goods-in 10.5; S2-F01-T03).
+export { BOOKING_KIND, BOOKING_SCOPE_KEY } from './domain/kinds.js';
+export { APPROVE_BOOKING, APPROVE_BOOKING_TERMS, BOOKING_CAPABILITY, BOOKING_OPERATIONS } from './domain/gate.js';
+export { bookingApproved } from './events.js';
