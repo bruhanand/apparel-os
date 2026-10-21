@@ -16,4 +16,8 @@ The shape change (a migration if the stored shape changes), schema and OpenAPI, 
 
 ## Done when
 
-No route, screen or stored version carries the default model; existing synthetic agreement versions read back with every other term unchanged; every check passes; RR-545 closed in open-items.
+No route or screen carries the default model and no new version can store it; versions already stored are never rewritten (approved records stay as stored, code-house-rules part A): they keep the term as stored, it is ignored when they are read, and every other term reads back unchanged; every check passes; RR-545 closed in open-items.
+
+## Comments
+
+- 21 Oct 2026: the builder's first version rewrote the stored synthetic agreement versions in a migration. Reworked to keep approved versions untouched, the recommended option put to the product owner; the product owner may still choose the one-off rewrite instead.
