@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 21 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): `S2-F01-T01` and `S2-F02-T01` done; `S2-F01-T02` and `S2-F04-T01` built, reviewed and merged, waiting for the product owner's answers (RR-548 to RR-550, RR-554); `S2-F02-T02` being built.
+Updated 21 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): `S2-F01-T01` and `S2-F02-T01` done; `S2-F01-T02` and `S2-F04-T01` built, reviewed and merged, waiting for the product owner's answers (RR-548 to RR-550, RR-554); `S2-F02-T02` built, reviewed and merged, waiting for RR-555 to RR-559.
 
 ## 3. Scope
 
@@ -51,7 +51,7 @@ Policies 1, 3, 5, 17 and the stage 2 parts of 10 Signed and validated, their val
 | [F01-T03 Record and approve a booking](s2-f01-bookings/tickets/T03-record-and-approve-a-booking.md) | blocked | F01-T01, F01-T02 |
 | [F01-T04 Issued, Confirmed, changes, cancellation and overdue](s2-f01-bookings/tickets/T04-issue-confirm-change-cancel-and-overdue.md) | blocked | F01-T03 |
 | [F02-T01 Ledger: receipt count without a product, identity step](s2-f02-arrival-count-and-grn/tickets/T01-receipt-count-without-a-product.md) | done | — |
-| [F02-T02 Inbox, Arrival, count and a clean GRN](s2-f02-arrival-count-and-grn/tickets/T02-inbox-arrival-count-and-a-clean-grn.md) | in-progress | F02-T01 (done) |
+| [F02-T02 Inbox, Arrival, count and a clean GRN](s2-f02-arrival-count-and-grn/tickets/T02-inbox-arrival-count-and-a-clean-grn.md) | ready-for-human | — (RR-555 to RR-559) |
 | [F08-T01 Damage reports](s2-f08-damage-holds/tickets/T01-damage-reports.md) | blocked | F02-T02 |
 | [F02-T03 Findings and held-line decisions](s2-f02-arrival-count-and-grn/tickets/T03-findings-and-held-lines.md) | blocked | F02-T02, F08-T01 |
 | [F02-T04 Receive against a booking](s2-f02-arrival-count-and-grn/tickets/T04-receive-against-a-booking.md) | blocked | F02-T02, F01-T04 |
