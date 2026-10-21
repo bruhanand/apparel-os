@@ -277,7 +277,7 @@ export const externalCode = merchandise.table('external_code', {
 /** A half-open range of instants, `[start, end)`, read and written as PostgreSQL's text form (7.3). */
 const tstzrange = customType<{ data: string; driverData: string }>({ dataType: () => 'tstzrange' });
 
-/** A marking: the season or the size list, each once (4.2 "As built"; migration 0089). */
+/** A marking: the season or the size list, each once (4.2 "As built"; migration 0090). */
 export const markedAttribute = merchandise.table('marked_attribute', {
   id: uuid('id').primaryKey(),
   mark: text('mark').$type<AttributeMark>().notNull(),
