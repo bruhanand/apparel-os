@@ -6,7 +6,7 @@ Status: **Current**, 3 Oct 2026. If this document disagrees with [prd.md](../../
 
 Implements these PRD sections: Module and data boundaries; Transaction and integration integrity; Delivery stages. For ownership only, it places every other PRD section in a module (section 11).
 
-- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-013`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`, `PRD-LED-019`, `PRD-LED-020`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
+- PRD IDs: `PRD-STG-001`, `PRD-STG-002`; `PRD-ORG-001`–`PRD-ORG-021`; `PRD-ACS-001`–`PRD-ACS-023`; `PRD-MER-001`, `PRD-MER-002`, `PRD-MER-004`–`PRD-MER-007`, `PRD-MER-013`, `PRD-MER-014`, `PRD-MER-018`; `PRD-IMP-002`–`PRD-IMP-013`; `PRD-BKG-001`–`PRD-BKG-015`; `PRD-REC-001`–`PRD-REC-022`; `PRD-PTW-001`–`PRD-PTW-013`; `PRD-STK-008`–`PRD-STK-017`; `PRD-TRF-001`–`PRD-TRF-026`; `PRD-DMG-001`–`PRD-DMG-017`; `PRD-POS-001`–`PRD-POS-022`; `PRD-RET-001`, `PRD-RET-003`–`PRD-RET-023`; `PRD-EBO-001`–`PRD-EBO-011`; `PRD-OFR-001`–`PRD-OFR-020`; `PRD-LED-001`–`PRD-LED-005`, `PRD-LED-007`–`PRD-LED-015`, `PRD-LED-019`, `PRD-LED-020`; `PRD-CSH-001`–`PRD-CSH-011`; `PRD-PAY-001`–`PRD-PAY-014`; `PRD-TAX-001`–`PRD-TAX-009`; `PRD-NAV-001`–`PRD-NAV-017`; `PRD-FRN-001`–`PRD-FRN-007`; `PRD-HRM-001`–`PRD-HRM-019`; `PRD-EXC-001`–`PRD-EXC-021`; `PRD-LIF-001`–`PRD-LIF-023`, `PRD-LIF-025`–`PRD-LIF-029`; `PRD-UXP-003`, `PRD-UXP-006`, `PRD-UXP-007`; `PRD-MOD-001`–`PRD-MOD-011`, `PRD-MOD-013`–`PRD-MOD-016`; `PRD-INT-001`–`PRD-INT-013`; `PRD-OFF-001`–`PRD-OFF-019`; `PRD-SEC-001`–`PRD-SEC-011`, `PRD-SEC-013`–`PRD-SEC-015`, `PRD-SEC-017`, `PRD-SEC-018`; `PRD-PRF-003`, `PRD-PRF-004`; `PRD-ACP-004`, `PRD-ACP-013`, `PRD-ACP-018`. Section 11.1 places every requirement ID of the PRD in a module.
 - Policies: 1 (`POL-01.02`–`POL-01.04`, `POL-01.06`, `POL-01.07`), 2 (`POL-02.06`–`POL-02.09`, `POL-02.12`, `POL-02.14`–`POL-02.20`, `POL-02.22`, `POL-02.23`, `POL-02.25`), 3 (`POL-03.05`), 4 (`POL-04.03`, `POL-04.04`, `POL-04.08`, `POL-04.09`), 5 (`POL-05.01`), 9 (`POL-09.01`, `POL-09.02`, `POL-09.04`, `POL-09.11`–`POL-09.13`, `POL-09.24`), 10 (`POL-10.01`, `POL-10.02`, `POL-10.07`, `POL-10.08`), 11 (`POL-11.01`), 14 (`POL-14.07`), 18 (`POL-18.05`). Section 11.2 places all 19 policies.
 - Decisions: DEC-003, DEC-005, DEC-013, DEC-015, DEC-016, DEC-037, DEC-041, DEC-043, DEC-044, DEC-051, DEC-054, DEC-056, DEC-066, DEC-071, DEC-084, DEC-086, DEC-087, DEC-092, DEC-093, DEC-097, DEC-099, DEC-100, DEC-101, DEC-105, DEC-106, DEC-107, DEC-113, DEC-114, DEC-116.
 
@@ -408,11 +408,11 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Maintain masters | Booking, Admin | Brands, categories, size sets, attributes, units, pack conversions with history (`POL-04.03`, `POL-04.04`) | — |
 | Change a tracking profile | Booking, Operations | Effective-dated. A change to piece-tracked takes effect only through a labelling count (`PRD-MER-018`, `POL-04.09`, DEC-054) | Stock exists and no labelling count is planned; as built, a change back to quantity while a Site holds pieces (structure-and-masters 4.6) |
 | Read a party; read the terms in force | `booking`, `receiving`, `stock`, `finance`, `supplier-returns` | The party, and the agreement version in force for a brand or supplier on a date (`PRD-ORG-016`) | — |
-| Maintain an agreement | Booking; approver | Effective-dated versions with history; terms may be revised later (`PRD-ORG-016`, `POL-01.03`). A booking's own terms follow `POL-01.04` in `booking` | A version would overlap another in the same scope (`PRD-MOD-010`) |
+| Maintain an agreement | Booking; approver | Effective-dated versions with history; terms may be revised later (`PRD-ORG-016`, `POL-01.03`). A booking has no terms of its own: it takes the terms in force (`POL-01.04`, `DEC-129`) | A version would overlap another in the same scope (`PRD-MOD-010`) |
 
 - Brands, suppliers, agents, ordering parties, invoicing parties and goods movers are kept independently (`PRD-MER-001`).
 - Unknown values are kept. Missing size is distinct from an explicitly supplied Free Size (`PRD-MER-005`).
-- An agreement's label never decides ownership, valuation or recognition by itself (`PRD-ORG-014`, `POL-01.06`, `POL-01.07`). Booking-level terms and overrides live in `booking` (`POL-01.02`, `POL-01.03`, `PRD-BKG-002`).
+- An agreement's label never decides ownership, valuation or recognition by itself (`PRD-ORG-014`, `POL-01.06`, `POL-01.07`). A booking has no terms of its own; `booking` reads the agreement's terms in force (`POL-01.02`, `POL-01.03`, `PRD-BKG-002`, `DEC-129`).
 - A supplier's bank details are restricted fields, and a change to them is independently approved (`PRD-ACS-008`, `POL-02.07`).
 - `merchandise` implements the scope contract for brand (rule 6).
 - `merchandise` defines the stock-presence contract, which `stock` · ledger implements, and the catalogue the supplier-role contract, which the parties part implements (rule 6; `S1-F03-T02`). `stock` · ledger reads a SKU through Read a SKU as of a date (stock-ledger 13.9).
@@ -509,7 +509,7 @@ Outline only. Each gets its own design before its stage. Every module below also
 | Module · part | Stage | Responsibility | Calls on the foundation | Main IDs |
 | --- | --- | --- | --- | --- |
 | `merchandise` · PT | 2 | PT workbench; submitted revision, review and independent approval make a PT official; frozen values; linked corrections; labels from official values; the KDPS export profile as a view | `files-imports` (source files), `merchandise` · catalogue, `receiving` (GRN lines), `stock` · ledger (coverage, cost established, cost adjustment), `access` (approval on proposed acquisition cost) | `PRD-REC-014`–`PRD-REC-020`, `PRD-PTW-001`–`PRD-PTW-013`, policy 3 |
-| `booking` | 2 | Bookings and their lifecycle (`POL-05.01`), open-to-buy, supplier confirmations, late-delivery follow-up | `merchandise`, `organisation`, `numbering`, `exceptions` | `PRD-BKG-001`–`PRD-BKG-013`, policy 5 |
+| `booking` | 2 | Bookings and their lifecycle (`POL-05.01`), open-to-buy, supplier confirmations, late-delivery follow-up | `merchandise`, `organisation`, `numbering`, `exceptions` | `PRD-BKG-001`–`PRD-BKG-015`, policy 5 |
 | `receiving` | 2 | Arrival, count, GRN, discrepancies, acceptance and putaway at the actual Site; inbound ownership records | `stock` · ledger (receipt count, holds, acceptance, location move), `booking` (links), `merchandise`, `exceptions`, `files-imports` (evidence) | `PRD-REC-001`–`PRD-REC-013`, `PRD-REC-021`, `PRD-REC-022`, `PRD-ORG-017`–`PRD-ORG-019` |
 | `stock` · documents | 2–3 | Damage reports and their independent confirmation; transfers from request to acceptance; full and cycle counts; adjustments; write-offs; disposals | `stock` · ledger, `access` (approval on cost), `organisation` (routes), `exceptions` | `PRD-TRF-001`–`PRD-TRF-026`, `PRD-STK-008`–`PRD-STK-017`, `PRD-DMG-001`–`PRD-DMG-017`, policy 17 |
 | `supplier-returns` | 3 | Return rights and deadlines by receipt origin; proposed lists; RTV legs and outcomes; the claims register | `stock` · ledger (reservations, departure, handover), `merchandise` · parties (terms), `exceptions` | `PRD-OFR-008`–`PRD-OFR-020` |
@@ -749,7 +749,7 @@ Every requirement ID in [prd.md](../../prd.md) is listed once, with the module t
 | `PRD-MER-001` | `merchandise` · parties |
 | `PRD-MER-002`–`PRD-MER-018` | `merchandise` · catalogue, with `stock` · ledger for piece rules and `merchandise` · PT for labels |
 | `PRD-IMP-001`–`PRD-IMP-013` | `files-imports` |
-| `PRD-BKG-001`–`PRD-BKG-013` | `booking`, with `planning` for `PRD-BKG-012` |
+| `PRD-BKG-001`–`PRD-BKG-015` | `booking`, with `planning` for `PRD-BKG-012` |
 | `PRD-REC-001`–`PRD-REC-013`, `PRD-REC-021`, `PRD-REC-022` | `receiving`, with `stock` · ledger |
 | `PRD-REC-014`–`PRD-REC-020` | `merchandise` · PT |
 | `PRD-PTW-001`–`PRD-PTW-013` | `merchandise` · PT |
@@ -804,7 +804,7 @@ Where each policy's configured values live. The policy's status and the gate are
 
 | Policy | Values live in |
 | --- | --- |
-| 1 Commercial ownership | `merchandise` · parties (agreements); `booking` (booking-level terms) |
+| 1 Commercial ownership | `merchandise` · parties (agreements; bookings carry no terms of their own, `DEC-129`) |
 | 2 Permissions and approvals | `access`; routing in `exceptions`; alerts in My work before stage 5 and in `notifications` from stage 5 (DEC-099); the daily summary in `notifications`; count rules in `stock` · documents |
 | 3 Source conflicts and pricing | `merchandise` · PT (costing profiles); `exceptions` |
 | 4 Merchandise tracking | `merchandise` · catalogue |

@@ -1337,3 +1337,30 @@
 - **Choice.** Arrival: one delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Batch keeps its lot-and-expiry meaning.
 - **Why.** The PRD and the earlier RetailsOps goods plan already use arrival; batch would clash with lot tracking.
 - **Changed.** PRD "Words used": new word Arrival. Whether an Arrival also gives exactly one PT (`PRD-REC-015` allows supplemental PTs) waits for the PT discussion the product owner will open.
+
+## DEC-129 — Booking terms come only from the Agreement
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, rounds 3 and 4 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Policy 1 and `PRD-BKG-002` treat the brand's or supplier's terms as defaults that a single booking may change (its commercial model, return rights and payment terms). Should a booking be able to change them?
+- **Options.** Terms only from the Agreement · the Agreement's terms as defaults that a booking may change · terms typed into each booking from the signed MOU.
+- **Choice.** The first. The signed MOU with the supplier or brand is recorded once as its Agreement, with the signed copy attached. Every booking under it takes its terms and never differs. A change of terms is a new Agreement version.
+- **Why.** One signed source of terms: nothing is retyped, and no booking drifts from what was signed.
+- **Changed.** PRD "Words used": new word Agreement. `PRD-BKG-002` reworded. `POL-01.02`, `POL-01.03`, `POL-01.04`, `POL-01.08` and `POL-01.14` reworded (IDs kept). module-map 5 and 9, domain-model, structure-and-masters 5.2 and `coverage.md` wording. The Agreement's "default model for new bookings" term is retired; its field in code is removed by RR-545. Not changed: `POL-03.06` (the costing profile is not an Agreement term). Still OPEN: which Agreement a booking takes when both its supplier and its brand have one (RR-543), and which Agreement version a booking follows when the terms are revised after it is approved (RR-544); product owner, before the stage 2 booking design is approved.
+
+## DEC-130 — Booking lines, their prices and their match to the GRN
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, rounds 3 to 5 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Which fields must a booking line have, does it carry a price, and how does a counted GRN line find its booking line?
+- **Options.** Lines: style code and quantity required, colour and size optional · every line by style, colour and size, as the size-colour grid implied. Price: an indicative cost and MRP per line · open-to-buy checked on pieces only. Match: at GRN issue, on the booking line's own fields · in a separate, dated linking step afterwards (the earlier RetailsOps plan).
+- **Choice.** Style code and quantity are required; colour and size are optional, for orders placed at style level. Each line carries an indicative cost and an MRP, used only for the booking's totals and the open-to-buy check; they never become the receipt cost. At GRN issue, a counted line links to the one booking line that matches its style code, and its colour and size where the booking line gives them; any other line goes to Booking for review. One booking can arrive over several Arrivals.
+- **Why.** The product owner's description of a booking; the open-to-buy check and the booking totals need a value (`PRD-BKG-003`, `PRD-BKG-004`).
+- **Changed.** `PRD-BKG-001`, `PRD-BKG-003` and `PRD-BKG-007` reworded.
+
+## DEC-131 — A booking is read from a photo or PDF of its document
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 4 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** How does a booking get into the system?
+- **Options.** AI reads a photo or PDF of the booking document into a draft, with manual entry kept open · one fixed booking template · manual entry only.
+- **Choice.** The first; there is no fixed template. AI reads the document into a draft booking with its lines, and a person reviews and saves it; AI never saves anything by itself (`PRD-SEC-003`, `PRD-SEC-004`). Manual entry stays available. The AI gateway therefore serves bookings in stage 2 too, switched off by default like every capability (`PRD-SEC-017`, `DEC-105`).
+- **Why.** Booking documents come as photos or PDFs in no fixed layout.
+- **Changed.** New `PRD-BKG-015`. `phases.md` stage 2 and `roadmap.md` `S2-F01`, `S2-F05` wording; module-map 9 range; `coverage.md`.

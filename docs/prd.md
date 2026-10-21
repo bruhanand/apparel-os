@@ -92,6 +92,7 @@ Business words:
 | Acceptance | Confirmation that goods meet the applicable identity, count, condition, policy and destination checks |
 | Accrual | Recording income, expense, assets or obligations when their applicable recognition event occurs, rather than only when cash moves |
 | Ageing | How long stock has been held, or how long a due has been unpaid |
+| Agreement | The signed commercial terms with a supplier or brand (its MOU), recorded once with the signed copy attached and revised only by a new version. Every booking under it takes its terms |
 | Arrival | One delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Not a batch, which means goods tracked by lot and expiry |
 | AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
@@ -358,13 +359,13 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 ## Booking and buying
 
-- `PRD-BKG-001` Create bookings by brand, season and destination, using style/size quantities and a size-colour grid.
-- `PRD-BKG-002` Record booking-specific terms with effective brand/supplier terms as defaults.
-- `PRD-BKG-003` Show total pieces, indicative cost and MRP values. Indicative booking cost does not replace approved receipt cost.
+- `PRD-BKG-001` Create bookings by brand, season and destination. Each line has a style code and a quantity; colour and size are optional, for orders placed at style level. Lines with colour and size are entered through a size-colour grid.
+- `PRD-BKG-002` Take a booking's terms from the supplier's or brand's Agreement. A booking records no terms of its own and cannot change the Agreement's.
+- `PRD-BKG-003` Give each booking line an indicative cost and an MRP. Show total pieces, indicative cost and MRP values. Indicative booking cost serves only these totals and the open-to-buy check; it never replaces approved receipt cost.
 - `PRD-BKG-004` Control booking approval against the open-to-buy budget by brand and season.
 - `PRD-BKG-005` Track ordered, delivered, outstanding and cancelled quantities separately from invoice discrepancies.
 - `PRD-BKG-006` Derive delivered quantities from retained receipt links rather than a manually maintained counter.
-- `PRD-BKG-007` At GRN issue against a booking, link a counted line only when it has one exact style-and-size match. Preserve actor and date; ambiguous lines require buyer review.
+- `PRD-BKG-007` At GRN issue against a booking, link a counted line only when exactly one booking line matches its style code, and its colour and size where the booking line gives them. Preserve actor and date; any other line goes to Booking for review.
 - `PRD-BKG-008` Support deliveries without a booking and subsequent authorised linking.
 - `PRD-BKG-009` Record expected delivery dates, transporter and lorry receipt references; notify responsible users of late deliveries.
 - `PRD-BKG-010` Compare supplier order confirmations with bookings and show differences for review.
@@ -372,6 +373,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-BKG-012` Suggest buying and size quantities from qualified sales history, with human approval.
 - `PRD-BKG-013` Configure commitment, amendment and cancellation rules; cancellation cannot erase quantities already physically received.
 - `PRD-BKG-014` Each booking names its actual supplier.
+- `PRD-BKG-015` Create a booking from a photo or PDF of the booking document: AI reads it into a draft booking with its lines, which a person reviews and saves. Manual entry stays available.
 
 ## Receiving and price tickets
 

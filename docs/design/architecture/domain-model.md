@@ -296,7 +296,7 @@ Owner: `merchandise` · parties. `PRD-MER-001`, `PRD-ORG-014`–`PRD-ORG-016`; p
 | Record | What it is | Identity | Rules | IDs |
 | --- | --- | --- | --- | --- |
 | Party | A supplier, agent, ordering party, invoicing party or goods mover | Party code, unique in the Organisation | Each kind is maintained independently. Bank details are restricted fields, and every party's bank-detail change needs a different authorised approver (GC2-6, DEC-105) | `PRD-MER-001`, `PRD-ACS-008` |
-| Agreement | The commercial terms with a brand or supplier | Agreement code, unique in the Organisation | Effective-dated versions. Bookings inherit it and may override it | `PRD-ORG-016`, `POL-01.02`, `POL-01.03` |
+| Agreement | The commercial terms with a brand or supplier | Agreement code, unique in the Organisation | Effective-dated versions. Every booking under it takes its terms and cannot change them (`DEC-129`) | `PRD-ORG-016`, `POL-01.02`, `POL-01.03` |
 
 An agreement version holds, as the governing agreement sets them:
 
@@ -310,7 +310,7 @@ Rules:
 - Ownership comes from the agreement. The outright or sale-or-return label alone decides neither legal title, valuation nor accounting recognition (`PRD-ORG-014`, `POL-01.06`).
 - Sale-or-return rights are separate from ownership transfer. PT approval does not change legal ownership by itself (`POL-01.07`).
 - There is no universal return window (`POL-01.11`).
-- **Lifecycle.** An agreement has effective-dated versions and may be revised later (`PRD-ORG-016`, `POL-01.03`). On a booking, terms are edited directly while the booking is a Draft; once goods or accounting entries exist, a change is a recorded amendment that keeps history (`POL-01.04`).
+- **Lifecycle.** An agreement has effective-dated versions and may be revised later (`PRD-ORG-016`, `POL-01.03`). A booking never edits terms; a change of terms is a new agreement version, which keeps history (`POL-01.04`, `DEC-129`).
 - Customers belong to `pos`, partners to `partners` and employees to `hr`. Records stay separate in each module. An optional link by tax identity shows one legal person's records together; payables and receivables are never netted automatically (DM-7, DEC-105).
 - **OPEN:** each brand's real model and terms (V-14; KDPS Owner, Accounts; stage 2).
 

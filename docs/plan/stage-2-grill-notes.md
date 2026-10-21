@@ -60,6 +60,12 @@ Answers (the product owner accepted each recommendation):
 2. **Required item fields.** Style code and quantity on every line; colour and size optional, for orders placed at style level.
 3. **How a booking gets in.** There is no fixed template. The booking document arrives as a photo or a PDF; AI reads it and adds the booking lines as a draft; manual entry stays open (`PRD-SEC-003`).
 
+## Round 5, 21 Oct 2026 (booking)
+
+1. **Prices on booking lines.** Each line carries an indicative cost and an MRP, for the booking's totals and the open-to-buy check only; they never become the receipt cost.
+
+Booking is written up: `DEC-129` (terms only from the Agreement), `DEC-130` (lines, prices, match to the GRN), `DEC-131` (read from a photo or PDF by AI, manual entry open). Two small booking points are open as RR-543 (which Agreement when both the supplier and the brand have one) and RR-544 (which Agreement version a booking follows after a revision).
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.

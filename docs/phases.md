@@ -72,7 +72,7 @@ This document divides the product in [prd.md](prd.md) into six delivery stages a
 - Sample layouts and readers: the XLS, XLSB and CSV readers beside stage 1's XLSX; the KDPS PT template and the chosen vendor-PT and earlier-POS layouts proved on synthetic replicas; a 10,000-line structured PT file parsed, mapped and validated in under one minute (PRD "Performance"; `PRD-IMP-001`, `PRD-PRF-001`, `DEC-115`).
 - Booking and buying, except buying suggestions from sales history.
 - Receiving and price tickets, including the PT workbench and the KDPS export profile.
-- The AI gateway for PT source files (`DEC-105`), switched off by default as a capability control (`PRD-SEC-017`).
+- The AI gateway for booking documents and PT source files (`DEC-105`, `DEC-131`), switched off by default as a capability control (`PRD-SEC-017`).
 - Labels, including piece IDs for piece-tracked goods, barcode verification, acceptance and putaway at the selling Site. A profile changed to piece-tracked after stock exists needs a labelling count first (`PRD-MER-018`).
 - Inbound ownership: goods owned under an agreement before receipt, recorded outside stock, with an amount only from invoice or agreement-price evidence, and closed against the receipt count (`PRD-ORG-017` to `PRD-ORG-019`).
 - Damage reported at or after receipt: immediate hold, independent confirmation or rejection.

@@ -51,19 +51,19 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 **Answer:**
 
 - `POL-01.01` Supported commercial models: outright purchase, purchase with return rights (sale-or-return), and consignment.
-- `POL-01.02` For each brand, a configured default commercial model is preselected on every new booking. The model can be changed for an individual booking.
-- `POL-01.03` Commercial models and related commercial terms are configurable at both the brand and booking levels and may be revised later.
-- `POL-01.04` Commercial terms may be edited directly while the booking is a draft. Once goods or accounting entries exist, subsequent changes use a recorded amendment that preserves prior transaction history.
+- `POL-01.02` The commercial model is set in the supplier's or brand's Agreement and applies to every booking under it. A booking cannot change it.
+- `POL-01.03` Commercial models and related commercial terms are configured in the Agreement, recorded from the signed MOU, and may be revised later through a new Agreement version. Bookings carry no terms of their own.
+- `POL-01.04` A booking never edits commercial terms. A change of terms is a new effective-dated Agreement version, which preserves prior transaction history.
 - `POL-01.05` The ownership-transfer event is configurable per brand agreement and inherited by its bookings. Options include supplier dispatch, receipt and acceptance by KDPS, sale to the customer (typically for consignment), or another explicitly agreed event.
 - `POL-01.06` Receipt and acceptance may be proposed for a new purchase agreement, but must be confirmed against the actual supplier terms. The configured event does not automatically assign ownership or override the governing agreement.
 - `POL-01.07` Sale-or-return rights are separate from ownership transfer. PT approval confirms merchandise data and approved cost; it does not automatically change legal ownership.
-- `POL-01.08` Supplier return rights are configured per brand agreement, inherited by each booking, and may be overridden per booking.
+- `POL-01.08` Supplier return rights are configured per Agreement and apply to every booking under it; a booking cannot override them.
 - `POL-01.09` Each agreement specifies whether unsold goods may be returned, the return window in days or as a fixed season-end date, and whether the window starts at dispatch, receipt, or acceptance.
 - `POL-01.10` Each agreement also specifies eligible condition tags, packaging and quantity limits, supplier-approval requirements, freight responsibility and deductions, and whether accepted returns settle by credit note, replacement, or refund.
 - `POL-01.11` The agreement determines the applicable return terms; there is no universal return-window default. Defective or incorrectly supplied goods follow a separate claims process, including under outright purchase.
 - `POL-01.12` For outright and purchase-with-return-rights agreements, supplier payment follows the booking’s agreed due dates, advances, and instalments; unsold stock does not automatically defer payment.
 - `POL-01.13` For consignment, settlement follows the agreed sale or consumption event and reporting cycle, reconciling customer returns and adjustments.
-- `POL-01.14` Payment terms are configurable per brand and may be overridden per booking. Track disputed amounts separately from undisputed amounts due.
+- `POL-01.14` Payment terms are configured per Agreement and apply to every booking under it; a booking cannot override them. Track disputed amounts separately from undisputed amounts due.
 - `POL-01.15` Accounting recognition remains unresolved here and belongs to the Financial posting policy.
 
 **Signed by, date:**
