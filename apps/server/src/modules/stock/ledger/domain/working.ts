@@ -11,6 +11,7 @@ import {
 } from './availability.js';
 import { compareCodeUnits, skuKey, unitKey } from './keys.js';
 import {
+  countedBrandRefused,
   refuse,
   type Condition,
   type DescribedIdentity,
@@ -55,15 +56,6 @@ function describedIdentityRefused(goods: {
     described.styleCode.trim() === '' ||
     [described.colour, described.size].some((text) => text?.trim() === '')
   );
-}
-
-/**
- * Whether the goods a receipt count names give their brand wrongly (13.14, 14.1; RR-555): goods of Unknown SKU name the
- * brand they are counted under, never none; a SKU's goods are of the SKU's brand and name none.
- */
-function countedBrandRefused(goods: { readonly skuId: string | null; readonly brandId?: string | undefined }): boolean {
-  if (goods.skuId !== null) return goods.brandId !== undefined;
-  return typeof goods.brandId !== 'string' || goods.brandId.trim() === '';
 }
 
 export interface Scope {
@@ -660,18 +652,27 @@ export class Working {
     return { siteId, storeId: unit.storeId, businessUnitId, legalEntityId: unit.legalEntityId };
   }
 
-  /** The SKU balance of a SKU at a unit, or of the goods of Unknown SKU there of one brand (14.2; 13.14; RR-555). */
+  /**
+   * The SKU balance of a SKU at a unit, or of the goods of Unknown SKU there of the brand they were counted under (14.2;
+   * 13.14; RR-555): the row of the same unit and SKU, and for goods of Unknown SKU of the same brand.
+   */
   protected skuBalanceOf(
     siteId: string,
     businessUnitId: string,
     skuId: string | null,
     brandId: string | null,
   ): SkuBalanceState {
-    const wanted = skuKey(siteId, businessUnitId, skuId, brandId);
     for (const row of this.skuBalances.values()) {
-      if (skuKey(row.siteId, row.businessUnitId, row.skuId, row.brandId) === wanted) return row;
+      if (
+        row.siteId === siteId &&
+        row.businessUnitId === businessUnitId &&
+        row.skuId === skuId &&
+        (skuId !== null || row.brandId === brandId)
+      ) {
+        return row;
+      }
     }
-    throw new Error(`SKU balance not locked: ${wanted}`);
+    throw new Error(`SKU balance not locked: ${unitKey(siteId, businessUnitId)}|${skuId ?? 'Unknown SKU'}`);
   }
 
   protected activeClaims(filter: (claim: ClaimState) => boolean): ClaimState[] {
@@ -745,7 +746,9 @@ export class Working {
   /** Plan staleness (13.1): every origin with stock here was one Plan found and locked. */
   protected checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
     if (goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
-    const seen = this.inputs.originsSeen.get(skuKey(place.siteId, place.businessUnitId, goods.skuId));
+    const seen = this.inputs.originsSeen.get(
+      skuKey(place.siteId, place.businessUnitId, goods.skuId, this.sku(goods.skuId).brandId),
+    );
     if (candidates.some((row) => row.quantity > 0 && seen?.has(row.receiptOriginId) !== true)) {
       refuse('plan-stale', lineId);
     }

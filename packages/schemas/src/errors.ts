@@ -926,7 +926,8 @@ export const merchandiseCodes = declareCodes({
  *   two mappings of a supplier barcode under one brand, which may name more than one SKU, the same SKU in another unit
  *   (4.3; PRD-MER-007, DEC-135; RR-554).
  * - `merchandise.code-ambiguous`: more than one target matches the code, other than SKUs each named by a barcode
- *   recorded under the brand given, which are answered as candidates (4.7; PRD-MER-007, DEC-135; RR-554).
+ *   recorded under the brand given, or under any brand where none is given, which are answered as candidates (4.7;
+ *   PRD-MER-007, DEC-135; RR-554).
  * - `merchandise.code-not-found`: no mapping of the code matches (4.7).
  * - `merchandise.no-version-in-force`: the SKU has no approved version in force on the date (4.7).
  * - `merchandise.end-not-allowed`: a mapping's end is before today, not after its start, or later than its end.

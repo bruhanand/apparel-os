@@ -24,7 +24,8 @@ export function useGranted(recordType: string, action: PermissionAction): boolea
 
 /**
  * An action button that is disabled, with the missing permission named beside it and as its tooltip, when no role
- * assignment grants it (design-language 10.1, 10.18; PRD-UXP-003). The server checks it again.
+ * assignment grants it (design-language 10.1, 10.18; PRD-UXP-003). The server checks it again. `waiting` disables it
+ * too while the screen waits for something, named as its tooltip.
  */
 export function GrantedButton({
   label,
@@ -32,6 +33,7 @@ export function GrantedButton({
   recordType,
   action,
   variant = 'secondary',
+  waiting,
   onClick,
 }: {
   label: MessageId;
@@ -39,6 +41,8 @@ export function GrantedButton({
   recordType: string;
   action: PermissionAction;
   variant?: 'primary' | 'secondary';
+  /** While set, the button waits, its reason the message given. */
+  waiting?: MessageId | undefined;
   onClick: () => void;
 }) {
   const granted = useGranted(recordType, action);
@@ -48,8 +52,12 @@ export function GrantedButton({
         label={label}
         {...(labelParams === undefined ? {} : { labelParams })}
         variant={variant}
-        disabled={!granted}
-        {...(granted ? {} : { reason: 'setup.needs-permission' as const })}
+        disabled={!granted || waiting !== undefined}
+        {...(granted
+          ? waiting === undefined
+            ? {}
+            : { reason: waiting }
+          : { reason: 'setup.needs-permission' as const })}
         onClick={onClick}
       />
       {!granted && (

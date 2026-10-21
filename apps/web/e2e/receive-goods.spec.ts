@@ -20,22 +20,20 @@ const INVOICE_PDF = {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** The read of one Arrival, `GET /api/receiving/arrivals/{arrivalId}`. */
+const ARRIVAL_READ = /\/api\/receiving\/arrivals\/[^/?]+$/;
+
 /**
- * Saves a line's change and waits until the screen has read the Arrival again, as a person sees the line change before
- * the next step: issuing the GRN sends the Arrival's version token, which the change made newer (goods-in 4.8;
- * code-house-rules 12.7). The read answers the gate too, so it can take a moment.
+ * Has the screen read the Arrival slowly, as on a slow connection, so the GRN is pressed while the Arrival is still
+ * being read again after a change: the change made the Arrival's version newer, and issuing names the version
+ * (code-house-rules 12.7). Answers the step that ends it.
  */
-async function savedAndReadAgain(page: Page, save: () => Promise<void>): Promise<void> {
-  const saved = page.waitForResponse(
-    (response) => response.request().method() === 'POST' && response.url().includes('/count-lines'),
-  );
-  await save();
-  await saved;
-  await page.waitForResponse(
-    (response) =>
-      response.request().method() === 'GET' &&
-      /\/api\/receiving\/arrivals\/[^/]+$/.test(new URL(response.url()).pathname),
-  );
+async function slowArrivalReads(page: Page): Promise<() => Promise<void>> {
+  await page.route(ARRIVAL_READ, async (route) => {
+    if (route.request().method() === 'GET') await new Promise((resolve) => setTimeout(resolve, 1_500));
+    await route.continue();
+  });
+  return () => page.unroute(ARRIVAL_READ);
 }
 
 /** A business date as the screens show it, DD MMM YYYY (design-language 8). */
@@ -161,17 +159,11 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
       .click();
     const change = page.getByRole('form', { name: 'Change' });
     await change.getByLabel(/^Counted quantity/).fill('5');
-    await savedAndReadAgain(page, () => change.getByRole('button', { name: 'Save the change' }).click());
+    const readsAtSpeed = await slowArrivalReads(page);
+    await change.getByRole('button', { name: 'Save the change' }).click();
     await expect(change).toHaveCount(0);
-    // The screen shows the line as saved, read again with the Arrival's new version, before the GRN is issued from it.
-    await expect(
-      page
-        .getByRole('table', { name: 'Lines counted' })
-        .getByRole('row')
-        .filter({ hasText: 'SYN-STYLE-JOURNEY' })
-        .getByRole('cell')
-        .nth(6),
-    ).toHaveText('5');
+    // Pressed at once, while the Arrival is read again: issuing waits for the read and names the change's new version,
+    // so it is never refused as stale (code-house-rules 12.7).
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
     await expect(grn).toBeVisible();
@@ -181,6 +173,7 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
     await expect(grn.getByText(`SYN-INV-JOURNEY of ${shown(organisationToday())}`)).toBeVisible();
     await expect(grn.getByText('Quantities only: the GRN holds no price, tax or value.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Issue the GRN' })).toHaveCount(0);
+    await readsAtSpeed();
   });
 
   await test.step('the delivery waits for its PT in the inbox', async () => {
@@ -236,17 +229,16 @@ test('PRD-REC-004 PRD-MER-011 a Store’s staff counts a batch-tracked product a
     const change = page.getByRole('form', { name: 'Change' });
     await change.getByLabel(/^Batch/).fill('SYN-BATCH-STORE');
     await change.getByLabel(/^Expiry date/).fill(expiry);
-    await savedAndReadAgain(page, () => change.getByRole('button', { name: 'Save the change' }).click());
+    const readsAtSpeed = await slowArrivalReads(page);
+    await change.getByRole('button', { name: 'Save the change' }).click();
     await expect(change).toHaveCount(0);
-    // The screen shows the line as saved, read again with the Arrival's new version, before the GRN is issued from it.
-    await expect(
-      page.getByRole('table', { name: 'Lines counted' }).getByRole('row').filter({ hasText: options.batchSku }),
-    ).toContainText(`SYN-BATCH-STORE, expires ${shown(expiry)}`);
+    // Pressed at once, while the Arrival is read again: issuing waits for the read (12.7).
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
     await expect(grn).toBeVisible();
     await expect(
       grn.getByRole('table', { name: 'GRN lines' }).getByRole('row').filter({ hasText: options.batchSku }),
     ).toContainText(`SYN-BATCH-STORE, expires ${shown(expiry)}`);
+    await readsAtSpeed();
   });
 });

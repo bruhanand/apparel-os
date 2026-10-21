@@ -152,7 +152,7 @@ export type FieldSpec = {
 
 const code: FieldSpec = { name: 'code', label: 'organisation.field.code', kind: 'text', mono: true, fixed: true };
 /** Where a version's values come from (code-house-rules 12.14): no option is chosen for the person. */
-const ORIGIN_OPTIONS: readonly Option[] = [
+export const ORIGIN_OPTIONS: readonly Option[] = [
   { value: 'kdps', label: 'rules.origin.kdps' },
   { value: 'test-setup', label: 'rules.origin.test-setup' },
   { value: 'synthetic', label: 'rules.origin.synthetic' },

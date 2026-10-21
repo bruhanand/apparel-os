@@ -94,6 +94,8 @@ let otherBrandId: string;
 /** A SYNTHETIC brand whose first version starts tomorrow, so it is not in force today. */
 let laterBrandId: string;
 let seasonAttributeId: string;
+/** The version of the season's marking the budgets are prepared under (code-house-rules 7.3, 12.14). */
+let seasonMarkingVersionId: string;
 let seasonValueIds: string[];
 /** A SYNTHETIC value of a list attribute that is not the season. */
 let colourValueId: string;
@@ -341,6 +343,7 @@ beforeAll(async () => {
   expect(marking.status, JSON.stringify(marking.body)).toBe(200);
   const marked = await decide(confirmer, marking.body.requestId as string, marking.body.versionId as string);
   expect(marked.status, JSON.stringify(marked.body)).toBe(200);
+  seasonMarkingVersionId = marking.body.versionId as string;
   colourValueId = await syntheticValue(await syntheticListAttribute('COLOUR'), 'TEAL');
   brandId = await syntheticBrand('OTB-BRAND');
   otherBrandId = await syntheticBrand('OTB-OTHER');
@@ -406,8 +409,9 @@ describe('preparing a budget (goods-in 3.3; PRD-BKG-004)', () => {
     expect(budget).toMatchObject({
       id: budgetId,
       brand: { id: brandId },
-      // The season's attribute is the one marked as the season when the budget was prepared (RR-550).
-      season: { attributeId: seasonAttributeId, valueId: season(0) },
+      // The season's attribute is the one marked as the season when the budget was prepared, and the budget keeps the
+      // marking's version it read (RR-550; code-house-rules 7.3, 12.14).
+      season: { attributeId: seasonAttributeId, valueId: season(0), markedAttributeVersionId: seasonMarkingVersionId },
       versionToken: versionId,
       remaining: { kind: 'not-approved' },
       versions: [

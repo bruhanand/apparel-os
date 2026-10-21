@@ -5,20 +5,14 @@ import {
   type MarkedAttributeVersionDraft,
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import {
-  CommandDefect,
-  LOCK_STEP,
-  lockTable,
-  type LockTarget,
-  type TransactionContext,
-} from '../../../../kernel/index.js';
+import { LOCK_STEP, lockTable, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface, DocumentEffect, EffectDecider, EffectOutcome } from '../../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../../audit/index.js';
 import type { ConfigurationInterface } from '../../../configuration/index.js';
 import type { Preparer } from '../../../organisation/index.js';
 import { markedAttribute, markedAttributeVersion } from '../db/schema.js';
-import { markAuditRecord, markDocument, markItem } from '../domain/marks.js';
-import { markDecision, markRow, markVersionRow, markVersions } from '../queries/marks.js';
+import { markAuditRecord, markDecision, markDocument, markItem } from '../domain/marks.js';
+import { markRow, markVersionRow, markVersions } from '../queries/marks.js';
 import { refused, today, type Outcome } from './common.js';
 import { listAttributeRefusal } from './proposals.js';
 
@@ -52,6 +46,48 @@ const markLock = (markedAttributeId: string): LockTarget => ({
 });
 
 /**
+ * The marking a preparation changes, locked before anything is written (code-house-rules 8.2): an existing marking's
+ * row exclusively at step 1, with the open requests of its versions still waiting, so no decision passes the
+ * supersession (access-and-approvals 9.1a), and its token rechecked under the lock (12.7). A marking's first
+ * preparation finds no row: it writes it, which creates it locked, and holds nothing else to lock. Another first
+ * preparation committing meanwhile wrote it first, so this one's token, naming no version, is stale.
+ */
+async function lockedMarking(
+  context: TransactionContext,
+  dependencies: MarkDependencies,
+  draft: MarkedAttributeVersionDraft,
+): Promise<
+  { readonly kind: 'locked'; readonly markedAttributeId: string; readonly waiting: readonly string[] } | Outcome<never>
+> {
+  const found = await markRow(context, draft.mark);
+  if (found === undefined) {
+    if (draft.versionToken !== undefined) return refused('conflict', 'kernel.stale-version');
+    const [written] = await context.tx
+      .insert(markedAttribute)
+      .values({ id: uuidv7(), mark: draft.mark })
+      .onConflictDoNothing({ target: markedAttribute.mark })
+      .returning({ id: markedAttribute.id });
+    if (written === undefined) return refused('conflict', 'kernel.stale-version');
+    return { kind: 'locked', markedAttributeId: written.id, waiting: [] };
+  }
+  const targets: LockTarget[] = [markLock(found.id)];
+  for (const each of await markVersions(context, found.id)) {
+    if (each.decision !== 'Awaiting approval') continue;
+    targets.push(...(await dependencies.access.requestLockTargets(context, markDecision(found.id, each.id))));
+  }
+  await context.lock(LOCK_STEP.document, targets);
+  const versions = await markVersions(context, found.id);
+  if (versions.at(-1)?.id !== draft.versionToken) {
+    return refused('conflict', 'kernel.stale-version', [markItem(found.id)]);
+  }
+  return {
+    kind: 'locked',
+    markedAttributeId: found.id,
+    waiting: versions.filter((version) => version.decision === 'Awaiting approval').map((version) => version.id),
+  };
+}
+
+/**
  * Prepare a version of the season or size attribute (4.2 "As built"): the attribute exists, is list-type and is in force
  * today; the token names the marking's newest version, or none before its first (12.7).
  */
@@ -67,33 +103,16 @@ export async function prepareMarkedAttributeVersion(
   if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
   const attribute = await listAttributeRefusal<MarkedAttributePrepared>(context, draft.attributeId, date);
   if (attribute !== undefined) return attribute;
-  // The marking's identity, written with its first version; another first preparation committing meanwhile leaves
-  // its row, which this one then locks and finds a version on (12.7).
-  await context.tx
-    .insert(markedAttribute)
-    .values({ id: uuidv7(), mark: draft.mark })
-    .onConflictDoNothing({ target: markedAttribute.mark });
-  const row = await markRow(context, draft.mark);
-  if (row === undefined) throw new CommandDefect('A marking just written could not be read');
-  // The open requests of a version still waiting, locked with the marking at step 1 in one call, so no decision passes
-  // the supersession (code-house-rules 8.2; access-and-approvals 9.1a).
-  const waiting = (await markVersions(context, row.id)).filter((each) => each.decision === 'Awaiting approval');
-  const targets: LockTarget[] = [markLock(row.id)];
-  for (const each of waiting) {
-    targets.push(...(await dependencies.access.requestLockTargets(context, markDecision(row.id, each.id))));
-  }
-  await context.lock(LOCK_STEP.document, targets);
-  const versions = await markVersions(context, row.id);
-  if (versions.at(-1)?.id !== draft.versionToken) {
-    return refused('conflict', 'kernel.stale-version', [markItem(row.id)]);
-  }
-  for (const each of versions.filter((version) => version.decision === 'Awaiting approval')) {
-    await dependencies.access.supersedeRequest(context, markDecision(row.id, each.id), preparer);
+  const marking = await lockedMarking(context, dependencies, draft);
+  if (marking.kind !== 'locked') return marking;
+  const { markedAttributeId } = marking;
+  for (const each of marking.waiting) {
+    await dependencies.access.supersedeRequest(context, markDecision(markedAttributeId, each), preparer);
   }
   const versionId = uuidv7();
   await context.tx.insert(markedAttributeVersion).values({
     id: versionId,
-    markedAttributeId: row.id,
+    markedAttributeId: markedAttributeId,
     attributeId: draft.attributeId,
     origin: draft.origin,
     decision: 'Awaiting approval',
@@ -103,7 +122,7 @@ export async function prepareMarkedAttributeVersion(
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: preparer.userId },
     roleAssignmentId: preparer.roleAssignmentId,
-    record: markAuditRecord(row.id, versionId),
+    record: markAuditRecord(markedAttributeId, versionId),
     operation: 'prepare-marked-attribute-version',
     changes: [
       value('mark', null, draft.mark),
@@ -115,12 +134,12 @@ export async function prepareMarkedAttributeVersion(
   });
   const requestId = await dependencies.access.requestApproval(context, {
     actionType: MARKED_ATTRIBUTE_CHANGE,
-    document: markDocument(row.id, versionId),
+    document: markDocument(markedAttributeId, versionId),
     value: { kind: 'none' },
     preparers: [preparer.userId],
     requestedBy: preparer,
   });
-  return { kind: 'success', answer: { markedAttributeId: row.id, versionId, requestId } };
+  return { kind: 'success', answer: { markedAttributeId: markedAttributeId, versionId, requestId } };
 }
 
 /** The version, rechecked under the lock: it exists and still awaits its decision. */

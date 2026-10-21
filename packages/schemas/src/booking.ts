@@ -103,6 +103,8 @@ export const openToBuyBudgetSchema = z.strictObject({
   season: z.strictObject({
     attributeId: idSchema,
     valueId: idSchema,
+    /** The version of the season's marking the season was read under when the budget was prepared (RR-550). */
+    markedAttributeVersionId: idSchema,
     code: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
   }),

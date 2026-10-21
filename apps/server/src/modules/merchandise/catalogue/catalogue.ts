@@ -21,7 +21,7 @@ import { proposeVocabularyValue } from './commands/proposals.js';
 import { recordTrackingSiteChange, type SiteChangeActor, type SiteChangeRequest } from './commands/tracking.js';
 import type { StockPresence } from './contracts/stock-presence.js';
 import type { SupplierRoles } from './contracts/supplier-roles.js';
-import { markedAttributeAt, markedAttributeViews } from './queries/marks.js';
+import { markedAttributeAt, markedAttributeViews, markVersionPage, markVersionRead } from './queries/marks.js';
 import { codeMappingPage, productProposalPage, productProposalRecord } from './queries/products.js';
 import {
   cataloguePage,
@@ -152,9 +152,23 @@ export class Catalogue extends CataloguePreparation {
     );
   }
 
-  /** Both markings, each with what is in force now and every version (4.2 "As built"). */
+  /** Both markings, each with what is in force now and its newest version's identifier (4.2 "As built"). */
   markedAttributes(context: TransactionContext) {
-    return markedAttributeViews(context, this.requests(context));
+    return markedAttributeViews(context);
+  }
+
+  /** A page of a marking's versions, newest first (4.2 "As built"; code-house-rules 12.1 "Reads"). */
+  markedAttributeVersions(
+    context: TransactionContext,
+    mark: AttributeMark,
+    page: { readonly after?: string | undefined; readonly limit: number },
+  ) {
+    return markVersionPage(context, mark, page, this.requests(context));
+  }
+
+  /** One version of a marking with what the marking has in force, or undefined (4.2 "As built"). */
+  markedAttributeVersion(context: TransactionContext, versionId: string) {
+    return markVersionRead(context, versionId, this.requests(context));
   }
 
   /**

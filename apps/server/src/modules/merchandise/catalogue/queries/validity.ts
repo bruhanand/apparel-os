@@ -1,11 +1,9 @@
-import { and, eq, sql } from 'drizzle-orm';
 import { lockTable, type LockTarget } from '../../../../kernel/index.js';
-import type { ValidityCheck } from '../../../configuration/index.js';
-import { today } from '../commands/common.js';
+import { approvedVersionValues, type ValidityCheck } from '../../../configuration/index.js';
 import { trackingProfile, trackingProfileVersion } from '../db/schema.js';
 
 // The tracking profiles as policy 4's values, for the policy gate (module-map 4.4, section 3 rule 6; DM-6;
-// structure-and-masters 4.5 "As built"; goods-in 10.5; POL-04.01, POL-04.05; RR-480, RR-558, product owner, 21 Oct
+// structure-and-masters 4.6 "As built"; goods-in 10.5; POL-04.01, POL-04.05; RR-480, RR-558, product owner, 21 Oct
 // 2026; S2-F02-T02): every version in force today or later, with its origin and its preparer, whom the validator of
 // policy 4 must not be. A version takes effect when recorded (structure-and-masters 2.3), so it is a value from then;
 // a later version ends it in place, which changes the value's version and so lapses a validation (RR-478). Every
@@ -23,32 +21,7 @@ export const trackingProfilesCheck: ValidityCheck = {
   code: TRACKING_PROFILES_CHECK,
   policy: 4,
   check: () => Promise.resolve({ kind: 'valid' }),
-  async values(context) {
-    const date = await today(context);
-    if (typeof date !== 'string') return [];
-    const rows = await context.tx
-      .select({
-        id: trackingProfileVersion.id,
-        validDuring: trackingProfileVersion.validDuring,
-        origin: trackingProfileVersion.origin,
-        preparedBy: trackingProfileVersion.preparedByUserId,
-      })
-      .from(trackingProfileVersion)
-      .where(
-        and(
-          eq(trackingProfileVersion.decision, 'Approved'),
-          sql`(pg_catalog.upper_inf(${trackingProfileVersion.validDuring})
-               or pg_catalog.upper(${trackingProfileVersion.validDuring}) > ${date}::date)`,
-        ),
-      );
-    // Its validity is the part changed in place, when a later version ends it (RR-478).
-    return rows.map((row) => ({
-      key: row.id,
-      version: row.validDuring,
-      origin: row.origin,
-      enteredBy: [row.preparedBy],
-    }));
-  },
+  values: (context) => approvedVersionValues(context, trackingProfileVersion),
   // Every change of a profile's versions locks the profile's row (commands/maintain.ts).
   async locks(context) {
     const rows = await context.tx.select({ id: trackingProfile.id }).from(trackingProfile);

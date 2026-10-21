@@ -323,10 +323,14 @@ import {
   packVersionDraftSchema,
 } from './catalogue.js';
 import {
+  attributeMarkSchema,
   MARKED_ATTRIBUTE_TYPE,
   markedAttributeListSchema,
   markedAttributePreparedSchema,
   markedAttributeVersionDraftSchema,
+  markedAttributeVersionListSchema,
+  markedAttributeVersionPageQuerySchema,
+  markedAttributeVersionReadSchema,
 } from './marked-attributes.js';
 import {
   codeMappedSchema,
@@ -793,7 +797,7 @@ const CATALOGUE_CHANGE_CODES = [
 
 /**
  * The codes a tracking profile change can answer: a catalogue change's, and a version's origin this environment does
- * not accept (code-house-rules 12.14; 4.5 "As built"; RR-558).
+ * not accept (code-house-rules 12.14; 4.6 "As built"; RR-558).
  */
 const TRACKING_PROFILE_CHANGE_CODES = [
   ...CATALOGUE_CHANGE_CODES,
@@ -992,14 +996,24 @@ const TAX_RULE_CA_EVIDENCE_CODES = [
 const OPEN_TO_BUY_CHANGE_CODES = [
   ...HISTORY_CODES,
   'kernel.cross-site-request',
-  'kernel.stale-version',
   'configuration.origin-not-allowed',
-  'booking.record-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/** A new budget's own: its brand, its season and its pair (3.3). */
+const OPEN_TO_BUY_NEW_BUDGET_CODES = [
+  ...OPEN_TO_BUY_CHANGE_CODES,
   'booking.brand-not-in-force',
   'booking.season-not-in-vocabulary',
   'booking.budget-exists',
   // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
   'merchandise.attribute-not-marked',
+] as const satisfies readonly ErrorCode[];
+
+/** A budget's next version's own: the budget, and the version token (code-house-rules 12.7). */
+const OPEN_TO_BUY_VERSION_CODES = [
+  ...OPEN_TO_BUY_CHANGE_CODES,
+  'booking.record-not-found',
+  'kernel.stale-version',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes the check or the approval of a budget version can answer under Decide's locks (3.3; POL-05.09). */
@@ -3521,6 +3535,27 @@ export const routes = {
     response: markedAttributeListSchema,
     codes: HISTORY_CODES,
   }),
+  // A marking's versions, newest first, a page at a time (code-house-rules 12.1 "Reads").
+  listMarkedAttributeVersions: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes/{mark}/versions',
+    params: z.strictObject({ mark: attributeMarkSchema }),
+    query: markedAttributeVersionPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeVersionListSchema,
+    codes: HISTORY_CODES,
+  }),
+  // One version with its marking, for the approval panel in My work.
+  readMarkedAttributeVersion: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes/versions/{versionId}',
+    params: z.strictObject({ versionId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeVersionReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
   prepareMarkedAttributeVersion: defineRoute({
     method: 'POST',
     path: '/api/merchandise/marked-attributes/versions',
@@ -4715,7 +4750,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: openToBuyBudgetPreparedSchema,
-    codes: OPEN_TO_BUY_CHANGE_CODES,
+    codes: OPEN_TO_BUY_NEW_BUDGET_CODES,
   }),
   prepareOpenToBuyBudgetVersion: defineRoute({
     method: 'POST',
@@ -4728,7 +4763,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: openToBuyBudgetPreparedSchema,
-    codes: OPEN_TO_BUY_CHANGE_CODES,
+    codes: OPEN_TO_BUY_VERSION_CODES,
   }),
   // Receive Goods (goods-in 4.1 to 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02): the
   // inbox of a Site, the Arrival with its invoices first, the count line by line and the GRN. An Arrival and a GRN carry

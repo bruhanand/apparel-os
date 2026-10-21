@@ -109,6 +109,19 @@ export type CountedGoods =
   | { readonly skuId: string; readonly described?: undefined; readonly brandId?: undefined }
   | { readonly skuId: null; readonly described: DescribedIdentity; readonly brandId: string };
 
+/**
+ * Whether the goods a receipt count names give their brand wrongly (13.14, 14.1; RR-555): goods of Unknown SKU name the
+ * brand they are counted under, never none; a SKU's goods are of the SKU's brand and name none. The item's type holds
+ * it (`CountedGoods`); Plan, before it locks their SKU balance, and the Recheck still check every request they are given.
+ */
+export function countedBrandRefused(goods: {
+  readonly skuId: string | null;
+  readonly brandId?: string | undefined;
+}): boolean {
+  if (goods.skuId !== null) return goods.brandId !== undefined;
+  return typeof goods.brandId !== 'string' || goods.brandId.trim() === '';
+}
+
 /** One item of a request (13.4, 13.5). `lineId` is the source line, kept without a foreign key (PRD-ACS-007). */
 export type LedgerItem =
   | ({

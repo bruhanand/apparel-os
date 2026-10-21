@@ -103,14 +103,9 @@ export async function lockPlan(
       })
       .onConflictDoNothing();
   }
-  const rowsOf = async (
-    found: readonly { siteId: string; businessUnitId: string; skuId?: string | null; brandId?: string | null }[],
-    read: (each: {
-      siteId: string;
-      businessUnitId: string;
-      skuId?: string | null;
-      brandId?: string | null;
-    }) => Promise<{ id: string } | undefined>,
+  const rowsOf = async <Found>(
+    found: readonly Found[],
+    read: (each: Found) => Promise<{ id: string } | undefined>,
     what: string,
   ) => {
     const ids: string[] = [];
@@ -149,12 +144,9 @@ export async function lockPlan(
               eq(skuBalance.siteId, siteId),
               eq(skuBalance.businessUnitId, businessUnitId),
               // The goods of Unknown SKU of one brand at the unit share one row (14.2, nulls not distinct; 13.14;
-              // RR-555).
-              skuId == null
-                ? and(
-                    isNull(skuBalance.skuId),
-                    brandId == null ? isNull(skuBalance.brandId) : eq(skuBalance.brandId, brandId),
-                  )
+              // RR-555); they always name the brand they were counted under.
+              skuId === null
+                ? and(isNull(skuBalance.skuId), eq(skuBalance.brandId, brandId))
                 : eq(skuBalance.skuId, skuId),
             ),
           )

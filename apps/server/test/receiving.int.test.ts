@@ -70,6 +70,8 @@ let keys: Record<string, string>;
 let clock: SyntheticClock;
 let setup: StructureSetup;
 let fixture: ReceivingFixture;
+/** The version of the size list's marking the size attribute test writes, which every count line after it reads. */
+let sizeMarking: string;
 const cookies = new Map<string, string>();
 /** A receiver of the first Store (P-STM), whose scope is that Store. */
 let storeReceiver: SyntheticUser;
@@ -290,7 +292,7 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
     expect(read.status, JSON.stringify(read.body)).toBe(200);
     const policies = policyReadinessSchema.parse(read.body).policies;
     const policy = (number: number) => policies.find((each) => each.policy === number);
-    // The fixture's one tracking profile, labelled synthetic (structure-and-masters 4.5).
+    // The fixture's one tracking profile, labelled synthetic (structure-and-masters 4.6 "As built").
     expect(policy(4)?.values.map((value) => ({ check: value.check, origin: value.origin }))).toEqual([
       { check: 'merchandise.tracking-profiles', origin: 'synthetic' },
     ]);
@@ -386,12 +388,14 @@ describe('the size attribute (goods-in 4.3, GI-3; structure-and-masters 4.2; RR-
     }
     // The fixture's size list marked as the Organisation's, a SYNTHETIC setting written as a fixture (4.2 "As built");
     // preparing it and its approval by a different person are proved in season-and-size-attributes.int.test.ts.
-    await writeSyntheticMarking(database, 'size', fixture.sizes.attributeId, setup.preparer.id);
+    sizeMarking = await writeSyntheticMarking(database, 'size', fixture.sizes.attributeId, setup.preparer.id);
     const saved = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-UNMARKED', 1, 1));
     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    // The line keeps the marking's version its size was read under (code-house-rules 7.3, 12.14).
     expect((await readArrival(storeReceiver, arrivalId)).lines[0]?.size).toEqual({
       attributeId: fixture.sizes.attributeId,
       valueId: fixture.sizes.values[0]?.id,
+      markedAttributeVersionId: sizeMarking,
       code: fixture.sizes.values[0]?.code,
     });
   });
@@ -565,6 +569,7 @@ describe('the count (goods-in 4.3; DEC-138, PRD-MER-005, PRD-MER-011)', () => {
         size: {
           attributeId: fixture.sizes.attributeId,
           valueId: fixture.sizes.values[0]?.id,
+          markedAttributeVersionId: sizeMarking,
           code: fixture.sizes.values[0]?.code,
         },
         skuId: null,
@@ -902,17 +907,18 @@ describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', ()
 // Last in the file: it leaves a value of an origin this environment does not accept, which keeps receiving unavailable.
 describe('a value of an origin this environment does not accept (code-house-rules 12.14; goods-in 10.5; RR-558)', () => {
   it('PRD-SEC-017 RR-558 a tracking profile of the test setup keeps receiving unavailable here, policy 4 validated again', async () => {
-    // A tracking profile version of the test setup's origin, written as a fixture: preparing one is refused outside
-    // `kdps-test` (configuration.origin-not-allowed), so here it could only come from elsewhere, as a restore brings it.
+    // A tracking profile version of the test setup's origin: preparing one is refused outside `kdps-test`
+    // (configuration.origin-not-allowed), so here it could only come from elsewhere, as a restore brings it. Written as
+    // the application writes, by the runtime role, past the command's check (code-house-rules 10.1).
     const profileId = uuidv7();
     const versionId = uuidv7();
-    const owner = await connect(database, 'migration');
+    const runtime = await connect(database, 'runtime');
     try {
-      await owner.query(`insert into merchandise.tracking_profile (id, code) values ($1, $2)`, [
+      await runtime.query(`insert into merchandise.tracking_profile (id, code) values ($1, $2)`, [
         profileId,
         `SYN-TEST-SETUP-PROFILE-${String(randomInt(1_000_000))}`,
       ]);
-      await owner.query(
+      await runtime.query(
         `insert into merchandise.tracking_profile_version (id, tracking_profile_id, name, piece_tracked,
            batch_expiry_required, required_identifiers, valid_during, decision, prepared_by_user_id, origin)
          values ($1, $2, 'SYNTHETIC test-setup profile', false, false, '{}', daterange($3::date, null), 'Approved', $4,
@@ -920,7 +926,7 @@ describe('a value of an origin this environment does not accept (code-house-rule
         [versionId, profileId, setup.today(), setup.preparer.id],
       );
     } finally {
-      await owner.end();
+      await runtime.end();
     }
     // Validated again, so the validation covers it: the one thing missing is the value's origin (DM-6).
     await receivingPolicyValidated(setup, database, 4);

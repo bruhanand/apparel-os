@@ -154,7 +154,10 @@ export const countLineSchema = z.strictObject({
   versionToken: idSchema,
   styleCode: z.string(),
   colour: z.string().nullable(),
-  size: z.strictObject({ attributeId: idSchema, valueId: idSchema, code: z.string() }).nullable(),
+  /** The size, with the version of the size list's marking it was read under (code-house-rules 7.3; RR-556). */
+  size: z
+    .strictObject({ attributeId: idSchema, valueId: idSchema, markedAttributeVersionId: idSchema, code: z.string() })
+    .nullable(),
   skuId: idSchema.nullable(),
   invoiceQuantity: piecesSchema,
   countedQuantity: piecesSchema,

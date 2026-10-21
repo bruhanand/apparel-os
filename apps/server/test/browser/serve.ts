@@ -116,6 +116,7 @@ import { createSyntheticOrganisations } from '../support/organisations.js';
 import { GRN_KIND } from '../../src/modules/receiving/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import {
+  mappingsVerified,
   placeScope,
   RECEIVER_AUTHORITY,
   RECEIVING_POLICY_CHECKS,
@@ -688,7 +689,10 @@ const productsSeasonProposal = recordedCatalogue(
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
 // That list attribute is the Organisation's season attribute, a SYNTHETIC setting written as a fixture, so the
-// open-to-buy journey's budget names its season from it (structure-and-masters 4.2 "As built"; RR-550).
+// open-to-buy journey's budget names its season from it (structure-and-masters 4.2 "As built"; RR-550). Written
+// directly, not through its routes (code-house-rules 11.2), for the clock, as writeSyntheticSetting writes a setting of
+// access: a marking approved through Decide is in force from the decision's instant on this composition's clock, which
+// may fall after the instant the journeys' requests read it at; this one is in force from a day before.
 await writeSyntheticMarking(settingsDatabase, 'season', productsSeasonAnswer.recordId, structureFixture.preparer.id);
 // A SYNTHETIC legal entity with a registration and a book, to which the devices journey's units are mapped. The
 // readiness journey's own Site and unit are in the receiving Organisation, below (RR-558).
@@ -2538,20 +2542,9 @@ await approved(readinessStructure, (c, p) =>
     validFrom: readinessStructure.today(),
   }),
 );
-{
-  const owner = await connect(readinessDatabase, 'migration');
-  try {
-    await owner.query(
-      `insert into organisation.business_unit_mapping_verification
-         (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
-       select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
-        where business_unit_id = $4 and decision = 'Approved'`,
-      [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
-    );
-  } finally {
-    await owner.end();
-  }
-}
+// Its mapping verified through organisation's command by the setup's approver, who did not make it, with a SYNTHETIC
+// stored file as its evidence (structure-and-masters 3.4; POL-10.08; code-house-rules 11.2).
+await mappingsVerified(readinessStructure, readinessDatabase, [readinessUnitAnswer.recordId]);
 /** An enrolled SYNTHETIC user of the readiness Organisation holding one persona and the authorities given. */
 async function provisionReadinessUser(
   label: string,

@@ -556,8 +556,8 @@ describe('external codes (structure-and-masters 4.3, 9 test 7; PRD-MER-006, PRD-
     expect(await resolve({ code: code.replace(/^0+/, ''), brandId: catalogue.brandId })).toMatchObject({
       refusal: { code: 'merchandise.code-not-found' },
     });
-    // A brand scope answers only for its brand: without it, the code names nothing here.
-    expect(await resolve({})).toMatchObject({ refusal: { code: 'merchandise.code-not-found' } });
+    // Asked without a brand, every brand's mappings answer: the same two candidates, still the person's choice (RR-554).
+    expect(await resolve({})).toEqual(await resolve({ brandId: catalogue.brandId }));
     // Each product's mapping is flagged as repeated where it is read (PRD-MER-007).
     const mappings = async (skuId: string) =>
       (await setup.run(setup.preparer.id, (c) => setup.catalogue.listCodeMappings(c, { skuId }))).records;
@@ -706,6 +706,55 @@ describe('external codes (structure-and-masters 4.3, 9 test 7; PRD-MER-006, PRD-
     ).toEqual([true, true, false, false, false, false]);
   });
 
+  it('PRD-MER-006 PRD-MER-007 RR-554: Resolve without a brand reads the brands’ mappings too: one product answers alone, several are the person’s choice', async () => {
+    const proposal = await confirmedProduct(styleDraft([skuDraft({ size: 'SYN-S' }), skuDraft({ size: 'SYN-M' })]));
+    const [small, medium] = proposal.skuIds as [string, string];
+    const map = async (code: string, skuId: string) =>
+      ok(
+        await setup.asPreparerDo((c, p) =>
+          setup.catalogue.mapCode(c, p, {
+            code,
+            kind: 'supplier-barcode',
+            scope: { kind: 'brand', brandId: catalogue.brandId },
+            skuId,
+            alias: false,
+            validFrom: setup.today(),
+          }),
+        ),
+      ).mappingId;
+    const resolve = (code: string) =>
+      setup.run(setup.preparer.id, (c) =>
+        setup.catalogue.resolveCode(c, { code, kind: 'supplier-barcode', date: setup.today() }),
+      );
+    // A PT barcode recorded under its product's brand names that product to a caller that knows no brand, such as the
+    // earlier POS's reference handler (imports-and-opening-data 10.3).
+    const single = syntheticCode(next('BARCODE'));
+    const singleMapping = await map(single, small);
+    expect(await resolve(single)).toEqual({
+      resolved: {
+        candidates: [{ skuId: small, mappingId: singleMapping }],
+        repeated: false,
+        alias: false,
+        skuId: small,
+        mappingId: singleMapping,
+      },
+    });
+    // One the brand repeats on two products answers both, flagged, and none is chosen (DEC-135).
+    const repeated = syntheticCode(next('BARCODE'));
+    const repeatedSmall = await map(repeated, small);
+    const repeatedMedium = await map(repeated, medium);
+    expect(await resolve(repeated)).toEqual({
+      resolved: {
+        candidates: [
+          { skuId: small, mappingId: repeatedSmall },
+          { skuId: medium, mappingId: repeatedMedium },
+        ],
+        repeated: true,
+        alias: false,
+      },
+    });
+  });
+
   it('RR-554 PRD-MER-007: the database refuses a second product for a supplier barcode outside a brand, whatever the command does', async () => {
     const proposal = await confirmedProduct(styleDraft([skuDraft({ size: 'SYN-S' }), skuDraft({ size: 'SYN-M' })]));
     const [small, medium] = proposal.skuIds as [string, string];
@@ -722,16 +771,18 @@ describe('external codes (structure-and-masters 4.3, 9 test 7; PRD-MER-006, PRD-
         }),
       ),
     ).recordId;
-    const owner = await connect(world.organisations[0].database, 'migration');
+    // Written as the application writes, by the runtime role, past the command and its cross-scope check
+    // (code-house-rules 10.1).
+    const runtime = await connect(world.organisations[0].database, 'runtime');
     try {
       const mapping = async (scope: 'supplier' | 'brand' | 'organisation') => {
         const keyId = uuidv7();
-        await owner.query(
+        await runtime.query(
           `insert into merchandise.external_code_key (id, code, kind) values ($1, $2, 'supplier-barcode')`,
           [keyId, syntheticCode(next('BARCODE'))],
         );
         return (skuId: string) =>
-          owner.query(
+          runtime.query(
             `insert into merchandise.external_code
                (id, code_key_id, kind, scope_kind, scope_party_id, scope_brand_id, sku_id, alias, valid_during,
                 prepared_by_user_id)
@@ -758,7 +809,7 @@ describe('external codes (structure-and-masters 4.3, 9 test 7; PRD-MER-006, PRD-
       await underBrand(small);
       await underBrand(medium);
     } finally {
-      await owner.end();
+      await runtime.end();
     }
   });
 

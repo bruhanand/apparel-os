@@ -70,8 +70,8 @@ describe('what stops a GRN (goods-in 4.5; DEC-133)', () => {
 });
 
 describe('one line per style, colour and size (goods-in 4.3)', () => {
-  const SIZE_M = { attributeId: 'size-list', valueId: 'size-m', code: 'SYN-M' };
-  const SIZE_L = { attributeId: 'size-list', valueId: 'size-l', code: 'SYN-L' };
+  const SIZE_M = { attributeId: 'size-list', valueId: 'size-m', markedAttributeVersionId: 'marking', code: 'SYN-M' };
+  const SIZE_L = { attributeId: 'size-list', valueId: 'size-l', markedAttributeVersionId: 'marking', code: 'SYN-L' };
   const lines = currentLines([
     entry('n1', 'n1', null, { styleCode: 'SYN-STYLE', colour: 'SYNTHETIC NAVY', size: SIZE_M }),
     entry('b1', 'b1', null, { styleCode: 'SYN-STYLE', colour: null, size: null }),

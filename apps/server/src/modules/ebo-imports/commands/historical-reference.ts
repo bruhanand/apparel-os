@@ -124,7 +124,8 @@ function paiseOf(row: HandlerRow): number | null {
 
 /**
  * The SKU a barcode names on a date, or null: not found, or two SKUs, whose choice is the person's, never this
- * handler's. It names no brand, so a barcode a brand repeats across products names nothing here (structure-and-masters
+ * handler's. It names no brand, so every brand's mappings answer it: a PT barcode recorded under its product's brand
+ * names that product, and one a brand repeats across products names several, left unresolved (structure-and-masters
  * 4.7; PRD-MER-007, DEC-135; RR-554).
  */
 async function skuOfBarcode(
