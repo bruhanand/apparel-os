@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ARRIVAL_TYPE,
+  DAMAGE_REPORT_TYPE,
   GRN_TYPE,
   RECEIVING_CAPS,
   type Arrival,
@@ -24,6 +25,7 @@ import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { useMarkedAttribute } from '../merchandise/marked';
+import { ReportDamage } from '../stock/DamageReport';
 import { t } from '../messages/catalogue';
 import { useBusinessToday } from '../setup/business-date';
 import { formatDate, formatList, formatQuantity } from '../setup/format';
@@ -636,6 +638,9 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
   const timeZone = useTimeZone();
   const names = useMasterNames();
   const products = useProducts();
+  // Damage on a line's goods is reported here, by whoever may (goods-in 8.1, 8.2; S2-F08-T01).
+  const mayReportDamage = useGranted(DAMAGE_REPORT_TYPE, 'create');
+  const [damageLine, setDamageLine] = useState<string | null>(null);
   const grn = arrival.grn;
   if (grn === null) return null;
   return (
@@ -692,11 +697,12 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
               <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
+              {mayReportDamage && <Th label="receive.damage" />}
             </tr>
           </thead>
           <tbody>
             {grn.lines.map((line) => (
-              <tr key={line.lineNumber} className="h-10 border-t border-border">
+              <tr key={line.id} className="h-10 border-t border-border">
                 <Cell text={formatQuantity(line.lineNumber)} numeric />
                 <Cell text={line.styleCode} />
                 <Cell text={line.colour ?? t('receive.none')} />
@@ -705,11 +711,25 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
                 <Cell text={batchText(line.batch)} />
                 <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
                 <Cell text={formatQuantity(line.countedQuantity)} numeric />
+                {mayReportDamage && (
+                  <td className="px-3">
+                    <Button
+                      label="damage.report"
+                      size="small"
+                      onClick={() => {
+                        setDamageLine(line.id);
+                      }}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {damageLine !== null && (
+        <ReportDamage key={damageLine} grnLineId={damageLine} locationId={arrival.receivingLocationId} />
+      )}
       <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>
     </section>
   );

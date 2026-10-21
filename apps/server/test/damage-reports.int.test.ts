@@ -34,11 +34,12 @@ import {
   asUserIn,
   damageGateOpen,
   DECIDER_AUTHORITY,
+  LIMIT_ADMIN_AUTHORITY,
+  LIMIT_APPROVER_AUTHORITY,
   limitFor,
   PROPOSER_AUTHORITY,
   REPORTER_AUTHORITY,
   REVERSAL_APPROVER_AUTHORITY,
-  routeDamageTo,
   storeScope,
   SYNTHETIC_POLICY_17_VALUES,
   type DamageLimit,
@@ -117,10 +118,12 @@ async function enrolled(
     label: `${label}${String(randomInt(1_000_000))}`,
     enrolled: true,
   });
+  // Each permission once, though the authorities given may share some (a receiver's and a reporter's do).
+  const once = [...new Map(authorities.map((each) => [`${each.recordType}:${each.action}`, each])).values()];
   const { assignmentId } = await grantSynthetic(
     database,
     { kind: 'user', id: user.id },
-    authorities,
+    once,
     scope === undefined ? {} : { scope },
   );
   const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
@@ -233,6 +236,10 @@ async function holdsOn(
   }
 }
 
+/** Who prepares and who approves the SYNTHETIC limits and the damage exception's routing, two different people. */
+let settingsAdmin: Person;
+let settingsApprover: Person;
+
 async function limit(
   person: Person,
   action: typeof DAMAGE_DECISION | typeof DAMAGE_REVERSAL_APPROVAL,
@@ -241,13 +248,32 @@ async function limit(
   await limitFor(
     api.app,
     organisation,
-    database,
-    { admin: setup.preparer, approver: setup.approver, code: freshCode },
+    { admin: settingsAdmin, approver: settingsApprover.user, approveReasonId: approveReason, code: freshCode },
     person,
     action,
     of,
     setup.today(),
   );
+}
+
+/**
+ * The damage exception routed at the Site to Operations, through the routing's own route, and approved by a different
+ * person (access-and-approvals 12.2, 12.4; POL-02.16): a SYNTHETIC owner and due time, never KDPS's (V-03).
+ */
+async function routeDamageToOperations(): Promise<void> {
+  const prepared = await post(settingsAdmin, '/api/exceptions/routing', {
+    typeCode: 'stock.damage',
+    siteId: fixture.siteId,
+    owner: { kind: 'user', userId: operations.user.id },
+    dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+    escalation: { kind: 'user', userId: operations.user.id },
+    validFrom: setup.today(),
+    origin: 'synthetic',
+  });
+  expect(prepared.status, JSON.stringify(prepared.body)).toBe(200);
+  const { requestId, versionId } = prepared.body as { requestId: string; versionId: string };
+  const decided = await decide(settingsApprover, requestId, versionId, 'approve');
+  expect(decided.status, JSON.stringify(decided.body)).toBe(200);
 }
 
 beforeAll(async () => {
@@ -306,6 +332,16 @@ beforeAll(async () => {
     { recordType: 'stock.damage_reversal', action: 'approve' },
   ]);
   reversalApprover = await enrolled('DMG-REVERSAL', REVERSAL_APPROVER_AUTHORITY);
+  settingsAdmin = await enrolled('DMG-SETTINGS', [
+    ...LIMIT_ADMIN_AUTHORITY,
+    { recordType: 'exceptions.exception_routing', action: 'view' },
+    { recordType: 'exceptions.exception_routing', action: 'edit' },
+  ]);
+  settingsApprover = await enrolled('DMG-SETTINGS-APPROVER', [
+    ...LIMIT_APPROVER_AUTHORITY,
+    { recordType: 'exceptions.exception_routing', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ]);
   // SYNTHETIC limits (V-02): Operations and the reporter with authority over Unknown cost, the cautious decider with
   // a known amount only; the reversal's proposer and approver over Unknown too.
   await limit(operations, DAMAGE_DECISION, { kind: 'unknown-only' });
@@ -313,7 +349,7 @@ beforeAll(async () => {
   await limit(cautious, DAMAGE_DECISION, { kind: 'amount', paise: 100_000, coversUnknown: false });
   await limit(proposer, DAMAGE_REVERSAL_APPROVAL, { kind: 'unknown-only' });
   await limit(reversalApprover, DAMAGE_REVERSAL_APPROVAL, { kind: 'unknown-only' });
-  await routeDamageTo(api.app, organisation, setup, database, fixture.siteId, operations.user);
+  await routeDamageToOperations();
 
   // Goods in custody at the Store's receiving location, through receiving's routes (goods-in 4): 6 pieces of a product
   // not yet set up and 5 of the batch-tracked product, each line its own receipt origin.
@@ -442,7 +478,7 @@ describe('reporting damage (goods-in 8.1, 8.2; design test 16)', () => {
     expect(read.photoAttachmentIds).toHaveLength(1);
   });
 
-  it('goods-in 8.2 the report reaches Operations in My work as an exception of its Unknown exposure', async () => {
+  it('POL-02.16 PRD-EXC-001 the report reaches Operations in My work as an exception of its Unknown exposure', async () => {
     const work = await get(operations, '/api/inbox/my-work');
     expect(work.status, JSON.stringify(work.body)).toBe(200);
     const exceptions = myWorkSchema.parse(work.body).items.filter((each) => each.kind === 'exception');
@@ -492,7 +528,7 @@ describe('deciding a report (goods-in 8.3; design test 16)', () => {
     secondReport = second;
   });
 
-  it('PRD-DMG-006 PRD-DMG-010 a confirmation makes the goods damaged and quarantines them where they are, released by no time', async () => {
+  it('PRD-DMG-006 PRD-DMG-010 a confirmation makes the goods damaged and quarantines them where they are, with no forced move', async () => {
     const confirmed = await decide(operations, secondReport.requestId, secondReport.versionToken, 'approve');
     expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
     expect(await custodyBy(null)).toEqual({ good: 5, damaged: 1 });
@@ -500,10 +536,8 @@ describe('deciding a report (goods-in 8.3; design test 16)', () => {
     const read = await readReport(reporter, secondReport.damageReportId);
     expect(read.state).toBe('Confirmed');
     expect(read.rounds[0]?.decision).toMatchObject({ outcome: 'Confirmed', decidedByUserId: operations.user.id });
-    // Days pass and nothing releases the quarantine (PRD-DMG-006).
-    clock.advance(3 * 86_400);
-    expect(await holdsOn('described')).toEqual([{ kind: 'quarantine', condition: 'damaged', quantity: 1 }]);
-    // A decided report is decided once (8.3).
+    // A quarantine ends only by an approved decision, never by time (stock-ledger 14.2 `hold_release`): the
+    // reversal below is such a decision. A decided report is decided once (8.3).
     const again = await post(reporter, `/api/stock/damage-reports/${secondReport.damageReportId}/decision-renewal`, {
       versionToken: secondReport.versionToken,
     });
@@ -535,6 +569,14 @@ describe('reversing a mistaken confirmation (goods-in 8.3; PRD-STK-017; design t
       versionToken: secondReport.versionToken,
     });
     expect(errorOf(twice)?.code).toBe('stock.reversal-open');
+    // Its approval panel reads the report it reverses through it (access-and-approvals 9.5).
+    const panel = await get(reversalApprover, `/api/stock/damage-reversals/${damageReversalId}`);
+    expect(panel.status, JSON.stringify(panel.body)).toBe(200);
+    expect(damageReportReadSchema.parse(panel.body).report).toMatchObject({
+      id: secondReport.damageReportId,
+      state: 'Confirmed',
+      reversals: [{ id: damageReversalId, outcome: null }],
+    });
     // Its proposer cannot approve it (PRD-ACS-006).
     const own = await decide(proposer, requestId, damageReversalId, 'approve');
     expect(errorOf(own)?.code).toBe('access.self-preparation');
@@ -584,7 +626,7 @@ describe('damage on a product at a location (goods-in 8.1; PRD-DMG-004)', () => 
     expect(await holdsOn('product')).toEqual([{ kind: 'quarantine', condition: 'damaged', quantity: 2 }]);
   });
 
-  it('goods-in 8.5 a report waiting for its decision is asked again in a new round, superseding its request', async () => {
+  it('PRD-ACS-007 DEC-066 a report waiting for its decision is asked again in a new round, superseding its request', async () => {
     const made = await report({ skuId: fixture.batchSku.id }, 1);
     const stale = await post(reporter, `/api/stock/damage-reports/${made.damageReportId}/decision-renewal`, {
       versionToken: uuidv7(),
@@ -609,7 +651,7 @@ describe('damage on a product at a location (goods-in 8.1; PRD-DMG-004)', () => 
 });
 
 describe('the interface `receiving` calls (goods-in 10.2)', () => {
-  it('goods-in 10.2 a report raised inside the caller’s transaction commits or rolls back with it', async () => {
+  it('PRD-INT-004 PRD-MOD-006 a report raised inside the caller’s transaction commits or rolls back with it', async () => {
     const documents = api.app.get<StockDocumentsInterface>(STOCK_DOCUMENTS);
     const actor = { userId: reporter.user.id, roleAssignmentId: reporter.assignmentId };
     const draft = draftOf({ grnLineId: describedLine }, 1) as Parameters<StockDocumentsInterface['reportDamage']>[2];
@@ -623,7 +665,9 @@ describe('the interface `receiving` calls (goods-in 10.2)', () => {
         throw new Error('SYNTHETIC failure of the caller after the report');
       }),
     ).rejects.toThrow('SYNTHETIC failure');
-    expect((await get(reporter, `/api/stock/damage-reports/${rolledBack ?? ''}`)).status).toBe(404);
+    // Read by Operations, whose scope covers every place, so a report that is not there is not found (5.3).
+    if (rolledBack === undefined) throw new Error('The report was not made before the failure');
+    expect((await get(operations, `/api/stock/damage-reports/${rolledBack}`)).status).toBe(404);
     expect(await holdsOn('described')).toEqual([]);
     // The caller's command commits: the report is there with its hold and the next number.
     const committed = await asUserIn(api.app, organisation, reporter.user.id, (context) =>

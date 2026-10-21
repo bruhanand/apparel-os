@@ -9,7 +9,7 @@ import {
   type DamageReversalDraft,
   type DamageReversalProposed,
 } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { ConfigurationInterface } from '../../../configuration/index.js';
@@ -80,7 +80,7 @@ async function goodsValue(
   );
   if (values.kind === 'refusal') return values;
   const [value] = values.answer;
-  if (value === undefined) throw new Error('A valued hold without its value');
+  if (value === undefined) throw new CommandDefect('A valued hold without its value');
   return { kind: 'success' as const, answer: requestValueOf(value) };
 }
 

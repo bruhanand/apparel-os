@@ -14,16 +14,15 @@ import {
 import { ACCESS, type AccessInterface } from '../../src/modules/access/index.js';
 import { Audit } from '../../src/modules/audit/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
-import { EXCEPTION_CODE_KIND, EXCEPTIONS, type ExceptionsInterface } from '../../src/modules/exceptions/index.js';
+import { EXCEPTION_CODE_KIND } from '../../src/modules/exceptions/index.js';
 import { exceptionCodeSeriesCheck, exceptionRoutingCheck } from '../../src/modules/exceptions/queries/validity.js';
 import { policyEvidence } from '../../src/modules/files-imports/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
-import { DAMAGE_CAPABILITY, DAMAGE_EXCEPTION_TYPE, DAMAGE_REPORTS } from '../../src/modules/stock/documents/index.js';
+import { DAMAGE_CAPABILITY, DAMAGE_REPORTS } from '../../src/modules/stock/documents/index.js';
 import { syntheticName } from '../fixtures/synthetic.js';
 import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic, type SyntheticAuthority } from './grants.js';
 import { capturingLogger } from './jobs.js';
-import { connect } from './postgres.js';
 import { STOCK_VIEW } from './receiving.js';
 import type { StructureSetup } from './organisation.js';
 import { writeSyntheticStoredFile } from './tax-rules.js';
@@ -154,63 +153,35 @@ export function asUserIn<T>(
     );
 }
 
-/**
- * Routes the damage exception at a Site to a user, as Operations' routing would (access-and-approvals 12.2;
- * POL-02.16), prepared through the application's `exceptions` and approved as a fixture (V-03): SYNTHETIC owner and
- * due time, never KDPS's.
- */
-export async function routeDamageTo(
-  app: AccessTestApp['app'],
-  organisation: RoutedOrganisation,
-  setup: StructureSetup,
-  database: string,
-  siteId: string,
-  owner: SyntheticUser,
-): Promise<void> {
-  const exceptions = app.get<ExceptionsInterface>(EXCEPTIONS);
-  const routing = await asUserIn(app, organisation, setup.preparer.id, (context) =>
-    exceptions.prepareRouting(
-      context,
-      { userId: setup.preparer.id, roleAssignmentId: setup.asPreparer.roleAssignmentId },
-      {
-        typeCode: DAMAGE_EXCEPTION_TYPE,
-        siteId,
-        owner: { kind: 'user', userId: owner.id },
-        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
-        escalation: { kind: 'user', userId: owner.id },
-        validFrom: setup.today(),
-        origin: 'synthetic',
-      },
-    ),
-  );
-  if (routing.kind !== 'done') throw new Error(routing.refusal.code);
-  const migration = await connect(database, 'migration');
-  try {
-    await migration.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
-      routing.value.versionId,
-    ]);
-  } finally {
-    await migration.end();
-  }
-}
-
 /** A SYNTHETIC limit on a damage report's decision or a reversal's approval (access-and-approvals 9.2; V-02). */
 export type DamageLimit =
   | { readonly kind: 'amount'; readonly paise: number; readonly coversUnknown: boolean }
   | { readonly kind: 'unknown-only' };
 
+/** What prepares a limit (access-and-approvals 9.2): create on the limits, read back. */
+export const LIMIT_ADMIN_AUTHORITY: readonly SyntheticAuthority[] = [
+  { recordType: 'access.approval_limit', action: 'view' },
+  { recordType: 'access.approval_limit', action: 'create' },
+];
+
+/** What approves a limit, a different person from its preparer (9.2, 9.11). */
+export const LIMIT_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
+  { recordType: 'access.approval_limit', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+];
+
 /**
  * Gives a user an individual SYNTHETIC limit through one of their assignments, on the decision of a report or the
- * approval of a reversal, prepared through the application's `access` by an admin and approved by a different person,
- * as any limit is (9.2, 9.11).
+ * approval of a reversal, prepared through the application's `access` by an admin and approved by a different person
+ * with a fresh code, as any limit is (9.2, 9.11).
  */
 export async function limitFor(
   app: AccessTestApp['app'],
   organisation: RoutedOrganisation,
-  database: string,
   people: {
-    readonly admin: SyntheticUser;
+    readonly admin: { readonly user: SyntheticUser; readonly assignmentId: string };
     readonly approver: SyntheticUser;
+    readonly approveReasonId: string;
     readonly code: (user: SyntheticUser) => string;
   },
   holder: { readonly user: SyntheticUser; readonly assignmentId: string },
@@ -219,14 +190,6 @@ export async function limitFor(
   today: string,
 ): Promise<void> {
   const access = app.get<AccessInterface>(ACCESS);
-  const admin = await grantSynthetic(database, { kind: 'user', id: people.admin.id }, [
-    { recordType: 'access.approval_limit', action: 'view' },
-    { recordType: 'access.approval_limit', action: 'create' },
-  ]);
-  await grantSynthetic(database, { kind: 'user', id: people.approver.id }, [
-    { recordType: 'access.approval_limit', action: 'approve' },
-    { recordType: 'access.approval_reason', action: 'view' },
-  ]);
   const draft: ApprovalLimitDraft = {
     actionType: action,
     holder: { kind: 'individual', userId: holder.user.id, roleAssignmentId: holder.assignmentId },
@@ -235,11 +198,11 @@ export async function limitFor(
     origin: 'synthetic',
     validFrom: today,
   };
-  const prepared = await asUserIn(app, organisation, people.admin.id, (context) =>
-    access.prepareApprovalLimit(context, { userId: people.admin.id, roleAssignmentId: admin.assignmentId }, draft),
+  const { admin } = people;
+  const prepared = await asUserIn(app, organisation, admin.user.id, (context) =>
+    access.prepareApprovalLimit(context, { userId: admin.user.id, roleAssignmentId: admin.assignmentId }, draft),
   );
   if (prepared.kind !== 'success') throw new Error(`limit refused: ${prepared.refusal.code}`);
-  const reasonId = await approveReasonOf(database);
   const decided = await asUserIn(app, organisation, people.approver.id, (context) =>
     access.decide(
       context,
@@ -248,27 +211,12 @@ export async function limitFor(
         requestId: prepared.answer.requestId,
         versionId: prepared.answer.limitId,
         outcome: 'approve',
-        reason: { kind: 'listed', reasonId },
+        reason: { kind: 'listed', reasonId: people.approveReasonId },
         totpCode: people.code(people.approver),
       },
     ),
   );
   if (decided.kind !== 'success') throw new Error(`limit not approved: ${decided.refusal.code}`);
-}
-
-/** An approve reason in force, from the fixture's list. */
-async function approveReasonOf(database: string): Promise<string> {
-  const migration = await connect(database, 'migration');
-  try {
-    const found = await migration.query<{ id: string }>(
-      "select id::text as id from access.approval_reason where kind = 'approve' order by id limit 1",
-    );
-    const id = found.rows[0]?.id;
-    if (id === undefined) throw new Error('No approve reason written');
-    return id;
-  } finally {
-    await migration.end();
-  }
 }
 
 /** A scope of one Store's place, every legal entity and brand (access-and-approvals 5.3). */

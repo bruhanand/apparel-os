@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { DAMAGE_DECISION, DAMAGE_REPORT_TYPE, type DamageReportDraft, type DamageReported } from '@apparel-os/schemas';
-import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
+import { CommandDefect, type CommandRefusal, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { ConfigurationInterface } from '../../../configuration/index.js';
@@ -206,7 +206,7 @@ export async function reportDamage(
   if (posted.kind === 'refusal') return posted;
   const [holdId] = posted.answer.written.holdIds;
   const [value] = posted.answer.values;
-  if (holdId === undefined || value === undefined) throw new Error('A damage report posted no hold');
+  if (holdId === undefined || value === undefined) throw new CommandDefect('A damage report posted no hold');
 
   const allocated = await dependencies.numbering.allocate(context, {
     seriesId: series.seriesId,

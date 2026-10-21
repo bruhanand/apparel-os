@@ -1067,29 +1067,24 @@ const GRN_ISSUE_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
- * The stock ledger's refusals a damage report, its decision or a reversal can meet (stock-ledger 13.8, 13.15; goods-in
- * 8; S2-F08-T01): the goods not in custody, held, reserved or taken by someone else's claim, a count freeze over them,
- * and a rule not set.
+ * The stock ledger's refusals a damage hold can meet, placed by a report or read for a request's value (stock-ledger
+ * 13.8, 13.15; goods-in 8.2, 8.5; S2-F08-T01): the goods not of the line or not in custody, a cost pool that appeared
+ * after Plan, and a cost that does not divide into whole paise (SL-2). A hold is stopped by no count freeze (13.9).
  */
-const DAMAGE_LEDGER_CODES = [
+const DAMAGE_HOLD_CODES = [
   'stock.invalid-item',
   'stock.place-invalid',
   'stock.plan-stale',
   'stock.not-in-custody',
-  'stock.insufficient-available',
-  'stock.held',
-  'stock.reserved',
-  'stock.blocked',
-  'stock.count-freeze-active',
-  'stock.exceeds-source',
-  'stock.condition-route',
   'stock.rule-not-set',
 ] as const satisfies readonly ErrorCode[];
 
 /**
  * The codes of a damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01): the policy gate, the
  * report already decided or its confirmation no longer the one it stands on, the decision verified under the ledger's
- * locks on the goods' cost then (access-and-approvals 9.7), and the ledger's refusals.
+ * locks on the goods' cost then (access-and-approvals 9.7), and the ledger's refusals of the condition change and its
+ * reversal: units held, reserved or taken by a claim the decider cannot see, a count freeze over them, more than the
+ * change moved (stock-ledger 13.8, 13.15).
  */
 const DAMAGE_DECISION_CODES = [
   'configuration.operation-unavailable',
@@ -1097,7 +1092,13 @@ const DAMAGE_DECISION_CODES = [
   'stock.report-decided',
   'stock.report-not-confirmed',
   'access.approval-value-exceeded',
-  ...DAMAGE_LEDGER_CODES,
+  ...DAMAGE_HOLD_CODES,
+  'stock.insufficient-available',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.count-freeze-active',
+  'stock.exceeds-source',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes every change of a damage report can answer (goods-in 8.5; S2-F08-T01). */
@@ -1107,7 +1108,7 @@ const DAMAGE_CHANGE_CODES = [
   'kernel.stale-version',
   'configuration.operation-unavailable',
   'stock.record-not-found',
-  ...DAMAGE_LEDGER_CODES,
+  ...DAMAGE_HOLD_CODES,
 ] as const satisfies readonly ErrorCode[];
 
 export const routes = {
@@ -4962,17 +4963,26 @@ export const routes = {
       'stock.goods-not-found',
       'stock.no-damage-report-series',
       'stock.damage-report-series-paused',
-      'exceptions.no-exception-code-series',
-      'exceptions.exception-code-series-paused',
+      // The exception-code series and the routing are the gate's checks (goods-in 10.5); the series may still be used
+      // up when the exception takes its number (numbering-and-audit 3.7).
       'exceptions.exception-code-series-exhausted',
-      'exceptions.no-routing',
-      ...DAMAGE_LEDGER_CODES,
+      ...DAMAGE_HOLD_CODES,
     ],
   }),
   readDamageReport: defineRoute({
     method: 'GET',
     path: '/api/stock/damage-reports/{damageReportId}',
     params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: damageReportReadSchema,
+    codes: [...HISTORY_CODES, 'stock.record-not-found'],
+  }),
+  // The report a reversal belongs to, as its approval panel shows it (goods-in 8.3; access-and-approvals 9.5).
+  readDamageReversal: defineRoute({
+    method: 'GET',
+    path: '/api/stock/damage-reversals/{damageReversalId}',
+    params: z.strictObject({ damageReversalId: idSchema }),
     access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
     command: false,
     response: damageReportReadSchema,

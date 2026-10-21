@@ -12,7 +12,7 @@ import { proposeReversal, renewDecision } from './commands/changes.js';
 import type { Actor } from './commands/common.js';
 import { newReportFacts, reportDamage } from './commands/report.js';
 import { DAMAGE_EXCEPTION_TYPE, DOCUMENTS_MODULE } from './domain/kinds.js';
-import { damageDecided, reportFacts, reportView } from './queries/reports.js';
+import { damageDecided, reportFacts, reportOfReversal, reportView } from './queries/reports.js';
 
 export interface StockDocumentsDependencies {
   readonly audit: AuditInterface;
@@ -79,6 +79,11 @@ export class StockDocuments {
   /** Propose a reversal of a report's confirmation (goods-in 8.3; PRD-STK-017). */
   proposeReversal(context: TransactionContext, actor: Actor, reportId: string, draft: DamageReversalDraft) {
     return proposeReversal(context, this.dependencies, actor, reportId, draft);
+  }
+
+  /** The report a reversal belongs to, as the reader may see it, or undefined (goods-in 8.3). */
+  reportOfReversal(context: TransactionContext, reversalId: string): Promise<string | undefined> {
+    return reportOfReversal(context, reversalId);
   }
 
   /** One report as the reader may see it, or undefined; `requests` gives each round's and reversal's latest request. */

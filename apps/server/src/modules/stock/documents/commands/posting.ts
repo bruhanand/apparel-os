@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { LOCK_STEP, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
+import { CommandDefect, LOCK_STEP, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { ItemValue, LedgerItem, LedgerSource, StockLedgerInterface, Written } from '../../ledger/index.js';
 import { refusalOf, requestValueOf, type Actor, type Outcome } from './common.js';
@@ -75,9 +75,9 @@ async function run(
   const { approval } = request;
   if (approval !== undefined) {
     const { access } = dependencies;
-    if (access === undefined) throw new Error('A posting under an approval was composed with no access');
+    if (access === undefined) throw new CommandDefect('A posting under an approval was composed with no access');
     const value = values[approval.valueOf];
-    if (value === undefined) throw new Error('The approved item is not among the posting items');
+    if (value === undefined) throw new CommandDefect('The approved item is not among the posting items');
     const check = {
       decisionId: approval.decisionId,
       actionType: approval.actionType,
@@ -108,7 +108,7 @@ export async function post(
   const outcome = await run(context, dependencies, request, true);
   if (outcome.kind === 'refusal') return outcome;
   const { written, values } = outcome.answer;
-  if (written === undefined) throw new Error('A posting written without its result');
+  if (written === undefined) throw new CommandDefect('A posting written without its result');
   return { kind: 'success', answer: { written, values } };
 }
 

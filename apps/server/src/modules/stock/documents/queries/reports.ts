@@ -1,6 +1,11 @@
-import { DAMAGE_REPORT_TYPE, type DamageReport, type DamageReportState } from '@apparel-os/schemas';
+import {
+  DAMAGE_REPORT_TYPE,
+  type DamagedGoods,
+  type DamageReport,
+  type DamageReportState,
+} from '@apparel-os/schemas';
 import { asc, eq } from 'drizzle-orm';
-import type { TransactionContext } from '../../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../../kernel/index.js';
 import type { LatestRequest, RecordFacts } from '../../../access/index.js';
 import type { ResolutionAnswer, ResolutionSubject } from '../../../exceptions/index.js';
 import {
@@ -10,13 +15,28 @@ import {
   reversalsOf,
   roundsOf,
   type DecisionRow,
+  type ReportRow,
   type RoundRow,
 } from '../commands/common.js';
-import { damageReportPhoto } from '../db/schema.js';
+import { damageReportPhoto, damageReversal } from '../db/schema.js';
 
 // Reading a damage report (goods-in 8.2, 8.3, 8.5; S2-F08-T01) under the reader's actor, so row-level security keeps
 // what the reader may not see out (code-house-rules 6.2), and the resolution check of the exception it raised
 // (access-and-approvals 12.3; PRD-EXC-002).
+
+/**
+ * The goods a report names, as reported (goods-in 8.2): a GRN line, or a product. The table's check holds that each
+ * names its own (migration 0094 `damage_report_goods`), so a missing one is a defect, never an empty identifier
+ * (PRD-MOD-015).
+ */
+function goodsNamed(row: ReportRow): DamagedGoods {
+  if (row.goodsKind === 'grn-line') {
+    if (row.grnLineId === null) throw new CommandDefect(`Damage report ${row.id} names no GRN line`);
+    return { kind: 'grn-line', grnLineId: row.grnLineId };
+  }
+  if (row.skuId === null) throw new CommandDefect(`Damage report ${row.id} names no product`);
+  return { kind: 'product', skuId: row.skuId };
+}
 
 /** A report's state, from its latest round and that round's decision (design-language 7; goods-in 8.5). */
 export function stateOf(rounds: readonly RoundRow[], decisions: readonly DecisionRow[]): DamageReportState {
@@ -29,6 +49,15 @@ export function stateOf(rounds: readonly RoundRow[], decisions: readonly Decisio
 export async function reportFacts(context: TransactionContext, reportId: string): Promise<RecordFacts | undefined> {
   const row = await reportRow(context, reportId);
   return row === undefined ? undefined : factsOf(row);
+}
+
+/** The report a reversal belongs to, as the reader may see it, or undefined (goods-in 8.3). */
+export async function reportOfReversal(context: TransactionContext, reversalId: string): Promise<string | undefined> {
+  const [row] = await context.tx
+    .select({ reportId: damageReversal.damageReportId })
+    .from(damageReversal)
+    .where(eq(damageReversal.id, reversalId));
+  return row?.reportId;
 }
 
 /**
@@ -52,7 +81,7 @@ export async function reportView(
     .orderBy(asc(damageReportPhoto.id));
   const latest = await requests([...rounds.map((each) => each.id), ...reversals.map((each) => each.reversal.id)]);
   const current = rounds.at(-1);
-  if (current === undefined) throw new Error(`Damage report ${reportId} has no round`);
+  if (current === undefined) throw new CommandDefect(`Damage report ${reportId} has no round`);
   return {
     id: row.id,
     number: row.number,
@@ -62,10 +91,7 @@ export async function reportView(
     businessUnitId: row.businessUnitId,
     locationId: row.locationId,
     brandId: row.brandId,
-    goods:
-      row.goodsKind === 'grn-line'
-        ? { kind: 'grn-line', grnLineId: row.grnLineId ?? '' }
-        : { kind: 'product', skuId: row.skuId ?? '' },
+    goods: goodsNamed(row),
     skuId: row.skuId,
     quantity: row.quantity,
     description: row.description,

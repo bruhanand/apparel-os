@@ -189,7 +189,7 @@ describe('holds on goods of a product not yet set up, named by their receipt ori
     expect(await rebuild()).toEqual([]);
   });
 
-  it('stock-ledger 13.15 goods of Unknown SKU are named only by an origin of Unknown SKU, by quantity, within custody', async () => {
+  it('PRD-DMG-005 PRD-MOD-015 goods of Unknown SKU are named only by an origin of Unknown SKU, by quantity, within custody', async () => {
     const at = await freshUnit();
     const originId = await countedUnknown(at, 3);
     const sku = world.sku(false);
@@ -338,7 +338,7 @@ describe('the damaged condition on goods of Unknown SKU and its reversal (stock-
 });
 
 describe('the value of a damage hold and a condition change for their approval (stock-ledger 13.10, 13.15)', () => {
-  it('DM-8 PRD-ACS-016 the goods cost once their cost is established; Unknown before, and for goods of Unknown SKU', async () => {
+  it('PRD-ACS-015 PRD-ACS-016 DEC-105 the goods cost once their cost is established; Unknown before, and for goods of Unknown SKU', async () => {
     const at = await freshUnit();
     const sku = world.sku(false);
     const receipt = written(

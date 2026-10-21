@@ -1,4 +1,4 @@
-import { DAMAGE_REPORT_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
+import { DAMAGE_REPORT_TYPE, DAMAGE_REVERSAL_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -26,6 +26,16 @@ import { STOCK_DOCUMENTS } from '../tokens.js';
 type FactsOf = (context: TransactionContext, today: string) => Promise<RecordFacts | CommandRefusal>;
 
 const isRefusal = (facts: RecordFacts | CommandRefusal): facts is CommandRefusal => 'code' in facts;
+
+/** No report with that identifier, or none the reader may see (code-house-rules 6.2). */
+const damageReportNotFound = (reportId: string): CommandRefusal => reportNotFound(reportId);
+
+/** No reversal with that identifier, or none the reader may see. */
+const damageReversalNotFound = (reversalId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'stock.record-not-found',
+  missing: [{ kind: 'record', recordType: DAMAGE_REVERSAL_TYPE, recordId: reversalId }],
+});
 
 /**
  * Damage reports (goods-in 8, section 11; module-map section 5; code-house-rules 12.1; S2-F08-T01). A report carries
@@ -56,14 +66,34 @@ export class DamageController {
   }
 
   @ApiRoute(routes.readDamageReport)
-  async readDamageReport(
-    @RouteInput() input: RouteInputOf<typeof routes.readDamageReport>,
+  readDamageReport(@RouteInput() input: RouteInputOf<typeof routes.readDamageReport>, @SignedIn() user: SignedInUser) {
+    const { damageReportId } = input.params;
+    return this.readReport(user, 'stock.read-damage-report', damageReportNotFound(damageReportId), () =>
+      Promise.resolve(damageReportId),
+    );
+  }
+
+  @ApiRoute(routes.readDamageReversal)
+  readDamageReversal(
+    @RouteInput() input: RouteInputOf<typeof routes.readDamageReversal>,
     @SignedIn() user: SignedInUser,
   ) {
-    const { damageReportId } = input.params;
+    const { damageReversalId } = input.params;
+    return this.readReport(user, 'stock.read-damage-reversal', damageReversalNotFound(damageReversalId), (context) =>
+      this.documents.reportOfReversal(context, damageReversalId),
+    );
+  }
+
+  /** A report as the reader may see it, read in a read-only transaction under the reader's actor (8.1). */
+  private async readReport(
+    user: SignedInUser,
+    commandName: string,
+    notFound: CommandRefusal,
+    reportIdOf: (context: TransactionContext) => Promise<string | undefined>,
+  ) {
     const answer = await this.runner.read(
       {
-        commandName: 'stock.read-damage-report',
+        commandName,
         organisation: user.organisation,
         correlationId: user.correlationId,
         actor: { kind: 'actor', actorId: user.userId },
@@ -72,7 +102,9 @@ export class DamageController {
         const date = await context.businessDate();
         if (date.kind === 'not-set') return { refused: BUSINESS_DATE_NOT_SET };
         // A report the reader's scope does not cover is hidden by row-level security, so it carries no fact, which only
-        // all-members scope covers (5.3; PRD-MOD-015); it is then not found.
+        // all-members scope covers (5.3; PRD-MOD-015); it is then not found. So is a reversal hidden or not there.
+        const damageReportId = await reportIdOf(context);
+        if (damageReportId === undefined) return { refused: notFound };
         const facts = (await this.documents.reportFacts(context, damageReportId)) ?? {};
         const authorised = await this.access.authorise(context, {
           actorId: user.userId,
@@ -84,7 +116,7 @@ export class DamageController {
         const report = await this.documents.readReport(context, damageReportId, (versionIds) =>
           this.access.approvalRequestsOf(context, versionIds),
         );
-        if (report === undefined) return { refused: reportNotFound(damageReportId) };
+        if (report === undefined) return { refused: notFound };
         return { asOf: context.startedAt.toISOString(), report };
       },
     );
