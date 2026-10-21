@@ -143,11 +143,39 @@ export async function remainingOf(
   };
 }
 
-/** Every budget, oldest first, or those named. */
-export async function budgetRows(context: TransactionContext, ids?: readonly string[]): Promise<BudgetRow[]> {
-  const query = context.tx.select().from(openToBuyBudget);
-  const filtered = ids === undefined ? query : query.where(inArray(openToBuyBudget.id, [...ids]));
-  return filtered.orderBy(asc(openToBuyBudget.recordedAt), asc(openToBuyBudget.id));
+/** The budgets named, in the order they were prepared. */
+export async function budgetRows(context: TransactionContext, ids: readonly string[]): Promise<BudgetRow[]> {
+  if (ids.length === 0) return [];
+  return context.tx
+    .select()
+    .from(openToBuyBudget)
+    .where(inArray(openToBuyBudget.id, [...ids]))
+    .orderBy(asc(openToBuyBudget.recordedAt), asc(openToBuyBudget.id));
+}
+
+/**
+ * A page of the budgets in the order they were prepared (code-house-rules 12.1 "Reads"): those after the budget `after`
+ * names, at most `limit` of them, and the cursor, the last one read, while more follow. A cursor naming no budget reads
+ * none. The order is compared in PostgreSQL, so no instant is rounded on its way through the application.
+ */
+export async function budgetPage(
+  context: TransactionContext,
+  page: { readonly after?: string | undefined; readonly limit: number },
+): Promise<{ readonly rows: BudgetRow[]; readonly next: string | null }> {
+  if (page.after !== undefined && (await budgetRow(context, page.after)) === undefined) return { rows: [], next: null };
+  const rows = await context.tx
+    .select()
+    .from(openToBuyBudget)
+    .where(
+      page.after === undefined
+        ? undefined
+        : sql`(${openToBuyBudget.recordedAt}, ${openToBuyBudget.id}) > (select named.recorded_at, named.id
+            from booking.open_to_buy_budget named where named.id = ${page.after}::uuid)`,
+    )
+    .orderBy(asc(openToBuyBudget.recordedAt), asc(openToBuyBudget.id))
+    .limit(page.limit + 1);
+  const read = rows.slice(0, page.limit);
+  return { rows: read, next: rows.length > page.limit ? (read.at(-1)?.id ?? null) : null };
 }
 
 function versionView(

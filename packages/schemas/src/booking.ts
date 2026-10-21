@@ -116,9 +116,32 @@ export const openToBuyBudgetSchema = z.strictObject({
 });
 export type OpenToBuyBudget = z.infer<typeof openToBuyBudgetSchema>;
 
+/**
+ * The largest page of the open-to-buy budgets: a technical cap the builders set (code-house-rules 12.1 "Reads"), not a
+ * KDPS value. A longer list is read page by page with the cursor.
+ */
+export const OPEN_TO_BUY_PAGE_CAP = 100;
+
+/**
+ * A page of the budgets (code-house-rules 12.1): in the order they were prepared, starting after the budget `after`
+ * names, at most `limit` of them read (the cap when left out). Those the reader may not see are left out after they
+ * are read, so a page may hold fewer; the cursor, the last budget read, still moves past them. It is opaque to the
+ * screen, which only hands back the `next` it was given.
+ */
+export const openToBuyBudgetPageQuerySchema = z.strictObject({
+  after: idSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= OPEN_TO_BUY_PAGE_CAP, { message: `At most ${String(OPEN_TO_BUY_PAGE_CAP)}` })
+    .optional(),
+});
+export type OpenToBuyBudgetPageQuery = z.infer<typeof openToBuyBudgetPageQuerySchema>;
+
 export const openToBuyBudgetListSchema = z.strictObject({
   asOf: instantSchema,
   budgets: z.array(openToBuyBudgetSchema),
+  next: idSchema.nullable(),
 });
 export type OpenToBuyBudgetList = z.infer<typeof openToBuyBudgetListSchema>;
 

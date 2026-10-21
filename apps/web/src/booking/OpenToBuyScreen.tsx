@@ -3,16 +3,17 @@ import {
   OPEN_TO_BUY_BUDGET_TYPE,
   settingOriginSchema,
   type OpenToBuyBudget,
+  type OpenToBuyBudgetList,
   type OpenToBuyBudgetVersion,
   type OpenToBuyRemaining,
 } from '@apparel-os/schemas';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
-import { readQuery } from '../api/query';
+import { ApiFailure, readQuery } from '../api/query';
 import { ApprovalPanel } from '../approvals/ApprovalPanel';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/StandardStates';
@@ -390,10 +391,22 @@ function BudgetDrawer({ budget, onClose }: { budget: OpenToBuyBudget; onClose: (
   );
 }
 
-/** Booking › Open-to-buy. */
+/** One page of the budgets, after the cursor the server gave, or the refusal thrown as ApiFailure. */
+async function readPage(after: string | undefined): Promise<OpenToBuyBudgetList> {
+  const result = await api.call('listOpenToBuyBudgets', { query: after === undefined ? {} : { after } });
+  if (result.ok) return result.data;
+  throw new ApiFailure(result.status, result.error);
+}
+
+/** Booking › Open-to-buy. The budgets are read a page at a time; Load more reads the next (code-house-rules 12.1). */
 export function OpenToBuyScreen() {
   const timeZone = useTimeZone();
-  const query = useQuery(readQuery(api, 'listOpenToBuyBudgets', {}));
+  const query = useInfiniteQuery({
+    queryKey: ['listOpenToBuyBudgets', 'pages'],
+    queryFn: ({ pageParam }) => readPage(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: OpenToBuyBudgetList) => last.next ?? undefined,
+  });
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-4">
@@ -417,14 +430,14 @@ export function OpenToBuyScreen() {
       </Toolbar>
       <p className="m-0 text-body-sm text-text-2">{t('budget.intro')}</p>
       <ListRead query={query} what="budget.what">
-        {(list) => {
-          const shown = list.budgets.find((budget) => budget.id === open);
+        {({ pages }) => {
+          const budgets = pages.flatMap((page) => page.budgets);
+          const asOf = pages[0]?.asOf;
+          const shown = budgets.find((budget) => budget.id === open);
           return (
             <div className="flex flex-col gap-3">
-              <div className="flex justify-end">
-                <AsOf asOf={list.asOf} timeZone={timeZone} />
-              </div>
-              {list.budgets.length === 0 ? (
+              <div className="flex justify-end">{asOf !== undefined && <AsOf asOf={asOf} timeZone={timeZone} />}</div>
+              {budgets.length === 0 ? (
                 <EmptyState title="budget.empty.title" body="budget.empty.body" />
               ) : (
                 <div className="overflow-x-auto rounded-card border border-border bg-surface">
@@ -440,7 +453,7 @@ export function OpenToBuyScreen() {
                       </tr>
                     </thead>
                     <tbody>
-                      {list.budgets.map((budget) => {
+                      {budgets.map((budget) => {
                         const figures = amounts(budget.remaining);
                         const newest = budget.versions.at(-1);
                         return (
@@ -477,6 +490,17 @@ export function OpenToBuyScreen() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {query.hasNextPage && (
+                <div>
+                  <Button
+                    label="organisation.load-more"
+                    disabled={query.isFetchingNextPage}
+                    onClick={() => {
+                      void query.fetchNextPage();
+                    }}
+                  />
                 </div>
               )}
               {shown !== undefined && (

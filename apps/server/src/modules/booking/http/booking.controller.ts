@@ -64,10 +64,15 @@ export class BookingController {
   ) {}
 
   @ApiRoute(routes.listOpenToBuyBudgets)
-  async listOpenToBuyBudgets(@SignedIn() user: SignedInUser) {
+  async listOpenToBuyBudgets(
+    @RouteInput() input: RouteInputOf<typeof routes.listOpenToBuyBudgets>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { after, limit } = input.query;
+    const page = { after, limit: limit === undefined ? undefined : Number(limit) };
     const answer = await this.read(user, 'booking.list-open-to-buy-budgets', async (context, today) => {
       let refusal: CommandRefusal | undefined;
-      const budgets = await this.booking.listBudgets(context, today, async (facts) => {
+      const { budgets, next } = await this.booking.listBudgets(context, today, page, async (facts) => {
         const checked = await this.access.authoriseEach(
           context,
           { actorId: user.userId, action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE },
@@ -80,7 +85,7 @@ export class BookingController {
         return checked.each.map((each) => each.kind === 'allowed');
       });
       if (refusal !== undefined) return { refused: refusal };
-      return { asOf: context.startedAt.toISOString(), budgets };
+      return { asOf: context.startedAt.toISOString(), budgets, next };
     });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
     return answer;
