@@ -395,7 +395,11 @@ export async function receivingFixture(
  * The units' mappings in force verified through organisation's command (structure-and-masters 3.4; POL-10.08) by the
  * setup's approver, who did not make them, each with a SYNTHETIC stored file as its evidence.
  */
-async function mappingsVerified(setup: StructureSetup, database: string, unitIds: readonly string[]): Promise<void> {
+export async function mappingsVerified(
+  setup: StructureSetup,
+  database: string,
+  unitIds: readonly string[],
+): Promise<void> {
   const verifier = setup.approver;
   const { assignmentId } = await grantSynthetic(database, { kind: 'user', id: verifier.id }, [
     { recordType: 'organisation.business_unit_mapping_verification', action: 'view' },

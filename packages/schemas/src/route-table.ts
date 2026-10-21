@@ -797,7 +797,7 @@ const CATALOGUE_CHANGE_CODES = [
 
 /**
  * The codes a tracking profile change can answer: a catalogue change's, and a version's origin this environment does
- * not accept (code-house-rules 12.14; 4.5 "As built"; RR-558).
+ * not accept (code-house-rules 12.14; 4.6 "As built"; RR-558).
  */
 const TRACKING_PROFILE_CHANGE_CODES = [
   ...CATALOGUE_CHANGE_CODES,

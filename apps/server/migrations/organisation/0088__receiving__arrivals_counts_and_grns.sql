@@ -147,7 +147,8 @@ create trigger refuse_truncate before truncate on receiving.arrival_photo
 -- One saved version of a count line (goods-in 4.3): the line's first entry gives the line its identity; each later
 -- entry names the one it replaces, once, so two people saving over the same version never both succeed (12.7); a
 -- removal is an entry too. The style code as the invoice writes it, the colour as it names it (DEC-138), the size as a
--- value of a list attribute with its code then (GI-3), the product when one is named, the invoice and counted
+-- value of a list attribute with its code then and the version of the size list's marking it was read under (GI-3;
+-- structure-and-masters 4.2 "As built"; code-house-rules 7.3, 12.14), the product when one is named, the invoice and counted
 -- quantities in whole pieces, a batch where the product's profile requires one (PRD-MER-011), and who saved it, from
 -- their sign-in.
 create table receiving.count_entry (
@@ -166,6 +167,7 @@ create table receiving.count_entry (
   size_attribute_id uuid,
   size_value_id uuid,
   size_code text,
+  size_marked_attribute_version_id uuid,
   sku_id uuid,
   invoice_quantity integer not null,
   counted_quantity integer not null,
@@ -176,7 +178,8 @@ create table receiving.count_entry (
   constraint count_entry_replaces_once unique (replaces_entry_id),
   constraint count_entry_first check ((replaces_entry_id is null) = (line_id = id)),
   constraint count_entry_texts check (style_code <> '' and colour <> '' and size_code <> '' and batch_code <> ''),
-  constraint count_entry_size check (num_nulls(size_attribute_id, size_value_id, size_code) in (0, 3)),
+  constraint count_entry_size
+    check (num_nulls(size_attribute_id, size_value_id, size_code, size_marked_attribute_version_id) in (0, 4)),
   constraint count_entry_batch check ((batch_code is null) = (expiry_date is null)),
   constraint count_entry_quantities check (invoice_quantity >= 0 and counted_quantity >= 0
     and (removed or invoice_quantity > 0 or counted_quantity > 0))

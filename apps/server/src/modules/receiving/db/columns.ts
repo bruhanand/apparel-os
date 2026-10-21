@@ -1,14 +1,16 @@
 import type { Batch, CountEntryFacts, Size } from '../domain/lines.js';
 import type { countEntry } from './schema.js';
 
-// The count's values as `receiving`'s tables keep them (goods-in 4.3; S2-F02-T02): a size as its attribute, value and
-// code, a batch as its code and expiry, each all three or both present, or none (migration 0088). The one place a row
+// The count's values as `receiving`'s tables keep them (goods-in 4.3; S2-F02-T02): a size as its attribute, value, code
+// and the marking's version it was read under, all four present or none; a batch as its code and expiry, both or none
+// (migration 0088). The one place a row
 // becomes the domain's values and back.
 
 interface SizeColumns {
   readonly sizeAttributeId: string | null;
   readonly sizeValueId: string | null;
   readonly sizeCode: string | null;
+  readonly sizeMarkedAttributeVersionId: string | null;
 }
 
 interface BatchColumns {
@@ -18,8 +20,20 @@ interface BatchColumns {
 
 /** A size as its row keeps it, or none (`count_entry_size`). */
 export function sizeOf(row: SizeColumns): Size | null {
-  if (row.sizeAttributeId === null || row.sizeValueId === null || row.sizeCode === null) return null;
-  return { attributeId: row.sizeAttributeId, valueId: row.sizeValueId, code: row.sizeCode };
+  if (
+    row.sizeAttributeId === null ||
+    row.sizeValueId === null ||
+    row.sizeCode === null ||
+    row.sizeMarkedAttributeVersionId === null
+  ) {
+    return null;
+  }
+  return {
+    attributeId: row.sizeAttributeId,
+    valueId: row.sizeValueId,
+    markedAttributeVersionId: row.sizeMarkedAttributeVersionId,
+    code: row.sizeCode,
+  };
 }
 
 export function sizeColumns(size: Size | null): SizeColumns {
@@ -27,6 +41,7 @@ export function sizeColumns(size: Size | null): SizeColumns {
     sizeAttributeId: size?.attributeId ?? null,
     sizeValueId: size?.valueId ?? null,
     sizeCode: size?.code ?? null,
+    sizeMarkedAttributeVersionId: size?.markedAttributeVersionId ?? null,
   };
 }
 

@@ -6,12 +6,14 @@ import { textKey } from './text.js';
 // (code-house-rules 2).
 
 /**
- * A size of the Organisation's size list: a value of a list attribute, named with its attribute, and the value's code
- * then, the text the PT file is matched on (goods-in 4.3, 5.4; GI-3).
+ * A size of the Organisation's size list: a value of a list attribute, named with its attribute and the version of the
+ * size list's marking it was read under (code-house-rules 7.3, 12.14; RR-556), and the value's code then, the text the
+ * PT file is matched on (goods-in 4.3, 5.4; GI-3).
  */
 export interface Size {
   readonly attributeId: string;
   readonly valueId: string;
+  readonly markedAttributeVersionId: string;
   readonly code: string;
 }
 

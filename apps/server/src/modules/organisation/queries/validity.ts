@@ -1,7 +1,6 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { lockTable, type LockTarget } from '../../../kernel/index.js';
-import type { ValidityCheck } from '../../configuration/index.js';
-import { today } from '../commands/common.js';
+import { approvedVersionValues, type ValidityCheck } from '../../configuration/index.js';
 import { businessUnit, businessUnitMapping, businessUnitMappingVerification } from '../db/schema.js';
 
 // The business units' verified mappings as policy 10's values, for the policy gate (module-map 4.4, section 3 rule 6;
@@ -22,36 +21,18 @@ export const verifiedMappingsCheck: ValidityCheck = {
   code: VERIFIED_MAPPINGS_CHECK,
   policy: 10,
   check: () => Promise.resolve({ kind: 'valid' }),
-  async values(context) {
-    const date = await today(context);
-    if (typeof date !== 'string') return [];
-    const rows = await context.tx
-      .select({
-        id: businessUnitMapping.id,
-        validDuring: businessUnitMapping.validDuring,
-        origin: businessUnitMapping.origin,
-        preparedBy: businessUnitMapping.preparedByUserId,
-      })
-      .from(businessUnitMapping)
-      .innerJoin(
-        businessUnitMappingVerification,
-        eq(businessUnitMappingVerification.businessUnitMappingId, businessUnitMapping.id),
-      )
-      .where(
-        and(
-          eq(businessUnitMapping.decision, 'Approved'),
-          sql`(pg_catalog.upper_inf(${businessUnitMapping.validDuring})
-               or pg_catalog.upper(${businessUnitMapping.validDuring}) > ${date}::date)`,
-        ),
-      );
-    // Its validity is the part changed in place, when a later version ends it (RR-478); a verification never changes.
-    return rows.map((row) => ({
-      key: row.id,
-      version: row.validDuring,
-      origin: row.origin,
-      enteredBy: [row.preparedBy],
-    }));
-  },
+  // Only a verified mapping is a value, once however often it was verified; a verification never changes.
+  values: (context) =>
+    approvedVersionValues(
+      context,
+      businessUnitMapping,
+      inArray(
+        businessUnitMapping.id,
+        context.tx
+          .select({ id: businessUnitMappingVerification.businessUnitMappingId })
+          .from(businessUnitMappingVerification),
+      ),
+    ),
   // A decision on a unit's mapping and a verification of one lock the unit's row (commands/effects.ts, verify.ts).
   async locks(context) {
     const rows = await context.tx.select({ id: businessUnit.id }).from(businessUnit);

@@ -93,6 +93,7 @@ export const countEntry = receiving.table('count_entry', {
   sizeAttributeId: uuid('size_attribute_id'),
   sizeValueId: uuid('size_value_id'),
   sizeCode: text('size_code'),
+  sizeMarkedAttributeVersionId: uuid('size_marked_attribute_version_id'),
   skuId: uuid('sku_id'),
   invoiceQuantity: integer('invoice_quantity').notNull(),
   countedQuantity: integer('counted_quantity').notNull(),

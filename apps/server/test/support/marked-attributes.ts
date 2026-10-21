@@ -8,14 +8,14 @@ import { connect } from './postgres.js';
  * 12.14), so a test's world has it whichever clock its commands run on: a marking approved through Decide is in force
  * from its decision's instant, which a fixture's own clock may put after the server's. Preparing a marking and its
  * approval by a different person are proved through the catalogue's routes (season-and-size-attributes.int.test.ts).
- * Refuses a mark already in force, so it never replaces one.
+ * Refuses a mark already in force, so it never replaces one. Answers the version written.
  */
 export async function writeSyntheticMarking(
   database: string,
   mark: AttributeMark,
   attributeId: string,
   preparedBy: string,
-): Promise<void> {
+): Promise<string> {
   const owner = await connect(database, 'migration');
   try {
     await owner.query('insert into merchandise.marked_attribute (id, mark) values ($1, $2) on conflict do nothing', [
@@ -33,12 +33,14 @@ export async function writeSyntheticMarking(
       [markedAttributeId],
     );
     if (inForce.rowCount !== 0) throw new Error(`An attribute is marked as the ${mark} already`);
+    const versionId = uuidv7();
     await owner.query(
       `insert into merchandise.marked_attribute_version
          (id, marked_attribute_id, attribute_id, origin, decision, valid_during, prepared_by_user_id)
        values ($1, $2, $3, 'synthetic', 'Approved', tstzrange($4::timestamptz, null), $5)`,
-      [uuidv7(), markedAttributeId, attributeId, new Date(Date.now() - 86_400_000).toISOString(), preparedBy],
+      [versionId, markedAttributeId, attributeId, new Date(Date.now() - 86_400_000).toISOString(), preparedBy],
     );
+    return versionId;
   } finally {
     await owner.end();
   }

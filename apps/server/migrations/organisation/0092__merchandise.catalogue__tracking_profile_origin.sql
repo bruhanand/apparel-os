@@ -1,5 +1,5 @@
 -- Where a tracking profile version's values came from (code-house-rules 12.14 "Where a value came from";
--- structure-and-masters 4.5 "As built"; goods-in 10.5; POL-04.01, POL-04.05; RR-480, RR-558; S2-F02-T02). The tracking
+-- structure-and-masters 4.6 "As built"; goods-in 10.5; POL-04.01, POL-04.05; RR-480, RR-558; S2-F02-T02). The tracking
 -- profiles are policy 4's values, reported to the policy gate with their origin, as every other configured value is:
 -- KDPS's answer, a setting of the test setup, or synthetic. Preparing a version states it, with no default; a version
 -- of an origin the environment does not accept is refused when prepared, and Available names one it finds. Runs as

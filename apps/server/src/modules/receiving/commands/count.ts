@@ -148,7 +148,7 @@ export async function saveCountLine(
         recordItem('merchandise.vocabulary_value', valueId),
       ]);
     }
-    size = { attributeId, valueId: value.id, code: value.code };
+    size = { attributeId, valueId: value.id, markedAttributeVersionId: sizes.versionId, code: value.code };
   }
   // One line per style, colour and size (goods-in 4.3): a line for them already is the one to change.
   const repeated = lineCounting(

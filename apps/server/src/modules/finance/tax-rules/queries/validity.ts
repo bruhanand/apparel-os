@@ -1,8 +1,6 @@
 import type { TaxRuleKind } from '@apparel-os/schemas';
-import { and, eq, sql } from 'drizzle-orm';
 import { lockTable, type LockTarget } from '../../../../kernel/index.js';
-import type { ConfiguredValue, ValidityCheck } from '../../../configuration/index.js';
-import { today } from '../../books/index.js';
+import { approvedVersionValues, type ConfiguredValue, type ValidityCheck } from '../../../configuration/index.js';
 import { KIND_TABLES, versionsOf } from '../commands/lines.js';
 import {
   goodsClassification,
@@ -31,35 +29,9 @@ export const taxRulesCheck: ValidityCheck = {
   policy: 10,
   check: () => Promise.resolve({ kind: 'valid' }),
   async values(context) {
-    const date = await today(context);
-    if (typeof date !== 'string') return [];
     const values: ConfiguredValue[] = [];
     for (const kind of TAX_RULE_KINDS) {
-      const versions = versionsOf(kind);
-      const rows = await context.tx
-        .select({
-          id: versions.id,
-          validDuring: versions.validDuring,
-          origin: versions.origin,
-          preparedBy: versions.preparedByUserId,
-        })
-        .from(versions)
-        .where(
-          and(
-            eq(versions.decision, 'Approved'),
-            sql`(pg_catalog.upper_inf(${versions.validDuring})
-                 or pg_catalog.upper(${versions.validDuring}) > ${date}::date)`,
-          ),
-        );
-      // Its validity is the part changed in place, when a later version ends it (RR-478).
-      for (const row of rows) {
-        values.push({
-          key: row.id,
-          version: row.validDuring,
-          origin: row.origin,
-          enteredBy: [row.preparedBy],
-        });
-      }
+      values.push(...(await approvedVersionValues(context, versionsOf(kind))));
     }
     return values;
   },

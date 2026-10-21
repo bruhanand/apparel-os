@@ -1179,7 +1179,6 @@ async function writeClassifications(
   }
 }
 
-/** A mapping's three fields (3.4). */
 /** A mapping's three fields and where it came from (3.4; code-house-rules 12.14; RR-558). */
 interface MappingFields {
   readonly legalEntityId: string;

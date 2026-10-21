@@ -133,7 +133,7 @@ interface Change {
   readonly after?: (context: TransactionContext, recordId: string, versionId: string) => Promise<void>;
   /**
    * Where the version's values came from, for a kind whose versions are a policy's values, as a tracking profile's are
-   * policy 4's: refused when this environment does not accept it (code-house-rules 12.14; 4.5 "As built"; RR-558).
+   * policy 4's: refused when this environment does not accept it (code-house-rules 12.14; 4.6 "As built"; RR-558).
    */
   readonly origin?: SettingOrigin;
 }
