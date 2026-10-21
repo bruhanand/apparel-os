@@ -410,6 +410,23 @@ const eboImportsRecordTypes = [
   declare('ebo_imports.reference_document', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
+const BRAND: ScopeFactsDeclared = { legalEntity: false, place: false, brand: true };
+
+/**
+ * `booking` (goods-in 3.3, 10.1, section 11; module-map section 5; POL-05.09, POL-02.07; S2-F01-T02). An open-to-buy
+ * budget is for one brand and one season across the Organisation, so it carries the brand as its one scope fact, and an
+ * assignment's brand scope decides whose budgets a person prepares, reads, checks or approves (access-and-approvals
+ * 5.3). Booking prepares a budget (create) and its later versions (edit); approve on the budget is the Owner's, or
+ * whoever holds the approval. Accounts' check is decided under a record type of its own, approve on
+ * `booking.open_to_buy_check`, which no permission on the budget gives, so the check and the approval are held apart
+ * (POL-05.09); view on it reads the check's evidence. **Design choice**; who holds them is the product owner's to
+ * name (V-01).
+ */
+const bookingRecordTypes = [
+  declare('booking.open_to_buy_budget', PREPARED, BRAND),
+  declare('booking.open_to_buy_check', ['view', 'approve'], BRAND),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -428,6 +445,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...financeRecordTypes,
   ...posRecordTypes,
   ...eboImportsRecordTypes,
+  ...bookingRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -446,7 +464,8 @@ export type RecordTypeCode =
   | (typeof financeTaxRulesRecordTypes)[number]['code']
   | (typeof financeRecordTypes)[number]['code']
   | (typeof posRecordTypes)[number]['code']
-  | (typeof eboImportsRecordTypes)[number]['code'];
+  | (typeof eboImportsRecordTypes)[number]['code']
+  | (typeof bookingRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

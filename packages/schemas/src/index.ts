@@ -552,3 +552,6 @@ export * from './posting.js';
 // Imports: the import upload, layouts, batches, staged rows, preview and publish (imports-and-opening-data 13;
 // S1-F06-T01).
 export * from './imports.js';
+
+// `booking`'s open-to-buy budgets (goods-in 3.3; S2-F01-T02).
+export * from './booking.js';

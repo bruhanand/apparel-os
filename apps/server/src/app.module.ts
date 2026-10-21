@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
   CommandRunnerModule,
   idempotencyModuleWith,
@@ -7,14 +8,17 @@ import {
   OrganisationRoutingModule,
 } from './kernel/index.js';
 import {
+  ACCESS,
   AccessContractsModule,
   AccessModule,
   DECISION_EVIDENCE,
   MODULE_APPROVALS,
   SCOPE_MEMBERS,
+  type AccessInterface,
   type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
+import { BookingModule, bookingApprovals } from './modules/booking/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import {
@@ -126,6 +130,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         configuration: ConfigurationInterface,
         bookHeldStock: BookHeldStock,
         importHandlers: ImportHandlers,
+        modules: ModuleRef,
       ) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
@@ -157,8 +162,13 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           posApprovals({ audit, numbering: composedNumbering(), origins: configuration }),
           // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
           filesImportsApprovals(audit, importHandlers),
+          // An open-to-buy budget version's check and approval (goods-in 3.3; S2-F01-T02). The check's effect requests
+          // the approval in the decision's transaction through `access`, which is built with these effects, so it
+          // reaches `access` when it runs, never at start (access-and-approvals 9.8b "As built for a document decided
+          // in two steps").
+          bookingApprovals({ audit, requests: () => modules.get<AccessInterface>(ACCESS, { strict: false }) }),
         ),
-      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
@@ -240,6 +250,8 @@ export class ModuleApprovalsModule {}
     // The historical-reference handler for the earlier POS's SOH and daily sales, which never moves stock (module-map
     // section 5, 11.1; imports-and-opening-data 4.1; DEC-116; S1-F13-T01).
     EboImportsModule,
+    // Bookings: in the first piece of stage 2, the open-to-buy budgets (module-map section 5; goods-in 3.3; S2-F01-T02).
+    BookingModule,
   ],
 })
 export class AppModule {}
