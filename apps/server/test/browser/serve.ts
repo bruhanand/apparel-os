@@ -118,9 +118,12 @@ import { GRN_KIND } from '../../src/modules/receiving/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
 import { DAMAGE_REPORT_KIND, damageExceptionType } from '../../src/modules/stock/documents/index.js';
+import { stockDocumentsApprovalRules } from '../../src/modules/stock/documents/domain/kinds.js';
 import {
   damageGateOpen,
   DECIDER_AUTHORITY,
+  LIMIT_ADMIN_AUTHORITY,
+  LIMIT_APPROVER_AUTHORITY,
   RECEIVER_REPORTER_AUTHORITY,
   SYNTHETIC_POLICY_17_VALUES,
 } from '../support/damage.js';
@@ -2409,9 +2412,63 @@ for (const each of [receivingWorld, storeStaffWorld, damageWorld]) {
     [readinessValuesCheck],
   );
 }
-// Policy 17 Signed and validated on the test-only check's one SYNTHETIC value, and the damage capability switched on
-// (support/damage.ts): which records are policy 17's values is the product owner's to say (goods-in 10.5).
+// The damage journey (damage-reports.spec.ts; S2-F08-T01): policy 17 Signed and validated on the test-only check's one
+// SYNTHETIC value, and the damage capability switched on (support/damage.ts), which records are policy 17's values
+// being the product owner's to say (goods-in 10.5); a Store's staff (P-STM) who receive and report damage at their
+// Store only (the lists of masters from a second assignment, below); and Operations (P-OPS), who decides reports over
+// every place from My work, with an individual SYNTHETIC limit on the decision covering an Unknown cost, prepared and
+// approved through `access`'s commands by the setup's two people (access-and-approvals 9.2). Who reports, who
+// decides and the limit are the product owner's: SYNTHETIC here.
 await damageGateOpen(receivingStructure, receivingDatabase);
+const damageReporter = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-REPORTER',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVER_REPORTER_AUTHORITY, {
+  scope: placeScope([{ type: 'store', id: damageWorld.storeId }]),
+});
+const damageOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-OPS',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const damageDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: damageOperations.id },
+  DECIDER_AUTHORITY,
+);
+{
+  const limitAccess = receivingStructure.accessWith({ rules: stockDocumentsApprovalRules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  await grantSynthetic(
+    receivingDatabase,
+    { kind: 'user', id: receivingStructure.approver.id },
+    LIMIT_APPROVER_AUTHORITY,
+  );
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: DAMAGE_DECISION,
+        holder: { kind: 'individual', userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+        limit: { kind: 'none' },
+        coversUnknown: true,
+        origin: 'synthetic',
+        validFrom: receivingStructure.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The damage limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') throw new Error(`The damage limit was not approved: ${decided.refusal.code}`);
+}
 await receivingStructure.close();
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
@@ -2459,31 +2516,11 @@ await fixtureRunner.run(
   },
   (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
 );
-// The damage journey (damage-reports.spec.ts; S2-F08-T01): a Store's staff (P-STM) who receive and report damage at
-// their Store only, the lists of masters from a second assignment; Operations (P-OPS), who decides reports over every
-// place from My work, with an individual SYNTHETIC limit on the decision covering an Unknown cost, approved as a fixture
-// (code-house-rules 11.2); an approve reason; the exception-code series and the damage-report series with SYNTHETIC
+// And for the damage journey: the reporter's lists of masters; an approve reason; the exception-code series and the damage-report series with SYNTHETIC
 // formats (RR-449; DEC-118); and the damage exception routed at the world's Site to Operations by a SYNTHETIC rule
-// approved as a fixture. Who reports, who decides, the limit and the routing are the product owner's: SYNTHETIC here.
-const damageReporter = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
-  label: 'BROWSER-DAMAGE-REPORTER',
-  enrolled: true,
-  personas: ['P-STM'],
-});
-await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVER_REPORTER_AUTHORITY, {
-  scope: placeScope([{ type: 'store', id: damageWorld.storeId }]),
-});
+// approved here as a fixture (code-house-rules 11.2), as the other journeys' rules are. The routing is the product
+// owner's: SYNTHETIC here.
 await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVING_LISTS);
-const damageOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
-  label: 'BROWSER-DAMAGE-OPS',
-  enrolled: true,
-  personas: ['P-OPS'],
-});
-const damageDecider = await grantSynthetic(
-  receivingDatabase,
-  { kind: 'user', id: damageOperations.id },
-  DECIDER_AUTHORITY,
-);
 const damageReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 const damageRouting = await fixtureRunner.run(
   {
@@ -2524,14 +2561,6 @@ if (damageRouting.kind !== 'done') throw new Error(`The damage rule was refused:
     await owner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
       damageRouting.value.versionId,
     ]);
-    const holderKey = `user:${damageOperations.id}:${damageDecider.assignmentId}`;
-    await owner.query(
-      `insert into access.approval_limit (id, action_type, basis, holder_kind, app_user_id, role_assignment_id,
-         holder_key, amount, unlimited, covers_unknown, origin, valid_during, decision)
-       values ($1, $2, 'cost', 'individual', $3, $4, $5, null, false, true, 'synthetic',
-         daterange(current_date - 1, null), 'Approved')`,
-      [uuidv7(), DAMAGE_DECISION, damageOperations.id, damageDecider.assignmentId, holderKey],
-    );
   } finally {
     await owner.end();
   }
