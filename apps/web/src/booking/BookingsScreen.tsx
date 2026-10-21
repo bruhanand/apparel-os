@@ -17,7 +17,7 @@ import { useTimeZone } from '../shell/session';
 import { BookingForm } from './BookingForm';
 import { BookingView } from './BookingView';
 import { referenceOf } from './facts';
-import { unknown, useBookingNames } from './names';
+import { useBookingNames } from './names';
 
 // Booking › Bookings (goods-in 3.1 to 3.4, section 11; PRD-BKG-001, PRD-UXP-003; S2-F01-T03): every booking the reader
 // may see, newest first, filtered by state, brand, season, supplier and destination, each with its state, window and
@@ -213,10 +213,10 @@ export function BookingsScreen() {
                           <td className="px-3">
                             <StatusBadge state={stateIdOf(booking.state)} />
                           </td>
-                          <td className="px-3">{names.brandText(booking.brandId) ?? unknown()}</td>
-                          <td className="px-3">{names.seasonText(booking.seasonValueId) ?? unknown()}</td>
-                          <td className="px-3">{names.partyText(booking.supplierPartyId) ?? unknown()}</td>
-                          <td className="px-3">{names.siteText(booking.destinationSiteId) ?? unknown()}</td>
+                          <td className="px-3">{names.brand.text(booking.brandId)}</td>
+                          <td className="px-3">{names.season.text(booking.seasonValueId)}</td>
+                          <td className="px-3">{names.party.text(booking.supplierPartyId)}</td>
+                          <td className="px-3">{names.site.text(booking.destinationSiteId)}</td>
                           <td className="px-3">
                             {t('booking.window.range', {
                               from: formatDate(booking.deliveryWindow.from),

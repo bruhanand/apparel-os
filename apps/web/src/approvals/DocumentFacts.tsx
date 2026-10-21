@@ -490,14 +490,13 @@ function BookingFacts({ view }: { view: ApprovalRequestView }) {
   const booking = query.data?.booking;
   if (booking?.version.id !== view.document.versionId) return null;
   const { version } = booking;
-  const unknownText = () => t('organisation.unknown');
   return (
     <div className="flex flex-col gap-3">
       <Facts>
-        <Fact label="booking.brand">{names.brandText(booking.brandId) ?? unknownText()}</Fact>
-        <Fact label="booking.season">{names.seasonText(version.season.valueId) ?? unknownText()}</Fact>
-        <Fact label="booking.supplier">{names.partyText(version.supplierPartyId) ?? unknownText()}</Fact>
-        <Fact label="booking.destination">{names.siteText(booking.destinationSiteId) ?? unknownText()}</Fact>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.season">{names.season.field(version.season.valueId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
         <Fact label="booking.window">
           {t('booking.window.range', {
             from: formatDate(version.deliveryWindow.from),

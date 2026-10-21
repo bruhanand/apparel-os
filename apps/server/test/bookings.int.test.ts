@@ -198,8 +198,7 @@ function decide(
 /** Whether My work offers the user the approval request named, once the worker has published it (11.1, 11.2). */
 async function offeredInMyWork(user: SyntheticUser, requestId: string): Promise<boolean> {
   const work = (await get(user, '/api/inbox/my-work')).body.items as
-    | { kind: string; owner: { recordId: string } }[]
-    | undefined;
+    { kind: string; owner: { recordId: string } }[] | undefined;
   return (work ?? []).some((each) => each.kind === 'approval' && each.owner.recordId === requestId);
 }
 
@@ -591,7 +590,7 @@ describe('recording a booking (goods-in 3.1, 3.2; PRD-BKG-001 to PRD-BKG-003)', 
     ).toBe('kernel.invalid-request');
   });
 
-  it('code-house-rules 12.7 a Draft is changed freely by its next version, naming the newest version token', async () => {
+  it('POL-05.01 code-house-rules 12.7 a Draft is changed freely by its next version, naming the newest version token', async () => {
     const made = ok(await post(booker, '/api/booking/bookings', draftBody([line('SYN-ST-4', 2)])));
     const bookingId = made.bookingId as string;
     const change = {
@@ -622,7 +621,7 @@ describe('recording a booking (goods-in 3.1, 3.2; PRD-BKG-001 to PRD-BKG-003)', 
 describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 test 4)', () => {
   let first: { bookingId: string; versionId: string; requestId: string };
 
-  it('goods-in 3.1 a booking is submitted only with a document attached; the approval binds to that version', async () => {
+  it('PRD-IMP-002 DEC-136 a booking is submitted only with a document attached; the approval binds to that version', async () => {
     const made = ok(await post(booker, '/api/booking/bookings', draftBody([line('SYN-ST-6', 10, { colour: 'SYN' })])));
     const bookingId = made.bookingId as string;
     const bare = await post(booker, `/api/booking/bookings/${bookingId}/submission`, {
@@ -706,7 +705,7 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     await raisedBudget(budgetId, SYNTHETIC_BUDGET);
   });
 
-  it('goods-in 3.1 RR-449 approval is refused while no booking series is set up', async () => {
+  it('PRD-INT-004 RR-449 approval is refused while no booking series is set up, so nothing of it commits', async () => {
     expect(errorOf(await decide(owner, first.requestId, first.versionId))).toMatchObject({
       code: 'booking.no-booking-series',
       missing: [{ kind: 'number-series', numberedKind: 'booking.booking' }],
@@ -806,7 +805,7 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     });
   });
 
-  it('goods-in 3.4 POL-02.07 a rejection returns the booking to Draft; its preparer still cannot approve the next version', async () => {
+  it('POL-05.01 POL-02.07 a rejection returns the booking to Draft; its preparer still cannot approve the next version', async () => {
     const sent = await submitted([line('SYN-ST-9', 4)]);
     const rejected = await decide(owner, sent.requestId, sent.versionId, 'reject');
     expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);

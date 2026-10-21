@@ -1,9 +1,16 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { paise, uuidv7 } from '@apparel-os/domain';
 import { BOOKING_APPROVAL, type PolicyNumber } from '@apparel-os/schemas';
+import type { Access } from '../../src/modules/access/index.js';
 import { Audit } from '../../src/modules/audit/index.js';
-import { BOOKING_CAPABILITY, BOOKING_OPERATIONS } from '../../src/modules/booking/index.js';
+import {
+  BOOKING_CAPABILITY,
+  BOOKING_KIND,
+  BOOKING_OPERATIONS,
+  bookingApprovals,
+} from '../../src/modules/booking/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
 import { policyEvidence } from '../../src/modules/files-imports/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
 import { syntheticName } from '../fixtures/synthetic.js';
 import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic } from './grants.js';
@@ -59,40 +66,52 @@ export async function writeSyntheticBudget(
 }
 
 /**
- * A SYNTHETIC booking limit on cost for the role of a user's one assignment, all members, Approved from yesterday,
- * written as a fixture as the browser server writes its bulk approver's (access-and-approvals 9.2; DM-8, DEC-105):
- * the real limits and their holders are the product owner's (V-02). Preparing and approving a limit are proved through
- * the routes (approval-limits.int.test.ts, bookings.int.test.ts).
+ * A SYNTHETIC individual booking limit on cost, through `access`'s own commands (access-and-approvals 9.2; DM-8,
+ * DEC-105; code-house-rules 11.2): the setup's preparer prepares it, its approver, a different person, approves it.
+ * `access` is composed with `booking`'s approval rules, so the action type is known. The real limits and their holders
+ * are the product owner's (V-02).
  */
-export async function writeSyntheticBookingLimit(database: string, userId: string, amountPaise: number): Promise<void> {
-  const owner = await connect(database, 'migration');
-  try {
-    const [assignment] = (
-      await owner.query<{ role_id: string }>('select role_id from access.role_assignment where app_user_id = $1', [
-        userId,
-      ])
-    ).rows;
-    if (assignment === undefined) throw new Error('The booking approver has no role assignment');
-    const scope = { kind: 'dimensions', legalEntity: { kind: 'all' }, place: { kind: 'all' }, brand: { kind: 'all' } };
-    const scopeKey = 'legal-entity=all;place=all;brand=all';
-    await owner.query(
-      `insert into access.approval_limit (id, action_type, basis, holder_kind, role_id, scope, scope_key, holder_key,
-         amount, unlimited, covers_unknown, origin, valid_during, decision)
-       values ($1, $2, 'cost', 'role', $3, $4, $5, $6, $7, false, false, 'synthetic',
-         daterange(current_date - 1, null), 'Approved')`,
-      [
-        uuidv7(),
-        BOOKING_APPROVAL,
-        assignment.role_id,
-        JSON.stringify(scope),
-        scopeKey,
-        `role:${assignment.role_id}:${scopeKey}`,
-        amountPaise,
-      ],
-    );
-  } finally {
-    await owner.end();
-  }
+export async function bookingLimitApproved(
+  setup: StructureSetup,
+  database: string,
+  holder: { readonly userId: string; readonly roleAssignmentId: string },
+  amountPaise: number,
+): Promise<void> {
+  const audit = new Audit(capturingLogger().logger);
+  const configuration = new Configuration({ audit, environment: { name: 'local' } });
+  const access: Access = setup.accessWith(
+    bookingApprovals({
+      audit,
+      configuration,
+      numbering: new Numbering({ kinds: [BOOKING_KIND] }),
+      requests: () => access,
+    }),
+  );
+  const preparing = await grantSynthetic(database, { kind: 'user', id: setup.preparer.id }, [
+    { recordType: 'access.approval_limit', action: 'view' },
+    { recordType: 'access.approval_limit', action: 'create' },
+  ]);
+  await grantSynthetic(database, { kind: 'user', id: setup.approver.id }, [
+    { recordType: 'access.approval_limit', action: 'view' },
+    { recordType: 'access.approval_limit', action: 'approve' },
+  ]);
+  const prepared = await setup.run(setup.preparer.id, (context) =>
+    access.prepareApprovalLimit(
+      context,
+      { userId: setup.preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: BOOKING_APPROVAL,
+        holder: { kind: 'individual', ...holder },
+        limit: { kind: 'amount', amount: paise(amountPaise) },
+        coversUnknown: false,
+        origin: 'synthetic',
+        validFrom: setup.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The booking limit was refused: ${prepared.refusal.code}`);
+  const approved = await setup.decideThrough(access, prepared.answer.requestId, prepared.answer.limitId);
+  if (approved.kind !== 'success') throw new Error(`The booking limit was not approved: ${approved.refusal.code}`);
 }
 
 /** Who entered the synthetic values: a SYNTHETIC person who is none of the validators (DM-6). */

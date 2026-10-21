@@ -17,7 +17,7 @@ import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { BOOKING_READS, BookingForm } from './BookingForm';
 import { OpenToBuyFacts, referenceOf, TermsFacts, TotalsView } from './facts';
-import { unknown, useBookingNames } from './names';
+import { useBookingNames } from './names';
 
 // Booking › a booking (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004, PRD-UXP-003; S2-F01-T03): its
 // state and what blocks it, its documents, the brand's Agreement terms read-only, the remaining open-to-buy of its brand
@@ -189,10 +189,10 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
               <Card title="booking.header">
                 <Facts
                   rows={[
-                    ['booking.brand', names.brandText(booking.brandId) ?? unknown()],
-                    ['booking.destination', names.siteText(booking.destinationSiteId) ?? unknown()],
-                    ['booking.supplier', names.partyText(booking.version.supplierPartyId) ?? unknown()],
-                    ['booking.season', names.seasonText(booking.version.season.valueId) ?? unknown()],
+                    ['booking.brand', names.brand.field(booking.brandId)],
+                    ['booking.destination', names.site.field(booking.destinationSiteId)],
+                    ['booking.supplier', names.party.field(booking.version.supplierPartyId)],
+                    ['booking.season', names.season.field(booking.version.season.valueId)],
                     [
                       'booking.window',
                       t('booking.window.range', {
@@ -224,7 +224,8 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
                 <Card title="booking.approval">
                   <Facts
                     rows={[
-                      ['booking.number', booking.number ?? unknown()],
+                      // The first approval gives the number, so an approved booking always has one (goods-in 3.1).
+                      ...(booking.number === undefined ? [] : [['booking.number', booking.number] as const]),
                       ['booking.approval.reserved', formatPaise(booking.approval.reserved)],
                       ['booking.approval.at', formatDateTime(booking.approval.approvedAt, timeZone)],
                     ]}
@@ -233,7 +234,9 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
               )}
               {draft && mayEdit ? (
                 <BookingForm
-                  key={booking.versionToken}
+                  // Kept while documents are attached, which change the token but not the version: the form sends the
+                  // booking's newest token when it saves (code-house-rules 12.7).
+                  key={booking.version.id}
                   booking={booking}
                   waiting={reading ? READING : undefined}
                   onSaved={() => undefined}

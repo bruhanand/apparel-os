@@ -120,7 +120,7 @@ import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import {
   BOOKING_POLICY_CHECKS,
   bookingGateOpen,
-  writeSyntheticBookingLimit,
+  bookingLimitApproved,
   writeSyntheticBudget,
 } from '../support/booking.js';
 import {
@@ -2453,7 +2453,6 @@ await writeSyntheticBudget(receivingDatabase, {
   preparedBy: receivingStructure.preparer.id,
 });
 await bookingGateOpen(receivingStructure, receivingDatabase);
-await receivingStructure.close();
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
   fixtureLog.logger,
@@ -2522,14 +2521,20 @@ const bookingOwner = await writeSyntheticUser(receivingDatabase, receivingCode, 
   enrolled: true,
   personas: ['P-OWN'],
 });
-await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingOwner.id }, [
+const bookingOwnerAssignment = await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingOwner.id }, [
   ...BOOKING_LISTS,
   { recordType: 'booking.booking', action: 'view' },
   { recordType: 'booking.booking', action: 'approve' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
-// A SYNTHETIC limit of ₹10,00,000.00 on cost.
-await writeSyntheticBookingLimit(receivingDatabase, bookingOwner.id, 100_000_000);
+// A SYNTHETIC limit of ₹10,00,000.00 on cost, prepared and approved by two other people through access's commands.
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: bookingOwner.id, roleAssignmentId: bookingOwnerAssignment.assignmentId },
+  100_000_000,
+);
+await receivingStructure.close();
 const bookingReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 await fixtureRunner.run(
   {

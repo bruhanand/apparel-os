@@ -40,7 +40,7 @@ describe('the size-colour grid (goods-in 3.1; PRD-BKG-001)', () => {
     ]);
   });
 
-  it('reads colours and sizes as written, separated by commas, each once', () => {
+  it('DEC-130 reads colours and sizes as written, separated by commas, each once', () => {
     expect(splitList(' S , M,, m ,S ')).toEqual(['S', 'M', 'm']);
     expect(splitList(' ')).toEqual([]);
   });
@@ -69,13 +69,13 @@ describe('a line (goods-in 3.1; DEC-130)', () => {
     });
   });
 
-  it('names each field that is not a line the route takes, and makes no line of it', () => {
+  it('PRD-UXP-003 names each field that is not a line the route takes, and makes no line of it', () => {
     const wrong = { ...typed, styleCode: ' ', quantity: '0', cost: '12.345', mrp: 'abc' };
     expect(lineProblems(wrong)).toEqual({ styleCode: true, quantity: true, cost: true, mrp: true });
     expect(draftLineOf(wrong)).toBeUndefined();
   });
 
-  it('a saved line is typed back as the same paise', () => {
+  it('PRD-MOD-014 a saved line is typed back as the same paise', () => {
     const saved = {
       id: '01900000-0000-7000-8000-000000000001',
       lineNumber: 1,

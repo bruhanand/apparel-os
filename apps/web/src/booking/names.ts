@@ -4,12 +4,13 @@ import { api } from '../api';
 import { readQuery } from '../api/query';
 import { t } from '../messages/catalogue';
 import { useMarkedAttribute } from '../merchandise/marked';
-import { inForce, optionText, useMasterNames } from '../receiving/names';
+import { inForce, optionText } from '../receiving/names';
 import { useGranted } from '../setup/parts';
 
 // The names the booking screens show beside identifiers (goods-in 3.1, section 11; structure-and-masters 8;
 // S2-F01-T03): brands, suppliers, Sites and seasons, read as the person may. A record the person may not read, or that
-// is not on the list read, is Unknown (PRD-MOD-015; design-language 8), never its identifier.
+// is not on the list read, is Unknown (PRD-MOD-015; design-language 8), never its identifier: a field shows the word, a
+// table cell stays blank, and while a list is still being read both stay blank.
 
 /** Whether a party holds the supplier role in force today (structure-and-masters 5.1). */
 function isSupplier(party: PartyRecord): boolean {
@@ -18,9 +19,39 @@ function isSupplier(party: PartyRecord): boolean {
   );
 }
 
+/** One list of records with their names, and whether it is still being read. */
+interface Named {
+  readonly id: string;
+  readonly code: string;
+  readonly versions: readonly { readonly state: string; readonly name?: string; readonly legalName?: string }[];
+}
+
+function lookup(records: readonly Named[] | undefined, reading: boolean) {
+  return {
+    /** "CODE · Name", or undefined while it is Unknown to the person or being read. */
+    text: (id: string): string | undefined => {
+      const found = records?.find((record) => record.id === id);
+      return found === undefined ? undefined : optionText(found);
+    },
+    /** As a field shows it: the name, blank while being read, or the word Unknown. */
+    field: (id: string): string => {
+      const found = records?.find((record) => record.id === id);
+      if (found !== undefined) return optionText(found);
+      return reading ? '' : t('receive.unknown');
+    },
+  };
+}
+
 /** The lists the booking form chooses from, and the text of each record by its identifier. */
 export function useBookingNames() {
-  const masters = useMasterNames();
+  const brands = useQuery({
+    ...readQuery(api, 'listBrands', { query: {} }),
+    enabled: useGranted('merchandise.brand', 'view'),
+  });
+  const parties = useQuery({
+    ...readQuery(api, 'listParties', { query: {} }),
+    enabled: useGranted('merchandise.party', 'view'),
+  });
   const sites = useQuery({
     ...readQuery(api, 'listSites', { query: {} }),
     enabled: useGranted('organisation.site', 'view'),
@@ -32,26 +63,17 @@ export function useBookingNames() {
     enabled: useGranted('merchandise.vocabulary_value', 'view'),
   });
   const seasonAttributeId = seasonMark.kind === 'set' ? seasonMark.attributeId : undefined;
-  const siteRecords = sites.data?.records;
-  const valueRecords = values.data?.records;
+  // A query that is not enabled is pending but never read: it is Unknown, not being read.
+  const reading = (query: { readonly isLoading: boolean }) => query.isLoading;
   return {
-    brands: inForce(masters.brands),
-    suppliers: inForce(masters.parties).filter(isSupplier),
-    sites: inForce(siteRecords),
-    seasons: inForce(valueRecords).filter((value) => value.attributeId === seasonAttributeId),
+    brands: inForce(brands.data?.records),
+    suppliers: inForce(parties.data?.records).filter(isSupplier),
+    sites: inForce(sites.data?.records),
+    seasons: inForce(values.data?.records).filter((value) => value.attributeId === seasonAttributeId),
     seasonMarked: seasonMark.kind,
-    brandText: masters.brandText,
-    partyText: masters.partyText,
-    siteText: (id: string) => {
-      const found = siteRecords?.find((record) => record.id === id);
-      return found === undefined ? undefined : optionText(found);
-    },
-    seasonText: (id: string) => {
-      const found = valueRecords?.find((record) => record.id === id);
-      return found === undefined ? undefined : optionText(found);
-    },
+    brand: lookup(brands.data?.records, reading(brands)),
+    party: lookup(parties.data?.records, reading(parties)),
+    site: lookup(sites.data?.records, reading(sites)),
+    season: lookup(values.data?.records, reading(values)),
   };
 }
-
-/** The word Unknown, as a field shows a record the person may not read (design-language 8). */
-export const unknown = (): string => t('receive.unknown');
