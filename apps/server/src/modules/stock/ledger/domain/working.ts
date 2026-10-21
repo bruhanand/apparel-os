@@ -39,6 +39,24 @@ function custodyLocation(row: BalanceState): string {
   return row.locationId;
 }
 
+/**
+ * Whether the goods a receipt count names pair a SKU and an identity as described wrongly (13.14): goods of Unknown SKU
+ * need one, with a style code and no empty text; a SKU is the goods' identity and takes none (14.2). The item's type
+ * holds the pairing (`CountedGoods`); the ledger still checks every request it is given, as the design says.
+ */
+function describedIdentityRefused(goods: {
+  readonly skuId: string | null;
+  readonly described?: DescribedIdentity | undefined;
+}): boolean {
+  const { described } = goods;
+  if (goods.skuId !== null) return described !== undefined;
+  return (
+    described === undefined ||
+    described.styleCode.trim() === '' ||
+    [described.colour, described.size].some((text) => text?.trim() === '')
+  );
+}
+
 export interface Scope {
   readonly siteId: string;
   readonly storeId: string | null;
@@ -985,22 +1003,12 @@ export class Working {
    * and the PT route follows.
    */
   protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
+    if (describedIdentityRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
     if (item.skuId === null) {
-      const described = item.described;
-      if (
-        described === undefined ||
-        described.styleCode.trim() === '' ||
-        [described.colour, described.size].some((text) => text?.trim() === '')
-      ) {
-        refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
-      }
       if (item.condition !== 'good')
         refuse('invalid-item', item.lineId, [{ kind: 'condition', condition: item.condition }]);
       if (item.pieceCodes !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'piece-codes' }]);
       if (item.batch !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'batch' }]);
-    } else if (item.described !== undefined) {
-      // A SKU is the goods' identity; an identity as described is for goods of Unknown SKU only (14.2).
-      refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
     }
     const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
