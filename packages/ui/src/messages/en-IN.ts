@@ -1810,7 +1810,6 @@ export const englishIndia = {
   'agreement.in-force-on': 'In force on',
   'agreement.none-in-force': 'No approved version is in force on that date.',
   'agreement.field.commercialModel': 'Commercial model',
-  'agreement.field.defaultModel': 'Default model for new bookings',
   'agreement.field.ownershipEvent': 'Ownership-transfer event',
   'agreement.field.ownershipDescription': 'The other agreed event, described',
   'agreement.field.returnAllowed': 'Unsold goods may go back',

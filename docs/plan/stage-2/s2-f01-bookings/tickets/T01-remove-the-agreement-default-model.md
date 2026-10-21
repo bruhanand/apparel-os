@@ -21,3 +21,8 @@ No route or screen carries the default model and no new version can store it; ve
 ## Comments
 
 - 21 Oct 2026: the builder's first version rewrote the stored synthetic agreement versions in a migration. Reworked to keep approved versions untouched, the recommended option put to the product owner; the product owner may still choose the one-off rewrite instead.
+
+## Notes
+
+- The shape change is a migration, `0087` in the Organisation set (the merger fixes any collision): new versions are written in `agreement-terms/2`, `agreement-terms/1` without the term, and a check refuses `/1` and the term for every row written from then on. Versions already stored in `/1` are kept as stored, approved ones included, and the versions guard is never switched off; reading one drops the term, every other term unchanged (structure-and-masters 5.2 "The default model retired, as built").
+- Tests: the routes refuse a draft naming the term and no read carries it (`parties-routes.int.test.ts`); versions stored in `/1` before the migration are untouched in storage and read back through the parties interface without the term, every other term as stored, and a new version with the term is refused (`agreement-terms-shape.int.test.ts`); the Agreement form and terms (`agreement.test.tsx`); the agreement journey, Booking preparing and a different person approving from My work (`agreement.spec.ts`, with its synthetic supplier and two people in the journeys' world).

@@ -552,6 +552,26 @@ const bankSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
 if (bankSupplierAnswer.kind !== 'success') {
   throw new Error(`The synthetic supplier was refused: ${bankSupplierAnswer.refusal.code}`);
 }
+// The agreement journey (agreement.spec.ts; S2-F01-T01): one SYNTHETIC supplier with no agreement yet, recorded
+// through the parties part's real command by the fixture person (code-house-rules 11.2), whose agreement the journey
+// prepares.
+const agreementSupplier = {
+  code: syntheticCode('JOURNEY-AGREEMENT-SUPPLIER'),
+  legalName: syntheticName('Journey Agreement Supplier'),
+};
+const agreementSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.parties.prepareParty(c, p, {
+    ...agreementSupplier,
+    taxIdentities: [],
+    msmeClassification: null,
+    contacts: [],
+    roles: ['supplier'],
+    validFrom: structureFixture.today(),
+  }),
+);
+if (agreementSupplierAnswer.kind !== 'success') {
+  throw new Error(`The synthetic supplier was refused: ${agreementSupplierAnswer.refusal.code}`);
+}
 // The products journey (products.spec.ts; S1-F03-T02): one SYNTHETIC brand and one category whose size set holds a
 // SYNTHETIC free size, recorded through the catalogue's real commands by the fixture person (code-house-rules 11.2),
 // so a Booking user proposes a style into them. A size set is fixed to its category, which names it by a later version
@@ -1816,6 +1836,33 @@ await grantSynthetic(
   { fieldClasses: [{ fieldClass: 'bank-details', access: 'view' }] },
 );
 
+// The agreement journey's people (S2-F01-T01): Booking, who prepares an agreement with a supplier, and a different
+// person who approves it from My work. Who holds which is KDPS's (V-01, RR-064).
+const agreementPreparer = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-AGREEMENT-PREPARER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: agreementPreparer.id }, [
+  { recordType: 'merchandise.party', action: 'view' },
+  { recordType: 'merchandise.brand', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'create' },
+  { recordType: 'merchandise.agreement', action: 'edit' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const agreementApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-AGREEMENT-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: agreementApprover.id }, [
+  { recordType: 'merchandise.agreement', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+
 // The exceptions journey (exceptions.spec.ts; S1-F08-T02), in the settings Organisation, whose worker identities the
 // setup step wrote: the test-only raising module's schema (code-house-rules 11.4), a SYNTHETIC exception-code series,
 // a SYNTHETIC rule routing its SYNTHETIC type at no Site to an enrolled Operations user, approved here as a fixture
@@ -2713,6 +2760,13 @@ writeFileSync(
       preparer: credentialsOf(bankPreparer),
       approver: credentialsOf(bankApprover),
       supplierCode: bankSupplier.code,
+    },
+    agreement: {
+      organisationCode: settingsCode,
+      preparer: credentialsOf(agreementPreparer),
+      approver: credentialsOf(agreementApprover),
+      supplierCode: agreementSupplier.code,
+      supplierName: agreementSupplier.legalName,
     },
     scope: {
       organisationCode: settingsCode,
