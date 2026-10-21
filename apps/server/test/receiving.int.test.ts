@@ -745,22 +745,34 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
   });
 });
 
-describe('goods of a product not yet set up (stock-ledger 13.14; RR-555)', () => {
-  it('PRD-MOD-015 a receiver scoped to the brand alone cannot issue a GRN of goods whose brand stays Unknown until the PT (stock-ledger 13.14)', async () => {
+describe('goods of a product not yet set up (stock-ledger 13.14; goods-in 4.8; RR-555)', () => {
+  it('RR-555 PRD-SEC-005 a receiver scoped to the brand alone issues a GRN of goods of a product not yet set up, and sees them', async () => {
     const brandReceiver = await enrolled('RCV-BRAND', RECEIVER_AUTHORITY, {
       kind: 'dimensions',
       legalEntity: { kind: 'all' },
       place: { kind: 'all' },
       brand: { kind: 'selected', members: [fixture.brand.id] },
     });
-    const arrivalId = await recordArrival(brandReceiver, fixture.wholeStore, fixture.storeLocation);
+    // At the other Store, where no other test of this file issues a GRN, so the custody there is this GRN's alone.
+    const location = fixture.otherStoreLocation;
+    const arrivalId = await recordArrival(brandReceiver, fixture.otherStoreUnit, location);
     expect((await recordInvoice(brandReceiver, arrivalId)).status).toBe(200);
     expect((await saveLine(brandReceiver, arrivalId, describedLine('SYN-STYLE-BRAND', 2, 2))).status).toBe(200);
     const { versionToken } = await readArrival(brandReceiver, arrivalId);
-    const refused = await post(brandReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
-    expect(refused.status).toBe(403);
-    expect(errorOf(refused)?.code).toBe('access.not-authorised');
-    expect((await readArrival(brandReceiver, arrivalId)).grn).toBeNull();
+    const issued = await post(brandReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    expect((await readArrival(brandReceiver, arrivalId)).grn).toMatchObject({
+      id: (issued.body as { grnId: string }).grnId,
+      lines: [{ styleCode: 'SYN-STYLE-BRAND', skuId: null, countedQuantity: 2 }],
+    });
+    // The goods take the Arrival's brand until PT approval names their SKU, so the brand's receiver sees them
+    // (stock-ledger 13.14, 14.1).
+    const held = await asUser(brandReceiver, (context) =>
+      custody(context, { businessUnitId: fixture.otherStoreUnit, locationId: location }),
+    );
+    expect(held.rows).toEqual([
+      expect.objectContaining({ skuId: null, quantity: 2, condition: 'good', heldAs: 'custody', acceptedQuantity: 0 }),
+    ]);
   });
 });
 

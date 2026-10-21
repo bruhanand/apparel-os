@@ -1,9 +1,10 @@
 import type { AgreementTerms } from '@apparel-os/schemas';
 import type { Owner } from '../../stock/ledger/index.js';
 
-// The owner a GRN records on its receipt counts (goods-in 4.5; stock-ledger 4; PRD-ORG-014, POL-01.05 to POL-01.07;
-// S2-F02-T02). Ownership follows the brand's Agreement in force on the arrival date, by its ownership-transfer event,
-// never by its commercial model's label alone (PRD-ORG-014). Pure: no database, no clock (code-house-rules 2).
+// The owner a GRN records on its receipt counts (goods-in 4.5, 4.8; stock-ledger 4; PRD-ORG-014, POL-01.05 to
+// POL-01.07; DEC-141; S2-F02-T02). Ownership follows the brand's Agreement in force on the arrival date, by its
+// ownership-transfer event, never by its commercial model's label alone (PRD-ORG-014). Pure: no database, no clock
+// (code-house-rules 2).
 
 /** The brand's Agreement version in force on the arrival date, as `merchandise` · parties reads it. */
 export interface BrandAgreement {
@@ -13,14 +14,17 @@ export interface BrandAgreement {
 }
 
 /**
- * The owner at the receipt count. **Design choice**, for the product owner's review (GI-4):
+ * The owner at the receipt count, by the Agreement's ownership-transfer event (`DEC-141`, POL-01.05):
  *
- * - ownership passed at the supplier's dispatch, so before the goods arrived: the legal entity of the receiving unit;
- * - ownership passes at the sale to the customer (POL-01.05, typically consignment): the brand the Agreement is with,
- *   until that sale;
- * - no Agreement in force, no event recorded, an event of receipt and acceptance (whether the GRN or the scan-in is
- *   that acceptance is not settled; POL-01.06) or another event described in words: Unknown, never guessed
- *   (PRD-MOD-015).
+ * - ownership passed at the supplier's dispatch, so before the goods arrived: the Organisation, as the legal entity of
+ *   the receiving unit;
+ * - ownership passes at the sale to the customer (typically consignment): the brand the Agreement is with, until that
+ *   sale;
+ * - ownership passes at receipt and acceptance: the brand, at the count; it passes to the Organisation at the scan-in
+ *   at the receiving Site, which is the acceptance (goods-in section 7; PRD-REC-021, PRD-REC-022), and the scan-in
+ *   records that change (S2-F07-T01), never the GRN;
+ * - no Agreement in force, no event recorded, or another event described in words: Unknown until recorded, never
+ *   guessed (PRD-MOD-015).
  */
 export function receiptOwner(agreement: BrandAgreement | undefined, legalEntityId: string): Owner {
   if (agreement === undefined) return { kind: 'unknown' };
@@ -28,6 +32,7 @@ export function receiptOwner(agreement: BrandAgreement | undefined, legalEntityI
     case 'supplier-dispatch':
       return { kind: 'organisation', legalEntityId, agreementVersionId: agreement.versionId };
     case 'sale-to-customer':
+    case 'receipt-and-acceptance':
       return { kind: 'brand', brandId: agreement.brandId, agreementVersionId: agreement.versionId };
     default:
       return { kind: 'unknown' };

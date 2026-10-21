@@ -2,7 +2,7 @@ import type { AgreementTerms } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
 import { ownerColumns, receiptOwner } from './owner.js';
 
-// The owner a GRN records on its receipt counts (goods-in 4.5; PRD-ORG-014, POL-01.05, POL-01.06; GI-4). Every
+// The owner a GRN records on its receipt counts (goods-in 4.5, 4.8; PRD-ORG-014, POL-01.05, POL-01.06; DEC-141). Every
 // identifier here is SYNTHETIC.
 
 const LEGAL_ENTITY = '01900000-0000-7000-8000-0000000000a1';
@@ -15,7 +15,7 @@ const agreement = (ownershipEvent: AgreementTerms['ownershipEvent']) => ({
   terms: { ownershipEvent },
 });
 
-describe('the owner at the receipt count (goods-in 4.5; PRD-ORG-014)', () => {
+describe('the owner at the receipt count (goods-in 4.5; PRD-ORG-014, DEC-141)', () => {
   it('PRD-ORG-014 ownership passed at the supplier’s dispatch: the receiving unit’s legal entity, under that Agreement', () => {
     expect(receiptOwner(agreement({ kind: 'supplier-dispatch' }), LEGAL_ENTITY)).toEqual({
       kind: 'organisation',
@@ -32,10 +32,17 @@ describe('the owner at the receipt count (goods-in 4.5; PRD-ORG-014)', () => {
     });
   });
 
-  it('PRD-MOD-015 POL-01.06 Unknown with no Agreement, no event, receipt and acceptance, or another event: never guessed', () => {
+  it('POL-01.05 DEC-141 ownership passing at receipt and acceptance: the brand at the count, until the scan-in accepts the goods', () => {
+    expect(receiptOwner(agreement({ kind: 'receipt-and-acceptance' }), LEGAL_ENTITY)).toEqual({
+      kind: 'brand',
+      brandId: BRAND,
+      agreementVersionId: VERSION,
+    });
+  });
+
+  it('PRD-MOD-015 DEC-141 Unknown with no Agreement, no event, or another event described in words: never guessed', () => {
     expect(receiptOwner(undefined, LEGAL_ENTITY)).toEqual({ kind: 'unknown' });
     expect(receiptOwner(agreement(null), LEGAL_ENTITY)).toEqual({ kind: 'unknown' });
-    expect(receiptOwner(agreement({ kind: 'receipt-and-acceptance' }), LEGAL_ENTITY)).toEqual({ kind: 'unknown' });
     expect(receiptOwner(agreement({ kind: 'other', description: 'SYNTHETIC event' }), LEGAL_ENTITY)).toEqual({
       kind: 'unknown',
     });
