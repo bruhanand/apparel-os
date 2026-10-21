@@ -30,6 +30,15 @@ import {
 // written by Write; what it cannot see, the holds, reservations and freezes hidden from the actor, the command asks the
 // narrowly authorised function about (DEC-117), with what this state collects for it.
 
+/**
+ * The location of a balance held in custody: `balance_location` gives every balance not in transit one (14.2), so a
+ * custody balance without one is a defect, never an empty identifier (PRD-MOD-015).
+ */
+function custodyLocation(row: BalanceState): string {
+  if (row.locationId === null) throw new Error(`A custody balance without its location: ${row.id}`);
+  return row.locationId;
+}
+
 export interface Scope {
   readonly siteId: string;
   readonly storeId: string | null;
@@ -1223,7 +1232,7 @@ export class Working {
         .sort(
           (a, b) =>
             IDENTITY_CONDITIONS.indexOf(a.condition) - IDENTITY_CONDITIONS.indexOf(b.condition) ||
-            compareCodeUnits(a.locationId ?? '', b.locationId ?? '') ||
+            compareCodeUnits(custodyLocation(a), custodyLocation(b)) ||
             compareCodeUnits(a.id, b.id),
         );
       for (const row of candidates) free.set(row, freeUnits(this.claimsOn(row)));
@@ -1262,7 +1271,7 @@ export class Working {
       // Kept units held wrong or unidentified return to good on their own origin (POL-17.02).
       for (const [row, units] of kept) {
         if (row.condition === 'good') continue;
-        move(row, this.balanceFor(row.siteId, row.businessUnitId, row.locationId ?? '', 'good', origin), units);
+        move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', origin), units);
       }
       for (const part of parts) {
         if (part.newReceiptOriginId === undefined) continue;
@@ -1272,7 +1281,7 @@ export class Working {
         }
         const child = this.identityOrigin(part.newReceiptOriginId, origin, sku, part.quantity, movementId);
         for (const [row, units] of take(part.quantity)) {
-          move(row, this.balanceFor(row.siteId, row.businessUnitId, row.locationId ?? '', 'good', child), units);
+          move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', child), units);
         }
       }
     }

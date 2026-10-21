@@ -161,6 +161,15 @@ const headerScope = (row: {
   legalEntityId: row.legalEntityId,
 });
 
+/**
+ * The owner column an origin's state holds for its owner kind: `receipt_origin_state_owner` holds exactly that one
+ * (14.2), so a null there is a defect, never an empty identifier standing for Unknown (PRD-MOD-015).
+ */
+function ownerColumn(value: string | null, kind: string): string {
+  if (value === null) throw new CommandDefect(`A receipt origin's ${kind} owner without its identifier`);
+  return value;
+}
+
 /** The owner an origin's state records (14.2; PRD-ORG-014), as the request names one (13.3). */
 function ownerOf(state: typeof receiptOriginState.$inferSelect): Owner {
   const agreement = state.agreementVersionId;
@@ -168,7 +177,7 @@ function ownerOf(state: typeof receiptOriginState.$inferSelect): Owner {
     case 'organisation':
       return {
         kind: 'organisation',
-        legalEntityId: state.ownerLegalEntityId ?? '',
+        legalEntityId: ownerColumn(state.ownerLegalEntityId, 'organisation'),
         ...(agreement === null ? {} : { agreementVersionId: agreement }),
       };
     case 'supplier':
@@ -176,8 +185,8 @@ function ownerOf(state: typeof receiptOriginState.$inferSelect): Owner {
       // Written only with its agreement version (13.3; write.ts).
       if (agreement === null) throw new CommandDefect('A supplier or brand owner without its agreement version');
       return state.ownerKind === 'supplier'
-        ? { kind: 'supplier', partyId: state.ownerPartyId ?? '', agreementVersionId: agreement }
-        : { kind: 'brand', brandId: state.ownerBrandId ?? '', agreementVersionId: agreement };
+        ? { kind: 'supplier', partyId: ownerColumn(state.ownerPartyId, 'supplier'), agreementVersionId: agreement }
+        : { kind: 'brand', brandId: ownerColumn(state.ownerBrandId, 'brand'), agreementVersionId: agreement };
     default:
       return { kind: 'unknown' };
   }
