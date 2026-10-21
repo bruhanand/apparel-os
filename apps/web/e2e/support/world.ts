@@ -40,7 +40,6 @@ export interface ReceivingOptions {
   readonly otherStoreLocation: string;
   readonly supplier: string;
   readonly brand: string;
-  readonly sizeList: string;
   readonly sizes: readonly string[];
   readonly batchSku: string;
 }
@@ -189,6 +188,7 @@ export interface SyntheticWorld {
     readonly booking: EnrolledUser;
     readonly confirmer: EnrolledUser;
     readonly attributeName: string;
+  };
   /**
    * The season and size attributes journey (structure-and-masters 4.2 "As built"; RR-556), in the security settings
    * Organisation: an Admin who marks the SYNTHETIC size list, the Owner who approves it, and how the form names it.
@@ -198,7 +198,6 @@ export interface SyntheticWorld {
     readonly admin: EnrolledUser;
     readonly owner: EnrolledUser;
     readonly attributeOption: string;
-  };
   };
   /**
    * The products journey (S1-F03-T02), in the security settings Organisation: a Booking user who proposes a style, a

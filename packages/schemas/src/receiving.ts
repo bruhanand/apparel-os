@@ -88,13 +88,6 @@ export const photosAttachedSchema = z.strictObject({ attachmentIds: z.array(idSc
 export type PhotosAttached = z.infer<typeof photosAttachedSchema>;
 
 /**
- * A size of the Organisation's size list: a value of a list attribute, named by the attribute and the value, as a
- * budget names its season (goods-in 4.3; GI-2, GI-3).
- */
-export const sizeRefSchema = z.strictObject({ attributeId: idSchema, valueId: idSchema });
-export type SizeRef = z.infer<typeof sizeRefSchema>;
-
-/**
  * One line of the count, by style, colour and size as the invoice lists the goods (goods-in 4.3; DEC-138): a new line,
  * or the next version of a line, naming the line and its latest version (code-house-rules 12.7).
  */
@@ -104,8 +97,12 @@ export const countLineDraftSchema = z
     styleCode: text(RECEIVING_CAPS.codeText),
     /** As the invoice names it; null when it names none (DEC-138). */
     colour: text(RECEIVING_CAPS.codeText).nullable(),
-    /** Null when the invoice states none: a missing size stays missing (PRD-MER-005). */
-    size: sizeRefSchema.nullable(),
+    /**
+     * A value of the attribute the Organisation marks as its size list (structure-and-masters 4.2 "As built"; goods-in
+     * 4.3; RR-556), named by the value alone. Null when the invoice states none: a missing size stays missing
+     * (PRD-MER-005).
+     */
+    sizeValueId: idSchema.nullable(),
     /** The product, when the style, colour and size name one already set up; null otherwise (goods-in 4.3). */
     skuId: idSchema.nullable(),
     invoiceQuantity: piecesSchema,

@@ -4795,6 +4795,8 @@ export const routes = {
     response: countLineSavedSchema,
     codes: [
       ...RECEIVING_CHANGE_CODES,
+      // No attribute is marked as the size list (structure-and-masters 4.2 "As built"; RR-556).
+      'merchandise.attribute-not-marked',
       'receiving.invoice-required',
       'receiving.size-not-on-list',
       'receiving.line-repeated',

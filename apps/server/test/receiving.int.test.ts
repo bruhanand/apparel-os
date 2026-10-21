@@ -31,6 +31,7 @@ import { structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { allowVerifier, connect, databaseUrl } from './support/postgres.js';
 import { defineSyntheticGrnSeries } from './fixtures/grn-series.js';
+import { writeSyntheticMarking } from './support/marked-attributes.js';
 import {
   placeScope,
   RECEIPT_READER_AUTHORITY,
@@ -173,7 +174,7 @@ function describedLine(styleCode: string, invoice: number, counted: number, size
   return {
     styleCode,
     colour: 'SYNTHETIC NAVY',
-    size: value === undefined ? null : { attributeId: fixture.sizes.attributeId, valueId: value.id },
+    sizeValueId: value === undefined ? null : value.id,
     skuId: null,
     invoiceQuantity: invoice,
     countedQuantity: counted,
@@ -228,7 +229,8 @@ beforeAll(async () => {
     keysEnvironment: keys,
     label: 'RECEIVING',
   });
-  fixture = await receivingFixture(setup, database, 'RCV');
+  // The size attribute is marked once the gate is open, after a count line is refused without it (RR-556).
+  fixture = await receivingFixture(setup, database, 'RCV', { marksSizes: false });
   storeReceiver = await enrolled('RCV-STORE', RECEIVER_AUTHORITY, placeScope([{ type: 'store', id: fixture.storeId }]));
   receiver = await enrolled('RCV-ALL', RECEIVER_AUTHORITY);
   otherStoreReader = await enrolled(
@@ -324,6 +326,32 @@ describe('the policy gate (goods-in 4.1, 10.5; PRD-LIF-001, POL-10.08)', () => {
       kind: 'mapping',
       businessUnitId: fixture.counterSameRegistration,
       lacks: 'verification',
+    });
+  });
+});
+
+describe('the size attribute (goods-in 4.3, GI-3; structure-and-masters 4.2; RR-556)', () => {
+  // As the gate's first test opens the gate for the tests after it, this one marks the size attribute for them.
+  it('RR-556 code-house-rules 12.14 a count line is refused while no attribute is marked as the size list, naming the setting; then its sizes are the marked attribute’s', async () => {
+    const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
+    expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
+    for (const line of [describedLine('SYN-STYLE-UNMARKED', 1, 1), describedLine('SYN-STYLE-NOSIZE', 1, 1, -1)]) {
+      const refused = await saveLine(storeReceiver, arrivalId, line);
+      expect(refused.status).toBe(403);
+      expect(errorOf(refused)).toMatchObject({
+        code: 'merchandise.attribute-not-marked',
+        missing: [{ kind: 'setting', setting: 'merchandise.size-attribute' }],
+      });
+    }
+    // The fixture's size list marked as the Organisation's, a SYNTHETIC setting written as a fixture (4.2 "As built");
+    // preparing it and its approval by a different person are proved in season-and-size-attributes.int.test.ts.
+    await writeSyntheticMarking(database, 'size', fixture.sizes.attributeId, setup.preparer.id);
+    const saved = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-UNMARKED', 1, 1));
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect((await readArrival(storeReceiver, arrivalId)).lines[0]?.size).toEqual({
+      attributeId: fixture.sizes.attributeId,
+      valueId: fixture.sizes.values[0]?.id,
+      code: fixture.sizes.values[0]?.code,
     });
   });
 });
@@ -452,13 +480,28 @@ describe('the count (goods-in 4.3; DEC-138, PRD-MER-005, PRD-MER-011)', () => {
     expect(stale.status).toBe(409);
     expect(errorOf(stale)?.code).toBe('kernel.stale-version');
     // A missing size stays missing; a size off the list is refused.
-    const noSize = await saveLine(storeReceiver, arrivalId, { ...describedLine('SYN-STYLE-B', 1, 1), size: null });
+    const noSize = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine('SYN-STYLE-B', 1, 1),
+      sizeValueId: null,
+    });
     expect(noSize.status, JSON.stringify(noSize.body)).toBe(200);
     const offList = await saveLine(storeReceiver, arrivalId, {
       ...describedLine('SYN-STYLE-C', 1, 1),
-      size: { attributeId: fixture.sizes.attributeId, valueId: uuidv7() },
+      sizeValueId: uuidv7(),
     });
     expect(errorOf(offList)?.code).toBe('receiving.size-not-on-list');
+    // A value of another list attribute is no size: only the attribute marked as the size list counts (RR-556).
+    const notSize = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine('SYN-STYLE-C', 1, 1),
+      sizeValueId: fixture.colourValueId,
+    });
+    expect(errorOf(notSize)).toMatchObject({
+      code: 'receiving.size-not-on-list',
+      missing: [
+        { kind: 'record', recordType: 'merchandise.attribute', recordId: fixture.sizes.attributeId },
+        { kind: 'record', recordType: 'merchandise.vocabulary_value', recordId: fixture.colourValueId },
+      ],
+    });
     // A product named for the line must be of the Arrival's brand and the line's style code.
     const wrongProduct = await saveLine(storeReceiver, arrivalId, {
       ...describedLine('SYN-STYLE-D', 1, 1),
@@ -529,7 +572,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     const batchLine = await saveLine(storeReceiver, arrivalId, {
       styleCode: fixture.batchSku.styleCode,
       colour: null,
-      size: null,
+      sizeValueId: null,
       skuId: fixture.batchSku.id,
       invoiceQuantity: 5,
       countedQuantity: 5,
@@ -546,7 +589,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     const withBatch = await saveLine(storeReceiver, arrivalId, {
       styleCode: fixture.batchSku.styleCode,
       colour: null,
-      size: null,
+      sizeValueId: null,
       skuId: fixture.batchSku.id,
       invoiceQuantity: 5,
       countedQuantity: 5,

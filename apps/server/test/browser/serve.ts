@@ -2475,6 +2475,7 @@ const RECEIVING_LISTS = [
   { recordType: 'merchandise.brand', action: 'view' },
   { recordType: 'merchandise.party', action: 'view' },
   { recordType: 'merchandise.attribute', action: 'view' },
+  { recordType: 'merchandise.marked_attribute', action: 'view' },
   { recordType: 'merchandise.vocabulary_value', action: 'view' },
   { recordType: 'merchandise.style', action: 'view' },
   { recordType: 'merchandise.sku', action: 'view' },
@@ -2740,7 +2741,6 @@ writeFileSync(
       confirmer: credentialsOf(vocabularyConfirmer),
       attributeName: vocabularyAttribute.name,
     },
-    products: {
     markedAttributes: {
       organisationCode: settingsCode,
       admin: credentialsOf(markingAdmin),
@@ -2748,6 +2748,7 @@ writeFileSync(
       // How the attribute form names the SYNTHETIC size list (budget.option).
       attributeOption: `${markingAttribute.code} · ${markingAttribute.name}`,
     },
+    products: {
       organisationCode: settingsCode,
       booking: credentialsOf(productsBooking),
       confirmer: credentialsOf(productsConfirmer),

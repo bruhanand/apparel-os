@@ -3028,7 +3028,8 @@ export const englishIndia = {
   'error.receiving.possible-duplicate-invoice':
     'This supplier’s invoice number is on another Arrival. Correct the number, or confirm it is right.',
   'error.receiving.invoice-required': 'Record the supplier invoice first: the count starts only once it is recorded.',
-  'error.receiving.size-not-on-list': 'This size is not an approved value of the size list in force today.',
+  'error.receiving.size-not-on-list':
+    'This size is not an approved value, in force today, of the attribute marked as the size list.',
   'error.receiving.line-repeated':
     'The count already has a line for this style, colour and size. Change that line instead of adding another.',
   'error.receiving.sku-not-of-line':
@@ -3126,11 +3127,11 @@ export const englishIndia = {
   'receive.style-code': 'Style code',
   'receive.colour': 'Colour',
   'receive.colour.help': 'As the invoice names it; leave it empty when it names none.',
-  'receive.size-list': 'Size list',
-  'receive.size-list.help': 'The list of the Organisation’s attributes that holds its sizes.',
   'receive.no-size': 'No size on the invoice',
   'receive.size': 'Size',
-  'receive.size.choose': 'Choose the size from the size list.',
+  'receive.size.help': 'A value of the attribute the Organisation marks as its size list.',
+  'receive.size.not-marked':
+    'No attribute is marked as the size list yet, so no line can be saved. It is marked in Setup › Vocabularies, on the Attributes tab, and approved by a second person.',
   'receive.product': 'Product',
   'receive.product.help':
     'The product of this brand and style code, when it is set up already; otherwise leave it, and the PT sets it up.',
@@ -3168,6 +3169,6 @@ export const englishIndia = {
   'setting.name.access.password-rules': 'the password rules',
   'setting.name.access.office-session-limits': 'the office session limits',
   'setting.name.access.shared-pos-session-limits': 'the shared POS session limits',
-} as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;
   'setting.name.merchandise.season-attribute': 'the season attribute',
   'setting.name.merchandise.size-attribute': 'the size attribute',
+} as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

@@ -78156,7 +78156,8 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "kernel.recovery-hold"
+              "kernel.recovery-hold",
+              "merchandise.attribute-not-marked"
             ]
           },
           "404": {
@@ -78276,27 +78277,12 @@
                       }
                     ]
                   },
-                  "size": {
+                  "sizeValueId": {
                     "anyOf": [
                       {
-                        "type": "object",
-                        "properties": {
-                          "attributeId": {
-                            "type": "string",
-                            "format": "uuid",
-                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
-                          },
-                          "valueId": {
-                            "type": "string",
-                            "format": "uuid",
-                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
-                          }
-                        },
-                        "required": [
-                          "attributeId",
-                          "valueId"
-                        ],
-                        "additionalProperties": false
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                       },
                       {
                         "type": "null"
@@ -78356,7 +78342,7 @@
                 "required": [
                   "styleCode",
                   "colour",
-                  "size",
+                  "sizeValueId",
                   "skuId",
                   "invoiceQuantity",
                   "countedQuantity",

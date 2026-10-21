@@ -23,6 +23,7 @@ import { EvidenceList, EvidencePicker, useChosenFile, useStoreEvidence } from '.
 import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
+import { useMarkedAttribute } from '../merchandise/marked';
 import { t } from '../messages/catalogue';
 import { useBusinessToday } from '../setup/business-date';
 import { formatDate, formatList, formatQuantity } from '../setup/format';
@@ -243,7 +244,6 @@ const lineFormSchema = z
   .object({
     styleCode: z.string().trim().min(1),
     colour: z.string(),
-    sizeAttributeId: z.string(),
     sizeValueId: z.string(),
     skuId: z.string(),
     batchCode: z.string(),
@@ -254,10 +254,6 @@ const lineFormSchema = z
   .refine((line) => line.invoiceQuantity > 0 || line.countedQuantity > 0, {
     message: 'receive.pieces.none',
     path: ['countedQuantity'],
-  })
-  .refine((line) => (line.sizeAttributeId === '') === (line.sizeValueId === ''), {
-    message: 'receive.size.choose',
-    path: ['sizeValueId'],
   })
   .refine((line) => (line.batchCode.trim() === '') === (line.expiryDate === ''), {
     message: 'receive.batch.both',
@@ -270,7 +266,6 @@ function lineDefaults(line: CountLine | undefined): LineFormInput {
   return {
     styleCode: line?.styleCode ?? '',
     colour: line?.colour ?? '',
-    sizeAttributeId: line?.size?.attributeId ?? '',
     sizeValueId: line?.size?.valueId ?? '',
     skuId: line?.skuId ?? '',
     batchCode: line?.batch?.code ?? '',
@@ -282,7 +277,8 @@ function lineDefaults(line: CountLine | undefined): LineFormInput {
 
 /**
  * One line of the count, by style code as the invoice writes it, colour as it names it and size from the size list,
- * with the invoice and counted quantities (goods-in 4.3; DEC-138). A missing colour or size stays missing
+ * the values of the attribute the Organisation marks as its size list (RR-556), with the invoice and counted
+ * quantities (goods-in 4.3; DEC-138). A missing colour or size stays missing
  * (PRD-MER-005). The product is one of the Arrival's brand with the line's style code, when one is set up; its batch
  * and expiry are asked for where its tracking profile at the Site requires them (PRD-MER-011), and the GRN waits for
  * them. Editing a line names the version shown (code-house-rules 12.7).
@@ -297,10 +293,7 @@ function LineForm({
   onDone: () => void;
 }) {
   const today = useBusinessToday();
-  const attributes = useQuery({
-    ...readQuery(api, 'listAttributes', { query: {} }),
-    enabled: useGranted('merchandise.attribute', 'view'),
-  });
+  const sizeList = useMarkedAttribute('size');
   const values = useQuery({
     ...readQuery(api, 'listVocabularyValues', { query: {} }),
     enabled: useGranted('merchandise.vocabulary_value', 'view'),
@@ -314,7 +307,7 @@ function LineForm({
   });
   const submission = useSubmission('saveCountLine', ARRIVAL_READS);
   const errors = form.formState.errors;
-  const attributeId = form.watch('sizeAttributeId');
+  const attributeId = sizeList.kind === 'set' ? sizeList.attributeId : undefined;
   const skus = products.of(arrival.brandId, form.watch('styleCode'));
   const skuId = form.watch('skuId');
   const named = skus.some((sku) => sku.id === skuId);
@@ -323,7 +316,6 @@ function LineForm({
     enabled: named && maySeeSkus,
   });
   const batchRequired = named && tracking.data?.sku.tracking?.batchExpiryRequired === true;
-  const lists = (attributes.data?.records ?? []).filter((each) => each.valueKind === 'list');
   const sizes = (values.data?.records ?? []).filter((each) => each.attributeId === attributeId);
   const formId = editing === undefined ? 'receive-line-form' : `receive-line-form-${editing.lineId}`;
   const field = (name: string) => `${formId}-${name}`;
@@ -343,10 +335,7 @@ function LineForm({
                 : { line: { lineId: editing.lineId, versionToken: editing.versionToken } }),
               styleCode: entered.styleCode,
               colour: entered.colour.trim() === '' ? null : entered.colour,
-              size:
-                entered.sizeAttributeId === ''
-                  ? null
-                  : { attributeId: entered.sizeAttributeId, valueId: entered.sizeValueId },
+              sizeValueId: entered.sizeValueId === '' ? null : entered.sizeValueId,
               skuId: named ? entered.skuId : null,
               invoiceQuantity: entered.invoiceQuantity,
               countedQuantity: entered.countedQuantity,
@@ -383,40 +372,25 @@ function LineForm({
             {...form.register('colour')}
           />
         </FormField>
-        <FormField id={field('size-list')} label="receive.size-list" help="receive.size-list.help">
-          <select
-            id={field('size-list')}
-            className={inputClass}
-            {...describedBy(field('size-list'), { invalid: false, help: true })}
-            {...form.register('sizeAttributeId')}
-          >
-            <option value="">{t('receive.no-size')}</option>
-            {lists.map((each) => (
-              <option key={each.id} value={each.id}>
-                {optionText(each)}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField
-          id={field('size')}
-          label="receive.size"
-          error={errors.sizeValueId}
-          message={errors.sizeValueId === undefined ? undefined : 'receive.size.choose'}
-        >
+        <FormField id={field('size')} label="receive.size" help="receive.size.help">
           <select
             id={field('size')}
             className={inputClass}
-            {...describedBy(field('size'), { invalid: errors.sizeValueId !== undefined, help: false })}
+            {...describedBy(field('size'), { invalid: false, help: true })}
             {...form.register('sizeValueId')}
           >
-            <option value="">{t('setup.choose')}</option>
+            <option value="">{t('receive.no-size')}</option>
             {sizes.map((each) => (
               <option key={each.id} value={each.id}>
                 {optionText(each)}
               </option>
             ))}
           </select>
+          {sizeList.kind === 'not-set' && (
+            <p role="status" className="m-0 text-body-sm text-text-2">
+              {t('receive.size.not-marked')}
+            </p>
+          )}
         </FormField>
         <FormField id={field('product')} label="receive.product" help="receive.product.help">
           <select

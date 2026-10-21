@@ -9,6 +9,7 @@ import { LocationStock } from '../../src/modules/stock/ledger/index.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
 import { TEST_COMPOSITION } from './composition.js';
 import { grantSynthetic, type SyntheticAuthority } from './grants.js';
+import { writeSyntheticMarking } from './marked-attributes.js';
 import { capturingLogger } from './jobs.js';
 import { approved, approvedGeography, decided, type StructureSetup } from './organisation.js';
 import { syntheticStores, type SyntheticStores } from './pos.js';
@@ -16,9 +17,10 @@ import { writeSyntheticStoredFile } from './tax-rules.js';
 
 // The SYNTHETIC world of Receive Goods (goods-in 4; S2-F02-T02), made through the real interfaces where a person would
 // make it (code-house-rules 11.2): a Site with two Stores and their units, the locations goods are received into, a
-// brand with a linked supplier and an approved Agreement, a size list and a batch-tracked product, the units' mappings
-// verified by a person other than who made them; then, apart, the receiving capability switched on and policies 4 and
-// 10 Signed and validated through configuration's commands, and receiving granted after readiness through
+// brand with a linked supplier and an approved Agreement, a size list marked as the Organisation's (RR-556) and a
+// batch-tracked product, the units' mappings verified by a person other than who made them; then, apart, the receiving
+// capability switched on and policies 4 and 10 Signed and validated through configuration's commands, and receiving
+// granted after readiness through
 // site-lifecycle's, decided by a different person. The evidence of a signature, a validation and a verification is a
 // SYNTHETIC stored file written as a fixture, as the stock harness writes it, since S1-F06-T05 proves storing files.
 // Nothing here is KDPS's: every value, person and setting is SYNTHETIC.
@@ -126,12 +128,16 @@ export interface ReceivingFixture extends SyntheticStores {
   readonly unlinkedSupplierId: string;
   /** The Agreement version of the brand in force today, whose ownership passes at the sale (consignment). */
   readonly agreementVersionId: string;
-  /** The SYNTHETIC size list: an attribute of list values, and two of its values. */
+  /**
+   * The SYNTHETIC size list: the attribute marked as the size list, or to be marked when the fixture leaves it unmarked,
+   * and two of its values (structure-and-masters 4.2 "As built"; RR-556).
+   */
   readonly sizes: {
     readonly attributeId: string;
-    readonly attributeCode: string;
     readonly values: readonly { readonly id: string; readonly code: string }[];
   };
+  /** A value of a list attribute that is not the size list. */
+  readonly colourValueId: string;
   /** A product of the brand whose tracking profile requires a batch and expiry. */
   readonly batchSku: { readonly id: string; readonly code: string; readonly styleCode: string };
   /** How the screens name the Site, the Stores' units, the first Store's location and the masters: "CODE · Name". */
@@ -144,7 +150,6 @@ export interface ReceivingFixture extends SyntheticStores {
     readonly otherStoreLocation: string;
     readonly supplier: string;
     readonly brand: string;
-    readonly sizeList: string;
     readonly sizes: readonly string[];
     readonly batchSku: string;
   };
@@ -152,13 +157,15 @@ export interface ReceivingFixture extends SyntheticStores {
 
 /**
  * The world: the units of syntheticStores, the mappings of the Stores' whole-store units and of the warehouse verified,
- * the brand counter's left unverified (POL-10.08); and the masters of merchandise above. Receiving is granted apart,
- * by receivingGranted, once the gate is open.
+ * the brand counter's left unverified (POL-10.08); and the masters of merchandise above. The size list is the
+ * attribute the Organisation marks as its size list, when one is marked; otherwise a new list attribute, which the
+ * fixture marks unless told not to (RR-556). Receiving is granted apart, by receivingGranted, once the gate is open.
  */
 export async function receivingFixture(
   setup: StructureSetup,
   database: string,
   label: string,
+  choices: { readonly marksSizes?: boolean } = {},
 ): Promise<ReceivingFixture> {
   let counter = 0;
   const next = (prefix: string) => syntheticCode(`${label}-${prefix}-${String(++counter)}`);
@@ -236,19 +243,22 @@ export async function receivingFixture(
   if (agreement.requestId === undefined) throw new Error('The Agreement version was not sent for approval');
   decided(await setup.decide(agreement.requestId, agreement.versionId));
 
-  // The size list: a list attribute and two confirmed values (structure-and-masters 4.2; goods-in 4.3; GI-3).
-  const attributeCode = next('SIZE');
-  const sizeListName = syntheticName('Size');
-  const sizeAttributeId = ok(
-    await setup.asPreparerDo((c, p) =>
-      setup.catalogue.prepareAttribute(c, p, {
-        code: attributeCode,
-        valueKind: 'list',
-        name: sizeListName,
-        validFrom: today,
-      }),
-    ),
-  ).recordId;
+  // The size list: the attribute marked as the size list, or a new list attribute, and two confirmed values of it
+  // (structure-and-masters 4.2; goods-in 4.3; GI-3, RR-556).
+  const marked = await setup.run(setup.preparer.id, (c) => setup.catalogue.markedAttributeAt(c, 'size'));
+  const sizeAttributeId =
+    marked.kind === 'set'
+      ? marked.attributeId
+      : ok(
+          await setup.asPreparerDo((c, p) =>
+            setup.catalogue.prepareAttribute(c, p, {
+              code: next('SIZE'),
+              valueKind: 'list',
+              name: syntheticName('Size'),
+              validFrom: today,
+            }),
+          ),
+        ).recordId;
   const value = async (attributeId: string, code: string) => {
     const proposed = ok(
       await setup.asPreparerDo((c, p) =>
@@ -261,6 +271,9 @@ export async function receivingFixture(
     return { id: confirmed.valueId, code };
   };
   const sizeValues = [await value(sizeAttributeId, next('S')), await value(sizeAttributeId, next('M'))];
+  if (marked.kind === 'not-set' && choices.marksSizes !== false) {
+    await writeSyntheticMarking(database, 'size', sizeAttributeId, setup.preparer.id);
+  }
 
   // A batch-tracked product of the brand (structure-and-masters 4.4 to 4.6; PRD-MER-011).
   const colourId = ok(
@@ -357,7 +370,6 @@ export async function receivingFixture(
     otherStoreLocation: locationOption(otherStoreLocation),
     supplier: option(supplier, 'supplier'),
     brand: option({ code: brandCode, name: brandName }, 'brand'),
-    sizeList: option({ code: attributeCode, name: sizeListName }, 'size list'),
     sizes: sizeValues.map((each) => option({ code: each.code, name: syntheticName(each.code) }, 'size')),
     batchSku: skuCode,
   };
@@ -372,7 +384,8 @@ export async function receivingFixture(
     supplier,
     unlinkedSupplierId: unlinked.id,
     agreementVersionId: agreement.versionId,
-    sizes: { attributeId: sizeAttributeId, attributeCode, values: sizeValues },
+    sizes: { attributeId: sizeAttributeId, values: sizeValues },
+    colourValueId: red.id,
     batchSku: { id: skuId, code: skuCode, styleCode },
   };
 }

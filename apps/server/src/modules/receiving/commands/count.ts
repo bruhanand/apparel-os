@@ -3,7 +3,7 @@ import { ARRIVAL_TYPE, type CountLineDraft, type CountLineRemoval, type CountLin
 import { eq } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
-import { skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
+import { markedAttributeAt, skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
 import { batchColumns, sizeColumns } from '../db/columns.js';
 import { arrivalInvoice, countEntry } from '../db/schema.js';
 import { currentLines, lineCounting, lineItem, newestEntry, type CountEntryFacts, type Size } from '../domain/lines.js';
@@ -25,8 +25,9 @@ import {
 } from './common.js';
 
 // Save the count as it goes, line by line, and resume it (goods-in 4.3; PRD-REC-005; DEC-133, DEC-138; S2-F02-T02).
-// The count starts only once the Arrival holds an invoice (DEC-133). A line is the style code as the invoice writes it,
-// the colour as the invoice names it, the size from the size list and the product when one is named, with the invoice
+// The count starts only once the Arrival holds an invoice (DEC-133), and only while an attribute is marked as the
+// Organisation's size list (structure-and-masters 4.2 "As built"; RR-556). A line is the style code as the invoice
+// writes it, the colour as the invoice names it, the size from the size list and the product when one is named, with the invoice
 // and counted quantities; each save is a new entry of the line naming the one it replaces, so two people saving over
 // the same version never both succeed (code-house-rules 12.7), and who saved each is kept, from their sign-ins.
 
@@ -103,10 +104,11 @@ async function writeEntry(
 }
 
 /**
- * Saves a line of the count, new or the next version of one (goods-in 4.3). Refused while the Arrival holds no invoice
- * (DEC-133); a size that is not an approved value of its attribute in force today; a style, colour and size another
- * line counts already; a product not in force at the Site today, of another brand or of another style code than the
- * line's.
+ * Saves a line of the count, new or the next version of one (goods-in 4.3). Refused while no attribute is marked as
+ * the size list, naming the setting (RR-556; code-house-rules 12.14); while the Arrival holds no invoice (DEC-133); a
+ * size that is not an approved value in force today of the attribute marked as the size list; a style, colour and size
+ * another line counts already; a product not in force at the Site today, of another brand or of another style code
+ * than the line's.
  */
 export async function saveCountLine(
   context: TransactionContext,
@@ -117,6 +119,8 @@ export async function saveCountLine(
 ): Promise<Outcome<CountLineSaved>> {
   const date = await today(context);
   if (typeof date !== 'string') return refusalOf(date);
+  const sizes = await markedAttributeAt(context, 'size');
+  if (sizes.kind === 'not-set') return refusalOf(sizes.refusal);
   const found = await arrivalForChange(context, arrivalId);
   if (found.kind !== 'open') return found;
   const { row } = found;
@@ -134,8 +138,9 @@ export async function saveCountLine(
     replaced = inForce.entry;
   }
   let size: Size | null = null;
-  if (draft.size !== null) {
-    const { attributeId, valueId } = draft.size;
+  if (draft.sizeValueId !== null) {
+    const { attributeId } = sizes;
+    const valueId = draft.sizeValueId;
     const value = (await vocabularyOn(context, attributeId, date)).find((each) => each.id === valueId);
     if (value === undefined) {
       return refused('refused', 'receiving.size-not-on-list', [
