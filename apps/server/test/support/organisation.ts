@@ -14,6 +14,7 @@ import {
   catalogueKinds,
   catalogueRecordType,
   EXTERNAL_CODE_TYPE,
+  MARKED_ATTRIBUTE_TYPE,
   permissionRegistry,
   PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_PROPOSAL_TYPE,
@@ -164,7 +165,7 @@ export async function structureSetup(options: {
   const routed: RoutedOrganisation = found.organisation;
   const audit = new Audit(log.logger);
   const structure = organisationApprovals(audit, options.locationInUse);
-  const catalogueModule = catalogueApprovals(audit);
+  const catalogueModule = catalogueApprovals(audit, localOrigins);
   const partiesModule = partiesApprovals(audit);
   const booksModule = booksApprovals(audit, options.bookHeldStock);
   const keys = OrganisationKeys.fromEnvironment(options.keysEnvironment);
@@ -191,6 +192,7 @@ export async function structureSetup(options: {
   const catalogue = new Catalogue({
     audit,
     access,
+    origins: localOrigins,
     suppliers: partiesSupplierRoles,
     stockPresence: options.stockPresence,
   });
@@ -219,6 +221,8 @@ export async function structureSetup(options: {
   const catalogueTypes = [
     ...catalogueKinds.map(catalogueRecordType),
     VOCABULARY_PROPOSAL_TYPE,
+    // The season and size attributes (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+    MARKED_ATTRIBUTE_TYPE,
     // Product proposals and external codes (S1-F03-T02).
     PRODUCT_PROPOSAL_TYPE,
     EXTERNAL_CODE_TYPE,

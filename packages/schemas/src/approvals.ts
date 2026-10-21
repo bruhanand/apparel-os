@@ -203,6 +203,7 @@ export const decisionRefusalCodes = [
   'access.not-eligible',
   'access.self-preparation',
   'access.stand-in-party',
+  'access.earlier-step-decider',
   'access.authenticator-code-refused',
   'access.approval-not-open',
   'access.approval-superseded',

@@ -26,7 +26,8 @@ import { budgetLock, refused } from './common.js';
 //   instant, ending the version in force there. Rejected: the version is Rejected.
 //
 // Neither may be decided by the version's preparer: `access` refuses every preparer (9.3; PRD-ACS-006), and the check
-// table's trigger stands behind it (migration 0086).
+// table's trigger stands behind it (migration 0086). Nor may the approval be decided by whoever recorded the check:
+// three different people for each version (DEC-142; access-and-approvals 9.8b).
 
 /** What the effects need: audit, and Request approval of `access`, bound late since `access` is built with them. */
 export interface EffectDependencies {
@@ -139,10 +140,18 @@ function checkEffect(dependencies: EffectDependencies): DocumentEffect {
   };
 }
 
-/** The approval of a checked version (3.3; POL-05.09): it takes effect at the decision's instant. */
+/**
+ * The approval of a checked version (3.3; POL-05.09): it takes effect at the decision's instant. Whoever recorded
+ * Accounts' check of the version may not decide it, so Booking, Accounts and the Owner are three different people for
+ * each version (DEC-142); `access` refuses them as it refuses a preparer (access-and-approvals 9.3, 9.8b).
+ */
 function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
   return {
     targets: targetsOf,
+    async earlierStepDeciders(context, versionId) {
+      const check = await checkOf(context, versionId);
+      return check === undefined ? [] : [check.checkedByUserId];
+    },
     async approve(context, decider, versionId) {
       const row = await waiting(context, versionId);
       if ('kind' in row) return row;

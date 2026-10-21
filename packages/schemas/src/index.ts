@@ -527,6 +527,8 @@ export type {
 
 // The merchandise catalogue (structure-and-masters 4; S1-F03-T01).
 export * from './catalogue.js';
+// Its season attribute and size attribute, two Organisation settings (structure-and-masters 4.2; RR-550, RR-556).
+export * from './marked-attributes.js';
 
 // The parties part of merchandise (structure-and-masters 5; S1-F03-T03).
 export * from './parties.js';

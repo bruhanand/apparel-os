@@ -113,7 +113,6 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
     const line = page.getByRole('form', { name: 'Add a line' });
     await line.getByLabel(/^Style code/).fill('SYN-STYLE-JOURNEY');
     await line.getByLabel(/^Colour/).fill('SYNTHETIC NAVY');
-    await line.getByLabel(/^Size list/).selectOption({ label: options.sizeList });
     await line.getByLabel(/^Size$/).selectOption({ label: options.sizes[0] ?? '' });
     await line.getByLabel(/^Invoice quantity/).fill('5');
     await line.getByLabel(/^Counted quantity/).fill('4');
@@ -146,6 +145,15 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
     await change.getByLabel(/^Counted quantity/).fill('5');
     await change.getByRole('button', { name: 'Save the change' }).click();
     await expect(change).toHaveCount(0);
+    // The screen shows the line as saved, read again with the Arrival's new version, before the GRN is issued from it.
+    await expect(
+      page
+        .getByRole('table', { name: 'Lines counted' })
+        .getByRole('row')
+        .filter({ hasText: 'SYN-STYLE-JOURNEY' })
+        .getByRole('cell')
+        .nth(6),
+    ).toHaveText('5');
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
     await expect(grn).toBeVisible();
@@ -212,6 +220,10 @@ test('PRD-REC-004 PRD-MER-011 a Store’s staff counts a batch-tracked product a
     await change.getByLabel(/^Expiry date/).fill(expiry);
     await change.getByRole('button', { name: 'Save the change' }).click();
     await expect(change).toHaveCount(0);
+    // The screen shows the line as saved, read again with the Arrival's new version, before the GRN is issued from it.
+    await expect(
+      page.getByRole('table', { name: 'Lines counted' }).getByRole('row').filter({ hasText: options.batchSku }),
+    ).toContainText(`SYN-BATCH-STORE, expires ${shown(expiry)}`);
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
     await expect(grn).toBeVisible();

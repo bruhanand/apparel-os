@@ -102,6 +102,11 @@ export interface DocumentEffect {
    * type too, each through an assignment of its own or the same one (access-and-approvals 9.3).
    */
   decidesWith?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /**
+   * The people who decided an earlier step of the document version, such as Accounts' check of an open-to-buy budget
+   * version, who may not decide this one besides its preparers (access-and-approvals 9.3, 9.8b; DEC-142).
+   */
+  earlierStepDeciders?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
 }

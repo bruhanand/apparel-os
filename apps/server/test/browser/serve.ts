@@ -99,6 +99,7 @@ import {
   type SyntheticUser,
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic, writeSyntheticRole } from '../support/grants.js';
+import { writeSyntheticMarking } from '../support/marked-attributes.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup, writeSyntheticSites } from '../support/organisation.js';
@@ -538,6 +539,20 @@ const vocabularyAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
 if (vocabularyAttributeAnswer.kind !== 'success') {
   throw new Error(`The synthetic attribute was refused: ${vocabularyAttributeAnswer.refusal.code}`);
 }
+// The season and size attributes journey's SYNTHETIC list attribute for sizes (season-and-size-attributes.spec.ts;
+// structure-and-masters 4.2 "As built"; RR-556), recorded through the catalogue's real command by the fixture person;
+// the journey marks it as the size list.
+const markingAttribute = { code: syntheticCode('JOURNEY-SIZES'), name: syntheticName('Journey Sizes') };
+const markingAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.catalogue.prepareAttribute(c, p, {
+    ...markingAttribute,
+    valueKind: 'list',
+    validFrom: structureFixture.today(),
+  }),
+);
+if (markingAttributeAnswer.kind !== 'success') {
+  throw new Error(`The synthetic size list was refused: ${markingAttributeAnswer.refusal.code}`);
+}
 // The bank details journey (bank-details.spec.ts; S1-F03-T03): one SYNTHETIC supplier, recorded through the parties
 // part's real command by the fixture person (code-house-rules 11.2), whose bank details the journey changes.
 const bankSupplier = { code: syntheticCode('JOURNEY-SUPPLIER'), legalName: syntheticName('Journey Supplier') };
@@ -665,6 +680,9 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
+// That list attribute is the Organisation's season attribute, a SYNTHETIC setting written as a fixture, so the
+// open-to-buy journey's budget names its season from it (structure-and-masters 4.2 "As built"; RR-550).
+await writeSyntheticMarking(settingsDatabase, 'season', productsSeasonAnswer.recordId, structureFixture.preparer.id);
 // The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
 // its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
 const readinessEntity = await approved(structureFixture, (c, p) =>
@@ -1382,6 +1400,27 @@ const vocabularyConfirmer = await provisionUser('BROWSER-VOCABULARY-CONFIRMER', 
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 
+// The season and size attributes journey's people (season-and-size-attributes.spec.ts; structure-and-masters 4.2 "As
+// built"; RR-556): an Admin (P-ADM) who marks the SYNTHETIC size list as the size list on Setup › Vocabularies and may approve too,
+// so the refusal of their own is for their preparation alone (POL-02.07); and the Owner (P-OWN), who approves it from
+// My work. No size attribute is marked in this Organisation before the journey. SYNTHETIC grants: who holds each is
+// the product owner's to name (V-01).
+const markingViews = [
+  ...catalogueViews,
+  { recordType: 'merchandise.marked_attribute', action: 'view' as const },
+  { recordType: 'access.approval_request', action: 'view' as const },
+  { recordType: 'access.approval_reason', action: 'view' as const },
+];
+const markingAdmin = await provisionUser('BROWSER-MARKING-ADMIN', 'P-ADM', [
+  ...markingViews,
+  { recordType: 'merchandise.marked_attribute', action: 'edit' },
+  { recordType: 'merchandise.marked_attribute', action: 'approve' },
+]);
+const markingOwner = await provisionUser('BROWSER-MARKING-OWNER', 'P-OWN', [
+  ...markingViews,
+  { recordType: 'merchandise.marked_attribute', action: 'approve' },
+]);
+
 // The products journey's people (S1-F03-T02): a Booking user who reads the catalogue, proposes products and may
 // confirm another person's, and a different person who confirms from My work and reads the SKUs. Who holds which is
 // KDPS's (V-01, RR-064).
@@ -1427,7 +1466,7 @@ const openToBuyReads = [
 ];
 const openToBuyBooking = await provisionUser('BROWSER-OPEN-TO-BUY-BOOKING', 'P-BKG', [
   ...openToBuyReads,
-  ...['merchandise.brand', 'merchandise.attribute', 'merchandise.vocabulary_value'].map((recordType) => ({
+  ...['merchandise.brand', 'merchandise.marked_attribute', 'merchandise.vocabulary_value'].map((recordType) => ({
     recordType,
     action: 'view' as const,
   })),
@@ -2436,6 +2475,7 @@ const RECEIVING_LISTS = [
   { recordType: 'merchandise.brand', action: 'view' },
   { recordType: 'merchandise.party', action: 'view' },
   { recordType: 'merchandise.attribute', action: 'view' },
+  { recordType: 'merchandise.marked_attribute', action: 'view' },
   { recordType: 'merchandise.vocabulary_value', action: 'view' },
   { recordType: 'merchandise.style', action: 'view' },
   { recordType: 'merchandise.sku', action: 'view' },
@@ -2701,6 +2741,13 @@ writeFileSync(
       confirmer: credentialsOf(vocabularyConfirmer),
       attributeName: vocabularyAttribute.name,
     },
+    markedAttributes: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(markingAdmin),
+      owner: credentialsOf(markingOwner),
+      // How the attribute form names the SYNTHETIC size list (budget.option).
+      attributeOption: `${markingAttribute.code} · ${markingAttribute.name}`,
+    },
     products: {
       organisationCode: settingsCode,
       booking: credentialsOf(productsBooking),
@@ -2728,9 +2775,9 @@ writeFileSync(
       accounts: credentialsOf(openToBuyAccounts),
       owner: credentialsOf(openToBuyOwner),
       reasonId: openToBuyReasonId,
-      // How the budget form names the products journey's SYNTHETIC brand, season list and season (budget.option).
+      // How the budget form names the products journey's SYNTHETIC brand and season, a value of the attribute marked
+      // as the season (budget.option; RR-550).
       brandOption: `${productsBrand.code} · ${productsBrand.name}`,
-      seasonListOption: `${productsSeason.code} · ${productsSeason.name}`,
       seasonOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
     },
     fileIntake: {

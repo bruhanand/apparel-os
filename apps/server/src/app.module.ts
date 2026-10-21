@@ -140,8 +140,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           routingApprovals(audit),
           // Task and approval routing (access-and-approvals 9.4, 11.3; S1-F05-T02).
           workItemRoutingApprovals(audit),
-          // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01).
-          catalogueApprovals(audit),
+          // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01), and the season and
+          // size attributes, whose origin `configuration` rechecks (4.2 "As built"; RR-550, RR-556).
+          catalogueApprovals(audit, configuration),
           // Bank-detail changes and agreement versions (structure-and-masters 5.1, 5.2; S1-F03-T03).
           partiesApprovals(audit),
           // Tax-rule versions, decided by a different Accounts user with the CA's evidence (shared-calculations 10.1;

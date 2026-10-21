@@ -26,7 +26,7 @@ import { lockBudget, refused, today, type Outcome } from './common.js';
 export interface BudgetDependencies {
   readonly audit: AuditInterface;
   readonly access: Pick<AccessInterface, 'requestApproval' | 'requestLockTargets' | 'supersedeRequest'>;
-  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn'>;
+  readonly catalogue: Pick<CatalogueInterface, 'vocabularyOn' | 'markedAttributeAt'>;
   readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
 }
 
@@ -80,8 +80,9 @@ async function writeVersion(
 
 /**
  * A new budget for a brand and a season, with its first version (3.3): the brand in force today, the season an
- * approved value of its attribute in force today, and no budget yet for the pair; a change is the budget's next
- * version.
+ * approved value in force today of the attribute marked as the season now (structure-and-masters 4.2 "As built";
+ * RR-550), and no budget yet for the pair; a change is the budget's next version. While no attribute is marked as the
+ * season, it is refused, naming the setting (code-house-rules 12.14).
  */
 export async function prepareBudget(
   context: TransactionContext,
@@ -93,32 +94,35 @@ export async function prepareBudget(
   if (origin !== undefined) return { kind: 'refusal', refusal: origin };
   const date = await today(context);
   if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
+  const seasons = await dependencies.catalogue.markedAttributeAt(context, 'season');
+  if (seasons.kind === 'not-set') return { kind: 'refusal', refusal: seasons.refusal };
   if (!(await brandInForce(context, draft.brandId, date))) {
     return refused('refused', 'booking.brand-not-in-force', [
       { kind: 'record', recordType: 'merchandise.brand', recordId: draft.brandId },
     ]);
   }
-  const values = await dependencies.catalogue.vocabularyOn(context, draft.season.attributeId, date);
-  if (!values.some((each) => each.id === draft.season.valueId)) {
+  const season = { attributeId: seasons.attributeId, valueId: draft.seasonValueId };
+  const values = await dependencies.catalogue.vocabularyOn(context, season.attributeId, date);
+  if (!values.some((each) => each.id === season.valueId)) {
     return refused('refused', 'booking.season-not-in-vocabulary', [
-      { kind: 'record', recordType: 'merchandise.attribute', recordId: draft.season.attributeId },
-      { kind: 'record', recordType: 'merchandise.vocabulary_value', recordId: draft.season.valueId },
+      { kind: 'record', recordType: 'merchandise.attribute', recordId: season.attributeId },
+      { kind: 'record', recordType: 'merchandise.vocabulary_value', recordId: season.valueId },
     ]);
   }
-  const existing = await budgetOf(context, draft.brandId, draft.season.valueId);
+  const existing = await budgetOf(context, draft.brandId, season.valueId);
   if (existing !== undefined) return refused('refused', 'booking.budget-exists', [budgetItem(existing.id)]);
   const budgetId = uuidv7();
   const written = await withSavepoint(context, 'booking_new_budget', [UNIQUE_VIOLATION], () =>
     context.tx.insert(openToBuyBudget).values({
       id: budgetId,
       brandId: draft.brandId,
-      seasonAttributeId: draft.season.attributeId,
-      seasonValueId: draft.season.valueId,
+      seasonAttributeId: season.attributeId,
+      seasonValueId: season.valueId,
     }),
   );
   if (written.kind !== 'done') {
     // Another budget for the pair committed first (3.3).
-    const raced = await budgetOf(context, draft.brandId, draft.season.valueId);
+    const raced = await budgetOf(context, draft.brandId, season.valueId);
     return refused('refused', 'booking.budget-exists', raced === undefined ? [] : [budgetItem(raced.id)]);
   }
   if (!(await lockBudget(context, budgetId))) throw new Error('A budget just written could not be locked');
@@ -129,10 +133,7 @@ export async function prepareBudget(
     { id: budgetId, brandId: draft.brandId },
     draft,
     'prepare-open-to-buy-budget',
-    [
-      value('brandId', draft.brandId),
-      value('season', { attributeId: draft.season.attributeId, valueId: draft.season.valueId }),
-    ],
+    [value('brandId', draft.brandId), value('season', { attributeId: season.attributeId, valueId: season.valueId })],
   );
   return { kind: 'success', answer };
 }

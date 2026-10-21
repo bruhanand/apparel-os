@@ -20,6 +20,10 @@ export { skuOn } from './queries/sku.js';
 // The approved values of an attribute in force on a date (4.2), for `receiving`'s size of a count line (goods-in 4.3;
 // S2-F02-T02).
 export { vocabularyOn } from './queries/records.js';
+// The attribute marked as the season or the size list at the command's start, or not set with its refusal (4.2 "As
+// built"; RR-550, RR-556), for a budget's season and a count line's size (goods-in 3.3, 4.3).
+export { markedAttributeAt } from './queries/marks.js';
+export type { MarkedAttributeAt } from './queries/marks.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
 export { catalogueRestoreParticipant } from './restore-participant.js';
