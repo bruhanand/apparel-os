@@ -81,9 +81,22 @@ Both written as `DEC-132`; RR-543 and RR-544 closed. Booking is settled.
 
 GRN is settled, apart from what PT making decides.
 
+## Round 8, 21 Oct 2026 (reports and stock search)
+
+1. **Reports.** The PRD's stage 2 list as the default (booking status, receipt problems at the count, supplier fill rate and timeliness with damage, stock by product, size, location, condition and owner); details are the builders' defaults. The PT accuracy report waits for PT making.
+2. **Stock search.** As `PRD-STK-006`, each result showing physical, available-to-sell and held quantities apart; a warehouse shows available to move instead of available to sell.
+3. **Past dates.** Not in stage 2: current stock only, with its as-of time.
+
+## PT file, opened by the owner, 21 Oct 2026
+
+- **Order of work:** the operational flow first: booking, then the Arrival at the Site with its invoice, then the GRN, then the PT file. Reports and search take defaults.
+- **First version:** the PT is made only by uploading a PT file for a GRN. The PT workbench is designed later, by the owner.
+- **Format:** KDPS's own fixed PT template ([pt-file-layouts.md](../data-notes/pt-file-layouts.md) section 1; the 20 columns of `PRD-PTW-008` plus the two `SUGGESTED` columns).
+- **Who:** whoever is assigned makes the file by hand and uploads it. The upload is what makes the stock real, to sell at a location.
+
 ## Not settled
 
-- PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.
+- PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.
 - Supplier-invoice matching, what is owed to the supplier and stage 2 reports: start with open questions. Booking was described in round 2; damage found later was agreed in round 2 (report, hold at once, a different person confirms, Operations follows up).
 - AI drafts and the file readers: not started. They feed PT making, so they wait for the owner's PT discussion too.
 
