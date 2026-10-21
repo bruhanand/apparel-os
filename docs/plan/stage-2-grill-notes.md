@@ -132,6 +132,11 @@ Written as `DEC-136`.
 
 Written as `DEC-137`.
 
+## Round 13, 21 Oct 2026
+
+1. **GRN colour (owner's baseline):** whatever the receiving invoice names, none if it names none. ECONOMY, MEDIUM and PREMIUM are for the PT file only. So the PT matches the GRN per style and size; colour is not compared (`DEC-138`).
+2. **Goods owned before they arrive:** the owner asked for an explanation before deciding the first version.
+
 ## Not settled
 
 - PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.

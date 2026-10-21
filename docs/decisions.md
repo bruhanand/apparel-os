@@ -1427,3 +1427,12 @@
   - Supplier invoice matching (`PRD-REC-010`) moves to stage 5, with supplier payments (`S5-F04`). In the first version the invoice is an uploaded file, with its number, date and quantities entered at the GRN.
 - **Why.** The product owner keeps the first version to the manual flow; matching needs the invoice's values, which the first version does not capture.
 - **Changed.** `phases.md` stage 2 goal and scope, stage 5 scope; `roadmap.md` `S2-F10` and first version; `coverage.md` note. No PRD rule changes: the deferred parts keep their IDs and wait for their placement (RR-546).
+
+## DEC-138 — A GRN line carries the invoice's colour; grade tags are for the PT file only
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 13 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** What colour does a GRN line carry, and are the tags ECONOMY, MEDIUM and PREMIUM, which KDPS's colour list holds, used on the GRN?
+- **Options.** The colour as the invoice names it, none if it names none · a value from the PT colour list, tags included.
+- **Choice.** The first. A GRN line carries the colour the supplier invoice names, or no colour when the invoice names none. ECONOMY, MEDIUM and PREMIUM are tags for the PT file only. So the PT file matches the GRN per style and size; colour is kept on both but not compared. This amends the match of `DEC-135` (per style, colour and size).
+- **Why.** The product owner's baseline: the GRN copies the invoice, and the PT may carry a grade tag where the colour is unclear.
+- **Changed.** No PRD rule changes. `roadmap.md` stage 2 first version; grill notes.
