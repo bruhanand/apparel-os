@@ -1,5 +1,8 @@
 import {
   ACTIVITY_APPROVAL,
+  OPEN_TO_BUY_APPROVAL,
+  OPEN_TO_BUY_BUDGET_TYPE,
+  OPEN_TO_BUY_CHECK,
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
   BILL_FORMAT_CHANGE_APPROVAL,
@@ -24,7 +27,7 @@ import { PersonaChip } from '../shell/AppShell';
 import { useSession, useTimeZone } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatText } from '../setup/format-parts';
-import { formatDate } from '../setup/format';
+import { formatDate, formatPaise } from '../setup/format';
 import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { formatDateTime } from '../history/format';
@@ -429,6 +432,41 @@ function BillFormatFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * An open-to-buy budget version, for Accounts' check and for its approval: the brand and season, the amount of the
+ * version decided, where it came from, and, at the approval, when Accounts checked it (goods-in 3.3; POL-05.09;
+ * S2-F01-T02). The budget is read with view on its own type, within the reader's brand scope.
+ */
+function BudgetFacts({ view }: { view: ApprovalRequestView }) {
+  const timeZone = useTimeZone();
+  const query = useQuery({
+    ...readQuery(api, 'readOpenToBuyBudget', { params: { budgetId: view.document.recordId } }),
+    enabled: useViewable(OPEN_TO_BUY_BUDGET_TYPE),
+  });
+  const budget = query.data?.budget;
+  const version = budget?.versions.find((each) => each.id === view.document.versionId);
+  if (budget === undefined || version === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="budget.brand">
+        <span className="font-mono">{budget.brand.code}</span> {budget.brand.name}
+      </Fact>
+      <Fact label="budget.season">
+        <span className="font-mono">{budget.season.code ?? t('organisation.unknown')}</span> {budget.season.name}
+      </Fact>
+      <Fact label="budget.amount">
+        <span className="tabular-nums">{formatPaise(version.amount)}</span>
+      </Fact>
+      <Fact label="rules.origin">{t(`rules.origin.${version.origin}`)}</Fact>
+      <Fact label="budget.check">
+        {version.check === undefined
+          ? t('budget.awaiting.check')
+          : t('budget.checked-at', { at: formatDateTime(version.check.checkedAt, timeZone) })}
+      </Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -463,6 +501,10 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <FinancialYearFacts view={view} />;
     case BILL_FORMAT_CHANGE_APPROVAL:
       return <BillFormatFacts view={view} />;
+    // An open-to-buy budget version's check and approval (goods-in 3.3; S2-F01-T02).
+    case OPEN_TO_BUY_CHECK:
+    case OPEN_TO_BUY_APPROVAL:
+      return <BudgetFacts view={view} />;
     // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
     case LAYOUT_CONFIRMATION:
     case MAPPING_CONFIRMATION:
