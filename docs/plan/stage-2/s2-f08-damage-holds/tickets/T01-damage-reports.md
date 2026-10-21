@@ -11,6 +11,7 @@ Feature: [Stage 2 first version](../../spec.md)
 - Undo a mistaken confirmation by a linked reversal, proposed and approved by different people (`PRD-STK-017`).
 - The interface `receiving` calls to raise a report inside its own transaction (goods-in 10.2). Policy gate: policy 17.
 - Screens: report damage; the decision in My work.
+- **Ledger support this needs** (found by `S2-F02-T01`): stock-ledger items name goods by SKU, so a damage hold and the damaged condition cannot yet fall on goods of Unknown SKU (a GRN line of a product not yet set up). Extend the ledger's hold and condition-change items to name such goods by their receipt origin, and amend stock-ledger.md in the same change.
 
 ## Expected outputs
 

@@ -536,7 +536,7 @@ Policy 2 governs every approval. On `dev` with synthetic data these run under la
 ### 10.6 Changes this needs in stage 1 work
 
 - **GI-1:** the receipt count of goods with Unknown SKU, not quarantined, and the identity step at PT approval that splits a style and size into the PT's SKUs (stock-ledger 13.9).
-- **RR-547:** a brand barcode on more than one SKU (`PRD-MER-007`, `DEC-135`).
+- **RR-547:** a brand barcode on more than one SKU (`PRD-MER-007`, `DEC-135`). Done in `S2-F04-T01`: structure-and-masters 4.3 "As built", module-map 4.12.
 - **RR-545:** remove the Agreement's default model for new bookings (`DEC-129`).
 - The new call of 10.2: done in module-map section 5 and the module check.
 

@@ -7,7 +7,9 @@ import { readWorld, type EnrolledUser } from './support/world';
 // Booking user proposes a style with two SKUs on Setup › Products, one of Unknown size and one of the category's
 // SYNTHETIC free size; their own confirmation is refused, with its reason on screen; a different person confirms it
 // from My work, and both SKUs then show on the Products screen with their codes. The style's attribute values are
-// entered with the proposal and changed by a later version (S1-F03 review S1). Every value is SYNTHETIC.
+// entered with the proposal and changed by a later version (S1-F03 review S1). One brand barcode mapped to both SKUs
+// is kept for both and flagged as repeated (S2-F04-T01; goods-in 12 test 10; PRD-MER-007, DEC-135). Every value is
+// SYNTHETIC.
 
 const suffix = String(Date.now()).slice(-6);
 const STYLE = `SYN-STYLE-${suffix}`;
@@ -15,6 +17,8 @@ const SKU_UNKNOWN = `SYN-SKU-U-${suffix}`;
 const SKU_FREE = `SYN-SKU-F-${suffix}`;
 const FIT = `SYNTHETIC slim ${suffix}`;
 const FIT_LATER = `SYNTHETIC relaxed ${suffix}`;
+/** A SYNTHETIC brand barcode, a leading zero kept (PRD-MER-007). */
+const BARCODE = `0${suffix}9`;
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
   const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
@@ -137,6 +141,30 @@ test('PRD-MER-013 DM-5 PRD-MER-005 a Booking user proposes a style with an Unkno
       await expect(drawer.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
       await expect(versions).toContainText(FIT_LATER);
       await expect(versions).toContainText('Scheduled');
+      await booking.keyboard.press('Escape');
+    });
+
+    await test.step('one brand barcode mapped to both SKUs is kept for both and flagged as repeated', async () => {
+      await openProducts(booking, 'Barcodes and aliases');
+      for (const sku of [SKU_UNKNOWN, SKU_FREE]) {
+        await booking.getByRole('button', { name: 'Map a code' }).click();
+        const drawer = booking.getByRole('dialog', { name: 'Map a code' });
+        await drawer.locator('#code-mapping-form-code').fill(BARCODE);
+        await expect(drawer.locator('#code-mapping-form-kind')).toHaveValue('supplier-barcode');
+        const option = drawer.locator('#code-mapping-form-sku option').filter({ hasText: sku });
+        await drawer.locator('#code-mapping-form-sku').selectOption((await option.getAttribute('value')) ?? '');
+        await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Save' }).click();
+        await expect(drawer.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+        await booking.keyboard.press('Escape');
+      }
+      const rows = booking
+        .getByRole('table', { name: 'Barcodes and aliases' })
+        .getByRole('row')
+        .filter({ hasText: BARCODE });
+      await expect(rows).toHaveCount(2);
+      for (const sku of [SKU_UNKNOWN, SKU_FREE]) {
+        await expect(rows.filter({ hasText: sku })).toContainText('Repeated on another product');
+      }
     });
   } finally {
     await bookingContext.close();

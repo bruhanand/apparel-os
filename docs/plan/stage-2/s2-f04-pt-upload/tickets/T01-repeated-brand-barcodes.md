@@ -17,3 +17,9 @@ Feature: [Stage 2 first version](../../spec.md)
 ## Done when
 
 The barcode part of design test 10 passes; the stage 1 import tests still pass; RR-547 closed.
+
+## Notes
+
+- Built 21 Oct 2026 (structure-and-masters 4.3 "As built" with `S2-F04-T01`). **Design choices:** a brand's barcode is the code kind supplier barcode; only it may name more than one SKU, and never one SKU in two units; every other kind keeps the refusal of an ambiguous mapping. The repeated flag is worked out when a mapping is read, so ending one mapping ends it.
+- Beyond the ticket: Setup › Products › Barcodes and aliases shows the flag ("Repeated on another product"), and the products browser journey maps one barcode to both its SKUs and sees both flagged; the browser journeys' Booking user of that journey gained create on `merchandise.external_code` for it.
+- The migration is not compatible with the version running: between it and the new version taking traffic, Map a code fails (planned brief interruption on `dev`, `DEC-120`; its header says so).
