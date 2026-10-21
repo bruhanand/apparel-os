@@ -253,6 +253,8 @@ export const externalCodeKey = merchandise.table('external_code_key', {
 export const externalCode = merchandise.table('external_code', {
   id: uuid('id').primaryKey(),
   codeKeyId: uuid('code_key_id').notNull(),
+  /** Its code row's kind, held equal by a foreign key, so a constraint can tell a supplier barcode apart (4.3). */
+  kind: text('kind').$type<ExternalCodeKind>().notNull(),
   scopeKind: text('scope_kind').$type<CodeScope['kind']>().notNull(),
   scopePartyId: uuid('scope_party_id'),
   scopeBrandId: uuid('scope_brand_id'),

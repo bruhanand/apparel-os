@@ -981,3 +981,72 @@ describe('an approved, unpublished opening batch is the unit’s opening plan (m
     expect(await stockPlan(fixtures.w1.businessUnitId)).toBe('failed');
   }, 600_000);
 });
+
+describe('a brand barcode repeated across products (S2-F04-T01; structure-and-masters 4.7; PRD-MER-007, DEC-135)', () => {
+  it('PRD-MER-007 DEC-135: a manifest row whose barcode names two SKUs is not resolved, and an SOH line of it keeps no SKU; the choice is the person’s', async () => {
+    const { setup } = harness;
+    const other = await harness.catalogueSku(false);
+    const repeated = next('BC-R');
+    for (const skuId of [fixtures.sku.skuId, other.skuId]) {
+      const mapped = await setup.asPreparerDo((c, p) =>
+        setup.catalogue.mapCode(c, p, {
+          code: repeated,
+          kind: 'supplier-barcode',
+          scope: { kind: 'organisation' },
+          skuId,
+          alias: false,
+          validFrom: setup.today(),
+        }),
+      );
+      if (mapped.kind !== 'success') throw new Error(`The SYNTHETIC barcode was refused: ${mapped.refusal.code}`);
+    }
+    const manifest = await started(
+      {
+        sheet: MANIFEST_SHEET,
+        header: Object.values(MANIFEST_FIELDS),
+        rows: [manifestRow('SYN-M-R', { barcode: repeated, quantity: '2', season: codes.season })],
+      },
+      {
+        kind: 'opening-balance',
+        target: OPENING_STOCK_TARGET,
+        layout: 'manifest',
+        scope: { siteId: fixtures.s1.siteId, businessUnitId: fixtures.s1.businessUnitId },
+      },
+    );
+    await ok(preparer, 'POST', `/api/files-imports/batches/${manifest}/validate`, {});
+    const [document] = (await readBatch(manifest)).documents;
+    expect(document?.preview).toEqual({
+      kind: 'issues',
+      issues: [expect.objectContaining({ code: `${OPENING_STOCK_TARGET}.identity-not-resolved`, rowNumber: 2 })],
+    });
+    const soh = await started(
+      {
+        sheet: SOH_SHEET,
+        header: Object.values(SOH_FIELDS),
+        rows: [cellsOf(SOH_FIELDS, { reportDate: SOH_DATE, barcode: repeated, quantity: '3' })],
+      },
+      {
+        kind: 'historical-reference',
+        target: 'ebo-imports.stock-on-hand',
+        layout: 'soh',
+        scope: { siteId: fixtures.s1.siteId, storeId: codes.storeId },
+      },
+    );
+    const answer = await ok(preparer, 'POST', '/api/files-imports/comparison-runs', {
+      run: 'count-against-soh',
+      count: { siteId: fixtures.s1.siteId, businessUnitId: fixtures.s1.businessUnitId },
+      stockOnHand: { batchId: soh },
+    });
+    const run = comparisonRunReadSchema.parse(
+      (await ok(preparer, 'GET', `/api/files-imports/comparison-runs/${answer.body.runId as string}`)).body,
+    );
+    // The SOH's three pieces are never matched to SKU X, which the count holds: the barcode names X and another SKU.
+    const lines = run.lines.filter((line) => line.barcode === repeated);
+    expect(lines.map((line) => [line.skuId ?? null, line.left, line.right])).toEqual([
+      [null, { state: 'not-listed' }, { state: 'listed', quantity: 3 }],
+    ]);
+    expect(run.lines.filter((line) => line.skuId === fixtures.sku.skuId)).toEqual([
+      expect.objectContaining({ left: { state: 'listed', quantity: 3 }, right: { state: 'not-listed' } }),
+    ]);
+  }, 600_000);
+});
