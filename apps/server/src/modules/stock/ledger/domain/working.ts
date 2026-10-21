@@ -30,6 +30,33 @@ import {
 // written by Write; what it cannot see, the holds, reservations and freezes hidden from the actor, the command asks the
 // narrowly authorised function about (DEC-117), with what this state collects for it.
 
+/**
+ * The location of a balance held in custody: `balance_location` gives every balance not in transit one (14.2), so a
+ * custody balance without one is a defect, never an empty identifier (PRD-MOD-015).
+ */
+function custodyLocation(row: BalanceState): string {
+  if (row.locationId === null) throw new Error(`A custody balance without its location: ${row.id}`);
+  return row.locationId;
+}
+
+/**
+ * Whether the goods a receipt count names pair a SKU and an identity as described wrongly (13.14): goods of Unknown SKU
+ * need one, with a style code and no empty text; a SKU is the goods' identity and takes none (14.2). The item's type
+ * holds the pairing (`CountedGoods`); the ledger still checks every request it is given, as the design says.
+ */
+function describedIdentityRefused(goods: {
+  readonly skuId: string | null;
+  readonly described?: DescribedIdentity | undefined;
+}): boolean {
+  const { described } = goods;
+  if (goods.skuId !== null) return described !== undefined;
+  return (
+    described === undefined ||
+    described.styleCode.trim() === '' ||
+    [described.colour, described.size].some((text) => text?.trim() === '')
+  );
+}
+
 export interface Scope {
   readonly siteId: string;
   readonly storeId: string | null;
@@ -976,22 +1003,12 @@ export class Working {
    * and the PT route follows.
    */
   protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
+    if (describedIdentityRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
     if (item.skuId === null) {
-      const described = item.described;
-      if (
-        described === undefined ||
-        described.styleCode.trim() === '' ||
-        [described.colour, described.size].some((text) => text?.trim() === '')
-      ) {
-        refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
-      }
       if (item.condition !== 'good')
         refuse('invalid-item', item.lineId, [{ kind: 'condition', condition: item.condition }]);
       if (item.pieceCodes !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'piece-codes' }]);
       if (item.batch !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'batch' }]);
-    } else if (item.described !== undefined) {
-      // A SKU is the goods' identity; an identity as described is for goods of Unknown SKU only (14.2).
-      refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
     }
     const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
@@ -1223,7 +1240,7 @@ export class Working {
         .sort(
           (a, b) =>
             IDENTITY_CONDITIONS.indexOf(a.condition) - IDENTITY_CONDITIONS.indexOf(b.condition) ||
-            compareCodeUnits(a.locationId ?? '', b.locationId ?? '') ||
+            compareCodeUnits(custodyLocation(a), custodyLocation(b)) ||
             compareCodeUnits(a.id, b.id),
         );
       for (const row of candidates) free.set(row, freeUnits(this.claimsOn(row)));
@@ -1262,7 +1279,7 @@ export class Working {
       // Kept units held wrong or unidentified return to good on their own origin (POL-17.02).
       for (const [row, units] of kept) {
         if (row.condition === 'good') continue;
-        move(row, this.balanceFor(row.siteId, row.businessUnitId, row.locationId ?? '', 'good', origin), units);
+        move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', origin), units);
       }
       for (const part of parts) {
         if (part.newReceiptOriginId === undefined) continue;
@@ -1272,7 +1289,7 @@ export class Working {
         }
         const child = this.identityOrigin(part.newReceiptOriginId, origin, sku, part.quantity, movementId);
         for (const [row, units] of take(part.quantity)) {
-          move(row, this.balanceFor(row.siteId, row.businessUnitId, row.locationId ?? '', 'good', child), units);
+          move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', child), units);
         }
       }
     }

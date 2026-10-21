@@ -27,3 +27,12 @@ export function environmentBanner(value: string | undefined): EnvironmentBanner 
     tone: environment === 'kdps-test' ? 'warning' : 'info',
   };
 }
+
+/**
+ * Whether the environment holds synthetic data only (deployment.md section 1; code-house-rules 11.1): local work and
+ * `dev`, as their banner says. A screen that says its values are SYNTHETIC says so only there; `kdps-test` and an
+ * environment not named are never taken for one.
+ */
+export function holdsSyntheticDataOnly(environment: Environment | null): boolean {
+  return environment === 'local' || environment === 'dev';
+}

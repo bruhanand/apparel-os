@@ -17,7 +17,7 @@ export type {
   Written,
 } from './ledger.js';
 export { splitIdentity } from './domain/identity.js';
-export type { IdentityRow, IdentitySource, IdentitySplit, IdentitySplitPart } from './domain/identity.js';
+export type { IdentityRow, IdentitySource, IdentitySplit } from './domain/identity.js';
 export type {
   Condition,
   DescribedIdentity,

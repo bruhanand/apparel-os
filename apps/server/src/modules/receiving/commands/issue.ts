@@ -83,13 +83,18 @@ async function batchRefusal(
 /** The receipt count of one line's counted pieces (stock-ledger 13.4, 13.14; goods-in 4.5). */
 function receiptCount(row: ArrivalRow, line: CurrentLine, grnLineId: string, owner: Owner): LedgerItem {
   const { entry } = line;
+  // A known product, or goods of a product not yet set up with their identity as described (stock-ledger 13.14).
+  const goods =
+    entry.skuId === null
+      ? {
+          skuId: null,
+          described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.sizeCode },
+        }
+      : { skuId: entry.skuId };
   return {
     kind: 'receipt-count',
     lineId: grnLineId,
-    skuId: entry.skuId,
-    ...(entry.skuId === null
-      ? { described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.sizeCode } }
-      : {}),
+    ...goods,
     quantity: entry.countedQuantity,
     to: { siteId: row.siteId, businessUnitId: row.businessUnitId, locationId: row.receivingLocationId },
     condition: 'good',
@@ -139,7 +144,7 @@ export async function issueGrn(
 
   // Goods of a product not yet set up are of Unknown brand until PT approval names their SKU, so only a person whose
   // scope covers every brand sees, and so writes, their stock (stock-ledger 13.14, 14.1; code-house-rules 6.2): asked
-  // here, so a person with a narrower scope is refused before anything is posted (RR-553).
+  // here, so a person with a narrower scope is refused before anything is posted (RR-555).
   if (lines.some((line) => line.entry.skuId === null)) {
     const unknownBrand = await dependencies.access.authorise(context, {
       actorId: actor.userId,

@@ -660,7 +660,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
   });
 });
 
-describe('goods of a product not yet set up (stock-ledger 13.14; RR-553)', () => {
+describe('goods of a product not yet set up (stock-ledger 13.14; RR-555)', () => {
   it('stock-ledger 13.14 a receiver scoped to the brand alone cannot issue a GRN of goods whose brand stays Unknown until the PT', async () => {
     const brandReceiver = await enrolled('RCV-BRAND', RECEIVER_AUTHORITY, {
       kind: 'dimensions',

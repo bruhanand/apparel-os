@@ -42,6 +42,25 @@ export const bookingApprovalRules: readonly ApprovalRule[] = [
   },
 ];
 
+/** The document Accounts' check of a version decides (3.3; POL-05.09). */
+export const checkDocument = (budgetId: string, versionId: string) =>
+  ({ module: 'booking', recordType: OPEN_TO_BUY_CHECK_TYPE, recordId: budgetId, versionId }) as const;
+
+/** The document a version's approval decides, once its check is recorded (3.3; POL-05.09). */
+export const approvalDocument = (budgetId: string, versionId: string) =>
+  ({ module: 'booking', recordType: OPEN_TO_BUY_BUDGET_TYPE, recordId: budgetId, versionId }) as const;
+
+/** Both decisions of a version, each with its action type and document, in the order they are taken (3.3). */
+export const versionDecisions = (budgetId: string, versionId: string) =>
+  [
+    [OPEN_TO_BUY_CHECK, checkDocument(budgetId, versionId)],
+    [OPEN_TO_BUY_APPROVAL, approvalDocument(budgetId, versionId)],
+  ] as const;
+
+/** The record a budget version's audit record names (numbering-and-audit 4.1). */
+export const budgetAuditRecord = (budgetId: string, versionId: string) =>
+  ({ module: 'booking', type: 'open_to_buy_budget', id: budgetId, versionId }) as const;
+
 /** A budget named in a refusal (PRD-UXP-003). */
 export const budgetItem = (budgetId: string): MissingItem => ({
   kind: 'record',
