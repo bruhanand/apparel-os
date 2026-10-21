@@ -35,7 +35,7 @@ Where the old plan, the PRD and the 19 Oct answers already agree, carried into t
 Answers (the product owner accepted each recommendation):
 
 1. **Where stage 2 ends.** At accepted stock at the receiving Site, as `phases.md` says. Transfers, supplier returns, write-off, disposal and counts stay in stage 3; the old plan's transfer and return rules are used when stage 3 is designed.
-2. **When goods become sellable.** Finishing the PT includes the barcode check and acceptance at the receiving Site, in one step; there is no separate acceptance step afterwards. All three conditions of `PRD-STK-003` are still met, so `PRD-REC-021`, `PRD-REC-022` and `PRD-STK-003` need no change.
+2. **When goods become sellable.** ~~Finishing the PT includes the barcode check and acceptance in one step.~~ Corrected in round 10 (`DEC-135`): after PT approval the goods are scanned in at the Site; only then are they sellable at a Store. `PRD-REC-021`, `PRD-REC-022` and `PRD-STK-003` stand.
 3. **Money in stage 2.** As the PRD says (`PRD-STG-002`): PT approval values the stock, posts balanced journals and records what is owed to the supplier. The old plan's no-books rule is not taken.
 4. **Taking in excess, wrong or unidentified goods.** The receiver records the line; a different person from Booking approves taking it in (`PRD-REC-013`, `POL-17.02`, `POL-17.11`).
 5. **One delivery is an Arrival** (`DEC-128`). Batch keeps its lot-and-expiry meaning.
@@ -99,10 +99,20 @@ GRN is settled, apart from what PT making decides.
 
 1. **Out of the first version:** the vendor-file readers (XLS, XLSB, CSV), the vendor layouts and AI reading of PT files, with the workbench; AI reading of booking photos stays.
 2. **Master sheet values:** set up once as approved vocabularies, each confirmed by a second person; the upload refuses an off-list cell, naming it.
-3. **Upload, then approval:** the upload makes a draft PT; a different person approves it; the approval makes the stock real and sellable at the GRN's Site.
+3. **Upload, then approval:** the upload makes a draft PT; a different person approves it, which makes the PT official and values the stock. Sellable only after the scan-in (round 10).
 4. **Against the GRN:** "count should match". Whether by style, colour and size or in total is asked in round 10.
 
 Written as `DEC-134`; placement of the deferred parts is RR-546.
+
+## Round 10, 21 Oct 2026 (PT upload)
+
+1. **Match:** per style, colour and size; otherwise the upload is refused with the differences.
+2. **Price and tax columns:** taken as the file gives them, checked by the approver; NAG and MARGIN checked by the system.
+3. **New products:** proposed by the upload, confirmed by the PT approver.
+4. **Flow (owner's words):** stock received at a Store; the GRN created with the invoice upload; the PT file uploaded and approved; then the stock is scanned and inwarded into the Store, and then it is sellable.
+5. **Barcodes** can repeat, rarely, for brand-tagged items; not a hard constraint.
+
+Written as `DEC-135` (`PRD-MER-007` reworded; RR-547 for the stage 1 code). The owner asked why questions came back: round 1 answer 2 was built on a recommendation that merged the scan into the PT, and round 10 asked about it again. Latest owner words win; do not re-ask settled points.
 
 ## Not settled
 

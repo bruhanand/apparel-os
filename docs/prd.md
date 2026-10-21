@@ -325,7 +325,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-004` Maintain season, collection, launch date, gender, fabric, fit, category, HSN and applicable merchandise attributes.
 - `PRD-MER-005` Preserve unknown values. Missing size is distinct from an explicitly supplied Free Size.
 - `PRD-MER-006` Map external barcodes and supplier codes to the correct SKU and unit, with scope and validity dates. Identical pieces may share an external barcode; their internal piece IDs remain distinct.
-- `PRD-MER-007` Reject ambiguous active mappings; preserve leading zeros and historical aliases.
+- `PRD-MER-007` Allow a brand's external barcode to map to more than one SKU where the brand's tags repeat it. Flag such a barcode and resolve it at each scan by the person's confirmed choice, never silently. Preserve leading zeros and historical aliases.
 - `PRD-MER-008` Print internal barcode labels when appropriate identifiers are absent.
 - `PRD-MER-009` Keep purchase cost, price-ticket maximum retail price (MRP), selling price, tax and discount separate; retain transaction-time snapshots.
 - `PRD-MER-010` Support packaged-goods units of measure, packs and conversions, and batch/expiry tracking where the merchandise profile requires them.
