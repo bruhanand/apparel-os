@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 4 approved by the product owner on 21 Oct 2026, sections 3 and 4 with their design choices; section 5 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 5 approved by the product owner on 21 Oct 2026, sections 3 to 5 with their design choices; section 6 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -269,7 +269,7 @@ In the first version a PT is made only by uploading a PT file for one GRN, in th
 
 ### 5.2 The template
 
-- The template is a layout version in `files-imports`, proposed and confirmed by a different person, like every layout (imports-and-opening-data 6.4). For KDPS it is its 20-column template plus the two `SUGGESTED` columns ([pt-file-layouts.md](../../data-notes/pt-file-layouts.md) 1.2; `PRD-PTW-008`). Which of its columns are required is stated by the layout version, set when the product owner confirms KDPS's layout.
+- The template is a layout version in `files-imports`, proposed and confirmed by a different person, like every layout (imports-and-opening-data 6.4). For KDPS it is its 20-column template plus the two `SUGGESTED` columns ([pt-file-layouts.md](../../data-notes/pt-file-layouts.md) 1.2; `PRD-PTW-008`). Which of its columns are required is stated by the layout version: for KDPS all 20 must be filled and the two `SUGGESTED` columns are optional (`DEC-140`).
 - The header is found by its column names, on row 1 or row 2: a work tab has a subtotal row above it, a copy saved as values does not (pt-file-layouts 1.7; imports-and-opening-data 6.5).
 - A row may hold one piece or several pieces of one barcode (`QTY`); both occur (pt-file-layouts 1.7).
 - XLSX only in the first version (`DEC-134`). Formula cells are read by their saved values and never recalculated; no formula is taken as a rule (imports-and-opening-data 3.1 step 3, 6.7).
@@ -323,7 +323,46 @@ Every problem is listed at once in the validation report, naming the row, the co
 
 ## 6. PT approval
 
-To draft.
+A different person approves the draft PT. The approval makes the PT official and values the stock in one transaction (module-map 6.2 flow C). It does not make the goods sellable; the scan-in does (section 7, `DEC-135`). It lives in `merchandise` · PT, with `access`, `merchandise` · catalogue, `stock` · ledger and `finance` · books.
+
+### 6.1 Who approves
+
+- A person holding PT approval authority for the GRN's Site and business unit, who is not the uploader (`PRD-REC-017`, `POL-02.07`). Which roles hold it, office, warehouse or both, is set in roles, never in code (system-dumb 15, 20.4).
+- The approval is judged on the PT's total proposed acquisition cost: `P RATE` times `QTY`, summed over its rows (`PRD-ACS-015`, `POL-02.09`; domain-model section 5). The request goes to approvers whose limit covers it (access-and-approvals; `S1-F05`). Every row has its cost, since all 20 columns are filled (`DEC-140`).
+- The request reaches the approver in My work.
+
+### 6.2 What the approver sees
+
+- The rows with their values and origins; the totals of pieces, BASIC, `P RATE` and MRP; the margin of each row (`PRD-PTW-011`).
+- BASIC and `P RATE` side by side: BASIC is the basic rate, `P RATE` the actual purchase rate with handling and transportation (`DEC-140`, `POL-03.07`).
+- The GRN with its invoices and photos, and the booking where its lines are linked.
+- The new products the upload proposes, the repeated barcodes and the differences from existing products (section 5.5).
+
+### 6.3 Approve or reject
+
+- **Reject**, with a reason: the draft ends; the uploader uploads a corrected file (section 5).
+- **Approve.** In one transaction, with the locks in the stock ledger's order (stock-ledger 10.3), or nothing (`PRD-INT-004`):
+  1. `access` verifies the approval under the lock: the same PT revision, the approver's authority and limit, and that the approver did not upload it (`PRD-ACS-007`).
+  2. `merchandise` · catalogue confirms the new products the PT proposed, with their barcodes as external codes (`PRD-MER-013`).
+  3. `merchandise` · PT freezes the revision and gives the PT its number from its own number series; a draft carries only an internal reference (`PRD-REC-018`). **Design choice.**
+  4. `stock` · ledger gives every receipt origin of the GRN its product: for each style and size, the pieces take the SKUs of the PT's rows, split by their quantities. The PT is the record of identity (system-dumb 13.6); a GRN line that named another SKU is corrected by this linked step, keeping its original (GI-1).
+  5. `stock` · ledger records the PT's coverage on those pieces and establishes their cost at `P RATE` (stock-ledger 2.3, 13.4). Coverage never overlaps another approved PT (`PRD-REC-015`, `PRD-INT-005`). The excess holds of excess taken in are released, and wrong or unidentified goods taken in return to good condition through the identity route (section 4.6).
+  6. `finance` · books posts the value of owned pieces with its balanced journal, under the posting map of `stock.cost-established` (books-and-posting 7.2). The posting map names both sides: stock value, and the account that holds what is still to be billed for it. Because `P RATE` includes handling and transportation (`DEC-140`), that second account is a receipt account set by Accounts and the CA, not the supplier's payable; what the supplier is owed comes from its invoice when invoices are matched in stage 5 (`DEC-137`). Goods the supplier still owns under the Agreement, such as consignment, record their cost only and post nothing (stock-ledger 13.4).
+  7. `audit` records it; the outbox carries the follow-ups.
+- Under the locks the approval is refused, naming the reason, when the GRN was recounted or a held line decided after the upload, when coverage would overlap, when a posting map is missing or the period is locked (books-and-posting), or when a number series is missing.
+- A PT of many lines posts through a queued job, one at a time per book: the click records the approval and a request to post; a failed job posts nothing and the PT shows the failure (module-map 6.2 flow E; stock-ledger 10.6).
+- After approval the GRN's goods are official and valued, still at their receiving location and not accepted (stock-ledger 6.3).
+
+### 6.4 Reversing a PT before the scan-in
+
+- A wrong approved PT is reversed and a corrected file uploaded and approved again, only while none of its pieces is scanned in (`DEC-137`, `PRD-REC-019`).
+- Someone with PT authority proposes the reversal with a reason; a different person approves it. **Design choice.** In one transaction the reversal removes the coverage, reverses the established cost and its journal (stock-ledger 2.3 Reversal, 7.5), and keeps the PT and its reversal as linked records. Products it confirmed stay; their identity on the pieces stays until the corrected PT sets it again.
+- The GRN then waits for a corrected PT file (section 5).
+- Corrections after the scan-in follow later (RR-546).
+
+### 6.5 Downloading a PT
+
+- An approved PT downloads as an XLSX file in the template's columns (`PRD-PTW-008`, `PRD-PTW-009`). Downloading changes nothing. **Design choice.**
 
 ## 7. Scan-in at the Site
 

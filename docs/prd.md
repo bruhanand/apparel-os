@@ -153,7 +153,7 @@ Business words:
 | Open-to-buy | The budget still free to commit to new bookings, by brand and season |
 | Organisation | An independent retail business group containing its legal entities and operating network, with data isolated from other Organisations |
 | Outright | Commercial terms where goods are bought with no agreed right to return unsold pieces |
-| P RATE | Purchase rate: in the KDPS PT layout, the approved cost of a piece at receipt |
+| P RATE | Purchase rate: in the KDPS PT layout, the actual purchase cost of a piece, including handling and transportation; the approved cost of the piece at receipt |
 | P&L | Profit and loss statement |
 | PAN | Permanent Account Number: the income-tax identity number |
 | Persona | One of the 14 kinds of work listed in People, access and approvals, each with a short ID. A person can hold several; a persona grants no access |

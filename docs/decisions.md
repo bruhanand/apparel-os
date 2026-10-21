@@ -1445,3 +1445,12 @@
 - **Choice.** After the first version. Until then nothing is recorded before the goods and their invoice reach the Site; a brand whose Agreement passes ownership at dispatch shows nothing until the Arrival.
 - **Why.** The product owner keeps the first version to the operational flow from booking to scan-in.
 - **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 first version; `coverage.md` note; RR-546 widened. No PRD rule changes; the stage 2 exit check on inbound ownership (`PRD-ACP-020`) waits for its placement (RR-546).
+
+## DEC-140 — P RATE includes handling and transportation; every template column is filled
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** goods-in design section 5 ([goods-in.md](design/goods-in/goods-in.md))
+- **Question.** What does P RATE hold beyond BASIC, and which columns of KDPS's PT template must be filled?
+- **Options.** P RATE as the actual purchase rate with handling and transportation · P RATE as the supplier's rate only. All 20 columns required · some optional.
+- **Choice.** BASIC is the basic rate; P RATE is the actual purchase rate of the piece, including handling and transportation, and is the cost the PT approval establishes. All 20 columns of KDPS's template must be filled; the two `SUGGESTED` columns are optional.
+- **Why.** The product owner's description of the template.
+- **Changed.** PRD "Words used": P RATE reworded. goods-in design 5.2 and 6.
