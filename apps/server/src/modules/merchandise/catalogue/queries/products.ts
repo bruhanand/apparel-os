@@ -2,7 +2,7 @@ import type { CodeMapping, CodeScope, ExternalCodeKind, ProductProposal } from '
 import { desc, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import { productProposal, sku } from '../db/schema.js';
-import { REPEATABLE_KIND } from '../domain/codes.js';
+import { REPEATABLE_KIND, REPEATABLE_SCOPE } from '../domain/codes.js';
 import type { PageRequest, RequestReader } from './records.js';
 
 // Product proposals and code mappings, a page at a time (structure-and-masters 4.2, 4.3, 8; code-house-rules 12.1;
@@ -86,10 +86,9 @@ export async function productProposalRecord(
 }
 
 /**
- * A page of the code mappings, of one SKU where named, in code order then identifier (4.3). A brand barcode's mapping is
- * flagged as repeated where another of the same code, active or alias as it is, names another SKU over a day it covers,
- * in a scope one Resolve could match with its own: the same scope, the whole Organisation, or a supplier beside a brand
- * (PRD-MER-007, DEC-135). **Design choice.**
+ * A page of the code mappings, of one SKU where named, in code order then identifier (4.3). A supplier barcode's mapping
+ * under a brand is flagged as repeated where another of the same code under the same brand, active or alias as it is,
+ * names another SKU over a day it covers: the only repeat there is (PRD-MER-007, DEC-135; RR-554). **Design choice.**
  */
 export async function codeMappingPage(
   context: TransactionContext,
@@ -113,11 +112,11 @@ export async function codeMappingPage(
     select c.id::text as id, k.code, k.kind, c.scope_kind, c.scope_party_id::text as scope_party_id,
            c.scope_brand_id::text as scope_brand_id, c.sku_id::text as sku_id, c.pack_id::text as pack_id, c.alias,
            lower(c.valid_during)::text as start, upper(c.valid_during)::text as end,
-           c.kind = ${REPEATABLE_KIND} and exists (
+           c.kind = ${REPEATABLE_KIND} and c.scope_kind = ${REPEATABLE_SCOPE} and exists (
              select 1 from merchandise.external_code o
              where o.code_key_id = c.code_key_id and o.alias = c.alias and o.sku_id <> c.sku_id
                and o.valid_during && c.valid_during
-               and (o.scope_kind <> c.scope_kind or o.scope_key = c.scope_key)) as repeated
+               and o.scope_kind = c.scope_kind and o.scope_key = c.scope_key) as repeated
     from merchandise.external_code c join merchandise.external_code_key k on k.id = c.code_key_id
     where (${query.skuId ?? null}::uuid is null or c.sku_id = ${query.skuId ?? null}::uuid)
       and (${query.after ?? null}::uuid is null

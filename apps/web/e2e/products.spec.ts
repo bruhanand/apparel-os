@@ -8,8 +8,8 @@ import { readWorld, type EnrolledUser } from './support/world';
 // SYNTHETIC free size; their own confirmation is refused, with its reason on screen; a different person confirms it
 // from My work, and both SKUs then show on the Products screen with their codes. The style's attribute values are
 // entered with the proposal and changed by a later version (S1-F03 review S1). One brand barcode mapped to both SKUs
-// is kept for both and flagged as repeated (S2-F04-T01; goods-in 12 test 10; PRD-MER-007, DEC-135). Every value is
-// SYNTHETIC.
+// under their brand is kept for both and flagged as repeated (S2-F04-T01; goods-in 12 test 10; PRD-MER-007, DEC-135,
+// RR-554). Every value is SYNTHETIC.
 
 const suffix = String(Date.now()).slice(-6);
 const STYLE = `SYN-STYLE-${suffix}`;
@@ -144,13 +144,16 @@ test('PRD-MER-013 DM-5 PRD-MER-005 a Booking user proposes a style with an Unkno
       await booking.keyboard.press('Escape');
     });
 
-    await test.step('one brand barcode mapped to both SKUs is kept for both and flagged as repeated', async () => {
+    await test.step('one brand barcode mapped to both SKUs under their brand is kept for both and flagged as repeated', async () => {
       await openProducts(booking, 'Barcodes and aliases');
       for (const sku of [SKU_UNKNOWN, SKU_FREE]) {
         await booking.getByRole('button', { name: 'Map a code' }).click();
         const drawer = booking.getByRole('dialog', { name: 'Map a code' });
         await drawer.locator('#code-mapping-form-code').fill(BARCODE);
         await expect(drawer.locator('#code-mapping-form-kind')).toHaveValue('supplier-barcode');
+        // Only a barcode recorded under a brand may repeat across products (RR-554).
+        await drawer.locator('#code-mapping-form-scope').selectOption('brand');
+        await drawer.locator('#code-mapping-form-brand').selectOption({ label: world.brandOption });
         const option = drawer.locator('#code-mapping-form-sku option').filter({ hasText: sku });
         await drawer.locator('#code-mapping-form-sku').selectOption((await option.getAttribute('value')) ?? '');
         await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Save' }).click();
