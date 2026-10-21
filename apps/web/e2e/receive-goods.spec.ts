@@ -20,6 +20,24 @@ const INVOICE_PDF = {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * Saves a line's change and waits until the screen has read the Arrival again, as a person sees the line change before
+ * the next step: issuing the GRN sends the Arrival's version token, which the change made newer (goods-in 4.8;
+ * code-house-rules 12.7). The read answers the gate too, so it can take a moment.
+ */
+async function savedAndReadAgain(page: Page, save: () => Promise<void>): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().includes('/count-lines'),
+  );
+  await save();
+  await saved;
+  await page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      /\/api\/receiving\/arrivals\/[^/]+$/.test(new URL(response.url()).pathname),
+  );
+}
+
 /** A business date as the screens show it, DD MMM YYYY (design-language 8). */
 function shown(date: string): string {
   const [year = '', month = '', day = ''] = date.split('-');
@@ -144,7 +162,7 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
       .click();
     const change = page.getByRole('form', { name: 'Change' });
     await change.getByLabel(/^Counted quantity/).fill('5');
-    await change.getByRole('button', { name: 'Save the change' }).click();
+    await savedAndReadAgain(page, () => change.getByRole('button', { name: 'Save the change' }).click());
     await expect(change).toHaveCount(0);
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
@@ -210,7 +228,7 @@ test('PRD-REC-004 PRD-MER-011 a Store’s staff counts a batch-tracked product a
     const change = page.getByRole('form', { name: 'Change' });
     await change.getByLabel(/^Batch/).fill('SYN-BATCH-STORE');
     await change.getByLabel(/^Expiry date/).fill(expiry);
-    await change.getByRole('button', { name: 'Save the change' }).click();
+    await savedAndReadAgain(page, () => change.getByRole('button', { name: 'Save the change' }).click());
     await expect(change).toHaveCount(0);
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     const grn = page.getByRole('region', { name: /^GRN SYN-GRN-\d{5}$/ });
