@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 8 approved by the product owner on 21 Oct 2026, sections 3 to 8 with their design choices; section 9 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 9 approved by the product owner on 21 Oct 2026, sections 3 to 9 with their design choices; section 10 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -468,7 +468,66 @@ The product owner asked for defaults here (grill round 8). Reports read declared
 
 ## 10. Modules, records, interfaces and transactions
 
-To draft.
+Technical. Every part follows the module map's rules: calls through public interfaces only, downward or to the same-tier calls the module map lists, one transaction per command (module-map sections 2, 3 and 6).
+
+### 10.1 Where each part lives
+
+| Module · part (tier) | Records | Operations |
+| --- | --- | --- |
+| `booking` (4) | Booking with its versions and lines; booking document (stored-file attachment); open-to-buy budget with its versions; receipt link from a GRN line to a booking line; issue and confirmation records; cancellation | Save draft; submit; approve or reject (through `access`); record issued, confirmed; propose a change or a cancellation; prepare, check and approve a budget; link a GRN line (called by `receiving`); read open lines; booking status read model |
+| `receiving` (4) | Arrival with its invoices, transport details and photos; count lines; GRN with its lines and findings; held-line decision; recount; scan-in and its scans | Record an Arrival; save the count; issue the GRN; decide a held line; propose and approve a recount; scan in; finish; read a GRN's good pieces per style and size (for `merchandise` · PT); receipt problems read model |
+| `merchandise` · PT (4) | PT with its revisions and rows; the reversal | The PT import handler (validate, preview, publish the draft and its approval request); approve or reject (through `access`); propose and approve a reversal; download |
+| `stock` · documents (4) | Damage report; its decision; the reversal of a confirmation | Report damage; confirm or reject; propose and approve a reversal |
+| `stock` · ledger (3), used | Receipt count, condition change, identity resolved, location move, cost established, reversal; holds; coverage; acceptance (stock-ledger 2.3, 6, 13) | As stock-ledger 13 |
+| `merchandise` · catalogue and parties (2), used | Products, product proposals, external codes, vocabularies; agreements, brand–supplier links | Resolve a code; propose and confirm a product; read the terms in force (module-map 4.12) |
+| `files-imports` (1), used | Stored files and attachments; the PT template's layout; the import batch | Intake, staging and validation (imports-and-opening-data 3.1); the handler contract (13.2) |
+
+### 10.2 Calls between modules
+
+- `receiving` calls `booking`, and `merchandise` · PT calls `receiving`, as the module map already lists (module-map section 5).
+- **New:** `receiving` calls `stock` · documents, to raise a damage report at the count and during the scan-in in its own transaction. Added to module-map section 5 and to the module check when this section is approved.
+- The rest are downward calls to `stock` · ledger, `merchandise`, `organisation`, `exceptions`, `finance` · books, `access`, `numbering`, `files-imports` and `audit`.
+
+### 10.3 One transaction each
+
+| Operation | In one transaction | Refused, naming the reason, when |
+| --- | --- | --- |
+| Approve a booking (3.4) | `access` decision; `booking` approved, Agreement version fixed, open-to-buy reserved, number given; `audit`; outbox | Not the same version; limit; open-to-buy short or missing; no Agreement in force; no number series |
+| Issue a GRN (4.5) | `receiving` GRN frozen and numbered; `stock` · ledger receipt counts, holds and quarantine; `stock` · documents damage reports; `booking` links; `exceptions` follow-ups; `audit`; outbox | Receiving not ready at the unit; a line without its counted quantity; batch or expiry missing where required; no number series |
+| Decide a held line (4.6) | `receiving` decision; for a rejected damage report, `stock` · documents and the release of its hold; `audit` | The decider is the receiver or reporter; no authority |
+| Approve a recount (4.7) | `receiving` recount; `stock` · ledger receipt count or reversal for the difference; `audit` | A PT uploaded for the GRN |
+| Submit a PT file (5.6) | `merchandise` · PT draft revision; `access` approval request; `files-imports` outcome; `audit` | Any check of 5.3 or 5.4 |
+| Approve a PT (6.3) | As module-map 6.2 flow C, with the product confirmations and the identity step; a large PT through flow E | As 6.3 |
+| Reverse a PT (6.4) | `merchandise` · PT reversal; `stock` · ledger reversal of coverage and cost; `finance` · books reversal journal; `audit` | Any piece scanned in; not a different approver |
+| Accept a scan (7.2) | `stock` · ledger acceptance and location move; `receiving` scan record; `audit` | Barcode not covered, or nothing left to accept |
+| Report, decide or reverse damage (8) | `stock` · documents record; `stock` · ledger hold or condition change; `exceptions`; `audit` | Decider is the reporter; no authority |
+
+Locks follow the stock ledger's order (stock-ledger 10.3); authority, version, state and quantities are checked again under them (`PRD-INT-003`).
+
+### 10.4 Numbers and events
+
+- Booking, GRN, PT and damage report each take a number from their own series (numbering-and-audit); an operation that needs a number and has no series set up is refused, naming it.
+- Outbox events, named under code-house-rules part B: booking approved and changed; GRN issued; held line decided; PT approved and reversed; piece accepted; damage reported, confirmed, rejected and reversed. Each carries identifiers only; consumers refetch (`PRD-MOD-006`). **Proposed.**
+
+### 10.5 The policy gate
+
+Every operation that records a business effect asks the Available check first (`S1-F04`; `PRD-SEC-017`). **Proposed** mapping, from [phases.md](../../phases.md) stage 2:
+
+| Operation | Needs |
+| --- | --- |
+| Approve a booking | Policies 5 and 1 |
+| Issue a GRN; scan in | The unit's receiving activity (`PRD-LIF-001`); policies 4 and 10 (`POL-10.08`) |
+| Decide a held line; damage | Policy 17 |
+| Approve or reverse a PT | Policies 1, 3, 9 and 10 |
+
+Policy 2 governs every approval. On `dev` with synthetic data these run under labelled synthetic settings (`DEC-118`).
+
+### 10.6 Changes this needs in stage 1 work
+
+- **GI-1:** the receipt count of goods with Unknown SKU, not quarantined, and the identity step at PT approval that splits a style and size into the PT's SKUs (stock-ledger 13.9).
+- **RR-547:** a brand barcode on more than one SKU (`PRD-MER-007`, `DEC-135`).
+- **RR-545:** remove the Agreement's default model for new bookings (`DEC-129`).
+- The new call of 10.2, in module-map section 5 and `tools/module-check/check.mts`.
 
 ## 11. Screens by persona
 
