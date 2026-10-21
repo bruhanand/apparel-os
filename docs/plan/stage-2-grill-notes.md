@@ -140,6 +140,10 @@ Written as `DEC-137`.
 
 The first version is settled: booking (document uploaded, entered by hand), the Arrival with its invoice, the GRN (counted by hand, documents and photos), the PT file uploaded for the GRN and approved by a different person, then the scan-in at the Site.
 
+## The design
+
+Written as [goods-in.md](../design/goods-in/goods-in.md), 21 Oct 2026: sections 1 to 10 approved one by one, then the owner asked for the rest to be completed (sections 11 and 12).
+
 ## Not settled
 
 - PT making beyond the first-version file upload (the PT workbench, labels, corrections): the owner designs it later. Do not raise it.

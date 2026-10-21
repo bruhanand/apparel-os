@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 9 approved by the product owner on 21 Oct 2026, sections 3 to 9 with their design choices; section 10 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft, complete**, 21 Oct 2026. Sections 1 to 10 approved by the product owner section by section on 21 Oct 2026, sections 3 to 10 with their design choices; sections 11 and 12 written on the product owner's instruction to complete the document, waiting for approval of the whole. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -485,7 +485,7 @@ Technical. Every part follows the module map's rules: calls through public inter
 ### 10.2 Calls between modules
 
 - `receiving` calls `booking`, and `merchandise` · PT calls `receiving`, as the module map already lists (module-map section 5).
-- **New:** `receiving` calls `stock` · documents, to raise a damage report at the count and during the scan-in in its own transaction. Added to module-map section 5 and to the module check when this section is approved.
+- **New:** `receiving` calls `stock` · documents, to raise a damage report at the count and during the scan-in in its own transaction. Added to module-map section 5 and to the module check (`tools/module-check/check.mts`), 21 Oct 2026.
 - The rest are downward calls to `stock` · ledger, `merchandise`, `organisation`, `exceptions`, `finance` · books, `access`, `numbering`, `files-imports` and `audit`.
 
 ### 10.3 One transaction each
@@ -527,15 +527,56 @@ Policy 2 governs every approval. On `dev` with synthetic data these run under la
 - **GI-1:** the receipt count of goods with Unknown SKU, not quarantined, and the identity step at PT approval that splits a style and size into the PT's SKUs (stock-ledger 13.9).
 - **RR-547:** a brand barcode on more than one SKU (`PRD-MER-007`, `DEC-135`).
 - **RR-545:** remove the Agreement's default model for new bookings (`DEC-129`).
-- The new call of 10.2, in module-map section 5 and `tools/module-check/check.mts`.
+- The new call of 10.2: done in module-map section 5 and the module check.
 
 ## 11. Screens by persona
 
-To draft.
+Every screen shows each record's state, what blocks it and the next action (`PRD-UXP-003`); a person's daily actions are within three navigation actions of their home (`PRD-UXP-001`); screen text is kept apart from code for the later Hindi screens (`DEC-099`). Names follow [ui-blueprint.html](../ui/ui-blueprint.html) and [personas.md](../access/personas.md); a persona grants nothing, the role assignment does.
+
+| Persona | Screens | What they do there |
+| --- | --- | --- |
+| Booking (P-BKG) | Booking › Bookings; the booking form; Booking › Open-to-buy; My work | List and filter bookings by state, brand, season, supplier and destination; upload the booking document, enter the header and the size-colour grid, see totals and the brand's terms read-only, submit (3.1); record Issued and Confirmed; propose changes and cancellations; prepare budgets; decide excess, wrong and unidentified lines, review unmatched GRN lines and link unbooked ones, follow overdue bookings (3.7, 3.8, 4.6) |
+| Warehouse (P-WHS); a Store's staff (P-STM) | Receive Goods › Inbox (Pending, History); Arrival; Count; Scan-in; Report damage; Stock search | "Goods arrived" or "Receive against booking"; record the Arrival and its invoices first; count line by line against the invoice, with findings and photos; issue the GRN (4.1 to 4.5); scan the goods in to the floor, backstore or a bin, stop and resume (7); report damage at any step (8); search stock (9.2) |
+| Whoever is assigned to make PTs | Receive Goods › a GRN › Upload PT file | Download the blank template; upload the filled file; read the validation report or the preview; submit for approval; withdraw a wrong draft; propose a reversal before the scan-in (5, 6.4) |
+| PT approver | My work › Approvals › the PT review | See the rows, totals, BASIC and `P RATE`, margins, the GRN's invoices and photos, new products, repeated barcodes and differences; approve or reject with a reason (6.1 to 6.3) |
+| Owner (P-OWN), or whoever holds the limits | My work › Approvals | Approve bookings, budgets, booking changes and cancellations, recounts, PT reversals and damage reversals (3, 4.7, 6.4, 8.3) |
+| Accounts (P-ACC) | My work | Record the check of an open-to-buy budget (3.3) |
+| Operations (P-OPS) | My work › Exceptions; the damage report | Follow up damage; confirm or reject a report made by someone else (8.3) |
+| Admin (P-ADM) | Setup | Propose the PT template's layout and the master sheet's vocabularies for a second person to confirm (5.2); set up the booking, GRN, PT and damage-report number series; approve receiving readiness per Site and unit; assign roles and approval limits |
+
+- **Template download.** The upload screen offers the Organisation's blank PT template, its lists included, so the file is made in the right columns. **Design choice.**
+- **Scan-in on a phone or a counter PC** with a keyboard-input scanner; the screen works at phone width (`PRD-PRO-009`; responsive web, `DEC-105`).
 
 ## 12. Design tests
 
-To draft.
+Each test runs on synthetic data: real PostgreSQL for rules, concurrency and failures, a browser journey for each persona's path (`PRD-ACP-018`; code-house-rules part A). They prove the stage 2 exit checks that the first version reaches.
+
+| # | Test | Proves |
+| --- | --- | --- |
+| 1 | Invoice 10, counted 8: custody 8, shortage 2 with Booking; no booking or invoice quantity creates stock | `PRD-ACP-001`, `PRD-REC-008` |
+| 2 | A GRN with clean, excess, wrong, unidentified and damaged lines: each held kind stays held; the PT upload is refused until every held line is decided | 4.4, 4.6, `DEC-137` |
+| 3 | No invoice: the count does not start | `DEC-133` |
+| 4 | Booking approval: open-to-buy short or missing refused; approval reserves; cancelling a balance releases; the Agreement version is fixed and a re-approval takes the new one; no Agreement refused | 3.2 to 3.5, `DEC-132` |
+| 5 | Booked 10 each of S, M and L; deliveries 5, 3 and 2 a size: outstanding 15, 6 and 0 | `PRD-BKG-005`, `PRD-BKG-006` |
+| 6 | GRN lines link on style code, and colour and size where given; an ambiguous line, a line at another Site and an unbooked GRN go to review; a later link changes nothing on the GRN | 3.7, `PRD-BKG-007`, `PRD-BKG-008` |
+| 7 | Overdue: the window passes with quantity outstanding; the balance is marked overdue, an exception reaches Booking, nothing is cancelled | 3.8, `POL-05.06` |
+| 8 | PT file refusals, each listed and nothing created: a value off its list; another brand; a style and size whose quantity differs, is missing or is extra; `NAG` not `QTY`; `MARGIN` disagreeing; `P RATE` above `MRP`; a required column empty; a workbook linked to another | 5.2 to 5.4, 5.6 |
+| 9 | A GRN line with no colour against PT rows tagged PREMIUM: accepted, colour not compared | `DEC-138` |
+| 10 | New products proposed by the upload and confirmed at PT approval; a barcode on two products flagged and kept for both | 5.5, `PRD-MER-013`, `DEC-135` |
+| 11 | PT approval: the uploader cannot approve; the limit is judged on `P RATE` × `QTY`; owned goods post their journal under the posting map, against the receipt account; consignment goods post nothing; a missing posting map or a locked period refuses the whole approval | 6.1 to 6.3 |
+| 12 | Two approvals of one PT at once, and a recount racing a PT approval: one succeeds, the other is refused; coverage never overlaps | `PRD-ACP-002`, `PRD-INT-005` |
+| 13 | After approval nothing is sellable; after the scan-in the Store's pieces are sellable and a warehouse's are available to move | 7.4, `PRD-STK-003`, `DEC-135` |
+| 14 | Scan-in: a barcode not on the PT refused and recorded; a repeated barcode asks which product; damage during the scan-in holds the piece; stop and resume; the last piece scanned twice at once is accepted once | 7.2, 7.3 |
+| 15 | A PT reversed before the scan-in and a corrected file approved; a reversal refused once one piece is scanned in | 6.4, `DEC-137` |
+| 16 | Damage: the hold applies at once; the reporter cannot decide; rejecting it releases only its hold while another hold stays; a mistaken confirmation reversed by a linked record | `PRD-ACP-005`, `PRD-DMG-001`–`PRD-DMG-003`, `PRD-STK-017` |
+| 17 | Goods received at a Store and at a warehouse meet the same acceptance and hold checks | `PRD-ACP-003` |
+| 18 | Receiving refused at a unit without approved receiving readiness or with an unverified mapping | `PRD-LIF-001`, `POL-10.08` |
+| 19 | A GRN issued twice with the same request gives one GRN; every write's idempotency key replays its first answer | `PRD-INT-002` |
+| 20 | A reader scoped to one Store sees only its stock and receipts; cost hidden without the cost permission | 9.1, `PRD-ACS-008` |
+| 21 | A 10,000-line PT file is checked within one minute; a 10,000-line PT approval posts through the queued job | `PRD-PRF-001`, 6.3 |
+| 22 | Browser journey: booking, approval, Arrival, count, GRN, PT upload, approval and scan-in, ending with the pieces sellable in stock search, with one refusal at each step | Sections 3 to 9 |
+
+Not proved by the first version: goods owned before they arrive (`PRD-ACP-020`, `DEC-139`) and the side-by-side test import (`PRD-LIF-014`, parked); both wait for their placement (RR-546).
 
 ## 13. Open questions
 
