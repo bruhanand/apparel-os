@@ -23,7 +23,7 @@ import type { AuditInterface } from '../../../audit/index.js';
 import type { Preparer } from '../../../organisation/index.js';
 import type { SupplierRoles } from '../contracts/supplier-roles.js';
 import { externalCode, externalCodeKey, pack } from '../db/schema.js';
-import { REPEATABLE_KIND } from '../domain/codes.js';
+import { mayRepeat } from '../domain/codes.js';
 import { codeMappingChanged } from '../events.js';
 import { exists, inForceOn, recordItem, refused, today, type Outcome } from './common.js';
 
@@ -33,9 +33,10 @@ import { exists, inForceOn, recordItem, refused, today, type Outcome } from './c
 // a lock on the code's row (`external_code_key`), so two mappings of one code never pass each other. Mappings take
 // effect when recorded, as no source names an approval for them (2.3). **Design choice.**
 //
-// A brand's barcode may repeat across products (PRD-MER-007 as reworded by DEC-135; S2-F04-T01): a supplier barcode
-// may name more than one SKU, each mapping kept and flagged as repeated, and Resolve answers every candidate for the
-// person to choose from. It never names two units of one SKU, and every other kind keeps one target (4.3 as built).
+// A brand's barcode may repeat across products (PRD-MER-007; DEC-135; S2-F04-T01): a supplier barcode recorded under a
+// brand may name more than one SKU in that brand's scope, each mapping kept and flagged as repeated, and Resolve answers
+// every candidate for the person to choose from. It never names two units of one SKU. One recorded for a supplier or for
+// the whole Organisation, and every other kind, keeps one target (RR-554; 4.3 as built).
 
 /** The code's row, made the first time the code and kind are mapped; a race meets the unique constraint. */
 async function codeKey(context: TransactionContext, code: string, kind: CodeMappingDraft['kind']): Promise<string> {
@@ -107,8 +108,9 @@ async function namesRefusal(
 /**
  * The active mapping of the code in an overlapping scope, over overlapping dates, to another target, if any (4.3):
  * scopes overlap when they name the same supplier or brand, or when either is the whole Organisation. A supplier scope
- * and a brand scope are not compared here; Resolve refuses a request that matches both with different targets. For a
- * supplier barcode only the same SKU in another unit conflicts, since another SKU is a repeat (PRD-MER-007, DEC-135).
+ * and a brand scope are not compared here; Resolve refuses a request that matches both with different targets. Under
+ * one brand, a supplier barcode's mapping to another SKU is a repeat, so only the same SKU in another unit conflicts
+ * there; the whole Organisation's mapping to another target always conflicts (PRD-MER-007, DEC-135; RR-554).
  */
 async function crossScopeConflict(
   context: TransactionContext,
@@ -131,8 +133,12 @@ async function crossScopeConflict(
         not(externalCode.alias),
         sql`${externalCode.validDuring} && ${range}::daterange`,
         ne(externalCode.target, `${draft.skuId}/${draft.packId ?? ''}`),
-        draft.kind === REPEATABLE_KIND ? eq(externalCode.skuId, draft.skuId) : undefined,
-        scopeKind === 'organisation' ? undefined : or(eq(externalCode.scopeKind, 'organisation'), sameScope),
+        scopeKind === 'organisation'
+          ? undefined
+          : or(
+              eq(externalCode.scopeKind, 'organisation'),
+              mayRepeat(draft.kind, scopeKind) ? and(sameScope, eq(externalCode.skuId, draft.skuId)) : sameScope,
+            ),
       ),
     )
     .limit(1);
@@ -140,8 +146,8 @@ async function crossScopeConflict(
 }
 
 /**
- * Map a code (4.3, 4.7): an active mapping that would make the code ambiguous is refused, a supplier barcode on another
- * SKU being a repeat, not an ambiguity (PRD-MER-007, DEC-135).
+ * Map a code (4.3, 4.7): an active mapping that would make the code ambiguous is refused, a supplier barcode recorded
+ * under a brand on another SKU of that brand's scope being a repeat, not an ambiguity (PRD-MER-007, DEC-135; RR-554).
  */
 export async function mapCode(
   context: TransactionContext,
@@ -264,10 +270,11 @@ export async function endCodeMapping(
 
 /**
  * Resolve a code (4.7; PRD-MER-006, PRD-MER-007): the mappings of the code and kind in force on the date whose scope is
- * the Organisation, or the supplier or brand given. Active mappings first: one target answers it. A brand's barcode
- * that names more than one SKU answers every candidate, one for each SKU in mapping order, flagged as repeated, so the
- * person chooses and nothing is chosen silently (DEC-135); one SKU in two units, or any other kind naming more than one
- * target, is ambiguous and refused. With no active match, historical aliases the same way. None matching is not found.
+ * the Organisation, or the supplier or brand given. Active mappings first: one target answers it. A barcode the brand
+ * given names on more than one SKU answers every candidate, one for each SKU in mapping order, flagged as repeated, so
+ * the person chooses and nothing is chosen silently (DEC-135); a mapping in another scope that names one of them adds
+ * no choice (RR-554). One SKU in two units, or more than one SKU where any is not named under the brand, is ambiguous
+ * and refused. With no active match, historical aliases the same way. None matching is not found.
  * **Design choice:** an alias answers only where no active mapping does, so an old label still finds its SKU.
  */
 export async function resolveCode(
@@ -281,6 +288,7 @@ export async function resolveCode(
       packId: externalCode.packId,
       alias: externalCode.alias,
       target: externalCode.target,
+      scopeKind: externalCode.scopeKind,
     })
     .from(externalCode)
     .innerJoin(externalCodeKey, eq(externalCodeKey.id, externalCode.codeKeyId))
@@ -322,8 +330,12 @@ export async function resolveCode(
       if (held === undefined) bySku.set(row.skuId, row);
       else if (held.target !== row.target) return ambiguous;
     }
-    // Only a brand's barcode may name more than one SKU (PRD-MER-007, DEC-135).
-    if (bySku.size > 1 && query.kind !== REPEATABLE_KIND) return ambiguous;
+    // Only a barcode recorded under a brand may name more than one SKU: each SKU must be one the brand names
+    // (PRD-MER-007, DEC-135; RR-554).
+    if (bySku.size > 1) {
+      const underBrand = new Set(matches.filter((row) => mayRepeat(query.kind, row.scopeKind)).map((row) => row.skuId));
+      if ([...bySku.keys()].some((skuId) => !underBrand.has(skuId))) return ambiguous;
+    }
     const candidates = [...bySku.values()].map((row) => ({
       skuId: row.skuId,
       ...(row.packId === null ? {} : { packId: row.packId }),

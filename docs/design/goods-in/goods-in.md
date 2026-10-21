@@ -333,7 +333,7 @@ Every problem is listed at once in the validation report, naming the row, the co
 
 - **A row's product** is found by its barcode's external code mapping, or by brand, style, colour and size. When none exists, the upload proposes a new style and SKU from the row's values, with its barcode as an external code (structure-and-masters 4.2, 4.3); the PT approver confirms the proposal with the PT (`PRD-MER-013`, `DEC-135`).
 - **A row that differs from an existing product** in a value the product holds, such as its HSN, is shown to the approver as a difference. The PT keeps the file's value; the product is changed only through its own master change. **Design choice.**
-- **A barcode repeated across products** is flagged, never refused, and kept for each product; the scan-in asks which product it is (`PRD-MER-007`, `DEC-135`). The same barcode on several rows of one product is ordinary.
+- **A barcode repeated across products** is flagged, never refused, and kept for each product; the scan-in asks which product it is (`PRD-MER-007`, `DEC-135`). The same barcode on several rows of one product is ordinary. Only a barcode recorded under a brand may repeat (RR-554; structure-and-masters 4.3), so the upload records a row's barcode under the brand of its product and resolves it with that brand. **Design choice.**
 
 ### 5.6 The steps
 
@@ -408,7 +408,7 @@ After the PT is approved, the goods are scanned in where they are. The scan-in v
 - Each scan accepts one piece. A barcode is scanned with a keyboard-input scanner or typed from the tag; both go through the same checks (PRD Stack: Hardware). Quantities are not typed, so every piece is verified. **Design choice.**
 - The barcode is resolved through its external code mapping to a product the PT covers, with pieces still waiting at the receiving location:
   - one product: accepted;
-  - a barcode repeated across products: the screen lists the PT's products that carry it, and the person chooses; nothing is chosen silently (`PRD-MER-007`, `DEC-135`);
+  - a barcode repeated across products, which only a barcode recorded under the brand can be, so it is resolved with the PT's brand (RR-554): the screen lists the PT's products that carry it, and the person chooses; nothing is chosen silently (`PRD-MER-007`, `DEC-135`);
   - a barcode the PT does not cover, or a product with no pieces left to accept: refused and shown, kept in the scan-in's record, and no stock changes (earlier RetailsOps plan, ruling R3).
 - **Each accepted scan**, in one transaction: `stock` · ledger records the acceptance of that piece and its location move from the receiving location to the chosen one (stock-ledger 2.3 Location move; 6.3); `audit` records who scanned, when and where.
 - **Damage found while scanning** is reported as in section 8; the piece goes under a damage hold and is not accepted (ruling R4).
