@@ -2,7 +2,7 @@
 
 > **Rank 3 of 4: design.** Must not contradict the PRD or the KDPS policies. See [README.md](../../README.md).
 
-Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 7 approved by the product owner on 21 Oct 2026, sections 3 to 7 with their design choices; section 8 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
+Status: **Draft**, 21 Oct 2026, written section by section for the product owner's approval. Sections 1 to 8 approved by the product owner on 21 Oct 2026, sections 3 to 8 with their design choices; section 9 drafted; the others outlined only. If this document disagrees with [prd.md](../../prd.md) or [kdps-policies.md](../../kdps-policies.md), they win. Raise the clash; do not guess.
 
 Implements, for the first version of stage 2 ([phases.md](../../phases.md) stage 2): from Booking and buying, recording and approving bookings; from Receiving and price tickets, the Arrival, the count, the GRN, the PT made by uploading the fixed PT template, its approval and the scan-in at the Site; from Damage, quarantine and disposal, damage reported at or after receipt; from Stock and warehouse control, stock search. It details the stage 2 modules `booking`, `receiving` and `merchandise` · PT, and the damage reports of `stock` · documents, of [module-map.md](../architecture/module-map.md) section 5. Its open questions are GI-n.
 
@@ -429,7 +429,42 @@ Damage is reported on goods at a Site and holds them at once; a different person
 
 ## 9. Stock search and the stage 2 reports
 
-To draft.
+The product owner asked for defaults here (grill round 8). Reports read declared read models of `booking`, `receiving`, `merchandise` · PT and `stock` · ledger through their interfaces, under the reader's own access (module-map section 5, `reports`).
+
+### 9.1 Rules for every report and the search
+
+- Only data the reader may see: their places and brands, and cost only with the cost field permission; MRP values need none (`PRD-ACS-008`, `PRD-EXC-011`, `PRD-SEC-005`).
+- Current state only, with its as-of time shown; past dates are not offered in stage 2 (grill round 8, `PRD-PRF-004`).
+- Missing or Unknown values are shown as such and never counted as zero; a total that has them says so (`PRD-EXC-010`, `PRD-MOD-015`).
+- Every figure drills down to its records: the booking, the GRN, the PT, the movements (`PRD-EXC-011`).
+- Each metric has one definition, written below (`PRD-EXC-009`).
+- Any report or search result exports to XLSX as shown. **Design choice.**
+
+### 9.2 Stock search
+
+- Search by style code or product name, brand, size, barcode, location and condition (`PRD-STK-006`). A barcode repeated across products shows each product.
+- Each result is a product at a place (Site, business unit, location), with its quantities apart (`PRD-STK-001`; grill round 8):
+
+| Quantity | Meaning |
+| --- | --- |
+| Physical | In custody at the place |
+| Available to sell (Store) or available to move (warehouse) | Physical, covered by an official PT, accepted, in good condition, with no hold or reservation (stock-ledger 6.2, 6.3) |
+| Waiting | Counted but not yet covered by a PT, or covered but not yet scanned in |
+| Held | Under any hold, by kind: damage, quarantine, excess |
+
+- The same search shows the product at the other Stores and warehouses the reader is allowed to see (`PRD-STK-006`).
+- Goods still without a product (before PT approval) show their style code, colour and size as counted.
+
+### 9.3 The stage 2 reports
+
+| Report | Shows | Definitions (design choices) |
+| --- | --- | --- |
+| Booking status | Per booking and line: ordered, delivered, outstanding, cancelled, overdue; by brand, season, supplier, destination and state (`PRD-BKG-005`) | As section 3.6. Overdue: outstanding after the line's date or the booking's window |
+| Receipt problems | Per GRN and line: shortage, excess, wrong, unidentified and damage, each with its decision and who made it; by Site, supplier, brand and date | As section 4.4 |
+| Supplier fill rate and timeliness | Per supplier, brand and season (`PRD-BKG-011`) | Fill rate: delivered pieces ÷ ordered pieces, over bookings whose window has ended or whose balance is closed. On time: delivered pieces that arrived within their line's date or the booking's window ÷ delivered pieces. Damage rate: pieces under a confirmed damage report at the count ÷ counted pieces |
+| Stock by product, size, location, condition and owner | The quantities of 9.2 summed by those five, with MRP value, and cost value for readers allowed to see cost (`PRD-PRO-001`) | Owner: the Organisation or the supplier, from the receipt origin (`PRD-ORG-015`) |
+
+- The PT accuracy report (`PRD-BKG-011`, PT lines right first time) waits until PT making is complete (grill round 8).
 
 ## 10. Modules, records, interfaces and transactions
 
