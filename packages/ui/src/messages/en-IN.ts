@@ -3152,6 +3152,7 @@ export const englishIndia = {
   'receive.issue': 'The GRN',
   'receive.issue.intro': 'The GRN needs no approval. Once issued, it is never changed.',
   'receive.issue-grn': 'Issue the GRN',
+  'receive.reading-again': 'Wait while the delivery is read again with the change just saved.',
   'receive.grn-issued': 'GRN issued.',
   'receive.blocked': 'Before the GRN can be issued',
   'receive.grn': 'GRN {number}',

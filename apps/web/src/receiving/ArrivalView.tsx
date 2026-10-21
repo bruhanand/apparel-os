@@ -8,7 +8,7 @@ import {
   type EvidenceFile,
   type Inbox,
 } from '@apparel-os/schemas';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -41,6 +41,20 @@ import { optionText, unknownText, useMasterNames, useProducts } from './names';
 
 /** The reads a change of an Arrival makes stale. */
 const ARRIVAL_READS = ['readArrival', 'readReceivingInbox'] as const;
+
+/**
+ * Whether the Arrival is being read again, as it is after every change saved here, which makes the versions it showed
+ * stale. An action that names a version the screen shows (issuing the GRN, changing or removing a line) waits for the
+ * read, so it never sends the version a save has just replaced (code-house-rules 12.7): `shown` disables it on screen,
+ * and `now` asks the read itself when it is pressed, before the screen has caught up with a save.
+ */
+interface Reading {
+  readonly shown: boolean;
+  readonly now: () => boolean;
+}
+
+/** The reason a version-checked action waits while the Arrival is read again. */
+const READING = 'receive.reading-again';
 
 type Unit = Inbox['units'][number];
 
@@ -286,10 +300,12 @@ function lineDefaults(line: CountLine | undefined): LineFormInput {
 function LineForm({
   arrival,
   editing,
+  reading,
   onDone,
 }: {
   arrival: Arrival;
   editing?: CountLine | undefined;
+  reading: Reading;
   onDone: () => void;
 }) {
   const today = useBusinessToday();
@@ -327,6 +343,8 @@ function LineForm({
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         void form.handleSubmit(async (entered) => {
+          // A change names the line's version shown: it waits while the Arrival is read again (12.7).
+          if (editing !== undefined && reading.now()) return;
           const saved = await submission.submit({
             params: { arrivalId: arrival.id },
             body: {
@@ -476,7 +494,8 @@ function LineForm({
           type="submit"
           variant="primary"
           label={editing === undefined ? 'receive.save-line' : 'receive.save-change'}
-          disabled={submission.state.kind === 'pending'}
+          disabled={submission.state.kind === 'pending' || (editing !== undefined && reading.shown)}
+          {...(editing !== undefined && reading.shown ? { reason: READING } : {})}
         />
         {editing !== undefined && <Button label="action.cancel" onClick={onDone} />}
       </div>
@@ -485,7 +504,7 @@ function LineForm({
 }
 
 /** The lines of the count as they stand, each with who counted it, and its edit and removal while it is counted. */
-function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
+function CountTable({ arrival, open, reading }: { arrival: Arrival; open: boolean; reading: Reading }) {
   const [editing, setEditing] = useState<string | null>(null);
   const removal = useSubmission('removeCountLine', ARRIVAL_READS);
   const mayEdit = useGranted(ARRIVAL_TYPE, 'edit');
@@ -526,6 +545,8 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
                         size="small"
                         variant="ghost"
                         label="receive.edit-line"
+                        disabled={reading.shown}
+                        {...(reading.shown ? { reason: READING } : {})}
                         onClick={() => {
                           setEditing(line.lineId);
                         }}
@@ -534,8 +555,10 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
                         size="small"
                         variant="ghost"
                         label="receive.remove-line"
-                        disabled={removal.state.kind === 'pending'}
+                        disabled={removal.state.kind === 'pending' || reading.shown}
+                        {...(reading.shown ? { reason: READING } : {})}
                         onClick={() => {
+                          if (reading.now()) return;
                           void removal.submit({
                             params: { arrivalId: arrival.id, lineId: line.lineId },
                             body: { lineVersionToken: line.versionToken },
@@ -553,12 +576,13 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
       {open && mayEdit && (
         <Card title={editing === null ? 'receive.add-line' : 'receive.edit-line'}>
           {editing === null ? (
-            <LineForm key="new" arrival={arrival} onDone={() => undefined} />
+            <LineForm key="new" arrival={arrival} reading={reading} onDone={() => undefined} />
           ) : (
             <LineForm
               key={editing}
               arrival={arrival}
               editing={arrival.lines.find((line) => line.lineId === editing)}
+              reading={reading}
               onDone={() => {
                 setEditing(null);
               }}
@@ -570,8 +594,11 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
   );
 }
 
-/** Issue the GRN, with no approval, once nothing blocks it (goods-in 4.5). */
-function IssueGrn({ arrival }: { arrival: Arrival }) {
+/**
+ * Issue the GRN, with no approval, once nothing blocks it (goods-in 4.5). It names the Arrival's version shown, so it
+ * waits while the Arrival is read again after a change (code-house-rules 12.7).
+ */
+function IssueGrn({ arrival, reading }: { arrival: Arrival; reading: Reading }) {
   const submission = useSubmission('issueGrn', ARRIVAL_READS);
   return (
     <Card title="receive.issue">
@@ -593,7 +620,9 @@ function IssueGrn({ arrival }: { arrival: Arrival }) {
           recordType={GRN_TYPE}
           action="create"
           variant="primary"
+          waiting={reading.shown ? READING : undefined}
           onClick={() => {
+            if (reading.now()) return;
             void submission.submit({ params: { arrivalId: arrival.id }, body: { versionToken: arrival.versionToken } });
           }}
         />
@@ -699,7 +728,13 @@ export function ArrivalView({
   const timeZone = useTimeZone();
   const names = useMasterNames();
   const mayEdit = useGranted(ARRIVAL_TYPE, 'edit');
-  const query = useQuery(readQuery(api, 'readArrival', { params: { arrivalId } }));
+  const queryClient = useQueryClient();
+  const read = readQuery(api, 'readArrival', { params: { arrivalId } });
+  const query = useQuery(read);
+  const reading: Reading = {
+    shown: query.isFetching,
+    now: () => queryClient.isFetching({ queryKey: read.queryKey }) > 0,
+  };
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -782,11 +817,11 @@ export function ArrivalView({
                 {arrival.invoices.length === 0 && open ? (
                   <p className="m-0 text-body-sm">{t('error.receiving.invoice-required')}</p>
                 ) : (
-                  <CountTable arrival={arrival} open={open} />
+                  <CountTable arrival={arrival} open={open} reading={reading} />
                 )}
               </Card>
               {open ? (
-                <IssueGrn arrival={arrival} />
+                <IssueGrn arrival={arrival} reading={reading} />
               ) : (
                 <GrnPrint arrival={arrival} unit={unitText} location={locationText} />
               )}
