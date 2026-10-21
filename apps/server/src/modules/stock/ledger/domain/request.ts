@@ -72,18 +72,62 @@ export type PlacedHoldKind =
 
 export type ReservationKind = 'transfer' | 'supplier-return' | 'held-goods' | 'offline-protected';
 
+/**
+ * The identity of goods of a product not yet set up, as the count describes it (stock-ledger 13.14; goods-in 4.3, 4.5;
+ * GI-1): the style code as the invoice writes it, the colour as the invoice names it (DEC-138) and the size from the
+ * Organisation's size list. A colour or size the invoice does not state is null, Unknown, never a default
+ * (PRD-MER-005, PRD-MOD-015).
+ */
+export interface DescribedIdentity {
+  readonly styleCode: string;
+  readonly colour: string | null;
+  readonly size: string | null;
+}
+
+/**
+ * One part of an identity step (stock-ledger 13.14; goods-in 6.3 step 4): units of one receipt origin that take one SKU.
+ * A part that names a new origin moves its units into it, a new receipt origin of the kind identity-resolved with the
+ * named one as its parent and the SKU given, in good condition; a part that names none keeps its origin and the SKU
+ * the origin already names, and returns any of its units held wrong or unidentified to good (POL-17.02).
+ */
+export interface IdentityPart {
+  readonly receiptOriginId: string;
+  readonly skuId: string;
+  readonly quantity: number;
+  /** The new origin's identifier, a UUIDv7 the caller makes (PRD-MOD-008), so later items can name it. */
+  readonly newReceiptOriginId?: string;
+}
+
 /** One item of a request (13.4, 13.5). `lineId` is the source line, kept without a foreign key (PRD-ACS-007). */
 export type LedgerItem =
   | {
       readonly kind: 'receipt-count';
       readonly lineId: string;
-      readonly skuId: string;
+      /**
+       * The SKU, or null for goods of a product not yet set up, counted with their identity as described and in good
+       * condition, not quarantined (stock-ledger 2.2, 13.14; PRD-DMG-005; GI-1).
+       */
+      readonly skuId: string | null;
+      /** Exactly when the SKU is null: the identity as described. */
+      readonly described?: DescribedIdentity;
       readonly quantity: number;
       readonly to: Place;
       readonly condition: Condition;
       readonly owner: Owner;
       readonly pieceCodes?: readonly string[];
       readonly batch?: { readonly code: string; readonly expiryDate: string };
+    }
+  | {
+      /**
+       * Identity resolved (stock-ledger 2.3, 13.4, 13.14; goods-in 6.3 step 4; PRD-DMG-005, POL-17.02; GI-1): the free
+       * units of the origins named, at one Site and business unit, take the SKUs of the parts, by quantity, under the
+       * approved identity route the request's approval carries. Every free unit of a named origin there takes exactly
+       * one part.
+       */
+      readonly kind: 'identity-resolved';
+      readonly lineId: string;
+      readonly at: UnitPlace;
+      readonly parts: readonly IdentityPart[];
     }
   | {
       /**
@@ -345,6 +389,7 @@ export type FreezeScope = { readonly locationId: string } | { readonly brandId: 
 /** Every item kind this ledger takes so far (13.4, 13.5). */
 export const ITEM_KINDS: readonly LedgerItemKind[] = [
   'receipt-count',
+  'identity-resolved',
   'opening-count',
   'location-move',
   'condition-change',
