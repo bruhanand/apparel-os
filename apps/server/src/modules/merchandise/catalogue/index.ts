@@ -17,6 +17,9 @@ export { SUPPLIER_ROLES } from './contracts/supplier-roles.js';
 export type { SupplierRoles } from './contracts/supplier-roles.js';
 // Read a SKU as of a date at a Site (structure-and-masters 4.7), for the stock ledger's SKU read (stock-ledger 13.9).
 export { skuOn } from './queries/sku.js';
+// The approved values of an attribute in force on a date (4.2), for `receiving`'s size of a count line (goods-in 4.3;
+// S2-F02-T02).
+export { vocabularyOn } from './queries/records.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
 export { catalogueRestoreParticipant } from './restore-participant.js';

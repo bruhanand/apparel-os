@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ARRIVAL_TYPE,
   GRN_TYPE,
+  RECEIVING_CAPS,
   type Arrival,
   type CountLine,
   type EvidenceFile,
@@ -23,24 +24,50 @@ import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
+import { useBusinessToday } from '../setup/business-date';
+import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
-import { optionText, useMasterNames } from './names';
+import { optionText, unknownText, useMasterNames, useProducts } from './names';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
 // (goods-in 4.2 to 4.5, section 11; PRD-REC-003 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The count is saved as
-// it goes and resumed by anyone counting; the GRN is issued with no approval once nothing blocks it, and is printed
-// with quantities only, never a price, tax or value.
+// it goes and resumed by anyone counting; a line names its product where one is set up, with its batch and expiry
+// where the product's tracking profile requires them. The GRN is issued with no approval once nothing blocks it, and
+// is printed with quantities only, never a price, tax or value. Dates read DD MMM YYYY and times the Organisation's
+// (design-language 8); anything the reader cannot name is Unknown, never an identifier (PRD-MOD-015).
 
 /** The reads a change of an Arrival makes stale. */
 const ARRIVAL_READS = ['readArrival', 'readReceivingInbox'] as const;
 
 type Unit = Inbox['units'][number];
 
-/** A person's name from their sign-in, as the Arrival names them; the identifier when it is unknown. */
+/** A person's name from their sign-in, as the Arrival names them; Unknown when it does not (PRD-MOD-015). */
 function personOf(arrival: Arrival, userId: string): string {
-  return arrival.people.find((each) => each.userId === userId)?.name ?? userId;
+  return arrival.people.find((each) => each.userId === userId)?.name ?? unknownText();
+}
+
+/** The people named, as one text. */
+const peopleOf = (arrival: Arrival, userIds: readonly string[]) =>
+  formatList(userIds.map((id) => personOf(arrival, id)));
+
+/** A document's number and its date as design-language 8 writes it: "<number> of DD MMM YYYY". */
+const numberOfDate = (number: string, date: string) => t('receive.number-of-date', { number, date: formatDate(date) });
+
+/** A batch and its expiry date, "<code>, expires DD MMM YYYY", or None. */
+const batchText = (batch: { readonly code: string; readonly expiryDate: string } | null) =>
+  batch === null
+    ? t('receive.none')
+    : t('receive.batch.text', { code: batch.code, date: formatDate(batch.expiryDate) });
+
+/** A table cell's text; an Unknown value is a blank cell that a screen reader reads as unknown (design-language 8). */
+function Cell({ text, numeric = false }: { text: string | undefined; numeric?: boolean }) {
+  return (
+    <td className={numeric ? 'px-3 tabular-nums' : 'px-3'}>
+      {text ?? <span className="sr-only">{unknownText()}</span>}
+    </td>
+  );
 }
 
 function Facts({ rows }: { rows: readonly (readonly [Parameters<typeof t>[0], string])[] }) {
@@ -132,6 +159,7 @@ function InvoiceForm({ arrival }: { arrival: Arrival }) {
         <FormField id="receive-invoice-number" label="receive.invoice-number" required error={errors.number}>
           <input
             id="receive-invoice-number"
+            maxLength={RECEIVING_CAPS.codeText}
             className={inputClass}
             {...describedBy('receive-invoice-number', { invalid: errors.number !== undefined, help: false })}
             {...form.register('number')}
@@ -204,9 +232,11 @@ function PhotoForm({ arrival }: { arrival: Arrival }) {
   );
 }
 
+/** Whole pieces, up to the cap on a line (goods-in 4.8 "Input caps"). */
 const pieces = z
   .string()
   .regex(/^\d{1,7}$/, { message: 'receive.pieces.invalid' })
+  .refine((text) => Number(text) <= RECEIVING_CAPS.pieces, { message: 'receive.pieces.invalid' })
   .transform((text) => Number(text));
 
 const lineFormSchema = z
@@ -215,6 +245,9 @@ const lineFormSchema = z
     colour: z.string(),
     sizeAttributeId: z.string(),
     sizeValueId: z.string(),
+    skuId: z.string(),
+    batchCode: z.string(),
+    expiryDate: z.string(),
     invoiceQuantity: pieces,
     countedQuantity: pieces,
   })
@@ -225,6 +258,10 @@ const lineFormSchema = z
   .refine((line) => (line.sizeAttributeId === '') === (line.sizeValueId === ''), {
     message: 'receive.size.choose',
     path: ['sizeValueId'],
+  })
+  .refine((line) => (line.batchCode.trim() === '') === (line.expiryDate === ''), {
+    message: 'receive.batch.both',
+    path: ['expiryDate'],
   });
 type LineFormInput = z.input<typeof lineFormSchema>;
 type LineFormOutput = z.output<typeof lineFormSchema>;
@@ -235,6 +272,9 @@ function lineDefaults(line: CountLine | undefined): LineFormInput {
     colour: line?.colour ?? '',
     sizeAttributeId: line?.size?.attributeId ?? '',
     sizeValueId: line?.size?.valueId ?? '',
+    skuId: line?.skuId ?? '',
+    batchCode: line?.batch?.code ?? '',
+    expiryDate: line?.batch?.expiryDate ?? '',
     invoiceQuantity: line === undefined ? '' : String(line.invoiceQuantity),
     countedQuantity: line === undefined ? '' : String(line.countedQuantity),
   };
@@ -243,7 +283,9 @@ function lineDefaults(line: CountLine | undefined): LineFormInput {
 /**
  * One line of the count, by style code as the invoice writes it, colour as it names it and size from the size list,
  * with the invoice and counted quantities (goods-in 4.3; DEC-138). A missing colour or size stays missing
- * (PRD-MER-005). Editing a line names the version shown (code-house-rules 12.7).
+ * (PRD-MER-005). The product is one of the Arrival's brand with the line's style code, when one is set up; its batch
+ * and expiry are asked for where its tracking profile at the Site requires them (PRD-MER-011), and the GRN waits for
+ * them. Editing a line names the version shown (code-house-rules 12.7).
  */
 function LineForm({
   arrival,
@@ -254,6 +296,7 @@ function LineForm({
   editing?: CountLine | undefined;
   onDone: () => void;
 }) {
+  const today = useBusinessToday();
   const attributes = useQuery({
     ...readQuery(api, 'listAttributes', { query: {} }),
     enabled: useGranted('merchandise.attribute', 'view'),
@@ -262,6 +305,8 @@ function LineForm({
     ...readQuery(api, 'listVocabularyValues', { query: {} }),
     enabled: useGranted('merchandise.vocabulary_value', 'view'),
   });
+  const products = useProducts();
+  const maySeeSkus = useGranted('merchandise.sku', 'view');
   const form = useForm<LineFormInput, unknown, LineFormOutput>({
     resolver: zodResolver(lineFormSchema),
     mode: 'onBlur',
@@ -270,6 +315,14 @@ function LineForm({
   const submission = useSubmission('saveCountLine', ARRIVAL_READS);
   const errors = form.formState.errors;
   const attributeId = form.watch('sizeAttributeId');
+  const skus = products.of(arrival.brandId, form.watch('styleCode'));
+  const skuId = form.watch('skuId');
+  const named = skus.some((sku) => sku.id === skuId);
+  const tracking = useQuery({
+    ...readQuery(api, 'readSkuAsOf', { params: { recordId: skuId }, query: { date: today, siteId: arrival.siteId } }),
+    enabled: named && maySeeSkus,
+  });
+  const batchRequired = named && tracking.data?.sku.tracking?.batchExpiryRequired === true;
   const lists = (attributes.data?.records ?? []).filter((each) => each.valueKind === 'list');
   const sizes = (values.data?.records ?? []).filter((each) => each.attributeId === attributeId);
   const formId = editing === undefined ? 'receive-line-form' : `receive-line-form-${editing.lineId}`;
@@ -294,10 +347,13 @@ function LineForm({
                 entered.sizeAttributeId === ''
                   ? null
                   : { attributeId: entered.sizeAttributeId, valueId: entered.sizeValueId },
-              skuId: editing?.skuId ?? null,
+              skuId: named ? entered.skuId : null,
               invoiceQuantity: entered.invoiceQuantity,
               countedQuantity: entered.countedQuantity,
-              batch: editing?.batch ?? null,
+              batch:
+                batchRequired && entered.batchCode.trim() !== ''
+                  ? { code: entered.batchCode, expiryDate: entered.expiryDate }
+                  : null,
             },
           });
           if (saved !== undefined) {
@@ -312,6 +368,7 @@ function LineForm({
         <FormField id={field('style')} label="receive.style-code" required error={errors.styleCode}>
           <input
             id={field('style')}
+            maxLength={RECEIVING_CAPS.codeText}
             className={inputClass}
             {...describedBy(field('style'), { invalid: errors.styleCode !== undefined, help: false })}
             {...form.register('styleCode')}
@@ -320,6 +377,7 @@ function LineForm({
         <FormField id={field('colour')} label="receive.colour" help="receive.colour.help">
           <input
             id={field('colour')}
+            maxLength={RECEIVING_CAPS.codeText}
             className={inputClass}
             {...describedBy(field('colour'), { invalid: false, help: true })}
             {...form.register('colour')}
@@ -360,6 +418,21 @@ function LineForm({
             ))}
           </select>
         </FormField>
+        <FormField id={field('product')} label="receive.product" help="receive.product.help">
+          <select
+            id={field('product')}
+            className={inputClass}
+            {...describedBy(field('product'), { invalid: false, help: true })}
+            {...form.register('skuId')}
+          >
+            <option value="">{t('receive.no-product')}</option>
+            {skus.map((sku) => (
+              <option key={sku.id} value={sku.id}>
+                {sku.code}
+              </option>
+            ))}
+          </select>
+        </FormField>
         <FormField
           id={field('invoice')}
           label="receive.invoice-quantity"
@@ -396,6 +469,33 @@ function LineForm({
             {...form.register('countedQuantity')}
           />
         </FormField>
+        {batchRequired && (
+          <>
+            <FormField id={field('batch')} label="receive.batch-code" help="receive.batch.help">
+              <input
+                id={field('batch')}
+                maxLength={RECEIVING_CAPS.codeText}
+                className={inputClass}
+                {...describedBy(field('batch'), { invalid: false, help: true })}
+                {...form.register('batchCode')}
+              />
+            </FormField>
+            <FormField
+              id={field('expiry')}
+              label="receive.expiry-date"
+              error={errors.expiryDate}
+              message={errors.expiryDate === undefined ? undefined : 'receive.batch.both'}
+            >
+              <input
+                id={field('expiry')}
+                type="date"
+                className={inputClass}
+                {...describedBy(field('expiry'), { invalid: errors.expiryDate !== undefined, help: false })}
+                {...form.register('expiryDate')}
+              />
+            </FormField>
+          </>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -415,6 +515,7 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const removal = useSubmission('removeCountLine', ARRIVAL_READS);
   const mayEdit = useGranted(ARRIVAL_TYPE, 'edit');
+  const products = useProducts();
   return (
     <div className="flex flex-col gap-3">
       <SubmissionBanner state={removal.state} done="receive.line-removed" />
@@ -425,6 +526,8 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
               <Th label="receive.style-code" />
               <Th label="receive.colour" />
               <Th label="receive.size" />
+              <Th label="receive.product" />
+              <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
               <Th label="receive.counted-by" />
@@ -434,12 +537,14 @@ function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
           <tbody>
             {arrival.lines.map((line) => (
               <tr key={line.lineId} className="h-10 border-t border-border">
-                <td className="px-3">{line.styleCode}</td>
-                <td className="px-3">{line.colour ?? t('receive.none')}</td>
-                <td className="px-3">{line.size?.code ?? t('receive.none')}</td>
-                <td className="px-3 tabular-nums">{line.invoiceQuantity}</td>
-                <td className="px-3 tabular-nums">{line.countedQuantity}</td>
-                <td className="px-3">{line.countedBy.map((id) => personOf(arrival, id)).join(', ')}</td>
+                <Cell text={line.styleCode} />
+                <Cell text={line.colour ?? t('receive.none')} />
+                <Cell text={line.size?.code ?? t('receive.none')} />
+                <Cell text={line.skuId === null ? t('receive.none') : products.skuText(line.skuId)} />
+                <Cell text={batchText(line.batch)} />
+                <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
+                <Cell text={formatQuantity(line.countedQuantity)} numeric />
+                <Cell text={peopleOf(arrival, line.countedBy)} />
                 {open && mayEdit && (
                   <td className="px-3">
                     <span className="flex flex-wrap gap-2">
@@ -527,6 +632,7 @@ function IssueGrn({ arrival }: { arrival: Arrival }) {
 function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string; location: string }) {
   const timeZone = useTimeZone();
   const names = useMasterNames();
+  const products = useProducts();
   const grn = arrival.grn;
   if (grn === null) return null;
   return (
@@ -546,19 +652,22 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
       </div>
       <Facts
         rows={[
-          ['receive.grn.date', grn.businessDate],
-          ['receive.supplier', names.partyText(arrival.supplierPartyId)],
-          ['receive.brand', names.brandText(arrival.brandId)],
+          ['receive.grn.date', formatDate(grn.businessDate)],
+          ['receive.supplier', names.partyText(arrival.supplierPartyId) ?? unknownText()],
+          ['receive.brand', names.brandText(arrival.brandId) ?? unknownText()],
           ['receive.unit', unit],
           ['receive.location', location],
-          ['receive.invoices', arrival.invoices.map((invoice) => `${invoice.number} (${invoice.date})`).join(', ')],
+          [
+            'receive.invoices',
+            formatList(arrival.invoices.map((invoice) => numberOfDate(invoice.number, invoice.date))),
+          ],
           ['receive.transporter', arrival.transporter],
-          ['receive.lorry-receipt', `${arrival.lorryReceipt.number} (${arrival.lorryReceipt.date})`],
+          ['receive.lorry-receipt', numberOfDate(arrival.lorryReceipt.number, arrival.lorryReceipt.date)],
           ['receive.vehicle-number', arrival.vehicleNumber ?? t('receive.none')],
           ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
-          ['receive.cartons', String(arrival.cartons)],
+          ['receive.cartons', formatQuantity(arrival.cartons)],
           ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
-          ['receive.grn.counted-by', grn.countedBy.map((id) => personOf(arrival, id)).join(', ')],
+          ['receive.grn.counted-by', peopleOf(arrival, grn.countedBy)],
           [
             'receive.grn.entered-by',
             t('receive.grn.entered-at', {
@@ -576,6 +685,8 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
               <Th label="receive.style-code" />
               <Th label="receive.colour" />
               <Th label="receive.size" />
+              <Th label="receive.product" />
+              <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
             </tr>
@@ -583,12 +694,14 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
           <tbody>
             {grn.lines.map((line) => (
               <tr key={line.lineNumber} className="h-10 border-t border-border">
-                <td className="px-3 tabular-nums">{line.lineNumber}</td>
-                <td className="px-3">{line.styleCode}</td>
-                <td className="px-3">{line.colour ?? t('receive.none')}</td>
-                <td className="px-3">{line.size ?? t('receive.none')}</td>
-                <td className="px-3 tabular-nums">{line.invoiceQuantity}</td>
-                <td className="px-3 tabular-nums">{line.countedQuantity}</td>
+                <Cell text={formatQuantity(line.lineNumber)} numeric />
+                <Cell text={line.styleCode} />
+                <Cell text={line.colour ?? t('receive.none')} />
+                <Cell text={line.size ?? t('receive.none')} />
+                <Cell text={line.skuId === null ? t('receive.none') : products.skuText(line.skuId)} />
+                <Cell text={batchText(line.batch)} />
+                <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
+                <Cell text={formatQuantity(line.countedQuantity)} numeric />
               </tr>
             ))}
           </tbody>
@@ -629,19 +742,16 @@ export function ArrivalView({
         {({ asOf, arrival }) => {
           const unit = units.find((each) => each.businessUnitId === arrival.businessUnitId);
           const unitText =
-            unit === undefined ? arrival.businessUnitId : t('receive.option', { code: unit.code, name: unit.name });
+            unit === undefined ? unknownText() : t('receive.option', { code: unit.code, name: unit.name });
           const location = unit?.locations.find((each) => each.id === arrival.receivingLocationId);
           const locationText =
-            location === undefined
-              ? arrival.receivingLocationId
-              : t('receive.option', { code: location.code, name: location.name });
+            location === undefined ? unknownText() : t('receive.option', { code: location.code, name: location.name });
+          const supplierText = names.partyText(arrival.supplierPartyId) ?? unknownText();
           const open = arrival.state === 'In progress';
           return (
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-h2 font-semibold">
-                  {t('receive.arrival.title', { supplier: names.partyText(arrival.supplierPartyId) })}
-                </h2>
+                <h2 className="text-h2 font-semibold">{t('receive.arrival.title', { supplier: supplierText })}</h2>
                 <StatusBadge state={stateIdOf(arrival.state)} />
                 <span className="flex-1" />
                 <AsOf asOf={asOf} timeZone={timeZone} />
@@ -651,13 +761,13 @@ export function ArrivalView({
                   rows={[
                     ['receive.unit', unitText],
                     ['receive.location', locationText],
-                    ['receive.supplier', names.partyText(arrival.supplierPartyId)],
-                    ['receive.brand', names.brandText(arrival.brandId)],
+                    ['receive.supplier', supplierText],
+                    ['receive.brand', names.brandText(arrival.brandId) ?? unknownText()],
                     ['receive.transporter', arrival.transporter],
-                    ['receive.lorry-receipt', `${arrival.lorryReceipt.number} (${arrival.lorryReceipt.date})`],
+                    ['receive.lorry-receipt', numberOfDate(arrival.lorryReceipt.number, arrival.lorryReceipt.date)],
                     ['receive.vehicle-number', arrival.vehicleNumber ?? t('receive.none')],
                     ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
-                    ['receive.cartons', String(arrival.cartons)],
+                    ['receive.cartons', formatQuantity(arrival.cartons)],
                     ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
                     [
                       'receive.recorded-by',
@@ -677,7 +787,7 @@ export function ArrivalView({
                     {arrival.invoices.map((invoice) => (
                       <li key={invoice.id} className="flex flex-col gap-1 border-t border-border pt-2">
                         <span className="font-semibold">
-                          {t('receive.invoice.line', { number: invoice.number, date: invoice.date })}
+                          {t('receive.invoice.line', { number: invoice.number, date: formatDate(invoice.date) })}
                         </span>
                         {(invoice.possibleDuplicateOf.length > 0 || invoice.possibleDuplicateElsewhere) && (
                           <span className="text-caption text-text-2">{t('receive.invoice.duplicate-confirmed')}</span>

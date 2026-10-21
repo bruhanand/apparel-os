@@ -1067,6 +1067,8 @@ export const bookingCodes = declareCodes({
  *   the receiver may see, and the receiver confirms or corrects it (goods-in 4.2).
  * - `receiving.invoice-required`: the count starts, and the GRN is issued, only once an invoice is recorded (DEC-133).
  * - `receiving.size-not-on-list`: the size is not an approved value of its attribute in force today (goods-in 4.3).
+ * - `receiving.line-repeated`: another line of the count counts the same style, colour and size; `missing` names it,
+ *   the line to change instead (goods-in 4.3, one line per style, colour and size).
  * - `receiving.sku-not-of-line`: the product named is not in force at the Site today, is of another brand, or of
  *   another style code than the line's (goods-in 4.3).
  * - `receiving.no-lines`: a GRN with no counted line is not issued (goods-in 4.5).
@@ -1089,6 +1091,7 @@ export const receivingCodes = declareCodes({
   'receiving.possible-duplicate-invoice': 'refused',
   'receiving.invoice-required': 'refused',
   'receiving.size-not-on-list': 'refused',
+  'receiving.line-repeated': 'refused',
   'receiving.sku-not-of-line': 'refused',
   'receiving.no-lines': 'refused',
   'receiving.line-differs-from-invoice': 'refused',

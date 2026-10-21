@@ -11,25 +11,29 @@ import {
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
-import type { AuditChange, AuditInterface } from '../../audit/index.js';
+import type { AuditInterface } from '../../audit/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { brandInForce } from '../../merchandise/catalogue/index.js';
 import { brandSupplierLinkedOn } from '../../merchandise/parties/index.js';
-import { mappingOn, type OrganisationInterface } from '../../organisation/index.js';
+import { mappingOn, structureOn } from '../../organisation/index.js';
 import { arrival, arrivalInvoice, arrivalPhoto } from '../db/schema.js';
+import { textKey, trimmed } from '../domain/text.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
 import {
   arrivalNotFound,
+  audited,
   factsOf,
   grnIssued,
   grnOf,
   lockArrival,
   recordChange,
+  recordItem,
+  refusalOf,
   refused,
   scopeColumns,
-  textKey,
   today,
-  trimmed,
+  unitNotAtSite,
+  valueChange,
   type Actor,
   type ArrivalRow,
   type Outcome,
@@ -46,21 +50,12 @@ import {
 export interface ArrivalDependencies extends AvailabilityDependencies {
   readonly audit: AuditInterface;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
-  readonly organisation: Pick<OrganisationInterface, 'structureOn'>;
 }
 
 /** The evidence kind of a supplier invoice's file on its Arrival (imports-and-opening-data 11). */
 const SUPPLIER_INVOICE = { kind: 'receiving.supplier-invoice', restrictedClasses: [] } as const;
 /** The evidence kind of a photo of the cartons, seals or damage (PRD-REC-007). */
 const ARRIVAL_PHOTO = { kind: 'receiving.arrival-photo', restrictedClasses: [] } as const;
-
-type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const value = (field: string, after: ValueChange['after']): ValueChange => ({
-  kind: 'value',
-  field,
-  before: null,
-  after,
-});
 
 /**
  * Records an Arrival (goods-in 4.2). The unit is one in force today at a Site, the location one of its locations in
@@ -75,41 +70,35 @@ export async function recordArrival(
   draft: ArrivalDraft,
 ): Promise<Outcome<ArrivalRecorded>> {
   const date = await today(context);
-  if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
+  if (typeof date !== 'string') return refusalOf(date);
   const arrivedAt = new Date(draft.arrivedAt);
   if (arrivedAt.getTime() > context.startedAt.getTime()) {
     return refused('refused', 'receiving.arrival-in-future', [{ kind: 'field', field: 'arrivedAt' }]);
   }
   const arrivalDate = await today(context, arrivedAt);
-  if (typeof arrivalDate !== 'string') return { kind: 'refusal', refusal: arrivalDate };
-  const structure = await dependencies.organisation.structureOn(context, date);
+  if (typeof arrivalDate !== 'string') return refusalOf(arrivalDate);
+  const structure = await structureOn(context, date);
   const unit = structure.businessUnits.find((each) => each.id === draft.businessUnitId);
-  if (unit === undefined) {
-    return refused('refused', 'receiving.unit-not-at-site', [
-      { kind: 'record', recordType: 'organisation.business_unit', recordId: draft.businessUnitId },
-    ]);
-  }
+  if (unit === undefined) return refusalOf(unitNotAtSite(draft.businessUnitId));
   const unavailable = receivingUnavailable(
     await receivingMissing(context, dependencies, { siteId: unit.siteId, businessUnitId: unit.id }, date),
   );
-  if (unavailable !== undefined) return { kind: 'refusal', refusal: unavailable };
+  if (unavailable !== undefined) return refusalOf(unavailable);
   const location = structure.locations.find(
     (each) => each.id === draft.receivingLocationId && each.businessUnitId === unit.id && !each.retired,
   );
   if (location === undefined) {
     return refused('refused', 'receiving.location-not-of-unit', [
-      { kind: 'record', recordType: 'organisation.location', recordId: draft.receivingLocationId },
+      recordItem('organisation.location', draft.receivingLocationId),
     ]);
   }
   if (!(await brandInForce(context, draft.brandId, arrivalDate))) {
-    return refused('refused', 'receiving.brand-not-in-force', [
-      { kind: 'record', recordType: 'merchandise.brand', recordId: draft.brandId },
-    ]);
+    return refused('refused', 'receiving.brand-not-in-force', [recordItem('merchandise.brand', draft.brandId)]);
   }
   if (!(await brandSupplierLinkedOn(context, draft.brandId, draft.supplierPartyId, arrivalDate))) {
     return refused('refused', 'receiving.supplier-not-linked', [
-      { kind: 'record', recordType: 'merchandise.party', recordId: draft.supplierPartyId },
-      { kind: 'record', recordType: 'merchandise.brand', recordId: draft.brandId },
+      recordItem('merchandise.party', draft.supplierPartyId),
+      recordItem('merchandise.brand', draft.brandId),
     ]);
   }
   const mapping = await mappingOn(context, unit.id, date);
@@ -138,25 +127,21 @@ export async function recordArrival(
   await context.tx.insert(arrival).values(values);
   const row: ArrivalRow = { ...values, recordedAt: context.startedAt };
   const versionToken = await recordChange(context, row, 'arrival', actor.userId);
-  await dependencies.audit.record(context, {
-    actor: { kind: 'user', id: actor.userId },
-    roleAssignmentId: actor.roleAssignmentId,
-    scope: factsOf(row),
-    record: { module: 'receiving', type: ARRIVAL_TYPE, id: row.id },
+  await audited(context, dependencies.audit, actor, row, {
+    record: { type: ARRIVAL_TYPE, id: row.id },
     operation: 'record-arrival',
     changes: [
-      value('businessUnitId', row.businessUnitId),
-      value('receivingLocationId', row.receivingLocationId),
-      value('supplierPartyId', row.supplierPartyId),
-      value('brandId', row.brandId),
-      value('transporter', row.transporter),
-      value('lorryReceipt', { number: row.lorryReceiptNumber, date: row.lorryReceiptDate }),
-      value('vehicleNumber', row.vehicleNumber),
-      value('ewayBillNumber', row.ewayBillNumber),
-      value('cartons', row.cartons),
-      value('arrivedAt', draft.arrivedAt),
+      valueChange('businessUnitId', null, row.businessUnitId),
+      valueChange('receivingLocationId', null, row.receivingLocationId),
+      valueChange('supplierPartyId', null, row.supplierPartyId),
+      valueChange('brandId', null, row.brandId),
+      valueChange('transporter', null, row.transporter),
+      valueChange('lorryReceipt', null, { number: row.lorryReceiptNumber, date: row.lorryReceiptDate }),
+      valueChange('vehicleNumber', null, row.vehicleNumber),
+      valueChange('ewayBillNumber', null, row.ewayBillNumber),
+      valueChange('cartons', null, row.cartons),
+      valueChange('arrivedAt', null, draft.arrivedAt),
     ],
-    source: { kind: 'screen' },
   });
   return { kind: 'success', answer: { arrivalId: row.id, versionToken } };
 }
@@ -198,7 +183,7 @@ export async function recordInvoice(
     .where(and(eq(arrivalInvoice.arrivalId, row.id), eq(arrivalInvoice.numberKey, numberKey)));
   if (repeated !== undefined) {
     return refused('refused', 'receiving.invoice-number-repeated', [
-      { kind: 'record', recordType: 'receiving.arrival_invoice', recordId: repeated.id },
+      recordItem('receiving.arrival_invoice', repeated.id),
     ]);
   }
   const used = await context.tx.execute<{ arrival_id: string; visible: boolean }>(
@@ -209,7 +194,7 @@ export async function recordInvoice(
   const visible = used.rows.filter((each) => each.visible).map((each) => each.arrival_id);
   const elsewhere = used.rows.some((each) => !each.visible);
   if (used.rows.length > 0 && draft.confirmPossibleDuplicate !== true) {
-    const missing: MissingItem[] = visible.map((id) => ({ kind: 'record', recordType: ARRIVAL_TYPE, recordId: id }));
+    const missing: MissingItem[] = visible.map((id) => recordItem(ARRIVAL_TYPE, id));
     if (elsewhere) missing.push({ kind: 'possible-duplicate-elsewhere' });
     return refused('refused', 'receiving.possible-duplicate-invoice', missing);
   }
@@ -238,20 +223,16 @@ export async function recordInvoice(
     recordedByUserId: actor.userId,
   });
   const versionToken = await recordChange(context, row, 'invoice', actor.userId);
-  await dependencies.audit.record(context, {
-    actor: { kind: 'user', id: actor.userId },
-    roleAssignmentId: actor.roleAssignmentId,
-    scope: factsOf(row),
-    record: { module: 'receiving', type: ARRIVAL_TYPE, id: row.id, versionId: invoiceId },
+  await audited(context, dependencies.audit, actor, row, {
+    record: { type: ARRIVAL_TYPE, id: row.id, versionId: invoiceId },
     operation: 'record-arrival-invoice',
     changes: [
-      value('invoiceNumber', number),
-      value('invoiceDate', draft.date),
-      value('attachmentId', attached.attachmentId),
-      value('possibleDuplicateOf', visible),
-      value('possibleDuplicateElsewhere', elsewhere),
+      valueChange('invoiceNumber', null, number),
+      valueChange('invoiceDate', null, draft.date),
+      valueChange('attachmentId', null, attached.attachmentId),
+      valueChange('possibleDuplicateOf', null, visible),
+      valueChange('possibleDuplicateElsewhere', null, elsewhere),
     ],
-    source: { kind: 'screen' },
   });
   return { kind: 'success', answer: { invoiceId, attachmentId: attached.attachmentId, versionToken } };
 }
@@ -299,14 +280,10 @@ export async function attachPhotos(
     attachmentIds.push(attached.attachmentId);
   }
   const versionToken = await recordChange(context, row, 'photos', actor.userId);
-  await dependencies.audit.record(context, {
-    actor: { kind: 'user', id: actor.userId },
-    roleAssignmentId: actor.roleAssignmentId,
-    scope: factsOf(row),
-    record: { module: 'receiving', type: ARRIVAL_TYPE, id: row.id },
+  await audited(context, dependencies.audit, actor, row, {
+    record: { type: ARRIVAL_TYPE, id: row.id },
     operation: 'attach-arrival-photos',
-    changes: [value('photoAttachmentIds', attachmentIds)],
-    source: { kind: 'screen' },
+    changes: [valueChange('photoAttachmentIds', null, attachmentIds)],
   });
   return { kind: 'success', answer: { attachmentIds, versionToken } };
 }

@@ -100,6 +100,12 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
   ],
 };
 const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
+/**
+ * The schemas whose foreign keys and scope columns the index check covers (code-house-rules 3.3): those added since
+ * the check was written (S2-F02-T02 review). Stage 1's schemas, whose migrations have run on `dev`, are not checked
+ * yet; a later stage adds its own schemas here.
+ */
+const INDEX_CHECKED_SCHEMAS: readonly string[] = ['booking', 'receiving'];
 
 /** A third-party schema, such as pg-boss's, listed as one entry (code-house-rules 3.2, 10.4). */
 interface ThirdPartyEntry {
@@ -196,6 +202,43 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
        order by 1`,
     );
     expect(covered).toEqual([]);
+  });
+
+  it('code-house-rules 3.3 every foreign key and every scope column a row policy names leads an index', async () => {
+    // An index serves a column set when the set is its leading columns, in any order (3.3; S2-F02-T02 review). The
+    // scope columns are those of the table a row-level security policy names (6.2). Checked in the schemas of
+    // INDEX_CHECKED_SCHEMAS only.
+    const schemas = `(${INDEX_CHECKED_SCHEMAS.map((name) => `'${name}'`).join(', ')})`;
+    const unindexed = await read<{ name: string }>(
+      databases[set],
+      `with wanted as (
+         select c.oid as relid, n.nspname || '.' || c.relname as tbl, k.conkey::int2[] as cols
+         from pg_catalog.pg_constraint k
+         join pg_catalog.pg_class c on c.oid = k.conrelid
+         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where k.contype = 'f' and n.nspname in ${schemas}
+         union
+         select c.oid, n.nspname || '.' || c.relname, array[a.attnum]::int2[]
+         from pg_catalog.pg_policy p
+         join pg_catalog.pg_class c on c.oid = p.polrelid
+         join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+         where n.nspname in ${schemas}
+           and pg_catalog.pg_get_expr(p.polqual, p.polrelid) ~ ('\\m' || a.attname || '\\M')
+           and a.attname <> 'id'
+       )
+       select w.tbl || ' (' || pg_catalog.array_to_string(array(
+                select a.attname from pg_catalog.pg_attribute a
+                where a.attrelid = w.relid and a.attnum = any (w.cols) order by a.attnum), ', ') || ')' as name
+       from wanted w
+       where not exists (
+         select 1 from pg_catalog.pg_index i
+         where i.indrelid = w.relid
+           and (i.indkey::int2[])[0:pg_catalog.cardinality(w.cols) - 1] @> w.cols
+           and (i.indkey::int2[])[0:pg_catalog.cardinality(w.cols) - 1] <@ w.cols)
+       order by 1`,
+    );
+    expect(unindexed.map((each) => each.name)).toEqual([]);
   });
 
   it('holds only classes and marks this test checks, each entry naming its design', () => {
@@ -686,6 +729,38 @@ describe('the Drizzle definitions of ebo-imports (code-house-rules 3.4, 10.4; S1
 describe('the Drizzle definitions of pos (code-house-rules 3.4, 10.4; S1-F12-T01)', () => {
   it.each(Object.entries(posTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
     await expectDefinitionMatches(world.organisations[0].database, table);
+  });
+});
+
+describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', () => {
+  it('code-house-rules 3.2 holds a foreign key for every reference to a receiving record, a count line and a version included', async () => {
+    const keys = await read<{ name: string }>(
+      world.organisations[0].database,
+      `select c.relname || ' (' || pg_catalog.array_to_string(array(
+                select a.attname from pg_catalog.pg_attribute a
+                where a.attrelid = c.oid and a.attnum = any (k.conkey) order by a.attnum), ', ')
+              || ') ' || r.relname as name
+       from pg_catalog.pg_constraint k
+       join pg_catalog.pg_class c on c.oid = k.conrelid
+       join pg_catalog.pg_class r on r.oid = k.confrelid
+       join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+       where k.contype = 'f' and n.nspname = 'receiving'
+       order by 1`,
+    );
+    expect(keys.map((each) => each.name)).toEqual([
+      'arrival_change (arrival_id) arrival',
+      'arrival_invoice (arrival_id) arrival',
+      'arrival_photo (arrival_id) arrival',
+      'count_entry (arrival_id) arrival',
+      // A line is named by its first entry (goods-in 4.3).
+      'count_entry (line_id) count_entry',
+      'count_entry (replaces_entry_id) count_entry',
+      'grn (arrival_id) arrival',
+      // The Arrival's version the GRN froze (code-house-rules 12.7).
+      'grn (arrival_version_id) arrival_change',
+      'grn_line (count_entry_id) count_entry',
+      'grn_line (grn_id) grn',
+    ]);
   });
 });
 

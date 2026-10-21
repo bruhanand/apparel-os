@@ -1,16 +1,24 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import {
+  CommandRunner,
   connectionToDatabase,
+  createDb,
   listDirectory,
   migrateDatabase,
   migrationSetFolder,
+  newCorrelationId,
   PinoLoggerService,
+  systemClock,
   type DirectoryEntry,
 } from '../../src/kernel/index.js';
-import { runSetupStep } from '../../src/modules/access/index.js';
+import { runSetupStep, SETUP_IDENTITY } from '../../src/modules/access/index.js';
+import { configurationTimezoneSource } from '../../src/modules/configuration/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
+import { GRN_KIND } from '../../src/modules/receiving/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
+import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import { isSyntheticCode, SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from '../fixtures/synthetic.js';
 import { seedRefusal } from './environment.js';
 import {
@@ -37,6 +45,10 @@ import {
 // Then it migrates the directory database, which refuses any other role or a database that role does not own, and
 // runs the setup step for each Organisation the directory does not list yet. A finished Organisation, one the
 // directory lists and whose setup record exists, is left as it is, so a second run changes nothing.
+//
+// No screen defines a number series yet (RR-449), so the seed gives each of its Organisations, set up now or before,
+// the SYNTHETIC series `dev` needs as labelled synthetic settings (DEC-118): the GRN series (goods-in 4.8;
+// S2-F02-T02), defined under the `setup` identity only while the Organisation has none, so a rerun changes nothing.
 const logger = new PinoLoggerService();
 
 interface Target {
@@ -50,6 +62,43 @@ interface Connections {
   readonly migration: string;
   readonly runtime: string;
   readonly firstUsersFile: string;
+}
+
+/**
+ * The SYNTHETIC GRN series of one seed Organisation, when it has none (fixtures/grn-series.ts; DEC-118, RR-449),
+ * defined under the Organisation's `setup` identity as the runtime role. Answers whether it defined one.
+ */
+async function grnSeriesDefined(target: Target, runtime: string): Promise<'defined' | 'unchanged'> {
+  const owner = new Client({ connectionString: target.connectionString });
+  await owner.connect();
+  let setupIdentityId: string | undefined;
+  try {
+    const found = await owner.query<{ id: string }>(
+      "select id::text as id from access.service_identity where code = $1 and kind = 'internal'",
+      [SETUP_IDENTITY],
+    );
+    setupIdentityId = found.rows[0]?.id;
+  } finally {
+    await owner.end();
+  }
+  if (setupIdentityId === undefined) throw new Error(`${target.code} has no setup identity`);
+  const connectionTo = connectionToDatabase(runtime);
+  if (connectionTo === undefined) throw new Error('The runtime connection cannot be pointed at a database');
+  const handle = createDb(connectionTo(target.database), { max: 1 });
+  try {
+    const runner = new CommandRunner({ clock: systemClock, timezones: configurationTimezoneSource, logger });
+    return await runner.run(
+      {
+        commandName: 'seed.define-grn-series',
+        organisation: { organisationCode: target.code, databaseName: target.database, db: handle.db },
+        correlationId: newCorrelationId(),
+        actor: { kind: 'actor', actorId: setupIdentityId },
+      },
+      (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
+    );
+  } finally {
+    await handle.close();
+  }
 }
 
 async function seed(connections: Connections, targets: readonly Target[]): Promise<void> {
@@ -81,6 +130,11 @@ async function seed(connections: Connections, targets: readonly Target[]): Promi
         `${target.code} (${target.name}): set up in database ${target.database} (${outcome.outcome}), with its first Admin and first approver`,
         'Seed',
       );
+    }
+  }
+  for (const target of targets) {
+    if ((await grnSeriesDefined(target, connections.runtime)) === 'defined') {
+      logger.log(`${target.code} (${target.name}): the SYNTHETIC GRN series defined`, 'Seed');
     }
   }
   logger.log(

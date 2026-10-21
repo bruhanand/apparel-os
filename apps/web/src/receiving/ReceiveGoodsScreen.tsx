@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ARRIVAL_TYPE, type Inbox, type InboxView } from '@apparel-os/schemas';
+import { ARRIVAL_TYPE, RECEIVING_CAPS, type Inbox, type InboxView } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -15,12 +15,14 @@ import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
+import { instantOfLocal, LOCAL_DATE_TIME } from '../setup/business-date';
+import { formatList } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { ArrivalView } from './ArrivalView';
-import { inForce, optionText, useMasterNames } from './names';
+import { inForce, optionText, unknownText, useMasterNames } from './names';
 
 // Receive Goods › Inbox (goods-in 4.1, 4.2, section 11; PRD-REC-001, PRD-REC-002, PRD-LIF-001, POL-10.08;
 // S2-F02-T02): one inbox per Site, Pending and History. Each unit of the Site shows whether receiving is available
@@ -45,20 +47,18 @@ const arrivalFormSchema = z.object({
   cartons: z
     .string()
     .regex(/^[1-9]\d{0,5}$/, { message: 'receive.cartons.invalid' })
+    .refine((text) => Number(text) <= RECEIVING_CAPS.cartons, { message: 'receive.cartons.invalid' })
     .transform((text) => Number(text)),
-  arrivedAt: z.string().min(1),
+  arrivedAt: z.string().regex(LOCAL_DATE_TIME),
 });
 type ArrivalFormInput = z.input<typeof arrivalFormSchema>;
 type ArrivalFormOutput = z.output<typeof arrivalFormSchema>;
 
-/** The instant a `datetime-local` value stands for, in the browser's own time. */
-function instantOf(local: string): string {
-  return new Date(local).toISOString();
-}
-
 /** Records an Arrival at a unit of the Site that may receive (goods-in 4.2); it opens once recorded. */
 function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecorded: (arrivalId: string) => void }) {
   const names = useMasterNames();
+  // The arrival time is typed as the Organisation's wall clock, as the screens show times (code-house-rules 9).
+  const timeZone = useTimeZone();
   const form = useForm<ArrivalFormInput, unknown, ArrivalFormOutput>({
     resolver: zodResolver(arrivalFormSchema),
     mode: 'onBlur',
@@ -87,6 +87,13 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
         role.role === 'supplier' && role.versions.some((version) => version.state === 'In force' && version.held),
     ),
   );
+  const maxLength = {
+    transporter: RECEIVING_CAPS.longText,
+    lorryReceiptNumber: RECEIVING_CAPS.codeText,
+    vehicleNumber: RECEIVING_CAPS.shortText,
+    ewayBillNumber: RECEIVING_CAPS.shortText,
+    cartons: undefined,
+  } as const;
   const text = (
     name: 'transporter' | 'lorryReceiptNumber' | 'vehicleNumber' | 'ewayBillNumber' | 'cartons',
     id: string,
@@ -103,7 +110,7 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
       <input
         id={id}
         className={inputClass}
-        {...(name === 'cartons' ? { inputMode: 'numeric' as const } : {})}
+        {...(name === 'cartons' ? { inputMode: 'numeric' as const } : { maxLength: maxLength[name] })}
         {...describedBy(id, { invalid: errors[name] !== undefined, help: false })}
         {...form.register(name)}
       />
@@ -150,7 +157,7 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
               ...(entered.vehicleNumber.trim() === '' ? {} : { vehicleNumber: entered.vehicleNumber }),
               ...(entered.ewayBillNumber.trim() === '' ? {} : { ewayBillNumber: entered.ewayBillNumber }),
               cartons: entered.cartons,
-              arrivedAt: instantOf(entered.arrivedAt),
+              arrivedAt: instantOfLocal(entered.arrivedAt, timeZone),
             },
           });
           if (recorded !== undefined) onRecorded(recorded.arrivalId);
@@ -203,12 +210,18 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
       {text('vehicleNumber', 'receive-vehicle', 'receive.vehicle-number', false)}
       {text('ewayBillNumber', 'receive-eway', 'receive.eway-bill-number', false)}
       {text('cartons', 'receive-cartons', 'receive.cartons', true)}
-      <FormField id="receive-arrived-at" label="receive.arrived-at" required error={errors.arrivedAt}>
+      <FormField
+        id="receive-arrived-at"
+        label="receive.arrived-at"
+        help="receive.arrived-at.help"
+        required
+        error={errors.arrivedAt}
+      >
         <input
           id="receive-arrived-at"
           type="datetime-local"
           className={inputClass}
-          {...describedBy('receive-arrived-at', { invalid: errors.arrivedAt !== undefined, help: false })}
+          {...describedBy('receive-arrived-at', { invalid: errors.arrivedAt !== undefined, help: true })}
           {...form.register('arrivedAt')}
         />
       </FormField>
@@ -242,8 +255,10 @@ function InboxTable({ inbox, onOpen }: { inbox: Inbox; onOpen: (arrivalId: strin
   const names = useMasterNames();
   const unitText = (id: string) => {
     const unit = inbox.units.find((each) => each.businessUnitId === id);
-    return unit === undefined ? id : t('receive.option', { code: unit.code, name: unit.name });
+    return unit === undefined ? undefined : t('receive.option', { code: unit.code, name: unit.name });
   };
+  // An Unknown name is a blank cell that a screen reader reads as unknown (design-language 8; PRD-MOD-015).
+  const cell = (text: string | undefined) => text ?? <span className="sr-only">{unknownText()}</span>;
   if (inbox.entries.length === 0) {
     return <EmptyState title={`receive.empty.${inbox.view}.title`} body={`receive.empty.${inbox.view}.body`} />;
   }
@@ -275,10 +290,10 @@ function InboxTable({ inbox, onOpen }: { inbox: Inbox; onOpen: (arrivalId: strin
                   {formatDateTime(entry.arrivedAt, timeZone)}
                 </button>
               </td>
-              <td className="px-3">{names.partyText(entry.supplierPartyId)}</td>
-              <td className="px-3">{names.brandText(entry.brandId)}</td>
-              <td className="px-3">{unitText(entry.businessUnitId)}</td>
-              <td className="px-3">{entry.invoiceNumbers.join(', ')}</td>
+              <td className="px-3">{cell(names.partyText(entry.supplierPartyId))}</td>
+              <td className="px-3">{cell(names.brandText(entry.brandId))}</td>
+              <td className="px-3">{cell(unitText(entry.businessUnitId))}</td>
+              <td className="px-3">{formatList(entry.invoiceNumbers)}</td>
               <td className="px-3 tabular-nums">
                 {t('receive.pieces.counted', { count: entry.countedPieces, lines: entry.lines })}
               </td>

@@ -28,6 +28,7 @@ import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { approved, approvedGeography, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
+import { signedFixture } from './support/signed-policies.js';
 
 // S1-F04-T02: readiness checks and unit activation through the whole application, on real PostgreSQL (module-map
 // 4.16; domain-model 3.6, section 5, section 6 "Granting an activity", invariant 7; stage 1 exit check 6; PRD-LIF-001
@@ -285,29 +286,9 @@ async function verifyFixture(database: string, unitId: string): Promise<void> {
   }
 }
 
-/**
- * Writes a SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports, as
- * fixtures (module-map 4.4; DM-6).
- */
-async function signedFixture(database: string, policy: number): Promise<void> {
-  const owner = await connect(database, 'migration');
-  try {
-    await owner.query(
-      `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-         evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-       values ($1, $2, 'SYNTHETIC signatory', current_date, 'synthetic', array[$3::uuid], $4, $5, now())`,
-      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7()],
-    );
-    await owner.query(
-      `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-         evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, $2, 'synthetic', array[$6], array[$3::uuid], $4, $5, now())`,
-      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7(), `${VALUES_CHECK}-${String(policy)}:syn-value@v1`],
-    );
-  } finally {
-    await owner.end();
-  }
-}
+/** A SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports (RR-480). */
+const signed = (database: string, policy: number) =>
+  signedFixture(database, policy, [`${VALUES_CHECK}-${String(policy)}:syn-value@v1`]);
 
 let mapping: { legalEntityId: string; taxRegistrationId: string; accountingBookId: string };
 let siteId: string;
@@ -428,8 +409,8 @@ beforeAll(async () => {
   counterUnit = await unit({ kind: 'brand-counter', storeId });
   await verifyFixture(a.database, counterUnit.id);
   await location(counterUnit);
-  await signedFixture(a.database, RECEIVE_POLICY);
-  await signedFixture(a.database, RECEIVING_STATUTORY_POLICY);
+  await signed(a.database, RECEIVE_POLICY);
+  await signed(a.database, RECEIVING_STATUTORY_POLICY);
   approveReason = await writeSyntheticReason(a.database, 'approve');
   // The SYNTHETIC essential security settings sign-in reads (access-and-approvals 3.3), in both Organisations.
   for (const organisation of world.organisations) {

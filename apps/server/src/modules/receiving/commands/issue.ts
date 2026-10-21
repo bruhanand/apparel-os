@@ -1,14 +1,15 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { ARRIVAL_TYPE, GRN_TYPE, type GrnIssue, type GrnIssued, type MissingItem } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
-import { LOCK_STEP, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import { LOCK_STEP, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { skuOn } from '../../merchandise/catalogue/index.js';
 import { termsInForce } from '../../merchandise/parties/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import type { LedgerItem, Owner, StockLedgerInterface } from '../../stock/ledger/index.js';
-import { arrivalInvoice, countEntry, grn, grnLine } from '../db/schema.js';
+import { batchColumns } from '../db/columns.js';
+import { arrivalInvoice, grn, grnLine } from '../db/schema.js';
 import { GRN_KIND, GRN_SCOPE_KEY, GRN_SOURCE_TYPE, MISSING_GRN_SERIES } from '../domain/kinds.js';
 import { currentLines, grnBlockers, lineItem, type CurrentLine } from '../domain/lines.js';
 import { ownerColumns, receiptOwner } from '../domain/owner.js';
@@ -16,11 +17,16 @@ import { grnIssued as grnIssuedEvent } from '../events.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
 import { arrivalForChange } from './arrival.js';
 import {
+  audited,
+  entriesOf,
   factsOf,
   newestChange,
+  recordItem,
+  refusalOf,
   refused,
   scopeColumns,
   today,
+  valueChange,
   type Actor,
   type ArrivalRow,
   type Outcome,
@@ -42,8 +48,8 @@ export interface IssueDependencies extends AvailabilityDependencies {
   readonly ledger: StockLedgerInterface;
 }
 
-/** A refusal outcome from a refusal (code-house-rules 12.3). */
-const refusalOf = (refusal: CommandRefusal): Outcome<never> => ({ kind: 'refusal', refusal });
+/** The GRN reads only an Agreement's ownership: it holds no value, so an Agreement's margins are never shown to it. */
+const SHOW_MARGINS = false;
 
 /**
  * What the lines' products ask of them on the issue date (PRD-MER-011): a batch and expiry exactly where the
@@ -61,19 +67,19 @@ async function batchRefusal(
   for (const line of lines) {
     const { entry } = line;
     if (entry.skuId === null) {
-      if (entry.batchCode !== null) untracked.push(lineItem(line.lineId));
+      if (entry.batch !== null) untracked.push(lineItem(line.lineId));
       continue;
     }
     const read = await skuOn(context, entry.skuId, row.siteId, date);
     if ('refusal' in read || read.sku.brandId !== row.brandId) {
       return refused('refused', 'receiving.sku-not-of-line', [
         lineItem(line.lineId),
-        { kind: 'record', recordType: 'merchandise.sku', recordId: entry.skuId },
+        recordItem('merchandise.sku', entry.skuId),
       ]);
     }
     const requires = read.sku.tracking?.batchExpiryRequired === true;
-    if (requires && entry.batchCode === null) required.push(lineItem(line.lineId));
-    if (!requires && entry.batchCode !== null) untracked.push(lineItem(line.lineId));
+    if (requires && entry.batch === null) required.push(lineItem(line.lineId));
+    if (!requires && entry.batch !== null) untracked.push(lineItem(line.lineId));
   }
   if (required.length > 0) return refused('refused', 'receiving.batch-required', required);
   if (untracked.length > 0) return refused('refused', 'receiving.batch-not-tracked', untracked);
@@ -88,7 +94,7 @@ function receiptCount(row: ArrivalRow, line: CurrentLine, grnLineId: string, own
     entry.skuId === null
       ? {
           skuId: null,
-          described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.sizeCode },
+          described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.size?.code ?? null },
         }
       : { skuId: entry.skuId };
   return {
@@ -99,9 +105,7 @@ function receiptCount(row: ArrivalRow, line: CurrentLine, grnLineId: string, own
     to: { siteId: row.siteId, businessUnitId: row.businessUnitId, locationId: row.receivingLocationId },
     condition: 'good',
     owner,
-    ...(entry.batchCode === null || entry.expiryDate === null
-      ? {}
-      : { batch: { code: entry.batchCode, expiryDate: entry.expiryDate } }),
+    ...(entry.batch === null ? {} : { batch: { ...entry.batch } }),
   };
 }
 
@@ -121,9 +125,7 @@ export async function issueGrn(
   const { row } = found;
   const newest = await newestChange(context, row.id);
   if (newest?.id !== draft.versionToken) {
-    return refused('conflict', 'kernel.stale-version', [
-      { kind: 'record', recordType: ARRIVAL_TYPE, recordId: row.id },
-    ]);
+    return refused('conflict', 'kernel.stale-version', [recordItem(ARRIVAL_TYPE, row.id)]);
   }
   const unavailable = receivingUnavailable(
     await receivingMissing(context, dependencies, { siteId: row.siteId, businessUnitId: row.businessUnitId }, date),
@@ -133,7 +135,7 @@ export async function issueGrn(
     .select({ id: arrivalInvoice.id })
     .from(arrivalInvoice)
     .where(eq(arrivalInvoice.arrivalId, row.id));
-  const lines = currentLines(await context.tx.select().from(countEntry).where(eq(countEntry.arrivalId, row.id)));
+  const lines = currentLines(await entriesOf(context, row.id));
   const blocked = grnBlockers(invoices.length, lines);
   if (blocked !== undefined) return refused('refused', blocked.code, blocked.missing);
   const batches = await batchRefusal(context, row, lines, date);
@@ -155,7 +157,7 @@ export async function issueGrn(
     if (unknownBrand.kind === 'refused') return refusalOf(unknownBrand.refusal);
   }
   // The owner each receipt origin records: the brand's Agreement version in force on the arrival date (PRD-ORG-014).
-  const terms = await termsInForce(context, { brandId: row.brandId }, row.arrivalDate, false);
+  const terms = await termsInForce(context, { brandId: row.brandId }, row.arrivalDate, SHOW_MARGINS);
   const agreement =
     terms === undefined ? undefined : { versionId: terms.versionId, brandId: row.brandId, terms: terms.terms };
   const owner = receiptOwner(agreement, row.legalEntityId);
@@ -216,30 +218,25 @@ export async function issueGrn(
       ...scopeColumns(row),
       styleCode: line.entry.styleCode,
       colour: line.entry.colour,
-      sizeCode: line.entry.sizeCode,
+      sizeCode: line.entry.size?.code ?? null,
       skuId: line.entry.skuId,
       invoiceQuantity: line.entry.invoiceQuantity,
       countedQuantity: line.entry.countedQuantity,
-      batchCode: line.entry.batchCode,
-      expiryDate: line.entry.expiryDate,
+      ...batchColumns(line.entry.batch),
       countedByUserIds: [...line.countedBy],
     })),
   );
-  await dependencies.audit.record(context, {
-    actor: { kind: 'user', id: actor.userId },
-    roleAssignmentId: actor.roleAssignmentId,
-    scope: factsOf(row),
-    record: { module: 'receiving', type: GRN_TYPE, id: grnId },
+  await audited(context, dependencies.audit, actor, row, {
+    record: { type: GRN_TYPE, id: grnId },
     operation: 'issue-grn',
     changes: [
-      { kind: 'value', field: 'arrivalId', before: null, after: row.id },
-      { kind: 'value', field: 'number', before: null, after: allocated.value.formattedText },
-      { kind: 'value', field: 'lines', before: null, after: numbered.length },
-      { kind: 'value', field: 'owner', before: null, after: { ...ownerColumns(owner) } },
-      { kind: 'value', field: 'agreementVersionId', before: null, after: agreement?.versionId ?? null },
-      { kind: 'value', field: 'movements', before: null, after: [...written.value.movementIds] },
+      valueChange('arrivalId', null, row.id),
+      valueChange('number', null, allocated.value.formattedText),
+      valueChange('lines', null, numbered.length),
+      valueChange('owner', null, { ...ownerColumns(owner) }),
+      valueChange('agreementVersionId', null, agreement?.versionId ?? null),
+      valueChange('movements', null, [...written.value.movementIds]),
     ],
-    source: { kind: 'screen' },
     idempotencyKey,
   });
   await context.publish(grnIssuedEvent, {

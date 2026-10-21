@@ -34,6 +34,13 @@ export function paiseOfRupees(text: string): number | undefined {
   return Number.isSafeInteger(amount) && rupees.length <= 13 ? amount : undefined;
 }
 
+const lists = new Intl.ListFormat('en-IN', { style: 'short', type: 'unit' });
+
+/** Several names, numbers or codes as one text, "A, B, C", joined by `Intl` (code-house-rules 12.13). */
+export function formatList(items: readonly string[]): string {
+  return lists.format(items);
+}
+
 /** A business date, YYYY-MM-DD, as DD MMM YYYY (design-language 8). */
 export function formatDate(date: string): string {
   const [year = '', month = '', day = ''] = date.split('-');

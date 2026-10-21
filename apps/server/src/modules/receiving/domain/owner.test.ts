@@ -41,7 +41,7 @@ describe('the owner at the receipt count (goods-in 4.5; PRD-ORG-014)', () => {
     });
   });
 
-  it('goods-in 4.5 the GRN keeps the owner by its kind and whoever it names, none when Unknown', () => {
+  it('PRD-ORG-014 the GRN keeps the owner by its kind and whoever it names, none when Unknown (goods-in 4.5)', () => {
     expect(ownerColumns({ kind: 'organisation', legalEntityId: LEGAL_ENTITY })).toEqual({
       ownerKind: 'organisation',
       ownerId: LEGAL_ENTITY,

@@ -1,21 +1,27 @@
-import { uuidv7 } from '@apparel-os/domain';
-import { permissionRegistry, type AgreementTerms, type AssignmentScope } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../src/kernel/index.js';
-import type { ValidityCheck } from '../../src/modules/configuration/index.js';
-import type { NumberingInterface } from '../../src/modules/numbering/index.js';
-import { GRN_KIND, RECEIVING_CAPABILITY } from '../../src/modules/receiving/index.js';
+import { permissionRegistry, type AgreementTerms, type AssignmentScope, type PolicyNumber } from '@apparel-os/schemas';
+import { Audit } from '../../src/modules/audit/index.js';
+import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
+import { policyEvidence } from '../../src/modules/files-imports/index.js';
+import { mappingOn } from '../../src/modules/organisation/index.js';
+import { RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from '../../src/modules/receiving/index.js';
+import { SiteLifecycle, siteLifecycleApprovals } from '../../src/modules/site-lifecycle/index.js';
+import { LocationStock } from '../../src/modules/stock/ledger/index.js';
 import { syntheticCode, syntheticIdentifier, syntheticName } from '../fixtures/synthetic.js';
-import type { SyntheticAuthority } from './grants.js';
+import { TEST_COMPOSITION } from './composition.js';
+import { grantSynthetic, type SyntheticAuthority } from './grants.js';
+import { capturingLogger } from './jobs.js';
 import { approved, approvedGeography, decided, type StructureSetup } from './organisation.js';
 import { syntheticStores, type SyntheticStores } from './pos.js';
-import { connect } from './postgres.js';
+import { writeSyntheticStoredFile } from './tax-rules.js';
 
-// The SYNTHETIC world of Receive Goods (goods-in 4; S2-F02-T02), made through the real interfaces of organisation and
-// merchandise where a person would make it (code-house-rules 11.2): a Site with two Stores and their units, the
-// locations goods are received into, a brand with a linked supplier and an approved Agreement, a size list and a
-// batch-tracked product. What other tickets prove is written as labelled fixtures: a mapping's verification
-// (S1-F02-T02), an activity grant after readiness (S1-F04-T02), the capability switched on, and policies 4 and 10 Signed
-// and validated (S1-F04-T01). Nothing here is KDPS's: every value, person and setting is SYNTHETIC.
+// The SYNTHETIC world of Receive Goods (goods-in 4; S2-F02-T02), made through the real interfaces where a person would
+// make it (code-house-rules 11.2): a Site with two Stores and their units, the locations goods are received into, a
+// brand with a linked supplier and an approved Agreement, a size list and a batch-tracked product, the units' mappings
+// verified by a person other than who made them; then, apart, the receiving capability switched on and policies 4 and
+// 10 Signed and validated through configuration's commands, and receiving granted after readiness through
+// site-lifecycle's, decided by a different person. The evidence of a signature, a validation and a verification is a
+// SYNTHETIC stored file written as a fixture, as the stock harness writes it, since S1-F06-T05 proves storing files.
+// Nothing here is KDPS's: every value, person and setting is SYNTHETIC.
 
 /** The SYNTHETIC values the receiving policies' validations cover, for a validity check per policy (RR-480). */
 const RECEIVING_GATE = syntheticIdentifier('receiving-gate');
@@ -91,9 +97,21 @@ function terms(ownershipEvent: AgreementTerms['ownershipEvent']): AgreementTerms
   };
 }
 
-function ok<A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } }): A {
-  if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal.code}`);
+function ok<A>(
+  outcome:
+    | { kind: 'success'; answer: A }
+    | { kind: 'refusal'; refusal: { readonly code: string; readonly missing: readonly unknown[] } },
+): A {
+  if (outcome.kind !== 'success') {
+    throw new Error(`Refused: ${outcome.refusal.code} ${JSON.stringify(outcome.refusal.missing)}`);
+  }
   return outcome.answer;
+}
+
+/** "CODE · Name", as the screens name a record (receive.option); a record the fixture made is always there. */
+function option(record: { readonly code: string; readonly name: string } | undefined, what: string): string {
+  if (record === undefined) throw new Error(`The fixture's ${what} is not in the structure in force`);
+  return `${record.code} · ${record.name}`;
 }
 
 export interface ReceivingFixture extends SyntheticStores {
@@ -115,23 +133,27 @@ export interface ReceivingFixture extends SyntheticStores {
     readonly values: readonly { readonly id: string; readonly code: string }[];
   };
   /** A product of the brand whose tracking profile requires a batch and expiry. */
-  readonly batchSku: { readonly id: string; readonly styleCode: string };
-  /** How the screens name the Site, the Stores' units and the first Store's location: "CODE · Name". */
+  readonly batchSku: { readonly id: string; readonly code: string; readonly styleCode: string };
+  /** How the screens name the Site, the Stores' units, the first Store's location and the masters: "CODE · Name". */
   readonly options: {
     readonly site: string;
     readonly wholeStore: string;
+    readonly otherStoreUnit: string;
     readonly warehouse: string;
     readonly storeLocation: string;
+    readonly otherStoreLocation: string;
     readonly supplier: string;
     readonly brand: string;
     readonly sizeList: string;
     readonly sizes: readonly string[];
+    readonly batchSku: string;
   };
 }
 
 /**
- * The world: the units of syntheticStores, receiving granted at the whole-store unit of each Store and at a brand
- * counter whose mapping stays unverified, never at the warehouse; and the masters of merchandise above.
+ * The world: the units of syntheticStores, the mappings of the Stores' whole-store units and of the warehouse verified,
+ * the brand counter's left unverified (POL-10.08); and the masters of merchandise above. Receiving is granted apart,
+ * by receivingGranted, once the gate is open.
  */
 export async function receivingFixture(
   setup: StructureSetup,
@@ -210,7 +232,9 @@ export async function receivingFixture(
       }),
     ),
   );
-  decided(await setup.decide(agreement.requestId ?? '', agreement.versionId));
+  // An Agreement version waits for a different authorised person (structure-and-masters 5.2; GC2-6).
+  if (agreement.requestId === undefined) throw new Error('The Agreement version was not sent for approval');
+  decided(await setup.decide(agreement.requestId, agreement.versionId));
 
   // The size list: a list attribute and two confirmed values (structure-and-masters 4.2; goods-in 4.3; GI-3).
   const attributeCode = next('SIZE');
@@ -285,13 +309,14 @@ export async function receivingFixture(
     ),
   );
   const styleCode = next('STYLE');
+  const skuCode = next('SKU');
   const product = ok(
     await setup.asPreparerDo((c, p) =>
       setup.catalogue.proposeProduct(c, p, {
         style: { code: styleCode, brandId, categoryId, attributes: [] },
         skus: [
           {
-            code: next('SKU'),
+            code: skuCode,
             identity: [{ attributeId: colourId, valueId: red.id }],
             stockUnit: 'piece',
             purpose: 'merchandise',
@@ -306,42 +331,35 @@ export async function receivingFixture(
   const skuId = proposal?.skuIds[0];
   if (skuId === undefined) throw new Error('The batch-tracked product was not made');
 
-  const owner = await connect(database, 'migration');
-  try {
-    // The mappings of the receiving units verified (S1-F02-T02); the counter's stays unverified (POL-10.08).
-    for (const unit of [stores.wholeStore, stores.otherStoreUnit, stores.warehouse]) {
-      await owner.query(
-        `insert into organisation.business_unit_mapping_verification
-           (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
-         select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
-          where business_unit_id = $4 and decision = 'Approved'`,
-        [uuidv7(), uuidv7(), uuidv7(), unit],
-      );
-    }
-    // Receiving granted after readiness at the Stores' units and the counter, never at the warehouse (S1-F04-T02).
-    for (const unit of [stores.wholeStore, stores.otherStoreUnit, stores.counterSameRegistration]) {
-      await owner.query(
-        `insert into configuration.activity_grant (id, activity, site_id, business_unit_id, granted,
-           readiness_record_id, approval_decision_id, recorded_by_user_id, recorded_at)
-         values ($1, 'receiving', $2, $3, true, $4, $5, $6, now())`,
-        [uuidv7(), stores.siteId, unit, uuidv7(), uuidv7(), uuidv7()],
-      );
-    }
-  } finally {
-    await owner.end();
-  }
+  // The mappings of the Stores' units and the warehouse verified (structure-and-masters 3.4); the counter's is not.
+  await mappingsVerified(setup, database, [stores.wholeStore, stores.otherStoreUnit, stores.warehouse]);
+
   const structure = await setup.run(setup.preparer.id, (c) => setup.organisation.structureOn(c, setup.today()));
-  const option = (record: { readonly code: string; readonly name: string } | undefined) =>
-    record === undefined ? '' : `${record.code} · ${record.name}`;
+  const unitOption = (id: string) =>
+    option(
+      structure.businessUnits.find((each) => each.id === id),
+      'unit',
+    );
+  const locationOption = (id: string) =>
+    option(
+      structure.locations.find((each) => each.id === id),
+      'location',
+    );
   const options = {
-    site: option(structure.sites.find((each) => each.id === stores.siteId)),
-    wholeStore: option(structure.businessUnits.find((each) => each.id === stores.wholeStore)),
-    warehouse: option(structure.businessUnits.find((each) => each.id === stores.warehouse)),
-    storeLocation: option(structure.locations.find((each) => each.id === storeLocation)),
-    supplier: `${supplier.code} · ${supplier.name}`,
-    brand: `${brandCode} · ${brandName}`,
-    sizeList: `${attributeCode} · ${sizeListName}`,
-    sizes: sizeValues.map((each) => `${each.code} · ${syntheticName(each.code)}`),
+    site: option(
+      structure.sites.find((each) => each.id === stores.siteId),
+      'Site',
+    ),
+    wholeStore: unitOption(stores.wholeStore),
+    otherStoreUnit: unitOption(stores.otherStoreUnit),
+    warehouse: unitOption(stores.warehouse),
+    storeLocation: locationOption(storeLocation),
+    otherStoreLocation: locationOption(otherStoreLocation),
+    supplier: option(supplier, 'supplier'),
+    brand: option({ code: brandCode, name: brandName }, 'brand'),
+    sizeList: option({ code: attributeCode, name: sizeListName }, 'size list'),
+    sizes: sizeValues.map((each) => option({ code: each.code, name: syntheticName(each.code) }, 'size')),
+    batchSku: skuCode,
   };
   return {
     ...stores,
@@ -355,84 +373,172 @@ export async function receivingFixture(
     unlinkedSupplierId: unlinked.id,
     agreementVersionId: agreement.versionId,
     sizes: { attributeId: sizeAttributeId, attributeCode, values: sizeValues },
-    batchSku: { id: skuId, styleCode },
+    batchSku: { id: skuId, code: skuCode, styleCode },
   };
 }
 
-/** A policy Signed and validated as a fixture, and the values its validation covers, `<check>:<key>@<version>`. */
-export interface SignedPolicy {
-  readonly policy: number;
-  readonly validatedValues: readonly string[];
-}
-
-/** Policies 4 and 10, covering the SYNTHETIC values of receivingValidityChecks. */
-export const RECEIVING_POLICIES: readonly SignedPolicy[] = receivingValidityChecks.map((check) => ({
-  policy: check.policy ?? 0,
-  validatedValues: [`${check.code}:syn-value@v1`],
-}));
-
-/** The policies Signed and validated as SYNTHETIC fixtures (module-map 4.4; DM-6; S1-F04-T01). */
-export async function policiesSigned(database: string, policies: readonly SignedPolicy[]): Promise<void> {
-  const owner = await connect(database, 'migration');
-  try {
-    for (const { policy, validatedValues } of policies) {
-      await owner.query(
-        `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-           evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-         values ($1, $2, 'SYNTHETIC signatory', current_date, 'synthetic', array[$3::uuid], $4, $5, now())`,
-        [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7()],
-      );
-      await owner.query(
-        `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-           evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-         values ($1, $2, 'synthetic', $6::text[], array[$3::uuid], $4, $5, now())`,
-        [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7(), [...validatedValues]],
-      );
-    }
-  } finally {
-    await owner.end();
+/**
+ * The units' mappings in force verified through organisation's command (structure-and-masters 3.4; POL-10.08) by the
+ * setup's approver, who did not make them, each with a SYNTHETIC stored file as its evidence.
+ */
+async function mappingsVerified(setup: StructureSetup, database: string, unitIds: readonly string[]): Promise<void> {
+  const verifier = setup.approver;
+  const { assignmentId } = await grantSynthetic(database, { kind: 'user', id: verifier.id }, [
+    { recordType: 'organisation.business_unit_mapping_verification', action: 'view' },
+    { recordType: 'organisation.business_unit_mapping_verification', action: 'create' },
+  ]);
+  for (const unitId of unitIds) {
+    const evidence = await writeSyntheticStoredFile(database, verifier.id);
+    ok(
+      await setup.run(verifier.id, async (context) => {
+        const mapping = await mappingOn(context, unitId, setup.today());
+        if (mapping === undefined) throw new Error(`The unit ${unitId} has no mapping in force`);
+        return setup.organisation.verifyMapping(
+          context,
+          { userId: verifier.id, roleAssignmentId: assignmentId },
+          unitId,
+          mapping.mappingVersionId,
+          { evidence: [evidence] },
+        );
+      }),
+    );
   }
 }
 
 /**
- * The receiving capability switched on and policies 4 and 10 Signed and validated, as fixtures (module-map 4.4; DM-6;
- * S1-F04-T01): by default covering the SYNTHETIC values of receivingValidityChecks.
+ * `configuration` as the composition root composes it for these fixtures: with the SYNTHETIC validity checks given
+ * and receiving's two operations (goods-in 10.5), so its policy status and readiness checks read what the
+ * application's do.
  */
-export async function receivingGateOpen(
-  database: string,
-  policies: readonly SignedPolicy[] = RECEIVING_POLICIES,
-): Promise<void> {
-  const owner = await connect(database, 'migration');
-  try {
-    await owner.query(
-      `insert into configuration.capability_change (id, capability, switched_on, changed_by_user_id,
-         role_assignment_id, changed_at)
-       values ($1, $2, true, $3, $4, now())`,
-      [uuidv7(), RECEIVING_CAPABILITY, uuidv7(), uuidv7()],
-    );
-  } finally {
-    await owner.end();
-  }
-  await policiesSigned(database, policies);
+function composedConfiguration(checks: readonly ValidityCheck[]) {
+  const audit = new Audit(capturingLogger().logger);
+  const configuration = new Configuration({ audit, environment: { name: 'local' }, evidence: policyEvidence(audit) });
+  for (const check of checks) configuration.registerCheck(check, TEST_COMPOSITION);
+  configuration.registerOperation(RECEIVE_GOODS);
+  configuration.registerOperation(RECEIVE_GOODS_STATUTORY);
+  return { audit, configuration };
 }
 
-/** A SYNTHETIC format of GRN numbers: no format is the Organisation's until it chooses one (numbering-and-audit 3.5). */
-export const SYNTHETIC_GRN_FORMAT = [
-  { kind: 'text' as const, text: 'SYN-GRN-' },
-  { kind: 'sequence' as const, width: 5 },
-];
+/**
+ * The receiving gate open Organisation-wide (goods-in 10.5; module-map 4.4; DM-6), through configuration's commands as
+ * labelled synthetic status (code-house-rules 12.14): the setup's preparer records policies 4 and 10 Signed, the
+ * approver, who entered none of their values, validates them, each with a SYNTHETIC stored file as evidence, and the
+ * preparer switches the receiving capability on. `checks` are the SYNTHETIC checks reporting the policies' values that
+ * the application under test registers.
+ */
+export async function receivingGateOpen(
+  setup: StructureSetup,
+  database: string,
+  checks: readonly ValidityCheck[] = receivingValidityChecks,
+): Promise<void> {
+  const { configuration } = composedConfiguration(checks);
+  const signer = setup.preparer;
+  const validator = setup.approver;
+  const signing = await grantSynthetic(database, { kind: 'user', id: signer.id }, [
+    { recordType: 'configuration.policy_status', action: 'create' },
+    { recordType: 'configuration.capability', action: 'edit' },
+  ]);
+  const validating = await grantSynthetic(database, { kind: 'user', id: validator.id }, [
+    { recordType: 'configuration.policy_validation', action: 'create' },
+  ]);
+  const policies = new Set<PolicyNumber>();
+  for (const check of checks) {
+    if (check.policy === null) throw new Error(`The check ${check.code} reports no policy's values`);
+    policies.add(check.policy);
+  }
+  for (const policy of policies) {
+    const signatureEvidence = await writeSyntheticStoredFile(database, signer.id);
+    ok(
+      await setup.run(signer.id, (context) =>
+        configuration.recordSignature(context, { userId: signer.id, roleAssignmentId: signing.assignmentId }, policy, {
+          signatory: syntheticName(`policy ${String(policy)} signatory`),
+          signedOn: setup.today(),
+          origin: 'synthetic',
+          evidence: [signatureEvidence],
+        }),
+      ),
+    );
+    const validationEvidence = await writeSyntheticStoredFile(database, validator.id);
+    ok(
+      await setup.run(validator.id, (context) =>
+        configuration.recordValidation(
+          context,
+          { userId: validator.id, roleAssignmentId: validating.assignmentId },
+          policy,
+          { origin: 'synthetic', evidence: [validationEvidence] },
+        ),
+      ),
+    );
+  }
+  ok(
+    await setup.run(signer.id, (context) =>
+      configuration.switchCapability(
+        context,
+        { userId: signer.id, roleAssignmentId: signing.assignmentId },
+        RECEIVING_CAPABILITY,
+        true,
+      ),
+    ),
+  );
+}
 
-/** Defines the GRN series with the SYNTHETIC format, as no screen does yet (RR-449; DEC-118). */
-export async function defineSyntheticGrnSeries(context: TransactionContext, numbering: NumberingInterface) {
-  const code = syntheticCode(`GRN-${uuidv7().slice(-6).toUpperCase()}`);
-  const format = await numbering.defineFormatVersion(context, code, SYNTHETIC_GRN_FORMAT);
-  if (format.kind !== 'done') throw new Error(`GRN format refused: ${format.refusal.code}`);
-  const series = await numbering.defineSeries(context, {
-    kind: GRN_KIND.kind,
-    scopeKey: 'organisation',
-    displayScopeKey: 'organisation',
-    formatCode: code,
-  });
-  if (series.kind !== 'done') throw new Error(`GRN series refused: ${series.refusal.code}`);
-  return series.value;
+/** The people receiving's operations need at a unit (goods-in 10.5; PRD-ACS-006), for its users-and-access check. */
+const RECEIVING_PEOPLE: readonly SyntheticAuthority[] = (RECEIVE_GOODS.needs?.permissions ?? []).map((each) => ({
+  recordType: each.recordType,
+  action: each.action,
+}));
+
+/**
+ * Receiving granted after readiness at the units given of one Site, through site-lifecycle's commands
+ * (module-map 4.16; PRD-LIF-001, PRD-LIF-002; S1-F04-T02): the setup's preparer, who holds the permissions receiving
+ * needs at a unit, runs the Site's shared checks and each unit's, declaring that it holds no stock, and asks for each
+ * approval; the approver, a different person, decides it, so the grant is written by the decision's effect. Needs the
+ * gate open first (receivingGateOpen), since the checks ask for policies 4 and 10.
+ */
+export async function receivingGranted(
+  setup: StructureSetup,
+  database: string,
+  siteId: string,
+  unitIds: readonly string[],
+  checks: readonly ValidityCheck[] = receivingValidityChecks,
+): Promise<void> {
+  const { audit, configuration } = composedConfiguration(checks);
+  const locationInUse = new LocationStock();
+  const access = setup.accessWith(
+    siteLifecycleApprovals({ audit, configuration, grants: configuration.claimActivityGrants(), locationInUse }),
+  );
+  const siteLifecycle = new SiteLifecycle({ audit, configuration, access, locationInUse });
+  const runner = setup.preparer;
+  const { assignmentId } = await grantSynthetic(database, { kind: 'user', id: runner.id }, [
+    { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+    { recordType: 'site_lifecycle.readiness_record', action: 'create' },
+    { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
+    { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
+    { recordType: 'access.approval_request', action: 'view' },
+    ...RECEIVING_PEOPLE,
+  ]);
+  await grantSynthetic(database, { kind: 'user', id: setup.approver.id }, [
+    { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+    { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ]);
+  const by = { userId: runner.id, roleAssignmentId: assignmentId };
+  const approve = async (readinessRecordId: string) => {
+    const requested = ok(
+      await setup.run(runner.id, (context) => siteLifecycle.requestActivation(context, by, readinessRecordId)),
+    );
+    decided(await setup.decideThrough(access, requested.requestId, readinessRecordId));
+  };
+  const site = ok(
+    await setup.run(runner.id, (context) => siteLifecycle.runSiteReadiness(context, by, siteId, 'receiving')),
+  );
+  await approve(site.readinessRecordId);
+  for (const unitId of unitIds) {
+    ok(await setup.run(runner.id, (context) => siteLifecycle.declareZeroStock(context, by, unitId)));
+    const ran = ok(
+      await setup.run(runner.id, (context) => siteLifecycle.runReadiness(context, by, unitId, 'receiving')),
+    );
+    await approve(ran.readinessRecordId);
+  }
 }

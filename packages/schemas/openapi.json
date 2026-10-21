@@ -338,7 +338,6 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "configuration.operation-unavailable",
               "kernel.recovery-hold"
             ]
           },
@@ -380,8 +379,7 @@
               }
             },
             "x-error-codes": [
-              "receiving.grn-issued",
-              "receiving.invoice-required"
+              "receiving.grn-issued"
             ]
           },
           "500": {
@@ -73487,7 +73485,6 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "configuration.operation-unavailable",
               "kernel.recovery-hold"
             ]
           },
@@ -73531,7 +73528,6 @@
             "x-error-codes": [
               "receiving.grn-issued",
               "receiving.invoice-number-repeated",
-              "receiving.invoice-required",
               "receiving.possible-duplicate-invoice"
             ]
           },
@@ -74892,7 +74888,6 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "configuration.operation-unavailable",
               "kernel.recovery-hold"
             ]
           },
@@ -74934,8 +74929,7 @@
               }
             },
             "x-error-codes": [
-              "receiving.grn-issued",
-              "receiving.invoice-required"
+              "receiving.grn-issued"
             ]
           },
           "500": {
@@ -77699,7 +77693,6 @@
             "x-error-codes": [
               "access.business-date-not-set",
               "access.not-authorised",
-              "configuration.operation-unavailable",
               "kernel.recovery-hold"
             ]
           },
@@ -77743,6 +77736,7 @@
             "x-error-codes": [
               "receiving.grn-issued",
               "receiving.invoice-required",
+              "receiving.line-repeated",
               "receiving.size-not-on-list",
               "receiving.sku-not-of-line"
             ]

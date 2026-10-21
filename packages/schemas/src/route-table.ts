@@ -966,22 +966,24 @@ const OPEN_TO_BUY_DECISION_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
- * The codes of a change to an Arrival, before its GRN (goods-in 4.1 to 4.3; S2-F02-T02): its own refusals, the policy
- * gate's when receiving is unavailable at the unit (10.5), and the version token's (code-house-rules 12.7).
+ * The codes every change to an Arrival before its GRN can answer (goods-in 4.1 to 4.3; S2-F02-T02): the Arrival not
+ * found or its GRN issued, and the version token's, which holding the actor's authority answers too when their role
+ * changed under the lock (code-house-rules 8.2, 12.7). Recording invoices and photos and the count is not gated
+ * (goods-in 4.8): only recording the Arrival and issuing its GRN add the gate's code.
  */
 const RECEIVING_CHANGE_CODES = [
   ...HISTORY_CODES,
   'kernel.cross-site-request',
   'kernel.stale-version',
-  'configuration.operation-unavailable',
   'receiving.record-not-found',
   'receiving.grn-issued',
-  'receiving.invoice-required',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes of issuing a GRN (goods-in 4.5, 10.3; S2-F02-T02), with the stock ledger's refusals of its receipt counts. */
 const GRN_ISSUE_CODES = [
   ...RECEIVING_CHANGE_CODES,
+  'configuration.operation-unavailable',
+  'receiving.invoice-required',
   'receiving.no-lines',
   'receiving.line-differs-from-invoice',
   'receiving.batch-required',
@@ -4740,7 +4742,13 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: countLineSavedSchema,
-    codes: [...RECEIVING_CHANGE_CODES, 'receiving.size-not-on-list', 'receiving.sku-not-of-line'],
+    codes: [
+      ...RECEIVING_CHANGE_CODES,
+      'receiving.invoice-required',
+      'receiving.size-not-on-list',
+      'receiving.line-repeated',
+      'receiving.sku-not-of-line',
+    ],
   }),
   removeCountLine: defineRoute({
     method: 'POST',
