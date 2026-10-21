@@ -2,6 +2,7 @@ import type { Paise } from '@apparel-os/domain';
 import type { MissingItem } from '../../../../../kernel/index.js';
 import type { CostSetting } from '../../plan.js';
 import type { Formula, PoolState } from '../valuation.js';
+import type { Condition } from '../request.js';
 import type { BalanceState, OriginState, PieceState, Scope, TransitKind, WorkingInputs } from '../working.js';
 
 // The valuing state's records (stock-ledger 7, 13.1 "Recheck and value", 14.2; S1-F10-T03): what it reads under the
@@ -46,8 +47,16 @@ export interface SaleState {
   readonly direction: 'in' | 'out' | null;
   readonly siteId: string;
   readonly businessUnitId: string;
-  /** Its out legs, in order, by origin. */
-  readonly legs: readonly { readonly originId: string; readonly quantity: number }[];
+  /**
+   * Its legs, in order, by origin, each with its direction and condition: a condition change has an out leg from the
+   * condition it left and an in leg into the one it gave, per origin (13.15; S2-F08-T01).
+   */
+  readonly legs: readonly {
+    readonly originId: string;
+    readonly quantity: number;
+    readonly direction: 'in' | 'out';
+    readonly condition: Condition;
+  }[];
   readonly pieceIds: ReadonlySet<string>;
   /** Its pool valuations by origin, as positive amounts (none when its value was Unknown), under FIFO. */
   readonly valued: ReadonlyMap<string, { readonly quantity: number; readonly value: number }>;

@@ -445,6 +445,20 @@ const receivingRecordTypes = [
   declare('receiving.grn', ['view', 'create'], ALL),
 ] as const;
 
+/**
+ * `stock` · documents' damage reports (goods-in 8, 10.1, section 11; module-map section 5; S2-F08-T01). A report belongs
+ * to the place where the goods are, the legal entity of the unit's mapping and the goods' brand, so it carries every
+ * scope fact, and an assignment's place scope decides whose reports a person makes, reads and decides
+ * (access-and-approvals 5.3). Create on the report reports damage and asks for its decision again; approve on it
+ * confirms or rejects one made by someone else (PRD-DMG-002). A reversal of a confirmation is proposed (create) and
+ * approved (approve) under its own type, so proposing and approving are held apart from deciding (PRD-STK-017).
+ * **Design choice**; who holds them is the product owner's to name (V-01).
+ */
+const stockDocumentsRecordTypes = [
+  declare('stock.damage_report', ['view', 'create', 'approve'], ALL),
+  declare('stock.damage_reversal', ['view', 'create', 'approve'], ALL),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -465,6 +479,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...eboImportsRecordTypes,
   ...bookingRecordTypes,
   ...receivingRecordTypes,
+  ...stockDocumentsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -485,7 +500,8 @@ export type RecordTypeCode =
   | (typeof posRecordTypes)[number]['code']
   | (typeof eboImportsRecordTypes)[number]['code']
   | (typeof bookingRecordTypes)[number]['code']
-  | (typeof receivingRecordTypes)[number]['code'];
+  | (typeof receivingRecordTypes)[number]['code']
+  | (typeof stockDocumentsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

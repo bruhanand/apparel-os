@@ -31,6 +31,8 @@ export type {
   LedgerItemKind,
   LedgerRequest,
   LedgerSource,
+  NamedGoods,
+  OriginGoods,
   Owner,
   Place,
   PlacedHoldKind,
@@ -40,8 +42,8 @@ export type { ExpectedQuantity } from './domain/working.js';
 export type { LedgerBooks, LedgerPlaces, LedgerSkus, SkuFacts, UnitFacts } from './ports.js';
 export { booksNotComposed, catalogueSkus, organisationPlaces } from './ports.js';
 export type { CallerRegistration, RegisteredRecordType } from './registry.js';
-export { custody, pieceByCode } from './queries/reads.js';
-export type { CustodyQuery, CustodyRow } from './queries/reads.js';
+export { custody, originOfSourceLine, pieceByCode } from './queries/reads.js';
+export type { CustodyQuery, CustodyRow, SourceLineOrigin } from './queries/reads.js';
 export { availability } from './queries/availability.js';
 export type { AvailabilityRow } from './queries/availability.js';
 export { rebuildAndCompare } from './queries/rebuild.js';

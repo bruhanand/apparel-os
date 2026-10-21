@@ -194,6 +194,8 @@ export const grnSchema = z.strictObject({
   countedBy: z.array(idSchema),
   lines: z.array(
     z.strictObject({
+      /** The line's identifier, which a damage report on its goods names (goods-in 8.2; S2-F08-T01). */
+      id: idSchema,
       lineNumber: z.int().min(1),
       styleCode: z.string(),
       colour: z.string().nullable(),

@@ -1113,6 +1113,29 @@ export const receivingCodes = declareCodes({
   'receiving.grn-series-paused': 'unavailable',
 });
 
+/**
+ * `stock` · documents' codes (goods-in 8, 10.3; S2-F08-T01):
+ *
+ * - `stock.record-not-found`: no damage report, or no reversal of one, has that identifier, or none the reader may see.
+ * - `stock.goods-not-found`: the GRN line names no counted goods, or the product is not in force at the Site today.
+ * - `stock.location-not-found`: no location has that identifier (structure-and-masters 3.5).
+ * - `stock.report-decided`: the report's decision is made already; a mistaken confirmation is reversed instead (8.3).
+ * - `stock.report-not-confirmed`: only a confirmation the report stands on is reversed (8.3; PRD-STK-017).
+ * - `stock.reversal-open`: a reversal of the confirmation waits for its approval already.
+ * - `stock.no-damage-report-series`, `stock.damage-report-series-paused`: no Open damage-report number series
+ *   (numbering-and-audit 3.2; goods-in 10.4).
+ */
+export const stockDocumentsCodes = declareCodes({
+  'stock.record-not-found': 'not-found',
+  'stock.goods-not-found': 'refused',
+  'stock.location-not-found': 'refused',
+  'stock.report-decided': 'refused',
+  'stock.report-not-confirmed': 'refused',
+  'stock.reversal-open': 'refused',
+  'stock.no-damage-report-series': 'unavailable',
+  'stock.damage-report-series-paused': 'unavailable',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1137,6 +1160,7 @@ export const errorCodes = {
   ...eboImportsCodes,
   ...bookingCodes,
   ...receivingCodes,
+  ...stockDocumentsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

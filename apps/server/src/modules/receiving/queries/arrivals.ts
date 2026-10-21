@@ -40,6 +40,7 @@ async function grnView(context: TransactionContext, arrivalId: string): Promise<
     enteredBy: row.issuedByUserId,
     countedBy: row.countedByUserIds,
     lines: lines.map((line) => ({
+      id: line.id,
       lineNumber: line.lineNumber,
       styleCode: line.styleCode,
       colour: line.colour,

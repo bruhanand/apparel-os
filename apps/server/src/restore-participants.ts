@@ -17,6 +17,7 @@ import { posRestoreParticipant } from './modules/pos/index.js';
 import { receivingRestoreParticipant } from './modules/receiving/index.js';
 import { siteLifecycleRestoreParticipant } from './modules/site-lifecycle/index.js';
 import { stockLedgerRestoreParticipant } from './modules/stock/ledger/index.js';
+import { stockDocumentsRestoreParticipant } from './modules/stock/documents/index.js';
 
 // The restore participants of every module that holds records (backup-and-restore 10.1, 10.2; S1-F14-T02): each
 // module defines its own and the composition registers them, as it registers numbered kinds (numbered-kinds.ts). The
@@ -41,5 +42,6 @@ export const restoreRegistry = new RestoreRegistry([
   eboImportsRestoreParticipant,
   bookingRestoreParticipant,
   receivingRestoreParticipant,
+  stockDocumentsRestoreParticipant,
   siteLifecycleRestoreParticipant,
 ]);
