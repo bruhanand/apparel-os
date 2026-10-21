@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { and, eq, gt, inArray, notInArray, or, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import {
   balance,
   costLayer,
@@ -27,7 +27,7 @@ import { Valuing, type SaleState, type TransitState, type ValuingInputs } from '
 import type { PoolState } from './domain/valuation.js';
 import { paise } from '@apparel-os/domain';
 import { recheckHidden, type HiddenAnswer } from './db/recheck-hidden.js';
-import { refusalOf, StockRefused, type Condition, type ItemValue } from './domain/request.js';
+import { refusalOf, StockRefused, type Condition, type ItemValue, type Owner } from './domain/request.js';
 import {
   Working,
   type BalanceState,
@@ -161,6 +161,28 @@ const headerScope = (row: {
   legalEntityId: row.legalEntityId,
 });
 
+/** The owner an origin's state records (14.2; PRD-ORG-014), as the request names one (13.3). */
+function ownerOf(state: typeof receiptOriginState.$inferSelect): Owner {
+  const agreement = state.agreementVersionId;
+  switch (state.ownerKind) {
+    case 'organisation':
+      return {
+        kind: 'organisation',
+        legalEntityId: state.ownerLegalEntityId ?? '',
+        ...(agreement === null ? {} : { agreementVersionId: agreement }),
+      };
+    case 'supplier':
+    case 'brand':
+      // Written only with its agreement version (13.3; write.ts).
+      if (agreement === null) throw new CommandDefect('A supplier or brand owner without its agreement version');
+      return state.ownerKind === 'supplier'
+        ? { kind: 'supplier', partyId: state.ownerPartyId ?? '', agreementVersionId: agreement }
+        : { kind: 'brand', brandId: state.ownerBrandId ?? '', agreementVersionId: agreement };
+    default:
+      return { kind: 'unknown' };
+  }
+}
+
 /** The rows read under the locks (code-house-rules 8.1): every one locked, or changed only under a lock held. */
 async function load(context: TransactionContext, locked: LockedPlan): Promise<ValuingInputs> {
   const { plan } = locked;
@@ -182,12 +204,20 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
     if (elsewhere.length > 0) throw new StockRefused(refusalOf('plan-stale', plan.request.items[0]?.lineId));
   }
   const freezeUnits = [...plan.freezeUnits].map((at) => at.split('|'));
+  // The goods of Unknown SKU at a unit share one SKU balance (14.2; 13.14): of its balances only those of the origins
+  // the request names are read, since no item takes such goods but by naming their origin.
+  const unknownTotals = totals.filter((row) => row.skuId === null).map((row) => row.id);
+  const knownTotals = totalIds.filter((id) => !unknownTotals.includes(id));
+  const namedOrigins = [...plan.originIds.keys()];
   const balanceRows = await context.tx
     .select()
     .from(balance)
     .where(
       or(
-        totalIds.length === 0 ? sql`false` : inArray(balance.skuBalanceId, totalIds),
+        knownTotals.length === 0 ? sql`false` : inArray(balance.skuBalanceId, knownTotals),
+        unknownTotals.length === 0 || namedOrigins.length === 0
+          ? sql`false`
+          : and(inArray(balance.skuBalanceId, unknownTotals), inArray(balance.receiptOriginId, namedOrigins)),
         ...freezeUnits.map(([siteId, unitId]) =>
           and(eq(balance.siteId, siteId ?? ''), eq(balance.businessUnitId, unitId ?? '')),
         ),
@@ -308,6 +338,16 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
       id: origin.id,
       isNew: false,
       skuId: origin.skuId,
+      stockUnit: origin.stockUnit as OriginState['stockUnit'],
+      owner: ownerOf(state),
+      mappingVersionId: origin.mappingVersionId,
+      bookId: origin.bookId,
+      parentOriginId: origin.parentOriginId,
+      described:
+        origin.describedStyleCode === null
+          ? null
+          : { styleCode: origin.describedStyleCode, colour: origin.describedColour, size: origin.describedSize },
+      madeByMovementId: null,
       pieceTracked: origin.pieceTracked,
       batchCode: origin.batchCode,
       expiryDate: origin.expiryDate,

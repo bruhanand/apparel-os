@@ -193,6 +193,21 @@ export interface SyntheticWorld {
     readonly fitName: string;
   };
   /**
+   * The open-to-buy journey (S2-F01-T02), in the security settings Organisation: a Booking user who prepares a budget,
+   * Accounts who checks it and the Owner who approves it, the approve reason, and how the budget form names the
+   * products journey's SYNTHETIC brand, season list and season.
+   */
+  readonly openToBuy: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly accounts: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly brandOption: string;
+    readonly seasonListOption: string;
+    readonly seasonOption: string;
+  };
+  /**
    * The file intake journey (S1-F06-T01), in the posting maps journey's Organisation: a Booking user who imports the
    * SYNTHETIC product file the server of the journeys wrote, the saved layout's option as the screen names it, and the
    * style and SKU codes the file holds.

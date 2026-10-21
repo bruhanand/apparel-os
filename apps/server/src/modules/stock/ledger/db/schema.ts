@@ -49,6 +49,10 @@ export const receiptOrigin = stock.table('receipt_origin', {
   bookId: uuid('book_id').notNull(),
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  // The identity as described of goods whose SKU is Unknown (migration `stock.ledger__described_goods`; stock-ledger 13.14; GI-1).
+  describedStyleCode: text('described_style_code'),
+  describedColour: text('described_colour'),
+  describedSize: text('described_size'),
 });
 
 export const movement = stock.table('movement', {

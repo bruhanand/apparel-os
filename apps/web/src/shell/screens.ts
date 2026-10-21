@@ -18,7 +18,7 @@ export interface Grant {
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 
-export const sections = ['home', 'money', 'setup'] as const;
+export const sections = ['home', 'booking', 'money', 'setup'] as const;
 export type Section = (typeof sections)[number];
 
 export interface Screen {
@@ -33,6 +33,13 @@ const view = (recordType: string): ScreenNeed => ({ kind: 'grant', grant: { reco
 /** Every screen of the shell, in sidebar order. */
 export const screens = {
   'my-work': { section: 'home', path: '/my-work', need: { kind: 'none' } },
+  // Booking › Open-to-buy: budgets by brand and season, prepared, checked and approved (goods-in 3.3, section 11;
+  // ui-blueprint Booking; S2-F01-T02).
+  'booking.open-to-buy': {
+    section: 'booking',
+    path: '/booking/open-to-buy',
+    need: view('booking.open_to_buy_budget'),
+  },
   'setup.users': { section: 'setup', path: '/setup/users', need: view('access.user') },
   'setup.roles': { section: 'setup', path: '/setup/roles', need: view('access.role') },
   'setup.role-assignments': {
@@ -125,7 +132,11 @@ export const screenIds = Object.keys(screens) as ScreenId[];
  */
 export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; menu: readonly ScreenId[] }>> = {
   // The Owner's Setup is "Policy readiness · Approval limits · Approve changes" (ui-blueprint).
-  'P-OWN': { home: 'my-work', menu: ['my-work', 'setup.policy-readiness', 'setup.approval-limits'] },
+  // Booking (open-to-buy, approve) arrives with S2-F01-T02 (ui-blueprint "Menus by persona").
+  'P-OWN': {
+    home: 'my-work',
+    menu: ['my-work', 'booking.open-to-buy', 'setup.policy-readiness', 'setup.approval-limits'],
+  },
   'P-ADM': {
     home: 'setup.policy-readiness',
     menu: [
@@ -156,7 +167,8 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   },
   'P-CHA': { home: null, menu: [] },
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
-  'P-BKG': { home: null, menu: ['setup.products'] },
+  // Booking › Open-to-buy arrives with S2-F01-T02 (ui-blueprint; goods-in section 11).
+  'P-BKG': { home: null, menu: ['booking.open-to-buy', 'setup.products'] },
   // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
   'P-OPS': { home: 'my-work', menu: ['my-work', 'setup.site-opening'] },
   'P-WHS': { home: null, menu: ['my-work'] },

@@ -912,8 +912,10 @@ export const merchandiseCodes = declareCodes({
  *   while a Site holds pieces of the goods (4.6; PRD-MER-018; product owner, 10 Oct 2026).
  * - `merchandise.not-a-piece-tracking-change`: the profile version is not a change from quantity to piece-tracked.
  * - `merchandise.pack-of-another-sku`: the pack named is not one of the SKU's (4.3).
- * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target (4.3).
- * - `merchandise.code-ambiguous`: more than one target matches the code (4.7; PRD-MER-007).
+ * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target; for a
+ *   supplier barcode, which may name more than one SKU, the same SKU in another unit (4.3; PRD-MER-007, DEC-135).
+ * - `merchandise.code-ambiguous`: more than one target matches the code, other than a brand barcode's SKUs, which are
+ *   answered as candidates (4.7; PRD-MER-007, DEC-135).
  * - `merchandise.code-not-found`: no mapping of the code matches (4.7).
  * - `merchandise.no-version-in-force`: the SKU has no approved version in force on the date (4.7).
  * - `merchandise.end-not-allowed`: a mapping's end is before today, not after its start, or later than its end.
@@ -1027,6 +1029,27 @@ export const deviceCodes = declareCodes({
   'pos.change-not-awaiting': 'refused',
 });
 
+/**
+ * `booking`'s codes (goods-in 3.3, 10.3; S2-F01-T02):
+ *
+ * - `booking.record-not-found`: no open-to-buy budget, or no version of one, has that identifier.
+ * - `booking.brand-not-in-force`: the brand has no approved version in force today that does not retire it
+ *   (structure-and-masters 2.5).
+ * - `booking.season-not-in-vocabulary`: the season is not an approved value of its attribute in force today
+ *   (structure-and-masters 4.2; goods-in 3.1).
+ * - `booking.budget-exists`: the brand and season have a budget already; a change is its next version (3.3).
+ * - `booking.version-not-awaiting`: the version is decided already, or a newer version replaced it.
+ * - `booking.budget-not-checked`: the version's approval is refused until Accounts' check is recorded (POL-05.09).
+ */
+export const bookingCodes = declareCodes({
+  'booking.record-not-found': 'not-found',
+  'booking.brand-not-in-force': 'refused',
+  'booking.season-not-in-vocabulary': 'refused',
+  'booking.budget-exists': 'refused',
+  'booking.version-not-awaiting': 'refused',
+  'booking.budget-not-checked': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1049,6 +1072,7 @@ export const errorCodes = {
   ...financePeriodCodes,
   ...deviceCodes,
   ...eboImportsCodes,
+  ...bookingCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

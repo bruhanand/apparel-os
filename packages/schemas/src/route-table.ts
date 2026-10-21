@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
 import {
+  OPEN_TO_BUY_BUDGET_TYPE,
+  openToBuyBudgetDraftSchema,
+  openToBuyBudgetListSchema,
+  openToBuyBudgetPreparedSchema,
+  openToBuyBudgetReadSchema,
+  openToBuyBudgetVersionDraftSchema,
+} from './booking.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -915,6 +923,28 @@ const TAX_RULE_CA_EVIDENCE_CODES = [
   'finance.version-not-awaiting',
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The codes preparing an open-to-buy budget or its version can answer (goods-in 3.3; S2-F01-T02): the budget carries
+ * its brand, so each route authorises in its command with the brand's facts (access-and-approvals 5.3).
+ */
+const OPEN_TO_BUY_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.origin-not-allowed',
+  'booking.record-not-found',
+  'booking.brand-not-in-force',
+  'booking.season-not-in-vocabulary',
+  'booking.budget-exists',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes the check or the approval of a budget version can answer under Decide's locks (3.3; POL-05.09). */
+const OPEN_TO_BUY_DECISION_CODES = [
+  'booking.record-not-found',
+  'booking.version-not-awaiting',
+  'booking.budget-not-checked',
+] as const satisfies readonly ErrorCode[];
+
 export const routes = {
   health: defineRoute({
     method: 'GET',
@@ -1513,6 +1543,8 @@ export const routes = {
       ...CATALOGUE_DECISION_CODES,
       // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
       ...FINANCE_DECISION_CODES,
+      // An open-to-buy budget version's check and approval (goods-in 3.3; POL-05.09; S2-F01-T02).
+      ...OPEN_TO_BUY_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -4529,6 +4561,52 @@ export const routes = {
     shows: 'nothing',
     response: numberingChangeWithdrawnSchema,
     codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
+  }),
+  // Booking › Open-to-buy (goods-in 3.3, section 11; PRD-BKG-004; POL-05.09; S2-F01-T02): budgets by brand and season,
+  // each version prepared by Booking, checked by Accounts and approved by the Owner, or whoever holds the approval,
+  // through My work. A budget carries its brand, so each route authorises in its command with the brand's facts
+  // (access-and-approvals 5.3). Not policy-gated: a budget is how policy 5's values are entered (DEC-116).
+  listOpenToBuyBudgets: defineRoute({
+    method: 'GET',
+    path: '/api/booking/open-to-buy-budgets',
+    access: { kind: 'action', action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: openToBuyBudgetListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readOpenToBuyBudget: defineRoute({
+    method: 'GET',
+    path: '/api/booking/open-to-buy-budgets/{budgetId}',
+    params: z.strictObject({ budgetId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: openToBuyBudgetReadSchema,
+    codes: [...HISTORY_CODES, 'booking.record-not-found'],
+  }),
+  prepareOpenToBuyBudget: defineRoute({
+    method: 'POST',
+    path: '/api/booking/open-to-buy-budgets',
+    access: { kind: 'action', action: 'create', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: openToBuyBudgetDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: openToBuyBudgetPreparedSchema,
+    codes: OPEN_TO_BUY_CHANGE_CODES,
+  }),
+  prepareOpenToBuyBudgetVersion: defineRoute({
+    method: 'POST',
+    path: '/api/booking/open-to-buy-budgets/{budgetId}/versions',
+    params: z.strictObject({ budgetId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: openToBuyBudgetVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: openToBuyBudgetPreparedSchema,
+    codes: OPEN_TO_BUY_CHANGE_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 
