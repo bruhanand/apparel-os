@@ -432,8 +432,9 @@ const bookingRecordTypes = [
  * to the place where the goods physically are, the legal entity of the unit's mapping and the Arrival's brand, so both
  * carry every scope fact, and an assignment's place scope decides whose receipts a person records and reads
  * (access-and-approvals 5.3; goods-in 12 test 20). Create on the Arrival records one; edit records its invoices and
- * photos and saves its count; create on the GRN issues it, with no approval (goods-in 4.5). **Design choice**; who
- * holds them is the product owner's to name (V-01).
+ * photos and saves its count; view reads it with its GRN; create on the GRN issues it, with no approval (goods-in
+ * 4.5), and view on the GRN reads its history. **Design choice**; who holds them is the product owner's to name
+ * (V-01).
  */
 const receivingRecordTypes = [
   declare('receiving.arrival', ['view', 'create', 'edit'], ALL),

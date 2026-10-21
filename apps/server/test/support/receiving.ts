@@ -72,7 +72,6 @@ export function placeScope(
 function terms(ownershipEvent: AgreementTerms['ownershipEvent']): AgreementTerms {
   return {
     commercialModel: null,
-    defaultModel: null,
     ownershipEvent,
     returnRights: { allowed: null, window: null, startsAt: null },
     returnConditions: {

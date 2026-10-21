@@ -10,7 +10,7 @@ import {
   type PhotosDraft,
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { brandInForce } from '../../merchandise/catalogue/index.js';
@@ -114,7 +114,7 @@ export async function recordArrival(
   }
   const mapping = await mappingOn(context, unit.id, date);
   // Available has just asked for it: a mapping in force and verified.
-  if (mapping === undefined) throw new Error('A unit receiving is available at has a mapping in force');
+  if (mapping === undefined) throw new CommandDefect('A unit receiving is available at has a mapping in force');
   const values = {
     id: uuidv7(),
     siteId: unit.siteId,

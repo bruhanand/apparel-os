@@ -1,7 +1,7 @@
 import { boolean, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `receiving`'s tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0087) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0088) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 

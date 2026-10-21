@@ -5,8 +5,9 @@
 -- written here: a GRN holds quantities, never a price, tax or value (goods-in 4.5).
 --
 -- Every row belongs to the place where the goods physically are, the legal entity of the unit's mapping and the
--- Arrival's brand, so every table is scoped (code-house-rules 6.1, 6.2): the Arrival and what is recorded on it under
--- `receiving.arrival`, the GRN and its lines under `receiving.grn`. Every row is append-only (code-house-rules 7.1): a
+-- Arrival's brand, so every table is scoped (code-house-rules 6.1, 6.2), each under `receiving.arrival`: the GRN and its
+-- lines are read with the Arrival they were issued from, so whoever sees an Arrival sees whether and how its GRN was
+-- issued; create on `receiving.grn` is what issuing one needs. Every row is append-only (code-house-rules 7.1): a
 -- count line changes by a new entry naming the one it replaces, and the GRN freezes the lines as they stood. The
 -- Arrival's identity row is locked by every change of it (code-house-rules 8.2, step 1), so a GRN is issued from a
 -- count no one is changing. References to other modules' records keep their identifiers with no foreign key
@@ -230,7 +231,8 @@ create trigger refuse_row_change before update or delete on receiving.grn_line
 create trigger refuse_truncate before truncate on receiving.grn_line
   for each statement execute function kernel.refuse_change();
 
--- Row-level security (code-house-rules 6.2): every table through `access.row_visible` with its scope facts.
+-- Row-level security (code-house-rules 6.2): every table through `access.row_visible` with its scope facts, under the
+-- Arrival's record type.
 alter table receiving.arrival enable row level security;
 create policy row_scope on receiving.arrival for all to aos_runtime
   using (access.row_visible('receiving.arrival', site_id, store_id, business_unit_id, legal_entity_id, brand_id, null))
@@ -258,13 +260,13 @@ create policy row_scope on receiving.count_entry for all to aos_runtime
     null));
 alter table receiving.grn enable row level security;
 create policy row_scope on receiving.grn for all to aos_runtime
-  using (access.row_visible('receiving.grn', site_id, store_id, business_unit_id, legal_entity_id, brand_id, null))
-  with check (access.row_visible('receiving.grn', site_id, store_id, business_unit_id, legal_entity_id, brand_id,
+  using (access.row_visible('receiving.arrival', site_id, store_id, business_unit_id, legal_entity_id, brand_id, null))
+  with check (access.row_visible('receiving.arrival', site_id, store_id, business_unit_id, legal_entity_id, brand_id,
     null));
 alter table receiving.grn_line enable row level security;
 create policy row_scope on receiving.grn_line for all to aos_runtime
-  using (access.row_visible('receiving.grn', site_id, store_id, business_unit_id, legal_entity_id, brand_id, null))
-  with check (access.row_visible('receiving.grn', site_id, store_id, business_unit_id, legal_entity_id, brand_id,
+  using (access.row_visible('receiving.arrival', site_id, store_id, business_unit_id, legal_entity_id, brand_id, null))
+  with check (access.row_visible('receiving.arrival', site_id, store_id, business_unit_id, legal_entity_id, brand_id,
     null));
 
 -- The narrowly authorised check of a possible duplicate invoice (goods-in 4.2; code-house-rules 6.2; DEC-117): the
