@@ -158,12 +158,12 @@ export class ValuedWorld extends StockWorld {
     return [POSTING_REFUSED];
   }
 
-  /** A SYNTHETIC SKU of a new brand, piece-tracked or quantity-tracked. */
-  sku(pieceTracked: boolean): SkuFacts {
+  /** A SYNTHETIC SKU of a new brand unless one is given, piece-tracked or quantity-tracked. */
+  sku(pieceTracked: boolean, brandId: string = uuidv7()): SkuFacts {
     const sku: SkuFacts = {
       skuId: uuidv7(),
       versionId: uuidv7(),
-      brandId: uuidv7(),
+      brandId,
       stockUnit: 'piece',
       pieceTracked,
       batchTracked: false,

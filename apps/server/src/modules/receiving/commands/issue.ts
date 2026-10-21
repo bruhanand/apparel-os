@@ -89,12 +89,14 @@ async function batchRefusal(
 /** The receipt count of one line's counted pieces (stock-ledger 13.4, 13.14; goods-in 4.5). */
 function receiptCount(row: ArrivalRow, line: CurrentLine, grnLineId: string, owner: Owner): LedgerItem {
   const { entry } = line;
-  // A known product, or goods of a product not yet set up with their identity as described (stock-ledger 13.14).
+  // A known product, or goods of a product not yet set up with their identity as described, counted under the
+  // Arrival's brand, so a person scoped to it sees them before PT approval names their SKU (stock-ledger 13.14; RR-555).
   const goods =
     entry.skuId === null
       ? {
           skuId: null,
           described: { styleCode: entry.styleCode, colour: entry.colour, size: entry.size?.code ?? null },
+          brandId: row.brandId,
         }
       : { skuId: entry.skuId };
   return {

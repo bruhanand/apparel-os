@@ -57,6 +57,15 @@ function describedIdentityRefused(goods: {
   );
 }
 
+/**
+ * Whether the goods a receipt count names give their brand wrongly (13.14, 14.1; RR-555): goods of Unknown SKU name the
+ * brand they are counted under, never none; a SKU's goods are of the SKU's brand and name none.
+ */
+function countedBrandRefused(goods: { readonly skuId: string | null; readonly brandId?: string | undefined }): boolean {
+  if (goods.skuId !== null) return goods.brandId !== undefined;
+  return typeof goods.brandId !== 'string' || goods.brandId.trim() === '';
+}
+
 export interface Scope {
   readonly siteId: string;
   readonly storeId: string | null;
@@ -70,6 +79,8 @@ export interface SkuBalanceState {
   readonly siteId: string;
   readonly businessUnitId: string;
   readonly skuId: string | null;
+  /** The SKU's brand; for the goods of Unknown SKU, the brand they were counted under (14.1; RR-555). */
+  readonly brandId: string | null;
   quantity: number;
   changed: boolean;
 }
@@ -535,9 +546,12 @@ export class Working {
     const brands = (skuIds: readonly string[]) => skuIds.map((skuId) => this.sku(skuId).brandId);
     switch (item.kind) {
       case 'receipt-count': {
-        // Goods of Unknown SKU touch their location only: no SKU or brand scope names them (14.1; 13.14).
-        const skuIds = item.skuId === null ? [] : [item.skuId];
-        return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], skuIds, brands(skuIds));
+        // Goods of Unknown SKU touch their location and the brand they are counted under: no SKU scope names them
+        // (14.1; 13.14; RR-555).
+        if (item.skuId === null) {
+          return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [], [item.brandId]);
+        }
+        return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
       }
       case 'opening-count':
         return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
@@ -557,12 +571,16 @@ export class Working {
             ...rows.flatMap((row) => (row.skuId === null ? [] : [row.skuId])),
           ]),
         ];
+        // Goods of Unknown SKU are of the brand they were counted under (RR-555).
+        const counted = rows.flatMap((row) =>
+          row.skuId === null && row.scope.brandId !== null ? [row.scope.brandId] : [],
+        );
         return at(
           item.at.siteId,
           item.at.businessUnitId,
           [...new Set(rows.flatMap((row) => (row.locationId === null ? [] : [row.locationId])))],
           skuIds,
-          [...new Set(brands(skuIds))],
+          [...new Set([...brands(skuIds), ...counted])],
         );
       }
       case 'location-move': {
@@ -642,10 +660,16 @@ export class Working {
     return { siteId, storeId: unit.storeId, businessUnitId, legalEntityId: unit.legalEntityId };
   }
 
-  protected skuBalanceOf(siteId: string, businessUnitId: string, skuId: string | null): SkuBalanceState {
-    const wanted = skuKey(siteId, businessUnitId, skuId);
+  /** The SKU balance of a SKU at a unit, or of the goods of Unknown SKU there of one brand (14.2; 13.14; RR-555). */
+  protected skuBalanceOf(
+    siteId: string,
+    businessUnitId: string,
+    skuId: string | null,
+    brandId: string | null,
+  ): SkuBalanceState {
+    const wanted = skuKey(siteId, businessUnitId, skuId, brandId);
     for (const row of this.skuBalances.values()) {
-      if (skuKey(row.siteId, row.businessUnitId, row.skuId) === wanted) return row;
+      if (skuKey(row.siteId, row.businessUnitId, row.skuId, row.brandId) === wanted) return row;
     }
     throw new Error(`SKU balance not locked: ${wanted}`);
   }
@@ -755,7 +779,7 @@ export class Working {
     const created: BalanceState = {
       id: this.newId(),
       isNew: true,
-      skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId).id,
+      skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId, origin.scope.brandId).id,
       siteId,
       businessUnitId,
       locationId: transit === undefined ? locationId : null,
@@ -781,7 +805,7 @@ export class Working {
     balance.quantity += quantity;
     balance.accepted += accepted;
     balance.changed = true;
-    const total = this.skuBalanceOf(balance.siteId, balance.businessUnitId, balance.skuId);
+    const total = this.skuBalanceOf(balance.siteId, balance.businessUnitId, balance.skuId, balance.scope.brandId);
     total.quantity += quantity;
     total.changed = true;
   }
@@ -953,19 +977,21 @@ export class Working {
     }
   }
 
+  /** A new movement; its brand set is its SKUs' brands, or the brands given for goods of Unknown SKU (14.1; RR-555). */
   protected newMovement(
     kind: MovementEntry['kind'],
     lineId: string,
     siteId: string,
     businessUnitId: string,
     skuIds: readonly (string | null)[],
+    brandIds?: readonly string[],
   ): MovementEntry {
     const movement: MovementEntry = {
       id: this.newId(),
       kind,
       lineId,
       scope: this.headerScopeAt(siteId, businessUnitId),
-      brandIds: [...new Set(skuIds.map((skuId) => this.brandOf(skuId)))],
+      brandIds: [...new Set(brandIds ?? skuIds.map((skuId) => this.brandOf(skuId)))],
       legs: [],
       pieceIds: [],
     };
@@ -1004,22 +1030,28 @@ export class Working {
    */
   protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
     if (describedIdentityRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
+    if (countedBrandRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'brand' }]);
     if (item.skuId === null) {
       if (item.condition !== 'good')
         refuse('invalid-item', item.lineId, [{ kind: 'condition', condition: item.condition }]);
       if (item.pieceCodes !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'piece-codes' }]);
       if (item.batch !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'batch' }]);
     }
-    const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
-      item.skuId,
-    ]);
+    const movement = this.newMovement(
+      'receipt-count',
+      item.lineId,
+      item.to.siteId,
+      item.to.businessUnitId,
+      [item.skuId],
+      item.skuId === null ? [item.brandId] : undefined,
+    );
     this.countedOrigin(item.lineId, movement, 'receipt', item.to, item.condition, {
       skuId: item.skuId,
       quantity: item.quantity,
       ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
       owner: item.owner,
       ...(item.batch === undefined ? {} : { batch: item.batch }),
-      ...(item.described === undefined ? {} : { described: item.described }),
+      ...(item.skuId === null ? { described: item.described, brandId: item.brandId } : {}),
     });
     return { kind: 'unknown' };
   }
@@ -1109,11 +1141,13 @@ export class Working {
       readonly owner: Owner;
       readonly batch?: { readonly code: string; readonly expiryDate: string };
       readonly described?: DescribedIdentity;
+      /** For goods of a product not yet set up, the brand they are counted under (14.1; RR-555). */
+      readonly brandId?: string;
     },
   ): { origin: OriginState; balance: BalanceState; pieces: PieceState[] } {
     const sku =
       counted.skuId === null
-        ? { pieceTracked: false, brandId: null, stockUnit: 'piece' as const }
+        ? { pieceTracked: false, brandId: counted.brandId ?? null, stockUnit: 'piece' as const }
         : this.sku(counted.skuId);
     const codes = counted.pieceCodes ?? [];
     for (const code of codes) {

@@ -123,8 +123,8 @@ export interface AnchorTarget {
 }
 
 /**
- * A SKU balance a request locks at step 3 (10.3): of a SKU at a unit, or of the goods of Unknown SKU there, which share
- * one row, in pieces and of no brand (14.1, 14.2; 13.14).
+ * A SKU balance a request locks at step 3 (10.3): of a SKU at a unit, or of the goods of Unknown SKU there of one brand,
+ * which share one row, in pieces, of the brand they were counted under (14.1, 14.2; 13.14; RR-555).
  */
 export interface SkuBalanceTarget {
   readonly unit: UnitFacts;
@@ -210,13 +210,16 @@ export async function planRequest(
       stockUnit: sku.stockUnit,
       brandId: sku.brandId,
     });
-  /** The SKU balance of the goods of Unknown SKU at a unit (13.14): one row, in pieces, of no brand (14.1). */
-  const unknownBalanceOf = (unit: UnitFacts) =>
-    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, null), {
+  /**
+   * The SKU balance of the goods of Unknown SKU of one brand at a unit (13.14): one row, in pieces, of the brand they
+   * were counted under (14.1; RR-555).
+   */
+  const unknownBalanceOf = (unit: UnitFacts, brandId: string | null) =>
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, null, brandId), {
       unit,
       skuId: null,
       stockUnit: 'piece',
-      brandId: null,
+      brandId,
     });
   const goodsAt = async (lineId: string, unit: UnitFacts, goods: Goods, reserving = false) => {
     const sku = await skuOf(lineId, goods.skuId, unit.siteId);
@@ -451,7 +454,7 @@ export async function planRequest(
           // leave and enter at the unit (10.3 steps 2 and 3).
           originIds.set(origin.id, 'exclusive');
           const receiving = await unitOf(item.lineId, origin.siteId, origin.businessUnitId);
-          if (origin.skuId === null) unknownBalanceOf(at);
+          if (origin.skuId === null) unknownBalanceOf(at, origin.brandId);
           else balanceOf(at, await skuOf(item.lineId, origin.skuId, at.siteId));
           const sku = await skuOf(item.lineId, part.skuId, at.siteId);
           balanceOf(at, sku);
@@ -490,8 +493,11 @@ export async function planRequest(
         if (!Number.isInteger(item.quantity) || item.quantity <= 0)
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'quantity' }]));
         if (item.skuId === null) {
-          // Goods of a product not yet set up (13.14; GI-1): the Recheck checks their identity as described.
-          unknownBalanceOf(unit);
+          // Goods of a product not yet set up (13.14; GI-1): their SKU balance is of the brand they are counted under,
+          // which they must name before anything is locked (RR-555); the Recheck checks their identity as described.
+          if (typeof item.brandId !== 'string' || item.brandId.trim() === '')
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'brand' }]));
+          unknownBalanceOf(unit, item.brandId);
           return;
         }
         const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
