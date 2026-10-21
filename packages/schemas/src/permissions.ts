@@ -427,6 +427,20 @@ const bookingRecordTypes = [
   declare('booking.open_to_buy_check', ['view', 'approve'], BRAND),
 ] as const;
 
+/**
+ * `receiving` (goods-in 4.1 to 4.5, 10.1, section 11; module-map section 5; S2-F02-T02). An Arrival and its GRN belong
+ * to the place where the goods physically are, the legal entity of the unit's mapping and the Arrival's brand, so both
+ * carry every scope fact, and an assignment's place scope decides whose receipts a person records and reads
+ * (access-and-approvals 5.3; goods-in 12 test 20). Create on the Arrival records one; edit records its invoices and
+ * photos and saves its count; view reads it with its GRN; create on the GRN issues it, with no approval (goods-in
+ * 4.5), and view on the GRN reads its history. **Design choice**; who holds them is the product owner's to name
+ * (V-01).
+ */
+const receivingRecordTypes = [
+  declare('receiving.arrival', ['view', 'create', 'edit'], ALL),
+  declare('receiving.grn', ['view', 'create'], ALL),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -446,6 +460,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...posRecordTypes,
   ...eboImportsRecordTypes,
   ...bookingRecordTypes,
+  ...receivingRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -465,7 +480,8 @@ export type RecordTypeCode =
   | (typeof financeRecordTypes)[number]['code']
   | (typeof posRecordTypes)[number]['code']
   | (typeof eboImportsRecordTypes)[number]['code']
-  | (typeof bookingRecordTypes)[number]['code'];
+  | (typeof bookingRecordTypes)[number]['code']
+  | (typeof receivingRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

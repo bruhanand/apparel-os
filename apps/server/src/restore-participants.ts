@@ -14,6 +14,7 @@ import { partiesRestoreParticipant } from './modules/merchandise/parties/index.j
 import { numberingRestoreParticipant } from './modules/numbering/index.js';
 import { organisationRestoreParticipant } from './modules/organisation/index.js';
 import { posRestoreParticipant } from './modules/pos/index.js';
+import { receivingRestoreParticipant } from './modules/receiving/index.js';
 import { siteLifecycleRestoreParticipant } from './modules/site-lifecycle/index.js';
 import { stockLedgerRestoreParticipant } from './modules/stock/ledger/index.js';
 
@@ -39,5 +40,6 @@ export const restoreRegistry = new RestoreRegistry([
   posRestoreParticipant,
   eboImportsRestoreParticipant,
   bookingRestoreParticipant,
+  receivingRestoreParticipant,
   siteLifecycleRestoreParticipant,
 ]);

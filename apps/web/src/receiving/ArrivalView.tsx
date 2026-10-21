@@ -1,0 +1,715 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  ARRIVAL_TYPE,
+  GRN_TYPE,
+  type Arrival,
+  type CountLine,
+  type EvidenceFile,
+  type Inbox,
+} from '@apparel-os/schemas';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { api } from '../api';
+import { useSubmission } from '../api/command';
+import { readQuery } from '../api/query';
+import { Banner } from '../components/Banner';
+import { Button } from '../components/Button';
+import { StatusBadge } from '../components/StatusBadge';
+import { missingText } from '../components/UnavailableState';
+import { EvidenceList, EvidencePicker, useChosenFile, useStoreEvidence } from '../files/Evidence';
+import { describedBy, FormField } from '../forms/FormField';
+import { AsOf } from '../history/AsOf';
+import { formatDateTime } from '../history/format';
+import { t } from '../messages/catalogue';
+import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
+import { stateIdOf } from '../setup/states';
+import { useTimeZone } from '../shell/session';
+import { optionText, useMasterNames } from './names';
+
+// Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
+// (goods-in 4.2 to 4.5, section 11; PRD-REC-003 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The count is saved as
+// it goes and resumed by anyone counting; the GRN is issued with no approval once nothing blocks it, and is printed
+// with quantities only, never a price, tax or value.
+
+/** The reads a change of an Arrival makes stale. */
+const ARRIVAL_READS = ['readArrival', 'readReceivingInbox'] as const;
+
+type Unit = Inbox['units'][number];
+
+/** A person's name from their sign-in, as the Arrival names them; the identifier when it is unknown. */
+function personOf(arrival: Arrival, userId: string): string {
+  return arrival.people.find((each) => each.userId === userId)?.name ?? userId;
+}
+
+function Facts({ rows }: { rows: readonly (readonly [Parameters<typeof t>[0], string])[] }) {
+  return (
+    <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-body-sm">
+      {rows.map(([label, text]) => (
+        <div key={label} className="contents">
+          <dt className="text-text-2">{t(label)}</dt>
+          <dd className="m-0 break-words">{text}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const invoiceFormSchema = z.object({ number: z.string().trim().min(1), date: z.iso.date() });
+type InvoiceForm = z.input<typeof invoiceFormSchema>;
+
+/**
+ * A supplier invoice with its file (goods-in 4.2; DEC-133). A number the supplier used on another Arrival is refused
+ * as a possible duplicate; the receiver corrects it, or confirms it is right and records it.
+ */
+function InvoiceForm({ arrival }: { arrival: Arrival }) {
+  const form = useForm<InvoiceForm>({
+    resolver: zodResolver(invoiceFormSchema),
+    mode: 'onBlur',
+    defaultValues: { number: '', date: '' },
+  });
+  const chosen = useChosenFile();
+  const storing = useStoreEvidence();
+  const submission = useSubmission('recordArrivalInvoice', ARRIVAL_READS);
+  const [stored, setStored] = useState<EvidenceFile | null>(null);
+  const [fileMissing, setFileMissing] = useState(false);
+  const errors = form.formState.errors;
+  const duplicate =
+    submission.state.kind === 'refused' && submission.state.refusal?.code === 'receiving.possible-duplicate-invoice';
+  const send = async (entered: InvoiceForm, confirm: boolean) => {
+    let file = stored;
+    if (file === null) {
+      if (chosen.file === null) {
+        setFileMissing(true);
+        return;
+      }
+      file = (await storing.store(chosen.file)) ?? null;
+      if (file === null) return;
+      setStored(file);
+    }
+    const recorded = await submission.submit({
+      params: { arrivalId: arrival.id },
+      body: {
+        number: entered.number,
+        date: entered.date,
+        file,
+        ...(confirm ? { confirmPossibleDuplicate: true } : {}),
+      },
+    });
+    if (recorded !== undefined) {
+      form.reset();
+      chosen.clear();
+      setStored(null);
+    }
+  };
+  return (
+    <form
+      id="receive-invoice-form"
+      aria-label={t('receive.add-invoice')}
+      noValidate
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        void form.handleSubmit((entered) => send(entered, false))(event);
+      }}
+    >
+      {storing.banner}
+      <SubmissionBanner state={submission.state} done="receive.invoice-added" />
+      {duplicate && (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-body-sm">{t('receive.duplicate-note')}</p>
+          <div>
+            <Button
+              label="receive.confirm-duplicate"
+              onClick={() => {
+                void form.handleSubmit((entered) => send(entered, true))();
+              }}
+            />
+          </div>
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField id="receive-invoice-number" label="receive.invoice-number" required error={errors.number}>
+          <input
+            id="receive-invoice-number"
+            className={inputClass}
+            {...describedBy('receive-invoice-number', { invalid: errors.number !== undefined, help: false })}
+            {...form.register('number')}
+          />
+        </FormField>
+        <FormField id="receive-invoice-date" label="receive.invoice-date" required error={errors.date}>
+          <input
+            id="receive-invoice-date"
+            type="date"
+            className={inputClass}
+            {...describedBy('receive-invoice-date', { invalid: errors.date !== undefined, help: false })}
+            {...form.register('date')}
+          />
+        </FormField>
+      </div>
+      <EvidencePicker
+        id="receive-invoice-file"
+        label="receive.invoice-file"
+        resetKey={chosen.resetKey}
+        onChange={(file) => {
+          chosen.choose(file);
+          setStored(null);
+          setFileMissing(false);
+        }}
+      />
+      {fileMissing && <p className="m-0 text-caption font-semibold text-d-fg">{t('receive.invoice-file.missing')}</p>}
+      <div>
+        <Button
+          type="submit"
+          variant="primary"
+          label="receive.add-invoice"
+          disabled={submission.state.kind === 'pending'}
+        />
+      </div>
+    </form>
+  );
+}
+
+/** Photos of the cartons, seals and any damage (PRD-REC-007). */
+function PhotoForm({ arrival }: { arrival: Arrival }) {
+  const chosen = useChosenFile();
+  const storing = useStoreEvidence();
+  const submission = useSubmission('attachArrivalPhotos', ARRIVAL_READS);
+  return (
+    <div className="flex flex-col gap-2">
+      {storing.banner}
+      <SubmissionBanner state={submission.state} done="receive.photos-added" />
+      <EvidencePicker
+        id="receive-photo-file"
+        label="receive.photo-file"
+        resetKey={chosen.resetKey}
+        onChange={chosen.choose}
+      />
+      <div>
+        <Button
+          label="receive.add-photo"
+          disabled={chosen.file === null || submission.state.kind === 'pending'}
+          onClick={() => {
+            void (async () => {
+              if (chosen.file === null) return;
+              const file = await storing.store(chosen.file);
+              if (file === undefined) return;
+              const added = await submission.submit({ params: { arrivalId: arrival.id }, body: { files: [file] } });
+              if (added !== undefined) chosen.clear();
+            })();
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const pieces = z
+  .string()
+  .regex(/^\d{1,7}$/, { message: 'receive.pieces.invalid' })
+  .transform((text) => Number(text));
+
+const lineFormSchema = z
+  .object({
+    styleCode: z.string().trim().min(1),
+    colour: z.string(),
+    sizeAttributeId: z.string(),
+    sizeValueId: z.string(),
+    invoiceQuantity: pieces,
+    countedQuantity: pieces,
+  })
+  .refine((line) => line.invoiceQuantity > 0 || line.countedQuantity > 0, {
+    message: 'receive.pieces.none',
+    path: ['countedQuantity'],
+  })
+  .refine((line) => (line.sizeAttributeId === '') === (line.sizeValueId === ''), {
+    message: 'receive.size.choose',
+    path: ['sizeValueId'],
+  });
+type LineFormInput = z.input<typeof lineFormSchema>;
+type LineFormOutput = z.output<typeof lineFormSchema>;
+
+function lineDefaults(line: CountLine | undefined): LineFormInput {
+  return {
+    styleCode: line?.styleCode ?? '',
+    colour: line?.colour ?? '',
+    sizeAttributeId: line?.size?.attributeId ?? '',
+    sizeValueId: line?.size?.valueId ?? '',
+    invoiceQuantity: line === undefined ? '' : String(line.invoiceQuantity),
+    countedQuantity: line === undefined ? '' : String(line.countedQuantity),
+  };
+}
+
+/**
+ * One line of the count, by style code as the invoice writes it, colour as it names it and size from the size list,
+ * with the invoice and counted quantities (goods-in 4.3; DEC-138). A missing colour or size stays missing
+ * (PRD-MER-005). Editing a line names the version shown (code-house-rules 12.7).
+ */
+function LineForm({
+  arrival,
+  editing,
+  onDone,
+}: {
+  arrival: Arrival;
+  editing?: CountLine | undefined;
+  onDone: () => void;
+}) {
+  const attributes = useQuery({
+    ...readQuery(api, 'listAttributes', { query: {} }),
+    enabled: useGranted('merchandise.attribute', 'view'),
+  });
+  const values = useQuery({
+    ...readQuery(api, 'listVocabularyValues', { query: {} }),
+    enabled: useGranted('merchandise.vocabulary_value', 'view'),
+  });
+  const form = useForm<LineFormInput, unknown, LineFormOutput>({
+    resolver: zodResolver(lineFormSchema),
+    mode: 'onBlur',
+    defaultValues: lineDefaults(editing),
+  });
+  const submission = useSubmission('saveCountLine', ARRIVAL_READS);
+  const errors = form.formState.errors;
+  const attributeId = form.watch('sizeAttributeId');
+  const lists = (attributes.data?.records ?? []).filter((each) => each.valueKind === 'list');
+  const sizes = (values.data?.records ?? []).filter((each) => each.attributeId === attributeId);
+  const formId = editing === undefined ? 'receive-line-form' : `receive-line-form-${editing.lineId}`;
+  const field = (name: string) => `${formId}-${name}`;
+  return (
+    <form
+      id={formId}
+      aria-label={t(editing === undefined ? 'receive.add-line' : 'receive.edit-line')}
+      noValidate
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        void form.handleSubmit(async (entered) => {
+          const saved = await submission.submit({
+            params: { arrivalId: arrival.id },
+            body: {
+              ...(editing === undefined
+                ? {}
+                : { line: { lineId: editing.lineId, versionToken: editing.versionToken } }),
+              styleCode: entered.styleCode,
+              colour: entered.colour.trim() === '' ? null : entered.colour,
+              size:
+                entered.sizeAttributeId === ''
+                  ? null
+                  : { attributeId: entered.sizeAttributeId, valueId: entered.sizeValueId },
+              skuId: editing?.skuId ?? null,
+              invoiceQuantity: entered.invoiceQuantity,
+              countedQuantity: entered.countedQuantity,
+              batch: editing?.batch ?? null,
+            },
+          });
+          if (saved !== undefined) {
+            form.reset(lineDefaults(undefined));
+            onDone();
+          }
+        })(event);
+      }}
+    >
+      <SubmissionBanner state={submission.state} done="receive.line-saved" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FormField id={field('style')} label="receive.style-code" required error={errors.styleCode}>
+          <input
+            id={field('style')}
+            className={inputClass}
+            {...describedBy(field('style'), { invalid: errors.styleCode !== undefined, help: false })}
+            {...form.register('styleCode')}
+          />
+        </FormField>
+        <FormField id={field('colour')} label="receive.colour" help="receive.colour.help">
+          <input
+            id={field('colour')}
+            className={inputClass}
+            {...describedBy(field('colour'), { invalid: false, help: true })}
+            {...form.register('colour')}
+          />
+        </FormField>
+        <FormField id={field('size-list')} label="receive.size-list" help="receive.size-list.help">
+          <select
+            id={field('size-list')}
+            className={inputClass}
+            {...describedBy(field('size-list'), { invalid: false, help: true })}
+            {...form.register('sizeAttributeId')}
+          >
+            <option value="">{t('receive.no-size')}</option>
+            {lists.map((each) => (
+              <option key={each.id} value={each.id}>
+                {optionText(each)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField
+          id={field('size')}
+          label="receive.size"
+          error={errors.sizeValueId}
+          message={errors.sizeValueId === undefined ? undefined : 'receive.size.choose'}
+        >
+          <select
+            id={field('size')}
+            className={inputClass}
+            {...describedBy(field('size'), { invalid: errors.sizeValueId !== undefined, help: false })}
+            {...form.register('sizeValueId')}
+          >
+            <option value="">{t('setup.choose')}</option>
+            {sizes.map((each) => (
+              <option key={each.id} value={each.id}>
+                {optionText(each)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField
+          id={field('invoice')}
+          label="receive.invoice-quantity"
+          required
+          error={errors.invoiceQuantity}
+          message={errors.invoiceQuantity === undefined ? undefined : 'receive.pieces.invalid'}
+        >
+          <input
+            id={field('invoice')}
+            inputMode="numeric"
+            className={inputClass}
+            {...describedBy(field('invoice'), { invalid: errors.invoiceQuantity !== undefined, help: false })}
+            {...form.register('invoiceQuantity')}
+          />
+        </FormField>
+        <FormField
+          id={field('counted')}
+          label="receive.counted-quantity"
+          required
+          error={errors.countedQuantity}
+          message={
+            errors.countedQuantity === undefined
+              ? undefined
+              : errors.countedQuantity.message === 'receive.pieces.none'
+                ? 'receive.pieces.none'
+                : 'receive.pieces.invalid'
+          }
+        >
+          <input
+            id={field('counted')}
+            inputMode="numeric"
+            className={inputClass}
+            {...describedBy(field('counted'), { invalid: errors.countedQuantity !== undefined, help: false })}
+            {...form.register('countedQuantity')}
+          />
+        </FormField>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          variant="primary"
+          label={editing === undefined ? 'receive.save-line' : 'receive.save-change'}
+          disabled={submission.state.kind === 'pending'}
+        />
+        {editing !== undefined && <Button label="action.cancel" onClick={onDone} />}
+      </div>
+    </form>
+  );
+}
+
+/** The lines of the count as they stand, each with who counted it, and its edit and removal while it is counted. */
+function CountTable({ arrival, open }: { arrival: Arrival; open: boolean }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const removal = useSubmission('removeCountLine', ARRIVAL_READS);
+  const mayEdit = useGranted(ARRIVAL_TYPE, 'edit');
+  return (
+    <div className="flex flex-col gap-3">
+      <SubmissionBanner state={removal.state} done="receive.line-removed" />
+      <div className="overflow-x-auto rounded-card border border-border bg-surface">
+        <table className="w-full border-collapse text-body" aria-label={t('receive.lines')}>
+          <thead>
+            <tr>
+              <Th label="receive.style-code" />
+              <Th label="receive.colour" />
+              <Th label="receive.size" />
+              <Th label="receive.invoice-quantity" />
+              <Th label="receive.counted-quantity" />
+              <Th label="receive.counted-by" />
+              {open && mayEdit && <Th label="receive.line-actions" />}
+            </tr>
+          </thead>
+          <tbody>
+            {arrival.lines.map((line) => (
+              <tr key={line.lineId} className="h-10 border-t border-border">
+                <td className="px-3">{line.styleCode}</td>
+                <td className="px-3">{line.colour ?? t('receive.none')}</td>
+                <td className="px-3">{line.size?.code ?? t('receive.none')}</td>
+                <td className="px-3 tabular-nums">{line.invoiceQuantity}</td>
+                <td className="px-3 tabular-nums">{line.countedQuantity}</td>
+                <td className="px-3">{line.countedBy.map((id) => personOf(arrival, id)).join(', ')}</td>
+                {open && mayEdit && (
+                  <td className="px-3">
+                    <span className="flex flex-wrap gap-2">
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        label="receive.edit-line"
+                        onClick={() => {
+                          setEditing(line.lineId);
+                        }}
+                      />
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        label="receive.remove-line"
+                        disabled={removal.state.kind === 'pending'}
+                        onClick={() => {
+                          void removal.submit({
+                            params: { arrivalId: arrival.id, lineId: line.lineId },
+                            body: { lineVersionToken: line.versionToken },
+                          });
+                        }}
+                      />
+                    </span>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {open && mayEdit && (
+        <Card title={editing === null ? 'receive.add-line' : 'receive.edit-line'}>
+          {editing === null ? (
+            <LineForm key="new" arrival={arrival} onDone={() => undefined} />
+          ) : (
+            <LineForm
+              key={editing}
+              arrival={arrival}
+              editing={arrival.lines.find((line) => line.lineId === editing)}
+              onDone={() => {
+                setEditing(null);
+              }}
+            />
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/** Issue the GRN, with no approval, once nothing blocks it (goods-in 4.5). */
+function IssueGrn({ arrival }: { arrival: Arrival }) {
+  const submission = useSubmission('issueGrn', ARRIVAL_READS);
+  return (
+    <Card title="receive.issue">
+      <SubmissionBanner state={submission.state} done="receive.grn-issued" />
+      {arrival.blocking.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="m-0 text-body-sm font-semibold">{t('receive.blocked')}</p>
+          <ul aria-label={t('receive.blocked')} className="m-0 list-disc pl-5 text-body-sm">
+            {arrival.blocking.map((item, index) => (
+              <li key={index}>{missingText(item)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="m-0 text-body-sm text-text-2">{t('receive.issue.intro')}</p>
+      <div>
+        <GrantedButton
+          label="receive.issue-grn"
+          recordType={GRN_TYPE}
+          action="create"
+          variant="primary"
+          onClick={() => {
+            void submission.submit({ params: { arrivalId: arrival.id }, body: { versionToken: arrival.versionToken } });
+          }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+/** The GRN as printed: its header and lines, quantities only, never a price, tax or value (goods-in 4.5). */
+function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string; location: string }) {
+  const timeZone = useTimeZone();
+  const names = useMasterNames();
+  const grn = arrival.grn;
+  if (grn === null) return null;
+  return (
+    <section
+      aria-label={t('receive.grn', { number: grn.number })}
+      className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-h3 font-semibold">{t('receive.grn', { number: grn.number })}</h3>
+        <span className="flex-1" />
+        <Button
+          label="receive.print"
+          onClick={() => {
+            window.print();
+          }}
+        />
+      </div>
+      <Facts
+        rows={[
+          ['receive.grn.date', grn.businessDate],
+          ['receive.supplier', names.partyText(arrival.supplierPartyId)],
+          ['receive.brand', names.brandText(arrival.brandId)],
+          ['receive.unit', unit],
+          ['receive.location', location],
+          ['receive.invoices', arrival.invoices.map((invoice) => `${invoice.number} (${invoice.date})`).join(', ')],
+          ['receive.transporter', arrival.transporter],
+          ['receive.lorry-receipt', `${arrival.lorryReceipt.number} (${arrival.lorryReceipt.date})`],
+          ['receive.vehicle-number', arrival.vehicleNumber ?? t('receive.none')],
+          ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
+          ['receive.cartons', String(arrival.cartons)],
+          ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
+          ['receive.grn.counted-by', grn.countedBy.map((id) => personOf(arrival, id)).join(', ')],
+          [
+            'receive.grn.entered-by',
+            t('receive.grn.entered-at', {
+              name: personOf(arrival, grn.enteredBy),
+              at: formatDateTime(grn.issuedAt, timeZone),
+            }),
+          ],
+        ]}
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-body" aria-label={t('receive.grn-lines')}>
+          <thead>
+            <tr>
+              <Th label="receive.line-number" />
+              <Th label="receive.style-code" />
+              <Th label="receive.colour" />
+              <Th label="receive.size" />
+              <Th label="receive.invoice-quantity" />
+              <Th label="receive.counted-quantity" />
+            </tr>
+          </thead>
+          <tbody>
+            {grn.lines.map((line) => (
+              <tr key={line.lineNumber} className="h-10 border-t border-border">
+                <td className="px-3 tabular-nums">{line.lineNumber}</td>
+                <td className="px-3">{line.styleCode}</td>
+                <td className="px-3">{line.colour ?? t('receive.none')}</td>
+                <td className="px-3">{line.size ?? t('receive.none')}</td>
+                <td className="px-3 tabular-nums">{line.invoiceQuantity}</td>
+                <td className="px-3 tabular-nums">{line.countedQuantity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>
+    </section>
+  );
+}
+
+/** Receive Goods › an Arrival, opened from the inbox. */
+export function ArrivalView({
+  arrivalId,
+  units,
+  onBack,
+}: {
+  arrivalId: string;
+  units: readonly Unit[];
+  onBack: () => void;
+}) {
+  const timeZone = useTimeZone();
+  const names = useMasterNames();
+  const mayEdit = useGranted(ARRIVAL_TYPE, 'edit');
+  const query = useQuery(readQuery(api, 'readArrival', { params: { arrivalId } }));
+  return (
+    <div className="flex flex-col gap-4">
+      <Toolbar>
+        <Button label="receive.back" onClick={onBack} />
+        <span className="flex-1" />
+        <Button
+          label="setup.refresh"
+          onClick={() => {
+            void query.refetch();
+          }}
+        />
+      </Toolbar>
+      <ListRead query={query} what="receive.arrival.what">
+        {({ asOf, arrival }) => {
+          const unit = units.find((each) => each.businessUnitId === arrival.businessUnitId);
+          const unitText =
+            unit === undefined ? arrival.businessUnitId : t('receive.option', { code: unit.code, name: unit.name });
+          const location = unit?.locations.find((each) => each.id === arrival.receivingLocationId);
+          const locationText =
+            location === undefined
+              ? arrival.receivingLocationId
+              : t('receive.option', { code: location.code, name: location.name });
+          const open = arrival.state === 'In progress';
+          return (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-h2 font-semibold">
+                  {t('receive.arrival.title', { supplier: names.partyText(arrival.supplierPartyId) })}
+                </h2>
+                <StatusBadge state={stateIdOf(arrival.state)} />
+                <span className="flex-1" />
+                <AsOf asOf={asOf} timeZone={timeZone} />
+              </div>
+              <Card title="receive.details">
+                <Facts
+                  rows={[
+                    ['receive.unit', unitText],
+                    ['receive.location', locationText],
+                    ['receive.supplier', names.partyText(arrival.supplierPartyId)],
+                    ['receive.brand', names.brandText(arrival.brandId)],
+                    ['receive.transporter', arrival.transporter],
+                    ['receive.lorry-receipt', `${arrival.lorryReceipt.number} (${arrival.lorryReceipt.date})`],
+                    ['receive.vehicle-number', arrival.vehicleNumber ?? t('receive.none')],
+                    ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
+                    ['receive.cartons', String(arrival.cartons)],
+                    ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
+                    [
+                      'receive.recorded-by',
+                      t('receive.recorded-at', {
+                        name: personOf(arrival, arrival.recordedBy),
+                        at: formatDateTime(arrival.recordedAt, timeZone),
+                      }),
+                    ],
+                  ]}
+                />
+              </Card>
+              <Card title="receive.invoices">
+                {arrival.invoices.length === 0 ? (
+                  <Banner tone="warning" role="status" message="receive.invoices.first" />
+                ) : (
+                  <ul aria-label={t('receive.invoices')} className="m-0 flex list-none flex-col gap-3 p-0">
+                    {arrival.invoices.map((invoice) => (
+                      <li key={invoice.id} className="flex flex-col gap-1 border-t border-border pt-2">
+                        <span className="font-semibold">
+                          {t('receive.invoice.line', { number: invoice.number, date: invoice.date })}
+                        </span>
+                        {(invoice.possibleDuplicateOf.length > 0 || invoice.possibleDuplicateElsewhere) && (
+                          <span className="text-caption text-text-2">{t('receive.invoice.duplicate-confirmed')}</span>
+                        )}
+                        <EvidenceList attachmentIds={[invoice.attachmentId]} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {open && mayEdit && <InvoiceForm arrival={arrival} />}
+              </Card>
+              <Card title="receive.photos">
+                <EvidenceList attachmentIds={arrival.photoAttachmentIds} />
+                {open && mayEdit && <PhotoForm arrival={arrival} />}
+              </Card>
+              <Card title="receive.count">
+                <p className="m-0 text-body-sm text-text-2">{t('receive.count.intro')}</p>
+                {arrival.invoices.length === 0 && open ? (
+                  <p className="m-0 text-body-sm">{t('error.receiving.invoice-required')}</p>
+                ) : (
+                  <CountTable arrival={arrival} open={open} />
+                )}
+              </Card>
+              {open ? (
+                <IssueGrn arrival={arrival} />
+              ) : (
+                <GrnPrint arrival={arrival} unit={unitText} location={locationText} />
+              )}
+            </div>
+          );
+        }}
+      </ListRead>
+    </div>
+  );
+}

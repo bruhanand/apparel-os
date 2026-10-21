@@ -197,6 +197,24 @@ export interface SyntheticWorld {
    * Accounts who checks it and the Owner who approves it, the approve reason, and how the budget form names the
    * products journey's SYNTHETIC brand, season list and season.
    */
+  /**
+   * The Receive Goods journey (S2-F02-T02), in an Organisation of its own: a Warehouse receiver, and how the screens
+   * name the SYNTHETIC Site, units, location, supplier, brand, size list and sizes ("CODE · Name").
+   */
+  readonly receiving: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly options: {
+      readonly site: string;
+      readonly wholeStore: string;
+      readonly warehouse: string;
+      readonly storeLocation: string;
+      readonly supplier: string;
+      readonly brand: string;
+      readonly sizeList: string;
+      readonly sizes: readonly string[];
+    };
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;

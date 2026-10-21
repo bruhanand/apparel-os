@@ -11,6 +11,25 @@ import {
   openToBuyBudgetVersionDraftSchema,
 } from './booking.js';
 import {
+  ARRIVAL_TYPE,
+  GRN_TYPE,
+  arrivalDraftSchema,
+  arrivalReadSchema,
+  arrivalRecordedSchema,
+  countLineDraftSchema,
+  countLineRemovalSchema,
+  countLineSavedSchema,
+  grnIssueSchema,
+  grnIssuedSchema,
+  inboxParamsSchema,
+  inboxQuerySchema,
+  inboxSchema,
+  invoiceDraftSchema,
+  invoiceRecordedSchema,
+  photosAttachedSchema,
+  photosDraftSchema,
+} from './receiving.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -944,6 +963,36 @@ const OPEN_TO_BUY_DECISION_CODES = [
   'booking.record-not-found',
   'booking.version-not-awaiting',
   'booking.budget-not-checked',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a change to an Arrival, before its GRN (goods-in 4.1 to 4.3; S2-F02-T02): its own refusals, the policy
+ * gate's when receiving is unavailable at the unit (10.5), and the version token's (code-house-rules 12.7).
+ */
+const RECEIVING_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.operation-unavailable',
+  'receiving.record-not-found',
+  'receiving.grn-issued',
+  'receiving.invoice-required',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes of issuing a GRN (goods-in 4.5, 10.3; S2-F02-T02), with the stock ledger's refusals of its receipt counts. */
+const GRN_ISSUE_CODES = [
+  ...RECEIVING_CHANGE_CODES,
+  'receiving.no-lines',
+  'receiving.line-differs-from-invoice',
+  'receiving.batch-required',
+  'receiving.batch-not-tracked',
+  'receiving.sku-not-of-line',
+  'receiving.no-grn-series',
+  'receiving.grn-series-paused',
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.count-freeze-active',
+  'stock.blocked',
 ] as const satisfies readonly ErrorCode[];
 
 export const routes = {
@@ -4609,6 +4658,115 @@ export const routes = {
     shows: 'nothing',
     response: openToBuyBudgetPreparedSchema,
     codes: OPEN_TO_BUY_CHANGE_CODES,
+  }),
+  // Receive Goods (goods-in 4.1 to 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02): the
+  // inbox of a Site, the Arrival with its invoices first, the count line by line and the GRN. An Arrival and a GRN carry
+  // every scope fact, so each route authorises in its command with the record's facts (access-and-approvals 5.3).
+  // Recording an Arrival and issuing its GRN ask the policy gate for the unit's receiving activity (goods-in 10.5).
+  readReceivingInbox: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/sites/{siteId}/inbox',
+    params: inboxParamsSchema,
+    query: inboxQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: inboxSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  readArrival: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/arrivals/{arrivalId}',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: arrivalReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  recordArrival: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals',
+    access: { kind: 'action', action: 'create', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: arrivalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: arrivalRecordedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.operation-unavailable',
+      'receiving.unit-not-at-site',
+      'receiving.location-not-of-unit',
+      'receiving.brand-not-in-force',
+      'receiving.supplier-not-linked',
+      'receiving.arrival-in-future',
+    ],
+  }),
+  recordArrivalInvoice: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/invoices',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: invoiceDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: invoiceRecordedSchema,
+    codes: [...RECEIVING_CHANGE_CODES, 'receiving.invoice-number-repeated', 'receiving.possible-duplicate-invoice'],
+  }),
+  attachArrivalPhotos: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/photos',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: photosDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: photosAttachedSchema,
+    codes: RECEIVING_CHANGE_CODES,
+  }),
+  saveCountLine: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/count-lines',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: countLineDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: countLineSavedSchema,
+    codes: [...RECEIVING_CHANGE_CODES, 'receiving.size-not-on-list', 'receiving.sku-not-of-line'],
+  }),
+  removeCountLine: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/count-lines/{lineId}/removal',
+    params: z.strictObject({ arrivalId: idSchema, lineId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: countLineRemovalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: countLineSavedSchema,
+    codes: RECEIVING_CHANGE_CODES,
+  }),
+  issueGrn: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/grn',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: GRN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: grnIssueSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: grnIssuedSchema,
+    codes: GRN_ISSUE_CODES,
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

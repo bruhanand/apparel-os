@@ -23,6 +23,7 @@ import * as taxRulesTables from '../src/modules/finance/tax-rules/db/schema.js';
 import * as booksTables from '../src/modules/finance/books/db/schema.js';
 import * as posTables from '../src/modules/pos/db/schema.js';
 import * as eboImportsTables from '../src/modules/ebo-imports/db/schema.js';
+import * as receivingTables from '../src/modules/receiving/db/schema.js';
 import { HARNESS_MIGRATIONS } from './harness/stock/harness.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
@@ -79,6 +80,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).
     'organisation.mapping_out_of_step',
+    // goods-in 4.2: the other Arrivals of a supplier holding an invoice number, each with whether the actor may see
+    // it, SECURITY DEFINER (DEC-117; S2-F02-T02).
+    'receiving.invoice_number_used',
     // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).
     'stock.book_has_held_stock',
     // structure-and-masters 3.5: the location-in-use contract's answer, SECURITY DEFINER (S1-F02-T02).
@@ -683,6 +687,15 @@ describe('the Drizzle definitions of pos (code-house-rules 3.4, 10.4; S1-F12-T01
   it.each(Object.entries(posTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
     await expectDefinitionMatches(world.organisations[0].database, table);
   });
+});
+
+describe('the Drizzle definitions of receiving (code-house-rules 3.4, 10.4; S2-F02-T02)', () => {
+  it.each(Object.entries(receivingTables))(
+    'code-house-rules 3.4 %s matches its migrated table',
+    async (_name, table) => {
+      await expectDefinitionMatches(world.organisations[0].database, table);
+    },
+  );
 });
 
 async function expectDefinitionMatches(database: string, table: Parameters<typeof getTableConfig>[0]): Promise<void> {

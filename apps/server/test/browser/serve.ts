@@ -112,6 +112,15 @@ import {
   writeTestDocument,
 } from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
+import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import {
+  defineSyntheticGrnSeries,
+  policiesSigned,
+  RECEIVER_AUTHORITY,
+  RECEIVING_STATUTORY_CHECK,
+  receivingFixture,
+  receivingGateOpen,
+} from '../support/receiving.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 import { z } from 'zod';
@@ -300,6 +309,10 @@ const settingsSetup = await runSetupStep({
 if (settingsSetup.outcome !== 'created')
   throw new Error(`The settings setup step did not create: ${settingsSetup.outcome}`);
 
+// The Receive Goods journey's Organisation (S2-F02-T02), made by the setup step below.
+const receivingCode = syntheticCode('ORG-RECEIVING');
+const receivingDatabase = `syn_browser_receiving_${randomBytes(3).toString('hex')}`;
+
 // The posting maps journey's Organisation (S1-F09-T02), made by the setup step like the one above, so My work is fed.
 const postingCode = syntheticCode('ORG-POSTING');
 const postingDatabase = `syn_browser_posting_${randomBytes(3).toString('hex')}`;
@@ -366,6 +379,7 @@ const keyring = JSON.parse(keys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<s
 keyring[journeyCode] = randomBytes(32).toString('base64url');
 keyring[settingsCode] = randomBytes(32).toString('base64url');
 keyring[postingCode] = randomBytes(32).toString('base64url');
+keyring[receivingCode] = randomBytes(32).toString('base64url');
 keys[ORGANISATION_KEYS_VARIABLE] = JSON.stringify(keyring);
 
 const firstSignIn = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
@@ -2353,6 +2367,89 @@ const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-O
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+// Since S2-F02-T02 the receiving activity needs `receiving`'s own operations too (goods-in 10.5): policy 10 Signed and
+// validated, as policy 4 is above, and someone at the unit who records Arrivals, counts and issues GRNs (PRD-ACS-006).
+await policiesSigned(settingsDatabase, [
+  { policy: 10, validatedValues: [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`] },
+]);
+await provisionUser('BROWSER-READINESS-RECEIVER', 'P-WHS', [
+  { recordType: 'receiving.arrival', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'edit' },
+  { recordType: 'receiving.grn', action: 'create' },
+]);
+
+// The Receive Goods journey (receive-goods.spec.ts; S2-F02-T02), in an Organisation of its own so its Site, Stores and
+// brand change no other journey's lists: made by the setup step like the ones above; a Site with two Stores, their
+// units and receiving locations, a brand with a linked supplier and an approved Agreement, and a size list, through the
+// real interfaces; receiving granted after readiness at the Stores' units, their mappings verified, the capability on
+// and policies 4 and 10 Signed and validated, as fixtures (support/receiving.ts); a GRN series with a SYNTHETIC
+// format (RR-449); and a Warehouse receiver who records the Arrival, counts and issues the GRN.
+const receivingSetup = await runSetupStep({
+  migrationConnectionString: databaseUrl(world.directory, 'migration'),
+  runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
+  request: setupRequestSchema.parse({
+    ...journeyRequest,
+    organisationCode: receivingCode,
+    databaseName: receivingDatabase,
+    firstAdmin: {
+      ...journeyRequest.firstAdmin,
+      temporaryPassword: journeyRequest.firstAdmin.temporaryPassword.reveal(),
+    },
+    firstApprover: {
+      ...journeyRequest.firstApprover,
+      temporaryPassword: journeyRequest.firstApprover.temporaryPassword.reveal(),
+    },
+  }),
+  serviceIdentities: serviceIdentitiesOf(jobRegistry),
+  logger: setupLog.logger,
+});
+if (receivingSetup.outcome !== 'created') {
+  throw new Error(`The receiving setup step did not create: ${receivingSetup.outcome}`);
+}
+const receivingStructure = await structureSetup({
+  directory: world.directory,
+  database: receivingDatabase,
+  organisationCode: receivingCode,
+  keysEnvironment: keys,
+  label: 'BROWSER-RCV',
+});
+const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
+await receivingStructure.close();
+// Policy 4 is covered through the readiness journey's SYNTHETIC check, which every Organisation's policy 4 reports.
+await receivingGateOpen(receivingDatabase, [
+  { policy: 4, validatedValues: [`${readinessValuesCheck.code}:syn-readiness-value@v1`] },
+  { policy: 10, validatedValues: [`${RECEIVING_STATUTORY_CHECK.code}:syn-value@v1`] },
+]);
+const receivingRouter = new OrganisationRouter(
+  { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
+  fixtureLog.logger,
+);
+const receivingRouted = await receivingRouter.resolveForSignIn(receivingCode);
+if (!receivingRouted.routed) throw new Error('The receiving Organisation was not routed');
+const receivingReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  // The lists the Receive Goods screens choose from (structure-and-masters 8).
+  { recordType: 'organisation.site', action: 'view' },
+  { recordType: 'merchandise.brand', action: 'view' },
+  { recordType: 'merchandise.party', action: 'view' },
+  { recordType: 'merchandise.attribute', action: 'view' },
+  { recordType: 'merchandise.vocabulary_value', action: 'view' },
+]);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-receiving.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: receivingReceiver.id },
+  },
+  (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
+);
+await receivingRouter.close();
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
@@ -2380,7 +2477,7 @@ const app = await startAccessApp(
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
     // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck],
+    validityChecks: [policyValuesCheck, readinessValuesCheck, RECEIVING_STATUTORY_CHECK],
     // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
     postingEventKinds: POSTING_JOURNEY_KINDS,
   },
@@ -2601,6 +2698,12 @@ writeFileSync(
       seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
       fitName: productsFit.name,
     },
+    receiving: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(receivingReceiver),
+      // How the screens name the SYNTHETIC Site, units, location, supplier, brand and size (receive.option).
+      options: receivingWorld.options,
+    },
     openToBuy: {
       organisationCode: settingsCode,
       booking: credentialsOf(openToBuyBooking),
@@ -2817,6 +2920,7 @@ async function stop(): Promise<void> {
   await dropDatabase(journeyDatabase).catch(() => undefined);
   await dropDatabase(settingsDatabase).catch(() => undefined);
   await dropDatabase(postingDatabase).catch(() => undefined);
+  await dropDatabase(receivingDatabase).catch(() => undefined);
   await world.reset().catch(() => undefined);
   await postgres.stop().catch(() => undefined);
   process.exit(0);

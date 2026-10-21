@@ -361,6 +361,7 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | --- | --- | --- |
 | Read a party | The party and its roles in force; its bank details always masked, unmasked only through Show bank details, for a reader with the field grant and a fresh code (`PRD-ACS-008`, `PRD-SEC-001`; 5.1 as built) | — |
 | Read the terms in force | The agreement version in force for a brand or supplier on a date, with its identifier (`PRD-ORG-016`) | No version is in force |
+| Is a supplier linked to a brand on a date | Yes when a link version in force on the date says linked and the party holds the supplier role then, since a later change of roles does not end a link (5.1; `PRD-MER-021`). **As built** (`S2-F02-T02`), `brandSupplierLinkedOn`, for an Arrival's supplier and brand (goods-in 4.8). **Design choice** | — |
 | Maintain a party or agreement | New records and versions under 2.2 and 2.3 | A version would overlap another approved version (`PRD-MOD-010`; 2.2); an agreement version is approved by its preparer (2.3, GC2-2) |
 | Change bank details | A new version; it waits for approval by a different authorised person: a supplier's under `POL-02.07`, every other party's under the baseline (GC2-6, DEC-105) | A change is approved by its preparer |
 

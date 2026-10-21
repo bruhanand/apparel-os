@@ -1050,6 +1050,54 @@ export const bookingCodes = declareCodes({
   'booking.budget-not-checked': 'refused',
 });
 
+/**
+ * `receiving`'s codes (goods-in 4.1 to 4.5, 10.3; S2-F02-T02):
+ *
+ * - `receiving.record-not-found`: no Arrival, or no count line of it, has that identifier.
+ * - `receiving.unit-not-at-site`: the business unit is not in force today, or not at a Site.
+ * - `receiving.location-not-of-unit`: the receiving location is not a location of the unit in force today
+ *   (structure-and-masters 3.5).
+ * - `receiving.brand-not-in-force`: the brand has no approved version in force on the arrival date.
+ * - `receiving.supplier-not-linked`: the supplier is not linked to the brand, or holds no supplier role, on the arrival
+ *   date (PRD-MER-021).
+ * - `receiving.arrival-in-future`: the arrival time is later than now (PRD-MOD-009).
+ * - `receiving.grn-issued`: the Arrival's GRN is issued; it is never changed or issued again (goods-in 4.5, 4.7).
+ * - `receiving.invoice-number-repeated`: the Arrival holds an invoice with that number already.
+ * - `receiving.possible-duplicate-invoice`: another Arrival of the supplier holds the number; `missing` names those
+ *   the receiver may see, and the receiver confirms or corrects it (goods-in 4.2).
+ * - `receiving.invoice-required`: the count starts, and the GRN is issued, only once an invoice is recorded (DEC-133).
+ * - `receiving.size-not-on-list`: the size is not an approved value of its attribute in force today (goods-in 4.3).
+ * - `receiving.sku-not-of-line`: the product named is not in force at the Site today, is of another brand, or of
+ *   another style code than the line's (goods-in 4.3).
+ * - `receiving.no-lines`: a GRN with no counted line is not issued (goods-in 4.5).
+ * - `receiving.line-differs-from-invoice`: a line's counted quantity differs from its invoice quantity; the findings
+ *   at the count are not built yet (S2-F02-T03), so such a GRN is not issued.
+ * - `receiving.batch-required`: the product's tracking profile requires a batch and expiry the line lacks
+ *   (PRD-MER-011).
+ * - `receiving.batch-not-tracked`: the line gives a batch its product's profile does not track, or has no product.
+ * - `receiving.no-grn-series`, `receiving.grn-series-paused`: no Open GRN number series (numbering-and-audit 3.2).
+ */
+export const receivingCodes = declareCodes({
+  'receiving.record-not-found': 'not-found',
+  'receiving.unit-not-at-site': 'refused',
+  'receiving.location-not-of-unit': 'refused',
+  'receiving.brand-not-in-force': 'refused',
+  'receiving.supplier-not-linked': 'refused',
+  'receiving.arrival-in-future': 'refused',
+  'receiving.grn-issued': 'refused',
+  'receiving.invoice-number-repeated': 'refused',
+  'receiving.possible-duplicate-invoice': 'refused',
+  'receiving.invoice-required': 'refused',
+  'receiving.size-not-on-list': 'refused',
+  'receiving.sku-not-of-line': 'refused',
+  'receiving.no-lines': 'refused',
+  'receiving.line-differs-from-invoice': 'refused',
+  'receiving.batch-required': 'refused',
+  'receiving.batch-not-tracked': 'refused',
+  'receiving.no-grn-series': 'unavailable',
+  'receiving.grn-series-paused': 'unavailable',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1073,6 +1121,7 @@ export const errorCodes = {
   ...deviceCodes,
   ...eboImportsCodes,
   ...bookingCodes,
+  ...receivingCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
