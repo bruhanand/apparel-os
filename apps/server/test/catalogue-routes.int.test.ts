@@ -351,4 +351,61 @@ describe('a brand barcode on two products through the routes (goods-in 12 test 1
     expect(refused.status).toBe(422);
     expect(refused.body).toMatchObject({ error: { code: 'merchandise.code-conflict' } });
   });
+
+  it('code-house-rules 12.1 answers a code of one SKU with its SKU and mapping at the top level too, for one deploy; a repeated code without them', async () => {
+    const brand = await post(booking, '/api/merchandise/brands', {
+      code: code('BRAND'),
+      name: syntheticName('Compatible brand'),
+      aliases: [],
+      validFrom: today(),
+    });
+    const category = await post(booking, '/api/merchandise/categories', {
+      code: code('CAT'),
+      name: syntheticName('Compatible category'),
+      identityAttributeIds: [],
+      validFrom: today(),
+    });
+    expect([brand.status, category.status]).toEqual([200, 200]);
+    const brandId = brand.body.recordId as string;
+    const first = await confirmedSku(brandId, category.body.recordId as string);
+    const second = await confirmedSku(brandId, category.body.recordId as string);
+    const barcode = `0${String(randomInt(100_000_000, 999_999_999))}`;
+    const map = async (skuId: string) => {
+      const mapped = await post(booking, '/api/merchandise/external-codes', {
+        code: barcode,
+        kind: 'supplier-barcode',
+        scope: { kind: 'brand', brandId },
+        skuId,
+        alias: false,
+        validFrom: today(),
+      });
+      expect(mapped.status, JSON.stringify(mapped.body)).toBe(200);
+      return mapped.body.mappingId as string;
+    };
+    const resolve = async () => {
+      const query = new URLSearchParams({ code: barcode, kind: 'supplier-barcode', brandId, date: today() });
+      const resolved = await get(booking, `/api/merchandise/external-codes/resolve?${query.toString()}`);
+      expect(resolved.status, JSON.stringify(resolved.body)).toBe(200);
+      return resolveCodeAnswerSchema.parse(resolved.body).resolved;
+    };
+    const firstMapping = await map(first);
+    // A client of the earlier deploy reads the SKU and the mapping where they were (12.1 "Compatible changes").
+    expect(await resolve()).toEqual({
+      candidates: [{ skuId: first, mappingId: firstMapping }],
+      repeated: false,
+      alias: false,
+      skuId: first,
+      mappingId: firstMapping,
+    });
+    // A repeated code names no one SKU: only its candidates, for the person to choose from (DEC-135).
+    const secondMapping = await map(second);
+    expect(await resolve()).toEqual({
+      candidates: [
+        { skuId: first, mappingId: firstMapping },
+        { skuId: second, mappingId: secondMapping },
+      ],
+      repeated: true,
+      alias: false,
+    });
+  });
 });

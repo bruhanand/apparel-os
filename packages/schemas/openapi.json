@@ -7472,6 +7472,22 @@
                           "from"
                         ],
                         "additionalProperties": false
+                      },
+                      "defaultModel": {
+                        "deprecated": true,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "outright",
+                              "sale-or-return",
+                              "consignment"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -35565,6 +35581,22 @@
                           "from"
                         ],
                         "additionalProperties": false
+                      },
+                      "defaultModel": {
+                        "deprecated": true,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "outright",
+                              "sale-or-return",
+                              "consignment"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -74149,6 +74181,24 @@
                         },
                         "alias": {
                           "type": "boolean"
+                        },
+                        "skuId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "packId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "mappingId": {
+                          "deprecated": true,
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                         }
                       },
                       "required": [

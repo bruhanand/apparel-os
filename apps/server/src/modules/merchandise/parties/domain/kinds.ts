@@ -4,6 +4,7 @@ import {
   BANK_DETAILS_CHANGE,
   BANK_DETAILS_TYPE,
   type AgreementTerms,
+  type AgreementTermsDraft,
   type RecordState,
 } from '@apparel-os/schemas';
 import type { ApprovalRule, LatestRequest } from '../../../access/index.js';
@@ -30,6 +31,17 @@ export function termsAsRead(stored: unknown, format: string): AgreementTerms {
     return Object.fromEntries(terms) as AgreementTerms;
   }
   throw new Error(`An agreement version's terms are in an unknown shape, ${format}`);
+}
+
+/**
+ * A draft's terms as they are stored and audited: without the retired default model, which a client of the earlier
+ * deploy may still send for one deploy and which is ignored, never stored and never answered (code-house-rules 12.1
+ * "Compatible changes"; DEC-129, POL-01.02; open-items section 4).
+ */
+export function termsToStore(given: AgreementTermsDraft): AgreementTerms {
+  const terms = { ...given };
+  delete terms.defaultModel;
+  return terms;
 }
 
 /**
