@@ -1,6 +1,6 @@
 # S2-F01-T01 — Remove the Agreement's default model for new bookings
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -28,3 +28,4 @@ No route or screen carries the default model and no new version can store it; ve
 - Tests: the routes refuse a draft naming the term and no read carries it (`parties-routes.int.test.ts`); versions stored in `/1` before the migration are untouched in storage and read back through the parties interface without the term, every other term as stored, and a new version with the term is refused (`agreement-terms-shape.int.test.ts`); the Agreement form and terms (`agreement.test.tsx`); the agreement journey, Booking preparing and a different person approving from My work (`agreement.spec.ts`, with its synthetic supplier and two people in the journeys' world).
 - Code review 1 of stage 2 (21 Oct 2026): for one deploy a draft may still name the default model; it is accepted and ignored, never stored and never answered, so a client of the earlier deploy still saves (code-house-rules 12.1 "Compatible changes"; structure-and-masters 5.2). `parties-routes.int.test.ts` now proves that, in place of the refusal. Its removal is RR-552 (open-items section 4).
 - Beyond the ticket: the agreement browser journey `apps/web/e2e/agreement.spec.ts`, Booking preparing an agreement with a supplier and a different person approving it from My work, and its two SYNTHETIC journey users in `apps/server/test/browser/serve.ts` (`BROWSER-AGREEMENT-PREPARER` and the approver) with their persona grants.
+- Closed 21 Oct 2026 on `s2/goods-in-first-version`: commits `9f6ac00` and `3800238` (stored versions kept untouched), merged as `3d2095b`; reviewed with `/code-review`, its fixes merged as `aa55bb2`; no blocking finding left.

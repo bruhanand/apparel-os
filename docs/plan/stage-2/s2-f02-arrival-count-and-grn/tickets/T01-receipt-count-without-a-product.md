@@ -1,6 +1,6 @@
 # S2-F02-T01 — Ledger: receipt count of goods without a product, and the identity step
 
-Status: ready-for-agent
+Status: done
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -29,3 +29,4 @@ A receipt count of described goods with Unknown SKU succeeds without quarantine;
 - **Not built, for the tickets that need it** (stock-ledger 13.14): holds, condition changes and moves of goods of Unknown SKU, since an item names its goods by SKU: the excess, damage and quarantine of a line of a product not yet set up (`S2-F02-T03`, `S2-F08-T01`) need a ledger change first; a receipt count of unidentified goods, whose identity is Unknown (`S2-F02-T03`).
 - **Migration number**: the runner refuses a gap in the numbers (`migration-set.ts`); the file is `0085__stock.ledger__described_goods.sql`, the next free number on `s2/goods-in-first-version` after `0084__merchandise.catalogue__repeated_brand_barcodes.sql` (built as the provisional 0100 and renumbered at the merge).
 - **Code review 1 of stage 2** (21 Oct 2026): `splitIdentity` takes the maker of new origin identifiers from the caller and answers the identity step's parts (`IdentityPart`) directly, so one type remains (`IdentitySplitPart` and its `keeps` are gone); the receipt count's SKU and identity as described are paired by the type `CountedGoods`, the ledger still checking the pairing (stock-ledger 13.14); the split rule's tests name their IDs (code-house-rules 10.2); Recheck's owner and the identity step's custody location are defects when missing, never an empty identifier (`PRD-MOD-015`).
+- Closed 21 Oct 2026 on `s2/goods-in-first-version`: commit `0cce376`, merged as `e157c17`; reviewed with `/code-review`, its fixes merged as `aa55bb2`; no blocking finding left. The stock-ledger amendment (GI-1) waits for the product owner's review; the brand of goods without a product is RR-555.

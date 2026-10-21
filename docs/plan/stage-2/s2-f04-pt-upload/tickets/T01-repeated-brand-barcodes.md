@@ -1,6 +1,6 @@
 # S2-F04-T01 — A brand barcode on several products
 
-Status: ready-for-agent
+Status: ready-for-human
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -24,3 +24,4 @@ The barcode part of design test 10 passes; the stage 1 import tests still pass; 
 - Beyond the ticket: Setup › Products › Barcodes and aliases shows the flag ("Repeated on another product"), and the products browser journey maps one barcode to both its SKUs and sees both flagged; the browser journeys' Booking user of that journey gained create on `merchandise.external_code` for it.
 - The migration is not compatible with the version running: between it and the new version taking traffic, Map a code fails (planned brief interruption on `dev`, `DEC-120`; its header says so).
 - Code review 1 of stage 2 (21 Oct 2026): Resolve a code keeps, for one deploy, the one candidate's `skuId`, `packId` and `mappingId` at the top level beside `candidates`, marked deprecated, none for a repeated code (code-house-rules 12.1 "Compatible changes"; structure-and-masters 4.3 "As built"). Their removal is RR-551 (open-items section 4).
+- Built and merged 21 Oct 2026 on `s2/goods-in-first-version`: commit `6b3a975`, merged as `08b0e9e`; reviewed with `/code-review`, its fixes merged as `aa55bb2`. Waits for the product owner: the code lets every supplier barcode repeat in any scope, wider than `PRD-MER-007`'s "a brand's external barcode ... where the brand's tags repeat it" (RR-554). It closes once that is answered and any change it needs is built.

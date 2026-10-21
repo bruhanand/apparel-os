@@ -1,6 +1,6 @@
 # S2-F01-T02 — Open-to-buy budgets
 
-Status: ready-for-agent
+Status: ready-for-human
 Blocked by: —
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -27,3 +27,4 @@ A budget is usable only once checked and approved by people other than its prepa
 - Beyond the ticket: a section Booking in the web app's menu; the composition root's late-bound Request approval for a decision effect (access-and-approvals 9.8b); the budget facts on the approval panel (`apps/web/src/approvals/DocumentFacts.tsx`), so whoever checks or approves a version sees its brand, season, amount and origin there, and when Accounts checked it.
 - Open, for the product owner: RR-548 (may the checker also approve; a value limit on the approval), RR-549 (budgets as policy 5's values lapse its validation after each change), RR-550 (which attribute is the season, GI-2).
 - Code review 1 of stage 2 (21 Oct 2026): the list is paged by a cursor (`after`, `limit`, `next`; at most `OPEN_TO_BUY_PAGE_CAP`, 100, a technical cap), the screen reading a page at a time with Load more (goods-in 3.3; code-house-rules 12.1); a route's facts lookup answers a missing budget as not found itself, so nothing falls back to the timezone refusal; a budget whose brand the catalogue does not hold is a defect, and the screen sends the amount its form accepted, never zero in its place (`PRD-MOD-015`); the screen says every amount is SYNTHETIC only in local work and dev; the documents, decisions and audit record of a version are written once in `domain/budgets.ts`.
+- Built and merged 21 Oct 2026 on `s2/goods-in-first-version`: commits `b438e9d`, `dfec0c1`, `8aa3780`, merged as `d34aaa1`; reviewed with `/code-review`, its fixes merged as `aa55bb2`. Waits for the product owner: the ticket asked for the budget operations to register with the policy gate under policy 5, and they were built as policy 5's values instead (DEC-116), which ends policy 5's validation at each new budget (RR-549); also RR-548 and RR-550. It closes once those are answered and any change they need is built.

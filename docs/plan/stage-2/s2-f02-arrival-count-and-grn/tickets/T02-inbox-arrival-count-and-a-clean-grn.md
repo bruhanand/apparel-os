@@ -1,6 +1,6 @@
 # S2-F02-T02 — Receive Goods inbox, Arrival, count and a clean GRN
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F02-T01
 Feature: [Stage 2 first version](../../spec.md)
 
