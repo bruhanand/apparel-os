@@ -333,7 +333,7 @@ Every problem is listed at once in the validation report, naming the row, the co
 
 - **A row's product** is found by its barcode's external code mapping, or by brand, style, colour and size. When none exists, the upload proposes a new style and SKU from the row's values, with its barcode as an external code (structure-and-masters 4.2, 4.3); the PT approver confirms the proposal with the PT (`PRD-MER-013`, `DEC-135`).
 - **A row that differs from an existing product** in a value the product holds, such as its HSN, is shown to the approver as a difference. The PT keeps the file's value; the product is changed only through its own master change. **Design choice.**
-- **A barcode repeated across products** is flagged, never refused, and kept for each product; the scan-in asks which product it is (`PRD-MER-007`, `DEC-135`). The same barcode on several rows of one product is ordinary. Only a barcode recorded under a brand may repeat (RR-554; structure-and-masters 4.3), so the upload records a row's barcode under the brand of its product and resolves it with that brand. **Design choice.**
+- **A barcode repeated across products** is flagged, never refused, and kept for each product; the scan-in asks which product it is (`PRD-MER-007`, `DEC-135`). The same barcode on several rows of one product is ordinary. Only a barcode recorded under a brand may repeat (RR-554; structure-and-masters 4.3), so the upload records a row's barcode under the brand of its product and resolves it with that brand. A caller that knows no brand, such as the earlier POS's reference handler, still finds it: Resolve asked without a brand reads every brand's mappings (structure-and-masters 4.3 "As built"; code review 3 of stage 2). **Design choice.**
 
 ### 5.6 The steps
 

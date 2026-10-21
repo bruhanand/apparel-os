@@ -982,13 +982,13 @@ describe('an approved, unpublished opening batch is the unit’s opening plan (m
   }, 600_000);
 });
 
-describe('a brand barcode repeated across products (S2-F04-T01; structure-and-masters 4.7; PRD-MER-007, DEC-135, RR-554)', () => {
+describe('barcodes recorded under a brand, read by loads that name none (S2-F04-T01; structure-and-masters 4.3, 4.7; PRD-MER-007, DEC-135, RR-554)', () => {
   it('PRD-MER-007 DEC-135 RR-554: a manifest row whose barcode the brand repeats on two SKUs is not resolved, and an SOH line of it keeps no SKU; the choice is the person’s', async () => {
     const { setup } = harness;
     const other = await harness.catalogueSku(false);
     const repeated = next('BC-R');
-    // Only a barcode recorded under a brand repeats (RR-554). These loads name no brand, so neither mapping answers
-    // them: the row stays unresolved and nothing is chosen silently.
+    // Only a barcode recorded under a brand repeats (RR-554). These loads name no brand, so Resolve answers both
+    // mappings as candidates: the row stays unresolved and nothing is chosen silently.
     for (const skuId of [fixtures.sku.skuId, other.skuId]) {
       const mapped = await setup.asPreparerDo((c, p) =>
         setup.catalogue.mapCode(c, p, {
@@ -1050,5 +1050,48 @@ describe('a brand barcode repeated across products (S2-F04-T01; structure-and-ma
     expect(run.lines.filter((line) => line.skuId === fixtures.sku.skuId)).toEqual([
       expect.objectContaining({ left: { state: 'listed', quantity: 3 }, right: { state: 'not-listed' } }),
     ]);
+  }, 600_000);
+
+  it('PRD-MER-006 PRD-LIF-027 RR-554: an SOH line whose barcode is recorded under its product’s brand names that product, though the load names no brand', async () => {
+    const { setup } = harness;
+    const underBrand = next('BC-B');
+    const mapped = await setup.asPreparerDo((c, p) =>
+      setup.catalogue.mapCode(c, p, {
+        code: underBrand,
+        kind: 'supplier-barcode',
+        scope: { kind: 'brand', brandId: fixtures.sku.brandId },
+        skuId: fixtures.sku.skuId,
+        alias: false,
+        validFrom: setup.today(),
+      }),
+    );
+    if (mapped.kind !== 'success') throw new Error(`The SYNTHETIC barcode was refused: ${mapped.refusal.code}`);
+    const soh = await started(
+      {
+        sheet: SOH_SHEET,
+        header: Object.values(SOH_FIELDS),
+        rows: [cellsOf(SOH_FIELDS, { reportDate: SOH_DATE, barcode: underBrand, quantity: '3' })],
+      },
+      {
+        kind: 'historical-reference',
+        target: 'ebo-imports.stock-on-hand',
+        layout: 'soh',
+        scope: { siteId: fixtures.s1.siteId, storeId: codes.storeId },
+      },
+    );
+    const answer = await ok(preparer, 'POST', '/api/files-imports/comparison-runs', {
+      run: 'count-against-soh',
+      count: { siteId: fixtures.s1.siteId, businessUnitId: fixtures.s1.businessUnitId },
+      stockOnHand: { batchId: soh },
+    });
+    const run = comparisonRunReadSchema.parse(
+      (await ok(preparer, 'GET', `/api/files-imports/comparison-runs/${answer.body.runId as string}`)).body,
+    );
+    // The SOH's three pieces under the brand's barcode are SKU X, which the count holds three of: one line, the same.
+    expect(
+      run.lines
+        .filter((line) => line.skuId === fixtures.sku.skuId || line.barcode === underBrand)
+        .map((line) => [line.keyedBy, line.skuId ?? null, line.barcode ?? null, line.result]),
+    ).toEqual([['sku', fixtures.sku.skuId, underBrand, 'same']]);
   }, 600_000);
 });

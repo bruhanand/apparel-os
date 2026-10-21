@@ -270,12 +270,14 @@ export async function endCodeMapping(
 
 /**
  * Resolve a code (4.7; PRD-MER-006, PRD-MER-007): the mappings of the code and kind in force on the date whose scope is
- * the Organisation, or the supplier or brand given. Active mappings first: one target answers it. A barcode the brand
- * given names on more than one SKU answers every candidate, one for each SKU in mapping order, flagged as repeated, so
- * the person chooses and nothing is chosen silently (DEC-135); a mapping in another scope that names one of them adds
- * no choice (RR-554). One SKU in two units, or more than one SKU where any is not named under the brand, is ambiguous
- * and refused. With no active match, historical aliases the same way. None matching is not found.
- * **Design choice:** an alias answers only where no active mapping does, so an old label still finds its SKU.
+ * the Organisation, or the supplier given, or the brand given; with no brand given, every brand's, since a PT barcode is
+ * recorded under its product's brand and a caller that knows no brand, such as the earlier POS's reference handler,
+ * must still find it (RR-554). Active mappings first: one target answers it. A barcode recorded under a brand (the
+ * brand given, or any where none is) that names more than one SKU answers every candidate, one for each SKU in mapping
+ * order, flagged as repeated, so the person chooses and nothing is chosen silently (DEC-135); a mapping in another scope
+ * that names one of them adds no choice (RR-554). One SKU in two units, or more than one SKU where any is not named
+ * under a brand, is ambiguous and refused. With no active match, historical aliases the same way. None matching is not
+ * found. **Design choice:** an alias answers only where no active mapping does, so an old label still finds its SKU.
  */
 export async function resolveCode(
   context: TransactionContext,
@@ -303,7 +305,7 @@ export async function resolveCode(
             ? undefined
             : and(eq(externalCode.scopeKind, 'supplier'), eq(externalCode.scopePartyId, query.supplierId)),
           query.brandId === undefined
-            ? undefined
+            ? eq(externalCode.scopeKind, 'brand')
             : and(eq(externalCode.scopeKind, 'brand'), eq(externalCode.scopeBrandId, query.brandId)),
         ),
       ),
@@ -330,8 +332,8 @@ export async function resolveCode(
       if (held === undefined) bySku.set(row.skuId, row);
       else if (held.target !== row.target) return ambiguous;
     }
-    // Only a barcode recorded under a brand may name more than one SKU: each SKU must be one the brand names
-    // (PRD-MER-007, DEC-135; RR-554).
+    // Only a barcode recorded under a brand may name more than one SKU: each SKU must be one a brand's mapping matched
+    // names, the brand given's, or any brand's where none is given (PRD-MER-007, DEC-135; RR-554).
     if (bySku.size > 1) {
       const underBrand = new Set(matches.filter((row) => mayRepeat(query.kind, row.scopeKind)).map((row) => row.skuId));
       if ([...bySku.keys()].some((skuId) => !underBrand.has(skuId))) return ambiguous;
