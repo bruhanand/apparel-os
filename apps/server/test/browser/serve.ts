@@ -1368,6 +1368,8 @@ const productsBooking = await provisionUser('BROWSER-PRODUCTS-BOOKING', 'P-BKG',
   { recordType: 'merchandise.product_proposal', action: 'create' },
   // Approve too, so the refusal of their own proposal is for the proposal alone (DM-5, DEC-105).
   { recordType: 'merchandise.product_proposal', action: 'approve' },
+  // Create on codes, so they map one brand barcode to both SKUs and see it flagged as repeated (S2-F04-T01).
+  { recordType: 'merchandise.external_code', action: 'create' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
