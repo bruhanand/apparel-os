@@ -370,7 +370,7 @@ After the PT is approved, the goods are scanned in where they are. The scan-in v
 
 ### 7.1 Who and when
 
-- At a Store, its staff (P-STM); at a warehouse, Warehouse (P-WHS): people authorised at the GRN's Site, whoever uploaded or approved the PT (`PRD-REC-022`).
+- At a Store, its staff (P-STM); at a warehouse, Warehouse (P-WHS): people authorised at the GRN's Site, whoever uploaded or approved the PT; the scan-in needs no second person (`PRD-REC-022`).
 - Once the GRN's PT is approved, the GRN shows in the Receive Goods inbox as waiting for scan-in (section 4.1).
 - Several people may scan the same GRN; the scan-in is saved as it goes and can be resumed.
 
