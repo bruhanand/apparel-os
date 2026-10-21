@@ -1,10 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import {
-  OPEN_TO_BUY_APPROVAL,
-  OPEN_TO_BUY_BUDGET_TYPE,
-  OPEN_TO_BUY_CHECK,
-  type MissingItem,
-} from '@apparel-os/schemas';
+import { OPEN_TO_BUY_APPROVAL, OPEN_TO_BUY_CHECK } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type {
@@ -16,9 +11,9 @@ import type {
 } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
-import { bookingApprovalRules, versionItem } from '../domain/budgets.js';
+import { approvalDocument, bookingApprovalRules, budgetAuditRecord, versionItem } from '../domain/budgets.js';
 import { checkOf, versionRow } from '../queries/budgets.js';
-import { budgetLock } from './common.js';
+import { budgetLock, refused } from './common.js';
 
 // What a decision does to an open-to-buy budget version (goods-in 3.3; module-map 6.2 flow A; access-and-approvals
 // 9.8b; POL-05.09, POL-02.07; S2-F01-T02), in the decision's transaction under the budget's lock, which Decide takes
@@ -47,12 +42,6 @@ const decision = (after: string): ValueChange => ({
   after,
 });
 
-const refusal = (
-  kind: 'not-found' | 'refused' | 'conflict',
-  code: string,
-  missing: readonly MissingItem[] = [],
-): EffectOutcome & { readonly kind: 'refusal' } => ({ kind: 'refusal', refusal: { kind, code, missing } });
-
 /** The budget's lock, which Decide takes with the request (code-house-rules 8.2). */
 async function targetsOf(context: TransactionContext, versionId: string): Promise<LockTarget[]> {
   const row = await versionRow(context, versionId);
@@ -62,9 +51,9 @@ async function targetsOf(context: TransactionContext, versionId: string): Promis
 /** The version, rechecked under the lock: it exists and still awaits its decision. */
 async function waiting(context: TransactionContext, versionId: string) {
   const row = await versionRow(context, versionId);
-  if (row === undefined) return refusal('not-found', 'booking.record-not-found');
+  if (row === undefined) return refused<never>('not-found', 'booking.record-not-found');
   if (row.decision !== 'Awaiting approval') {
-    return refusal('refused', 'booking.version-not-awaiting', [versionItem(row.openToBuyBudgetId, versionId)]);
+    return refused<never>('refused', 'booking.version-not-awaiting', [versionItem(row.openToBuyBudgetId, versionId)]);
   }
   return row;
 }
@@ -95,7 +84,7 @@ async function reject(
     ...(decider.approvalDecisionId === undefined ? {} : { approval: { decisionId: decider.approvalDecisionId } }),
     ...(decider.reason === undefined ? {} : { reason: decider.reason }),
     scope: { brandId: row.brandId },
-    record: { module: 'booking', type: 'open_to_buy_budget', id: row.openToBuyBudgetId, versionId },
+    record: budgetAuditRecord(row.openToBuyBudgetId, versionId),
     operation,
     changes: [decision('Rejected')],
     source: { kind: 'screen' },
@@ -111,7 +100,7 @@ function checkEffect(dependencies: EffectDependencies): DocumentEffect {
       const row = await waiting(context, versionId);
       if ('kind' in row) return row;
       if ((await checkOf(context, versionId)) !== undefined) {
-        return refusal('refused', 'booking.version-not-awaiting', [versionItem(row.openToBuyBudgetId, versionId)]);
+        return refused('refused', 'booking.version-not-awaiting', [versionItem(row.openToBuyBudgetId, versionId)]);
       }
       const { decisionId, roleAssignmentId } = decided(decider);
       const checkId = uuidv7();
@@ -128,7 +117,7 @@ function checkEffect(dependencies: EffectDependencies): DocumentEffect {
         approval: { decisionId },
         ...(decider.reason === undefined ? {} : { reason: decider.reason }),
         scope: { brandId: row.brandId },
-        record: { module: 'booking', type: 'open_to_buy_budget', id: row.openToBuyBudgetId, versionId },
+        record: budgetAuditRecord(row.openToBuyBudgetId, versionId),
         operation: 'check-open-to-buy-budget-version',
         changes: [{ kind: 'value', field: 'check', before: null, after: checkId }],
         source: { kind: 'screen' },
@@ -137,12 +126,7 @@ function checkEffect(dependencies: EffectDependencies): DocumentEffect {
       // checker in the same transaction; its preparer is the version's, the one who recorded it (9.1; GC3-1).
       await dependencies.requests().requestApproval(context, {
         actionType: OPEN_TO_BUY_APPROVAL,
-        document: {
-          module: 'booking',
-          recordType: OPEN_TO_BUY_BUDGET_TYPE,
-          recordId: row.openToBuyBudgetId,
-          versionId,
-        },
+        document: approvalDocument(row.openToBuyBudgetId, versionId),
         value: { kind: 'none' },
         preparers: [row.preparedByUserId],
         requestedBy: { userId: decider.actor.id, roleAssignmentId },
@@ -165,7 +149,7 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
       const budgetId = row.openToBuyBudgetId;
       // POL-05.09: Accounts checks the budget before the Owner approves it.
       if ((await checkOf(context, versionId)) === undefined) {
-        return refusal('refused', 'booking.budget-not-checked', [versionItem(budgetId, versionId)]);
+        return refused('refused', 'booking.budget-not-checked', [versionItem(budgetId, versionId)]);
       }
       const { decisionId, roleAssignmentId } = decided(decider);
       const at = context.startedAt.toISOString();
@@ -185,7 +169,7 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
           ),
         );
       if (inForce?.later === true)
-        return refusal('conflict', 'kernel.stale-version', [versionItem(budgetId, versionId)]);
+        return refused('conflict', 'kernel.stale-version', [versionItem(budgetId, versionId)]);
       if (inForce !== undefined) {
         await context.tx
           .update(openToBuyBudgetVersion)
@@ -207,7 +191,7 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
         approval: { decisionId },
         ...(decider.reason === undefined ? {} : { reason: decider.reason }),
         scope: { brandId: row.brandId },
-        record: { module: 'booking', type: 'open_to_buy_budget', id: budgetId, versionId },
+        record: budgetAuditRecord(budgetId, versionId),
         operation: 'approve-open-to-buy-budget-version',
         changes: [
           decision('Approved'),
